@@ -44,7 +44,7 @@ func TestBlockEncoding(t *testing.T) {
 			t.Errorf("%s mismatch: got %v, want %v", f, got, want)
 		}
 	}
-	check("Difficulty", block.Difficulty(), big.NewInt(131072))
+	//check("Difficulty", block.Difficulty(), big.NewInt(131072))
 	check("GasLimit", block.GasLimit(), uint64(3141592))
 	check("GasUsed", block.GasUsed(), uint64(21000))
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
@@ -81,7 +81,7 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 		}
 	}
 
-	check("Difficulty", block.Difficulty(), big.NewInt(131072))
+	//check("Difficulty", block.Difficulty(), big.NewInt(131072))
 	check("GasLimit", block.GasLimit(), uint64(3141592))
 	check("GasUsed", block.GasUsed(), uint64(21000))
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
@@ -145,7 +145,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 			t.Errorf("%s mismatch: got %v, want %v", f, got, want)
 		}
 	}
-	check("Difficulty", block.Difficulty(), big.NewInt(131072))
+	//check("Difficulty", block.Difficulty(), big.NewInt(131072))
 	check("GasLimit", block.GasLimit(), uint64(3141592))
 	check("GasUsed", block.GasUsed(), uint64(42000))
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
@@ -250,12 +250,12 @@ func makeBenchBlock() *Block {
 		uncles   = make([]*Header, 3)
 	)
 	header := &Header{
-		Difficulty: math.BigPow(11, 11),
-		Number:     math.BigPow(2, 9),
-		GasLimit:   12345678,
-		GasUsed:    1476322,
-		Time:       9876543,
-		Extra:      []byte("coolest block on chain"),
+		//Difficulty: math.BigPow(11, 11),
+		//Number:     math.BigPow(2, 9),
+		GasLimit: 12345678,
+		GasUsed:  1476322,
+		Time:     9876543,
+		Extra:    []byte("coolest block on chain"),
 	}
 	for i := range txs {
 		amount := math.BigPow(2, int64(i))
@@ -271,13 +271,13 @@ func makeBenchBlock() *Block {
 	}
 	for i := range uncles {
 		uncles[i] = &Header{
-			Difficulty: math.BigPow(11, 11),
-			Number:     math.BigPow(2, 9),
-			GasLimit:   12345678,
-			GasUsed:    1476322,
-			Time:       9876543,
-			Extra:      []byte("benchmark uncle"),
+			//Difficulty: math.BigPow(11, 11),
+			//Number:     math.BigPow(2, 9),
+			GasLimit: 12345678,
+			GasUsed:  1476322,
+			Time:     9876543,
+			Extra:    []byte("benchmark uncle"),
 		}
 	}
-	return NewBlock(header, txs, uncles, receipts, newHasher())
+	return NewBlock(header, txs, receipts, newHasher())
 }
