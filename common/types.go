@@ -26,6 +26,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -47,6 +48,18 @@ var (
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
+
+func IsEqualHashArrays(a, b []Hash) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
 
 // BytesToHash sets b to hash.
 // If b is larger than len(h), b will be cropped from the left.
@@ -193,6 +206,141 @@ func (h *UnprefixedHash) UnmarshalText(input []byte) error {
 // MarshalText encodes the hash as hex.
 func (h UnprefixedHash) MarshalText() ([]byte, error) {
 	return []byte(hex.EncodeToString(h[:])), nil
+}
+
+/////////// HashArray
+
+type HashArray []Hash
+
+func HashArrayFromBytes(data []byte) HashArray {
+	count := len(data) / HashLength
+	ha := make(HashArray, count)
+	for i := 0; i < count; i++ {
+		ha[i] = Hash{}
+		ha[i].SetBytes(data[i*HashLength : (i+1)*HashLength])
+	}
+	return ha
+}
+
+func (ha HashArray) ToBytes() []byte {
+	res := []byte{}
+	for i := 0; i < len(ha); i++ {
+		res = append(res, ha[i].Bytes()...)
+	}
+	return res
+}
+
+func (ha HashArray) Copy() HashArray {
+	c := make(HashArray, len(ha))
+	for k, item := range ha {
+		c[k] = item
+	}
+	return c
+}
+
+func (ha HashArray) Intersection(hashArray HashArray) HashArray {
+	c := make(HashArray, 0)
+	m := make(map[Hash]bool)
+	for _, item := range ha {
+		m[item] = true
+	}
+	for _, item := range hashArray {
+		if _, ok := m[item]; ok {
+			c = append(c, item)
+		}
+	}
+	return c
+}
+
+func (ha HashArray) Difference(hashArray HashArray) HashArray {
+	mb := make(map[Hash]struct{})
+	for _, x := range hashArray {
+		mb[x] = struct{}{}
+	}
+	diff := []Hash{}
+	for _, x := range ha {
+		if _, found := mb[x]; !found {
+			diff = append(diff, x)
+		}
+	}
+	return diff
+}
+
+func (ha HashArray) Uniq() HashArray {
+	c := make(HashArray, 0)
+	m := make(map[Hash]bool)
+	for _, item := range ha {
+		if !m[item] {
+			c = append(c, item)
+		}
+		m[item] = true
+	}
+	ha = c
+	return ha
+}
+
+func (ha HashArray) Concat(hashes HashArray) HashArray {
+	for _, item := range hashes {
+		ha = append(ha, item)
+	}
+	return ha
+}
+
+func (ha HashArray) IsEqualTo(hashArray HashArray) bool {
+	return IsEqualHashArrays(ha, hashArray)
+}
+
+func (ha HashArray) Sort() HashArray {
+	strs := make([]string, len(ha))
+	for i, hash := range ha {
+		strs[i] = hash.String()
+	}
+	sort.Strings(strs)
+	for i, str := range strs {
+		ha[i] = HexToHash(str)
+	}
+	return ha
+}
+
+func (ha HashArray) Key() Hash {
+	c := make(HashArray, len(ha))
+	for i, hash := range ha {
+		c[i] = hash
+	}
+	buf := c.Uniq().Sort().ToBytes()
+	sha := sha3.NewLegacyKeccak256()
+	sha.Write(buf[:])
+	key := sha.Sum(nil)
+	return BytesToHash(key)
+}
+
+func (ha HashArray) Has(hash Hash) bool {
+	for _, h := range ha {
+		if h == hash {
+			return true
+		}
+	}
+	return false
+}
+
+func (ha HashArray) IndexOf(hash Hash) int {
+	for i, h := range ha {
+		if h == hash {
+			return i
+		}
+	}
+	return -1
+}
+
+func (ha HashArray) Reverse() HashArray {
+	i := 0
+	j := len(ha) - 1
+	for i < j {
+		ha[i], ha[j] = ha[j], ha[i]
+		i++
+		j--
+	}
+	return ha
 }
 
 /////////// Address
