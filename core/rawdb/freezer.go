@@ -352,7 +352,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			}
 		}
 		// Retrieve the freezing threshold.
-		hash := ReadHeadBlockHash(nfdb)
+		hash := ReadLastFinalizedHash(nfdb)
 		if hash == (common.Hash{}) {
 			log.Debug("Current full block hash unavailable") // new chain, empty database
 			backoff = true
@@ -377,7 +377,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			backoff = true
 			continue
 		}
-		head := ReadHeader(nfdb, hash, *number)
+		head := ReadHeader(nfdb, hash)
 		if head == nil {
 			log.Error("Current full block unavailable", "number", *number, "hash", hash)
 			backoff = true
@@ -410,7 +410,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		for i := 0; i < len(ancients); i++ {
 			// Always keep the genesis block in active database
 			if first+uint64(i) != 0 {
-				DeleteBlockWithoutNumber(batch, ancients[i], first+uint64(i))
+				DeleteBlockWithoutNumber(batch, ancients[i])
 				DeleteCanonicalHash(batch, first+uint64(i))
 			}
 		}
@@ -419,18 +419,18 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		}
 		batch.Reset()
 
-		// Wipe out side chains also and track dangling side chains
-		var dangling []common.Hash
-		for number := first; number < f.frozen; number++ {
-			// Always keep the genesis block in active database
-			if number != 0 {
-				dangling = ReadAllHashes(db, number)
-				for _, hash := range dangling {
-					log.Trace("Deleting side chain", "number", number, "hash", hash)
-					DeleteBlock(batch, hash, number)
-				}
-			}
-		}
+		//// Wipe out side chains also and track dangling side chains
+		//var dangling []common.Hash
+		//for number := first; number < f.frozen; number++ {
+		//	// Always keep the genesis block in active database
+		//	if number != 0 {
+		//		dangling = ReadAllHashes(db, number)
+		//		for _, hash := range dangling {
+		//			log.Trace("Deleting side chain", "number", number, "hash", hash)
+		//			DeleteBlock(batch, hash)
+		//		}
+		//	}
+		//}
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to delete frozen side blocks", "err", err)
 		}
@@ -438,33 +438,33 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 		// Step into the future and delete and dangling side chains
 		if f.frozen > 0 {
-			tip := f.frozen
-			for len(dangling) > 0 {
-				drop := make(map[common.Hash]struct{})
-				for _, hash := range dangling {
-					log.Debug("Dangling parent from freezer", "number", tip-1, "hash", hash)
-					drop[hash] = struct{}{}
-				}
-				children := ReadAllHashes(db, tip)
-				for i := 0; i < len(children); i++ {
-					// Dig up the child and ensure it's dangling
-					child := ReadHeader(nfdb, children[i], tip)
-					if child == nil {
-						log.Error("Missing dangling header", "number", tip, "hash", children[i])
-						continue
-					}
-					if _, ok := drop[child.ParentHash]; !ok {
-						children = append(children[:i], children[i+1:]...)
-						i--
-						continue
-					}
-					// Delete all block data associated with the child
-					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash)
-					DeleteBlock(batch, children[i], tip)
-				}
-				dangling = children
-				tip++
-			}
+			//tip := f.frozen
+			//for len(dangling) > 0 {
+			//	drop := make(map[common.Hash]struct{})
+			//	for _, hash := range dangling {
+			//		log.Debug("Dangling parent from freezer", "number", tip-1, "hash", hash)
+			//		drop[hash] = struct{}{}
+			//	}
+			//	children := ReadAllHashes(db, tip)
+			//	for i := 0; i < len(children); i++ {
+			//		// Dig up the child and ensure it's dangling
+			//		child := ReadHeader(nfdb, children[i])
+			//		if child == nil {
+			//			log.Error("Missing dangling header", "number", tip, "hash", children[i])
+			//			continue
+			//		}
+			//		if _, ok := drop[child.ParentHash]; !ok {
+			//			children = append(children[:i], children[i+1:]...)
+			//			i--
+			//			continue
+			//		}
+			//		// Delete all block data associated with the child
+			//		log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash)
+			//		DeleteBlock(batch, children[i])
+			//	}
+			//	dangling = children
+			//	tip++
+			//}
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to delete dangling side blocks", "err", err)
 			}
@@ -496,22 +496,22 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 			if hash == (common.Hash{}) {
 				return fmt.Errorf("canonical hash missing, can't freeze block %d", number)
 			}
-			header := ReadHeaderRLP(nfdb, hash, number)
+			header := ReadHeaderRLP(nfdb, hash)
 			if len(header) == 0 {
 				return fmt.Errorf("block header missing, can't freeze block %d", number)
 			}
-			body := ReadBodyRLP(nfdb, hash, number)
+			body := ReadBodyRLP(nfdb, hash)
 			if len(body) == 0 {
 				return fmt.Errorf("block body missing, can't freeze block %d", number)
 			}
-			receipts := ReadReceiptsRLP(nfdb, hash, number)
+			receipts := ReadReceiptsRLP(nfdb, hash)
 			if len(receipts) == 0 {
 				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
 			}
-			td := ReadTdRLP(nfdb, hash, number)
-			if len(td) == 0 {
-				return fmt.Errorf("total difficulty missing, can't freeze block %d", number)
-			}
+			//td := ReadTdRLP(nfdb, hash, number)
+			//if len(td) == 0 {
+			//	return fmt.Errorf("total difficulty missing, can't freeze block %d", number)
+			//}
 
 			// Write to the batch.
 			if err := op.AppendRaw(freezerHashTable, number, hash[:]); err != nil {
@@ -526,9 +526,9 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 			if err := op.AppendRaw(freezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to freezer: %v", err)
 			}
-			if err := op.AppendRaw(freezerDifficultyTable, number, td); err != nil {
-				return fmt.Errorf("can't write td to freezer: %v", err)
-			}
+			//if err := op.AppendRaw(freezerDifficultyTable, number, td); err != nil {
+			//	return fmt.Errorf("can't write td to freezer: %v", err)
+			//}
 
 			hashes = append(hashes, hash)
 		}

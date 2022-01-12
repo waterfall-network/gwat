@@ -54,7 +54,8 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		} else {
 			hash = common.BytesToHash(h)
 		}
-		WriteHeaderNumber(batch, hash, i)
+		//WriteHeaderNumber(batch, hash, i)
+		WriteFinalizedHashNumber(batch, hash, i)
 		// If enough data was accumulated in memory or we're at the last block, dump to disk
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
@@ -73,7 +74,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 	}
 	batch.Reset()
 
-	WriteHeadHeaderHash(db, hash)
+	WriteLastFinalizedHash(db, hash)
 	WriteHeadFastBlockHash(db, hash)
 	log.Info("Initialized database from freezer", "blocks", frozen, "elapsed", common.PrettyDuration(time.Since(start)))
 }
