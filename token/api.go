@@ -58,7 +58,11 @@ func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexut
 
 func (s *PublicTokenAPI) Wrc20Props(ctx context.Context, tokenAddr common.Address) (*wrc20Properties, error) {
 	log.Info("WRC-20 token properties", "tokenAddr", tokenAddr)
-	return nil, nil
+	name := hexutil.Bytes("Test token")
+	symbol := hexutil.Bytes("TST")
+	decimals := hexutil.Uint(3)
+	totalSupply := (*hexutil.Big)(big.NewInt(1000))
+	return &wrc20Properties{&name, &symbol, &decimals, totalSupply}, nil
 }
 
 func (s *PublicTokenAPI) Wrc20BalanceOf(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address) (*hexutil.Big, error) {
