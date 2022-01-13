@@ -79,9 +79,8 @@ func TestLookupStorage(t *testing.T) {
 			func(db ethdb.Writer, block *types.Block) {
 				for index, tx := range block.Transactions() {
 					entry := LegacyTxLookupEntry{
-						BlockHash:  block.Hash(),
-						BlockIndex: block.NumberU64(),
-						Index:      uint64(index),
+						BlockHash: block.Hash(),
+						Index:     uint64(index),
 					}
 					data, _ := rlp.EncodeToBytes(entry)
 					db.Put(txLookupKey(tx.Hash()), data)
@@ -99,25 +98,25 @@ func TestLookupStorage(t *testing.T) {
 			tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
 			txs := []*types.Transaction{tx1, tx2, tx3}
 
-			block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, txs, nil, nil, newHasher())
+			block := types.NewBlock(&types.Header{Height: uint64(314)}, txs, nil, newHasher())
 
 			// Check that no transactions entries are in a pristine database
 			for i, tx := range txs {
-				if txn, _, _, _ := ReadTransaction(db, tx.Hash()); txn != nil {
+				if txn, _, _ := ReadTransaction(db, tx.Hash()); txn != nil {
 					t.Fatalf("tx #%d [%x]: non existent transaction returned: %v", i, tx.Hash(), txn)
 				}
 			}
 			// Insert all the transactions into the database, and verify contents
-			WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+			WriteCanonicalHash(db, block.Hash(), block.Nr())
 			WriteBlock(db, block)
 			tc.writeTxLookupEntriesByBlock(db, block)
 
 			for i, tx := range txs {
-				if txn, hash, number, index := ReadTransaction(db, tx.Hash()); txn == nil {
+				if txn, hash, index := ReadTransaction(db, tx.Hash()); txn == nil {
 					t.Fatalf("tx #%d [%x]: transaction not found", i, tx.Hash())
 				} else {
-					if hash != block.Hash() || number != block.NumberU64() || index != uint64(i) {
-						t.Fatalf("tx #%d [%x]: positional metadata mismatch: have %x/%d/%d, want %x/%v/%v", i, tx.Hash(), hash, number, index, block.Hash(), block.NumberU64(), i)
+					if hash != block.Hash() || index != uint64(i) {
+						t.Fatalf("tx #%d [%x]: positional metadata mismatch: have %x/%d/%d, want %x/%v/%v", i, tx.Hash(), hash, block.Height(), index, block.Hash(), block.Nr(), i)
 					}
 					if tx.Hash() != txn.Hash() {
 						t.Fatalf("tx #%d [%x]: transaction mismatch: have %v, want %v", i, tx.Hash(), txn, tx)
@@ -127,7 +126,7 @@ func TestLookupStorage(t *testing.T) {
 			// Delete the transactions and check purge
 			for i, tx := range txs {
 				DeleteTxLookupEntry(db, tx.Hash())
-				if txn, _, _, _ := ReadTransaction(db, tx.Hash()); txn != nil {
+				if txn, _, _ := ReadTransaction(db, tx.Hash()); txn != nil {
 					t.Fatalf("tx #%d [%x]: deleted transaction returned: %v", i, tx.Hash(), txn)
 				}
 			}

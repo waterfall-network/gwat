@@ -227,24 +227,20 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 	var hash common.Hash
 	for n := uint64(0); n < count; n++ {
 		header := &types.Header{
-			Coinbase:    common.Address{},
-			Number:      big.NewInt(int64(n)),
-			ParentHash:  hash,
-			Difficulty:  big.NewInt(1),
-			UncleHash:   types.EmptyUncleHash,
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
+			Coinbase:     common.Address{},
+			ParentHashes: []common.Hash{hash},
+			TxHash:       types.EmptyRootHash,
+			ReceiptHash:  types.EmptyRootHash,
 		}
 		hash = header.Hash()
 
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, hash, n)
-		rawdb.WriteTd(db, hash, n, big.NewInt(int64(n+1)))
 
 		if full || n == 0 {
 			block := types.NewBlockWithHeader(header)
-			rawdb.WriteBody(db, hash, n, block.Body())
-			rawdb.WriteReceipts(db, hash, n, nil)
+			rawdb.WriteBody(db, hash, block.Body())
+			rawdb.WriteReceipts(db, hash, nil)
 		}
 	}
 }
@@ -296,8 +292,8 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 			header := chain.GetHeaderByNumber(n)
 			if full {
 				hash := header.Hash()
-				rawdb.ReadBody(db, hash, n)
-				rawdb.ReadReceipts(db, hash, n, chain.Config())
+				rawdb.ReadBody(db, hash)
+				rawdb.ReadReceipts(db, hash, chain.Config())
 			}
 		}
 		chain.Stop()

@@ -438,7 +438,11 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		return nil, nil
 	}
 	var upper, lower uint64
-	upper = interpreter.evm.Context.BlockNumber.Uint64()
+	if interpreter.evm.Context.BlockNumber != nil && interpreter.evm.Context.BlockNumber.Uint64() > 0 {
+		upper = interpreter.evm.Context.BlockNumber.Uint64()
+	} else if interpreter.evm.Context.BlockHeight != nil {
+		upper = interpreter.evm.Context.BlockHeight.Uint64()
+	}
 	if upper < 257 {
 		lower = 0
 	} else {
@@ -464,7 +468,7 @@ func opTimestamp(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 }
 
 func opNumber(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	v, _ := uint256.FromBig(interpreter.evm.Context.BlockNumber)
+	v, _ := uint256.FromBig(interpreter.evm.Context.BlockHeight)
 	scope.Stack.push(v)
 	return nil, nil
 }
@@ -812,13 +816,20 @@ func makeLog(size int) executionFunc {
 		}
 
 		d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
+
+		//blockNumber := uint64(0)
+		//if interpreter.evm.Context.BlockNumber != nil && interpreter.evm.Context.BlockNumber.Cmp(big0) > 0 {
+		//	blockNumber = interpreter.evm.Context.BlockNumber.Uint64()
+		//} else {
+		//	blockNumber = interpreter.evm.Context.BlockHeight.Uint64()
+		//}
 		interpreter.evm.StateDB.AddLog(&types.Log{
 			Address: scope.Contract.Address(),
 			Topics:  topics,
 			Data:    d,
-			// This is a non-consensus field, but assigned here because
-			// core/state doesn't know the current block number.
-			BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
+			//// This is a non-consensus field, but assigned here because
+			//// core/state doesn't know the current block number.
+			//BlockNumber: blockNumber,
 		})
 
 		return nil, nil

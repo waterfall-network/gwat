@@ -36,6 +36,7 @@ type Config struct {
 	Difficulty  *big.Int
 	Origin      common.Address
 	Coinbase    common.Address
+	BlockHeight *big.Int
 	BlockNumber *big.Int
 	Time        *big.Int
 	GasLimit    uint64
@@ -86,6 +87,9 @@ func setDefaults(cfg *Config) {
 	if cfg.Value == nil {
 		cfg.Value = new(big.Int)
 	}
+	if cfg.BlockHeight == nil {
+		cfg.BlockHeight = new(big.Int)
+	}
 	if cfg.BlockNumber == nil {
 		cfg.BlockNumber = new(big.Int)
 	}
@@ -118,7 +122,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
+	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockHeight); rules.IsBerlin {
 		cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
 	}
 	cfg.State.CreateAccount(address)
@@ -150,7 +154,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		vmenv  = NewEnv(cfg)
 		sender = vm.AccountRef(cfg.Origin)
 	)
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
+	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockHeight); rules.IsBerlin {
 		cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
 	}
 	// Call the code with the given configuration.
@@ -176,7 +180,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	statedb := cfg.State
 
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
+	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockHeight); rules.IsBerlin {
 		statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
 	}
 	// Call the code with the given configuration.

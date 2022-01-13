@@ -34,9 +34,9 @@ func TestChainIterator(t *testing.T) {
 	var block *types.Block
 	var txs []*types.Transaction
 	to := common.BytesToAddress([]byte{0x11})
-	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newHasher()) // Empty genesis block
+	block = types.NewBlock(&types.Header{Height: uint64(0)}, nil, nil, newHasher()) // Empty genesis block
 	WriteBlock(chainDb, block)
-	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
+	WriteCanonicalHash(chainDb, block.Hash(), block.Height())
 	for i := uint64(1); i <= 10; i++ {
 		var tx *types.Transaction
 		if i%2 == 0 {
@@ -60,9 +60,9 @@ func TestChainIterator(t *testing.T) {
 			})
 		}
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+		block = types.NewBlock(&types.Header{Height: uint64(i)}, []*types.Transaction{tx}, nil, newHasher())
 		WriteBlock(chainDb, block)
-		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
+		WriteCanonicalHash(chainDb, block.Hash(), block.Height())
 	}
 
 	var cases = []struct {
@@ -111,9 +111,9 @@ func TestIndexTransactions(t *testing.T) {
 	to := common.BytesToAddress([]byte{0x11})
 
 	// Write empty genesis block
-	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newHasher())
+	block = types.NewBlock(&types.Header{Height: uint64(0)}, nil, nil, newHasher())
 	WriteBlock(chainDb, block)
-	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
+	WriteCanonicalHash(chainDb, block.Hash(), block.Height())
 
 	for i := uint64(1); i <= 10; i++ {
 		var tx *types.Transaction
@@ -138,9 +138,9 @@ func TestIndexTransactions(t *testing.T) {
 			})
 		}
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+		block = types.NewBlock(&types.Header{Height: uint64(i)}, []*types.Transaction{tx}, nil, newHasher())
 		WriteBlock(chainDb, block)
-		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
+		//WriteCanonicalHash(chainDb, block.Hash(), block.Height())
 	}
 	// verify checks whether the tx indices in the range [from, to)
 	// is expected.
@@ -149,11 +149,11 @@ func TestIndexTransactions(t *testing.T) {
 			if i == 0 {
 				continue
 			}
-			number := ReadTxLookupEntry(chainDb, txs[i-1].Hash())
-			if exist && number == nil {
+			hash := ReadTxLookupEntry(chainDb, txs[i-1].Hash())
+			if exist && hash == (common.Hash{}) {
 				t.Fatalf("Transaction index %d missing", i)
 			}
-			if !exist && number != nil {
+			if !exist && hash != (common.Hash{}) {
 				t.Fatalf("Transaction index %d is not deleted", i)
 			}
 		}

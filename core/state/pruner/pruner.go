@@ -85,10 +85,13 @@ type Pruner struct {
 
 // NewPruner creates the pruner instance.
 func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64) (*Pruner, error) {
-	headBlock := rawdb.ReadHeadBlock(db)
-	if headBlock == nil {
+	lastFinHash := rawdb.ReadLastFinalizedHash(db)
+	lastFinBlock := rawdb.ReadBlock(db, lastFinHash)
+	if lastFinBlock == nil {
 		return nil, errors.New("Failed to load head block")
 	}
+	headBlock := lastFinBlock
+
 	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.Root(), false, false, false)
 	if err != nil {
 		return nil, err // The relevant snapshot(s) might not exist
@@ -294,7 +297,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		}
 	} else {
 		if len(layers) > 0 {
-			log.Info("Selecting bottom-most difflayer as the pruning target", "root", root, "height", p.headHeader.Number.Uint64()-127)
+			log.Info("Selecting bottom-most difflayer as the pruning target", "root", root, "height", p.headHeader.Nr()-127)
 		} else {
 			log.Info("Selecting user-specified state as the pruning target", "root", root)
 		}
@@ -350,8 +353,11 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	if stateBloomPath == "" {
 		return nil // nothing to recover
 	}
-	headBlock := rawdb.ReadHeadBlock(db)
-	if headBlock == nil {
+
+	lastFinHash := rawdb.ReadLastFinalizedHash(db)
+	lastFinBlock := rawdb.ReadBlock(db, lastFinHash)
+
+	if lastFinBlock == nil {
 		return errors.New("Failed to load head block")
 	}
 	// Initialize the snapshot tree in recovery mode to handle this special case:
@@ -362,7 +368,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	// - The state HEAD is rewound already because of multiple incomplete `prune-state`
 	// In this case, even the state HEAD is not exactly matched with snapshot, it
 	// still feasible to recover the pruning correctly.
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.Root(), false, false, true)
+	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, lastFinBlock.Root(), false, false, true)
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
 	}
@@ -382,7 +388,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	// otherwise the dangling state will be left.
 	var (
 		found       bool
-		layers      = snaptree.Snapshots(headBlock.Root(), 128, true)
+		layers      = snaptree.Snapshots(lastFinBlock.Root(), 128, true)
 		middleRoots = make(map[common.Hash]struct{})
 	)
 	for _, layer := range layers {
@@ -406,7 +412,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	if genesisHash == (common.Hash{}) {
 		return errors.New("missing genesis hash")
 	}
-	genesis := rawdb.ReadBlock(db, genesisHash, 0)
+	genesis := rawdb.ReadBlock(db, genesisHash)
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}

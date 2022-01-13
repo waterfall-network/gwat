@@ -173,6 +173,7 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		Difficulty:  big.NewInt(0x200000),
 		Time:        new(big.Int).SetUint64(0),
 		Coinbase:    common.Address{},
+		BlockHeight: new(big.Int).SetUint64(1),
 		BlockNumber: new(big.Int).SetUint64(1),
 		ChainConfig: &params.ChainConfig{
 			ChainID:             big.NewInt(1),
@@ -212,16 +213,18 @@ func BenchmarkEVM_CREATE2_1200(bench *testing.B) {
 	benchmarkEVM_Create(bench, "5b5862124f80600080f5600152600056")
 }
 
-func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
+func fakeHeader(n uint64, parentHashes []common.Hash) *types.Header {
 	header := types.Header{
-		Coinbase:   common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
-		Number:     big.NewInt(int64(n)),
-		ParentHash: parentHash,
-		Time:       1000,
-		Nonce:      types.BlockNonce{0x1},
-		Extra:      []byte{},
-		Difficulty: big.NewInt(0),
-		GasLimit:   100000,
+		Coinbase:     common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
+		Number:       &n,
+		ParentHashes: parentHashes,
+		Epoch:        uint64(0),
+		Slot:         uint64(0),
+		Height:       uint64(0),
+		Time:         1000,
+		Nonce:        types.BlockNonce{0x1},
+		Extra:        []byte{},
+		GasLimit:     100000,
 	}
 	return &header
 }
@@ -242,9 +245,11 @@ func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
 	s := common.LeftPadBytes(big.NewInt(int64(n-1)).Bytes(), 32)
 	copy(parentHash[:], s)
 
+	parentHashes := []common.Hash{parentHash}
+
 	//parentHash := common.Hash{byte(n - 1)}
 	//fmt.Printf("GetHeader(%x, %d) => header with parent %x\n", h, n, parentHash)
-	return fakeHeader(n, parentHash)
+	return fakeHeader(n, parentHashes)
 }
 
 // TestBlockhash tests the blockhash operation. It's a bit special, since it internally
@@ -255,7 +260,10 @@ func TestBlockhash(t *testing.T) {
 	parentHash := common.Hash{}
 	s := common.LeftPadBytes(big.NewInt(int64(n-1)).Bytes(), 32)
 	copy(parentHash[:], s)
-	header := fakeHeader(n, parentHash)
+
+	parentHashes := []common.Hash{parentHash}
+
+	header := fakeHeader(n, parentHashes)
 
 	// This is the contract we're using. It requests the blockhash for current num (should be all zeroes),
 	// then iteratively fetches all blockhashes back to n-260.
@@ -296,7 +304,8 @@ func TestBlockhash(t *testing.T) {
 	chain := &dummyChain{}
 	ret, _, err := Execute(data, input, &Config{
 		GetHashFn:   core.GetHashFn(header, chain),
-		BlockNumber: new(big.Int).Set(header.Number),
+		BlockHeight: new(big.Int).SetUint64(header.Height),
+		BlockNumber: new(big.Int).SetUint64(header.Nr()),
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

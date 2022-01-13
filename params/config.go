@@ -562,10 +562,11 @@ func isForkIncompatible(s1, s2, head *big.Int) bool {
 
 // isForked returns whether a fork scheduled at block s is active at the given head block.
 func isForked(s, head *big.Int) bool {
-	if s == nil || head == nil {
-		return false
-	}
-	return s.Cmp(head) <= 0
+	return true
+	//if s == nil || head == nil {
+	//	return false
+	//}
+	//return s.Cmp(head) <= 0
 }
 
 func configNumEqual(x, y *big.Int) bool {
