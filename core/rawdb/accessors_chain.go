@@ -146,70 +146,21 @@ func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int
 	return numbers, hashes
 }
 
-//todo deprecated
-// ReadHeaderNumber returns the header number assigned to a hash.
-func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
-	data, _ := db.Get(headerNumberKey(hash))
-	if len(data) != 8 {
-		return nil
+// ReadLastCanonicalHash retrieves the hash of the current canonical head block.
+func ReadLastCanonicalHash(db ethdb.KeyValueReader) common.Hash {
+	data, _ := db.Get(lastCanonicalHashKey)
+	if len(data) == 0 {
+		return common.Hash{}
 	}
-	number := binary.BigEndian.Uint64(data)
-	return &number
+	return common.BytesToHash(data)
 }
 
-////todo deprecated
-//// WriteHeaderNumber stores the hash->number mapping.
-//func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-//	key := headerNumberKey(hash)
-//	enc := encodeBlockNumber(number)
-//	if err := db.Put(key, enc); err != nil {
-//		log.Crit("Failed to store hash to number mapping", "err", err)
-//	}
-//}
-
-////todo deprecated
-//// DeleteHeaderNumber removes hash->number mapping.
-//func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
-//	if err := db.Delete(headerNumberKey(hash)); err != nil {
-//		log.Crit("Failed to delete hash to number mapping", "err", err)
-//	}
-//}
-
-////TODO deprecated
-//// ReadHeadHeaderHash retrieves the hash of the current canonical head header.
-//func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
-//	data, _ := db.Get(headHeaderKey)
-//	if len(data) == 0 {
-//		return common.Hash{}
-//	}
-//	return common.BytesToHash(data)
-//}
-//
-////TODO deprecated
-//// WriteHeadHeaderHash stores the hash of the current canonical head header.
-//func WriteHeadHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
-//	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
-//		log.Crit("Failed to store last header's hash", "err", err)
-//	}
-//}
-//
-////TODO deprecated
-//// ReadHeadBlockHash retrieves the hash of the current canonical head block.
-//func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
-//	data, _ := db.Get(headBlockKey)
-//	if len(data) == 0 {
-//		return common.Hash{}
-//	}
-//	return common.BytesToHash(data)
-//}
-//
-////TODO deprecated
-//// WriteHeadBlockHash stores the head block's hash.
-//func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
-//	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
-//		log.Crit("Failed to store last block's hash", "err", err)
-//	}
-//}
+// WriteLastCanonicalHash stores the last canonical block's hash.
+func WriteLastCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Put(lastCanonicalHashKey, hash.Bytes()); err != nil {
+		log.Crit("Failed to store last canonical block's hash", "err", err)
+	}
+}
 
 // ReadHeadFastBlockHash retrieves the hash of the current fast-sync head block.
 func ReadHeadFastBlockHash(db ethdb.KeyValueReader) common.Hash {
@@ -390,10 +341,10 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 }
 
 // DeleteHeader removes all block header data associated with a hash.
-func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash) {
+func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, finNr *uint64) {
 	deleteHeaderWithoutNumber(db, hash)
-	if err := db.Delete(headerNumberKey(hash)); err != nil {
-		log.Crit("Failed to delete hash to number mapping", "err", err)
+	if finNr != nil {
+		DeleteFinalizedHashNumber(db, hash, *finNr)
 	}
 }
 
@@ -668,7 +619,7 @@ func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// DeriveLogFields fills the logs in receiptLogs with information such as block number, txhash, etc.
+// deriveLogFields fills the logs in receiptLogs with information such as block number, txhash, etc.
 func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, txs types.Transactions) error {
 	logIndex := uint(0)
 	if len(txs) != len(receipts) {
@@ -766,6 +717,9 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 }
 
 func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts []*types.ReceiptForStorage) error {
+	if block.Number() == nil {
+		return fmt.Errorf("block finalized number is not defined (hash=%v)", block.Hash().Hex())
+	}
 	num := block.Nr()
 	if err := op.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)
@@ -783,9 +737,9 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 }
 
 // DeleteBlock removes all block data associated with a hash.
-func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash) {
+func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, finNr *uint64) {
 	DeleteReceipts(db, hash)
-	DeleteHeader(db, hash)
+	DeleteHeader(db, hash, finNr)
 	DeleteBody(db, hash)
 	DeleteChildren(db, hash)
 }
@@ -927,11 +881,11 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 ////todo deprecated
 //// ReadHeadHeader returns the current canonical head header.
 //func ReadHeadHeader(db ethdb.Reader) *types.Header {
-//	headHeaderHash := ReadHeadHeaderHash(db)
+//	headHeaderHash := ReadLastFinalizedHash(db)
 //	if headHeaderHash == (common.Hash{}) {
 //		return nil
 //	}
-//	headHeaderNumber := ReadHeaderNumber(db, headHeaderHash)
+//	headHeaderNumber := ReadFinalizedNumberByHash(db, headHeaderHash)
 //	if headHeaderNumber == nil {
 //		return nil
 //	}
@@ -941,11 +895,11 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 ////todo deprecated
 //// ReadHeadBlock returns the current canonical head block.
 //func ReadHeadBlock(db ethdb.Reader) *types.Block {
-//	headBlockHash := ReadHeadBlockHash(db)
+//	headBlockHash := ReadLastCanonicalHash(db)
 //	if headBlockHash == (common.Hash{}) {
 //		return nil
 //	}
-//	headBlockNumber := ReadHeaderNumber(db, headBlockHash)
+//	headBlockNumber := ReadFinalizedNumberByHash(db, headBlockHash)
 //	if headBlockNumber == nil {
 //		return nil
 //	}
@@ -953,6 +907,8 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 //}
 
 /**** FINALIZED BLOCK DATA ***/
+
+// ReadFinalizedNumberByHash retrieves block finalization number by hash.
 func ReadFinalizedNumberByHash(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(finNumberByHashKey(hash))
 	if len(data) != 8 {
@@ -979,6 +935,7 @@ func _deleteFinalizedNumberByHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadFinalizedHashByNumber retrieves block finalization hash by number.
 func ReadFinalizedHashByNumber(db ethdb.KeyValueReader, number uint64) common.Hash {
 	data, _ := db.Get(finHashByNumberKey(number))
 	return common.BytesToHash(data)
@@ -1001,14 +958,16 @@ func _deleteFinalizedHashByNumber(db ethdb.KeyValueWriter, number uint64) {
 	}
 }
 
-func WriteFinalizedHashNumber(db ethdb.KeyValueWriter, hash common.Hash, height uint64) {
-	_writeFinalizedNumberByHash(db, hash, height)
-	_writeFinalizedHashByNumber(db, height, hash)
+// WriteFinalizedHashNumber writes of block finalization data.
+func WriteFinalizedHashNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	_writeFinalizedNumberByHash(db, hash, number)
+	_writeFinalizedHashByNumber(db, number, hash)
 }
 
-func DeleteFinalizedHashNumber(db ethdb.KeyValueWriter, hash common.Hash, height uint64) {
+// DeleteFinalizedHashNumber removes all block finalization data.
+func DeleteFinalizedHashNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	_deleteFinalizedNumberByHash(db, hash)
-	_deleteFinalizedHashByNumber(db, height)
+	_deleteFinalizedHashByNumber(db, number)
 }
 
 /**** LAST FINALIZED BLOCK ***/

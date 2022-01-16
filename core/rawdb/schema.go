@@ -31,7 +31,10 @@ var (
 	databaseVersionKey = []byte("DatabaseVersion")
 
 	// lastFinalizedHashKey tracks the latest known finalized block hash.
-	lastFinalizedHashKey = []byte("LastFinalizedHash")
+	lastFinalizedHashKey = []byte("LFHash")
+
+	// lastCanonicalHashKey tracks the latest known canonical full block's hash.
+	lastCanonicalHashKey = []byte("LCHash")
 
 	// tipsHashesKey tracks the latest known tips hashes.
 	tipsHashesKey = []byte("TipsHashes")
@@ -76,15 +79,13 @@ var (
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
-	headerPrefix = []byte("h") // headerPrefix + hash -> header
-	//headerTDSuffix     = []byte("t") // headerPrefix + hash + headerTDSuffix -> td
-	headerHashSuffix   = []byte("n") // headerPrefix + headerHashSuffix -> hash
-	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
+	headerPrefix     = []byte("h") // headerPrefix + hash -> header
+	headerHashSuffix = []byte("n") // headerPrefix + headerHashSuffix -> hash
 
 	childrenPrefix              = []byte("C")   // childrenPrefix + parentHash -> children (HashArray)
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
-	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> height (uint64 big endian)
-	finalizedHashByNumberPrefix = []byte("fnh") // finalizedNumberByHashPrefix + height (uint64 big endian) -> hash
+	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
+	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -156,11 +157,6 @@ func headerKey(hash common.Hash) []byte {
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
 func headerHashKey(number uint64) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
-}
-
-// headerNumberKey = headerNumberPrefix + hash
-func headerNumberKey(hash common.Hash) []byte {
-	return append(headerNumberPrefix, hash.Bytes()...)
 }
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash

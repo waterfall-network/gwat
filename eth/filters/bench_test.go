@@ -69,14 +69,14 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}
-	head := rawdb.ReadHeadBlockHash(db)
+	head := rawdb.ReadLastCanonicalHash(db)
 	if head == (common.Hash{}) {
 		b.Fatalf("chain data not found at %v", benchDataDir)
 	}
 
 	clearBloomBits(db)
 	b.Log("Generating bloombits data...")
-	headNum := rawdb.ReadHeaderNumber(db, head)
+	headNum := rawdb.ReadFinalizedNumberByHash(db, head)
 	if headNum == nil || *headNum < sectionSize+512 {
 		b.Fatalf("not enough blocks for running a benchmark")
 	}
@@ -161,11 +161,11 @@ func BenchmarkNoBloomBits(b *testing.B) {
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}
-	head := rawdb.ReadHeadBlockHash(db)
+	head := rawdb.ReadLastCanonicalHash(db)
 	if head == (common.Hash{}) {
 		b.Fatalf("chain data not found at %v", benchDataDir)
 	}
-	headNum := rawdb.ReadHeaderNumber(db, head)
+	headNum := rawdb.ReadFinalizedNumberByHash(db, head)
 
 	clearBloomBits(db)
 

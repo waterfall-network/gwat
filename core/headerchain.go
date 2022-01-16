@@ -104,7 +104,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	}
 
 	hc.currentHeader.Store(hc.genesisHeader)
-	if head := rawdb.ReadHeadBlockHash(chainDb); head != (common.Hash{}) {
+	if head := rawdb.ReadLastCanonicalHash(chainDb); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
 		}
@@ -122,7 +122,7 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 		number := cached.(uint64)
 		return &number
 	}
-	number := rawdb.ReadHeaderNumber(hc.chainDb, hash)
+	number := rawdb.ReadFinalizedNumberByHash(hc.chainDb, hash)
 	if number != nil {
 		hc.numberCache.Add(hash, *number)
 	}
@@ -266,13 +266,13 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 				hash := headers[i].Hash()
 				num := headers[i].Number.Uint64()
 				rawdb.WriteCanonicalHash(markerBatch, hash, num)
-				rawdb.WriteHeadHeaderHash(markerBatch, hash)
+				rawdb.WriteLastFinalizedHash(markerBatch, hash)
 			}
 		}
 		// Extend the canonical chain with the new headers
 		for _, hn := range inserted {
 			rawdb.WriteCanonicalHash(markerBatch, hn.hash, hn.number)
-			rawdb.WriteHeadHeaderHash(markerBatch, hn.hash)
+			rawdb.WriteLastFinalizedHash(markerBatch, hn.hash)
 		}
 		if err := markerBatch.Write(); err != nil {
 			log.Crit("Failed to write header markers into disk", "err", err)
@@ -559,7 +559,7 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 			}
 		}
 		// Update head header then.
-		rawdb.WriteHeadHeaderHash(markerBatch, parentHash)
+		rawdb.WriteLastFinalizedHash(markerBatch, parentHash)
 		if err := markerBatch.Write(); err != nil {
 			log.Crit("Failed to update chain markers", "error", err)
 		}

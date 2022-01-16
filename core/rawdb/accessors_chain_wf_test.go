@@ -29,50 +29,38 @@ func TestHeadStorageWf(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	blockHead := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block header")})
-	//blockFull := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block full")})
+	blockFull := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block full")})
 	blockFast := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block fast")})
 
 	// Check that no head entries are in a pristine database
 	if entry := ReadTipsHashes(db); !entry.IsEqualTo(common.HashArray{}) {
 		t.Fatalf("Non head header entry returned: %v", entry)
 	}
-	//if entry := ReadHeadBlockHashes(db); !entry.IsEqualTo(common.HashArray{}) {
-	//	t.Fatalf("Non head block entry returned: %v", entry)
-	//}
+	if entry := ReadLastCanonicalHash(db); entry != (common.Hash{}) {
+		t.Fatalf("Non head block entry returned: %v", entry)
+	}
 	if entry := ReadHeadFastBlockHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non fast head block entry returned: %v", entry)
 	}
-	//if entry := ReadHeadHeaders(db); len(entry) != 0 {
-	//	t.Fatalf("Non head headers entry returned: %v", entry)
-	//}
-	//if entry := ReadHeadBlocks(db); len(entry) != 0 {
-	//	t.Fatalf("Non head blocks entry returned: %v", entry)
-	//}
 
 	// Assign separate entries for the head header and block
 	WriteTipsHashes(db, common.HashArray{blockHead.Hash()})
-	//WriteHeadBlockHashes(db, common.HashArray{blockFull.Hash()})
+	WriteLastCanonicalHash(db, blockFull.Hash())
 	WriteHeadFastBlockHash(db, blockFast.Hash())
 
 	// Check that both heads are present, and different (i.e. two heads maintained)
 	if entry := ReadTipsHashes(db); !entry.IsEqualTo(common.HashArray{blockHead.Hash()}) {
 		t.Fatalf("Head header hash mismatch: have %v, want %v", entry, common.HashArray{blockHead.Hash()})
 	}
-	//if entry := ReadHeadBlockHashes(db); !entry.IsEqualTo(common.HashArray{blockFull.Hash()}) {
-	//	t.Fatalf("Head block hash mismatch: have %v, want %v", entry, common.HashArray{blockFull.Hash()})
-	//}
+	if entry := ReadLastCanonicalHash(db); entry != blockFull.Hash() {
+		t.Fatalf("Head block hash mismatch: have %v, want %v", entry, blockFull.Hash())
+	}
 	if entry := ReadHeadFastBlockHash(db); entry != blockFast.Hash() {
 		t.Fatalf("Fast head block hash mismatch: have %v, want %v", entry.Hex(), blockFast.Hash())
 	}
 
 	WriteHeader(db, blockHead.Header())
 	WriteBlock(db, blockHead)
-	//if entry := ReadHeadHeaders(db); len(entry) != 1 && entry[blockHead.Hash()].Hash() != blockHead.Hash() {
-	//	t.Fatalf("Non head headers entry returned: %v", entry)
-	//}
-	//if entry := ReadHeadBlocks(db); len(entry) != 1 && entry[blockHead.Hash()].Hash() != blockHead.Hash() {
-	//	t.Fatalf("Non head blocks entry returned: %v", entry)
-	//}
 }
 
 // Tests that head headers and head blocks can be assigned, individually.

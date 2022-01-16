@@ -358,7 +358,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			backoff = true
 			continue
 		}
-		number := ReadHeaderNumber(nfdb, hash)
+		number := ReadFinalizedNumberByHash(nfdb, hash)
 		threshold := atomic.LoadUint64(&f.threshold)
 
 		switch {
@@ -508,11 +508,6 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 			if len(receipts) == 0 {
 				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
 			}
-			//td := ReadTdRLP(nfdb, hash, number)
-			//if len(td) == 0 {
-			//	return fmt.Errorf("total difficulty missing, can't freeze block %d", number)
-			//}
-
 			// Write to the batch.
 			if err := op.AppendRaw(freezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to freezer: %v", err)
@@ -526,10 +521,6 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 			if err := op.AppendRaw(freezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to freezer: %v", err)
 			}
-			//if err := op.AppendRaw(freezerDifficultyTable, number, td); err != nil {
-			//	return fmt.Errorf("can't write td to freezer: %v", err)
-			//}
-
 			hashes = append(hashes, hash)
 		}
 		return nil

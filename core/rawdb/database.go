@@ -172,7 +172,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 			if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup is the database has a more recent head.
-				if *ReadHeaderNumber(db, ReadLastFinalizedHash(db)) > frozen-1 {
+				if *ReadFinalizedNumberByHash(db, ReadLastFinalizedHash(db)) > frozen-1 {
 					return nil, fmt.Errorf("gap (#%d) in the chain between ancients and leveldb", frozen)
 				}
 				// Database contains only older data than the freezer, this happens if the
@@ -341,7 +341,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			receipts.Add(size)
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
 			numHashPairings.Add(size)
-		case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
+		case bytes.HasPrefix(key, lastFinalizedHashKey) && len(key) == (len(lastFinalizedHashKey)+common.HashLength):
+			hashNumPairings.Add(size)
+		case bytes.HasPrefix(key, lastCanonicalHashKey) && len(key) == (len(lastCanonicalHashKey)+common.HashLength):
 			hashNumPairings.Add(size)
 		case len(key) == common.HashLength:
 			tries.Add(size)
@@ -374,7 +376,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
-				databaseVersionKey, lastFinalizedHashKey, tipsHashesKey, headFastBlockKey, lastPivotKey,
+				lastFinalizedHashKey, lastCanonicalHashKey,
+				databaseVersionKey, tipsHashesKey, headFastBlockKey, lastPivotKey,
 				fastTrieProgressKey, snapshotDisabledKey, snapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey,
 				fastTxLookupLimitKey, uncleanShutdownKey, badBlockKey,

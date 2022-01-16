@@ -64,8 +64,8 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		num  uint64
 	)
 	if blockNr == rpc.LatestBlockNumber {
-		hash = rawdb.ReadHeadBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
+		hash = rawdb.ReadLastCanonicalHash(b.db)
+		number := rawdb.ReadFinalizedNumberByHash(b.db, hash)
 		if number == nil {
 			return nil, nil
 		}
@@ -78,7 +78,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
+	number := rawdb.ReadFinalizedNumberByHash(b.db, hash)
 	if number == nil {
 		return nil, nil
 	}
@@ -86,14 +86,14 @@ func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
+	if number := rawdb.ReadFinalizedNumberByHash(b.db, hash); number != nil {
 		return rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig), nil
 	}
 	return nil, nil
 }
 
 func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
+	number := rawdb.ReadFinalizedNumberByHash(b.db, hash)
 	if number == nil {
 		return nil, nil
 	}

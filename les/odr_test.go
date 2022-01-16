@@ -66,11 +66,11 @@ func TestOdrGetReceiptsLes4(t *testing.T) { testOdr(t, 4, 1, true, odrGetReceipt
 func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var receipts types.Receipts
 	if bc != nil {
-		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
+		if number := rawdb.ReadFinalizedNumberByHash(db, bhash); number != nil {
 			receipts = rawdb.ReadReceipts(db, bhash, *number, config)
 		}
 	} else {
-		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
+		if number := rawdb.ReadFinalizedNumberByHash(db, bhash); number != nil {
 			receipts, _ = light.GetBlockReceipts(ctx, lc.Odr(), bhash, *number)
 		}
 	}

@@ -392,8 +392,8 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		arg := ctx.Args().First()
 		if hashish(arg) {
 			hash := common.HexToHash(arg)
-			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
-				header = rawdb.ReadHeader(db, hash, *number)
+			if number := rawdb.ReadFinalizedNumberByHash(db, hash); number != nil {
+				header = rawdb.ReadHeader(db, hash)
 			} else {
 				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
 			}
@@ -403,7 +403,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 				return nil, nil, common.Hash{}, err
 			}
 			if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
-				header = rawdb.ReadHeader(db, hash, uint64(number))
+				header = rawdb.ReadHeader(db, hash)
 			} else {
 				return nil, nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)
 			}

@@ -151,7 +151,7 @@ func (lc *LightChain) HeaderChain() *core.HeaderChain {
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (lc *LightChain) loadLastState() error {
-	if head := rawdb.ReadHeadHeaderHash(lc.chainDb); head == (common.Hash{}) {
+	if head := rawdb.ReadLastFinalizedHash(lc.chainDb); head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
 		lc.Reset()
 	} else {
@@ -203,7 +203,7 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	batch := lc.chainDb.NewBatch()
 	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
 	rawdb.WriteBlock(batch, genesis)
-	rawdb.WriteHeadHeaderHash(batch, genesis.Hash())
+	rawdb.WriteLastFinalizedHash(batch, genesis.Hash())
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to reset genesis block", "err", err)
 	}
@@ -344,7 +344,7 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 		// last step, however the direction of rollback is from high
 		// to low, so it's safe the update in-memory markers directly.
 		if head := lc.hc.CurrentHeader(); head.Hash() == hash {
-			rawdb.WriteHeadHeaderHash(batch, head.ParentHash)
+			rawdb.WriteLastFinalizedHash(batch, head.ParentHash)
 			lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash, head.Number.Uint64()-1))
 		}
 	}
@@ -515,7 +515,7 @@ func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.Tru
 		// Ensure the chain didn't move past the latest block while retrieving it
 		if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
 			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
-			rawdb.WriteHeadHeaderHash(lc.chainDb, header.Hash())
+			rawdb.WriteLastFinalizedHash(lc.chainDb, header.Hash())
 			lc.hc.SetCurrentHeader(header)
 		}
 		return true

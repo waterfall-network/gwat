@@ -114,6 +114,7 @@ func TestIndexTransactions(t *testing.T) {
 	block = types.NewBlock(&types.Header{Height: uint64(0)}, nil, nil, newHasher())
 	WriteBlock(chainDb, block)
 	WriteCanonicalHash(chainDb, block.Hash(), block.Height())
+	WriteFinalizedHashNumber(chainDb, block.Hash(), block.Height())
 
 	for i := uint64(1); i <= 10; i++ {
 		var tx *types.Transaction

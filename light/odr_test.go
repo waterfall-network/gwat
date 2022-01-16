@@ -72,12 +72,12 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	}
 	switch req := req.(type) {
 	case *BlockRequest:
-		number := rawdb.ReadHeaderNumber(odr.sdb, req.Hash)
+		number := rawdb.ReadFinalizedNumberByHash(odr.sdb, req.Hash)
 		if number != nil {
 			req.Rlp = rawdb.ReadBodyRLP(odr.sdb, req.Hash, *number)
 		}
 	case *ReceiptsRequest:
-		number := rawdb.ReadHeaderNumber(odr.sdb, req.Hash)
+		number := rawdb.ReadFinalizedNumberByHash(odr.sdb, req.Hash)
 		if number != nil {
 			req.Receipts = rawdb.ReadRawReceipts(odr.sdb, req.Hash, *number)
 		}
@@ -120,12 +120,12 @@ func TestOdrGetReceiptsLes2(t *testing.T) { testChainOdr(t, 1, odrGetReceipts) }
 func odrGetReceipts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error) {
 	var receipts types.Receipts
 	if bc != nil {
-		number := rawdb.ReadHeaderNumber(db, bhash)
+		number := rawdb.ReadFinalizedNumberByHash(db, bhash)
 		if number != nil {
 			receipts = rawdb.ReadReceipts(db, bhash, *number, bc.Config())
 		}
 	} else {
-		number := rawdb.ReadHeaderNumber(db, bhash)
+		number := rawdb.ReadFinalizedNumberByHash(db, bhash)
 		if number != nil {
 			receipts, _ = GetBlockReceipts(ctx, lc.Odr(), bhash, *number)
 		}
