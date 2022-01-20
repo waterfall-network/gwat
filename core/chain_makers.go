@@ -126,8 +126,9 @@ func (b *BlockGen) AddUncheckedTx(tx *types.Transaction) {
 }
 
 // Number returns the block number of the block being generated.
-func (b *BlockGen) Number() *big.Int {
-	return new(big.Int).Set(b.header.Number)
+func (b *BlockGen) Number() *uint64 {
+	var nr uint64 = b.header.Nr()
+	return &nr
 }
 
 // BaseFee returns the EIP-1559 base fee of the block being generated.
@@ -205,28 +206,30 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
-		// Mutate the state and block according to any hard-fork specs
-		if daoBlock := config.DAOForkBlock; daoBlock != nil {
-			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-			if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
-				if config.DAOForkSupport {
-					b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-				}
-			}
-		}
-		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
-			misc.ApplyDAOHardFork(statedb)
-		}
+		//// Mutate the state and block according to any hard-fork specs
+		//if daoBlock := config.DAOForkBlock; daoBlock != nil {
+		//	limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
+		//	if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
+		//		if config.DAOForkSupport {
+		//			b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+		//		}
+		//	}
+		//}
+		//if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
+		//	misc.ApplyDAOHardFork(statedb)
+		//}
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+			//block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.receipts)
 
 			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+			//root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+			root, err := statedb.Commit(true)
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
@@ -258,26 +261,15 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
 	header := &types.Header{
-		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
-		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(chain, time, &types.Header{
-			Number:     parent.Number(),
-			Time:       time - 10,
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit: parent.GasLimit(),
-		Number:   new(big.Int).Add(parent.Number(), common.Big1),
-		Time:     time,
+		Root:         state.IntermediateRoot(true),
+		ParentHashes: []common.Hash{parent.Hash()},
+		Coinbase:     parent.Coinbase(),
+		GasLimit:     parent.GasLimit(),
+		Height:       parent.Height() + 1,
+		//Number:   parent.Height() + 1,
+		Time: time,
 	}
-	if chain.Config().IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
-		if !chain.Config().IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
-		}
-	}
+	header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
 	return header
 }
 
@@ -308,8 +300,8 @@ func (cr *fakeChainReader) Config() *params.ChainConfig {
 	return cr.config
 }
 
-func (cr *fakeChainReader) CurrentHeader() *types.Header                            { return nil }
-func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header           { return nil }
-func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
-func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
-func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
+func (cr *fakeChainReader) GetLastFinalisedHeader() *types.Header          { return nil }
+func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header  { return nil }
+func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header { return nil }
+func (cr *fakeChainReader) GetHeader(hash common.Hash) *types.Header       { return nil }
+func (cr *fakeChainReader) GetBlock(hash common.Hash) *types.Block         { return nil }

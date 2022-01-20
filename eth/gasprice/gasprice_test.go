@@ -116,7 +116,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		b.SetCoinbase(common.Address{1})
 
 		var txdata types.TxData
-		if londonBlock != nil && b.Number().Cmp(londonBlock) >= 0 {
+		if londonBlock != nil && *b.Number() >= londonBlock.Uint64() {
 			txdata = &types.DynamicFeeTx{
 				ChainID:   gspec.Config.ChainID,
 				Nonce:     b.TxNonce(addr),

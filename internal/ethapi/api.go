@@ -1286,7 +1286,7 @@ type RPCTransaction struct {
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
-	signer := types.MakeSigner(config, big.NewInt(0).SetUint64(blockNumber))
+	signer := types.MakeSigner(config)
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
@@ -1611,7 +1611,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 
 	// Derive the sender.
 	bigblock := new(big.Int).SetUint64(blockNumber)
-	signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
+	signer := types.MakeSigner(s.b.ChainConfig())
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
@@ -1683,7 +1683,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, err
 	}
 	// Print a log with full tx details for manual investigations and interventions
-	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
+	signer := types.MakeSigner(b.ChainConfig())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return common.Hash{}, err

@@ -63,13 +63,25 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
+func (bc *testBlockChain) GetLastFinalizedBlock() *types.Block {
+	return bc.GetLastFinalizedBlock()
+}
+
+func (bc *testBlockChain) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
+	return bc.ReadFinalizedNumberByHash(hash)
+}
+
+func (bc *testBlockChain) GetBlockByNumber(number uint64) *types.Block {
+	return bc.GetBlockByNumber(number)
+}
+
 func (bc *testBlockChain) CurrentBlock() *types.Block {
 	return types.NewBlock(&types.Header{
 		GasLimit: atomic.LoadUint64(&bc.gasLimit),
-	}, nil, nil, nil, trie.NewStackTrie(nil))
+	}, nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+func (bc *testBlockChain) GetBlock(hash common.Hash) *types.Block {
 	return bc.CurrentBlock()
 }
 

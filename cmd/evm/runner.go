@@ -206,10 +206,9 @@ func runCmd(ctx *cli.Context) error {
 		GasLimit:    initialGas,
 		GasPrice:    utils.GlobalBig(ctx, PriceFlag.Name),
 		Value:       utils.GlobalBig(ctx, ValueFlag.Name),
-		Difficulty:  genesisConfig.Difficulty,
 		Time:        new(big.Int).SetUint64(genesisConfig.Timestamp),
 		Coinbase:    genesisConfig.Coinbase,
-		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
+		BlockNumber: new(big.Int).SetUint64(genesisConfig.Height),
 		EVMConfig: vm.Config{
 			Tracer: tracer,
 			Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),

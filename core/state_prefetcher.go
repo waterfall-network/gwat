@@ -17,6 +17,7 @@
 package core
 
 import (
+	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/consensus"
@@ -53,10 +54,10 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		gaspool      = new(GasPool).AddGas(block.GasLimit())
 		blockContext = NewEVMBlockContext(header, p.bc, nil)
 		evm          = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
-		signer       = types.MakeSigner(p.config, header.Number)
+		signer       = types.MakeSigner(p.config)
 	)
 	// Iterate over and process the individual transactions
-	byzantium := p.config.IsByzantium(block.Number())
+	byzantium := p.config.IsByzantium(new(big.Int).SetUint64(block.Height()))
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
 		if interrupt != nil && atomic.LoadUint32(interrupt) == 1 {

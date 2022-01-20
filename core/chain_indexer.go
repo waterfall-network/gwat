@@ -53,8 +53,8 @@ type ChainIndexerBackend interface {
 
 // ChainIndexerChain interface is used for connecting the indexer to a blockchain
 type ChainIndexerChain interface {
-	// CurrentHeader retrieves the latest locally known header.
-	CurrentHeader() *types.Header
+	// GetLastFinalisedHeader retrieves the latest locally known header.
+	GetLastFinalisedHeader() *types.Header
 
 	// SubscribeChainHeadEvent subscribes to new head header notifications.
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
@@ -148,8 +148,8 @@ func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
-
-	go c.eventLoop(chain.CurrentHeader(), events, sub)
+	header := chain.GetLastFinalisedHeader()
+	go c.eventLoop(header, events, sub)
 }
 
 // Close tears down all goroutines belonging to the indexer and returns any error
@@ -194,18 +194,18 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
-func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
+func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
 	// Mark the chain indexer as active, requiring an additional teardown
 	atomic.StoreUint32(&c.active, 1)
 
 	defer sub.Unsubscribe()
 
 	// Fire the initial new head event to start any outstanding processing
-	c.newHead(currentHeader.Number.Uint64(), false)
+	c.newHead(lastFinalisedHeader.Nr(), false)
 
 	var (
-		prevHeader = currentHeader
-		prevHash   = currentHeader.Hash()
+		prevHeader = lastFinalisedHeader
+		prevHash   = lastFinalisedHeader.Hash()
 	)
 	for {
 		select {
@@ -222,17 +222,17 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 				return
 			}
 			header := ev.Block.Header()
-			if header.ParentHash != prevHash {
+			if !header.ParentHashes.Has(prevHash) {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
 
-				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number.Uint64()) != prevHash {
+				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Nr()) != prevHash {
 					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-						c.newHead(h.Number.Uint64(), true)
+						c.newHead(h.Nr(), true)
 					}
 				}
 			}
-			c.newHead(header.Number.Uint64(), false)
+			c.newHead(header.Nr(), false)
 
 			prevHeader, prevHash = header, header.Hash()
 		}
@@ -399,10 +399,10 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		if hash == (common.Hash{}) {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
 		}
-		header := rawdb.ReadHeader(c.chainDb, hash, number)
+		header := rawdb.ReadHeader(c.chainDb, hash)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
-		} else if header.ParentHash != lastHead {
+		} else if header.ParentHashes.Has(lastHead) {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
 		if err := c.backend.Process(c.ctx, header); err != nil {

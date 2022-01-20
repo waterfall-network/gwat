@@ -260,7 +260,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 
 			// Fetch and execute the next block trace tasks
 			for task := range tasks {
-				signer := types.MakeSigner(api.backend.ChainConfig(), task.block.Number())
+				signer := types.MakeSigner(api.backend.ChainConfig())
 				blockCtx := core.NewEVMBlockContext(task.block.Header(), api.chainContext(localctx), nil)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
@@ -502,7 +502,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	}
 	var (
 		roots              []common.Hash
-		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer             = types.MakeSigner(api.backend.ChainConfig())
 		chainConfig        = api.backend.ChainConfig()
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
@@ -563,7 +563,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 	// Execute all the transaction contained within the block concurrently
 	var (
-		signer  = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer  = types.MakeSigner(api.backend.ChainConfig())
 		txs     = block.Transactions()
 		results = make([]*txTraceResult, len(txs))
 
@@ -664,7 +664,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	// Execute transaction, either tracing all or just the requested one
 	var (
 		dumps       []string
-		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer      = types.MakeSigner(api.backend.ChainConfig())
 		chainConfig = api.backend.ChainConfig()
 		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		canon       = true

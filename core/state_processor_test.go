@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -292,27 +293,25 @@ func TestStateProcessorErrors(t *testing.T) {
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, &types.Header{
-			Number:     parent.Number(),
-			Time:       parent.Time(),
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit:  parent.GasLimit(),
-		Number:    new(big.Int).Add(parent.Number(), common.Big1),
-		Time:      parent.Time() + 10,
-		UncleHash: types.EmptyUncleHash,
+		ParentHashes: []common.Hash{parent.Hash()},
+		Epoch:        0,
+		Slot:         0,
+		Height:       0,
+		Coinbase:     parent.Coinbase(),
+		GasLimit:     parent.GasLimit(),
+		//Number:     parent.Nr()+1,
+		Time: parent.Time() + 10,
 	}
-	if config.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
-	}
+	//if config.IsLondon(header.Number) {
+	header.BaseFee = misc.CalcBaseFee(config, parent.Header())
+	//}
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there
 	// Preferably something unique. So let's use a combo of blocknum + txhash
 	hasher := sha3.NewLegacyKeccak256()
-	hasher.Write(header.Number.Bytes())
+	hbin := make([]byte, 8)
+	binary.BigEndian.PutUint64(hbin, header.Height)
+	hasher.Write(hbin)
 	var cumulativeGas uint64
 	for _, tx := range txs {
 		txh := tx.Hash()
@@ -325,5 +324,5 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+	return types.NewBlock(header, txs, receipts, trie.NewStackTrie(nil))
 }

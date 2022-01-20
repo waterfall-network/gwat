@@ -126,20 +126,20 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		}
 		// Include transactions to the miner to make blocks more interesting.
 		if parent == tc.genesis && i%22 == 0 {
-			signer := types.MakeSigner(params.TestChainConfig, block.Number())
+			signer := types.MakeSigner(params.TestChainConfig)
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
 			block.AddTx(tx)
 		}
-		// if the block number is a multiple of 5, add a bonus uncle to the block
-		if i > 0 && i%5 == 0 {
-			block.AddUncle(&types.Header{
-				ParentHash: block.PrevBlock(i - 1).Hash(),
-				Number:     big.NewInt(block.Number().Int64() - 1),
-			})
-		}
+		//// if the block number is a multiple of 5, add a bonus uncle to the block
+		//if i > 0 && i%5 == 0 {
+		//	block.AddUncle(&types.Header{
+		//		ParentHash: block.PrevBlock(i - 1).Hash(),
+		//		Number:     big.NewInt(block.Number().Int64() - 1),
+		//	})
+		//}
 	})
 
 	// Convert the block-chain into a hash-chain and header/block maps
