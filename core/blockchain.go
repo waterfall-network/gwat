@@ -20,9 +20,7 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rlp"
 	"io"
-	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -329,28 +327,31 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		var (
 			needRewind bool
 			low        uint64
+			headHash   common.Hash
 		)
 		// The head full block may be rolled back to a very low height due to
 		// blockchain repair. If the head full block is even lower than the ancient
 		// chain, truncate the ancient store.
-		fullBlock := bc.CurrentBlock()
-		if fullBlock != nil && fullBlock.Hash() != bc.genesisBlock.Hash() && fullBlock.NumberU64() < frozen-1 {
+		fullBlock := bc.GetLastFinalizedBlock()
+		if fullBlock != nil && fullBlock.Hash() != bc.genesisBlock.Hash() && fullBlock.Nr() < frozen-1 {
 			needRewind = true
-			low = fullBlock.NumberU64()
+			low = fullBlock.Nr()
+			headHash = fullBlock.Hash()
 		}
 		// In fast sync, it may happen that ancient data has been written to the
 		// ancient store, but the LastFastBlock has not been updated, truncate the
 		// extra data here.
-		fastBlock := bc.CurrentFastBlock()
-		if fastBlock != nil && fastBlock.NumberU64() < frozen-1 {
+		fastBlock := bc.GetLastFinalizedFastBlock()
+		if fastBlock != nil && fastBlock.Nr() < frozen-1 {
 			needRewind = true
-			if fastBlock.NumberU64() < low || low == 0 {
-				low = fastBlock.NumberU64()
+			if fastBlock.Nr() < low || low == 0 {
+				low = fastBlock.Nr()
+				headHash = fullBlock.Hash()
 			}
 		}
 		if needRewind {
-			log.Error("Truncating ancient chain", "from", bc.CurrentHeader().Number.Uint64(), "to", low)
-			if err := bc.SetHead(low); err != nil {
+			log.Error("Truncating ancient chain", "from", bc.GetLastFinalisedHeader().Nr(), "to", low, "hash", headHash.Hex())
+			if err := bc.SetHead(headHash); err != nil {
 				return nil, err
 			}
 		}
@@ -358,20 +359,22 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// The first thing the node will do is reconstruct the verification data for
 	// the head block (ethash cache or clique voting snapshot). Might as well do
 	// it in advance.
-	bc.engine.VerifyHeader(bc, bc.CurrentHeader(), true)
+	bc.engine.VerifyHeader(bc, bc.GetLastFinalisedHeader(), true)
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
 			// get the canonical block corresponding to the offending header's number
-			headerByNumber := bc.GetHeaderByNumber(header.Number.Uint64())
+			headerByNumber := bc.GetHeaderByNumber(header.Nr())
 			// make sure the headerByNumber (if present) is in our current canonical chain
 			if headerByNumber != nil && headerByNumber.Hash() == header.Hash() {
-				log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
-				if err := bc.SetHead(header.Number.Uint64() - 1); err != nil {
-					return nil, err
-				}
-				log.Error("Chain rewind was successful, resuming normal operation")
+				log.Error("Found bad hash, rewinding chain", "number", header.Nr(), "hash", header.Hash().Hex())
+				panic("Bad blocks handling implementation required")
+				//todo set last finalized block and block dag
+				//if err := bc.SetHead(header.Number.Uint64() - 1); err != nil {
+				//	return nil, err
+				//}
+				//log.Error("Chain rewind was successful, resuming normal operation")
 			}
 		}
 	}
@@ -384,9 +387,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		// head mismatch.
 		var recover bool
 
-		head := bc.CurrentBlock()
-		if layer := rawdb.ReadSnapshotRecoveryNumber(bc.db); layer != nil && *layer > head.NumberU64() {
-			log.Warn("Enabling snapshot recovery", "chainhead", head.NumberU64(), "diskbase", *layer)
+		head := bc.GetLastFinalizedBlock()
+		if layer := rawdb.ReadSnapshotRecoveryNumber(bc.db); layer != nil && *layer > head.Nr() {
+			log.Warn("Enabling snapshot recovery", "chainhead", head.Nr(), "diskbase", *layer)
 			recover = true
 		}
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
@@ -671,7 +674,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 				log.Crit("Failed to truncate ancient data", "number", num, "err", err)
 			}
 			// Remove the hash <-> number mapping from the active store.
-			rawdb.DeleteHeader(db, hash)
+			rawdb.DeleteHeader(db, hash, num)
 		} else {
 			// Remove relative body and receipts from the active store.
 			// The header, total difficulty and canonical hash will be
@@ -735,249 +738,14 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	return nil
 }
 
-// GasLimit returns the gas limit of the current HEAD block.
-func (bc *BlockChain) GasLimit() uint64 {
-	curBlock := bc.GetLastFinalizedBlock()
-	return curBlock.GasLimit()
-}
-
-// GetLastFinalizedBlock retrieves the current Last Finalized block of the canonical chain. The
-// block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) GetLastFinalizedBlock() *types.Block {
-	lfb := bc.lastFinalizedBlock.Load().(*types.Block)
-	return lfb
-}
-
-// GetDagHashes retrieves all non finalized block's hashes
-func (bc *BlockChain) GetDagHashes() *common.HashArray {
-	dagHashes := common.HashArray{}
-	for hash, tip := range *bc.hc.GetTips() {
-		if hash == tip.LastFinalizedHash {
-			dagHashes = append(dagHashes, hash)
-			continue
-		}
-		_, loaded, _, _, _ := bc.ExploreChainRecursive(hash)
-		dagHashes = dagHashes.Concat(loaded)
-	}
-	dagHashes = dagHashes.Uniq()
-	return &dagHashes
-}
-
-// GetUnsynchronizedTipsHashes retrieves tips with incomplete chain to finalized state
-func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
-	tipsHashes := common.HashArray{}
-	for hash, dag := range *bc.hc.GetTips() {
-		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
-			tipsHashes = append(tipsHashes, hash)
-		}
-	}
-	return tipsHashes
-}
-
-//todo check and RM
-// EmitTipsSynced if tips are synchronized - emit tipsSynced event
-// returns true if evt is emitted, otherwise - false
-func (bc *BlockChain) EmitTipsSynced(tips *types.Tips) bool {
-	if tips != nil {
-		bc.tipsSynced.Send(*tips)
-		return true
-	}
-	if unsynced := bc.GetUnsynchronizedTipsHashes(); len(unsynced) == 0 {
-		tips := bc.GetTips().Copy()
-		bc.tipsSynced.Send(tips)
-		return true
-	}
-	return false
-}
-
-// ReviseTips revise tips state
-// explore chains to update tips in accordance with sync process
-func (bc *BlockChain) ReviseTips() (tips *types.Tips, unloadedHashes common.HashArray) {
-	return bc.hc.ReviseTips(bc)
-}
-
-func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, err error) {
-	block := bc.GetBlockByHash(headHash)
-	graph = &types.GraphDag{
-		Hash:   headHash,
-		Height: 0,
-		Graph:  []*types.GraphDag{},
-		State:  types.BSS_NOT_LOADED,
-	}
-	if block == nil {
-		// if block not loaded
-		return common.HashArray{headHash}, loaded, finalized, graph, nil
-	}
-	graph.State = types.BSS_LOADED
-	graph.Height = block.Height()
-	if nr := rawdb.ReadFinalizedNumberByHash(bc.db, headHash); nr != nil {
-		// if finalized
-		graph.State = types.BSS_FINALIZED
-		graph.Number = *nr
-		return unloaded, loaded, common.HashArray{headHash}, graph, nil
-	}
-	loaded = common.HashArray{headHash}
-	if block.ParentHashes() == nil || len(block.ParentHashes()) < 1 {
-		if block.Hash() == bc.genesisBlock.Hash() {
-			return unloaded, loaded, common.HashArray{headHash}, graph, nil
-		}
-		log.Warn("Detect block without parents", "hash", block.Hash(), "height", block.Height(), "epoch", block.Epoch(), "slot", block.Slot())
-		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
-		return unloaded, loaded, finalized, graph, err
-	}
-	for _, ph := range block.ParentHashes() {
-		_unloaded, _loaded, _finalized, _graph, _err := bc.ExploreChainRecursive(ph)
-		unloaded = unloaded.Concat(_unloaded).Uniq()
-		loaded = loaded.Concat(_loaded).Uniq()
-		finalized = finalized.Concat(_finalized).Uniq()
-		graph.Graph = append(graph.Graph, _graph)
-		err = _err
-	}
-	return unloaded, loaded, finalized, graph, err
-}
-
-func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash common.Hash) bool {
-	//if ancestorHash is genesis
-	if bc.genesisBlock.Hash() == ancestorHash {
-		return true
-	}
-	// if ancestorHash in parents
-	if block.ParentHashes().Has(ancestorHash) {
-		return true
-	}
-	// if ancestor not exists
-	ancestor := bc.GetBlockByHash(ancestorHash)
-	if ancestor == nil {
-		return false
-	}
-	//if ancestor is finalised and block is not finalised
-	if ancestor.Number() != nil && block.Number() == nil {
-		return true
-	}
-	//if ancestor is not finalised and block is finalised
-	if ancestor.Number() == nil && block.Number() != nil {
-		return false
-	}
-	//if ancestor is finalised and block is finalised
-	if ancestor.Number() != nil && block.Number() != nil {
-		if ancestor.Nr() > block.Nr() {
-			return false
-		}
-	}
-	// otherwise, recursive check parents
-	for _, pHash := range block.ParentHashes() {
-		pBlock := bc.GetBlock(pHash)
-		if pBlock != nil && bc.IsAncestorRecursive(pBlock, ancestorHash) {
-			return true
-		}
-	}
-	return false
-}
-
-//GetTips retrieves active tips headers:
-// - no descendants
-// - chained to finalized state (skips unchained)
-func (bc *BlockChain) GetTips() types.Tips {
-	tips := types.Tips{}
-	for hash, dag := range *bc.hc.GetTips() {
-		if dag != nil && dag.LastFinalizedHash != (common.Hash{}) {
-			tips[hash] = dag
-		}
-	}
-	return tips
-}
-
-// ResetTips set last finalized block to tips for stable work
-func (bc *BlockChain) ResetTips() error {
-	return bc.hc.ResetTips()
-}
-
-//AddTips add BlockDag to tips
-func (bc *BlockChain) AddTips(blockDag *types.BlockDAG) {
-	bc.hc.AddTips(blockDag)
-}
-
-//RemoveTips remove BlockDag from tips by hash from tips
-func (bc *BlockChain) RemoveTips(hashes common.HashArray) {
-	bc.hc.RemoveTips(hashes)
-}
-
-//FinalizeTips update tips in accordance with finalization result
-func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
-	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
-}
-
-//AppendToChildren append block hash as child of block
-func (bc *BlockChain) AppendToChildren(child common.Hash, parents common.HashArray) {
-	batch := bc.db.NewBatch()
-	for _, parent := range parents {
-		children := rawdb.ReadChildren(bc.db, parent)
-		children = append(children, child)
-		rawdb.WriteChildren(batch, parent, children)
-	}
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write block children", "err", err)
-	}
-}
-
-func (bc *BlockChain) ReadChildren(hash common.Hash) common.HashArray {
-	return rawdb.ReadChildren(bc.db, hash)
-}
-
-func (bc *BlockChain) DeleteBockDag(hash common.Hash) {
-	rawdb.DeleteBlockDag(bc.db, hash)
-}
-
-func (bc *BlockChain) ReadBockDag(hash common.Hash) *types.BlockDAG {
-	return rawdb.ReadBlockDag(bc.db, hash)
-}
-
-// Snapshots returns the blockchain snapshot tree.
-func (bc *BlockChain) Snapshots() *snapshot.Tree {
-	return bc.snaps
-}
-
-// GetLastFinalizedFastBlock retrieves the current fast-sync last finalized block of the canonical
-// chain. The block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) GetLastFinalizedFastBlock() *types.Block {
-	lfb := bc.lastFinalizedBlock.Load().(*types.Block)
-	return lfb
+// Reset purges the entire blockchain, restoring it to its genesis state.
+func (bc *BlockChain) Reset() error {
+	return bc.ResetWithGenesisBlock(bc.genesisBlock)
 }
 
 //func (bc *BlockChain) GetLastFinalizedFastBlock() types.Block {
 //	return bc.lastFinalizedFastBlock.Load().(types.Block)
 //}
-
-// Validator returns the current validator.
-func (bc *BlockChain) Validator() Validator {
-	return bc.validator
-}
-
-// Processor returns the current processor.
-func (bc *BlockChain) Processor() Processor {
-	return bc.processor
-}
-
-// State returns a new mutable state based on the current HEAD block.
-func (bc *BlockChain) State() (*state.StateDB, error) {
-	curBlock := bc.GetLastFinalizedBlock()
-	return bc.StateAt(curBlock.Root())
-}
-
-// StateAt returns a new mutable state based on a particular point in time.
-func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, bc.stateCache, bc.snaps)
-}
-
-// StateCache returns the caching database underpinning the blockchain instance.
-func (bc *BlockChain) StateCache() state.Database {
-	return bc.stateCache
-}
-
-// Reset purges the entire blockchain, restoring it to its genesis state.
-func (bc *BlockChain) Reset() error {
-	return bc.ResetWithGenesisBlock(bc.genesisBlock)
-}
 
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
 // specified genesis state.
@@ -1126,7 +894,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 		bc.lastFinalizedBlock.Store(block)
 		headFastBlockGauge.Update(int64(finNr))
 		bc.lastFinalizedFastBlock.Store(block)
-		headFastBlockGauge.Update(int64(block.NumberU64()))
+		headFastBlockGauge.Update(int64(block.Nr()))
 		headBlockGauge.Update(int64(finNr))
 
 		bc.chainHeadFeed.Send(ChainHeadEvent{Block: block, Type: ET_NETWORK})
@@ -1134,220 +902,24 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	return nil
 }
 
-// GetLastFinalizedNumber checks if a block is fully present in the database or not.
-func (bc *BlockChain) GetLastFinalizedNumber() uint64 {
-	if cached, ok := bc.hc.numberCache.Get(bc.hc.lastFinalisedHash); ok {
-		number := cached.(uint64)
-		return number
-	}
-	return rawdb.ReadLastFinalizedNumber(bc.db)
-}
-
-// GetBody retrieves a block body (transactions and uncles) from the database by
-// hash, caching it if found.
-func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
-	// Short circuit if the body's already in the cache, retrieve otherwise
-	if cached, ok := bc.bodyCache.Get(hash); ok {
-		body := cached.(*types.Body)
-		return body
-	}
-	//number := bc.hc.GetBlockFinalizedNumber(hash)
-	//if number == nil {
-	//	return nil
-	//}
-	body := rawdb.ReadBody(bc.db, hash)
-	if body == nil {
-		return nil
-	}
-	// Cache the found body for next time and return
-	bc.bodyCache.Add(hash, body)
-	return body
-}
-
-// GetBodyRLP retrieves a block body in RLP encoding from the database by hash,
-// caching it if found.
-func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
-	// Short circuit if the body's already in the cache, retrieve otherwise
-	if cached, ok := bc.bodyRLPCache.Get(hash); ok {
-		return cached.(rlp.RawValue)
-	}
-	//number := bc.hc.GetBlockFinalizedNumber(hash)
-	//if number == nil {
-	//	return nil
-	//}
-	body := rawdb.ReadBodyRLP(bc.db, hash)
-	if len(body) == 0 {
-		return nil
-	}
-	// Cache the found body for next time and return
-	bc.bodyRLPCache.Add(hash, body)
-	return body
-}
-
-// HasBlock checks if a block is fully present in the database or not.
-func (bc *BlockChain) HasBlock(hash common.Hash) bool {
-	if bc.blockCache.Contains(hash) {
-		return true
-	}
-	return rawdb.HasBody(bc.db, hash)
-}
-
-// HasFastBlock checks if a fast block is fully present in the database or not.
-func (bc *BlockChain) HasFastBlock(hash common.Hash) bool {
-	if !bc.HasBlock(hash) {
-		return false
-	}
-	if bc.receiptsCache.Contains(hash) {
-		return true
-	}
-	return rawdb.HasReceipts(bc.db, hash)
-}
-
-// HasState checks if state trie is fully present in the database or not.
-func (bc *BlockChain) HasState(hash common.Hash) bool {
-	_, err := bc.stateCache.OpenTrie(hash)
-	return err == nil
-}
-
-// HasBlockAndState checks if a block and associated state trie is fully present
-// in the database or not, caching it if present.
-func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
-	// Check first that the block itself is known
-	block := bc.GetBlock(hash)
-	if block == nil {
-		return false
-	}
-	return bc.HasState(block.Root())
-}
-
-// GetBlock retrieves a block from the database by hash and number,
-// caching it if found.
-func (bc *BlockChain) GetBlock(hash common.Hash) *types.Block {
-	finNr := bc.hc.GetBlockFinalizedNumber(hash)
-	// Short circuit if the block's already in the cache, retrieve otherwise
-	if block, ok := bc.blockCache.Get(hash); ok {
-		blk := block.(*types.Block)
-		blk.SetNumber(finNr)
-		return blk
-	}
-	block := rawdb.ReadBlock(bc.db, hash)
-	if block == nil {
-		return nil
-	}
-	block.SetNumber(finNr)
-	// Cache the found block for next time and return
-	bc.blockCache.Add(block.Hash(), block)
-	return block
-}
-
-// GetBlockByHash retrieves a block from the database by hash, caching it if found.
-func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
-	return bc.GetBlock(hash)
-}
-
-func (bc *BlockChain) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
-	blocks := make(types.BlockMap, len(hashes))
-	for _, hash := range hashes {
-		blocks[hash] = bc.GetBlock(hash)
-	}
-	return blocks
-}
-
-// GetBlockByNumber retrieves a block from the database by number, caching it
-// (associated with its hash) if found.
-func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	hash := rawdb.ReadCanonicalHash(bc.db, number)
-	if hash == (common.Hash{}) {
-		hash = rawdb.ReadFinalizedHashByNumber(bc.db, number)
-		if hash == (common.Hash{}) {
-			return nil
-		}
-	}
-	block := bc.GetBlock(hash)
-	if block != nil {
-		block.SetNumber(&number)
-	}
-	return block
-}
-
-func (bc *BlockChain) ReadFinalizedHashByNumber(number uint64) common.Hash {
-	return rawdb.ReadFinalizedHashByNumber(bc.db, number)
-}
-func (bc *BlockChain) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
-	return rawdb.ReadFinalizedNumberByHash(bc.db, hash)
-}
-
-// GetBlockFinalizedNumber retrieves a block finalized height
-func (bc *BlockChain) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
-	return bc.hc.GetBlockFinalizedNumber(hash)
-}
-
-func (bc *BlockChain) GetGenesisBlock() *types.Block {
-	hash := rawdb.ReadCanonicalHash(bc.db, 0)
-	if hash == (common.Hash{}) {
-		return nil
-	}
-	return bc.GetBlock(hash)
-}
-
-// GetReceiptsByHash retrieves the receipts for all transactions in a given block.
-func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
-	if receipts, ok := bc.receiptsCache.Get(hash); ok {
-		return receipts.(types.Receipts)
-	}
-	//number := rawdb.ReadHeaderNumber(bc.db, hash)
-	//if number == nil {
-	//	return nil
-	//}
-	receipts := rawdb.ReadReceipts(bc.db, hash, bc.chainConfig)
-	if receipts == nil {
-		return nil
-	}
-	bc.receiptsCache.Add(hash, receipts)
-	return receipts
-}
-
-// GetFinalizedBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
-// [deprecated by eth/62]
-func (bc *BlockChain) GetFinalizedBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
-	number := bc.hc.GetBlockFinalizedNumber(hash)
-	if number == nil {
-		return nil
-	}
-	for i := 0; i < n; i++ {
-		block := bc.GetBlockByNumber(*number)
-		if block == nil {
-			break
-		}
-		blocks = append(blocks, block)
-		*number--
-	}
-	return
-}
-
-// TrieNode retrieves a blob of data associated with a trie node
-// either from ephemeral in-memory cache, or from persistent storage.
-func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
-	return bc.stateCache.TrieDB().Node(hash)
-}
-
-// ContractCode retrieves a blob of data associated with a contract hash
-// either from ephemeral in-memory cache, or from persistent storage.
-func (bc *BlockChain) ContractCode(hash common.Hash) ([]byte, error) {
-	return bc.stateCache.ContractCode(common.Hash{}, hash)
-}
-
-// ContractCodeWithPrefix retrieves a blob of data associated with a contract
-// hash either from ephemeral in-memory cache, or from persistent storage.
-//
-// If the code doesn't exist in the in-memory cache, check the storage with
-// new code scheme.
-func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
-	type codeReader interface {
-		ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error)
-	}
-	return bc.stateCache.(codeReader).ContractCodeWithPrefix(common.Hash{}, hash)
-}
+//todo RM
+//// GetFinalizedBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
+//// todo [deprecated by eth/62]
+//func (bc *BlockChain) GetFinalizedBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
+//	number := bc.hc.GetBlockFinalizedNumber(hash)
+//	if number == nil {
+//		return nil
+//	}
+//	for i := 0; i < n; i++ {
+//		block := bc.GetBlockByNumber(*number)
+//		if block == nil {
+//			break
+//		}
+//		blocks = append(blocks, block)
+//		*number--
+//	}
+//	return
+//}
 
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
@@ -1568,7 +1140,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// generated.
 		var batch = bc.db.NewBatch()
 		for _, block := range blockChain {
-			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.NumberU64() >= ancientLimit-bc.txLookupLimit {
+			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.Nr() >= ancientLimit-bc.txLookupLimit {
 				rawdb.WriteTxLookupEntriesByBlock(batch, block)
 			} else if rawdb.ReadTxIndexTail(bc.db) != nil {
 				rawdb.WriteTxLookupEntriesByBlock(batch, block)
@@ -1736,7 +1308,7 @@ var lastWrite uint64
 // writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (err error) {
+func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
 	if bc.insertStopped() {
 		return errInsertionInterrupted
 	}
@@ -1832,7 +1404,9 @@ func (bc *BlockChain) WriteMinedBlock(block *types.Block, receipts []*types.Rece
 
 // WriteMinedBlock writes the block and all associated state to the database.
 func (bc *BlockChain) WriteRecommitedBlock(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) (status WriteStatus, err error) {
-	bc.chainmu.Lock()
+	if !bc.chainmu.TryLock() {
+		return NonStatTy, errInsertionInterrupted
+	}
 	defer bc.chainmu.Unlock()
 	return bc.writeBlockWithState(block, receipts, logs, state, ET_SKIP, "WriteRecommitedBlock")
 }
@@ -2177,7 +1751,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		// Falls through to the block import
 	}
 	switch {
-	// First block is pruned, insert as sidechain and reorg only if TD grows enough
+	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
 		return bc.insertSideChain(block, it)
@@ -2371,7 +1945,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		switch status {
 		case CanonStatTy:
 			log.Error("Inserted new block :: require FIX lastCanon", "hash", block.Hash(),
-				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
 			//lastCanon = block
@@ -2380,16 +1954,16 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 
 		case SideStatTy:
 			log.Debug("Inserted forked block", "hash", block.Hash(),
-				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles",
 				"root", block.Root())
 
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
 			// a log, instead of trying to track down blocks imports that don't emit logs.
 			log.Warn("Inserted block with unknown status", "hash", block.Hash(),
-				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles",
 				"root", block.Root())
 		}
 		stats.processed++
@@ -2517,7 +2091,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		// Falls through to the block import
 	}
 	switch {
-	// First block is pruned, insert as sidechain and reorg only if TD grows enough
+	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
 		return bc.insertSideChain(block, it)
@@ -2575,7 +2149,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		if err == ErrKnownBlock {
 			log.Warn("========= ERROR::ErrKnownBlock:2 ==========")
 			log.Warn("Inserted known block", "hash", block.Hash(),
-				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
 
 			//// Special case. Commit the empty receipt slice if we meet the known
@@ -2739,7 +2313,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "hash", block.Hash(),
-				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
 
@@ -2750,16 +2324,16 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		case SideStatTy:
 			log.Debug("Inserted forked block", "hash", block.Hash(),
-				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
 
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
 			// a log, instead of trying to track down blocks imports that don't emit logs.
 			log.Warn("Inserted block with unknown status", "hash", block.Hash(),
-				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
 		}
 		stats.processed++
@@ -2779,12 +2353,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		//})
 	}
 
-	if !stateOnly {
-		upTips, unloaded := bc.ReviseTips()
-		if len(unloaded) == 0 {
-			bc.EmitTipsSynced(upTips)
-		}
-	}
+	//if !stateOnly {
+	//	upTips, unloaded := bc.ReviseTips()
+	//	if len(unloaded) == 0 {
+	//		bc.EmitTipsSynced(upTips)
+	//	}
+	//}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
@@ -3158,7 +2732,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		//// Falls through to the block import
 	}
 	switch {
-	// First block is pruned, insert as sidechain and reorg only if TD grows enough
+	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
 		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Nr(), "hash", block.Hash().Hex())
 		return bc.insertSideChain(block, it)
@@ -3387,7 +2961,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 // found.
 //
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
-// switch over to the new chain if the TD exceeded the current chain.
+// switch over to the new chain
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	//var (
 	//externTd *big.Int
@@ -3815,158 +3389,191 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	return 0, err
 }
 
-// GetLastFinalisedHeader retrieves the current head header of the canonical chain. The
-// header is retrieved from the HeaderChain's internal cache.
-func (bc *BlockChain) GetLastFinalisedHeader() *types.Header {
-	return bc.hc.GetLastFinalisedHeader()
-}
+/********** BlockDAG **********/
 
-// GetTdByHash retrieves a block's total difficulty in the canonical chain from the
-// database by hash, caching it if found.
-func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
-	return bc.hc.GetTdByHash(hash)
-}
-
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
-func (bc *BlockChain) GetHeader(hash common.Hash) *types.Header {
-	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block).Header()
+// GetDagHashes retrieves all non finalized block's hashes
+func (bc *BlockChain) GetDagHashes() *common.HashArray {
+	dagHashes := common.HashArray{}
+	for hash, tip := range *bc.hc.GetTips() {
+		if hash == tip.LastFinalizedHash {
+			dagHashes = append(dagHashes, hash)
+			continue
+		}
+		_, loaded, _, _, _ := bc.ExploreChainRecursive(hash)
+		dagHashes = dagHashes.Concat(loaded)
 	}
-
-	return bc.hc.GetHeader(hash)
+	dagHashes = dagHashes.Uniq()
+	return &dagHashes
 }
 
-// GetHeaderByHash retrieves a block header from the database by hash, caching it if found.
-func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
-	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block).Header()
-	}
-
-	return bc.hc.GetHeaderByHash(hash)
-}
-
-// GetHeadersByHashes retrieves a blocks headers from the database by hashes, caching it if found.
-func (bc *BlockChain) GetHeadersByHashes(hashes common.HashArray) types.HeaderMap {
-	headers := types.HeaderMap{}
-	for _, hash := range hashes {
-		headers[hash] = bc.GetHeader(hash)
-	}
-	return headers
-}
-
-// HasHeader checks if a block header is present in the database or not, caching
-// it if present.
-func (bc *BlockChain) HasHeader(hash common.Hash) bool {
-	return bc.hc.HasHeader(hash)
-}
-
-// GetCanonicalHash returns the canonical hash for a given block number
-func (bc *BlockChain) GetCanonicalHash(number uint64) common.Hash {
-	return bc.hc.GetCanonicalHash(number)
-}
-
-// GetBlockHashesFromHash retrieves a number of block hashes starting at a given
-// hash, fetching towards the genesis block.
-func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
-	return bc.hc.GetBlockHashesFromHash(hash, max)
-}
-
-// GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or
-// a close ancestor of it is canonical. maxNonCanonical points to a downwards counter limiting the
-// number of blocks to be individually checked before we reach the canonical chain.
-//
-// Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
-func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
-	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
-}
-
-// GetHeaderByNumber retrieves a block header from the database by number,
-// caching it (associated with its hash) if found.
-func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
-	return bc.hc.GetHeaderByNumber(number)
-}
-
-func (bc *BlockChain) SearchPrevFinalizedBlueHeader(finNr uint64) *types.Header {
-	for i := finNr - 1; i > 0; i-- {
-		header := bc.GetHeaderByNumber(i)
-		if header.Height == i {
-			return header
+// GetUnsynchronizedTipsHashes retrieves tips with incomplete chain to finalized state
+func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
+	tipsHashes := common.HashArray{}
+	for hash, dag := range *bc.hc.GetTips() {
+		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
+			tipsHashes = append(tipsHashes, hash)
 		}
 	}
-	return nil
+	return tipsHashes
 }
 
-// GetTransactionLookup retrieves the lookup associate with the given transaction
-// hash from the cache or database.
-func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
-	// Short circuit if the txlookup already in the cache, retrieve otherwise
-	if lookup, exist := bc.txLookupCache.Get(hash); exist {
-		return lookup.(*rawdb.LegacyTxLookupEntry)
+// ReviseTips revise tips state
+// explore chains to update tips in accordance with sync process
+func (bc *BlockChain) ReviseTips() (tips *types.Tips, unloadedHashes common.HashArray) {
+	return bc.hc.ReviseTips(bc)
+}
+
+func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, err error) {
+	block := bc.GetBlockByHash(headHash)
+	graph = &types.GraphDag{
+		Hash:   headHash,
+		Height: 0,
+		Graph:  []*types.GraphDag{},
+		State:  types.BSS_NOT_LOADED,
 	}
-	tx, blockHash, txIndex := rawdb.ReadTransaction(bc.db, hash)
-	if tx == nil {
-		return nil
+	if block == nil {
+		// if block not loaded
+		return common.HashArray{headHash}, loaded, finalized, graph, nil
 	}
-	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: txIndex}
-	bc.txLookupCache.Add(hash, lookup)
-	return lookup
-}
-
-// GetTxBlockHash retrieves block hash of transaction
-func (bc *BlockChain) GetTxBlockHash(txHash common.Hash) common.Hash {
-	if lookup, exist := bc.txLookupCache.Get(txHash); exist {
-		return lookup.(*rawdb.LegacyTxLookupEntry).BlockHash
+	graph.State = types.BSS_LOADED
+	graph.Height = block.Height()
+	if nr := rawdb.ReadFinalizedNumberByHash(bc.db, headHash); nr != nil {
+		// if finalized
+		graph.State = types.BSS_FINALIZED
+		graph.Number = *nr
+		return unloaded, loaded, common.HashArray{headHash}, graph, nil
 	}
-	return rawdb.ReadTxLookupEntry(bc.db, txHash)
+	loaded = common.HashArray{headHash}
+	if block.ParentHashes() == nil || len(block.ParentHashes()) < 1 {
+		if block.Hash() == bc.genesisBlock.Hash() {
+			return unloaded, loaded, common.HashArray{headHash}, graph, nil
+		}
+		log.Warn("Detect block without parents", "hash", block.Hash(), "height", block.Height(), "epoch", block.Epoch(), "slot", block.Slot())
+		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
+		return unloaded, loaded, finalized, graph, err
+	}
+	for _, ph := range block.ParentHashes() {
+		_unloaded, _loaded, _finalized, _graph, _err := bc.ExploreChainRecursive(ph)
+		unloaded = unloaded.Concat(_unloaded).Uniq()
+		loaded = loaded.Concat(_loaded).Uniq()
+		finalized = finalized.Concat(_finalized).Uniq()
+		graph.Graph = append(graph.Graph, _graph)
+		err = _err
+	}
+	return unloaded, loaded, finalized, graph, err
 }
 
-// CacheTransactionLookup add to cache positions of block transactions
-func (bc *BlockChain) CacheTransactionLookup(block *types.Block) {
-	for i, tx := range block.Transactions() {
-		lookup := &rawdb.LegacyTxLookupEntry{BlockHash: block.Hash(), Index: uint64(i)}
-		bc.txLookupCache.Add(tx.Hash(), lookup)
+func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash common.Hash) bool {
+	//if ancestorHash is genesis
+	if bc.genesisBlock.Hash() == ancestorHash {
+		return true
+	}
+	// if ancestorHash in parents
+	if block.ParentHashes().Has(ancestorHash) {
+		return true
+	}
+	// if ancestor not exists
+	ancestor := bc.GetBlockByHash(ancestorHash)
+	if ancestor == nil {
+		return false
+	}
+	//if ancestor is finalised and block is not finalised
+	if ancestor.Number() != nil && block.Number() == nil {
+		return true
+	}
+	//if ancestor is not finalised and block is finalised
+	if ancestor.Number() == nil && block.Number() != nil {
+		return false
+	}
+	//if ancestor is finalised and block is finalised
+	if ancestor.Number() != nil && block.Number() != nil {
+		if ancestor.Nr() > block.Nr() {
+			return false
+		}
+	}
+	// otherwise, recursive check parents
+	for _, pHash := range block.ParentHashes() {
+		pBlock := bc.GetBlock(pHash)
+		if pBlock != nil && bc.IsAncestorRecursive(pBlock, ancestorHash) {
+			return true
+		}
+	}
+	return false
+}
+
+//GetTips retrieves active tips headers:
+// - no descendants
+// - chained to finalized state (skips unchained)
+func (bc *BlockChain) GetTips() types.Tips {
+	tips := types.Tips{}
+	for hash, dag := range *bc.hc.GetTips() {
+		if dag != nil && dag.LastFinalizedHash != (common.Hash{}) {
+			tips[hash] = dag
+		}
+	}
+	return tips
+}
+
+// ResetTips set last finalized block to tips for stable work
+func (bc *BlockChain) ResetTips() error {
+	return bc.hc.ResetTips()
+}
+
+//AddTips add BlockDag to tips
+func (bc *BlockChain) AddTips(blockDag *types.BlockDAG) {
+	bc.hc.AddTips(blockDag)
+}
+
+//RemoveTips remove BlockDag from tips by hash from tips
+func (bc *BlockChain) RemoveTips(hashes common.HashArray) {
+	bc.hc.RemoveTips(hashes)
+}
+
+//FinalizeTips update tips in accordance with finalization result
+func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
+	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
+}
+
+//AppendToChildren append block hash as child of block
+func (bc *BlockChain) AppendToChildren(child common.Hash, parents common.HashArray) {
+	batch := bc.db.NewBatch()
+	for _, parent := range parents {
+		children := rawdb.ReadChildren(bc.db, parent)
+		children = append(children, child)
+		rawdb.WriteChildren(batch, parent, children)
+	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write block children", "err", err)
 	}
 }
 
-// Config retrieves the chain's fork configuration.
-func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
-
-// Engine retrieves the blockchain's consensus engine.
-func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
-
-// SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
-func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
-	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch))
+func (bc *BlockChain) ReadChildren(hash common.Hash) common.HashArray {
+	return rawdb.ReadChildren(bc.db, hash)
 }
 
-// SubscribeChainEvent registers a subscription of ChainEvent.
-func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
-	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
+func (bc *BlockChain) DeleteBockDag(hash common.Hash) {
+	rawdb.DeleteBlockDag(bc.db, hash)
 }
 
-// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
-func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
-	return bc.scope.Track(bc.chainHeadFeed.Subscribe(ch))
+func (bc *BlockChain) ReadBockDag(hash common.Hash) *types.BlockDAG {
+	return rawdb.ReadBlockDag(bc.db, hash)
 }
 
-// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
-func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
-	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
-}
-
-// SubscribeLogsEvent registers a subscription of []*types.Log.
-func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
-}
-
-// SubscribeBlockProcessingEvent registers a subscription of bool where true means
-// block processing has started while false means it has stopped.
-func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
-	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
-}
+////todo check and RM
+//// EmitTipsSynced if tips are synchronized - emit tipsSynced event
+//// returns true if evt is emitted, otherwise - false
+//func (bc *BlockChain) EmitTipsSynced(tips *types.Tips) bool {
+//	if tips != nil {
+//		bc.tipsSynced.Send(*tips)
+//		return true
+//	}
+//	if unsynced := bc.GetUnsynchronizedTipsHashes(); len(unsynced) == 0 {
+//		tips := bc.GetTips().Copy()
+//		bc.tipsSynced.Send(tips)
+//		return true
+//	}
+//	return false
+//}
 
 //// SubscribeTipsSyncedEvent registers a subscription for tips synchronized event
 //func (bc *BlockChain) SubscribeTipsSyncedEvent(ch chan<- types.Tips) event.Subscription {

@@ -33,11 +33,11 @@ type ChainHeaderReader interface {
 	// Config retrieves the blockchain's chain configuration.
 	Config() *params.ChainConfig
 
-	// CurrentHeader retrieves the current header from the local chain.
-	CurrentHeader() *types.Header
+	// GetLastFinalisedHeader retrieves the current header from the local chain.
+	GetLastFinalisedHeader() *types.Header
 
 	// GetHeader retrieves a block header from the database by hash and number.
-	GetHeader(hash common.Hash, number uint64) *types.Header
+	GetHeader(hash common.Hash) *types.Header
 
 	// GetHeaderByNumber retrieves a block header from the database by number.
 	GetHeaderByNumber(number uint64) *types.Header
@@ -52,7 +52,7 @@ type ChainReader interface {
 	ChainHeaderReader
 
 	// GetBlock retrieves a block from the database by hash and number.
-	GetBlock(hash common.Hash, number uint64) *types.Block
+	GetBlock(hash common.Hash) *types.Block
 }
 
 // Engine is an algorithm agnostic consensus engine.
@@ -86,8 +86,7 @@ type Engine interface {
 	//
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
-	Finalize(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-		uncles []*types.Header)
+	Finalize(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction)
 
 	// FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
 	// rewards) and assembles the final block.
@@ -95,14 +94,14 @@ type Engine interface {
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
 	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
+		receipts []*types.Receipt) (*types.Block, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
 	//
 	// Note, the method returns immediately and will send the result async. More
 	// than one result may also be returned depending on the consensus algorithm.
-	Seal(chain ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error
+	Seal(chain ChainHeaderReader, block *types.Block, tips *types.Tips, results chan<- *types.Block, stop <-chan struct{}) error
 
 	// SealHash returns the hash of a block prior to it being sealed.
 	SealHash(header *types.Header) common.Hash

@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	mrand "math/rand"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -61,8 +62,11 @@ type HeaderChain struct {
 	chainDb       ethdb.Database
 	genesisHeader *types.Header
 
-	currentHeader     atomic.Value // Current head of the header chain (may be above the block chain!)
-	currentHeaderHash common.Hash  // Hash of the current head of the header chain (prevent recomputing all the time)
+	tips   atomic.Value
+	tipsMu sync.RWMutex
+
+	lastFinalisedHeader atomic.Value // Current head of the header chain (may be above the block chain!)
+	lastFinalisedHash   common.Hash  // Hash of the current head of the header chain (prevent recomputing all the time)
 
 	headerCache *lru.Cache // Cache for the most recent block headers
 	tdCache     *lru.Cache // Cache for the most recent block total difficulties
@@ -98,26 +102,28 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		engine:        engine,
 	}
 
-	hc.genesisHeader = hc.GetHeaderByNumber(0)
+	heihgt := uint64(0)
+	hc.genesisHeader = hc.GetHeaderByNumber(heihgt)
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
 
-	hc.currentHeader.Store(hc.genesisHeader)
-	if head := rawdb.ReadLastCanonicalHash(chainDb); head != (common.Hash{}) {
+	hc.lastFinalisedHeader.Store(hc.genesisHeader)
+	if head := rawdb.ReadLastFinalizedHash(chainDb); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
-			hc.currentHeader.Store(chead)
+			heihgt = *rawdb.ReadFinalizedNumberByHash(chainDb, head)
+			hc.lastFinalisedHeader.Store(chead)
 		}
 	}
-	hc.currentHeaderHash = hc.CurrentHeader().Hash()
-	headHeaderGauge.Update(hc.CurrentHeader().Number.Int64())
-
+	hc.lastFinalisedHash = hc.GetLastFinalisedHeader().Hash()
+	hc.tips.Store(&types.Tips{})
+	headHeaderGauge.Update(int64(heihgt))
 	return hc, nil
 }
 
-// GetBlockNumber retrieves the block number belonging to the given hash
+// GetBlockFinalizedNumber retrieves the block number belonging to the given hash
 // from the cache or database
-func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
+func (hc *HeaderChain) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
 		number := cached.(uint64)
 		return &number
@@ -137,6 +143,7 @@ type headerWriteResult struct {
 	lastHeader *types.Header
 }
 
+//todo uncorrect
 // WriteHeaders writes a chain of headers into the local chain, given that the parents
 // are already known. If the total difficulty of the newly inserted chain becomes
 // greater than the current known TD, the canonical chain is reorged.
@@ -150,14 +157,8 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	if len(headers) == 0 {
 		return &headerWriteResult{}, nil
 	}
-	ptd := hc.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
-	if ptd == nil {
-		return &headerWriteResult{}, consensus.ErrUnknownAncestor
-	}
 	var (
-		lastNumber = headers[0].Number.Uint64() - 1 // Last successfully imported number
-		lastHash   = headers[0].ParentHash          // Last imported header hash
-		newTD      = new(big.Int).Set(ptd)          // Total difficulty of inserted chain
+		lastHash = headers[0].ParentHashes[0] // Last imported header hash
 
 		lastHeader    *types.Header
 		inserted      []numberHash // Ephemeral lookup of number/hash for the chain
@@ -172,21 +173,16 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 		// know that it's a contiguous chain, where
 		// headers[i].Hash() == headers[i+1].ParentHash
 		if i < len(headers)-1 {
-			hash = headers[i+1].ParentHash
+			hash = headers[i+1].ParentHashes[0]
 		} else {
 			hash = header.Hash()
 		}
-		number := header.Number.Uint64()
-		newTD.Add(newTD, header.Difficulty)
+		number := header.Nr()
 
 		// If the parent was not present, store it
 		// If the header is already known, skip it, otherwise store
-		alreadyKnown := parentKnown && hc.HasHeader(hash, number)
+		alreadyKnown := parentKnown && hc.HasHeader(hash)
 		if !alreadyKnown {
-			// Irrelevant of the canonical status, write the TD and header to the database.
-			rawdb.WriteTd(batch, hash, number, newTD)
-			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
-
 			rawdb.WriteHeader(batch, header)
 			inserted = append(inserted, numberHash{number, hash})
 			hc.headerCache.Add(hash, header)
@@ -196,7 +192,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 			}
 		}
 		parentKnown = alreadyKnown
-		lastHeader, lastHash, lastNumber = header, hash, number
+		lastHeader, lastHash = header, hash
 	}
 
 	// Skip the slow disk write of all headers if interrupted.
@@ -211,82 +207,8 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	batch.Reset()
 
 	var (
-		head    = hc.CurrentHeader().Number.Uint64()
-		localTD = hc.GetTd(hc.currentHeaderHash, head)
-		status  = SideStatTy
+		status = SideStatTy
 	)
-	// If the total difficulty is higher than our known, add it to the canonical chain
-	// Second clause in the if statement reduces the vulnerability to selfish mining.
-	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := newTD.Cmp(localTD) > 0
-	if !reorg && newTD.Cmp(localTD) == 0 {
-		if lastNumber < head {
-			reorg = true
-		} else if lastNumber == head {
-			reorg = mrand.Float64() < 0.5
-		}
-	}
-	// If the parent of the (first) block is already the canon header,
-	// we don't have to go backwards to delete canon blocks, but
-	// simply pile them onto the existing chain
-	chainAlreadyCanon := headers[0].ParentHash == hc.currentHeaderHash
-	if reorg {
-		// If the header can be added into canonical chain, adjust the
-		// header chain markers(canonical indexes and head header flag).
-		//
-		// Note all markers should be written atomically.
-		markerBatch := batch // we can reuse the batch to keep allocs down
-		if !chainAlreadyCanon {
-			// Delete any canonical number assignments above the new head
-			for i := lastNumber + 1; ; i++ {
-				hash := rawdb.ReadCanonicalHash(hc.chainDb, i)
-				if hash == (common.Hash{}) {
-					break
-				}
-				rawdb.DeleteCanonicalHash(markerBatch, i)
-			}
-			// Overwrite any stale canonical number assignments, going
-			// backwards from the first header in this import
-			var (
-				headHash   = headers[0].ParentHash          // inserted[0].parent?
-				headNumber = headers[0].Number.Uint64() - 1 // inserted[0].num-1 ?
-				headHeader = hc.GetHeader(headHash, headNumber)
-			)
-			for rawdb.ReadCanonicalHash(hc.chainDb, headNumber) != headHash {
-				rawdb.WriteCanonicalHash(markerBatch, headHash, headNumber)
-				headHash = headHeader.ParentHash
-				headNumber = headHeader.Number.Uint64() - 1
-				headHeader = hc.GetHeader(headHash, headNumber)
-			}
-			// If some of the older headers were already known, but obtained canon-status
-			// during this import batch, then we need to write that now
-			// Further down, we continue writing the staus for the ones that
-			// were not already known
-			for i := 0; i < firstInserted; i++ {
-				hash := headers[i].Hash()
-				num := headers[i].Number.Uint64()
-				rawdb.WriteCanonicalHash(markerBatch, hash, num)
-				rawdb.WriteLastFinalizedHash(markerBatch, hash)
-			}
-		}
-		// Extend the canonical chain with the new headers
-		for _, hn := range inserted {
-			rawdb.WriteCanonicalHash(markerBatch, hn.hash, hn.number)
-			rawdb.WriteLastFinalizedHash(markerBatch, hn.hash)
-		}
-		if err := markerBatch.Write(); err != nil {
-			log.Crit("Failed to write header markers into disk", "err", err)
-		}
-		markerBatch.Reset()
-		// Last step update all in-memory head header markers
-		hc.currentHeaderHash = lastHash
-		hc.currentHeader.Store(types.CopyHeader(lastHeader))
-		headHeaderGauge.Update(lastHeader.Number.Int64())
-
-		// Chain status is canonical since this insert was a reorg.
-		// Note that all inserts which have higher TD than existing are 'reorg'.
-		status = CanonStatTy
-	}
 
 	if len(inserted) == 0 {
 		status = NonStatTy
@@ -303,19 +225,21 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
-		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 {
+		if chain[i].Number != nil && chain[i].Nr() != chain[i-1].Nr()+1 {
 			hash := chain[i].Hash()
 			parentHash := chain[i-1].Hash()
 			// Chain broke ancestry, log a message (programming error) and skip insertion
-			log.Error("Non contiguous header insert", "number", chain[i].Number, "hash", hash,
-				"parent", chain[i].ParentHash, "prevnumber", chain[i-1].Number, "prevhash", parentHash)
+			log.Error("Non contiguous header insert", "number", chain[i].Nr(), "hash", hash,
+				"parent", chain[i].ParentHashes, "prevnumber", chain[i-1].Nr(), "prevhash", parentHash)
 
-			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, chain[i-1].Number,
-				parentHash.Bytes()[:4], i, chain[i].Number, hash.Bytes()[:4], chain[i].ParentHash[:4])
+			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, chain[i-1].Nr(),
+				parentHash.Bytes()[:4], i, chain[i].Number, hash.Bytes()[:4], chain[i].ParentHashes)
 		}
 		// If the header is a banned one, straight out abort
-		if BadHashes[chain[i].ParentHash] {
-			return i - 1, ErrBannedHash
+		for _, pHash := range chain[i].ParentHashes {
+			if BadHashes[pHash] {
+				return i - 1, ErrBannedHash
+			}
 		}
 		// If it's the last header in the cunk, we need to check it too
 		if i == len(chain)-1 && BadHashes[chain[i].Hash()] {
@@ -382,7 +306,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time)
 		context = append(context, "err", err)
 	}
 	if last := res.lastHeader; last != nil {
-		context = append(context, "number", last.Number, "hash", res.lastHash)
+		context = append(context, "number", last.Nr(), "hash", res.lastHash)
 		if timestamp := time.Unix(int64(last.Time), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 		}
@@ -392,6 +316,32 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time)
 	}
 	log.Info("Imported new block headers", context...)
 	return res.status, err
+}
+
+// GetBlockHashesFromHash retrieves a number of block hashes starting at a given
+// hash, fetching towards the genesis block.
+func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
+	// Get the origin header from which to fetch
+	header := hc.GetHeaderByHash(hash)
+	if header == nil {
+		return nil
+	}
+	// Iterate the headers until enough is collected or the genesis reached
+	chain := make([]common.Hash, 0, max)
+	for i := uint64(0); i < max; i++ {
+		next := header.ParentHashes[0]
+		if header = hc.GetHeader(next); header == nil {
+			break
+		}
+		chain = append(chain, next)
+		if header.Nr() == 0 {
+			break
+		}
+		if len(header.ParentHashes) == 0 {
+			break
+		}
+	}
+	return chain
 }
 
 // GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or
@@ -405,14 +355,21 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	}
 	if ancestor == 1 {
 		// in this case it is cheaper to just read the header
-		if header := hc.GetHeader(hash, number); header != nil {
-			return header.ParentHash, number - 1
+		if header := hc.GetHeaderByNumber(number - 1); header != nil {
+			return header.Hash(), number - 1
 		}
 		return common.Hash{}, 0
 	}
 	for ancestor != 0 {
-		if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-			ancestorHash := rawdb.ReadCanonicalHash(hc.chainDb, number-ancestor)
+		//if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
+		//	ancestorHash := rawdb.ReadCanonicalHash(hc.chainDb, number-ancestor)
+		//	if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
+		//		number -= ancestor
+		//		return ancestorHash, number
+		//	}
+		//}
+		if rawdb.ReadFinalizedHashByNumber(hc.chainDb, number) == hash {
+			ancestorHash := rawdb.ReadFinalizedHashByNumber(hc.chainDb, number-ancestor)
 			if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
 				number -= ancestor
 				return ancestorHash, number
@@ -423,66 +380,57 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		}
 		*maxNonCanonical--
 		ancestor--
-		header := hc.GetHeader(hash, number)
+		header := hc.GetHeaderByNumber(number - 1)
 		if header == nil {
 			return common.Hash{}, 0
 		}
-		hash = header.ParentHash
+		hash = header.Hash()
 		number--
 	}
 	return hash, number
 }
 
-// GetTd retrieves a block's total difficulty in the canonical chain from the
-// database by hash and number, caching it if found.
-func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
-	// Short circuit if the td's already in the cache, retrieve otherwise
-	if cached, ok := hc.tdCache.Get(hash); ok {
-		return cached.(*big.Int)
-	}
-	td := rawdb.ReadTd(hc.chainDb, hash, number)
-	if td == nil {
-		return nil
-	}
-	// Cache the found body for next time and return
-	hc.tdCache.Add(hash, td)
-	return td
-}
-
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
-func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+// GetHeader retrieves a block header from the database by hash, caching it if found.
+func (hc *HeaderChain) GetHeader(hash common.Hash) *types.Header {
+	finNr := hc.GetBlockFinalizedNumber(hash)
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
+		hdr := header.(*types.Header)
+		hdr.Number = finNr
+		return hdr
 	}
-	header := rawdb.ReadHeader(hc.chainDb, hash, number)
+	header := rawdb.ReadHeader(hc.chainDb, hash)
 	if header == nil {
 		return nil
 	}
 	// Cache the found header for next time and return
 	hc.headerCache.Add(hash, header)
+	header.Number = finNr
 	return header
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
-	number := hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil
+	return hc.GetHeader(hash)
+}
+
+func (hc *HeaderChain) GetHeadersByHashes(hashes common.HashArray) types.HeaderMap {
+	headers := types.HeaderMap{}
+	for _, hash := range hashes {
+		headers[hash] = hc.GetHeader(hash)
 	}
-	return hc.GetHeader(hash, *number)
+	return headers
 }
 
 // HasHeader checks if a block header is present in the database or not.
 // In theory, if header is present in the database, all relative components
 // like td and hash->number should be present too.
-func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
+func (hc *HeaderChain) HasHeader(hash common.Hash) bool {
 	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
 		return true
 	}
-	return rawdb.HasHeader(hc.chainDb, hash, number)
+	return rawdb.HasHeader(hc.chainDb, hash)
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,
@@ -490,27 +438,253 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
 	if hash == (common.Hash{}) {
+		hash = rawdb.ReadFinalizedHashByNumber(hc.chainDb, number)
+	}
+	if hash == (common.Hash{}) {
 		return nil
 	}
-	return hc.GetHeader(hash, number)
+	return hc.GetHeader(hash)
 }
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
 	return rawdb.ReadCanonicalHash(hc.chainDb, number)
 }
 
-// CurrentHeader retrieves the current head header of the canonical chain. The
+// GetLastFinalisedHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
-func (hc *HeaderChain) CurrentHeader() *types.Header {
-	return hc.currentHeader.Load().(*types.Header)
+func (hc *HeaderChain) GetLastFinalisedHeader() *types.Header {
+	lastFinHead := hc.lastFinalisedHeader.Load().(*types.Header)
+	if lastFinHead.Number == nil {
+		finNr := hc.GetBlockFinalizedNumber(lastFinHead.Hash())
+		lastFinHead.Number = finNr
+	}
+	return lastFinHead
 }
 
-// SetCurrentHeader sets the in-memory head header marker of the canonical chan
+// SetLastFinalisedHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
-	hc.currentHeader.Store(head)
-	hc.currentHeaderHash = head.Hash()
-	headHeaderGauge.Update(head.Number.Int64())
+func (hc *HeaderChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint64) {
+	head.Number = &lastFinNr
+	hc.lastFinalisedHeader.Store(head)
+	hc.lastFinalisedHash = head.Hash()
+	hc.numberCache.Add(head.Hash(), lastFinNr)
+	headHeaderGauge.Update(int64(lastFinNr))
+}
+
+// ResetTips set base tips for stable work
+// in case synchronization not finished
+func (hc *HeaderChain) ResetTips() error {
+	hc.tipsMu.Lock()
+	//defer hc.tipsMu.Unlock()
+
+	lastFinHeader := hc.GetLastFinalisedHeader()
+	//set genesis blockDag
+	dag := &types.BlockDAG{
+		Hash:                lastFinHeader.Hash(),
+		Height:              lastFinHeader.Height,
+		LastFinalizedHash:   lastFinHeader.Hash(),
+		LastFinalizedHeight: lastFinHeader.Nr(),
+		DagChainHashes:      common.HashArray{},
+		FinalityPoints:      common.HashArray{},
+	}
+	rawdb.WriteBlockDag(hc.chainDb, dag)
+	rawdb.WriteTipsHashes(hc.chainDb, common.HashArray{dag.Hash})
+	rawdb.DeleteChildren(hc.chainDb, dag.Hash)
+
+	hc.tipsMu.Unlock()
+	return hc.loadTips()
+}
+
+// loadTips retrieves tips with incomplete chain to finalized state
+func (hc *HeaderChain) loadTips() error {
+	hc.tipsMu.Lock()
+	defer hc.tipsMu.Unlock()
+	tipsHashes := rawdb.ReadTipsHashes(hc.chainDb)
+	if len(tipsHashes) == 0 {
+		// Corrupt or empty database
+		return fmt.Errorf("tips missing")
+	}
+	for _, th := range tipsHashes {
+		if th == (common.Hash{}) {
+			log.Error("loadTips:: unacceptable value", "hash", th.Hex())
+			continue
+		}
+
+		bdag := rawdb.ReadBlockDag(hc.chainDb, th)
+		if bdag == nil {
+			bdag = &types.BlockDAG{
+				Hash:                th,
+				Height:              0,
+				LastFinalizedHash:   common.Hash{},
+				LastFinalizedHeight: 0,
+				DagChainHashes:      common.HashArray{},
+			}
+		}
+		hc.AddTips(bdag, true)
+	}
+	return nil
+}
+
+//GetTips retrieves active tips
+func (hc *HeaderChain) GetTips(skipLock ...bool) *types.Tips {
+	if len(skipLock) == 0 || skipLock[0] == false {
+		hc.tipsMu.Lock()
+		defer hc.tipsMu.Unlock()
+	}
+	cpy := hc.tips.Load().(*types.Tips).Copy()
+	return &cpy
+}
+
+//AddTips add BlockDag to tips
+func (hc *HeaderChain) AddTips(blockDag *types.BlockDAG, skipLock ...bool) {
+	if len(skipLock) == 0 || skipLock[0] == false {
+		hc.tipsMu.Lock()
+		defer hc.tipsMu.Unlock()
+	}
+
+	tips := hc.GetTips(true)
+	tips.Add(blockDag)
+	hc.tips.Store(tips)
+}
+
+//RemoveTips remove BlockDag from tips by hashes from tips
+func (hc *HeaderChain) RemoveTips(hashes common.HashArray, skipLock ...bool) {
+	if len(skipLock) == 0 || skipLock[0] == false {
+		hc.tipsMu.Lock()
+		defer hc.tipsMu.Unlock()
+	}
+
+	tips := hc.GetTips(true)
+	for _, h := range hashes {
+		tips.Remove(h)
+	}
+	hc.tips.Store(tips)
+}
+
+//FinalizeTips update tips in accordance with finalization result
+func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
+	hc.tipsMu.Lock()
+	defer hc.tipsMu.Unlock()
+	tips := hc.GetTips(true)
+	for _, t := range *tips {
+		t.DagChainHashes = t.DagChainHashes.Difference(finHashes)
+		t.FinalityPoints = t.FinalityPoints.Difference(finHashes)
+		// if tips is synced - update finalized data
+		if t.LastFinalizedHash != (common.Hash{}) {
+			t.LastFinalizedHash = lastFinHash
+			t.LastFinalizedHeight = lastFinNr
+		}
+		tips.Add(t)
+	}
+	hc.tips.Store(tips)
+	hc.writeCurrentTips(true)
+}
+
+// ReviseTips revise tips state
+// explore chains to update tips in accordance with sync process
+func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHashes common.HashArray) {
+	hc.tipsMu.Lock()
+	defer hc.tipsMu.Unlock()
+
+	unloadedHashes = common.HashArray{}
+	saveTips := false
+	rmTips := common.HashArray{}
+
+	curTips := *hc.GetTips(true)
+
+	// check top hashes in chains
+	ancestors := curTips.GetAncestorsHashes()
+	for hash, _ := range curTips {
+		if ancestors.Has(hash) {
+			curTips.Remove(hash)
+		}
+	}
+
+	for hash, dag := range curTips {
+		// if has children - rm from curTips
+		if children := bc.ReadChildren(hash); len(children) > 0 {
+			rmTips = append(rmTips, hash)
+			saveTips = true
+		}
+		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
+			block := bc.GetBlockByHash(hash)
+			// if block not loaded
+			if block == nil {
+				unloadedHashes = append(unloadedHashes, hash)
+				continue
+			}
+			// if block is finalized - update curr curTips
+			if nr := rawdb.ReadFinalizedNumberByHash(bc.db, hash); nr != nil {
+				header := hc.GetHeader(hash)
+				dag.Hash = hash
+				dag.Height = header.Height
+				dag.LastFinalizedHash = hash
+				dag.LastFinalizedHeight = *nr
+				hc.AddTips(dag, true)
+				saveTips = true
+				continue
+			}
+			// if block exists - check all ancestors to finalized state
+			unloaded, loaded, finalized, graph, err := bc.ExploreChainRecursive(hash)
+			if err != nil {
+				hc.RemoveTips(common.HashArray{hash}, true)
+				saveTips = true
+				continue
+			}
+
+			if dag.Height == 0 {
+				header := hc.GetHeader(hash)
+				dag.Height = header.Height
+			}
+
+			dag.Hash = hash
+			chain := dag.DagChainHashes
+			chain = chain.Concat(unloaded)
+			chain = chain.Concat(loaded)
+			chain = chain.Difference(finalized)
+			// bad order of hashes
+			dag.DagChainHashes = chain.Difference(common.HashArray{hash})
+			dag.FinalityPoints = dag.FinalityPoints.Difference(finalized)
+			dag.FinalityPoints = dag.FinalityPoints.Difference(common.HashArray{hash}).Uniq()
+			// if curTips synchronized
+			if len(unloaded) == 0 {
+				dag.LastFinalizedHash = bc.GetLastFinalizedBlock().Hash()
+				dag.LastFinalizedHeight = bc.GetLastFinalizedNumber()
+				dag.DagChainHashes = *graph.GetDagChainHashes()
+				//dag.FinalityPoints = *graph.GetFinalityPointsByLastFinNr(dag.LastFinalizedHeight)
+				dag.FinalityPoints = *graph.GetFinalityPoints()
+				hc.AddTips(dag, true)
+			} else {
+				log.Warn("!!!!!!!!!!!!!! UNLOADED BLOCK DETECTED !!!!!!!!!!!!!!!!", "unloaded", unloaded)
+			}
+			saveTips = true
+		}
+	}
+	hc.RemoveTips(rmTips, true)
+
+	hc.writeCurrentTips(true)
+	if saveTips {
+	}
+	return hc.GetTips(true), unloadedHashes
+}
+
+//WriteCurrentTips save current tips blockDags and hashes
+func (hc *HeaderChain) writeCurrentTips(skipLock ...bool) {
+	if len(skipLock) == 0 || skipLock[0] == false {
+		hc.tipsMu.Lock()
+		defer hc.tipsMu.Unlock()
+	}
+	batch := hc.chainDb.NewBatch()
+	tips := hc.GetTips(true)
+	//1. save blockDags of tips
+	for _, dag := range *tips {
+		rawdb.WriteBlockDag(batch, dag)
+	}
+	//2. save tips hashes
+	rawdb.WriteTipsHashes(batch, tips.GetHashes())
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write tips", "error", err)
+	}
 }
 
 type (
@@ -518,26 +692,29 @@ type (
 	// before head header is updated. The method will return the actual block it
 	// updated the head to (missing state) and a flag if setHead should continue
 	// rewinding till that forcefully (exceeded ancient limits)
-	UpdateHeadBlocksCallback func(ethdb.KeyValueWriter, *types.Header) (uint64, bool)
+	UpdateHeadBlocksCallback func(ethdb.KeyValueWriter, *types.Header) (common.Hash, bool)
 
 	// DeleteBlockContentCallback is a callback function that is called by SetHead
 	// before each header is deleted.
-	DeleteBlockContentCallback func(ethdb.KeyValueWriter, common.Hash, uint64)
+	DeleteBlockContentCallback func(ethdb.KeyValueWriter, common.Hash)
 )
 
 // SetHead rewinds the local chain to a new head. Everything above the new head
 // will be deleted and the new one set.
-func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
+func (hc *HeaderChain) SetHead(headHash common.Hash, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
 	var (
 		parentHash common.Hash
 		batch      = hc.chainDb.NewBatch()
 		origin     = true
+		lastFinNr  = hc.GetBlockFinalizedNumber(headHash)
 	)
-	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
-		num := hdr.Number.Uint64()
+
+	for hdrHeight := hc.GetBlockFinalizedNumber(hc.GetLastFinalisedHeader().Hash()); hdrHeight != nil && lastFinNr != nil && *hdrHeight > *lastFinNr; hdrHeight = hc.GetBlockFinalizedNumber(hc.GetLastFinalisedHeader().Hash()) {
+		hdr := hc.GetLastFinalisedHeader()
+		num := *hdrHeight
 
 		// Rewind block chain to new head.
-		parent := hc.GetHeader(hdr.ParentHash, num-1)
+		parent := hc.GetHeaderByNumber(num - 1)
 		if parent == nil {
 			parent = hc.genesisHeader
 		}
@@ -553,9 +730,11 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		markerBatch := hc.chainDb.NewBatch()
 		if updateFn != nil {
 			newHead, force := updateFn(markerBatch, parent)
-			if force && newHead < head {
-				log.Warn("Force rewinding till ancient limit", "head", newHead)
-				head = newHead
+			newHeadHeight := hc.GetBlockFinalizedNumber(newHead)
+			if force && newHeadHeight != nil && *newHeadHeight < *lastFinNr {
+				log.Warn("Force rewinding till ancient limit", "head", newHeadHeight)
+				headHash = newHead
+				lastFinNr = newHeadHeight
 			}
 		}
 		// Update head header then.
@@ -563,16 +742,20 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		if err := markerBatch.Write(); err != nil {
 			log.Crit("Failed to update chain markers", "error", err)
 		}
-		hc.currentHeader.Store(parent)
-		hc.currentHeaderHash = parentHash
-		headHeaderGauge.Update(parent.Number.Int64())
+		hc.lastFinalisedHeader.Store(parent)
+		hc.lastFinalisedHash = parentHash
+		headHeaderGauge.Update(int64(num - 1))
 
 		// If this is the first iteration, wipe any leftover data upwards too so
 		// we don't end up with dangling daps in the database
 		var nums []uint64
 		if origin {
-			for n := num + 1; len(rawdb.ReadAllHashes(hc.chainDb, n)) > 0; n++ {
-				nums = append([]uint64{n}, nums...) // suboptimal, but we don't really expect this path
+			for n, exists := num+1, true; exists; n++ {
+				fnh := rawdb.ReadFinalizedHashByNumber(hc.chainDb, n)
+				exists = fnh != (common.Hash{})
+				if exists {
+					nums = append([]uint64{n}, nums...)
+				}
 			}
 			origin = false
 		}
@@ -581,17 +764,18 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		// Remove the related data from the database on all sidechains
 		for _, num := range nums {
 			// Gather all the side fork hashes
-			hashes := rawdb.ReadAllHashes(hc.chainDb, num)
+			//hashes := rawdb.ReadAllHashes(hc.chainDb, num)
+			hashes := []common.Hash{rawdb.ReadFinalizedHashByNumber(hc.chainDb, num)}
 			if len(hashes) == 0 {
 				// No hashes in the database whatsoever, probably frozen already
 				hashes = append(hashes, hdr.Hash())
 			}
 			for _, hash := range hashes {
 				if delFn != nil {
-					delFn(batch, hash, num)
+					delFn(batch, hash)
 				}
-				rawdb.DeleteHeader(batch, hash, num)
-				rawdb.DeleteTd(batch, hash, num)
+				rawdb.DeleteHeader(batch, hash, &num)
+				rawdb.DeleteFinalizedHashNumber(batch, hash, num)
 			}
 			rawdb.DeleteCanonicalHash(batch, num)
 		}
@@ -619,6 +803,6 @@ func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
 
 // GetBlock implements consensus.ChainReader, and returns nil for every input as
 // a header chain does not have blocks available for retrieval.
-func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+func (hc *HeaderChain) GetBlock(hash common.Hash) *types.Block {
 	return nil
 }

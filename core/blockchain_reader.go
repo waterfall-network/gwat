@@ -17,7 +17,6 @@
 package core
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -26,22 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
-//// CurrentHeader retrieves the current head header of the canonical chain. The
-//// header is retrieved from the HeaderChain's internal cache.
-//func (bc *BlockChain) CurrentHeader() *types.Header {
-//	return bc.hc.CurrentHeader()
-//}
-
-//// CurrentBlock retrieves the current head block of the canonical chain. The
-//// block is retrieved from the blockchain's internal cache.
-//func (bc *BlockChain) CurrentBlock() *types.Block {
-//	return bc.currentBlock.Load().(*types.Block)
-//}
 
 // GetLastFinalizedBlock retrieves the current Last Finalized block of the canonical chain. The
 // block is retrieved from the blockchain's internal cache.
@@ -50,195 +36,11 @@ func (bc *BlockChain) GetLastFinalizedBlock() *types.Block {
 	return lfb
 }
 
-// GetDagHashes retrieves all non finalized block's hashes
-func (bc *BlockChain) GetDagHashes() *common.HashArray {
-	dagHashes := common.HashArray{}
-	for hash, tip := range *bc.hc.GetTips() {
-		if hash == tip.LastFinalizedHash {
-			dagHashes = append(dagHashes, hash)
-			continue
-		}
-		_, loaded, _, _, _ := bc.ExploreChainRecursive(hash)
-		dagHashes = dagHashes.Concat(loaded)
-	}
-	dagHashes = dagHashes.Uniq()
-	return &dagHashes
-}
-
-//// CurrentFastBlock retrieves the current fast-sync head block of the canonical
-//// chain. The block is retrieved from the blockchain's internal cache.
-//func (bc *BlockChain) CurrentFastBlock() *types.Block {
-//	return bc.currentFastBlock.Load().(*types.Block)
-//}
-
-// GetUnsynchronizedTipsHashes retrieves tips with incomplete chain to finalized state
-func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
-	tipsHashes := common.HashArray{}
-	for hash, dag := range *bc.hc.GetTips() {
-		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
-			tipsHashes = append(tipsHashes, hash)
-		}
-	}
-	return tipsHashes
-}
-
-// ReviseTips revise tips state
-// explore chains to update tips in accordance with sync process
-func (bc *BlockChain) ReviseTips() (tips *types.Tips, unloadedHashes common.HashArray) {
-	return bc.hc.ReviseTips(bc)
-}
-
-func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, err error) {
-	block := bc.GetBlockByHash(headHash)
-	graph = &types.GraphDag{
-		Hash:   headHash,
-		Height: 0,
-		Graph:  []*types.GraphDag{},
-		State:  types.BSS_NOT_LOADED,
-	}
-	if block == nil {
-		// if block not loaded
-		return common.HashArray{headHash}, loaded, finalized, graph, nil
-	}
-	graph.State = types.BSS_LOADED
-	graph.Height = block.Height()
-	if nr := rawdb.ReadFinalizedNumberByHash(bc.db, headHash); nr != nil {
-		// if finalized
-		graph.State = types.BSS_FINALIZED
-		graph.Number = *nr
-		return unloaded, loaded, common.HashArray{headHash}, graph, nil
-	}
-	loaded = common.HashArray{headHash}
-	if block.ParentHashes() == nil || len(block.ParentHashes()) < 1 {
-		if block.Hash() == bc.genesisBlock.Hash() {
-			return unloaded, loaded, common.HashArray{headHash}, graph, nil
-		}
-		log.Warn("Detect block without parents", "hash", block.Hash(), "height", block.Height(), "epoch", block.Epoch(), "slot", block.Slot())
-		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
-		return unloaded, loaded, finalized, graph, err
-	}
-	for _, ph := range block.ParentHashes() {
-		_unloaded, _loaded, _finalized, _graph, _err := bc.ExploreChainRecursive(ph)
-		unloaded = unloaded.Concat(_unloaded).Uniq()
-		loaded = loaded.Concat(_loaded).Uniq()
-		finalized = finalized.Concat(_finalized).Uniq()
-		graph.Graph = append(graph.Graph, _graph)
-		err = _err
-	}
-	return unloaded, loaded, finalized, graph, err
-}
-
-func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash common.Hash) bool {
-	//if ancestorHash is genesis
-	if bc.genesisBlock.Hash() == ancestorHash {
-		return true
-	}
-	// if ancestorHash in parents
-	if block.ParentHashes().Has(ancestorHash) {
-		return true
-	}
-	// if ancestor not exists
-	ancestor := bc.GetBlockByHash(ancestorHash)
-	if ancestor == nil {
-		return false
-	}
-	//if ancestor is finalised and block is not finalised
-	if ancestor.Number() != nil && block.Number() == nil {
-		return true
-	}
-	//if ancestor is not finalised and block is finalised
-	if ancestor.Number() == nil && block.Number() != nil {
-		return false
-	}
-	//if ancestor is finalised and block is finalised
-	if ancestor.Number() != nil && block.Number() != nil {
-		if ancestor.Nr() > block.Nr() {
-			return false
-		}
-	}
-	// otherwise, recursive check parents
-	for _, pHash := range block.ParentHashes() {
-		pBlock := bc.GetBlock(pHash)
-		if pBlock != nil && bc.IsAncestorRecursive(pBlock, ancestorHash) {
-			return true
-		}
-	}
-	return false
-}
-
-//GetTips retrieves active tips headers:
-// - no descendants
-// - chained to finalized state (skips unchained)
-func (bc *BlockChain) GetTips() types.Tips {
-	tips := types.Tips{}
-	for hash, dag := range *bc.hc.GetTips() {
-		if dag != nil && dag.LastFinalizedHash != (common.Hash{}) {
-			tips[hash] = dag
-		}
-	}
-	return tips
-}
-
-// ResetTips set last finalized block to tips for stable work
-func (bc *BlockChain) ResetTips() error {
-	return bc.hc.ResetTips()
-}
-
-//AddTips add BlockDag to tips
-func (bc *BlockChain) AddTips(blockDag *types.BlockDAG) {
-	bc.hc.AddTips(blockDag)
-}
-
-//RemoveTips remove BlockDag from tips by hash from tips
-func (bc *BlockChain) RemoveTips(hashes common.HashArray) {
-	bc.hc.RemoveTips(hashes)
-}
-
-//FinalizeTips update tips in accordance with finalization result
-func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
-	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
-}
-
-//AppendToChildren append block hash as child of block
-func (bc *BlockChain) AppendToChildren(child common.Hash, parents common.HashArray) {
-	batch := bc.db.NewBatch()
-	for _, parent := range parents {
-		children := rawdb.ReadChildren(bc.db, parent)
-		children = append(children, child)
-		rawdb.WriteChildren(batch, parent, children)
-	}
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write block children", "err", err)
-	}
-}
-
-func (bc *BlockChain) ReadChildren(hash common.Hash) common.HashArray {
-	return rawdb.ReadChildren(bc.db, hash)
-}
-
-func (bc *BlockChain) DeleteBockDag(hash common.Hash) {
-	rawdb.DeleteBlockDag(bc.db, hash)
-}
-
-func (bc *BlockChain) ReadBockDag(hash common.Hash) *types.BlockDAG {
-	return rawdb.ReadBlockDag(bc.db, hash)
-}
-
-// Snapshots returns the blockchain snapshot tree.
-func (bc *BlockChain) Snapshots() *snapshot.Tree {
-	return bc.snaps
-}
-
 // GetLastFinalizedFastBlock retrieves the current fast-sync last finalized block of the canonical
 // chain. The block is retrieved from the blockchain's internal cache.
 func (bc *BlockChain) GetLastFinalizedFastBlock() *types.Block {
-	lfb := bc.lastFinalizedBlock.Load().(*types.Block)
+	lfb := bc.lastFinalizedFastBlock.Load().(*types.Block)
 	return lfb
-}
-
-// Reset purges the entire blockchain, restoring it to its genesis state.
-func (bc *BlockChain) Reset() error {
-	return bc.ResetWithGenesisBlock(bc.genesisBlock)
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
@@ -311,10 +113,6 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	if cached, ok := bc.bodyRLPCache.Get(hash); ok {
 		return cached.(rlp.RawValue)
 	}
-	//number := bc.hc.GetBlockFinalizedNumber(hash)
-	//if number == nil {
-	//	return nil
-	//}
 	body := rawdb.ReadBodyRLP(bc.db, hash)
 	if len(body) == 0 {
 		return nil
@@ -405,33 +203,11 @@ func (bc *BlockChain) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
 	return bc.hc.GetBlockFinalizedNumber(hash)
 }
 
-// GetFinalizedBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
-// [deprecated by eth/62]
-func (bc *BlockChain) GetFinalizedBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
-	number := bc.hc.GetBlockFinalizedNumber(hash)
-	if number == nil {
-		return nil
-	}
-	for i := 0; i < n; i++ {
-		block := bc.GetBlockByNumber(*number)
-		if block == nil {
-			break
-		}
-		blocks = append(blocks, block)
-		*number--
-	}
-	return
-}
-
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts.(types.Receipts)
 	}
-	//number := rawdb.ReadFinalizedNumberByHash(bc.db, hash)
-	//if number == nil {
-	//	return nil
-	//}
 	receipts := rawdb.ReadReceipts(bc.db, hash, bc.chainConfig)
 	if receipts == nil {
 		return nil
@@ -446,7 +222,6 @@ func (bc *BlockChain) GetLastFinalisedHeader() *types.Header {
 	return bc.hc.GetLastFinalisedHeader()
 }
 
-//todo deprecate
 // GetHeadersByHashes retrieves a blocks headers from the database by hashes, caching it if found.
 func (bc *BlockChain) GetHeadersByHashes(hashes common.HashArray) types.HeaderMap {
 	headers := types.HeaderMap{}
