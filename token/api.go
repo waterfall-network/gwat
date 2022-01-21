@@ -30,8 +30,8 @@ type wrc721Properties struct {
 // wrc20Properties stores results of the following view functions of EIP-20: name, symbol, decimals, totalSupply.
 type wrc20Properties struct {
 	wrc721Properties
-	Decimals    *hexutil.Uint `json:"decimals"`
-	TotalSupply *hexutil.Big  `json:"totalSupply"`
+	Decimals    *hexutil.Uint8 `json:"decimals"`
+	TotalSupply *hexutil.Big   `json:"totalSupply"`
 }
 
 // wrc721ByTokenIdProperties contains Metadata field which is custom field of WRC-721 token.
@@ -71,9 +71,9 @@ func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexut
 	if args.Name != nil {
 		symbol = string(*args.Symbol)
 	}
-	decimals := uint(0)
+	decimals := uint8(0)
 	if args.Decimals != nil {
-		decimals = uint(*args.Decimals)
+		decimals = uint8(*args.Decimals)
 	}
 	totalSupply := big.NewInt(0)
 	if args.TotalSupply != nil {
@@ -124,7 +124,7 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 		}, nil
 	}
 
-	decimals := hexutil.Uint(3)
+	decimals := hexutil.Uint8(3)
 	totalSupply := (*hexutil.Big)(big.NewInt(1000))
 
 	log.Info("Return WRC-20 properties", "name", name, "symbol", symbol, "decimals", decimals, "totalSupply", totalSupply)

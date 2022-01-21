@@ -49,6 +49,7 @@ var (
 	ErrLeadingZero   = &decError{"hex number with leading zero digits"}
 	ErrUint64Range   = &decError{"hex number > 64 bits"}
 	ErrUintRange     = &decError{fmt.Sprintf("hex number > %d bits", uintBits)}
+	ErrUint8Range    = &decError{"hex number > 8 bits"}
 	ErrBig256Range   = &decError{"hex number > 256 bits"}
 )
 
