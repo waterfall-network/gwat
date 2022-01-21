@@ -237,10 +237,13 @@ func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, tokenAddr common.Addres
 // `bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));` otherwise, the transfer is reverted.
 //
 // Returns hash of the mint transaction. If the function reverts you can check a status in receipts of the transaction.
-func (s *PublicTokenAPI) Wrc721SafeMint(ctx context.Context, tokenAddr common.Address, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (bool, error) {
+//
+// TODO: Impement safe minting of NFTs.
+/* func (s *PublicTokenAPI) Wrc721SafeMint(ctx context.Context, tokenAddr common.Address, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (bool, error) {
 	log.Info("WRC-721 safe mint", "tokenAddr", tokenAddr, "to", to, "tokenId", tokenId, "metadata", metadata)
 	return false, nil
 }
+*/
 
 // Wrc721Burn burns a specific token. Reverts if the token does not exist.
 //
