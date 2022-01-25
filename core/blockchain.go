@@ -419,10 +419,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
-	//// cache TransactionLookup for dag chain
-	//for _, block := range bc.GetBlocksByHashes(*bc.GetDagHashes()) {
-	//	bc.CacheTransactionLookup(block)
-	//}
+	// cache TransactionLookup for dag chain
+	for _, block := range bc.GetBlocksByHashes(*bc.GetDagHashes()) {
+		bc.CacheTransactionLookup(block)
+	}
 	return bc, nil
 }
 
@@ -2226,6 +2226,9 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			finDag := upTips.GetFinalizingDag()
 			if finDag.Hash != block.Hash() {
 				log.Info("============================ Insert propagated block :: SKIP RED BLOCK ============================", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.Print())
+				// create transaction lookup
+				rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
+				bc.CacheTransactionLookup(block)
 				continue
 			}
 
