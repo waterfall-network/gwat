@@ -119,7 +119,7 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 			return ErrUnknownBlock
 		}
 		if block.Number() != nil {
-			if block.Hash() == *chain[block.Nr()] {
+			if chain[block.Nr()] != nil && block.Hash() == *chain[block.Nr()] {
 				delete(chain, block.Nr())
 			} else if block.Nr() <= lastFinNr {
 				lastFinNr = block.Nr() - 1
