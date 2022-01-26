@@ -1824,12 +1824,12 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
 
 	// Verify pruning of lastPrunedBlock
-	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
+	if chain.HasBlockAndState(lastPrunedBlock.Hash()) {
+		t.Errorf("Block %h not pruned", lastPrunedBlock.Hash())
 	}
 	// Verify firstNonPrunedBlock is not pruned
-	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
+	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash()) {
+		t.Errorf("Block %h pruned", firstNonPrunedBlock.NumberU64())
 	}
 	// Generate the sidechain
 	// First block should be a known block, block after should be a pruned block. So
@@ -2495,13 +2495,13 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 	lastPrunedBlock := blocks[lastPrunedIndex]
 
 	// Verify pruning of lastPrunedBlock
-	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
+	if chain.HasBlockAndState(lastPrunedBlock.Hash()) {
+		t.Errorf("Block %h not pruned", lastPrunedBlock.Hash())
 	}
 	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
 	// Verify firstNonPrunedBlock is not pruned
-	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
+	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash()) {
+		t.Errorf("Block %h pruned", firstNonPrunedBlock.Hash())
 	}
 	// Now re-import some old blocks
 	blockToReimport := blocks[5:8]

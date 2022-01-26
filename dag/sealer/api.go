@@ -125,7 +125,6 @@ func (api *API) Status() (*status, error) {
 	var (
 		numBlocks = uint64(64)
 		header    = api.chain.GetLastFinalisedHeader()
-		diff      = uint64(0)
 		optimals  = 0
 	)
 	//snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
@@ -152,10 +151,6 @@ func (api *API) Status() (*status, error) {
 		if h == nil {
 			return nil, fmt.Errorf("missing block %d", n)
 		}
-		if h.Difficulty.Cmp(diffInTurn) == 0 {
-			optimals++
-		}
-		diff += h.Difficulty.Uint64()
 		sealer, err := api.clique.Author(h)
 		if err != nil {
 			return nil, err

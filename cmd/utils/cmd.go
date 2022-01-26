@@ -174,7 +174,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 				return fmt.Errorf("at block %d: %v", n, err)
 			}
 			// don't import first block
-			if b.NumberU64() == 0 {
+			if b.Height() == 0 {
 				i--
 				continue
 			}
@@ -201,17 +201,17 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 }
 
 func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
-	head := chain.CurrentBlock()
+	head := chain.GetLastFinalizedBlock()
 	for i, block := range blocks {
 		// If we're behind the chain head, only check block, state is available at head
-		if head.NumberU64() > block.NumberU64() {
-			if !chain.HasBlock(block.Hash(), block.NumberU64()) {
+		if head.Nr() > block.Nr() {
+			if !chain.HasBlock(block.Hash()) {
 				return blocks[i:]
 			}
 			continue
 		}
 		// If we're above the chain head, state availability is a must
-		if !chain.HasBlockAndState(block.Hash(), block.NumberU64()) {
+		if !chain.HasBlockAndState(block.Hash()) {
 			return blocks[i:]
 		}
 	}

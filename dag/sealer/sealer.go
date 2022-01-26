@@ -46,8 +46,6 @@ var (
 	nonceAuthVote = hexutil.MustDecode("0xffffffffffffffff") // Magic nonce number to vote on adding a new signer
 	nonceDropVote = hexutil.MustDecode("0x0000000000000000") // Magic nonce number to vote on removing a signer.
 
-	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
-
 	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
 	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
 )
@@ -95,9 +93,6 @@ var (
 
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
-
-	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
-	errInvalidUncleHash = errors.New("non empty uncle hash")
 
 	// errInvalidDifficulty is returned if the difficulty of a block neither 1 or 2.
 	errInvalidDifficulty = errors.New("invalid difficulty")
@@ -249,8 +244,7 @@ func (c *Sealer) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	//if header.Number == nil {
 	//	return errUnknownBlock
 	//}
-	//todo
-	number := header.Height
+	//number := header.Height
 
 	// Don't waste time checking blocks from the future
 	if header.Time > uint64(time.Now().Unix()) {
@@ -294,16 +288,7 @@ func (c *Sealer) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if header.MixDigest != (common.Hash{}) {
 		return errInvalidMixDigest
 	}
-	//// Ensure that the block doesn't contain any uncles which are meaningless in PoA
-	//if header.UncleHash != uncleHash {
-	//	return errInvalidUncleHash
-	//}
-	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
-	if number > 0 {
-		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
-			return errInvalidDifficulty
-		}
-	}
+
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
 	if header.GasLimit > cap {
@@ -475,15 +460,6 @@ func (c *Sealer) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 	return snap, err
 }
 
-// VerifyUncles implements consensus.Engine, always returning an error for any
-// uncles as this consensus mechanism doesn't permit uncles.
-func (c *Sealer) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	if len(block.Uncles()) > 0 {
-		return errors.New("uncles not allowed")
-	}
-	return nil
-}
-
 // verifySeal checks whether the signature contained in the header satisfies the
 // consensus protocol requirements. The method accepts an optional list of parent
 // headers that aren't yet part of the local blockchain to generate the snapshots
@@ -599,16 +575,15 @@ func (c *Sealer) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	return nil
 }
 
-// Finalize implements consensus.Engine, ensuring no uncles are set, nor block
+// Finalize implements consensus.Engine
 // rewards given.
 func (c *Sealer) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction) {
-	// No block rewards in PoA, so the state remains as is and uncles are dropped
+	// No block rewards in PoA, so the state remains as is
 	//header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.Root = state.IntermediateRoot(true)
-	//header.UncleHash = types.CalcUncleHash(nil) //no uncles
 }
 
-// FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
+// FinalizeAndAssemble implements consensus.Engine
 // nor block rewards given, and returns the final block.
 func (c *Sealer) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
@@ -718,27 +693,6 @@ func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, tip
 	return nil
 }
 
-// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
-// that a new block should have:
-// * DIFF_NOTURN(2) if BLOCK_NUMBER % SIGNER_COUNT != SIGNER_INDEX
-// * DIFF_INTURN(1) if BLOCK_NUMBER % SIGNER_COUNT == SIGNER_INDEX
-func (c *Sealer) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	//todo
-	//snap, err := c.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
-	snap, err := c.snapshot(chain, 0, parent.Hash(), nil)
-	if err != nil {
-		return nil
-	}
-	return calcDifficulty(snap, c.signer)
-}
-
-func calcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
-	if snap.inturn(snap.Number+1, signer) {
-		return new(big.Int).Set(diffInTurn)
-	}
-	return new(big.Int).Set(diffNoTurn)
-}
-
 // SealHash returns the hash of a block prior to it being sealed.
 func (c *Sealer) SealHash(header *types.Header) common.Hash {
 	return SealHash(header)
@@ -785,13 +739,11 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	enc := []interface{}{
 		header.ParentHashes,
 		header.Height,
-		//header.UncleHash,
 		header.Coinbase,
 		header.Root,
 		header.TxHash,
 		header.ReceiptHash,
 		header.Bloom,
-		header.Difficulty,
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,

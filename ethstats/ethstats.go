@@ -36,11 +36,11 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/dag/creator"
 	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -63,7 +63,7 @@ const (
 type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
-	CurrentHeader() *types.Header
+	GetLastFinalisedHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
@@ -74,9 +74,9 @@ type backend interface {
 // reporting to ethstats
 type fullNodeBackend interface {
 	backend
-	Miner() *miner.Miner
+	Creator() *creator.Creator
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	CurrentBlock() *types.Block
+	GetLastFinalizedBlock() *types.Block
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
@@ -563,19 +563,20 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 
 // blockStats is the information to report about individual blocks.
 type blockStats struct {
-	Number     *big.Int       `json:"number"`
-	Hash       common.Hash    `json:"hash"`
-	ParentHash common.Hash    `json:"parentHash"`
-	Timestamp  *big.Int       `json:"timestamp"`
-	Miner      common.Address `json:"miner"`
-	GasUsed    uint64         `json:"gasUsed"`
-	GasLimit   uint64         `json:"gasLimit"`
-	Diff       string         `json:"difficulty"`
-	TotalDiff  string         `json:"totalDifficulty"`
-	Txs        []txStats      `json:"transactions"`
-	TxHash     common.Hash    `json:"transactionsRoot"`
-	Root       common.Hash    `json:"stateRoot"`
-	Uncles     uncleStats     `json:"uncles"`
+	Number       *uint64        `json:"number"`
+	Hash         common.Hash    `json:"hash"`
+	ParentHashes []common.Hash  `json:"parentHashes"`
+	Epoch        uint64         `json:"epoch"`
+	Slot         uint64         `json:"slot"`
+	Height       uint64         `json:"height"`
+	Timestamp    *big.Int       `json:"timestamp"`
+	Miner        common.Address `json:"miner"`
+	GasUsed      uint64         `json:"gasUsed"`
+	GasLimit     uint64         `json:"gasLimit"`
+	TotalDiff    string         `json:"totalDifficulty"`
+	Txs          []txStats      `json:"transactions"`
+	TxHash       common.Hash    `json:"transactionsRoot"`
+	Root         common.Hash    `json:"stateRoot"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -620,14 +621,13 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		header *types.Header
 		td     *big.Int
 		txs    []txStats
-		uncles []*types.Header
 	)
 
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
 		if block == nil {
-			block = fullBackend.CurrentBlock()
+			block = fullBackend.GetLastFinalizedBlock()
 		}
 		header = block.Header()
 		td = fullBackend.GetTd(context.Background(), header.Hash())
@@ -636,13 +636,12 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		for i, tx := range block.Transactions() {
 			txs[i].Hash = tx.Hash()
 		}
-		uncles = block.Uncles()
 	} else {
-		// Light nodes would need on-demand lookups for transactions/uncles, skip
+		// Light nodes would need on-demand lookups for transactions, skip
 		if block != nil {
 			header = block.Header()
 		} else {
-			header = s.backend.CurrentHeader()
+			header = s.backend.GetLastFinalisedHeader()
 		}
 		td = s.backend.GetTd(context.Background(), header.Hash())
 		txs = []txStats{}
@@ -652,19 +651,18 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	author, _ := s.engine.Author(header)
 
 	return &blockStats{
-		Number:     header.Number,
-		Hash:       header.Hash(),
-		ParentHash: header.ParentHash,
-		Timestamp:  new(big.Int).SetUint64(header.Time),
-		Miner:      author,
-		GasUsed:    header.GasUsed,
-		GasLimit:   header.GasLimit,
-		Diff:       header.Difficulty.String(),
-		TotalDiff:  td.String(),
-		Txs:        txs,
-		TxHash:     header.TxHash,
-		Root:       header.Root,
-		Uncles:     uncles,
+		Height:       header.Height,
+		Number:       header.Number,
+		Hash:         header.Hash(),
+		ParentHashes: header.ParentHashes,
+		Timestamp:    new(big.Int).SetUint64(header.Time),
+		Miner:        author,
+		GasUsed:      header.GasUsed,
+		GasLimit:     header.GasLimit,
+		TotalDiff:    td.String(),
+		Txs:          txs,
+		TxHash:       header.TxHash,
+		Root:         header.Root,
 	}
 }
 
@@ -678,7 +676,7 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 		indexes = append(indexes, list...)
 	} else {
 		// No indexes requested, send back the top ones
-		head := s.backend.CurrentHeader().Number.Int64()
+		head := s.backend.GetLastFinalisedHeader().Nr()
 		start := head - historyUpdateRange + 1
 		if start < 0 {
 			start = 0
@@ -774,20 +772,25 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
-		mining = fullBackend.Miner().Mining()
-		hashrate = int(fullBackend.Miner().Hashrate())
+		mining = fullBackend.Creator().IsRunning()
+		hashrate = int(fullBackend.Creator().Hashrate())
 
 		sync := fullBackend.SyncProgress()
-		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		//todo require new logic
+		//syncing = fullBackend.GetLastFinalisedHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = 0 >= sync.HighestBlock
 
 		price, _ := fullBackend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
-		if basefee := fullBackend.CurrentHeader().BaseFee; basefee != nil {
+		header := fullBackend.GetLastFinalisedHeader()
+		if basefee := header.BaseFee; basefee != nil {
 			gasprice += int(basefee.Uint64())
 		}
 	} else {
 		sync := s.backend.SyncProgress()
-		syncing = s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		//todo require new logic
+		//syncing = s.backend.GetLastFinalisedHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = 0 >= sync.HighestBlock
 	}
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to ethstats")

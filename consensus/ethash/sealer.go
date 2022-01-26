@@ -134,8 +134,8 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 	var (
 		header  = block.Header()
 		hash    = ethash.SealHash(header).Bytes()
-		target  = new(big.Int).Div(two256, header.Difficulty)
-		number  = header.Number.Uint64()
+		target  = new(big.Int).Div(two256, big1)
+		number  = header.Height
 		dataset = ethash.dataset(number, false)
 	)
 	// Start generating random nonces until we abort or find a good one
@@ -324,7 +324,7 @@ func (s *remoteSealer) loop() {
 			// Clear stale pending blocks
 			if s.currentBlock != nil {
 				for hash, block := range s.works {
-					if block.NumberU64()+staleThreshold <= s.currentBlock.NumberU64() {
+					if block.Height()+staleThreshold <= s.currentBlock.Height() {
 						delete(s.works, hash)
 					}
 				}
@@ -346,9 +346,9 @@ func (s *remoteSealer) loop() {
 func (s *remoteSealer) makeWork(block *types.Block) {
 	hash := s.ethash.SealHash(block.Header())
 	s.currentWork[0] = hash.Hex()
-	s.currentWork[1] = common.BytesToHash(SeedHash(block.NumberU64())).Hex()
-	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(two256, block.Difficulty()).Bytes()).Hex()
-	s.currentWork[3] = hexutil.EncodeBig(block.Number())
+	s.currentWork[1] = common.BytesToHash(SeedHash(block.Height())).Hex()
+	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(two256, big1).Bytes()).Hex()
+	s.currentWork[3] = hexutil.EncodeBig(new(big.Int).SetUint64(block.Height()))
 
 	// Trace the seal work fetched by remote sealer.
 	s.currentBlock = block
@@ -408,7 +408,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, mixDigest common.Hash,
 	// Make sure the work submitted is present
 	block := s.works[sealhash]
 	if block == nil {
-		s.ethash.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentBlock.NumberU64())
+		s.ethash.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentBlock.Height())
 		return false
 	}
 	// Verify the correctness of submitted result.
@@ -434,10 +434,10 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, mixDigest common.Hash,
 	solution := block.WithSeal(header)
 
 	// The submitted solution is within the scope of acceptance.
-	if solution.NumberU64()+staleThreshold > s.currentBlock.NumberU64() {
+	if solution.Height()+staleThreshold > s.currentBlock.Height() {
 		select {
 		case s.results <- solution:
-			s.ethash.config.Log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+			s.ethash.config.Log.Debug("Work submitted is acceptable", "number", solution.Height(), "sealhash", sealhash, "hash", solution.Hash())
 			return true
 		default:
 			s.ethash.config.Log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
@@ -445,6 +445,6 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, mixDigest common.Hash,
 		}
 	}
 	// The submitted block is too old to accept, drop it.
-	s.ethash.config.Log.Warn("Work submitted is too old", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+	s.ethash.config.Log.Warn("Work submitted is too old", "number", solution.Height(), "sealhash", sealhash, "hash", solution.Hash())
 	return false
 }

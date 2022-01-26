@@ -285,13 +285,16 @@ func (bc *BlockChain) HasState(hash common.Hash) bool {
 
 // HasBlockAndState checks if a block and associated state trie is fully present
 // in the database or not, caching it if present.
-func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
+func (bc *BlockChain) HasBlockAndState(hash common.Hash) bool {
 	// Check first that the block itself is known
 	block := bc.GetBlock(hash)
 	if block == nil {
 		return false
 	}
-	return bc.HasState(block.Root())
+	if block.Number() != nil && block.Height() == block.Nr() {
+		return bc.HasState(block.Root())
+	}
+	return true
 }
 
 // TrieNode retrieves a blob of data associated with a trie node

@@ -542,10 +542,11 @@ func (c *Creator) resultHandler(block *types.Block) {
 		FinalityPoints:      tmpFinalityPoints,
 	}
 	c.chain.AddTips(newBlockDag)
-	upTips, unloaded := c.chain.ReviseTips()
-	if len(unloaded) == 0 {
-		c.chain.EmitTipsSynced(upTips)
-	}
+	//upTips, unloaded := c.chain.ReviseTips()
+	//if len(unloaded) == 0 {
+	//	c.chain.EmitTipsSynced(upTips)
+	//}
+	c.chain.ReviseTips()
 
 	log.Info("Successfully sealed new block", "Hash", block.Hash(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 	log.Info("new hash", ">>", block.Hash().Hex())
@@ -1027,11 +1028,7 @@ func (c *Creator) isCreatorActive(assigned *Assignment) bool {
 
 // getPending returns all pending transactions for current miner
 func (c *Creator) getPending() map[common.Address]types.Transactions {
-	pending, err := c.eth.TxPool().Pending(true)
-	if err != nil {
-		log.Error("Failed to fetch pending transactions", "err", err)
-		return map[common.Address]types.Transactions{}
-	}
+	pending := c.eth.TxPool().Pending(true)
 
 	c.recentTxsMu.Lock()
 	defer c.recentTxsMu.Unlock()
