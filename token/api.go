@@ -68,7 +68,7 @@ func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexut
 		name = string(*args.Name)
 	}
 	symbol := ""
-	if args.Name != nil {
+	if args.Symbol != nil {
 		symbol = string(*args.Symbol)
 	}
 	decimals := uint8(0)
