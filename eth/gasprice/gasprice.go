@@ -111,7 +111,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	go func() {
 		var lastHead common.Hash
 		for ev := range headEvent {
-			if ev.Block.ParentHash() != lastHead {
+			if !ev.Block.ParentHashes().Has(lastHead) {
 				cache.Purge()
 			}
 			lastHead = ev.Block.Hash()
@@ -160,7 +160,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	}
 	var (
 		sent, exp int
-		number    = head.Number.Uint64()
+		number    = head.Nr()
 		result    = make(chan results, oracle.checkBlocks)
 		quit      = make(chan struct{})
 		results   []*big.Int

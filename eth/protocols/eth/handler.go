@@ -18,7 +18,6 @@ package eth
 
 import (
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -134,22 +133,29 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 // NodeInfo represents a short summary of the `eth` sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
-	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash         `json:"head"`       // Hex hash of the host's best owned block
+	Network   uint64              `json:"network"`   // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
+	Genesis   common.Hash         `json:"genesis"`   // SHA3 hash of the host's genesis block
+	Config    *params.ChainConfig `json:"config"`    // Chain configuration for the fork rules
+	LastFinNr uint64              `json:"lastFinNr"` // Last Finalized Number of node
+	Dag       *common.HashArray   `json:"dag"`       // all current dag hashes: nil - has not synchronized tips
 }
 
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
 func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
-	head := chain.CurrentBlock()
+	var (
+		lastFinNr                   = chain.GetLastFinalizedNumber()
+		dagHashes *common.HashArray = nil
+		unsync                      = chain.GetUnsynchronizedTipsHashes()
+	)
+	if len(unsync) == 0 {
+		dagHashes = chain.GetDagHashes()
+	}
 	return &NodeInfo{
-		Network:    network,
-		Difficulty: chain.GetTd(head.Hash(), head.NumberU64()),
-		Genesis:    chain.Genesis().Hash(),
-		Config:     chain.Config(),
-		Head:       head.Hash(),
+		Network:   network,
+		Genesis:   chain.Genesis().Hash(),
+		Config:    chain.Config(),
+		LastFinNr: lastFinNr,
+		Dag:       dagHashes, // nil - has not synchronized tips
 	}
 }
 
@@ -186,6 +192,8 @@ var eth66 = map[uint64]msgHandler{
 	ReceiptsMsg:                   handleReceipts66,
 	GetPooledTransactionsMsg:      handleGetPooledTransactions66,
 	PooledTransactionsMsg:         handlePooledTransactions66,
+	GetDagMsg:                     handleGetDag66,
+	DagMsg:                        handleDag66,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote

@@ -19,6 +19,7 @@ package downloader
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -46,17 +47,11 @@ func (p *headerPack) Stats() string  { return fmt.Sprintf("%d", len(p.headers)) 
 type bodyPack struct {
 	peerID       string
 	transactions [][]*types.Transaction
-	uncles       [][]*types.Header
 }
 
 func (p *bodyPack) PeerId() string { return p.peerID }
-func (p *bodyPack) Items() int {
-	if len(p.transactions) <= len(p.uncles) {
-		return len(p.transactions)
-	}
-	return len(p.uncles)
-}
-func (p *bodyPack) Stats() string { return fmt.Sprintf("%d:%d", len(p.transactions), len(p.uncles)) }
+func (p *bodyPack) Items() int     { return len(p.transactions) }
+func (p *bodyPack) Stats() string  { return fmt.Sprintf("%d:%d", len(p.transactions)) }
 
 // receiptPack is a batch of receipts returned by a peer.
 type receiptPack struct {
@@ -77,3 +72,13 @@ type statePack struct {
 func (p *statePack) PeerId() string { return p.peerID }
 func (p *statePack) Items() int     { return len(p.states) }
 func (p *statePack) Stats() string  { return fmt.Sprintf("%d", len(p.states)) }
+
+// dagPack is a dag chain returned by a peer.
+type dagPack struct {
+	peerID string
+	dag    common.HashArray
+}
+
+func (p *dagPack) PeerId() string { return p.peerID }
+func (p *dagPack) Items() int     { return len(p.dag) }
+func (p *dagPack) Stats() string  { return fmt.Sprintf("%d", len(p.dag)) }

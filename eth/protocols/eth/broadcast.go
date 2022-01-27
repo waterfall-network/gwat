@@ -17,8 +17,6 @@
 package eth
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -33,7 +31,6 @@ const (
 // broadcast queue.
 type blockPropagation struct {
 	block *types.Block
-	td    *big.Int
 }
 
 // broadcastBlocks is a write loop that multiplexes blocks and block accouncements
@@ -43,16 +40,16 @@ func (p *Peer) broadcastBlocks() {
 	for {
 		select {
 		case prop := <-p.queuedBlocks:
-			if err := p.SendNewBlock(prop.block, prop.td); err != nil {
+			if err := p.SendNewBlock(prop.block); err != nil {
 				return
 			}
-			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "td", prop.td)
+			p.Log().Trace("Propagated block", "number", prop.block.Nr(), "hash", prop.block.Hash().Hex())
 
 		case block := <-p.queuedBlockAnns:
-			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()}); err != nil {
+			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}); err != nil {
 				return
 			}
-			p.Log().Trace("Announced block", "number", block.Number(), "hash", block.Hash())
+			p.Log().Trace("Announced block", "height", block.Height(), "hash", block.Hash().Hex())
 
 		case <-p.term:
 			return

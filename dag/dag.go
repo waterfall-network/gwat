@@ -108,33 +108,32 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 			Creators: data.Creators,
 		}
 
-		block, err := d.creator.CreateBlock(assigned)
-
-		if err != nil {
-			errs["creation"] = err.Error()
-		}
-
-		if block != nil {
-			info["newBlock"] = block.Hash().Hex()
-		}
+		go func() {
+			crtStart := time.Now()
+			crtInfo := map[string]string{}
+			block, crtErr := d.creator.CreateBlock(assigned)
+			if crtErr != nil {
+				crtInfo["error"] = crtErr.Error()
+			}
+			if block != nil {
+				crtInfo["newBlock"] = block.Hash().Hex()
+			}
+			log.Info("============= HandleConsensus::create=============", "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+		}()
 	}
 
 	info["elapsed"] = fmt.Sprintf("%s", common.PrettyDuration(time.Since(tstart)))
-
-	log.Info("============= HandleConsensus::create=============", "IsRunning", d.creator.IsRunning(), "err", err, "info", info)
-
 	res := &ConsensusResult{
 		Error:      nil,
 		Info:       &info,
 		Candidates: candidates,
 	}
-
 	if len(errs) > 0 {
 		strBuf, _ := json.Marshal(errs)
 		estr := fmt.Sprintf("%s", strBuf)
 		res.Error = &estr
 	}
-
+	log.Info("============= HandleConsensus::response=============", "result", res)
 	return res
 }
 

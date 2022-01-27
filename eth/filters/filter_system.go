@@ -21,13 +21,13 @@ package filters
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -372,23 +372,31 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 	if oldh == nil {
 		return
 	}
+
 	newh := newHeader
 	// find common ancestor, create list of rolled back and new block hashes
 	var oldHeaders, newHeaders []*types.Header
-	for oldh.Hash() != newh.Hash() {
-		if oldh.Number.Uint64() >= newh.Number.Uint64() {
-			oldHeaders = append(oldHeaders, oldh)
-			oldh = rawdb.ReadHeader(es.backend.ChainDb(), oldh.ParentHash, oldh.Number.Uint64()-1)
-		}
-		if oldh.Number.Uint64() < newh.Number.Uint64() {
-			newHeaders = append(newHeaders, newh)
-			newh = rawdb.ReadHeader(es.backend.ChainDb(), newh.ParentHash, newh.Number.Uint64()-1)
-			if newh == nil {
-				// happens when CHT syncing, nothing to do
-				newh = oldh
+	if oldh.Number != nil && newh.Number != nil {
+		for oldh.Hash() != newh.Hash() {
+			for _, oldParentHash := range oldh.ParentHashes {
+				if oldh.Nr() >= newh.Nr() {
+					oldHeaders = append(oldHeaders, oldh)
+					oldh = rawdb.ReadHeader(es.backend.ChainDb(), oldParentHash)
+				}
+			}
+			for _, newParentHash := range newh.ParentHashes {
+				if oldh.Nr() < newh.Nr() {
+					newHeaders = append(newHeaders, newh)
+					newh = rawdb.ReadHeader(es.backend.ChainDb(), newParentHash)
+					if newh == nil {
+						// happens when CHT syncing, nothing to do
+						newh = oldh
+					}
+				}
 			}
 		}
 	}
+
 	// roll back old blocks
 	for _, h := range oldHeaders {
 		callBack(h, true)

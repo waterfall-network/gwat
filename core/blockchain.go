@@ -1723,8 +1723,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		//// Skip all known blocks that are behind us
 		////var (
 		////	current  = bc.GetLastFinalizedBlock()
-		////	localTd  = bc.GetTd(current.Hash())
-		////	externTd = bc.GetTd(block.ParentHashes()[0]) // The first block can't be nil
 		////)
 		//for block != nil && err == ErrKnownBlock {
 		//	//externTd = new(big.Int).Add(externTd, block.Difficulty())
@@ -2063,8 +2061,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		//// Skip all known blocks that are behind us
 		////var (
 		////	current  = bc.GetLastFinalizedBlock()
-		////	localTd  = bc.GetTd(current.Hash())
-		////	externTd = bc.GetTd(block.ParentHashes()[0]) // The first block can't be nil
 		////)
 		//for block != nil && err == ErrKnownBlock {
 		//	//externTd = new(big.Int).Add(externTd, block.Difficulty())
@@ -2714,14 +2710,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		//// Skip all known blocks that are behind us
 		//var (
 		//	current  = bc.GetLastFinalizedBlock()
-		//	localTd  = bc.GetTd(current.Hash())
-		//	externTd = bc.GetTd(block.ParentHashes()[0]) // The first block can't be nil
 		//)
 		//for block != nil && err == ErrKnownBlock {
-		//	externTd = new(big.Int).Add(externTd, block.Difficulty())
-		//	if localTd.Cmp(externTd) < 0 {
-		//		break
-		//	}
 		//	log.Debug("Ignoring already known block", "hash", block.Hash())
 		//	stats.ignored++
 		//
@@ -2972,7 +2962,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 // switch over to the new chain
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	//var (
-	//externTd *big.Int
 	//current  = bc.GetLastFinalizedBlock()
 	//)
 	// The first sidechain block error is already verified to be ErrPrunedAncestor.
@@ -2987,11 +2976,6 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		//	canonical := bc.GetBlockByNumber(number)
 		//	if canonical != nil && canonical.Hash() == block.Hash() {
 		//		// Not a sidechain block, this is a re-import of a canon block which has it's state pruned
-		//
-		//		// Collect the TD of the block. Since we know it's a canon one,
-		//		// we can get it directly, and not (like further below) use
-		//		// the parent and then add the block on top
-		//		externTd = bc.GetTd(block.Hash())
 		//		continue
 		//	}
 		//	if canonical != nil && canonical.Root() == block.Root() {
