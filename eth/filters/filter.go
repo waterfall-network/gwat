@@ -133,34 +133,37 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if header == nil {
 		return nil, nil
 	}
-	head := header.Number.Uint64()
 
-	if f.begin == -1 {
-		f.begin = int64(head)
-	}
-	end := uint64(f.end)
-	if f.end == -1 {
-		end = head
-	}
-	// Gather all indexed logs, and finish with non indexed ones
-	var (
-		logs []*types.Log
-		err  error
-	)
-	size, sections := f.backend.BloomStatus()
-	if indexed := sections * size; indexed > uint64(f.begin) {
-		if indexed > end {
-			logs, err = f.indexedLogs(ctx, end)
-		} else {
-			logs, err = f.indexedLogs(ctx, indexed-1)
+	if header.Number != nil {
+		head := header.Nr()
+		if f.begin == -1 {
+			f.begin = int64(head)
 		}
-		if err != nil {
-			return logs, err
+		end := uint64(f.end)
+		if f.end == -1 {
+			end = head
 		}
+		// Gather all indexed logs, and finish with non indexed ones
+		var (
+			logs []*types.Log
+			err  error
+		)
+		size, sections := f.backend.BloomStatus()
+		if indexed := sections * size; indexed > uint64(f.begin) {
+			if indexed > end {
+				logs, err = f.indexedLogs(ctx, end)
+			} else {
+				logs, err = f.indexedLogs(ctx, indexed-1)
+			}
+			if err != nil {
+				return logs, err
+			}
+		}
+		rest, err := f.unindexedLogs(ctx, end)
+		logs = append(logs, rest...)
+		return logs, err
 	}
-	rest, err := f.unindexedLogs(ctx, end)
-	logs = append(logs, rest...)
-	return logs, err
+	return nil, nil
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom

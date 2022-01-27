@@ -20,8 +20,6 @@ package light
 
 import (
 	"context"
-	"errors"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -74,6 +72,10 @@ type LightChain struct {
 	disableCheckFreq int32 // disables header verification
 }
 
+func (lc *LightChain) WriteSyncDagBlock(block *types.Block) (status int, err error) {
+	panic("implement me")
+}
+
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
@@ -110,8 +112,14 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range core.BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
-			log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
-			bc.SetHead(header.Number.Uint64() - 1)
+			height := rawdb.ReadFinalizedNumberByHash(bc.chainDb, hash)
+			if height == nil {
+				continue
+			}
+			prevHeight := *height - 1
+			prevHash := rawdb.ReadFinalizedHashByNumber(bc.chainDb, prevHeight)
+			log.Error("Found bad hash, rewinding chain", "hash", prevHash)
+			bc.SetHead(prevHash)
 			log.Info("Chain rewind was successful, resuming normal operation")
 		}
 	}
@@ -151,28 +159,28 @@ func (lc *LightChain) HeaderChain() *core.HeaderChain {
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (lc *LightChain) loadLastState() error {
-	if head := rawdb.ReadLastFinalizedHash(lc.chainDb); head == (common.Hash{}) {
+	if currHash := rawdb.ReadLastFinalizedHash(lc.chainDb); currHash == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
 		lc.Reset()
 	} else {
-		header := lc.GetHeaderByHash(head)
+		header := lc.GetHeaderByHash(currHash)
 		if header == nil {
 			// Corrupt or empty database, init from scratch
 			lc.Reset()
 		} else {
-			lc.hc.SetCurrentHeader(header)
+			height := rawdb.ReadLastFinalizedNumber(lc.chainDb)
+			lc.hc.SetLastFinalisedHeader(header, height)
 		}
 	}
 	// Issue a status log and return
-	header := lc.hc.CurrentHeader()
-	headerTd := lc.GetTd(header.Hash(), header.Number.Uint64())
-	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
+	header := lc.hc.GetLastFinalisedHeader()
+	log.Info("Loaded most recent local header", "hash", header.Hash())
 	return nil
 }
 
 // SetHead rewinds the local chain to a new head. Everything above the new
 // head will be deleted and the new one set.
-func (lc *LightChain) SetHead(head uint64) error {
+func (lc *LightChain) SetHead(head common.Hash) error {
 	lc.chainmu.Lock()
 	defer lc.chainmu.Unlock()
 
@@ -182,7 +190,7 @@ func (lc *LightChain) SetHead(head uint64) error {
 
 // GasLimit returns the gas limit of the current HEAD block.
 func (lc *LightChain) GasLimit() uint64 {
-	return lc.hc.CurrentHeader().GasLimit
+	return lc.hc.GetLastFinalisedHeader().GasLimit
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -194,14 +202,13 @@ func (lc *LightChain) Reset() {
 // specified genesis state.
 func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	// Dump the entire block chain and purge the caches
-	lc.SetHead(0)
+	lc.SetHead(lc.genesisBlock.Hash())
 
 	lc.chainmu.Lock()
 	defer lc.chainmu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := lc.chainDb.NewBatch()
-	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
 	rawdb.WriteBlock(batch, genesis)
 	rawdb.WriteLastFinalizedHash(batch, genesis.Hash())
 	if err := batch.Write(); err != nil {
@@ -209,7 +216,7 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	}
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
-	lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
+	lc.hc.SetLastFinalisedHeader(lc.genesisBlock.Header(), uint64(0))
 }
 
 // Accessors
@@ -234,11 +241,7 @@ func (lc *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Bod
 		body := cached.(*types.Body)
 		return body, nil
 	}
-	number := lc.hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil, errors.New("unknown block")
-	}
-	body, err := GetBody(ctx, lc.odr, hash, *number)
+	body, err := GetBody(ctx, lc.odr, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -254,11 +257,7 @@ func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.Raw
 	if cached, ok := lc.bodyRLPCache.Get(hash); ok {
 		return cached.(rlp.RawValue), nil
 	}
-	number := lc.hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil, errors.New("unknown block")
-	}
-	body, err := GetBodyRLP(ctx, lc.odr, hash, *number)
+	body, err := GetBodyRLP(ctx, lc.odr, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -269,19 +268,19 @@ func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.Raw
 
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
-func (lc *LightChain) HasBlock(hash common.Hash, number uint64) bool {
-	blk, _ := lc.GetBlock(NoOdr, hash, number)
+func (lc *LightChain) HasBlock(hash common.Hash) bool {
+	blk, _ := lc.GetBlock(NoOdr, hash)
 	return blk != nil
 }
 
 // GetBlock retrieves a block from the database or ODR service by hash and number,
 // caching it if found.
-func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash, number uint64) (*types.Block, error) {
+func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := lc.blockCache.Get(hash); ok {
 		return block.(*types.Block), nil
 	}
-	block, err := GetBlock(ctx, lc.odr, hash, number)
+	block, err := GetBlock(ctx, lc.odr, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -293,11 +292,7 @@ func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash, number uin
 // GetBlockByHash retrieves a block from the database or ODR service by hash,
 // caching it if found.
 func (lc *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	number := lc.hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil, errors.New("unknown block")
-	}
-	return lc.GetBlock(ctx, hash, *number)
+	return lc.GetBlock(ctx, hash)
 }
 
 // GetBlockByNumber retrieves a block from the database or ODR service by
@@ -307,7 +302,7 @@ func (lc *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*typ
 	if hash == (common.Hash{}) || err != nil {
 		return nil, err
 	}
-	return lc.GetBlock(ctx, hash, number)
+	return lc.GetBlock(ctx, hash)
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress
@@ -343,9 +338,16 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 		// In theory we should update all in-memory markers in the
 		// last step, however the direction of rollback is from high
 		// to low, so it's safe the update in-memory markers directly.
-		if head := lc.hc.CurrentHeader(); head.Hash() == hash {
-			rawdb.WriteLastFinalizedHash(batch, head.ParentHash)
-			lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash, head.Number.Uint64()-1))
+		if head := lc.hc.GetLastFinalisedHeader(); head.Hash() == hash {
+			height := rawdb.ReadFinalizedNumberByHash(lc.chainDb, head.Hash())
+			if height == nil || *height == uint64(0) {
+				continue
+			}
+			prevHeight := *height - 1
+			prevHash := rawdb.ReadFinalizedHashByNumber(lc.chainDb, prevHeight)
+			rawdb.WriteLastFinalizedHash(batch, prevHash)
+			prevHeader := lc.GetHeaderByHash(prevHash)
+			lc.hc.SetLastFinalisedHeader(prevHeader, prevHeight)
 		}
 	}
 	if err := batch.Write(); err != nil {
@@ -359,7 +361,7 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 	for _, event := range events {
 		switch ev := event.(type) {
 		case core.ChainEvent:
-			if lc.CurrentHeader().Hash() == ev.Hash {
+			if lc.GetLastFinalisedHeader().Hash() == ev.Hash {
 				lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: ev.Block})
 			}
 			lc.chainFeed.Send(ev)
@@ -418,33 +420,25 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	return 0, err
 }
 
-// CurrentHeader retrieves the current head header of the canonical chain. The
+// GetLastFinalisedHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
-func (lc *LightChain) CurrentHeader() *types.Header {
-	return lc.hc.CurrentHeader()
+func (lc *LightChain) GetLastFinalisedHeader() *types.Header {
+	return lc.hc.GetLastFinalisedHeader()
 }
 
-// GetTd retrieves a block's total difficulty in the canonical chain from the
-// database by hash and number, caching it if found.
-func (lc *LightChain) GetTd(hash common.Hash, number uint64) *big.Int {
-	return lc.hc.GetTd(hash, number)
+func (lc *LightChain) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
+	return lc.hc.GetBlockFinalizedNumber(hash)
 }
 
-// GetHeaderByNumberOdr retrieves the total difficult from the database or
-// network by hash and number, caching it (associated with its hash) if found.
-func (lc *LightChain) GetTdOdr(ctx context.Context, hash common.Hash, number uint64) *big.Int {
-	td := lc.GetTd(hash, number)
-	if td != nil {
-		return td
-	}
-	td, _ = GetTd(ctx, lc.odr, hash, number)
-	return td
+// GetBlockFinalizedNumber retrieves a block finalized height
+func (lc *LightChain) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
+	return lc.hc.GetBlockFinalizedNumber(hash)
 }
 
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
-func (lc *LightChain) GetHeader(hash common.Hash, number uint64) *types.Header {
-	return lc.hc.GetHeader(hash, number)
+func (lc *LightChain) GetHeader(hash common.Hash) *types.Header {
+	return lc.hc.GetHeader(hash)
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
@@ -453,15 +447,27 @@ func (lc *LightChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return lc.hc.GetHeaderByHash(hash)
 }
 
+// GetHeaderByHash retrieves a block header from the database by hash, caching it if
+// found.
+func (lc *LightChain) GetHeadersByHashes(hashes common.HashArray) types.HeaderMap {
+	return lc.hc.GetHeadersByHashes(hashes)
+}
+
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
-func (lc *LightChain) HasHeader(hash common.Hash, number uint64) bool {
-	return lc.hc.HasHeader(hash, number)
+func (lc *LightChain) HasHeader(hash common.Hash) bool {
+	return lc.hc.HasHeader(hash)
 }
 
 // GetCanonicalHash returns the canonical hash for a given block number
 func (bc *LightChain) GetCanonicalHash(number uint64) common.Hash {
 	return bc.hc.GetCanonicalHash(number)
+}
+
+// GetBlockHashesFromHash retrieves a number of block hashes starting at a given
+// hash, fetching towards the genesis block.
+func (lc *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
+	return lc.hc.GetBlockHashesFromHash(hash, max)
 }
 
 // GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or
@@ -498,7 +504,7 @@ func (lc *LightChain) Config() *params.ChainConfig { return lc.hc.Config() }
 // which covered by checkpoint.
 func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.TrustedCheckpoint) bool {
 	// Ensure the remote checkpoint head is ahead of us
-	head := lc.CurrentHeader().Number.Uint64()
+	head := lc.GetLastFinalisedHeader().Nr()
 
 	latest := (checkpoint.SectionIndex+1)*lc.indexerConfig.ChtSize - 1
 	if clique := lc.hc.Config().Clique; clique != nil {
@@ -513,10 +519,10 @@ func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.Tru
 		defer lc.chainmu.Unlock()
 
 		// Ensure the chain didn't move past the latest block while retrieving it
-		if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
+		if lc.hc.GetLastFinalisedHeader().Nr() < header.Nr() {
 			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
 			rawdb.WriteLastFinalizedHash(lc.chainDb, header.Hash())
-			lc.hc.SetCurrentHeader(header)
+			lc.hc.SetLastFinalisedHeader(header, header.Nr())
 		}
 		return true
 	}
