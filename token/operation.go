@@ -14,27 +14,36 @@ var (
 	ErrNoBaseURI     = errors.New("token baseURI is required")
 )
 
-type commonOpArgs struct {
+type operation struct {
 	standard Std
 }
 
-func (a *commonOpArgs) Standard() Std {
-	return a.standard
+func (op *operation) Standard() Std {
+	return op.standard
 }
 
-type CreateOperation struct {
-	commonOpArgs
-	Name   []byte
-	Symbol []byte
+type CreateOperation interface {
+	Operation
+	Name() []byte
+	Symbol() []byte
 	// That's not required arguments
 	// WRC-20 arguments
-	Decimals    *uint8
-	TotalSupply *big.Int
+	Decimals() (uint8, bool)
+	TotalSupply() (*big.Int, bool)
 	// WRC-721 arguments
-	BaseURI []byte
+	BaseURI() ([]byte, bool)
 }
 
-func NewWrc20CreateOperation(name []byte, symbol []byte, decimals uint8, totalSupply *big.Int) (Operation, error) {
+type createOperation struct {
+	operation
+	name        []byte
+	symbol      []byte
+	decimals    *uint8
+	totalSupply *big.Int
+	baseURI     []byte
+}
+
+func NewWrc20CreateOperation(name []byte, symbol []byte, decimals uint8, totalSupply *big.Int) (CreateOperation, error) {
 	if len(name) == 0 {
 		return nil, ErrNoName
 	}
@@ -45,18 +54,18 @@ func NewWrc20CreateOperation(name []byte, symbol []byte, decimals uint8, totalSu
 		return nil, ErrNoTokenSupply
 	}
 
-	return &CreateOperation{
-		commonOpArgs: commonOpArgs{
+	return &createOperation{
+		operation: operation{
 			standard: StdWRC20,
 		},
-		Name:        name,
-		Symbol:      symbol,
-		Decimals:    &decimals,
-		TotalSupply: totalSupply,
+		name:        name,
+		symbol:      symbol,
+		decimals:    &decimals,
+		totalSupply: totalSupply,
 	}, nil
 }
 
-func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (Operation, error) {
+func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (CreateOperation, error) {
 	if len(name) == 0 {
 		return nil, ErrNoName
 	}
@@ -67,20 +76,55 @@ func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (Opera
 		return nil, ErrNoBaseURI
 	}
 
-	return &CreateOperation{
-		commonOpArgs: commonOpArgs{
-			standard: StdWRC20,
+	return &createOperation{
+		operation: operation{
+			standard: StdWRC721,
 		},
-		Name:    name,
-		Symbol:  symbol,
-		BaseURI: baseURI,
+		name:    name,
+		symbol:  symbol,
+		baseURI: baseURI,
 	}, nil
 }
 
-func (op *CreateOperation) OpCode() OpCode {
+func (op *createOperation) OpCode() OpCode {
 	return OpCreate
 }
 
-func (op *CreateOperation) Address() common.Address {
+func (op *createOperation) Address() common.Address {
 	return common.Address{}
+}
+
+func (op *createOperation) Name() []byte {
+	return makeCopy(op.name)
+}
+
+func (op *createOperation) Symbol() []byte {
+	return makeCopy(op.name)
+}
+
+func (op *createOperation) Decimals() (uint8, bool) {
+	if op.decimals == nil {
+		return 0, false
+	}
+	return *op.decimals, true
+}
+
+func (op *createOperation) TotalSupply() (*big.Int, bool) {
+	if op.totalSupply == nil {
+		return nil, false
+	}
+	return new(big.Int).Set(op.totalSupply), true
+}
+
+func (op *createOperation) BaseURI() ([]byte, bool) {
+	if op.baseURI == nil {
+		return nil, false
+	}
+	return makeCopy(op.baseURI), true
+}
+
+func makeCopy(src []byte) []byte {
+	dst := make([]byte, len(src))
+	copy(dst, src)
+	return dst
 }
