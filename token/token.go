@@ -21,6 +21,7 @@ const (
 	OpApprove      = 0x0D
 	OpTransfer     = 0x1E
 	OpTransferFrom = 0x1F
+	OpProperties   = 0x21
 )
 
 type Operation interface {

@@ -12,6 +12,7 @@ var (
 	ErrNoName        = errors.New("token name is required")
 	ErrNoSymbol      = errors.New("token symbol is required")
 	ErrNoBaseURI     = errors.New("token baseURI is required")
+	ErrNoAddress     = errors.New("token address is required")
 )
 
 type operation struct {
@@ -127,4 +128,59 @@ func makeCopy(src []byte) []byte {
 	dst := make([]byte, len(src))
 	copy(dst, src)
 	return dst
+}
+
+type addresser interface {
+	Address() common.Address
+}
+
+type PropertiesOperation interface {
+	Operation
+	addresser
+	TokenId() (*big.Int, bool)
+}
+
+type addressOperation struct {
+	address common.Address
+}
+
+func (a *addressOperation) Address() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return a.address
+}
+
+type propertiesOperation struct {
+	operation
+	addressOperation
+	tokenId *big.Int
+}
+
+func NewPropertiesOperation(address common.Address, tokenId *big.Int) (PropertiesOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	var standard Std = StdWRC20
+	if tokenId != nil {
+		standard = StdWRC721
+	}
+	return &propertiesOperation{
+		operation: operation{
+			standard: standard,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		tokenId: tokenId,
+	}, nil
+}
+
+func (op *propertiesOperation) OpCode() OpCode {
+	return OpProperties
+}
+
+func (op *propertiesOperation) TokenId() (*big.Int, bool) {
+	if op.tokenId == nil {
+		return nil, false
+	}
+	return new(big.Int).Set(op.tokenId), true
 }
