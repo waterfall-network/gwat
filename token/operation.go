@@ -13,6 +13,7 @@ var (
 	ErrNoSymbol      = errors.New("token symbol is required")
 	ErrNoBaseURI     = errors.New("token baseURI is required")
 	ErrNoAddress     = errors.New("token address is required")
+	ErrNoOwner       = errors.New("token owner address is required")
 )
 
 type operation struct {
@@ -183,4 +184,45 @@ func (op *propertiesOperation) TokenId() (*big.Int, bool) {
 		return nil, false
 	}
 	return new(big.Int).Set(op.tokenId), true
+}
+
+type BalanceOfOperation interface {
+	Operation
+	addresser
+	Owner() common.Address
+}
+
+type balanceOfOperation struct {
+	addressOperation
+	owner common.Address
+}
+
+func NewBalanceOfOperation(address common.Address, owner common.Address) (BalanceOfOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if owner == (common.Address{}) {
+		return nil, ErrNoOwner
+	}
+	return &balanceOfOperation{
+		addressOperation: addressOperation{
+			address: address,
+		},
+		owner: owner,
+	}, nil
+}
+
+func (op *balanceOfOperation) OpCode() OpCode {
+	return OpBalanceOf
+}
+
+// Standard method is just a stub to implement Operation interface.
+// Always returns 0.
+func (op *balanceOfOperation) Standard() Std {
+	return 0
+}
+
+func (op *balanceOfOperation) Owner() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.owner
 }
