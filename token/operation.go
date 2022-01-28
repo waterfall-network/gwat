@@ -14,6 +14,8 @@ var (
 	ErrNoBaseURI     = errors.New("token baseURI is required")
 	ErrNoAddress     = errors.New("token address is required")
 	ErrNoOwner       = errors.New("token owner address is required")
+	ErrNoValue       = errors.New("value is required")
+	ErrNoTo          = errors.New("to address is required")
 )
 
 type operation struct {
@@ -225,4 +227,53 @@ func (op *balanceOfOperation) Standard() Std {
 func (op *balanceOfOperation) Owner() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
 	return op.owner
+}
+
+type TransferOperation interface {
+	Operation
+	addresser
+	To() common.Address
+	Value() *big.Int
+}
+
+type transferOperation struct {
+	operation
+	addressOperation
+	to    common.Address
+	value *big.Int
+}
+
+func NewTransferOperation(address common.Address, to common.Address, value *big.Int) (TransferOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if to == (common.Address{}) {
+		return nil, ErrNoTo
+	}
+	if value == nil {
+		return nil, ErrNoValue
+	}
+	return &transferOperation{
+		operation: operation{
+			standard: StdWRC20,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		to:    to,
+		value: value,
+	}, nil
+}
+
+func (op *transferOperation) OpCode() OpCode {
+	return OpTransfer
+}
+
+func (op *transferOperation) To() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.to
+}
+
+func (op *transferOperation) Value() *big.Int {
+	return new(big.Int).Set(op.value)
 }
