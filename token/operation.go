@@ -17,6 +17,7 @@ var (
 	ErrNoValue       = errors.New("value is required")
 	ErrNoTo          = errors.New("to address is required")
 	ErrNoFrom        = errors.New("from address is required")
+	ErrNoSpender     = errors.New("spender address is required")
 )
 
 type operation struct {
@@ -195,9 +196,18 @@ type BalanceOfOperation interface {
 	Owner() common.Address
 }
 
+type ownerOperation struct {
+	owner common.Address
+}
+
+func (op *ownerOperation) Owner() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.owner
+}
+
 type balanceOfOperation struct {
 	addressOperation
-	owner common.Address
+	ownerOperation
 }
 
 func NewBalanceOfOperation(address common.Address, owner common.Address) (BalanceOfOperation, error) {
@@ -211,7 +221,9 @@ func NewBalanceOfOperation(address common.Address, owner common.Address) (Balanc
 		addressOperation: addressOperation{
 			address: address,
 		},
-		owner: owner,
+		ownerOperation: ownerOperation{
+			owner: owner,
+		},
 	}, nil
 }
 
@@ -225,11 +237,6 @@ func (op *balanceOfOperation) Standard() Std {
 	return 0
 }
 
-func (op *balanceOfOperation) Owner() common.Address {
-	// It's safe to return common.Address by value, cause it's an array
-	return op.owner
-}
-
 type TransferOperation interface {
 	Operation
 	addresser
@@ -237,11 +244,19 @@ type TransferOperation interface {
 	Value() *big.Int
 }
 
+type valueOperation struct {
+	value *big.Int
+}
+
+func (op *valueOperation) Value() *big.Int {
+	return new(big.Int).Set(op.value)
+}
+
 type transferOperation struct {
 	operation
 	addressOperation
-	to    common.Address
-	value *big.Int
+	valueOperation
+	to common.Address
 }
 
 func NewTransferOperation(address common.Address, to common.Address, value *big.Int) (TransferOperation, error) {
@@ -265,8 +280,10 @@ func newTransferOperation(standard Std, address common.Address, to common.Addres
 		addressOperation: addressOperation{
 			address: address,
 		},
-		to:    to,
-		value: value,
+		to: to,
+		valueOperation: valueOperation{
+			value: value,
+		},
 	}, nil
 }
 
@@ -277,10 +294,6 @@ func (op *transferOperation) OpCode() OpCode {
 func (op *transferOperation) To() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
 	return op.to
-}
-
-func (op *transferOperation) Value() *big.Int {
-	return new(big.Int).Set(op.value)
 }
 
 type TransferFromOperation interface {
@@ -338,4 +351,50 @@ func (op *safeTransferFromOperation) Data() ([]byte, bool) {
 		return nil, false
 	}
 	return makeCopy(op.data), true
+}
+
+type ApproveOperation interface {
+	Operation
+	Spender() common.Address
+	Value() *big.Int
+}
+
+type approveOperation struct {
+	operation
+	addressOperation
+	valueOperation
+	spender common.Address
+}
+
+func NewApproveOperation(address common.Address, spender common.Address, value *big.Int) (ApproveOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if spender == (common.Address{}) {
+		return nil, ErrNoSpender
+	}
+	if value == nil {
+		return nil, ErrNoValue
+	}
+	return &approveOperation{
+		operation: operation{
+			standard: StdWRC20,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		valueOperation: valueOperation{
+			value: value,
+		},
+		spender: spender,
+	}, nil
+}
+
+func (op *approveOperation) OpCode() OpCode {
+	return OpApprove
+}
+
+func (op *approveOperation) Spender() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.spender
 }
