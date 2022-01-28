@@ -20,6 +20,7 @@ var (
 	ErrNoSpender     = errors.New("spender address is required")
 	ErrNoOperator    = errors.New("operator address is required")
 	ErrNoTokenId     = errors.New("token id is required")
+	ErrNoIndex       = errors.New("index is required")
 )
 
 type operation struct {
@@ -649,4 +650,50 @@ func NewBurnOperation(address common.Address, tokenId *big.Int) (BurnOperation, 
 
 func (op *burnOperation) OpCode() OpCode {
 	return OpBurn
+}
+
+type TokenOfOwnerByIndexOperation interface {
+	Operation
+	addresser
+	Owner() common.Address
+	Index() *big.Int
+}
+
+type tokenOfOwnerByIndexOperation struct {
+	operation
+	addressOperation
+	ownerOperation
+	index *big.Int
+}
+
+func NewTokenOfOwnerByIndexOperation(address common.Address, owner common.Address, index *big.Int) (TokenOfOwnerByIndexOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if owner == (common.Address{}) {
+		return nil, ErrNoOwner
+	}
+	if index == nil {
+		return nil, ErrNoIndex
+	}
+	return &tokenOfOwnerByIndexOperation{
+		operation: operation{
+			standard: StdWRC721,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		ownerOperation: ownerOperation{
+			owner: owner,
+		},
+		index: index,
+	}, nil
+}
+
+func (op *tokenOfOwnerByIndexOperation) OpCode() OpCode {
+	return OpTokenOfOwnerByIndex
+}
+
+func (op *tokenOfOwnerByIndexOperation) Index() *big.Int {
+	return new(big.Int).Set(op.index)
 }
