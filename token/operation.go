@@ -18,6 +18,7 @@ var (
 	ErrNoTo          = errors.New("to address is required")
 	ErrNoFrom        = errors.New("from address is required")
 	ErrNoSpender     = errors.New("spender address is required")
+	ErrNoOperator    = errors.New("operator address is required")
 )
 
 type operation struct {
@@ -447,4 +448,50 @@ func NewAllowanceOperation(address common.Address, owner common.Address, spender
 
 func (op *allowanceOperation) OpCode() OpCode {
 	return OpAllowance
+}
+
+type IsApprovedForAllOperation interface {
+	addresser
+	Owner() common.Address
+	Operator() common.Address
+}
+
+type isApprovedForAllOperation struct {
+	operation
+	addressOperation
+	ownerOperation
+	operator common.Address
+}
+
+func NewIsApprovedForAllOperation(address common.Address, owner common.Address, operator common.Address) (IsApprovedForAllOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if owner == (common.Address{}) {
+		return nil, ErrNoOwner
+	}
+	if operator == (common.Address{}) {
+		return nil, ErrNoOperator
+	}
+	return &isApprovedForAllOperation{
+		operation: operation{
+			standard: StdWRC721,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		ownerOperation: ownerOperation{
+			owner: owner,
+		},
+		operator: operator,
+	}, nil
+}
+
+func (op *isApprovedForAllOperation) OpCode() OpCode {
+	return OpIsApprovedForAll
+}
+
+func (op *isApprovedForAllOperation) Operator() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.operator
 }
