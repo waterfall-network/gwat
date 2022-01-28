@@ -19,6 +19,7 @@ var (
 	ErrNoFrom        = errors.New("from address is required")
 	ErrNoSpender     = errors.New("spender address is required")
 	ErrNoOperator    = errors.New("operator address is required")
+	ErrNoTokenId     = errors.New("token id is required")
 )
 
 type operation struct {
@@ -253,11 +254,20 @@ func (op *valueOperation) Value() *big.Int {
 	return new(big.Int).Set(op.value)
 }
 
+type toOperation struct {
+	to common.Address
+}
+
+func (op *toOperation) To() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.to
+}
+
 type transferOperation struct {
 	operation
 	addressOperation
 	valueOperation
-	to common.Address
+	toOperation
 }
 
 func NewTransferOperation(address common.Address, to common.Address, value *big.Int) (TransferOperation, error) {
@@ -281,7 +291,9 @@ func newTransferOperation(standard Std, address common.Address, to common.Addres
 		addressOperation: addressOperation{
 			address: address,
 		},
-		to: to,
+		toOperation: toOperation{
+			to: to,
+		},
 		valueOperation: valueOperation{
 			value: value,
 		},
@@ -290,11 +302,6 @@ func newTransferOperation(standard Std, address common.Address, to common.Addres
 
 func (op *transferOperation) OpCode() OpCode {
 	return OpTransfer
-}
-
-func (op *transferOperation) To() common.Address {
-	// It's safe to return common.Address by value, cause it's an array
-	return op.to
 }
 
 type TransferFromOperation interface {
@@ -544,4 +551,59 @@ func (op *setApprovalForAllOperation) OpCode() OpCode {
 
 func (op *setApprovalForAllOperation) IsApproved() bool {
 	return op.isApproved
+}
+
+type MintOperation interface {
+	Operation
+	To() common.Address
+	TokenId() *big.Int
+	Metadata() ([]byte, bool)
+}
+
+type mintOperation struct {
+	operation
+	addressOperation
+	toOperation
+	tokenId  *big.Int
+	metadata []byte
+}
+
+func NewMintOperation(address common.Address, to common.Address, tokenId *big.Int, metadata []byte) (MintOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if to == (common.Address{}) {
+		return nil, ErrNoTo
+	}
+	if tokenId == nil {
+		return nil, ErrNoTokenId
+	}
+	return &mintOperation{
+		operation: operation{
+			standard: StdWRC721,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		toOperation: toOperation{
+			to: to,
+		},
+		tokenId:  tokenId,
+		metadata: metadata,
+	}, nil
+}
+
+func (op *mintOperation) OpCode() OpCode {
+	return OpMint
+}
+
+func (op *mintOperation) TokenId() *big.Int {
+	return new(big.Int).Set(op.tokenId)
+}
+
+func (op *mintOperation) Metadata() ([]byte, bool) {
+	if len(op.metadata) == 0 {
+		return nil, false
+	}
+	return makeCopy(op.metadata), true
 }

@@ -26,6 +26,7 @@ const (
 	OpAllowance         = 0x23
 	OpIsApprovedForAll  = 0x24
 	OpSetApprovalForAll = 0x25
+	OpMint              = 0x26
 )
 
 type Operation interface {
