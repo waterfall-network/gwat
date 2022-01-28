@@ -17,10 +17,10 @@
 package eth
 
 import (
-	"math/big"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 )
@@ -28,9 +28,9 @@ import (
 // ethPeerInfo represents a short summary of the `eth` sub-protocol metadata known
 // about a connected peer.
 type ethPeerInfo struct {
-	Version    uint     `json:"version"`    // Ethereum protocol version negotiated
-	Difficulty *big.Int `json:"difficulty"` // Total difficulty of the peer's blockchain
-	Head       string   `json:"head"`       // Hex hash of the peer's best owned block
+	Version   uint              `json:"version"`   // Ethereum protocol version negotiated
+	LastFinNr uint64            `json:"lastFinNr"` // dag max height of the peer
+	Dag       *common.HashArray `json:"dag"`       // hashes of the peer dag
 }
 
 // ethPeer is a wrapper around eth.Peer to maintain a few extra metadata.
@@ -45,12 +45,11 @@ type ethPeer struct {
 
 // info gathers and returns some `eth` protocol metadata known about a peer.
 func (p *ethPeer) info() *ethPeerInfo {
-	hash, td := p.Head()
-
+	lastFinNr, dag := p.GetDagInfo()
 	return &ethPeerInfo{
-		Version:    p.Version(),
-		Difficulty: td,
-		Head:       hash.Hex(),
+		Version:   p.Version(),
+		LastFinNr: lastFinNr,
+		Dag:       dag,
 	}
 }
 

@@ -64,7 +64,7 @@ func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
 
 // Hashrate returns the POW hashrate
 func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
-	return hexutil.Uint64(api.e.Miner().Hashrate())
+	return hexutil.Uint64(api.e.dag.Creator().Hashrate())
 }
 
 // PublicMinerAPI provides an API to control the miner.
@@ -80,7 +80,7 @@ func NewPublicMinerAPI(e *Ethereum) *PublicMinerAPI {
 
 // Mining returns an indication if this node is currently mining.
 func (api *PublicMinerAPI) Mining() bool {
-	return api.e.IsMining()
+	return api.e.dag.Creator().IsRunning()
 }
 
 // PrivateMinerAPI provides private RPC methods to control the miner.
@@ -114,7 +114,7 @@ func (api *PrivateMinerAPI) Stop() {
 
 // SetExtra sets the extra data string that is included when this miner mines a block.
 func (api *PrivateMinerAPI) SetExtra(extra string) (bool, error) {
-	if err := api.e.Miner().SetExtra([]byte(extra)); err != nil {
+	if err := api.e.dag.Creator().SetExtra([]byte(extra)); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -132,7 +132,7 @@ func (api *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
 
 // SetGasLimit sets the gaslimit to target towards during mining.
 func (api *PrivateMinerAPI) SetGasLimit(gasLimit hexutil.Uint64) bool {
-	api.e.Miner().SetGasCeil(uint64(gasLimit))
+	api.e.dag.Creator().SetGasCeil(uint64(gasLimit))
 	return true
 }
 
@@ -140,11 +140,6 @@ func (api *PrivateMinerAPI) SetGasLimit(gasLimit hexutil.Uint64) bool {
 func (api *PrivateMinerAPI) SetEtherbase(etherbase common.Address) bool {
 	api.e.SetEtherbase(etherbase)
 	return true
-}
-
-// SetRecommitInterval updates the interval for miner sealing work recommitting.
-func (api *PrivateMinerAPI) SetRecommitInterval(interval int) {
-	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
 }
 
 // PrivateAdminAPI is the collection of Ethereum full node-related APIs
@@ -166,7 +161,7 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 		return false, errors.New("last cannot be specified without first")
 	}
 	if first != nil && last == nil {
-		head := api.eth.BlockChain().CurrentHeader().Number.Uint64()
+		head := api.eth.BlockChain().GetLastFinalizedBlock().Nr()
 		last = &head
 	}
 	if _, err := os.Stat(file); err == nil {
@@ -200,7 +195,7 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 
 func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 	for _, b := range bs {
-		if !chain.HasBlock(b.Hash(), b.NumberU64()) {
+		if !chain.HasBlock(b.Hash()) {
 			return false
 		}
 	}
@@ -279,12 +274,12 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 		// If we're dumping the pending state, we need to request
 		// both the pending block as well as the pending state from
 		// the miner and operate on those
-		_, stateDb := api.eth.miner.Pending()
+		_, stateDb := api.eth.dag.Creator().Pending()
 		return stateDb.RawDump(opts), nil
 	}
 	var block *types.Block
 	if blockNr == rpc.LatestBlockNumber {
-		block = api.eth.blockchain.CurrentBlock()
+		block = api.eth.blockchain.GetLastFinalizedBlock()
 	} else {
 		block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 	}
@@ -368,11 +363,11 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 			// If we're dumping the pending state, we need to request
 			// both the pending block as well as the pending state from
 			// the miner and operate on those
-			_, stateDb = api.eth.miner.Pending()
+			_, stateDb = api.eth.dag.Creator().Pending()
 		} else {
 			var block *types.Block
 			if number == rpc.LatestBlockNumber {
-				block = api.eth.blockchain.CurrentBlock()
+				block = api.eth.blockchain.GetLastFinalizedBlock()
 			} else {
 				block = api.eth.blockchain.GetBlockByNumber(uint64(number))
 			}
@@ -479,9 +474,10 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum 
 
 	if endNum == nil {
 		endBlock = startBlock
-		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
+		//startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
+		startBlock = api.eth.blockchain.GetBlockByNumber(*endNum - 1)
 		if startBlock == nil {
-			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
+			return nil, fmt.Errorf("block %v has no parent", endBlock.Hash().Hex())
 		}
 	} else {
 		endBlock = api.eth.blockchain.GetBlockByNumber(*endNum)
@@ -506,9 +502,14 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, end
 
 	if endHash == nil {
 		endBlock = startBlock
-		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
+		//startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
+		if endBlock.Number() == nil {
+			return nil, fmt.Errorf("block %v has not finalised", endBlock.Hash().Hex())
+		}
+		endNum := endBlock.Nr()
+		startBlock = api.eth.blockchain.GetBlockByNumber(endNum - 1)
 		if startBlock == nil {
-			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
+			return nil, fmt.Errorf("block %v has no parent", endBlock.Hash())
 		}
 	} else {
 		endBlock = api.eth.blockchain.GetBlockByHash(*endHash)
@@ -520,8 +521,14 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, end
 }
 
 func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
-	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
-		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
+	if startBlock.Number() == nil {
+		return nil, fmt.Errorf("block %v has not finalised", startBlock.Hash().Hex())
+	}
+	if endBlock.Number() == nil {
+		return nil, fmt.Errorf("block %v has not finalised", endBlock.Hash().Hex())
+	}
+	if startBlock.Nr() >= endBlock.Nr() {
+		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Nr(), endBlock.Nr())
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
@@ -562,11 +569,11 @@ func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64
 	var resolveNum = func(num rpc.BlockNumber) (uint64, error) {
 		// We don't have state for pending (-2), so treat it as latest
 		if num.Int64() < 0 {
-			block := api.eth.blockchain.CurrentBlock()
+			block := api.eth.blockchain.GetLastFinalizedBlock()
 			if block == nil {
 				return 0, fmt.Errorf("current block missing")
 			}
-			return block.NumberU64(), nil
+			return block.Nr(), nil
 		}
 		return uint64(num.Int64()), nil
 	}

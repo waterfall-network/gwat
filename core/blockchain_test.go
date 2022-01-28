@@ -56,7 +56,7 @@ func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *B
 	)
 
 	// Initialize a fresh chain with only a genesis block
-	blockchain, _ := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil)
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil
@@ -1825,11 +1825,11 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash()) {
-		t.Errorf("Block %h not pruned", lastPrunedBlock.Hash())
+		t.Errorf("Block %v not pruned", lastPrunedBlock.Hash().Hex())
 	}
 	// Verify firstNonPrunedBlock is not pruned
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash()) {
-		t.Errorf("Block %h pruned", firstNonPrunedBlock.NumberU64())
+		t.Errorf("Block %v pruned", firstNonPrunedBlock.Hash().Hex())
 	}
 	// Generate the sidechain
 	// First block should be a known block, block after should be a pruned block. So
@@ -2496,12 +2496,12 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash()) {
-		t.Errorf("Block %h not pruned", lastPrunedBlock.Hash())
+		t.Errorf("Block %v not pruned", lastPrunedBlock.Hash().Hex())
 	}
 	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
 	// Verify firstNonPrunedBlock is not pruned
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash()) {
-		t.Errorf("Block %h pruned", firstNonPrunedBlock.Hash())
+		t.Errorf("Block %v pruned", firstNonPrunedBlock.Hash().Hex())
 	}
 	// Now re-import some old blocks
 	blockToReimport := blocks[5:8]

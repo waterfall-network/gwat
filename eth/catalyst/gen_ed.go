@@ -16,7 +16,10 @@ var _ = (*executableDataMarshaling)(nil)
 func (e executableData) MarshalJSON() ([]byte, error) {
 	type executableData struct {
 		BlockHash    common.Hash     `json:"blockHash"     gencodec:"required"`
-		ParentHash   common.Hash     `json:"parentHash"    gencodec:"required"`
+		ParentHashes []common.Hash   `json:"parentHashes"  gencodec:"required"`
+		Epoch        hexutil.Uint64  `json:"epoch"         gencodec:"required"`
+		Slot         hexutil.Uint64  `json:"slot"          gencodec:"required"`
+		Height       hexutil.Uint64  `json:"height"        gencodec:"required"`
 		Miner        common.Address  `json:"miner"         gencodec:"required"`
 		StateRoot    common.Hash     `json:"stateRoot"     gencodec:"required"`
 		Number       hexutil.Uint64  `json:"number"        gencodec:"required"`
@@ -29,7 +32,10 @@ func (e executableData) MarshalJSON() ([]byte, error) {
 	}
 	var enc executableData
 	enc.BlockHash = e.BlockHash
-	enc.ParentHash = e.ParentHash
+	enc.ParentHashes = e.ParentHashes
+	enc.Epoch = hexutil.Uint64(e.Epoch)
+	enc.Slot = hexutil.Uint64(e.Slot)
+	enc.Height = hexutil.Uint64(e.Height)
 	enc.Miner = e.Miner
 	enc.StateRoot = e.StateRoot
 	enc.Number = hexutil.Uint64(e.Number)
@@ -51,7 +57,10 @@ func (e executableData) MarshalJSON() ([]byte, error) {
 func (e *executableData) UnmarshalJSON(input []byte) error {
 	type executableData struct {
 		BlockHash    *common.Hash    `json:"blockHash"     gencodec:"required"`
-		ParentHash   *common.Hash    `json:"parentHash"    gencodec:"required"`
+		ParentHashes *[]common.Hash  `json:"parentHashes"  gencodec:"required"`
+		Epoch        *hexutil.Uint64 `json:"epoch"         gencodec:"required"`
+		Slot         *hexutil.Uint64 `json:"slot"          gencodec:"required"`
+		Height       *hexutil.Uint64 `json:"height"        gencodec:"required"`
 		Miner        *common.Address `json:"miner"         gencodec:"required"`
 		StateRoot    *common.Hash    `json:"stateRoot"     gencodec:"required"`
 		Number       *hexutil.Uint64 `json:"number"        gencodec:"required"`
@@ -70,10 +79,23 @@ func (e *executableData) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'blockHash' for executableData")
 	}
 	e.BlockHash = *dec.BlockHash
-	if dec.ParentHash == nil {
-		return errors.New("missing required field 'parentHash' for executableData")
+	if dec.ParentHashes == nil {
+		return errors.New("missing required field 'parentHashes' for executableData")
 	}
-	e.ParentHash = *dec.ParentHash
+	e.ParentHashes = *dec.ParentHashes
+
+	if dec.Epoch == nil {
+		return errors.New("missing required field 'Epoch' for executableData")
+	}
+	e.Epoch = uint64(*dec.Epoch)
+	if dec.Slot == nil {
+		return errors.New("missing required field 'Slot' for executableData")
+	}
+	e.Slot = uint64(*dec.Slot)
+	if dec.Height == nil {
+		return errors.New("missing required field 'Height' for executableData")
+	}
+	e.Height = uint64(*dec.Height)
 	if dec.Miner == nil {
 		return errors.New("missing required field 'miner' for executableData")
 	}
