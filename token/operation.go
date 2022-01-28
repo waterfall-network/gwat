@@ -311,3 +311,31 @@ func (op *transferFromOperation) From() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
 	return op.from
 }
+
+type SafeTransferFromOperation interface {
+	TransferFromOperation
+	Data() ([]byte, bool)
+}
+
+type safeTransferFromOperation struct {
+	transferFromOperation
+	data []byte
+}
+
+func NewSafeTransferFromOperation(address common.Address, from common.Address, to common.Address, value *big.Int, data []byte) (SafeTransferFromOperation, error) {
+	transferOp, err := NewTransferFromOperation(StdWRC721, address, from, to, value)
+	if err != nil {
+		return nil, err
+	}
+	return &safeTransferFromOperation{
+		transferFromOperation: *transferOp.(*transferFromOperation),
+		data:                  data,
+	}, nil
+}
+
+func (op *safeTransferFromOperation) Data() ([]byte, bool) {
+	if len(op.data) == 0 {
+		return nil, false
+	}
+	return makeCopy(op.data), true
+}
