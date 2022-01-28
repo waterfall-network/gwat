@@ -62,7 +62,7 @@ type Backend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -90,15 +90,8 @@ func (context *chainContext) Engine() consensus.Engine {
 	return context.api.backend.Engine()
 }
 
-func (context *chainContext) GetHeader(hash common.Hash, number uint64) *types.Header {
-	header, err := context.api.backend.HeaderByNumber(context.ctx, rpc.BlockNumber(number))
-	if err != nil {
-		return nil
-	}
-	if header.Hash() == hash {
-		return header
-	}
-	header, err = context.api.backend.HeaderByHash(context.ctx, hash)
+func (context *chainContext) GetHeader(hash common.Hash) *types.Header {
+	header, err := context.api.backend.HeaderByHash(context.ctx, hash)
 	if err != nil {
 		return nil
 	}
@@ -219,7 +212,7 @@ func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, conf
 	if err != nil {
 		return nil, err
 	}
-	if from.Number().Cmp(to.Number()) >= 0 {
+	if from.Nr() >= to.Nr() {
 		return nil, fmt.Errorf("end block (#%d) needs to come after start block (#%d)", end, start)
 	}
 	return api.traceChain(ctx, from, to, config)
@@ -242,7 +235,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	blocks := int(end.NumberU64() - start.NumberU64())
+	blocks := int(end.Nr() - start.Nr())
 	threads := runtime.NumCPU()
 	if threads > blocks {
 		threads = blocks
@@ -273,11 +266,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 					res, err := api.traceTx(localctx, msg, txctx, blockCtx, task.statedb, config)
 					if err != nil {
 						task.results[i] = &txTraceResult{Error: err.Error()}
-						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
+						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.Nr(), "err", err)
 						break
 					}
 					// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-					task.statedb.Finalise(api.backend.ChainConfig().IsEIP158(task.block.Number()))
+					task.statedb.Finalise(true)
 					task.results[i] = &txTraceResult{Result: res}
 				}
 				// Stream the result back to the user or abort on teardown
@@ -312,16 +305,16 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 
 			switch {
 			case failed != nil:
-				log.Warn("Chain tracing failed", "start", start.NumberU64(), "end", end.NumberU64(), "transactions", traced, "elapsed", time.Since(begin), "err", failed)
-			case number < end.NumberU64():
-				log.Warn("Chain tracing aborted", "start", start.NumberU64(), "end", end.NumberU64(), "abort", number, "transactions", traced, "elapsed", time.Since(begin))
+				log.Warn("Chain tracing failed", "start", start.Nr(), "end", end.Nr(), "transactions", traced, "elapsed", time.Since(begin), "err", failed)
+			case number < end.Nr():
+				log.Warn("Chain tracing aborted", "start", start.Nr(), "end", end.Nr(), "abort", number, "transactions", traced, "elapsed", time.Since(begin))
 			default:
-				log.Info("Chain tracing finished", "start", start.NumberU64(), "end", end.NumberU64(), "transactions", traced, "elapsed", time.Since(begin))
+				log.Info("Chain tracing finished", "start", start.Nr(), "end", end.Nr(), "transactions", traced, "elapsed", time.Since(begin))
 			}
 			close(results)
 		}()
 		// Feed all the blocks both into the tracer, as well as fast process concurrently
-		for number = start.NumberU64(); number < end.NumberU64(); number++ {
+		for number = start.Nr(); number < end.Nr(); number++ {
 			// Stop tracing if interruption was requested
 			select {
 			case <-notifier.Closed():
@@ -339,7 +332,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			// Print progress logs if long enough time elapsed
 			if time.Since(logged) > 8*time.Second {
 				logged = time.Now()
-				log.Info("Tracing chain segment", "start", start.NumberU64(), "end", end.NumberU64(), "current", number, "transactions", traced, "elapsed", time.Since(begin))
+				log.Info("Tracing chain segment", "start", start.Nr(), "end", end.Nr(), "current", number, "transactions", traced, "elapsed", time.Since(begin))
 			}
 			// Retrieve the parent state to trace on top
 			block, err := api.blockByNumber(localctx, rpc.BlockNumber(number))
@@ -385,12 +378,12 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 	go func() {
 		var (
 			done = make(map[uint64]*blockTraceResult)
-			next = start.NumberU64() + 1
+			next = start.Nr() + 1
 		)
 		for res := range results {
 			// Queue up next received result
 			result := &blockTraceResult{
-				Block:  hexutil.Uint64(res.block.NumberU64()),
+				Block:  hexutil.Uint64(res.block.Nr()),
 				Hash:   res.block.Hash(),
 				Traces: res.results,
 			}
@@ -401,7 +394,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			derefsMu.Unlock()
 			// Stream completed traces to the user, aborting on the first error
 			for result, ok := done[next]; ok; result, ok = done[next] {
-				if len(result.Traces) > 0 || next == end.NumberU64() {
+				if len(result.Traces) > 0 || next == end.Nr() {
 					notifier.Notify(sub.ID, result)
 				}
 				delete(done, next)
@@ -485,10 +478,21 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if block == nil {
 		return nil, fmt.Errorf("block %#x not found", hash)
 	}
-	if block.NumberU64() == 0 {
+	if block.Height() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
+	var parentBl *types.Block
+	for _, h := range block.ParentHashes() {
+		pb, err := api.blockByHash(ctx, h)
+		if err != nil {
+			return nil, err
+		}
+		if pb != nil && pb.Nr() == pb.Height() {
+			parentBl = pb
+			break
+		}
+	}
+	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(parentBl.Nr()), parentBl.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +509,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		signer             = types.MakeSigner(api.backend.ChainConfig())
 		chainConfig        = api.backend.ChainConfig()
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
+		deleteEmptyObjects = true
 	)
 	for i, tx := range block.Transactions() {
 		var (
@@ -546,10 +550,10 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requestd tracer.
 func (api *API) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
-	if block.NumberU64() == 0 {
+	if block.Height() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
+	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.Nr()-1), block.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -613,7 +617,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		}
 		// Finalize the state so any modifications are written to the trie
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(true)
 	}
 	close(jobs)
 	pend.Wait()
@@ -635,10 +639,22 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			return nil, fmt.Errorf("transaction %#x not found in block", config.TxHash)
 		}
 	}
-	if block.NumberU64() == 0 {
+	if block.Height() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
+
+	var parentBl *types.Block
+	for _, h := range block.ParentHashes() {
+		pb, err := api.blockByHash(ctx, h)
+		if err != nil {
+			return nil, err
+		}
+		if pb != nil && pb.Nr() == pb.Height() {
+			parentBl = pb
+			break
+		}
+	}
+	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(parentBl.Nr()), block.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +749,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		}
 		// Finalize the state so any modifications are written to the trie
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(true)
 
 		// If we've traced the transaction we were looking for, abort
 		if tx.Hash() == txHash {
@@ -757,19 +773,20 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
-	_, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
+	_, blockHash, index, err := api.backend.GetTransaction(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
 	// It shouldn't happen in practice.
-	if blockNumber == 0 {
+	bl, err := api.blockByHash(ctx, blockHash)
+	if bl.Height() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	block, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNumber), blockHash)
+	block, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(bl.Nr()), blockHash)
 	if err != nil {
 		return nil, err
 	}
