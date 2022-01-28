@@ -451,16 +451,26 @@ func (op *allowanceOperation) OpCode() OpCode {
 }
 
 type IsApprovedForAllOperation interface {
+	Operation
 	addresser
 	Owner() common.Address
 	Operator() common.Address
+}
+
+type operatorOperation struct {
+	operator common.Address
+}
+
+func (op *operatorOperation) Operator() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.operator
 }
 
 type isApprovedForAllOperation struct {
 	operation
 	addressOperation
 	ownerOperation
-	operator common.Address
+	operatorOperation
 }
 
 func NewIsApprovedForAllOperation(address common.Address, owner common.Address, operator common.Address) (IsApprovedForAllOperation, error) {
@@ -483,7 +493,9 @@ func NewIsApprovedForAllOperation(address common.Address, owner common.Address, 
 		ownerOperation: ownerOperation{
 			owner: owner,
 		},
-		operator: operator,
+		operatorOperation: operatorOperation{
+			operator: operator,
+		},
 	}, nil
 }
 
@@ -491,7 +503,45 @@ func (op *isApprovedForAllOperation) OpCode() OpCode {
 	return OpIsApprovedForAll
 }
 
-func (op *isApprovedForAllOperation) Operator() common.Address {
-	// It's safe to return common.Address by value, cause it's an array
-	return op.operator
+type SetApprovalForAllOperation interface {
+	Operation
+	addresser
+	Operator() common.Address
+	IsApproved() bool
+}
+
+type setApprovalForAllOperation struct {
+	operation
+	addressOperation
+	operatorOperation
+	isApproved bool
+}
+
+func NewSetApprovalForAllOperation(address common.Address, operator common.Address, isApproved bool) (SetApprovalForAllOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if operator == (common.Address{}) {
+		return nil, ErrNoOperator
+	}
+	return &setApprovalForAllOperation{
+		operation: operation{
+			standard: StdWRC721,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		operatorOperation: operatorOperation{
+			operator: operator,
+		},
+		isApproved: isApproved,
+	}, nil
+}
+
+func (op *setApprovalForAllOperation) OpCode() OpCode {
+	return OpSetApprovalForAll
+}
+
+func (op *setApprovalForAllOperation) IsApproved() bool {
+	return op.isApproved
 }
