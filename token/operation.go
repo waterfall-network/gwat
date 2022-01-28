@@ -555,16 +555,25 @@ func (op *setApprovalForAllOperation) IsApproved() bool {
 
 type MintOperation interface {
 	Operation
+	addresser
 	To() common.Address
 	TokenId() *big.Int
 	Metadata() ([]byte, bool)
+}
+
+type tokenIdOperation struct {
+	tokenId *big.Int
+}
+
+func (op *tokenIdOperation) TokenId() *big.Int {
+	return new(big.Int).Set(op.tokenId)
 }
 
 type mintOperation struct {
 	operation
 	addressOperation
 	toOperation
-	tokenId  *big.Int
+	tokenIdOperation
 	metadata []byte
 }
 
@@ -588,7 +597,9 @@ func NewMintOperation(address common.Address, to common.Address, tokenId *big.In
 		toOperation: toOperation{
 			to: to,
 		},
-		tokenId:  tokenId,
+		tokenIdOperation: tokenIdOperation{
+			tokenId: tokenId,
+		},
 		metadata: metadata,
 	}, nil
 }
@@ -597,13 +608,45 @@ func (op *mintOperation) OpCode() OpCode {
 	return OpMint
 }
 
-func (op *mintOperation) TokenId() *big.Int {
-	return new(big.Int).Set(op.tokenId)
-}
-
 func (op *mintOperation) Metadata() ([]byte, bool) {
 	if len(op.metadata) == 0 {
 		return nil, false
 	}
 	return makeCopy(op.metadata), true
+}
+
+type BurnOperation interface {
+	Operation
+	addresser
+	TokenId() *big.Int
+}
+
+type burnOperation struct {
+	operation
+	addressOperation
+	tokenIdOperation
+}
+
+func NewBurnOperation(address common.Address, tokenId *big.Int) (BurnOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if tokenId == nil {
+		return nil, ErrNoTokenId
+	}
+	return &burnOperation{
+		operation: operation{
+			standard: StdWRC721,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		tokenIdOperation: tokenIdOperation{
+			tokenId: tokenId,
+		},
+	}, nil
+}
+
+func (op *burnOperation) OpCode() OpCode {
+	return OpBurn
 }

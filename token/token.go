@@ -27,6 +27,7 @@ const (
 	OpIsApprovedForAll  = 0x24
 	OpSetApprovalForAll = 0x25
 	OpMint              = 0x26
+	OpBurn              = 0x27
 )
 
 type Operation interface {
