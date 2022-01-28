@@ -16,6 +16,7 @@ var (
 	ErrNoOwner       = errors.New("token owner address is required")
 	ErrNoValue       = errors.New("value is required")
 	ErrNoTo          = errors.New("to address is required")
+	ErrNoFrom        = errors.New("from address is required")
 )
 
 type operation struct {
@@ -244,6 +245,10 @@ type transferOperation struct {
 }
 
 func NewTransferOperation(address common.Address, to common.Address, value *big.Int) (TransferOperation, error) {
+	return newTransferOperation(StdWRC20, address, to, value)
+}
+
+func newTransferOperation(standard Std, address common.Address, to common.Address, value *big.Int) (*transferOperation, error) {
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
 	}
@@ -255,7 +260,7 @@ func NewTransferOperation(address common.Address, to common.Address, value *big.
 	}
 	return &transferOperation{
 		operation: operation{
-			standard: StdWRC20,
+			standard: standard,
 		},
 		addressOperation: addressOperation{
 			address: address,
@@ -276,4 +281,33 @@ func (op *transferOperation) To() common.Address {
 
 func (op *transferOperation) Value() *big.Int {
 	return new(big.Int).Set(op.value)
+}
+
+type TransferFromOperation interface {
+	TransferOperation
+	From() common.Address
+}
+
+type transferFromOperation struct {
+	transferOperation
+	from common.Address
+}
+
+func NewTransferFromOperation(standard Std, address common.Address, from common.Address, to common.Address, value *big.Int) (TransferFromOperation, error) {
+	if from == (common.Address{}) {
+		return nil, ErrNoFrom
+	}
+	transferOp, err := newTransferOperation(standard, address, to, value)
+	if err != nil {
+		return nil, err
+	}
+	return &transferFromOperation{
+		transferOperation: *transferOp,
+		from:              from,
+	}, nil
+}
+
+func (op *transferFromOperation) From() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.from
 }
