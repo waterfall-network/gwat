@@ -23,6 +23,7 @@ const (
 	OpTransferFrom = 0x1F
 	OpProperties   = 0x21
 	OpBalanceOf    = 0x22
+	OpAllowance    = 0x23
 )
 
 type Operation interface {

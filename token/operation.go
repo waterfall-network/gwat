@@ -359,11 +359,20 @@ type ApproveOperation interface {
 	Value() *big.Int
 }
 
+type spenderOperation struct {
+	spender common.Address
+}
+
+func (op *spenderOperation) Spender() common.Address {
+	// It's safe to return common.Address by value, cause it's an array
+	return op.spender
+}
+
 type approveOperation struct {
 	operation
 	addressOperation
 	valueOperation
-	spender common.Address
+	spenderOperation
 }
 
 func NewApproveOperation(address common.Address, spender common.Address, value *big.Int) (ApproveOperation, error) {
@@ -386,7 +395,9 @@ func NewApproveOperation(address common.Address, spender common.Address, value *
 		valueOperation: valueOperation{
 			value: value,
 		},
-		spender: spender,
+		spenderOperation: spenderOperation{
+			spender: spender,
+		},
 	}, nil
 }
 
@@ -394,7 +405,46 @@ func (op *approveOperation) OpCode() OpCode {
 	return OpApprove
 }
 
-func (op *approveOperation) Spender() common.Address {
-	// It's safe to return common.Address by value, cause it's an array
-	return op.spender
+type AllowanceOperation interface {
+	Operation
+	addresser
+	Owner() common.Address
+	Spender() common.Address
+}
+
+type allowanceOperation struct {
+	operation
+	addressOperation
+	ownerOperation
+	spenderOperation
+}
+
+func NewAllowanceOperation(address common.Address, owner common.Address, spender common.Address) (AllowanceOperation, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+	if spender == (common.Address{}) {
+		return nil, ErrNoSpender
+	}
+	if owner == (common.Address{}) {
+		return nil, ErrNoOwner
+	}
+	return &allowanceOperation{
+		operation: operation{
+			standard: StdWRC20,
+		},
+		addressOperation: addressOperation{
+			address: address,
+		},
+		ownerOperation: ownerOperation{
+			owner: owner,
+		},
+		spenderOperation: spenderOperation{
+			spender: spender,
+		},
+	}, nil
+}
+
+func (op *allowanceOperation) OpCode() OpCode {
+	return OpAllowance
 }
