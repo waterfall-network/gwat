@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"math/big"
 	"net/http"
 	"runtime"
@@ -37,9 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/dag/creator"
-	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -65,7 +64,6 @@ type backend interface {
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	GetLastFinalisedHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
-	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
 	SyncProgress() ethereum.SyncProgress
 }
@@ -469,12 +467,16 @@ func (s *Service) login(conn *connWrapper) error {
 	for _, proto := range s.server.Protocols {
 		protocols = append(protocols, fmt.Sprintf("%s/%d", proto.Name, proto.Version))
 	}
-	var network string
-	if info := infos.Protocols["eth"]; info != nil {
-		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
-	} else {
-		network = fmt.Sprintf("%d", infos.Protocols["les"].(*les.NodeInfo).Network)
-	}
+
+	// TODO LES TMP OFF
+	info := infos.Protocols["eth"]
+	network := fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
+	//var network string
+	//if info := infos.Protocols["eth"]; info != nil {
+	//	network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
+	//} else {
+	//	network = fmt.Sprintf("%d", infos.Protocols["les"].(*les.NodeInfo).Network)
+	//}
 	auth := &authMsg{
 		ID: s.node,
 		Info: nodeInfo{
@@ -573,7 +575,6 @@ type blockStats struct {
 	Miner        common.Address `json:"miner"`
 	GasUsed      uint64         `json:"gasUsed"`
 	GasLimit     uint64         `json:"gasLimit"`
-	TotalDiff    string         `json:"totalDifficulty"`
 	Txs          []txStats      `json:"transactions"`
 	TxHash       common.Hash    `json:"transactionsRoot"`
 	Root         common.Hash    `json:"stateRoot"`
@@ -619,7 +620,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// Gather the block infos from the local blockchain
 	var (
 		header *types.Header
-		td     *big.Int
 		txs    []txStats
 	)
 
@@ -630,8 +630,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			block = fullBackend.GetLastFinalizedBlock()
 		}
 		header = block.Header()
-		td = fullBackend.GetTd(context.Background(), header.Hash())
-
 		txs = make([]txStats, len(block.Transactions()))
 		for i, tx := range block.Transactions() {
 			txs[i].Hash = tx.Hash()
@@ -643,7 +641,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		} else {
 			header = s.backend.GetLastFinalisedHeader()
 		}
-		td = s.backend.GetTd(context.Background(), header.Hash())
 		txs = []txStats{}
 	}
 
@@ -659,7 +656,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Miner:        author,
 		GasUsed:      header.GasUsed,
 		GasLimit:     header.GasLimit,
-		TotalDiff:    td.String(),
 		Txs:          txs,
 		TxHash:       header.TxHash,
 		Root:         header.Root,

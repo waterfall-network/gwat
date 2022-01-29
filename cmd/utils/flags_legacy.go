@@ -47,7 +47,7 @@ var (
 	LegacyMinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks (deprecated)",
-		Value: ethconfig.Defaults.Miner.GasFloor,
+		Value: ethconfig.Defaults.Creator.GasFloor,
 	}
 )
 
