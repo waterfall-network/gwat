@@ -331,8 +331,8 @@ func exportChain(ctx *cli.Context) error {
 		if first < 0 || last < 0 {
 			utils.Fatalf("Export error: block number must be greater than 0\n")
 		}
-		if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
-			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
+		if head := chain.GetLastFinalizedFastBlock(); uint64(last) > head.Nr() {
+			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Nr())
 		}
 		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
@@ -410,7 +410,9 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		}
 	} else {
 		// Use latest
-		header = rawdb.ReadHeadHeader(db)
+		if headHash := rawdb.ReadLastFinalizedHash(db); headHash != (common.Hash{}) {
+			header = rawdb.ReadHeader(db, headHash)
+		}
 	}
 	if header == nil {
 		return nil, nil, common.Hash{}, errors.New("no head block found")
@@ -434,7 +436,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		Start:             start.Bytes(),
 		Max:               ctx.Uint64(utils.DumpLimitFlag.Name),
 	}
-	log.Info("State dump configured", "block", header.Number, "hash", header.Hash().Hex(),
+	log.Info("State dump configured", "block", header.Nr(), "hash", header.Hash().Hex(),
 		"skipcode", conf.SkipCode, "skipstorage", conf.SkipStorage,
 		"start", hexutil.Encode(conf.Start), "limit", conf.Max)
 	return conf, db, header.Root, nil
