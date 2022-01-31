@@ -1642,7 +1642,7 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
-	defer bc.chainmu.Unlock()
+	//defer bc.chainmu.Unlock()
 	n, err := bc.insertPropagatedBlocks(chain, true, false)
 	bc.chainmu.Unlock()
 	//bc.wg.Done()

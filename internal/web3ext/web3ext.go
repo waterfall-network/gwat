@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
+	"dag":      DagJs,
 }
 
 const CliqueJs = `
@@ -844,6 +845,20 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'requestStats',
 			getter: 'vflux_requestStats'
+		}),
+	]
+});
+`
+
+const DagJs = `
+web3._extend({
+	property: 'dag',
+	methods: [],
+	properties: [
+		new web3._extend.Method({
+			name: 'sync',
+			call: 'dag_sync',
+			params: 1
 		}),
 	]
 });
