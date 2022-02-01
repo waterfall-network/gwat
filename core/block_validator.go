@@ -50,14 +50,6 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 // header's transaction root. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
-	//// Check whether the block's known, and if not, that it's linkable
-	//if block.Height() == block.Nr() && v.bc.HasBlockAndState(block.Hash()) {
-	//	return ErrKnownBlock
-	//}
-	//if block.Height() != block.Nr() && v.bc.GetBlockFinalizedNumber(block.Hash()) != nil {
-	//	return ErrKnownBlock
-	//}
-
 	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()
 	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {

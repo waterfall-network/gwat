@@ -1713,46 +1713,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 
 	block, err := it.next()
 
-	// Left-trim all the known blocks
-	if err == ErrKnownBlock {
-		log.Warn("========= ERROR::ErrKnownBlock:1 ==========")
-		//// First block (and state) is known
-		////   1. We did a roll-back, and should now do a re-import
-		////   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
-		//// 	    from the canonical chain, which has not been verified.
-		//// Skip all known blocks that are behind us
-		////var (
-		////	current  = bc.GetLastFinalizedBlock()
-		////)
-		//for block != nil && err == ErrKnownBlock {
-		//	//externTd = new(big.Int).Add(externTd, block.Difficulty())
-		//	//if localTd.Cmp(externTd) < 0 {
-		//	//	break
-		//	//}
-		//	log.Debug("Ignoring already known block", "hash", block.Hash())
-		//	stats.ignored++
-		//
-		//	block, err = it.next()
-		//}
-		//// The remaining blocks are still known blocks, the only scenario here is:
-		//// During the fast sync, the pivot point is already submitted but rollback
-		//// happens. Then node resets the head full block to a lower height via `rollback`
-		//// and leaves a few known blocks in the database.
-		////
-		//// When node runs a fast sync again, it can re-import a batch of known blocks via
-		//// `insertChain` while a part of them have higher total difficulty than current
-		//// head full block(new pivot point).
-		//for block != nil && err == ErrKnownBlock {
-		//	log.Debug("Writing previously known block", "hash", block.Hash())
-		//	if err := bc.writeKnownBlock(block); err != nil {
-		//		return it.index, err
-		//	}
-		//	lastCanon = block
-		//
-		//	block, err = it.next()
-		//}
-		// Falls through to the block import
-	}
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
@@ -1793,7 +1753,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		}
 	}()
 
-	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
+	for ; block != nil && err == nil; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during block processing")
@@ -1803,41 +1763,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		if BadHashes[block.Hash()] {
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
-		}
-		// If the block is known (in the middle of the chain), it's a special case for
-		// Clique blocks where they can share state among each other, so importing an
-		// older block might complete the state of the subsequent one. In this case,
-		// just skip the block (we already validated it once fully (and crashed), since
-		// its header and body was already in the database).
-		if err == ErrKnownBlock {
-			log.Warn("========= ERROR::ErrKnownBlock:2 ==========")
-			log.Warn("Inserted known block", "hash", block.Hash(),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(),
-				"root", block.Root())
-
-			//// Special case. Commit the empty receipt slice if we meet the known
-			//// block in the middle. It can only happen in the clique chain. Whenever
-			//// we insert blocks via `insertSideChain`, we only commit `td`, `header`
-			//// and `body` if it's non-existent. Since we don't have receipts without
-			//// reexecution, so nothing to commit. But if the sidechain will be adpoted
-			//// as the canonical chain eventually, it needs to be reexecuted for missing
-			//// state, but if it's this special case here(skip reexecution) we will lose
-			//// the empty receipt entry.
-			//if len(block.Transactions()) == 0 {
-			//	rawdb.WriteReceipts(bc.db, block.Hash(), nil)
-			//} else {
-			//	log.Error("Please file an issue, skip known block execution without receipt",
-			//		"hash", block.Hash())
-			//}
-			//if err := bc.writeKnownBlock(block); err != nil {
-			//	return it.index, err
-			//}
-			//stats.processed++
-			//
-			//// We can assume that logs are empty here, since the only way for consecutive
-			//// Clique blocks to have the same state is if there are no transactions.
-			//lastCanon = block
-			continue
 		}
 
 		rawdb.WriteBlock(bc.db, block)
@@ -2051,46 +1976,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 	block, err := it.next()
 
-	// Left-trim all the known blocks
-	if err == ErrKnownBlock {
-		log.Warn("========= ERROR::ErrKnownBlock:1 ==========")
-		//// First block (and state) is known
-		////   1. We did a roll-back, and should now do a re-import
-		////   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
-		//// 	    from the canonical chain, which has not been verified.
-		//// Skip all known blocks that are behind us
-		////var (
-		////	current  = bc.GetLastFinalizedBlock()
-		////)
-		//for block != nil && err == ErrKnownBlock {
-		//	//externTd = new(big.Int).Add(externTd, block.Difficulty())
-		//	//if localTd.Cmp(externTd) < 0 {
-		//	//	break
-		//	//}
-		//	log.Debug("Ignoring already known block", "hash", block.Hash())
-		//	stats.ignored++
-		//
-		//	block, err = it.next()
-		//}
-		//// The remaining blocks are still known blocks, the only scenario here is:
-		//// During the fast sync, the pivot point is already submitted but rollback
-		//// happens. Then node resets the head full block to a lower height via `rollback`
-		//// and leaves a few known blocks in the database.
-		////
-		//// When node runs a fast sync again, it can re-import a batch of known blocks via
-		//// `insertChain` while a part of them have higher total difficulty than current
-		//// head full block(new pivot point).
-		//for block != nil && err == ErrKnownBlock {
-		//	log.Debug("Writing previously known block", "hash", block.Hash())
-		//	if err := bc.writeKnownBlock(block); err != nil {
-		//		return it.index, err
-		//	}
-		//	lastCanon = block
-		//
-		//	block, err = it.next()
-		//}
-		// Falls through to the block import
-	}
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
@@ -2131,7 +2016,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		}
 	}()
 
-	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
+	for ; block != nil && err == nil; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during block processing")
@@ -2141,41 +2026,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		if BadHashes[block.Hash()] {
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
-		}
-		// If the block is known (in the middle of the chain), it's a special case for
-		// Clique blocks where they can share state among each other, so importing an
-		// older block might complete the state of the subsequent one. In this case,
-		// just skip the block (we already validated it once fully (and crashed), since
-		// its header and body was already in the database).
-		if err == ErrKnownBlock {
-			log.Warn("========= ERROR::ErrKnownBlock:2 ==========")
-			log.Warn("Inserted known block", "hash", block.Hash(),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(),
-				"root", block.Root())
-
-			//// Special case. Commit the empty receipt slice if we meet the known
-			//// block in the middle. It can only happen in the clique chain. Whenever
-			//// we insert blocks via `insertSideChain`, we only commit `td`, `header`
-			//// and `body` if it's non-existent. Since we don't have receipts without
-			//// reexecution, so nothing to commit. But if the sidechain will be adpoted
-			//// as the canonical chain eventually, it needs to be reexecuted for missing
-			//// state, but if it's this special case here(skip reexecution) we will lose
-			//// the empty receipt entry.
-			//if len(block.Transactions()) == 0 {
-			//	rawdb.WriteReceipts(bc.db, block.Hash(), nil)
-			//} else {
-			//	log.Error("Please file an issue, skip known block execution without receipt",
-			//		"hash", block.Hash())
-			//}
-			//if err := bc.writeKnownBlock(block); err != nil {
-			//	return it.index, err
-			//}
-			//stats.processed++
-			//
-			//// We can assume that logs are empty here, since the only way for consecutive
-			//// Clique blocks to have the same state is if there are no transactions.
-			//lastCanon = block
-			continue
 		}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
@@ -2202,15 +2052,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		if stateErr != nil {
 			return it.index, stateErr
 		}
-
-		//dagChainHashes := common.HashArray{}
-		//for _, bl :=  range recommitBlocks{
-		//	dagChainHashes = append(dagChainHashes, bl.Hash())
-		//}
-
-		//if block.Height() > 600 && stateOnly{
-		//	log.Crit("STOP")
-		//}
 
 		if !stateOnly {
 			// update tips
@@ -2699,36 +2540,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 	block, err := it.next()
 
-	// Left-trim all the known blocks
-	if err == ErrKnownBlock {
-		log.Warn("========= ERROR::ErrKnownBlock:3 ==========")
-
-		//// First block (and state) is known
-		////   1. We did a roll-back, and should now do a re-import
-		////   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
-		//// 	    from the canonical chain, which has not been verified.
-		//// Skip all known blocks that are behind us
-		//var (
-		//	current  = bc.GetLastFinalizedBlock()
-		//)
-		//for block != nil && err == ErrKnownBlock {
-		//	log.Debug("Ignoring already known block", "hash", block.Hash())
-		//	stats.ignored++
-		//
-		//// When node runs a fast sync again, it can re-import a batch of known blocks via
-		//// `insertChain` while a part of them have higher total difficulty than current
-		//// head full block(new pivot point).
-		//for block != nil && err == ErrKnownBlock {
-		//	log.Debug("Writing previously known block", "hash", block.Hash())
-		//	if err := bc.writeKnownBlock(block); err != nil {
-		//		return it.index, err
-		//	}
-		//	lastCanon = block
-		//
-		//	block, err = it.next()
-		//}
-		//// Falls through to the block import
-	}
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
@@ -2769,7 +2580,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 	}()
 
-	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
+	for ; block != nil && err == nil; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during block processing")
@@ -2780,41 +2591,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
-		// If the block is known (in the middle of the chain), it's a special case for
-		// Clique blocks where they can share state among each other, so importing an
-		// older block might complete the state of the subsequent one. In this case,
-		// just skip the block (we already validated it once fully (and crashed), since
-		// its header and body was already in the database).
-		if err == ErrKnownBlock {
-			log.Warn("========= ERROR::ErrKnownBlock:4 ==========")
-			log.Warn("Inserted known block", "hash", block.Hash(),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(),
-				"root", block.Root())
 
-			//// Special case. Commit the empty receipt slice if we meet the known
-			//// block in the middle. It can only happen in the clique chain. Whenever
-			//// we insert blocks via `insertSideChain`, we only commit `td`, `header`
-			//// and `body` if it's non-existent. Since we don't have receipts without
-			//// reexecution, so nothing to commit. But if the sidechain will be adpoted
-			//// as the canonical chain eventually, it needs to be reexecuted for missing
-			//// state, but if it's this special case here(skip reexecution) we will lose
-			//// the empty receipt entry.
-			//if len(block.Transactions()) == 0 {
-			//	rawdb.WriteReceipts(bc.db, block.Hash(), nil)
-			//} else {
-			//	log.Error("Please file an issue, skip known block execution without receipt",
-			//		"hash", block.Hash())
-			//}
-			//if err := bc.writeKnownBlock(block); err != nil {
-			//	return it.index, err
-			//}
-			//stats.processed++
-			//
-			//// We can assume that logs are empty here, since the only way for consecutive
-			//// Clique blocks to have the same state is if there are no transactions.
-			//lastCanon = block
-			continue
-		}
 		// Retrieve the parent block and it's state to execute on top
 		start := time.Now()
 

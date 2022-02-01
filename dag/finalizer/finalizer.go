@@ -147,11 +147,11 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 	return nil
 }
 
-func (f *Finalizer) updateTips(fihHashes common.HashArray, lastBlock types.Block) {
+func (f *Finalizer) updateTips(finHashes common.HashArray, lastBlock types.Block) {
 	bc := f.eth.BlockChain()
-	bc.FinalizeTips(fihHashes, lastBlock.Hash(), lastBlock.Height())
+	bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height())
 	//remove stale blockDags
-	for _, h := range fihHashes {
+	for _, h := range finHashes {
 		bc.DeleteBockDag(h)
 	}
 }
@@ -239,6 +239,10 @@ func (f *Finalizer) GetFinalizingCandidates() (*NrHashMap, error) {
 	var lastBlock = (*finChain)[len(*finChain)-1]
 	nextFinNr := lastFinNr + 1
 	for _, block := range *finChain {
+		if block.Number() != nil && block.Nr() < nextFinNr && len(*finChain) > 0 {
+			bc.FinalizeTips(common.HashArray{block.Hash()}, common.Hash{}, lastFinNr)
+			continue
+		}
 		if block.Number() == nil {
 			hash := block.Hash()
 			candidates[nextFinNr] = &hash

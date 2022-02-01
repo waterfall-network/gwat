@@ -148,9 +148,6 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			err = blockchain.validator.ValidateBody(block)
 		}
 		if err != nil {
-			if err == ErrKnownBlock {
-				continue
-			}
 			return err
 		}
 		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.stateCache, nil)
