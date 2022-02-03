@@ -194,7 +194,7 @@ func TestBadBlockStorage(t *testing.T) {
 
 	// Create a test block to move around the database and make sure it's really new
 	block := types.NewBlockWithHeader(&types.Header{
-		//Number:      uint64(1),
+		Number:      func() *uint64 { nr := uint64(1); return &nr }(),
 		Extra:       []byte("bad block"),
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,

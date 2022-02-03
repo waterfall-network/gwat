@@ -268,7 +268,8 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
 	// the canonical data.
 	if number != nil {
 		data, _ = db.Ancient(freezerHeaderTable, *number)
-		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+		//if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+		if len(data) > 0 {
 			return data
 		}
 	}
@@ -313,6 +314,10 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	header := new(types.Header)
 	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
 		log.Error("Invalid block header RLP", "hash", hash, "err", err)
+		return nil
+	}
+	if header.Hash() != hash {
+		log.Error("Invalid retrieved header's hash", "hash", header.Hash().Hex(), "expected", hash.Hex())
 		return nil
 	}
 	if nr := ReadFinalizedNumberByHash(db, hash); nr != nil {

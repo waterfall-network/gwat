@@ -69,7 +69,6 @@ type HeaderChain struct {
 	lastFinalisedHash   common.Hash  // Hash of the current head of the header chain (prevent recomputing all the time)
 
 	headerCache *lru.Cache // Cache for the most recent block headers
-	tdCache     *lru.Cache // Cache for the most recent block total difficulties
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
 	procInterrupt func() bool
@@ -82,7 +81,6 @@ type HeaderChain struct {
 // to the parent's interrupt semaphore.
 func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
-	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 
 	// Seed a fast but crypto originating random generator
@@ -95,7 +93,6 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		config:        config,
 		chainDb:       chainDb,
 		headerCache:   headerCache,
-		tdCache:       tdCache,
 		numberCache:   numberCache,
 		procInterrupt: procInterrupt,
 		rand:          mrand.New(mrand.NewSource(seed.Int64())),
@@ -786,7 +783,6 @@ func (hc *HeaderChain) SetHead(headHash common.Hash, updateFn UpdateHeadBlocksCa
 	}
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()
-	hc.tdCache.Purge()
 	hc.numberCache.Purge()
 }
 
