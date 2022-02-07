@@ -21,16 +21,15 @@ var (
 	ErrNoSpender        = errors.New("spender address is required")
 	ErrNoOperator       = errors.New("operator address is required")
 	ErrNoTokenId        = errors.New("token id is required")
-	ErrNoIndex          = errors.New("index is required")
 	ErrStandardNotValid = errors.New("not valid value for token standard")
 )
 
 type operation struct {
-	Std
+	standard Std
 }
 
 func (op *operation) Standard() Std {
-	return op.Std
+	return op.standard
 }
 
 type CreateOperation interface {
@@ -47,79 +46,74 @@ type CreateOperation interface {
 
 type createOperation struct {
 	operation
-	TokenName        []byte
-	TokenSymbol      []byte
-	TokenTotalSupply *big.Int `rlp:"nil"`
-	TokenDecimals    *uint8   `rlp:"nil"`
-	TokenBaseURI     []byte   `rlp:"optional"`
+	name        []byte
+	symbol      []byte
+	decimals    *uint8
+	totalSupply *big.Int
+	baseURI     []byte
 }
 
-func NewWrc20CreateOperation(name []byte, symbol []byte, decimals uint8, totalSupply *big.Int) (CreateOperation, error) {
+func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals *uint8, totalSupply *big.Int, baseURI []byte) error {
 	if len(name) == 0 {
-		return nil, ErrNoName
-	}
-	if len(symbol) == 0 {
-		return nil, ErrNoSymbol
-	}
-	if totalSupply == nil {
-		return nil, ErrNoTokenSupply
-	}
-
-	return &createOperation{
-		operation: operation{
-			Std: StdWRC20,
-		},
-		TokenName:        name,
-		TokenSymbol:      symbol,
-		TokenDecimals:    &decimals,
-		TokenTotalSupply: totalSupply,
-	}, nil
-}
-
-func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (CreateOperation, error) {
-	if len(name) == 0 {
-		return nil, ErrNoName
-	}
-	if len(symbol) == 0 {
-		return nil, ErrNoSymbol
-	}
-	if len(baseURI) == 0 {
-		return nil, ErrNoBaseURI
-	}
-
-	return &createOperation{
-		operation: operation{
-			Std: StdWRC721,
-		},
-		TokenName:    name,
-		TokenSymbol:  symbol,
-		TokenBaseURI: baseURI,
-	}, nil
-}
-
-func (op *createOperation) UnmarshalBinary(b []byte) error {
-	if err := rlp.DecodeBytes(b, op); err != nil {
-		return err
-	}
-	if len(op.TokenName) == 0 {
 		return ErrNoName
 	}
-	if len(op.TokenSymbol) == 0 {
+	if len(symbol) == 0 {
 		return ErrNoSymbol
 	}
 
-	switch op.Std {
+	switch std {
 	case StdWRC20:
-		if op.TokenTotalSupply == nil {
+		if totalSupply == nil {
 			return ErrNoTokenSupply
 		}
+		op.decimals = decimals
+		op.totalSupply = totalSupply
 	case StdWRC721:
-		if len(op.TokenBaseURI) == 0 {
+		if len(baseURI) == 0 {
 			return ErrNoBaseURI
 		}
+		op.baseURI = baseURI
 	default:
 		return ErrStandardNotValid
 	}
+
+	op.standard = std
+	op.name = name
+	op.symbol = symbol
+
+	return nil
+}
+
+func NewWrc20CreateOperation(name []byte, symbol []byte, decimals *uint8, totalSupply *big.Int) (CreateOperation, error) {
+	op := createOperation{}
+	if err := op.init(StdWRC20, name, symbol, decimals, totalSupply, nil); err != nil {
+		return nil, err
+	}
+	return &op, nil
+}
+
+func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (CreateOperation, error) {
+	op := createOperation{}
+	if err := op.init(StdWRC721, name, symbol, nil, nil, baseURI); err != nil {
+		return nil, err
+	}
+	return &op, nil
+}
+
+func (op *createOperation) UnmarshalBinary(b []byte) error {
+	opData := struct {
+		Std
+		Name        []byte
+		Symbol      []byte
+		TotalSupply *big.Int `rlp:"nil"`
+		Decimals    *uint8   `rlp:"nil"`
+		BaseURI     []byte   `rlp:"optional"`
+	}{}
+
+	if err := rlp.DecodeBytes(b, &opData); err != nil {
+		return err
+	}
+	op.init(opData.Std, opData.Name, opData.Symbol, opData.Decimals, opData.TotalSupply, opData.BaseURI)
 	return nil
 }
 
@@ -136,32 +130,32 @@ func (op *createOperation) Address() common.Address {
 }
 
 func (op *createOperation) Name() []byte {
-	return makeCopy(op.TokenName)
+	return makeCopy(op.name)
 }
 
 func (op *createOperation) Symbol() []byte {
-	return makeCopy(op.TokenName)
+	return makeCopy(op.name)
 }
 
 func (op *createOperation) Decimals() (uint8, bool) {
-	if op.TokenDecimals == nil {
+	if op.decimals == nil {
 		return 0, false
 	}
-	return *op.TokenDecimals, true
+	return *op.decimals, true
 }
 
 func (op *createOperation) TotalSupply() (*big.Int, bool) {
-	if op.TokenTotalSupply == nil {
+	if op.totalSupply == nil {
 		return nil, false
 	}
-	return new(big.Int).Set(op.TokenTotalSupply), true
+	return new(big.Int).Set(op.totalSupply), true
 }
 
 func (op *createOperation) BaseURI() ([]byte, bool) {
-	if op.TokenBaseURI == nil {
+	if op.baseURI == nil {
 		return nil, false
 	}
-	return makeCopy(op.TokenBaseURI), true
+	return makeCopy(op.baseURI), true
 }
 
 func makeCopy(src []byte) []byte {
@@ -205,7 +199,7 @@ func NewPropertiesOperation(address common.Address, tokenId *big.Int) (Propertie
 	}
 	return &propertiesOperation{
 		operation: operation{
-			Std: standard,
+			standard: standard,
 		},
 		addressOperation: addressOperation{
 			address: address,
@@ -319,7 +313,7 @@ func newTransferOperation(standard Std, address common.Address, to common.Addres
 	}
 	return &transferOperation{
 		operation: operation{
-			Std: standard,
+			standard: standard,
 		},
 		addressOperation: addressOperation{
 			address: address,
@@ -428,7 +422,7 @@ func NewApproveOperation(address common.Address, spender common.Address, value *
 	}
 	return &approveOperation{
 		operation: operation{
-			Std: StdWRC20,
+			standard: StdWRC20,
 		},
 		addressOperation: addressOperation{
 			address: address,
@@ -472,7 +466,7 @@ func NewAllowanceOperation(address common.Address, owner common.Address, spender
 	}
 	return &allowanceOperation{
 		operation: operation{
-			Std: StdWRC20,
+			standard: StdWRC20,
 		},
 		addressOperation: addressOperation{
 			address: address,
@@ -525,7 +519,7 @@ func NewIsApprovedForAllOperation(address common.Address, owner common.Address, 
 	}
 	return &isApprovedForAllOperation{
 		operation: operation{
-			Std: StdWRC721,
+			standard: StdWRC721,
 		},
 		addressOperation: addressOperation{
 			address: address,
@@ -566,7 +560,7 @@ func NewSetApprovalForAllOperation(address common.Address, operator common.Addre
 	}
 	return &setApprovalForAllOperation{
 		operation: operation{
-			Std: StdWRC721,
+			standard: StdWRC721,
 		},
 		addressOperation: addressOperation{
 			address: address,
@@ -622,7 +616,7 @@ func NewMintOperation(address common.Address, to common.Address, tokenId *big.In
 	}
 	return &mintOperation{
 		operation: operation{
-			Std: StdWRC721,
+			standard: StdWRC721,
 		},
 		addressOperation: addressOperation{
 			address: address,
@@ -669,7 +663,7 @@ func NewBurnOperation(address common.Address, tokenId *big.Int) (BurnOperation, 
 	}
 	return &burnOperation{
 		operation: operation{
-			Std: StdWRC721,
+			standard: StdWRC721,
 		},
 		addressOperation: addressOperation{
 			address: address,
