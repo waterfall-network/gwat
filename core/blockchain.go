@@ -604,6 +604,10 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 					}
 					log.Debug("Skipping block with threshold state", "number", rootNumber, "hash", newHeadBlock.Hash(), "root", newHeadBlock.Root())
 					newHeadBlock = bc.GetBlockByNumber(newHeadBlock.Nr()) // Keep rewinding
+					//TODO fix it
+					if rootNumber == newHeadBlock.Nr() {
+						panic("SetHeadBeyondRoot: cycled")
+					}
 				}
 			}
 			rawdb.WriteLastCanonicalHash(db, newHeadBlock.Hash())
@@ -2320,7 +2324,7 @@ func (bc *BlockChain) CollectStateDataByTips(tips types.Tips) (statedb *state.St
 }
 
 func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
-	unl, _, _, graph, _err := bc.ExploreChainRecursive(block.Hash())
+	unl, _, fnl, graph, _err := bc.ExploreChainRecursive(block.Hash())
 	if _err != nil {
 		log.Error("ERROR::CollectStateDataByBlock", "err", _err)
 		return statedb, stateBlock, recommitBlocks, err
@@ -2330,6 +2334,7 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 		return statedb, stateBlock, recommitBlocks, ErrInsertUncompletedDag
 	}
 
+	ordHashes := *graph.GetDagChainHashes()
 	finPoints := common.HashArray{}
 	if fp := graph.GetFinalityPoints(); fp != nil {
 		finPoints = *fp
@@ -2345,6 +2350,15 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 		stateHash = []common.Hash(finPoints)[len(finPoints)-1]
 	} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
 		stateHash = lastFinAncestor.Hash
+		if len(ordHashes) == 0 {
+			lfn := bc.GetLastFinalizedBlock().Nr()
+			for i := lastFinAncestor.Number + 1; i <= lfn; i++ {
+				bl := bc.GetBlockByNumber(i)
+				if bl != nil && fnl.Has(bl.Hash()) {
+					ordHashes = append(ordHashes, bl.Hash())
+				}
+			}
+		}
 	}
 	if stateHash == (common.Hash{}) {
 		log.Error("ERROR::CollectStateDataByBlock", "error", ErrStateBlockNotFound)
@@ -2360,7 +2374,6 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 	}
 
 	// collect red blocks (not in finalization points)
-	ordHashes := *graph.GetDagChainHashes()
 	stateIndex := ordHashes.IndexOf(stateHash)
 	recalcHashes := common.HashArray{}
 	if stateIndex > -1 {
