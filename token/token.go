@@ -1,7 +1,16 @@
 package token
 
 import (
+	"encoding"
+	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
+)
+
+var (
+	ErrPrefixNotValid = errors.New("not valid value for prefix")
+	ErrRawDataShort   = errors.New("binary data for token operation is short")
+	ErrOpNotValid     = errors.New("not valid op code for token operation")
 )
 
 // Token standard
@@ -31,8 +40,38 @@ const (
 	OpTokenOfOwnerByIndex = 0x28
 )
 
+const (
+	Prefix = 0xF3
+)
+
 type Operation interface {
 	OpCode() OpCode
 	Standard() Std
 	Address() common.Address // Token address
+
+	encoding.BinaryUnmarshaler
+	encoding.BinaryMarshaler
+}
+
+func DecodeBytes(b []byte) (Operation, error) {
+	if len(b) < 2 {
+		return nil, ErrRawDataShort
+	}
+
+	prefix := b[0]
+	if prefix != Prefix {
+		return nil, ErrPrefixNotValid
+	}
+
+	var op Operation
+	opCode := b[1]
+	switch opCode {
+	case OpCreate:
+		op = &createOperation{}
+	default:
+		return nil, ErrOpNotValid
+	}
+
+	op.UnmarshalBinary(b[2:])
+	return op, nil
 }
