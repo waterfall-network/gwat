@@ -3,6 +3,7 @@ package token
 import (
 	"errors"
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -25,11 +26,11 @@ var (
 )
 
 type operation struct {
-	standard Std
+	Std
 }
 
 func (op *operation) Standard() Std {
-	return op.standard
+	return op.Std
 }
 
 type CreateOperation interface {
@@ -77,7 +78,7 @@ func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals *u
 		return ErrStandardNotValid
 	}
 
-	op.standard = std
+	op.Std = std
 	op.name = name
 	op.symbol = symbol
 
@@ -175,18 +176,18 @@ type PropertiesOperation interface {
 }
 
 type addressOperation struct {
-	address common.Address
+	TokenAddress common.Address
 }
 
 func (a *addressOperation) Address() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
-	return a.address
+	return a.TokenAddress
 }
 
 type propertiesOperation struct {
 	operation
 	addressOperation
-	tokenId *big.Int
+	Id *big.Int
 }
 
 func NewPropertiesOperation(address common.Address, tokenId *big.Int) (PropertiesOperation, error) {
@@ -199,13 +200,33 @@ func NewPropertiesOperation(address common.Address, tokenId *big.Int) (Propertie
 	}
 	return &propertiesOperation{
 		operation: operation{
-			standard: standard,
+			Std: standard,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
-		tokenId: tokenId,
+		Id: tokenId,
 	}, nil
+}
+
+func (op *propertiesOperation) UnmarshalBinary(b []byte) error {
+	opData := struct {
+		Std
+		common.Address
+		TokenId *big.Int
+	}{}
+	if err := rlp.DecodeBytes(b, &opData); err != nil {
+		return err
+	}
+
+	op.Std = opData.Std
+	op.TokenAddress = opData.Address
+	op.Id = opData.TokenId
+	return nil
+}
+
+func (op *propertiesOperation) MarshalBinary() ([]byte, error) {
+	return rlp.EncodeToBytes(op)
 }
 
 func (op *propertiesOperation) OpCode() OpCode {
@@ -213,10 +234,10 @@ func (op *propertiesOperation) OpCode() OpCode {
 }
 
 func (op *propertiesOperation) TokenId() (*big.Int, bool) {
-	if op.tokenId == nil {
+	if op.Id == nil {
 		return nil, false
 	}
-	return new(big.Int).Set(op.tokenId), true
+	return new(big.Int).Set(op.Id), true
 }
 
 type BalanceOfOperation interface {
@@ -226,12 +247,12 @@ type BalanceOfOperation interface {
 }
 
 type ownerOperation struct {
-	owner common.Address
+	OwnerAddress common.Address
 }
 
 func (op *ownerOperation) Owner() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
-	return op.owner
+	return op.OwnerAddress
 }
 
 type balanceOfOperation struct {
@@ -248,10 +269,10 @@ func NewBalanceOfOperation(address common.Address, owner common.Address) (Balanc
 	}
 	return &balanceOfOperation{
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		ownerOperation: ownerOperation{
-			owner: owner,
+			OwnerAddress: owner,
 		},
 	}, nil
 }
@@ -274,20 +295,20 @@ type TransferOperation interface {
 }
 
 type valueOperation struct {
-	value *big.Int
+	TokenValue *big.Int
 }
 
 func (op *valueOperation) Value() *big.Int {
-	return new(big.Int).Set(op.value)
+	return new(big.Int).Set(op.TokenValue)
 }
 
 type toOperation struct {
-	to common.Address
+	ToAddress common.Address
 }
 
 func (op *toOperation) To() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
-	return op.to
+	return op.ToAddress
 }
 
 type transferOperation struct {
@@ -313,16 +334,16 @@ func newTransferOperation(standard Std, address common.Address, to common.Addres
 	}
 	return &transferOperation{
 		operation: operation{
-			standard: standard,
+			Std: standard,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		toOperation: toOperation{
-			to: to,
+			ToAddress: to,
 		},
 		valueOperation: valueOperation{
-			value: value,
+			TokenValue: value,
 		},
 	}, nil
 }
@@ -338,7 +359,7 @@ type TransferFromOperation interface {
 
 type transferFromOperation struct {
 	transferOperation
-	from common.Address
+	FromAddress common.Address
 }
 
 func NewTransferFromOperation(standard Std, address common.Address, from common.Address, to common.Address, value *big.Int) (TransferFromOperation, error) {
@@ -351,13 +372,13 @@ func NewTransferFromOperation(standard Std, address common.Address, from common.
 	}
 	return &transferFromOperation{
 		transferOperation: *transferOp,
-		from:              from,
+		FromAddress:       from,
 	}, nil
 }
 
 func (op *transferFromOperation) From() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
-	return op.from
+	return op.FromAddress
 }
 
 type SafeTransferFromOperation interface {
@@ -395,12 +416,12 @@ type ApproveOperation interface {
 }
 
 type spenderOperation struct {
-	spender common.Address
+	SpenderAddress common.Address
 }
 
 func (op *spenderOperation) Spender() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
-	return op.spender
+	return op.SpenderAddress
 }
 
 type approveOperation struct {
@@ -422,16 +443,16 @@ func NewApproveOperation(address common.Address, spender common.Address, value *
 	}
 	return &approveOperation{
 		operation: operation{
-			standard: StdWRC20,
+			Std: StdWRC20,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		valueOperation: valueOperation{
-			value: value,
+			TokenValue: value,
 		},
 		spenderOperation: spenderOperation{
-			spender: spender,
+			SpenderAddress: spender,
 		},
 	}, nil
 }
@@ -466,16 +487,16 @@ func NewAllowanceOperation(address common.Address, owner common.Address, spender
 	}
 	return &allowanceOperation{
 		operation: operation{
-			standard: StdWRC20,
+			Std: StdWRC20,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		ownerOperation: ownerOperation{
-			owner: owner,
+			OwnerAddress: owner,
 		},
 		spenderOperation: spenderOperation{
-			spender: spender,
+			SpenderAddress: spender,
 		},
 	}, nil
 }
@@ -492,12 +513,12 @@ type IsApprovedForAllOperation interface {
 }
 
 type operatorOperation struct {
-	operator common.Address
+	OperatorAddress common.Address
 }
 
 func (op *operatorOperation) Operator() common.Address {
 	// It's safe to return common.Address by value, cause it's an array
-	return op.operator
+	return op.OperatorAddress
 }
 
 type isApprovedForAllOperation struct {
@@ -519,16 +540,16 @@ func NewIsApprovedForAllOperation(address common.Address, owner common.Address, 
 	}
 	return &isApprovedForAllOperation{
 		operation: operation{
-			standard: StdWRC721,
+			Std: StdWRC721,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		ownerOperation: ownerOperation{
-			owner: owner,
+			OwnerAddress: owner,
 		},
 		operatorOperation: operatorOperation{
-			operator: operator,
+			OperatorAddress: operator,
 		},
 	}, nil
 }
@@ -560,13 +581,13 @@ func NewSetApprovalForAllOperation(address common.Address, operator common.Addre
 	}
 	return &setApprovalForAllOperation{
 		operation: operation{
-			standard: StdWRC721,
+			Std: StdWRC721,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		operatorOperation: operatorOperation{
-			operator: operator,
+			OperatorAddress: operator,
 		},
 		isApproved: isApproved,
 	}, nil
@@ -616,13 +637,13 @@ func NewMintOperation(address common.Address, to common.Address, tokenId *big.In
 	}
 	return &mintOperation{
 		operation: operation{
-			standard: StdWRC721,
+			Std: StdWRC721,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		toOperation: toOperation{
-			to: to,
+			ToAddress: to,
 		},
 		tokenIdOperation: tokenIdOperation{
 			tokenId: tokenId,
@@ -663,10 +684,10 @@ func NewBurnOperation(address common.Address, tokenId *big.Int) (BurnOperation, 
 	}
 	return &burnOperation{
 		operation: operation{
-			standard: StdWRC721,
+			Std: StdWRC721,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		tokenIdOperation: tokenIdOperation{
 			tokenId: tokenId,
@@ -707,10 +728,10 @@ func NewTokenOfOwnerByIndexOperation(address common.Address, owner common.Addres
 			Std: StdWRC721,
 		},
 		addressOperation: addressOperation{
-			address: address,
+			TokenAddress: address,
 		},
 		ownerOperation: ownerOperation{
-			owner: owner,
+			OwnerAddress: owner,
 		},
 		index: index,
 	}, nil
@@ -722,4 +743,106 @@ func (op *tokenOfOwnerByIndexOperation) OpCode() OpCode {
 
 func (op *tokenOfOwnerByIndexOperation) Index() *big.Int {
 	return new(big.Int).Set(op.index)
+}
+
+type opData struct {
+	Std
+	common.Address
+	TokenId    *big.Int
+	Owner      common.Address
+	Spender    common.Address
+	Operator   common.Address
+	From       common.Address
+	To         common.Address
+	Value      *big.Int
+	Index      *big.Int
+	IsApproved bool
+	Data       []byte `rlp:"tail"`
+}
+
+func rlpDecode(b []byte, op interface{}) error {
+	data := opData{}
+	if err := rlp.DecodeBytes(b, &data); err != nil {
+		return err
+	}
+
+	// op is passed by pointer
+	value := reflect.ValueOf(op).Elem()
+
+	setFieldValue := func(name string, isValid func() bool, v interface{}) bool {
+		field := value.FieldByName(name)
+		// Check if the field is exists in the struct
+		if field != (reflect.Value{}) {
+			if !isValid() {
+				return false
+			}
+			field.Set(reflect.ValueOf(v))
+		}
+		return true
+	}
+
+	if !setFieldValue("Std", func() bool {
+		return data.Std == StdWRC20 || data.Std == StdWRC721
+	}, data.Std) {
+		return ErrStandardNotValid
+	}
+
+	if !setFieldValue("TokenAddress", func() bool {
+		return data.Address != (common.Address{})
+	}, data.Address) {
+		return ErrNoAddress
+	}
+
+	setFieldValue("TokenValue", func() bool {
+		return true
+	}, data.Value)
+
+	if !setFieldValue("OwnerAddress", func() bool {
+		return data.Owner != (common.Address{})
+	}, data.Owner) {
+		return ErrNoOwner
+	}
+
+	if !setFieldValue("FromAddress", func() bool {
+		return data.From != (common.Address{})
+	}, data.From) {
+		return ErrNoFrom
+	}
+
+	if !setFieldValue("ToAddress", func() bool {
+		return data.To != (common.Address{})
+	}, data.To) {
+		return ErrNoTo
+	}
+
+	if !setFieldValue("OperatorAddress", func() bool {
+		return data.Operator != (common.Address{})
+	}, data.Operator) {
+		return ErrNoOperator
+	}
+
+	if !setFieldValue("SpenderAddress", func() bool {
+		return data.Spender != (common.Address{})
+	}, data.Spender) {
+		return ErrNoSpender
+	}
+
+	if !setFieldValue("Id", func() bool {
+		return true
+	}, data.TokenId) {
+		return nil
+	}
+
+	switch v := op.(type) {
+	case *safeTransferFromOperation:
+		v.data = data.Data
+	case *setApprovalForAllOperation:
+		v.isApproved = data.IsApproved
+	case *mintOperation:
+		v.metadata = data.Data
+	case *tokenOfOwnerByIndexOperation:
+		v.index = data.Index
+	}
+
+	return nil
 }
