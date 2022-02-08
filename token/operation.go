@@ -23,6 +23,7 @@ var (
 	ErrNoSpender        = errors.New("spender address is required")
 	ErrNoOperator       = errors.New("operator address is required")
 	ErrNoTokenId        = errors.New("token id is required")
+	ErrNoIndex          = errors.New("token index is required")
 	ErrStandardNotValid = errors.New("not valid value for token standard")
 )
 
@@ -211,23 +212,11 @@ func NewPropertiesOperation(address common.Address, tokenId *big.Int) (Propertie
 }
 
 func (op *propertiesOperation) UnmarshalBinary(b []byte) error {
-	opData := struct {
-		Std
-		common.Address
-		TokenId *big.Int
-	}{}
-	if err := rlp.DecodeBytes(b, &opData); err != nil {
-		return err
-	}
-
-	op.Std = opData.Std
-	op.TokenAddress = opData.Address
-	op.Id = opData.TokenId
-	return nil
+	return rlpDecode(b, op)
 }
 
 func (op *propertiesOperation) MarshalBinary() ([]byte, error) {
-	return rlp.EncodeToBytes(op)
+	return rlpEncode(op)
 }
 
 func (op *propertiesOperation) OpCode() OpCode {
@@ -286,6 +275,14 @@ func (op *balanceOfOperation) OpCode() OpCode {
 // Always returns 0.
 func (op *balanceOfOperation) Standard() Std {
 	return 0
+}
+
+func (op *balanceOfOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *balanceOfOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
 }
 
 type TransferOperation interface {
@@ -353,6 +350,14 @@ func (op *transferOperation) OpCode() OpCode {
 	return OpTransfer
 }
 
+func (op *transferOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *transferOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
+}
+
 type TransferFromOperation interface {
 	TransferOperation
 	From() common.Address
@@ -382,6 +387,14 @@ func (op *transferFromOperation) From() common.Address {
 	return op.FromAddress
 }
 
+func (op *transferFromOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *transferFromOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
+}
+
 type SafeTransferFromOperation interface {
 	TransferFromOperation
 	Data() ([]byte, bool)
@@ -408,6 +421,14 @@ func (op *safeTransferFromOperation) Data() ([]byte, bool) {
 		return nil, false
 	}
 	return makeCopy(op.data), true
+}
+
+func (op *safeTransferFromOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *safeTransferFromOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
 }
 
 type ApproveOperation interface {
@@ -462,6 +483,14 @@ func (op *approveOperation) OpCode() OpCode {
 	return OpApprove
 }
 
+func (op *approveOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *approveOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
+}
+
 type AllowanceOperation interface {
 	Operation
 	addresser
@@ -504,6 +533,14 @@ func NewAllowanceOperation(address common.Address, owner common.Address, spender
 
 func (op *allowanceOperation) OpCode() OpCode {
 	return OpAllowance
+}
+
+func (op *allowanceOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *allowanceOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
 }
 
 type IsApprovedForAllOperation interface {
@@ -559,6 +596,14 @@ func (op *isApprovedForAllOperation) OpCode() OpCode {
 	return OpIsApprovedForAll
 }
 
+func (op *isApprovedForAllOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *isApprovedForAllOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
+}
+
 type SetApprovalForAllOperation interface {
 	Operation
 	addresser
@@ -600,6 +645,14 @@ func (op *setApprovalForAllOperation) OpCode() OpCode {
 
 func (op *setApprovalForAllOperation) IsApproved() bool {
 	return op.isApproved
+}
+
+func (op *setApprovalForAllOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *setApprovalForAllOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
 }
 
 type MintOperation interface {
@@ -664,6 +717,14 @@ func (op *mintOperation) Metadata() ([]byte, bool) {
 	return makeCopy(op.metadata), true
 }
 
+func (op *mintOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *mintOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
+}
+
 type BurnOperation interface {
 	Operation
 	addresser
@@ -698,6 +759,14 @@ func NewBurnOperation(address common.Address, tokenId *big.Int) (BurnOperation, 
 
 func (op *burnOperation) OpCode() OpCode {
 	return OpBurn
+}
+
+func (op *burnOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *burnOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
 }
 
 type TokenOfOwnerByIndexOperation interface {
@@ -746,6 +815,14 @@ func (op *tokenOfOwnerByIndexOperation) Index() *big.Int {
 	return new(big.Int).Set(op.index)
 }
 
+func (op *tokenOfOwnerByIndexOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *tokenOfOwnerByIndexOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
+}
+
 type opData struct {
 	Std
 	common.Address
@@ -783,7 +860,7 @@ func rlpDecode(b []byte, op interface{}) error {
 	}
 
 	if !setFieldValue("Std", func() bool {
-		return data.Std == StdWRC20 || data.Std == StdWRC721
+		return data.Std == StdWRC20 || data.Std == StdWRC721 || data.Std == 0
 	}, data.Std) {
 		return ErrStandardNotValid
 	}
@@ -848,7 +925,7 @@ func rlpDecode(b []byte, op interface{}) error {
 	return nil
 }
 
-func rlpEncode(op interface{}) []byte {
+func rlpEncode(op interface{}) ([]byte, error) {
 	data := opData{}
 	dataValue := reflect.ValueOf(&data).Elem()
 
@@ -895,6 +972,5 @@ func rlpEncode(op interface{}) []byte {
 		}
 	}
 
-	encoded, _ := rlp.EncodeToBytes(op)
-	return encoded
+	return rlp.EncodeToBytes(op)
 }
