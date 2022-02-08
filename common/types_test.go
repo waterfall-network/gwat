@@ -657,7 +657,7 @@ func TestHashArray_Uniq(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "HashArray.Difference()",
+			name:    "HashArray.Uniq()",
 			ha:      hashes,
 			want:    fmt.Sprintf("%v", uniq),
 			wantErr: false,
@@ -841,8 +841,7 @@ func TestHashArray_Reverse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.ha.Reverse()
-			got := fmt.Sprintf("%#v", tt.ha)
+			got := fmt.Sprintf("%#v", tt.ha.Reverse())
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("HashArray.Reverse() = %v, want %v", got, tt.want)
 			}

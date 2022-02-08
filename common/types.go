@@ -49,18 +49,6 @@ var (
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 
-func IsEqualHashArrays(a, b []Hash) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // BytesToHash sets b to hash.
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToHash(b []byte) Hash {
@@ -275,8 +263,7 @@ func (ha HashArray) Uniq() HashArray {
 		}
 		m[item] = true
 	}
-	ha = c
-	return ha
+	return c
 }
 
 func (ha HashArray) Concat(hashes HashArray) HashArray {
@@ -287,7 +274,15 @@ func (ha HashArray) Concat(hashes HashArray) HashArray {
 }
 
 func (ha HashArray) IsEqualTo(hashArray HashArray) bool {
-	return IsEqualHashArrays(ha, hashArray)
+	if len(ha) != len(hashArray) {
+		return false
+	}
+	for i, v := range ha {
+		if v != hashArray[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (ha HashArray) Sort() HashArray {
@@ -333,14 +328,15 @@ func (ha HashArray) IndexOf(hash Hash) int {
 }
 
 func (ha HashArray) Reverse() HashArray {
+	cpy := ha.Copy()
 	i := 0
 	j := len(ha) - 1
 	for i < j {
-		ha[i], ha[j] = ha[j], ha[i]
+		cpy[i], cpy[j] = cpy[j], cpy[i]
 		i++
 		j--
 	}
-	return ha
+	return cpy
 }
 
 /////////// Address
