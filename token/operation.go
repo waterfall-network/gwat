@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/big"
 	"reflect"
+	"regexp"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -845,4 +846,55 @@ func rlpDecode(b []byte, op interface{}) error {
 	}
 
 	return nil
+}
+
+func rlpEncode(op interface{}) []byte {
+	data := opData{}
+	dataValue := reflect.ValueOf(&data).Elem()
+
+	opValue := reflect.ValueOf(op).Elem()
+	opType := opValue.Type()
+
+	re := regexp.MustCompile(`^(.*)Address$`)
+
+	for i := 0; i < opType.NumField(); i++ {
+		f := opType.Field(i)
+		// There are only embedded structures with one field in the package
+		if f.Anonymous {
+			f = f.Type.Field(0)
+		}
+
+		var name string = ""
+		switch f.Name {
+		case "Std":
+			name = f.Name
+		case "Id":
+			name = "TokenId"
+		case "TokenValue":
+			name = "Value"
+		case "TokenAddress":
+			name = "Address"
+		case "metadata":
+			name = "Data"
+		case "data":
+			name = "Data"
+		case "isApproved":
+			name = "IsApproved"
+		case "index":
+			name = "Index"
+		default:
+			if re.MatchString(f.Name) {
+				name = re.ReplaceAllString(f.Name, "$1")
+			}
+		}
+
+		if name != "" {
+			dv := dataValue.FieldByName(name)
+			ov := opValue.FieldByName(f.Name)
+			dv.Set(ov)
+		}
+	}
+
+	encoded, _ := rlp.EncodeToBytes(op)
+	return encoded
 }
