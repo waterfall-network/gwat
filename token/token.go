@@ -38,6 +38,7 @@ const (
 	OpMint                = 0x26
 	OpBurn                = 0x27
 	OpTokenOfOwnerByIndex = 0x28
+	OpSafeTransferFrom    = 0x29
 )
 
 const (
@@ -68,10 +69,34 @@ func DecodeBytes(b []byte) (Operation, error) {
 	switch opCode {
 	case OpCreate:
 		op = &createOperation{}
+	case OpApprove:
+		op = &approveOperation{}
+	case OpTransfer:
+		op = &transferOperation{}
+	case OpTransferFrom:
+		op = &transferFromOperation{}
+	case OpProperties:
+		op = &propertiesOperation{}
+	case OpBalanceOf:
+		op = &balanceOfOperation{}
+	case OpAllowance:
+		op = &allowanceOperation{}
+	case OpIsApprovedForAll:
+		op = &isApprovedForAllOperation{}
+	case OpSetApprovalForAll:
+		op = &setApprovalForAllOperation{}
+	case OpMint:
+		op = &mintOperation{}
+	case OpBurn:
+		op = &burnOperation{}
+	case OpTokenOfOwnerByIndex:
+		op = &tokenOfOwnerByIndexOperation{}
+	case OpSafeTransferFrom:
+		op = &safeTransferFromOperation{}
 	default:
 		return nil, ErrOpNotValid
 	}
 
-	op.UnmarshalBinary(b[2:])
-	return op, nil
+	err := op.UnmarshalBinary(b[2:])
+	return op, err
 }
