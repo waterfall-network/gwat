@@ -14,7 +14,7 @@ var (
 )
 
 // Token standard
-type Std uint
+type Std uint16
 
 const (
 	StdWRC20  = 20
@@ -22,7 +22,7 @@ const (
 )
 
 // Token operation code
-type OpCode uint
+type OpCode byte
 
 // Token operation codes use invalid op codes of EVM instructions to prevent clashes.
 const (
@@ -99,4 +99,47 @@ func DecodeBytes(b []byte) (Operation, error) {
 
 	err := op.UnmarshalBinary(b[2:])
 	return op, err
+}
+
+func EncodeToBytes(op Operation) ([]byte, error) {
+	b, err := op.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	// len = 2 for prefix and op code
+	buf := make([]byte, 2, len(b)+2)
+	buf[0] = Prefix
+
+	switch op.(type) {
+	case *createOperation:
+		buf[1] = OpCreate
+	case *approveOperation:
+		buf[1] = OpApprove
+	case *transferOperation:
+		buf[1] = OpTransfer
+	case *transferFromOperation:
+		buf[1] = OpTransferFrom
+	case *propertiesOperation:
+		buf[1] = OpProperties
+	case *balanceOfOperation:
+		buf[1] = OpBalanceOf
+	case *allowanceOperation:
+		buf[1] = OpAllowance
+	case *isApprovedForAllOperation:
+		buf[1] = OpIsApprovedForAll
+	case *setApprovalForAllOperation:
+		buf[1] = OpSetApprovalForAll
+	case *mintOperation:
+		buf[1] = OpMint
+	case *burnOperation:
+		buf[1] = OpBurn
+	case *tokenOfOwnerByIndexOperation:
+		buf[1] = OpTokenOfOwnerByIndex
+	case *safeTransferFromOperation:
+		buf[1] = OpSafeTransferFrom
+	}
+
+	buf = append(buf, b...)
+	return buf, nil
 }

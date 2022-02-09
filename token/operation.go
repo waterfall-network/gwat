@@ -103,16 +103,17 @@ func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (Creat
 	return &op, nil
 }
 
-func (op *createOperation) UnmarshalBinary(b []byte) error {
-	opData := struct {
-		Std
-		Name        []byte
-		Symbol      []byte
-		TotalSupply *big.Int `rlp:"nil"`
-		Decimals    *uint8   `rlp:"nil"`
-		BaseURI     []byte   `rlp:"optional"`
-	}{}
+type createOpData struct {
+	Std
+	Name        []byte
+	Symbol      []byte
+	TotalSupply *big.Int `rlp:"nil"`
+	Decimals    *uint8   `rlp:"nil"`
+	BaseURI     []byte   `rlp:"optional"`
+}
 
+func (op *createOperation) UnmarshalBinary(b []byte) error {
+	opData := createOpData{}
 	if err := rlp.DecodeBytes(b, &opData); err != nil {
 		return err
 	}
@@ -121,7 +122,15 @@ func (op *createOperation) UnmarshalBinary(b []byte) error {
 }
 
 func (op *createOperation) MarshalBinary() ([]byte, error) {
-	return rlp.EncodeToBytes(op)
+	opData := createOpData{}
+	opData.Std = op.Std
+	opData.Name = op.name
+	opData.Symbol = op.symbol
+	opData.TotalSupply = op.totalSupply
+	opData.Decimals = op.decimals
+	opData.BaseURI = op.baseURI
+
+	return rlp.EncodeToBytes(&opData)
 }
 
 func (op *createOperation) OpCode() OpCode {

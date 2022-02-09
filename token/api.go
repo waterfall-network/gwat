@@ -2,12 +2,17 @@ package token
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+)
+
+var (
+	ErrNotEnoughArgs = errors.New("not enough arguments for token create operation")
 )
 
 type Backend interface{}
@@ -63,25 +68,41 @@ type TokenArgs struct {
 // Will create a WRC-721 token if BaseURI field is given in the args. Returns a raw data with token attributes.
 // Use the raw data in the Data field when sending a transaction to create the token.
 func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexutil.Bytes, error) {
-	name := ""
-	if args.Name != nil {
-		name = string(*args.Name)
+	if args.Name == nil {
+		return nil, ErrNoName
 	}
-	symbol := ""
-	if args.Symbol != nil {
-		symbol = string(*args.Symbol)
+	if args.Symbol == nil {
+		return nil, ErrNoSymbol
 	}
-	decimals := uint8(0)
-	if args.Decimals != nil {
-		decimals = uint8(*args.Decimals)
-	}
-	totalSupply := big.NewInt(0)
-	if args.TotalSupply != nil {
-		totalSupply = args.TotalSupply.ToInt()
-	}
-	log.Info("Create WRC-20 token", "name", name, "symbol", symbol, "decimals", decimals, "totalSupply", totalSupply)
+	name := []byte(*args.Name)
+	symbol := []byte(*args.Symbol)
 
-	return nil, nil
+	var (
+		op  Operation
+		err error
+	)
+	switch {
+	case args.TotalSupply != nil:
+		decimals := (*uint8)(args.Decimals)
+		totalSupply := args.TotalSupply.ToInt()
+		if op, err = NewWrc20CreateOperation(name, symbol, decimals, totalSupply); err != nil {
+			return nil, err
+		}
+	case args.BaseURI != nil:
+		baseURI := []byte(*args.BaseURI)
+		if op, err = NewWrc721CreateOperation(name, symbol, baseURI); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, ErrNotEnoughArgs
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Warn("Failed to encode token create operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // TokenProperties returns properties of the token. Returns different structures for WRC-20 and WRC-721 tokens.
