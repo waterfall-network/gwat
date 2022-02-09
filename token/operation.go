@@ -664,11 +664,11 @@ type MintOperation interface {
 }
 
 type tokenIdOperation struct {
-	tokenId *big.Int
+	Id *big.Int
 }
 
 func (op *tokenIdOperation) TokenId() *big.Int {
-	return new(big.Int).Set(op.tokenId)
+	return new(big.Int).Set(op.Id)
 }
 
 type mintOperation struct {
@@ -700,7 +700,7 @@ func NewMintOperation(address common.Address, to common.Address, tokenId *big.In
 			ToAddress: to,
 		},
 		tokenIdOperation: tokenIdOperation{
-			tokenId: tokenId,
+			Id: tokenId,
 		},
 		metadata: metadata,
 	}, nil
@@ -752,7 +752,7 @@ func NewBurnOperation(address common.Address, tokenId *big.Int) (BurnOperation, 
 			TokenAddress: address,
 		},
 		tokenIdOperation: tokenIdOperation{
-			tokenId: tokenId,
+			Id: tokenId,
 		},
 	}, nil
 }
