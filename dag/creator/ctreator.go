@@ -838,7 +838,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 		return
 	}
 	tmpFinalityPoints := finDag.FinalityPoints.Uniq()
-	tmpDagChainHashes := tips.GetOrderedDagChainHashes().Uniq()
+	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
 
 	// after reorg tips can content hashes of finalized blocks
 	finHashes := common.HashArray{}

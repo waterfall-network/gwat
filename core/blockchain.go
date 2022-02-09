@@ -2297,7 +2297,7 @@ func (bc *BlockChain) CollectStateDataByTips(tips types.Tips) (statedb *state.St
 		return statedb, stateBlock, recommitBlocks, err
 	}
 	// collect red blocks (not in finalization points)
-	ordHashes := tips.GetOrderedDagChainHashes().Uniq()
+	ordHashes := tips.GetOrderedDagChainHashes()
 	stateIndex := ordHashes.IndexOf(stateHash)
 	recalcHashes := common.HashArray{}
 	if stateIndex > -1 {

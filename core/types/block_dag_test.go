@@ -199,61 +199,165 @@ func TestBlockDAG(t *testing.T) {
 }
 
 func TestTips(t *testing.T) {
+	// Nr= 1807722  (blue)
 	blockDag0 := &BlockDAG{
-		Hash:                common.Hash{0x66, 0x66, 0x66, 0x66},
-		Height:              uint64(301),
-		LastFinalizedHash:   common.Hash{0x11, 0x11, 0x11, 0x11},
-		LastFinalizedHeight: uint64(255),
-		DagChainHashes:      common.HashArray{
-			//common.Hash{0x11, 0x11, 0x11, 0x11},
-			//common.Hash{0x22, 0x22, 0x22, 0x22},
-			//common.Hash{0x33, 0x33, 0x33, 0x33},
+		Hash:                common.HexToHash("0xa659fcd4ed3f3ad9cd43ab36eb29080a4655328fe16f045962afab1d66a5da09"),
+		Height:              uint64(1807722),
+		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
+		LastFinalizedHeight: uint64(1807706),
+
+		DagChainHashes: common.HashArray{
+			common.HexToHash("0x0c449b3b974d1c33081eda15010740a4c79b194ee10846311970d150b7cd07de"), // 1807717 (blue)
+			common.HexToHash("0x72fc4b6693d51f0a10913ca9ecfb6baa6774e54134b5aa23f49e45c5443841db"), // 1807717
+			common.HexToHash("0xae0e83f6c7249349bd4c71f4aaccf16c57b3ba7a7f5a2a3b6618f2f86e155a99"), // 1807717
+			common.HexToHash("0xc05186da87308720aef815a8a91a5195f104f89cb99e3fe5943f42c0856da7d1"), // 1807717
+			common.HexToHash("0xe198206aa59e3f274851cefb00e648bf179d1b160b781f33c9d47752a1d86297"), // 1807717
 		},
 	}
+	// Nr= 1807723  (red)
 	blockDag1 := &BlockDAG{
-		Hash:                common.Hash{0x77, 0x77, 0x77, 0x77},
-		Height:              uint64(301),
-		LastFinalizedHash:   common.Hash{0x11, 0x11, 0x11, 0x11},
-		LastFinalizedHeight: uint64(255),
-		DagChainHashes:      common.HashArray{
-			//common.Hash{0x11, 0x11, 0x11, 0x11},
-			//common.Hash{0x22, 0x22, 0x22, 0x22},
-			//common.Hash{0x33, 0x33, 0x33, 0x33},
+		Hash:                common.HexToHash("0xd6a047d2fa3483d042741ef2cc0856d323f5d0432d48e48568d2de3c52310286"), //common.Hash{0x66, 0x66, 0x66, 0x66},
+		Height:              uint64(1807722),
+		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
+		LastFinalizedHeight: uint64(1807706),
+
+		DagChainHashes: common.HashArray{
+			common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), //> 1807706 => 1807707
+			common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), //> 1807706 => 1807708
+			common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), //> 1807706 => 1807709
+			common.HexToHash("0xfb39360c4c5b41b1685315b6ea423cba96afa9ab88bdd75bd74ca19e4c669a8b"), //> 1807706 => 1807710
+			common.HexToHash("0xfdf4a98d8f823eb6fa922340ffe5fd0a3ffa22590f8353e9d8ef873e745a86c7"), //> 1807706 => 1807711
+
+			common.HexToHash("0x1c2dcc132ccfea02842d60c9c23de2efcfb614c4c8d95ff1f39ab5c58a7efda4"), //> 1807712 => 1807712 (blue)
+			common.HexToHash("0x633fe4a676d864d89e75f61bffa31b632e99a595d8e71e55158591d752c09f57"), //> 1807712 => 1807713
+			common.HexToHash("0x9fe01e79fd826b02f7308b23731003ecde3178fe9862ddd97bcd11819aa7171f"), //> 1807712 => 1807714
+			common.HexToHash("0xd4d302747ccadaa7348062fc75b5a69331b05479fe844fae914faa3e992cdee7"), //> 1807712 => 1807715
+			common.HexToHash("0xe39bfd9d8c1ec623fd00942484d2b3fbd54b0b70ad13035096e3b67771d71c6c"), //> 1807712 => 1807716
+
+			common.HexToHash("0x0c449b3b974d1c33081eda15010740a4c79b194ee10846311970d150b7cd07de"), // 1807717 (blue)
+			common.HexToHash("0x72fc4b6693d51f0a10913ca9ecfb6baa6774e54134b5aa23f49e45c5443841db"), // 1807717
+			common.HexToHash("0xae0e83f6c7249349bd4c71f4aaccf16c57b3ba7a7f5a2a3b6618f2f86e155a99"), // 1807717
+			common.HexToHash("0xc05186da87308720aef815a8a91a5195f104f89cb99e3fe5943f42c0856da7d1"), // 1807717
+			common.HexToHash("0xe198206aa59e3f274851cefb00e648bf179d1b160b781f33c9d47752a1d86297"), // 1807717
+		},
+	}
+	// Nr= 1807724  (red)
+	blockDag2 := &BlockDAG{
+		Hash:                common.HexToHash("0xddcc2c3e0530a6a3d8e60d35bd17c05b22a4826b78c44f55438cac6b47f4bfde"), //common.Hash{0x66, 0x66, 0x66, 0x66},
+		Height:              uint64(1807722),
+		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
+		LastFinalizedHeight: uint64(1807706),
+		DagChainHashes: common.HashArray{
+			common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), //> 1807706 => 1807707
+			common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), //> 1807706 => 1807708
+			common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), //> 1807706 => 1807709
+			common.HexToHash("0xfb39360c4c5b41b1685315b6ea423cba96afa9ab88bdd75bd74ca19e4c669a8b"), //> 1807706 => 1807710
+			common.HexToHash("0xfdf4a98d8f823eb6fa922340ffe5fd0a3ffa22590f8353e9d8ef873e745a86c7"), //> 1807706 => 1807711
+
+			common.HexToHash("0x1c2dcc132ccfea02842d60c9c23de2efcfb614c4c8d95ff1f39ab5c58a7efda4"), //> 1807712 => 1807712 (blue)
+			common.HexToHash("0x633fe4a676d864d89e75f61bffa31b632e99a595d8e71e55158591d752c09f57"), //> 1807712 => 1807713
+			common.HexToHash("0x9fe01e79fd826b02f7308b23731003ecde3178fe9862ddd97bcd11819aa7171f"), //> 1807712 => 1807714
+			common.HexToHash("0xd4d302747ccadaa7348062fc75b5a69331b05479fe844fae914faa3e992cdee7"), //> 1807712 => 1807715
+			common.HexToHash("0xe39bfd9d8c1ec623fd00942484d2b3fbd54b0b70ad13035096e3b67771d71c6c"), //> 1807712 => 1807716
+
+			common.HexToHash("0x0c449b3b974d1c33081eda15010740a4c79b194ee10846311970d150b7cd07de"), // 1807717 (blue)
+			common.HexToHash("0x72fc4b6693d51f0a10913ca9ecfb6baa6774e54134b5aa23f49e45c5443841db"), // 1807717
+			common.HexToHash("0xae0e83f6c7249349bd4c71f4aaccf16c57b3ba7a7f5a2a3b6618f2f86e155a99"), // 1807717
+			common.HexToHash("0xc05186da87308720aef815a8a91a5195f104f89cb99e3fe5943f42c0856da7d1"), // 1807717
+			common.HexToHash("0xe198206aa59e3f274851cefb00e648bf179d1b160b781f33c9d47752a1d86297"), // 1807717
+		},
+	}
+	// Nr= 1807725  (red)
+	blockDag3 := &BlockDAG{
+		Hash:                common.HexToHash("0xe29272257bd82f1beb90ce048361e5063481830f16dacdb4a2781164ede114e1"), //common.Hash{0x66, 0x66, 0x66, 0x66},
+		Height:              uint64(1807722),
+		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
+		LastFinalizedHeight: uint64(1807706),
+		DagChainHashes: common.HashArray{
+			common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), //> 1807706 => 1807707
+			common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), //> 1807706 => 1807708
+			common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), //> 1807706 => 1807709
+			common.HexToHash("0xfb39360c4c5b41b1685315b6ea423cba96afa9ab88bdd75bd74ca19e4c669a8b"), //> 1807706 => 1807710
+			common.HexToHash("0xfdf4a98d8f823eb6fa922340ffe5fd0a3ffa22590f8353e9d8ef873e745a86c7"), //> 1807706 => 1807711
+
+			common.HexToHash("0x1c2dcc132ccfea02842d60c9c23de2efcfb614c4c8d95ff1f39ab5c58a7efda4"), //> 1807712 => 1807712 (blue)
+			common.HexToHash("0x633fe4a676d864d89e75f61bffa31b632e99a595d8e71e55158591d752c09f57"), //> 1807712 => 1807713
+			common.HexToHash("0x9fe01e79fd826b02f7308b23731003ecde3178fe9862ddd97bcd11819aa7171f"), //> 1807712 => 1807714
+			common.HexToHash("0xd4d302747ccadaa7348062fc75b5a69331b05479fe844fae914faa3e992cdee7"), //> 1807712 => 1807715
+			common.HexToHash("0xe39bfd9d8c1ec623fd00942484d2b3fbd54b0b70ad13035096e3b67771d71c6c"), //> 1807712 => 1807716
+
+			common.HexToHash("0x0c449b3b974d1c33081eda15010740a4c79b194ee10846311970d150b7cd07de"), // 1807717 (blue)
+			common.HexToHash("0x72fc4b6693d51f0a10913ca9ecfb6baa6774e54134b5aa23f49e45c5443841db"), // 1807717
+			common.HexToHash("0xae0e83f6c7249349bd4c71f4aaccf16c57b3ba7a7f5a2a3b6618f2f86e155a99"), // 1807717
+			common.HexToHash("0xc05186da87308720aef815a8a91a5195f104f89cb99e3fe5943f42c0856da7d1"), // 1807717
+			common.HexToHash("0xe198206aa59e3f274851cefb00e648bf179d1b160b781f33c9d47752a1d86297"), // 1807717
+		},
+	}
+	// Nr= 1807726  (red)
+	blockDag4 := &BlockDAG{
+		Hash:                common.HexToHash("0xeb1a3ad9ad8136fc6290de8227dde86699f7e2d1944259783e4f1241c5eb1610"), //common.Hash{0x66, 0x66, 0x66, 0x66},
+		Height:              uint64(1807722),
+		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
+		LastFinalizedHeight: uint64(1807706),
+		DagChainHashes: common.HashArray{
+			common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), //> 1807706 => 1807707
+			common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), //> 1807706 => 1807708
+			common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), //> 1807706 => 1807709
+			common.HexToHash("0xfb39360c4c5b41b1685315b6ea423cba96afa9ab88bdd75bd74ca19e4c669a8b"), //> 1807706 => 1807710
+			common.HexToHash("0xfdf4a98d8f823eb6fa922340ffe5fd0a3ffa22590f8353e9d8ef873e745a86c7"), //> 1807706 => 1807711
+
+			common.HexToHash("0x1c2dcc132ccfea02842d60c9c23de2efcfb614c4c8d95ff1f39ab5c58a7efda4"), //> 1807712 => 1807712 (blue)
+			common.HexToHash("0x633fe4a676d864d89e75f61bffa31b632e99a595d8e71e55158591d752c09f57"), //> 1807712 => 1807713
+			common.HexToHash("0x9fe01e79fd826b02f7308b23731003ecde3178fe9862ddd97bcd11819aa7171f"), //> 1807712 => 1807714
+			common.HexToHash("0xd4d302747ccadaa7348062fc75b5a69331b05479fe844fae914faa3e992cdee7"), //> 1807712 => 1807715
+			common.HexToHash("0xe39bfd9d8c1ec623fd00942484d2b3fbd54b0b70ad13035096e3b67771d71c6c"), //> 1807712 => 1807716
+
+			common.HexToHash("0x0c449b3b974d1c33081eda15010740a4c79b194ee10846311970d150b7cd07de"), // 1807717 (blue)
+			common.HexToHash("0x72fc4b6693d51f0a10913ca9ecfb6baa6774e54134b5aa23f49e45c5443841db"), // 1807717
+			common.HexToHash("0xae0e83f6c7249349bd4c71f4aaccf16c57b3ba7a7f5a2a3b6618f2f86e155a99"), // 1807717
+			common.HexToHash("0xc05186da87308720aef815a8a91a5195f104f89cb99e3fe5943f42c0856da7d1"), // 1807717
+			common.HexToHash("0xe198206aa59e3f274851cefb00e648bf179d1b160b781f33c9d47752a1d86297"), // 1807717
 		},
 	}
 
-	blockDag2 := &BlockDAG{
-		Hash:                common.Hash{0x55, 0x55, 0x55, 0x55},
-		Height:              uint64(300),
-		LastFinalizedHash:   common.Hash{0x11, 0x11, 0x11, 0x11},
-		LastFinalizedHeight: uint64(255),
-		DagChainHashes:      common.HashArray{
-			//common.Hash{0x22, 0x22, 0x22, 0x22},
-			//common.Hash{0x33, 0x33, 0x33, 0x33},
-		},
-	}
-	tips := Tips{}.Add(blockDag1).Add(blockDag2).Add(blockDag0)
+	tips := Tips{}.Add(blockDag1).Add(blockDag2).Add(blockDag4).Add(blockDag0).Add(blockDag3)
 
 	// sort by (1) Height desc (2) Hash asc
 	orderedHashes := tips.getOrderedHashes()
 	res := fmt.Sprintf("%v", orderedHashes)
-	exp := fmt.Sprintf("%v", common.HashArray{blockDag0.Hash, blockDag1.Hash, blockDag2.Hash})
+	exp := fmt.Sprintf("%v", common.HashArray{blockDag0.Hash, blockDag1.Hash, blockDag2.Hash, blockDag3.Hash, blockDag4.Hash})
 	if res != exp {
 		t.Fatalf("Tips.getOrderedHashes failed, got %v != %v", res, exp)
 	}
 
-	// tips.GetOrderedDagChainHashes()
 	ordChain := tips.GetOrderedDagChainHashes()
-	res = fmt.Sprintf("%v", ordChain)
+	res = fmt.Sprintf("%v", ordChain.Uniq())
 
-	expHashes := common.HashArray{}
-	expHashes = append(expHashes, blockDag0.DagChainHashes...)
-	expHashes = append(expHashes, blockDag0.Hash)
-	expHashes = append(expHashes, blockDag1.DagChainHashes...)
-	expHashes = append(expHashes, blockDag1.Hash)
-	expHashes = append(expHashes, blockDag2.DagChainHashes...)
-	expHashes = append(expHashes, blockDag2.Hash)
-	exp = fmt.Sprintf("%v", expHashes)
+	expHashes := common.HashArray{
+		common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), // > 1807706 => 1807707
+		common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), // > 1807706 => 1807708
+		common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), // > 1807706 => 1807709
+		common.HexToHash("0xfb39360c4c5b41b1685315b6ea423cba96afa9ab88bdd75bd74ca19e4c669a8b"), // > 1807706 => 1807710
+		common.HexToHash("0xfdf4a98d8f823eb6fa922340ffe5fd0a3ffa22590f8353e9d8ef873e745a86c7"), // > 1807706 => 1807711
+
+		common.HexToHash("0x1c2dcc132ccfea02842d60c9c23de2efcfb614c4c8d95ff1f39ab5c58a7efda4"), // > 1807712 => 1807712 (blue)
+		common.HexToHash("0x633fe4a676d864d89e75f61bffa31b632e99a595d8e71e55158591d752c09f57"), // > 1807712 => 1807713
+		common.HexToHash("0x9fe01e79fd826b02f7308b23731003ecde3178fe9862ddd97bcd11819aa7171f"), // > 1807712 => 1807714
+		common.HexToHash("0xd4d302747ccadaa7348062fc75b5a69331b05479fe844fae914faa3e992cdee7"), // > 1807712 => 1807715
+		common.HexToHash("0xe39bfd9d8c1ec623fd00942484d2b3fbd54b0b70ad13035096e3b67771d71c6c"), // > 1807712 => 1807716
+
+		common.HexToHash("0x0c449b3b974d1c33081eda15010740a4c79b194ee10846311970d150b7cd07de"),
+		common.HexToHash("0x72fc4b6693d51f0a10913ca9ecfb6baa6774e54134b5aa23f49e45c5443841db"),
+		common.HexToHash("0xae0e83f6c7249349bd4c71f4aaccf16c57b3ba7a7f5a2a3b6618f2f86e155a99"),
+		common.HexToHash("0xc05186da87308720aef815a8a91a5195f104f89cb99e3fe5943f42c0856da7d1"),
+		common.HexToHash("0xe198206aa59e3f274851cefb00e648bf179d1b160b781f33c9d47752a1d86297"),
+		common.HexToHash("0xa659fcd4ed3f3ad9cd43ab36eb29080a4655328fe16f045962afab1d66a5da09"),
+		common.HexToHash("0xd6a047d2fa3483d042741ef2cc0856d323f5d0432d48e48568d2de3c52310286"),
+		common.HexToHash("0xddcc2c3e0530a6a3d8e60d35bd17c05b22a4826b78c44f55438cac6b47f4bfde"),
+		common.HexToHash("0xe29272257bd82f1beb90ce048361e5063481830f16dacdb4a2781164ede114e1"),
+		common.HexToHash("0xeb1a3ad9ad8136fc6290de8227dde86699f7e2d1944259783e4f1241c5eb1610"),
+	}
+	exp = fmt.Sprintf("%v", expHashes.Uniq())
 	if res != exp {
 		t.Fatalf("Tips.GetOrderedDagChainHashes failed, got %v != %v", res, exp)
 	}
