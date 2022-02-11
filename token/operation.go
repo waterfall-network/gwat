@@ -41,7 +41,7 @@ type CreateOperation interface {
 	Symbol() []byte
 	// That's not required arguments
 	// WRC-20 arguments
-	Decimals() (uint8, bool)
+	Decimals() uint8
 	TotalSupply() (*big.Int, bool)
 	// WRC-721 arguments
 	BaseURI() ([]byte, bool)
@@ -51,7 +51,7 @@ type createOperation struct {
 	operation
 	name        []byte
 	symbol      []byte
-	decimals    *uint8
+	decimals    uint8
 	totalSupply *big.Int
 	baseURI     []byte
 }
@@ -69,7 +69,11 @@ func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals *u
 		if totalSupply == nil {
 			return ErrNoTokenSupply
 		}
-		op.decimals = decimals
+		if decimals == nil {
+			op.decimals = DefaultDecimals
+		} else {
+			op.decimals = *decimals
+		}
 		op.totalSupply = totalSupply
 	case StdWRC721:
 		if len(baseURI) == 0 {
@@ -127,7 +131,7 @@ func (op *createOperation) MarshalBinary() ([]byte, error) {
 	opData.Name = op.name
 	opData.Symbol = op.symbol
 	opData.TotalSupply = op.totalSupply
-	opData.Decimals = op.decimals
+	opData.Decimals = &op.decimals
 	opData.BaseURI = op.baseURI
 
 	return rlp.EncodeToBytes(&opData)
@@ -149,11 +153,8 @@ func (op *createOperation) Symbol() []byte {
 	return makeCopy(op.name)
 }
 
-func (op *createOperation) Decimals() (uint8, bool) {
-	if op.decimals == nil {
-		return 0, false
-	}
-	return *op.decimals, true
+func (op *createOperation) Decimals() uint8 {
+	return op.decimals
 }
 
 func (op *createOperation) TotalSupply() (*big.Int, bool) {
