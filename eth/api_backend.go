@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/token"
 )
 
 // EthAPIBackend implements ethapi.Backend for full nodes
@@ -209,6 +210,12 @@ func (b *EthAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
 	return vm.NewEVM(context, txContext, state, b.eth.blockchain.Config(), *vmConfig), vmError, nil
+}
+
+func (b *EthAPIBackend) GetTP(ctx context.Context, state *state.StateDB, header *types.Header) (*token.Processor, func() error, error) {
+	tpError := func() error { return nil }
+	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
+	return token.NewProcessor(context, state), tpError, nil
 }
 
 func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {

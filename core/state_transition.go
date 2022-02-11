@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/token"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -50,6 +51,7 @@ The state transitioning model does all the necessary work to work out a valid ne
 */
 type StateTransition struct {
 	gp         *GasPool
+	tp         *token.Processor
 	msg        Message
 	gas        uint64
 	gasPrice   *big.Int
@@ -156,10 +158,11 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:        gp,
 		evm:       evm,
+		tp:        tokenProcessor,
 		msg:       msg,
 		gasPrice:  msg.GasPrice(),
 		gasFeeCap: msg.GasFeeCap(),
@@ -177,8 +180,8 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
+	return NewStateTransition(evm, tokenProcessor, msg, gp).TransitionDb()
 }
 
 // to returns the recipient of the message.
@@ -289,7 +292,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
 	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
-	contractCreation := msg.To() == nil
+
+	// Check if token prefix and opcode are valid in raw data
+	isTokenOp := false
+	if _, err := token.GetOpCode(msg.Data()); err == nil {
+		isTokenOp = true
+	}
+
+	contractCreation := msg.To() == nil && !isTokenOp
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
@@ -319,7 +329,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+
+		if isTokenOp {
+			op, err := token.DecodeBytes(msg.Data())
+			if err != nil {
+				return nil, err
+			}
+			ret, vmerr = st.tp.Call(sender, op)
+		} else {
+			ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		}
 	}
 
 	if !london {
