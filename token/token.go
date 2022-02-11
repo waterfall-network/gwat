@@ -7,6 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const (
+	DefaultDecimals = 18
+)
+
 var (
 	ErrPrefixNotValid = errors.New("not valid value for prefix")
 	ErrRawDataShort   = errors.New("binary data for token operation is short")
@@ -54,18 +58,26 @@ type Operation interface {
 	encoding.BinaryMarshaler
 }
 
-func DecodeBytes(b []byte) (Operation, error) {
+func GetOpCode(b []byte) (OpCode, error) {
 	if len(b) < 2 {
-		return nil, ErrRawDataShort
+		return 0, ErrRawDataShort
 	}
 
 	prefix := b[0]
 	if prefix != Prefix {
-		return nil, ErrPrefixNotValid
+		return 0, ErrPrefixNotValid
+	}
+
+	return OpCode(b[1]), nil
+}
+
+func DecodeBytes(b []byte) (Operation, error) {
+	opCode, err := GetOpCode(b)
+	if err != nil {
+		return nil, err
 	}
 
 	var op Operation
-	opCode := b[1]
 	switch opCode {
 	case OpCreate:
 		op = &createOperation{}
@@ -97,7 +109,7 @@ func DecodeBytes(b []byte) (Operation, error) {
 		return nil, ErrOpNotValid
 	}
 
-	err := op.UnmarshalBinary(b[2:])
+	err = op.UnmarshalBinary(b[2:])
 	return op, err
 }
 
