@@ -101,7 +101,8 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	log.Info("============= HandleConsensus::GetFinalizingCandidates=============", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
 
 	// create block
-	if d.creator.IsRunning() && len(errs) == 0 {
+	dagSlots := d.countDagSlots()
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= 3 {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Epoch:    data.Epoch,
@@ -118,7 +119,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 			if block != nil {
 				crtInfo["newBlock"] = block.Hash().Hex()
 			}
-			log.Info("============= HandleConsensus::create=============", "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+			log.Info("============= HandleConsensus::create=============", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 		}()
 	}
 
@@ -163,4 +164,18 @@ func (d *Dag) emitDagSyncInfo() bool {
 		return true
 	}
 	return false
+}
+
+// countDagSlots count number of slots in dag chain
+// if it has unknown blocks returns  -1
+func (d *Dag) countDagSlots() int {
+	tips, unloaded := d.bc.ReviseTips()
+	//if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
+	if len(unloaded) > 0 {
+		return -1
+	}
+	dag := tips.GetFinalizingDag()
+	finPoints := append(dag.FinalityPoints.Uniq(), dag.Hash)
+	finPoints = finPoints.Difference(common.HashArray{dag.LastFinalizedHash}).Uniq()
+	return len(finPoints)
 }
