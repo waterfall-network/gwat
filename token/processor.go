@@ -2,6 +2,7 @@ package token
 
 import (
 	"errors"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -77,4 +78,60 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 	storage.Flush()
 
 	return tokenAddr, nil
+}
+
+type WRC20PropertiesResult struct {
+	Name        []byte
+	Symbol      []byte
+	Decimals    uint8
+	TotalSupply *big.Int
+}
+
+type WRC721PropertiesResult struct {
+	Name    []byte
+	Symbol  []byte
+	BaseURI []byte
+}
+
+func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
+	log.Info("Token properties", "address", op.Address())
+	if !p.state.Exist(op.Address()) {
+		log.Error("Token doesn't exist", "address", op.Address())
+		return nil, ErrTokenNotExists
+	}
+
+	storage := NewStorage(op.Address(), p.state)
+	std := storage.ReadUint16()
+	if std == 0 {
+		log.Error("Token doesn't exist", "address", op.Address(), "std", std)
+		return nil, ErrTokenNotExists
+	}
+	name := storage.ReadBytes()
+	symbol := storage.ReadBytes()
+
+	var r interface{}
+	switch Std(std) {
+	case StdWRC20:
+		decimals := storage.ReadUint8()
+		totalSupply := storage.ReadUint256()
+
+		r = &WRC20PropertiesResult{
+			Name:        name,
+			Symbol:      symbol,
+			Decimals:    decimals,
+			TotalSupply: totalSupply,
+		}
+	case StdWRC721:
+		baseURI := storage.ReadBytes()
+
+		r = &WRC721PropertiesResult{
+			Name:    name,
+			Symbol:  symbol,
+			BaseURI: baseURI,
+		}
+	default:
+		return nil, ErrStandardNotValid
+	}
+
+	return r, nil
 }

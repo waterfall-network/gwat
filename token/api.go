@@ -3,10 +3,12 @@ package token
 import (
 	"context"
 	"errors"
-	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -15,7 +17,11 @@ var (
 	ErrNotEnoughArgs = errors.New("not enough arguments for token create operation")
 )
 
-type Backend interface{}
+type Backend interface {
+	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
+	RPCEVMTimeout() time.Duration // global timeout for eth_call over rpc: DoS protection
+	GetTP(ctx context.Context, state *state.StateDB, header *types.Header) (*Processor, func() error, error)
+}
 
 // PublicTokenAPI provides an API to access native token functions.
 type PublicTokenAPI struct {
@@ -114,49 +120,70 @@ func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexut
 // It also implements view functions of EIP-721: name, symbol, tokenURI, ownerOf, getApproved.
 // TokenURI, ownerOf and getApproved are only returned if tokenId parameter is given. Also with tokenId given
 // TokenProperties returns custom metadata field for WRC-721 tokens in the result structure.
-func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.Address, tokenId *hexutil.Big) (interface{}, error) {
-	name := "Test token"
-	nameBytes := hexutil.Bytes(name)
-	symbol := "TST"
-	symbolBytes := hexutil.Bytes(symbol)
+func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.Address, tokenId *hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) (ret interface{}, err error) {
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
 
-	if tokenId != nil {
-		tokenURI := "https://waterfall.foundation/testtoken/1.json"
-		tokenURIBytes := hexutil.Bytes(tokenURI)
-		ownerOf := "0x3552fea0d44cb11d56210ca8a8f04a69c67ebf48"
-		ownerOfBytes := common.HexToAddress(ownerOf)
-		getApproved := "0x43b5339ea30687e43c39336d96c5f0db278debf6"
-		getApprovedBytes := common.HexToAddress(getApproved)
-		metadata := "{ name: \"Test token\" }"
-		metadataBytes := hexutil.Bytes(metadata)
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	timeout := s.b.RPCEVMTimeout()
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
 
-		log.Info("Return WRC-721 properties by token id", "name", name, "symbol", symbol, "tokenURI", tokenURI, "ownerOf", ownerOf, "getApproved", getApproved, "metadata", metadata)
-		return &wrc721TokenProperties{
+	tp, tpError, err := s.b.GetTP(ctx, state, header)
+	if err != nil {
+		return nil, err
+	}
+
+	op, err := NewPropertiesOperation(tokenAddr, tokenId.ToInt())
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := tp.Properties(op)
+	if err != nil {
+		return nil, err
+	}
+	if err := tpError(); err != nil {
+		return nil, err
+	}
+
+	switch v := res.(type) {
+	case *WRC20PropertiesResult:
+		nameBytes := hexutil.Bytes(v.Name)
+		symbolBytes := hexutil.Bytes(v.Symbol)
+		decimals := hexutil.Uint8(v.Decimals)
+		totalSupply := (*hexutil.Big)(v.TotalSupply)
+		ret = &wrc20Properties{
 			wrc721Properties{
 				Name:   &nameBytes,
 				Symbol: &symbolBytes,
 			},
-			&wrc721ByTokenIdProperties{
-				TokenURI:    &tokenURIBytes,
-				OwnerOf:     &ownerOfBytes,
-				GetApproved: &getApprovedBytes,
-				Metadata:    &metadataBytes,
+			&decimals,
+			totalSupply,
+		}
+	case *WRC721PropertiesResult:
+		nameBytes := hexutil.Bytes(v.Name)
+		symbolBytes := hexutil.Bytes(v.Symbol)
+		ret = &wrc721TokenProperties{
+			wrc721Properties{
+				Name:   &nameBytes,
+				Symbol: &symbolBytes,
 			},
-		}, nil
+			nil,
+		}
 	}
 
-	decimals := hexutil.Uint8(3)
-	totalSupply := (*hexutil.Big)(big.NewInt(1000))
-
-	log.Info("Return WRC-20 properties", "name", name, "symbol", symbol, "decimals", decimals, "totalSupply", totalSupply)
-	return &wrc20Properties{
-		wrc721Properties{
-			Name:   &nameBytes,
-			Symbol: &symbolBytes,
-		},
-		&decimals,
-		totalSupply,
-	}, nil
+	return ret, nil
 }
 
 // TokenBalanceOf returns the balance of another account with owner address for a WRC-20 token.
