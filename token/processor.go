@@ -6,13 +6,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
 	ErrTokenAlreadyExists = errors.New("token address already exists")
+	ErrTokenNotExists     = errors.New("token doesn't exist")
 )
 
-type TokenRef interface {
+type Ref interface {
 	Address() common.Address
 }
 
@@ -28,16 +30,15 @@ func NewProcessor(blockCtx vm.BlockContext, statedb vm.StateDB) *Processor {
 	}
 }
 
-func (p *Processor) Call(caller vm.ContractRef, op Operation) (ret []byte, err error) {
+func (p *Processor) Call(caller Ref, op Operation) (ret []byte, err error) {
 	snapshot := p.state.Snapshot()
 
 	ret = nil
 	switch v := op.(type) {
-	case *createOperation:
+	case CreateOperation:
 		if addr, err := p.tokenCreate(caller, v); err == nil {
 			ret = addr.Bytes()
 		}
-		return ret, err
 	}
 
 	if err != nil {
@@ -46,12 +47,34 @@ func (p *Processor) Call(caller vm.ContractRef, op Operation) (ret []byte, err e
 	return ret, err
 }
 
-func (p *Processor) tokenCreate(caller TokenRef, op *createOperation) (tokenAddr common.Address, err error) {
+func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr common.Address, err error) {
 	tokenAddr = crypto.CreateAddress(caller.Address(), p.state.GetNonce(caller.Address()))
 	if p.state.Exist(tokenAddr) {
 		return common.Address{}, ErrTokenAlreadyExists
 	}
 	p.state.CreateAccount(tokenAddr)
 
-	return common.Address{}, nil
+	storage := NewStorage(tokenAddr, p.state)
+	storage.WriteUint16(uint16(op.Standard()))
+	storage.Write(op.Name())
+	storage.Write(op.Symbol())
+
+	switch op.Standard() {
+	case StdWRC20:
+		storage.WriteUint8(op.Decimals())
+		if v, ok := op.TotalSupply(); ok {
+			storage.WriteUint256(v)
+		}
+	case StdWRC721:
+		if v, ok := op.BaseURI(); ok {
+			storage.Write(v)
+		}
+	default:
+		return common.Address{}, ErrStandardNotValid
+	}
+
+	log.Info("Create token", "address", tokenAddr)
+	storage.Flush()
+
+	return tokenAddr, nil
 }
