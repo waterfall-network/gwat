@@ -5,21 +5,23 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 const SlotSize = 32
 
 type Storage struct {
-	pos   int
-	slots []common.Hash
-
-	readSlot func(slot int) common.Hash
+	pos     int
+	slots   []common.Hash
+	statedb vm.StateDB
+	addr    common.Address
 }
 
-func NewStorage(readSlot func(int) common.Hash) Storage {
+func NewStorage(tokenAddr common.Address, statedb vm.StateDB) Storage {
 	return Storage{
-		slots:    make([]common.Hash, 1),
-		readSlot: readSlot,
+		slots:   make([]common.Hash, 1),
+		statedb: statedb,
+		addr:    tokenAddr,
 	}
 }
 
@@ -94,7 +96,15 @@ func (s *Storage) ReadBytes() []byte {
 func (s *Storage) read(b []byte) {
 	s.do(b, func(slotSlice, bSlice []byte) {
 		copy(slotSlice, bSlice)
-	}, s.readSlot)
+	}, func(slot int) common.Hash {
+		return s.statedb.GetState(s.addr, s.slotHash(slot))
+	})
+}
+
+func (s *Storage) slotHash(slotNumber int) common.Hash {
+	hash := common.Hash{}
+	binary.BigEndian.PutUint64(hash[:], uint64(slotNumber))
+	return hash
 }
 
 func (s *Storage) do(b []byte, action func(slotSlice, bSlice []byte), getSlot func(int) common.Hash) {
@@ -116,4 +126,7 @@ func (s *Storage) do(b []byte, action func(slotSlice, bSlice []byte), getSlot fu
 }
 
 func (s *Storage) Flush() {
+	for i, slot := range s.slots {
+		s.statedb.SetState(s.addr, s.slotHash(i), slot)
+	}
 }
