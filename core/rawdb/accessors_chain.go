@@ -747,6 +747,7 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, finNr *uint64) {
 	DeleteHeader(db, hash, finNr)
 	DeleteBody(db, hash)
 	DeleteChildren(db, hash)
+	DeleteBlockDag(db, hash)
 }
 
 // DeleteBlockWithoutNumber removes all block data associated with a hash, except
@@ -756,6 +757,7 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	deleteHeaderWithoutNumber(db, hash)
 	DeleteBody(db, hash)
 	DeleteChildren(db, hash)
+	DeleteBlockDag(db, hash)
 }
 
 const badBlockToKeep = 10

@@ -677,15 +677,14 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 			if err := bc.db.TruncateAncients(*num); err != nil {
 				log.Crit("Failed to truncate ancient data", "number", num, "err", err)
 			}
-			// Remove the hash <-> number mapping from the active store.
-			rawdb.DeleteHeader(db, hash, num)
-		} else {
-			// Remove relative body and receipts from the active store.
-			// The header, total difficulty and canonical hash will be
-			// removed in the hc.SetHead function.
-			rawdb.DeleteBody(db, hash)
-			rawdb.DeleteReceipts(db, hash)
 		}
+		if num != nil {
+			rawdb.DeleteBlock(db, hash, num)
+		} else {
+			rawdb.DeleteBlockWithoutNumber(db, hash)
+		}
+		bc.RemoveTips(common.HashArray{hash})
+
 		// Todo(rjl493456442) txlookup, bloombits, etc
 	}
 
