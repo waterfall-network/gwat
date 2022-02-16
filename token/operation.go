@@ -150,7 +150,7 @@ func (op *createOperation) Name() []byte {
 }
 
 func (op *createOperation) Symbol() []byte {
-	return makeCopy(op.name)
+	return makeCopy(op.symbol)
 }
 
 func (op *createOperation) Decimals() uint8 {

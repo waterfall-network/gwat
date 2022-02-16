@@ -54,6 +54,7 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 		return common.Address{}, ErrTokenAlreadyExists
 	}
 	p.state.CreateAccount(tokenAddr)
+	p.state.SetNonce(tokenAddr, 1)
 
 	storage := NewStorage(tokenAddr, p.state)
 	storage.WriteUint16(uint16(op.Standard()))

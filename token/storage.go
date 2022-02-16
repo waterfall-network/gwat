@@ -19,7 +19,7 @@ type Storage struct {
 
 func NewStorage(tokenAddr common.Address, statedb vm.StateDB) Storage {
 	return Storage{
-		slots:   make([]common.Hash, 1),
+		slots:   make([]common.Hash, 0),
 		statedb: statedb,
 		addr:    tokenAddr,
 	}
@@ -55,7 +55,7 @@ func (s *Storage) Write(b []byte) (int, error) {
 
 func (s *Storage) write(b []byte) {
 	s.do(b, func(slotSlice, bSlice []byte) {
-		copy(bSlice, slotSlice)
+		copy(slotSlice, bSlice)
 	}, func(slot int) common.Hash {
 		return common.Hash{}
 	})
@@ -95,7 +95,7 @@ func (s *Storage) ReadBytes() []byte {
 
 func (s *Storage) read(b []byte) {
 	s.do(b, func(slotSlice, bSlice []byte) {
-		copy(slotSlice, bSlice)
+		copy(bSlice, slotSlice)
 	}, func(slot int) common.Hash {
 		return s.statedb.GetState(s.addr, s.slotHash(slot))
 	})
@@ -108,7 +108,7 @@ func (s *Storage) slotHash(slotNumber int) common.Hash {
 }
 
 func (s *Storage) do(b []byte, action func(slotSlice, bSlice []byte), getSlot func(int) common.Hash) {
-	if s.pos >= SlotSize {
+	if s.pos >= SlotSize || len(s.slots) == 0 {
 		s.slots = append(s.slots, getSlot(len(s.slots)))
 		s.pos = 0
 	}
