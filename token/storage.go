@@ -8,21 +8,37 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-const SlotSize = 32
-
 type Storage struct {
 	pos     int
-	slots   []common.Hash
+	slots   map[common.Hash]*common.Hash
 	statedb vm.StateDB
 	addr    common.Address
+
+	slot    *common.Hash
+	addSlot func(func(common.Hash) common.Hash) (common.Hash, *common.Hash)
 }
 
 func NewStorage(tokenAddr common.Address, statedb vm.StateDB) Storage {
-	return Storage{
-		slots:   make([]common.Hash, 0),
+	s := Storage{
+		slots:   make(map[common.Hash]*common.Hash),
 		statedb: statedb,
 		addr:    tokenAddr,
 	}
+
+	slotNumber := 0
+	addSlot := func(getSlot func(common.Hash) common.Hash) (common.Hash, *common.Hash) {
+		hash := common.Hash{}
+		binary.BigEndian.PutUint64(hash[:], uint64(slotNumber))
+		slot := getSlot(hash)
+		s.slots[hash] = &slot
+		s.pos = 0
+
+		slotNumber += 1
+		return hash, &slot
+	}
+	s.addSlot = addSlot
+
+	return s
 }
 
 func (s *Storage) WriteUint8(v uint8) {
@@ -56,7 +72,7 @@ func (s *Storage) Write(b []byte) (int, error) {
 func (s *Storage) write(b []byte) {
 	s.do(b, func(slotSlice, bSlice []byte) {
 		copy(slotSlice, bSlice)
-	}, func(slot int) common.Hash {
+	}, func(common.Hash) common.Hash {
 		return common.Hash{}
 	})
 }
@@ -96,37 +112,30 @@ func (s *Storage) ReadBytes() []byte {
 func (s *Storage) read(b []byte) {
 	s.do(b, func(slotSlice, bSlice []byte) {
 		copy(bSlice, slotSlice)
-	}, func(slot int) common.Hash {
-		return s.statedb.GetState(s.addr, s.slotHash(slot))
+	}, func(hash common.Hash) common.Hash {
+		return s.statedb.GetState(s.addr, hash)
 	})
 }
 
-func (s *Storage) slotHash(slotNumber int) common.Hash {
-	hash := common.Hash{}
-	binary.BigEndian.PutUint64(hash[:], uint64(slotNumber))
-	return hash
-}
-
-func (s *Storage) do(b []byte, action func(slotSlice, bSlice []byte), getSlot func(int) common.Hash) {
-	if s.pos >= SlotSize || len(s.slots) == 0 {
-		s.slots = append(s.slots, getSlot(len(s.slots)))
-		s.pos = 0
+func (s *Storage) do(b []byte, action func(slotSlice, bSlice []byte), getSlot func(common.Hash) common.Hash) {
+	if s.pos >= common.HashLength || len(s.slots) == 0 {
+		_, s.slot = s.addSlot(getSlot)
 	}
 
-	if s.pos+len(b) > SlotSize {
-		size := SlotSize - s.pos
+	if s.pos+len(b) > common.HashLength {
+		size := common.HashLength - s.pos
 		defer s.do(b[size:], action, getSlot)
-		action(s.slots[len(s.slots)-1][s.pos:], b[:size])
+		action(s.slot[s.pos:], b[:size])
 		s.pos += size
 		return
 	}
 
-	action(s.slots[len(s.slots)-1][s.pos:s.pos+len(b)], b)
+	action(s.slot[s.pos:s.pos+len(b)], b)
 	s.pos += len(b)
 }
 
 func (s *Storage) Flush() {
-	for i, slot := range s.slots {
-		s.statedb.SetState(s.addr, s.slotHash(i), slot)
+	for k, v := range s.slots {
+		s.statedb.SetState(s.addr, k, *v)
 	}
 }
