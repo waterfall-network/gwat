@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type Storage struct {
@@ -18,8 +19,8 @@ type Storage struct {
 	addSlot func(func(common.Hash) common.Hash) (common.Hash, *common.Hash)
 }
 
-func NewStorage(tokenAddr common.Address, statedb vm.StateDB) Storage {
-	s := Storage{
+func NewStorage(tokenAddr common.Address, statedb vm.StateDB) *Storage {
+	s := &Storage{
 		slots:   make(map[common.Hash]*common.Hash),
 		statedb: statedb,
 		addr:    tokenAddr,
@@ -39,6 +40,49 @@ func NewStorage(tokenAddr common.Address, statedb vm.StateDB) Storage {
 	s.addSlot = addSlot
 
 	return s
+}
+
+func (s *Storage) ReadMapSlot() common.Hash {
+	hash, _ := s.addSlot(func(hash common.Hash) common.Hash {
+		return common.Hash{}
+	})
+	return hash
+}
+
+func (s *Storage) makeIthSlotGetter(mapSlot common.Hash, key []byte, getSlot func(common.Hash) *common.Hash) func() *common.Hash {
+	var i uint64 = 0
+	getIthSlot := func() *common.Hash {
+		indexBuf := make([]byte, 8)
+		binary.BigEndian.PutUint64(indexBuf, i)
+		hash := common.BytesToHash(crypto.Keccak256(mapSlot[:], key, indexBuf))
+		s.slots[hash] = getSlot(hash)
+		s.pos = 0
+
+		i += 1
+		return s.slots[hash]
+	}
+	return getIthSlot
+}
+
+func (s *Storage) writeToMap(mapSlot common.Hash, key []byte, value []byte) {
+	prevPos := s.pos
+	s.do(value, func(slotSlice, bSlice []byte) {
+		copy(slotSlice, bSlice)
+	}, s.makeIthSlotGetter(mapSlot, key, func(common.Hash) *common.Hash {
+		return &common.Hash{}
+	}))
+	s.pos = prevPos
+}
+
+func (s *Storage) readFromMap(mapSlot common.Hash, key []byte, value []byte) {
+	prevPos := s.pos
+	s.do(value, func(slotSlice, bSlice []byte) {
+		copy(bSlice, slotSlice)
+	}, s.makeIthSlotGetter(mapSlot, key, func(hash common.Hash) *common.Hash {
+		slot := s.statedb.GetState(s.addr, hash)
+		return &slot
+	}))
+	s.pos = prevPos
 }
 
 func (s *Storage) WriteUint8(v uint8) {
@@ -72,8 +116,11 @@ func (s *Storage) Write(b []byte) (int, error) {
 func (s *Storage) write(b []byte) {
 	s.do(b, func(slotSlice, bSlice []byte) {
 		copy(slotSlice, bSlice)
-	}, func(common.Hash) common.Hash {
-		return common.Hash{}
+	}, func() *common.Hash {
+		_, ret := s.addSlot(func(common.Hash) common.Hash {
+			return common.Hash{}
+		})
+		return ret
 	})
 }
 
@@ -112,19 +159,22 @@ func (s *Storage) ReadBytes() []byte {
 func (s *Storage) read(b []byte) {
 	s.do(b, func(slotSlice, bSlice []byte) {
 		copy(bSlice, slotSlice)
-	}, func(hash common.Hash) common.Hash {
-		return s.statedb.GetState(s.addr, hash)
+	}, func() *common.Hash {
+		_, ret := s.addSlot(func(hash common.Hash) common.Hash {
+			return s.statedb.GetState(s.addr, hash)
+		})
+		return ret
 	})
 }
 
-func (s *Storage) do(b []byte, action func(slotSlice, bSlice []byte), getSlot func(common.Hash) common.Hash) {
+func (s *Storage) do(b []byte, action func(slotSlice, bSlice []byte), addSlot func() *common.Hash) {
 	if s.pos >= common.HashLength || len(s.slots) == 0 {
-		_, s.slot = s.addSlot(getSlot)
+		s.slot = addSlot()
 	}
 
 	if s.pos+len(b) > common.HashLength {
 		size := common.HashLength - s.pos
-		defer s.do(b[size:], action, getSlot)
+		defer s.do(b[size:], action, addSlot)
 		action(s.slot[s.pos:], b[:size])
 		s.pos += size
 		return
