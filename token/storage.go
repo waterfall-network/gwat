@@ -39,6 +39,28 @@ func (s *Storage) addSlot(getSlot func(common.Hash) common.Hash) (common.Hash, *
 	return hash, &slot
 }
 
+func (s *Storage) SkipBytes() {
+	l := s.ReadUint64()
+	s.skip(int(l))
+}
+
+func (s *Storage) SkipUint8() {
+	s.skip(1)
+}
+
+func (s *Storage) SkipUint256() {
+	s.skip(32)
+}
+
+func (s *Storage) skip(l int) {
+	s.do(nil, l, func([]byte, []byte) {}, func() *common.Hash {
+		_, ret := s.addSlot(func(hash common.Hash) common.Hash {
+			return s.statedb.GetState(s.addr, hash)
+		})
+		return ret
+	})
+}
+
 func (s *Storage) ReadMapSlot() common.Hash {
 	hash, _ := s.addSlot(func(hash common.Hash) common.Hash {
 		return common.Hash{}
@@ -54,7 +76,7 @@ func (s *Storage) WriteUint256ToMap(mapSlot common.Hash, key []byte, value *big.
 
 func (s *Storage) writeToMap(mapSlot common.Hash, key []byte, value []byte) {
 	prevPos := s.pos
-	s.do(value, func(slotSlice, bSlice []byte) {
+	s.do(value, len(value), func(slotSlice, bSlice []byte) {
 		copy(slotSlice, bSlice)
 	}, s.makeIthSlotGetter(mapSlot, key, func(common.Hash) *common.Hash {
 		return &common.Hash{}
@@ -71,7 +93,7 @@ func (s *Storage) ReadUint256FromMap(mapSlot common.Hash, key []byte) *big.Int {
 
 func (s *Storage) readFromMap(mapSlot common.Hash, key []byte, value []byte) {
 	prevPos := s.pos
-	s.do(value, func(slotSlice, bSlice []byte) {
+	s.do(value, len(value), func(slotSlice, bSlice []byte) {
 		copy(bSlice, slotSlice)
 	}, s.makeIthSlotGetter(mapSlot, key, func(hash common.Hash) *common.Hash {
 		slot := s.statedb.GetState(s.addr, hash)
@@ -124,7 +146,7 @@ func (s *Storage) Write(b []byte) (int, error) {
 }
 
 func (s *Storage) write(b []byte) {
-	s.do(b, func(slotSlice, bSlice []byte) {
+	s.do(b, len(b), func(slotSlice, bSlice []byte) {
 		copy(slotSlice, bSlice)
 	}, func() *common.Hash {
 		_, ret := s.addSlot(func(common.Hash) common.Hash {
@@ -167,7 +189,7 @@ func (s *Storage) ReadBytes() []byte {
 }
 
 func (s *Storage) read(b []byte) {
-	s.do(b, func(slotSlice, bSlice []byte) {
+	s.do(b, len(b), func(slotSlice, bSlice []byte) {
 		copy(bSlice, slotSlice)
 	}, func() *common.Hash {
 		_, ret := s.addSlot(func(hash common.Hash) common.Hash {
@@ -177,21 +199,21 @@ func (s *Storage) read(b []byte) {
 	})
 }
 
-func (s *Storage) do(b []byte, action func(slotSlice, bSlice []byte), addSlot func() *common.Hash) {
+func (s *Storage) do(b []byte, l int, action func(slotSlice, bSlice []byte), addSlot func() *common.Hash) {
 	if s.pos >= common.HashLength || len(s.slots) == 0 {
 		s.slot = addSlot()
 	}
 
-	if s.pos+len(b) > common.HashLength {
+	if s.pos+l > common.HashLength {
 		size := common.HashLength - s.pos
-		defer s.do(b[size:], action, addSlot)
+		defer s.do(b[size:], len(b[size:]), action, addSlot)
 		action(s.slot[s.pos:], b[:size])
 		s.pos += size
 		return
 	}
 
-	action(s.slot[s.pos:s.pos+len(b)], b)
-	s.pos += len(b)
+	action(s.slot[s.pos:s.pos+l], b)
+	s.pos += l
 }
 
 func (s *Storage) Flush() {
