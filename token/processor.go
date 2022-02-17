@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrTokenAlreadyExists = errors.New("token address already exists")
-	ErrTokenNotExists     = errors.New("token doesn't exist")
+	ErrTokenAlreadyExists      = errors.New("token address already exists")
+	ErrTokenNotExists          = errors.New("token doesn't exist")
+	ErrTokenOpStandardNotValid = errors.New("token standard isn't valid for the operation")
 )
 
 type Ref interface {
@@ -96,22 +97,16 @@ type WRC721PropertiesResult struct {
 
 func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())
-	if !p.state.Exist(op.Address()) {
-		log.Error("Token doesn't exist", "address", op.Address())
-		return nil, ErrTokenNotExists
+	storage, err := p.newStorage(op)
+	if err != nil {
+		return nil, err
 	}
 
-	storage := NewStorage(op.Address(), p.state)
-	std := storage.ReadUint16()
-	if std == 0 {
-		log.Error("Token doesn't exist", "address", op.Address(), "std", std)
-		return nil, ErrTokenNotExists
-	}
 	name := storage.ReadBytes()
 	symbol := storage.ReadBytes()
 
 	var r interface{}
-	switch Std(std) {
+	switch op.Standard() {
 	case StdWRC20:
 		decimals := storage.ReadUint8()
 		totalSupply := storage.ReadUint256()
@@ -135,4 +130,39 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	}
 
 	return r, nil
+}
+
+func (p *Processor) transfer(op TransferOperation) ([]byte, error) {
+	log.Info("Transfer token", "address", op.Address(), "to", op.To(), "value", op.Value())
+	_, err := p.newStorage(op)
+	if err != nil {
+		return nil, err
+	}
+
+	switch op.Standard() {
+	case StdWRC20:
+	}
+
+	return nil, err
+}
+
+func (p *Processor) newStorage(op Operation) (*Storage, error) {
+	if !p.state.Exist(op.Address()) {
+		log.Error("Token doesn't exist", "address", op.Address())
+		return nil, ErrTokenNotExists
+	}
+
+	storage := NewStorage(op.Address(), p.state)
+	std := storage.ReadUint16()
+	if std == 0 {
+		log.Error("Token doesn't exist", "address", op.Address(), "std", std)
+		return nil, ErrTokenNotExists
+	}
+	standard := Std(std)
+	if standard != op.Standard() {
+		log.Error("Token standard isn't valid for the operation", "address", op.Address(), "standard", standard, "opStandard", op.Standard())
+		return nil, ErrTokenOpStandardNotValid
+	}
+
+	return storage, nil
 }
