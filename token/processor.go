@@ -14,6 +14,7 @@ var (
 	ErrTokenAlreadyExists      = errors.New("token address already exists")
 	ErrTokenNotExists          = errors.New("token doesn't exist")
 	ErrTokenOpStandardNotValid = errors.New("token standard isn't valid for the operation")
+	ErrNotEnoughBalance        = errors.New("transfer amount exceeds token balance")
 )
 
 type Ref interface {
@@ -41,6 +42,8 @@ func (p *Processor) Call(caller Ref, op Operation) (ret []byte, err error) {
 		if addr, err := p.tokenCreate(caller, v); err == nil {
 			ret = addr.Bytes()
 		}
+	case TransferOperation:
+		ret, err = p.transfer(caller, v)
 	}
 
 	if err != nil {
@@ -65,9 +68,12 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 	switch op.Standard() {
 	case StdWRC20:
 		storage.WriteUint8(op.Decimals())
-		if v, ok := op.TotalSupply(); ok {
-			storage.WriteUint256(v)
-		}
+		v, _ := op.TotalSupply()
+		storage.WriteUint256(v)
+		mapSlot := storage.ReadMapSlot()
+		// Set balance for the caller
+		addr := caller.Address()
+		storage.WriteUint256ToMap(mapSlot, addr[:], v)
 	case StdWRC721:
 		if v, ok := op.BaseURI(); ok {
 			storage.Write(v)
@@ -132,18 +138,44 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	return r, nil
 }
 
-func (p *Processor) transfer(op TransferOperation) ([]byte, error) {
+func (p *Processor) transfer(caller Ref, op TransferOperation) ([]byte, error) {
 	log.Info("Transfer token", "address", op.Address(), "to", op.To(), "value", op.Value())
-	_, err := p.newStorage(op)
+	storage, err := p.newStorage(op)
 	if err != nil {
 		return nil, err
 	}
 
+	value := op.Value()
 	switch op.Standard() {
 	case StdWRC20:
+		// name
+		storage.SkipBytes()
+		// symbol
+		storage.SkipBytes()
+		// decimals
+		storage.SkipUint8()
+		// totalSupply
+		storage.SkipUint256()
+
+		mapSlot := storage.ReadMapSlot()
+
+		fromAddr := caller.Address()
+		fromBalance := storage.ReadUint256FromMap(mapSlot, fromAddr[:])
+
+		if fromBalance.Cmp(value) >= 0 {
+			fromRes := new(big.Int).Sub(fromBalance, value)
+			storage.WriteUint256ToMap(mapSlot, fromAddr[:], fromRes)
+		} else {
+			return nil, ErrNotEnoughBalance
+		}
+
+		toAddr := op.To()
+		toBalance := storage.ReadUint256FromMap(mapSlot, toAddr[:])
+		toRes := new(big.Int).Add(toBalance, value)
+		storage.WriteUint256ToMap(mapSlot, toAddr[:], toRes)
 	}
 
-	return nil, err
+	return value.FillBytes(make([]byte, 32)), nil
 }
 
 func (p *Processor) newStorage(op Operation) (*Storage, error) {
