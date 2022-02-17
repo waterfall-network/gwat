@@ -181,9 +181,9 @@ func (f *Finalizer) isSyncing() bool {
 func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *types.BlockDAG) {
 	bc := f.eth.BlockChain()
 	dag := tips.GetFinalizingDag()
-	finPoints := append(dag.FinalityPoints.Uniq(), dag.Hash)
-	finPoints = finPoints.Difference(common.HashArray{dag.LastFinalizedHash}).Uniq()
-	if len(finPoints) < FinalisationDelaySlots {
+	fpts := append(dag.FinalityPoints.Uniq(), dag.Hash)
+	fpts = fpts.Difference(common.HashArray{dag.LastFinalizedHash}).Uniq()
+	if len(fpts) < FinalisationDelaySlots {
 		return nil, dag
 	}
 
@@ -196,10 +196,15 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 		log.Error("ERROR::syncInsertChain: unsert unloaded block", "err", _err)
 		return nil, dag
 	}
+	finPoints := dag.FinalityPoints.Uniq()
 
 	log.Info("Creator colect finalisation points", "finPoints", finPoints)
 
-	finPoint := finPoints[len(finPoints)-FinalisationDelaySlots]
+	fpIndex := len(finPoints) - FinalisationDelaySlots
+	if fpIndex < 0 {
+		fpIndex = 0
+	}
+	finPoint := finPoints[fpIndex]
 	finOrd := dag.DagChainHashes.Uniq()
 
 	log.Info("Creator select finalisation candidats", "candidats", finOrd)
