@@ -15,38 +15,69 @@ type Storage struct {
 	statedb vm.StateDB
 	addr    common.Address
 
-	slot    *common.Hash
-	addSlot func(func(common.Hash) common.Hash) (common.Hash, *common.Hash)
+	slot       *common.Hash
+	slotNumber uint64
 }
 
 func NewStorage(tokenAddr common.Address, statedb vm.StateDB) *Storage {
-	s := &Storage{
-		slots:   make(map[common.Hash]*common.Hash),
-		statedb: statedb,
-		addr:    tokenAddr,
+	return &Storage{
+		slots:      make(map[common.Hash]*common.Hash),
+		statedb:    statedb,
+		addr:       tokenAddr,
+		slotNumber: 0,
 	}
+}
 
-	slotNumber := 0
-	addSlot := func(getSlot func(common.Hash) common.Hash) (common.Hash, *common.Hash) {
-		hash := common.Hash{}
-		binary.BigEndian.PutUint64(hash[:], uint64(slotNumber))
-		slot := getSlot(hash)
-		s.slots[hash] = &slot
-		s.pos = 0
+func (s *Storage) addSlot(getSlot func(common.Hash) common.Hash) (common.Hash, *common.Hash) {
+	hash := common.Hash{}
+	binary.BigEndian.PutUint64(hash[:], s.slotNumber)
+	slot := getSlot(hash)
+	s.slots[hash] = &slot
+	s.pos = 0
 
-		slotNumber += 1
-		return hash, &slot
-	}
-	s.addSlot = addSlot
-
-	return s
+	s.slotNumber += 1
+	return hash, &slot
 }
 
 func (s *Storage) ReadMapSlot() common.Hash {
 	hash, _ := s.addSlot(func(hash common.Hash) common.Hash {
 		return common.Hash{}
 	})
+	s.pos = common.HashLength
 	return hash
+}
+
+func (s *Storage) WriteUint256ToMap(mapSlot common.Hash, key []byte, value *big.Int) {
+	buf := value.FillBytes(make([]byte, 32))
+	s.writeToMap(mapSlot, key, buf)
+}
+
+func (s *Storage) writeToMap(mapSlot common.Hash, key []byte, value []byte) {
+	prevPos := s.pos
+	s.do(value, func(slotSlice, bSlice []byte) {
+		copy(slotSlice, bSlice)
+	}, s.makeIthSlotGetter(mapSlot, key, func(common.Hash) *common.Hash {
+		return &common.Hash{}
+	}))
+	s.pos = prevPos
+}
+
+func (s *Storage) ReadUint256FromMap(mapSlot common.Hash, key []byte) *big.Int {
+	buf := make([]byte, 32)
+	s.readFromMap(mapSlot, key, buf)
+	v := new(big.Int)
+	return v.SetBytes(buf)
+}
+
+func (s *Storage) readFromMap(mapSlot common.Hash, key []byte, value []byte) {
+	prevPos := s.pos
+	s.do(value, func(slotSlice, bSlice []byte) {
+		copy(bSlice, slotSlice)
+	}, s.makeIthSlotGetter(mapSlot, key, func(hash common.Hash) *common.Hash {
+		slot := s.statedb.GetState(s.addr, hash)
+		return &slot
+	}))
+	s.pos = prevPos
 }
 
 func (s *Storage) makeIthSlotGetter(mapSlot common.Hash, key []byte, getSlot func(common.Hash) *common.Hash) func() *common.Hash {
@@ -62,27 +93,6 @@ func (s *Storage) makeIthSlotGetter(mapSlot common.Hash, key []byte, getSlot fun
 		return s.slots[hash]
 	}
 	return getIthSlot
-}
-
-func (s *Storage) writeToMap(mapSlot common.Hash, key []byte, value []byte) {
-	prevPos := s.pos
-	s.do(value, func(slotSlice, bSlice []byte) {
-		copy(slotSlice, bSlice)
-	}, s.makeIthSlotGetter(mapSlot, key, func(common.Hash) *common.Hash {
-		return &common.Hash{}
-	}))
-	s.pos = prevPos
-}
-
-func (s *Storage) readFromMap(mapSlot common.Hash, key []byte, value []byte) {
-	prevPos := s.pos
-	s.do(value, func(slotSlice, bSlice []byte) {
-		copy(bSlice, slotSlice)
-	}, s.makeIthSlotGetter(mapSlot, key, func(hash common.Hash) *common.Hash {
-		slot := s.statedb.GetState(s.addr, hash)
-		return &slot
-	}))
-	s.pos = prevPos
 }
 
 func (s *Storage) WriteUint8(v uint8) {
