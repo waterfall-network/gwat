@@ -198,8 +198,19 @@ func (s *PublicTokenAPI) TokenBalanceOf(ctx context.Context, tokenAddr common.Ad
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer a token.
 func (s *PublicTokenAPI) Wrc20Transfer(ctx context.Context, tokenAddr common.Address, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
-	log.Info("WRC-20 transfer", "tokenAddr", tokenAddr, "to", to, "value", value.ToInt())
-	return nil, nil
+	v := value.ToInt()
+	op, err := NewTransferOperation(tokenAddr, to, v)
+	if err != nil {
+		log.Error("Can't create a transfer operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token transfer operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc20TransferFrom transfers `value` amount of WRC-20 tokens from address `from` to address `to`.
