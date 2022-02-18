@@ -15,6 +15,7 @@ var (
 	ErrTokenNotExists          = errors.New("token doesn't exist")
 	ErrTokenOpStandardNotValid = errors.New("token standard isn't valid for the operation")
 	ErrNotEnoughBalance        = errors.New("transfer amount exceeds token balance")
+	ErrInsufficientAllowance   = errors.New("insufficient allowance for token")
 )
 
 type Ref interface {
@@ -155,26 +156,81 @@ func (p *Processor) transfer(caller Ref, op TransferOperation) ([]byte, error) {
 		storage.SkipUint8()
 		// totalSupply
 		storage.SkipUint256()
+		// allowances
+		storage.ReadMapSlot()
 
-		mapSlot := storage.ReadMapSlot()
-
-		fromAddr := caller.Address()
-		fromBalance := storage.ReadUint256FromMap(mapSlot, fromAddr[:])
-
-		if fromBalance.Cmp(value) >= 0 {
-			fromRes := new(big.Int).Sub(fromBalance, value)
-			storage.WriteUint256ToMap(mapSlot, fromAddr[:], fromRes)
-		} else {
-			return nil, ErrNotEnoughBalance
+		if err := p.wrc20Transfer(storage, caller.Address(), op.To(), op.Value()); err != nil {
+			return nil, err
 		}
-
-		toAddr := op.To()
-		toBalance := storage.ReadUint256FromMap(mapSlot, toAddr[:])
-		toRes := new(big.Int).Add(toBalance, value)
-		storage.WriteUint256ToMap(mapSlot, toAddr[:], toRes)
 	}
 
 	log.Info("Transfer token", "address", op.Address(), "to", op.To(), "value", op.Value())
+	storage.Flush()
+
+	return value.FillBytes(make([]byte, 32)), nil
+}
+
+func (p *Processor) wrc20Transfer(storage *Storage, from common.Address, to common.Address, value *big.Int) error {
+	mapSlot := storage.ReadMapSlot()
+
+	fromBalance := storage.ReadUint256FromMap(mapSlot, from[:])
+
+	if fromBalance.Cmp(value) >= 0 {
+		fromRes := new(big.Int).Sub(fromBalance, value)
+		storage.WriteUint256ToMap(mapSlot, from[:], fromRes)
+	} else {
+		return ErrNotEnoughBalance
+	}
+
+	toBalance := storage.ReadUint256FromMap(mapSlot, to[:])
+	toRes := new(big.Int).Add(toBalance, value)
+	storage.WriteUint256ToMap(mapSlot, to[:], toRes)
+
+	return nil
+}
+
+func (p *Processor) wrc20SpendAllowance(storage *Storage, owner common.Address, spender common.Address, amount *big.Int) error {
+	mapSlot := storage.ReadMapSlot()
+
+	key := crypto.Keccak256(owner[:], spender[:])
+	currentAllowance := storage.ReadUint256FromMap(mapSlot, key)
+	if currentAllowance.Cmp(amount) >= 0 {
+		allowance := new(big.Int).Sub(currentAllowance, amount)
+		storage.WriteUint256ToMap(mapSlot, key, allowance)
+	} else {
+		return ErrInsufficientAllowance
+	}
+
+	return nil
+}
+
+func (p *Processor) transferFrom(caller Ref, op TransferFromOperation) ([]byte, error) {
+	storage, err := p.newStorage(op)
+	if err != nil {
+		return nil, err
+	}
+
+	value := op.Value()
+	switch op.Standard() {
+	case StdWRC20:
+		// name
+		storage.SkipBytes()
+		// symbol
+		storage.SkipBytes()
+		// decimals
+		storage.SkipUint8()
+		// totalSupply
+		storage.SkipUint256()
+
+		if err := p.wrc20SpendAllowance(storage, op.From(), caller.Address(), op.Value()); err != nil {
+			return nil, err
+		}
+		if err := p.wrc20Transfer(storage, op.From(), op.To(), op.Value()); err != nil {
+			return nil, err
+		}
+	}
+
+	log.Info("Transfer token", "address", op.Address(), "from", op.From(), "to", op.To(), "value", op.Value())
 	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
