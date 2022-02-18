@@ -129,7 +129,8 @@ func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int
 		hashes  []common.Hash
 	)
 	// Construct the key prefix of start point.
-	start, end := headerHashKey(from), headerHashKey(to)
+	//start, end := headerHashKey(from), headerHashKey(to)
+	start, end := finHashByNumberKey(from), finHashByNumberKey(to)
 	it := db.NewIterator(nil, start)
 	defer it.Release()
 
