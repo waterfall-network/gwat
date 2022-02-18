@@ -139,7 +139,6 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 }
 
 func (p *Processor) transfer(caller Ref, op TransferOperation) ([]byte, error) {
-	log.Info("Transfer token", "address", op.Address(), "to", op.To(), "value", op.Value())
 	storage, err := p.newStorage(op)
 	if err != nil {
 		return nil, err
@@ -174,6 +173,9 @@ func (p *Processor) transfer(caller Ref, op TransferOperation) ([]byte, error) {
 		toRes := new(big.Int).Add(toBalance, value)
 		storage.WriteUint256ToMap(mapSlot, toAddr[:], toRes)
 	}
+
+	log.Info("Transfer token", "address", op.Address(), "to", op.To(), "value", op.Value())
+	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
 }

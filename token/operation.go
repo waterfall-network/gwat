@@ -982,5 +982,5 @@ func rlpEncode(op interface{}) ([]byte, error) {
 		}
 	}
 
-	return rlp.EncodeToBytes(op)
+	return rlp.EncodeToBytes(data)
 }
