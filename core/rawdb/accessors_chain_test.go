@@ -261,19 +261,22 @@ func TestCanonicalMappingStorage(t *testing.T) {
 
 	// Create a test canonical number and assinged hash to move around
 	hash, number := common.Hash{0: 0xff}, uint64(314)
-	if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
+	//if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
+	if entry := ReadFinalizedHashByNumber(db, number); entry != (common.Hash{}) {
 		t.Fatalf("Non existent canonical mapping returned: %v", entry)
 	}
 	// Write and verify the TD in the database
-	WriteCanonicalHash(db, hash, number)
-	if entry := ReadCanonicalHash(db, number); entry == (common.Hash{}) {
+	//WriteCanonicalHash(db, hash, number)
+	WriteFinalizedHashNumber(db, hash, number)
+	//if entry := ReadCanonicalHash(db, number); entry == (common.Hash{}) {
+	if entry := ReadFinalizedHashByNumber(db, number); entry == (common.Hash{}) {
 		t.Fatalf("Stored canonical mapping not found")
 	} else if entry != hash {
 		t.Fatalf("Retrieved canonical mapping mismatch: have %v, want %v", entry, hash)
 	}
-	// Delete the TD and verify the execution
-	DeleteCanonicalHash(db, number)
-	if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
+	//DeleteCanonicalHash(db, number)
+	//if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
+	if entry := ReadFinalizedHashByNumber(db, number); entry != (common.Hash{}) {
 		t.Fatalf("Deleted canonical mapping returned: %v", entry)
 	}
 }
@@ -489,7 +492,8 @@ func TestCanonicalHashIteration(t *testing.T) {
 	}
 	// Fill database with testing data.
 	for i := uint64(1); i <= 8; i++ {
-		WriteCanonicalHash(db, common.Hash{}, i)
+		//WriteCanonicalHash(db, common.Hash{}, i)
+		WriteFinalizedHashNumber(db, common.Hash{}, i)
 	}
 	for i, c := range cases {
 		numbers, _ := ReadAllCanonicalHashes(db, c.from, c.to, c.limit)

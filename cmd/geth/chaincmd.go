@@ -402,7 +402,8 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 			if err != nil {
 				return nil, nil, common.Hash{}, err
 			}
-			if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
+			//if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
+			if hash := rawdb.ReadFinalizedHashByNumber(db, uint64(number)); hash != (common.Hash{}) {
 				header = rawdb.ReadHeader(db, hash)
 			} else {
 				return nil, nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)

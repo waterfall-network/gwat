@@ -277,13 +277,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	var txIndexBlock uint64
 
 	if bc.empty() {
-		rawdb.InitDatabaseFromFreezer(bc.db)
-		// If ancient database is not empty, reconstruct all missing
-		// indices in the background.
-		frozen, _ := bc.db.Ancients()
-		if frozen > 0 {
-			txIndexBlock = frozen
-		}
+		////TODO FREEZER TEMPORARY OFF
+		//rawdb.InitDatabaseFromFreezer(bc.db)
+		//// If ancient database is not empty, reconstruct all missing
+		//// indices in the background.
+		//frozen, _ := bc.db.Ancients()
+		//if frozen > 0 {
+		//	txIndexBlock = frozen
+		//}
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
@@ -864,7 +865,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	// ~Add the block to the canonical chain number scheme and mark as the head~
 	// Add the block to the finalized chain number scheme
 	batch := bc.db.NewBatch()
-	rawdb.WriteCanonicalHash(batch, block.Hash(), block.Nr())
+	//rawdb.WriteCanonicalHash(batch, block.Hash(), block.Nr())
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	bc.CacheTransactionLookup(block)
 	//todo ???
@@ -1187,7 +1188,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			if block.Nr() == 0 {
 				continue
 			}
-			rawdb.DeleteCanonicalHash(batch, block.Nr())
+			//rawdb.DeleteCanonicalHash(batch, block.Nr())
 			rawdb.DeleteBlockWithoutNumber(batch, block.Hash())
 		}
 		//todo

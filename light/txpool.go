@@ -269,7 +269,8 @@ func (pool *TxPool) reorgOnNewHead(ctx context.Context, newHeader *types.Header)
 		idx2 := idx - txPermanent
 		if len(pool.mined) > 0 {
 			for i := pool.clearIdx; i < idx2; i++ {
-				hash := rawdb.ReadCanonicalHash(pool.chainDb, i)
+				//hash := rawdb.ReadCanonicalHash(pool.chainDb, i)
+				hash := rawdb.ReadFinalizedHashByNumber(pool.chainDb, i)
 				if list, ok := pool.mined[hash]; ok {
 					hashes := make([]common.Hash, len(list))
 					for i, tx := range list {

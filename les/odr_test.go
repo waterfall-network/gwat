@@ -215,8 +215,9 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 		// Mark this as a helper to put the failures at the correct lines
 		t.Helper()
 
-		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
-			bhash := rawdb.ReadCanonicalHash(server.db, i)
+		for i := uint64(0); i <= server.handler.blockchain.GetLastFinalisedHeader().Nr(); i++ {
+			//bhash := rawdb.ReadCanonicalHash(server.db, i)
+			bhash := rawdb.ReadFinalizedHashByNumber(server.db, i)
 			b1 := fn(light.NoOdr, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
 
 			// Set the timeout as 1 second here, ensure there is enough time

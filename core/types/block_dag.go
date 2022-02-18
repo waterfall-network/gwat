@@ -81,7 +81,7 @@ func (tips Tips) GetOrderedDagChainHashes() common.HashArray {
 		}
 		allHashes = append(allHashesReorg, hashesAdd...)
 	}
-	return allHashes
+	return allHashes.Uniq()
 }
 
 func (tips Tips) GetLowestFinNrDag() *BlockDAG {

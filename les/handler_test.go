@@ -662,7 +662,8 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	msg.Discard()
 
 	// check if their status is included now
-	block1hash := rawdb.ReadCanonicalHash(server.db, 1)
+	//block1hash := rawdb.ReadCanonicalHash(server.db, 1)
+	block1hash := rawdb.ReadFinalizedHashByNumber(server.db, 1)
 	test(tx1, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
 
 	test(tx2, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})

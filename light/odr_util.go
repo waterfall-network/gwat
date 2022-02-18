@@ -37,7 +37,8 @@ var errNonCanonicalHash = errors.New("hash is not currently canonical")
 func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*types.Header, error) {
 	// Try to find it in the local database first.
 	db := odr.Database()
-	hash := rawdb.ReadCanonicalHash(db, number)
+	//hash := rawdb.ReadCanonicalHash(db, number)
+	hash := rawdb.ReadFinalizedHashByNumber(db, number)
 
 	// If there is a canonical hash, there should have a header too.
 	// But if it's pruned, re-fetch from network again.
@@ -97,7 +98,8 @@ func GetHeader(ctx context.Context, odr OdrBackend, hash common.Hash) (*types.He
 
 // GetCanonicalHash retrieves the canonical block hash corresponding to the number.
 func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (common.Hash, error) {
-	hash := rawdb.ReadCanonicalHash(odr.Database(), number)
+	//hash := rawdb.ReadCanonicalHash(odr.Database(), number)
+	hash := rawdb.ReadFinalizedHashByNumber(odr.Database(), number)
 	if hash != (common.Hash{}) {
 		return hash, nil
 	}
@@ -191,7 +193,8 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash) (ty
 		if err != nil {
 			return nil, err
 		}
-		genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
+		//genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
+		genesis := rawdb.ReadFinalizedHashByNumber(odr.Database(), 0)
 		config := rawdb.ReadChainConfig(odr.Database(), genesis)
 
 		if err := receipts.DeriveFields(config, block.Hash(), block.Nr(), block.Transactions()); err != nil {
@@ -252,7 +255,8 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bit uint, sections []uint
 	)
 	blooms, _, sectionHead := odr.BloomTrieIndexer().Sections()
 	for i, section := range sections {
-		sectionHead := rawdb.ReadCanonicalHash(db, (section+1)*odr.IndexerConfig().BloomSize-1)
+		//sectionHead := rawdb.ReadCanonicalHash(db, (section+1)*odr.IndexerConfig().BloomSize-1)
+		sectionHead := rawdb.ReadFinalizedHashByNumber(db, (section+1)*odr.IndexerConfig().BloomSize-1)
 		// If we don't have the canonical hash stored for this section head number,
 		// we'll still look for an entry with a zero sectionHead (we store it with
 		// zero section head too if we don't know it at the time of the retrieval)

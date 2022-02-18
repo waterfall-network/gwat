@@ -32,21 +32,18 @@ import (
 )
 
 func verifyUnbrokenCanonchain(hc *HeaderChain) error {
-	h := hc.CurrentHeader()
+	h := hc.GetLastFinalisedHeader()
 	for {
-		canonHash := rawdb.ReadCanonicalHash(hc.chainDb, h.Number.Uint64())
+		//canonHash := rawdb.ReadCanonicalHash(hc.chainDb, h.Nr())
+		canonHash := rawdb.ReadFinalizedHashByNumber(hc.chainDb, h.Nr())
 		if exp := h.Hash(); canonHash != exp {
 			return fmt.Errorf("Canon hash chain broken, block %d got %x, expected %x",
 				h.Number, canonHash[:8], exp[:8])
 		}
-		// Verify that we have the TD
-		if td := rawdb.ReadTd(hc.chainDb, canonHash, h.Number.Uint64()); td == nil {
-			return fmt.Errorf("Canon TD missing at block %d", h.Number)
-		}
-		if h.Number.Uint64() == 0 {
+		if h.Nr() == 0 {
 			break
 		}
-		h = hc.GetHeader(h.ParentHash, h.Number.Uint64()-1)
+		h = hc.GetHeaderByNumber(h.Nr() - 1)
 	}
 	return nil
 }

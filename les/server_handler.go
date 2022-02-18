@@ -382,10 +382,12 @@ func (h *serverHandler) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 	)
 	switch typ {
 	case htCanonical:
-		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.ChtSize-1)
+		//sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.ChtSize-1)
+		sectionHead := rawdb.ReadFinalizedHashByNumber(h.chainDb, (index+1)*h.server.iConfig.ChtSize-1)
 		root, prefix = light.GetChtRoot(h.chainDb, index, sectionHead), light.ChtTablePrefix
 	case htBloomBits:
-		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.BloomTrieSize-1)
+		//sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.BloomTrieSize-1)
+		sectionHead := rawdb.ReadFinalizedHashByNumber(h.chainDb, (index+1)*h.server.iConfig.BloomTrieSize-1)
 		root, prefix = light.GetBloomTrieRoot(h.chainDb, index, sectionHead), light.BloomTrieTablePrefix
 	}
 	if root == (common.Hash{}) {

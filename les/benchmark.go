@@ -66,7 +66,8 @@ func (b *benchmarkBlockHeaders) init(h *serverHandler, count int) error {
 	if b.byHash {
 		b.hashes = make([]common.Hash, count)
 		for i := range b.hashes {
-			b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(b.offset+rand.Int63n(b.randMax)))
+			//b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(b.offset+rand.Int63n(b.randMax)))
+			b.hashes[i] = rawdb.ReadFinalizedHashByNumber(h.chainDb, uint64(b.offset+rand.Int63n(b.randMax)))
 		}
 	}
 	return nil
@@ -86,10 +87,11 @@ type benchmarkBodiesOrReceipts struct {
 }
 
 func (b *benchmarkBodiesOrReceipts) init(h *serverHandler, count int) error {
-	randMax := h.blockchain.CurrentHeader().Number.Int64() + 1
+	randMax := h.blockchain.GetLastFinalisedHeader().Nr() + 1
 	b.hashes = make([]common.Hash, count)
 	for i := range b.hashes {
-		b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(rand.Int63n(randMax)))
+		//b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(rand.Int63n(randMax)))
+		b.hashes[i] = rawdb.ReadFinalizedHashByNumber(h.chainDb, uint64(rand.Int63n(randMax)))
 	}
 	return nil
 }

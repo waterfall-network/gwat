@@ -363,23 +363,23 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 		switch {
 		case number == nil:
-			log.Error("Current full block number unavailable", "hash", hash)
+			log.Error("Current full block number unavailable", "hash", hash.Hex())
 			backoff = true
 			continue
 
 		case *number < threshold:
-			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", threshold)
+			log.Debug("Current full block not old enough", "number", *number, "hash", hash.Hex(), "delay", threshold)
 			backoff = true
 			continue
 
 		case *number-threshold <= f.frozen:
-			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", f.frozen)
+			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash.Hex(), "frozen", f.frozen)
 			backoff = true
 			continue
 		}
 		head := ReadHeader(nfdb, hash)
 		if head == nil {
-			log.Error("Current full block unavailable", "number", *number, "hash", hash)
+			log.Error("Current full block unavailable", "number", *number, "hash", hash.Hex())
 			backoff = true
 			continue
 		}
@@ -411,7 +411,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			// Always keep the genesis block in active database
 			if first+uint64(i) != 0 {
 				DeleteBlockWithoutNumber(batch, ancients[i])
-				DeleteCanonicalHash(batch, first+uint64(i))
+				//DeleteCanonicalHash(batch, first+uint64(i))
 			}
 		}
 		if err := batch.Write(); err != nil {
@@ -492,7 +492,8 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for ; number <= limit; number++ {
 			// Retrieve all the components of the canonical block.
-			hash := ReadCanonicalHash(nfdb, number)
+			//hash := ReadCanonicalHash(nfdb, number)
+			hash := ReadFinalizedHashByNumber(nfdb, number)
 			if hash == (common.Hash{}) {
 				return fmt.Errorf("canonical hash missing, can't freeze block %d", number)
 			}

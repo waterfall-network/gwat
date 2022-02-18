@@ -164,7 +164,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
 	// Just commit the new block if there is no stored genesis block.
-	stored := rawdb.ReadCanonicalHash(db, 0)
+	//stored := rawdb.ReadCanonicalHash(db, 0)
+	stored := rawdb.ReadFinalizedHashByNumber(db, 0)
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
@@ -181,8 +182,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
-	//header := rawdb.ReadHeader(db, stored, 0)
 	header := rawdb.ReadHeader(db, stored)
+	if header == nil && stored != (common.Hash{}) {
+		log.Crit("Incompatible database structure")
+	}
 
 	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil), nil); err != nil {
 		if genesis == nil {
@@ -324,7 +327,10 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	}
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), nil)
-	rawdb.WriteCanonicalHash(db, block.Hash(), 0)
+
+	//rawdb.WriteCanonicalHash(db, block.Hash(), 0)
+	rawdb.WriteLastCanonicalHash(db, block.Hash())
+
 	rawdb.WriteFinalizedHashNumber(db, block.Hash(), 0)
 	rawdb.WriteLastFinalizedHash(db, block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())

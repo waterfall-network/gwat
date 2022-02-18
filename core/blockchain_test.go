@@ -721,10 +721,12 @@ func TestFastVsFullChains(t *testing.T) {
 
 	// Check that the canonical chains are the same between the databases
 	for i := 0; i < len(blocks)+1; i++ {
-		if fhash, ahash := rawdb.ReadCanonicalHash(fastDb, uint64(i)), rawdb.ReadCanonicalHash(archiveDb, uint64(i)); fhash != ahash {
+		//if fhash, ahash := rawdb.ReadCanonicalHash(fastDb, uint64(i)), rawdb.ReadCanonicalHash(archiveDb, uint64(i)); fhash != ahash {
+		if fhash, ahash := rawdb.ReadFinalizedHashByNumber(fastDb, uint64(i)), rawdb.ReadCanonicalHash(archiveDb, uint64(i)); fhash != ahash {
 			t.Errorf("block #%d: canonical hash mismatch: fastdb %v, archivedb %v", i, fhash, ahash)
 		}
-		if anhash, arhash := rawdb.ReadCanonicalHash(ancientDb, uint64(i)), rawdb.ReadCanonicalHash(archiveDb, uint64(i)); anhash != arhash {
+		//if anhash, arhash := rawdb.ReadCanonicalHash(ancientDb, uint64(i)), rawdb.ReadCanonicalHash(archiveDb, uint64(i)); anhash != arhash {
+		if anhash, arhash := rawdb.ReadFinalizedHashByNumber(ancientDb, uint64(i)), rawdb.ReadCanonicalHash(archiveDb, uint64(i)); anhash != arhash {
 			t.Errorf("block #%d: canonical hash mismatch: ancientdb %v, archivedb %v", i, anhash, arhash)
 		}
 	}
@@ -1258,7 +1260,8 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 
 			// try to retrieve a block by its canonical hash and see if the block data can be retrieved.
 			for {
-				ch := rawdb.ReadCanonicalHash(blockchain.db, block.NumberU64())
+				//ch := rawdb.ReadCanonicalHash(blockchain.db, block.NumberU64())
+				ch := rawdb.ReadFinalizedHashByNumber(blockchain.db, block.Nr())
 				if ch == (common.Hash{}) {
 					continue // busy wait for canonical hash to be written
 				}
@@ -1266,13 +1269,13 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 					t.Errorf("unknown canonical hash, want %s, got %s", block.Hash().Hex(), ch.Hex())
 					return
 				}
-				fb := rawdb.ReadBlock(blockchain.db, ch, block.NumberU64())
+				fb := rawdb.ReadBlock(blockchain.db, ch)
 				if fb == nil {
-					t.Errorf("unable to retrieve block %d for canonical hash: %s", block.NumberU64(), ch.Hex())
+					t.Errorf("unable to retrieve block %d for canonical hash: %s", block.Nr(), ch.Hex())
 					return
 				}
 				if fb.Hash() != block.Hash() {
-					t.Errorf("invalid block hash for block %d, want %s, got %s", block.NumberU64(), block.Hash().Hex(), fb.Hash().Hex())
+					t.Errorf("invalid block hash for block %d, want %s, got %s", block.Nr(), block.Hash().Hex(), fb.Hash().Hex())
 					return
 				}
 				return
@@ -2170,8 +2173,9 @@ func TestTransactionIndices(t *testing.T) {
 			t.Fatalf("Oldest indexded block mismatch, want %d, have %d", *tail, *stored)
 		}
 		if tail != nil {
-			for i := *tail; i <= chain.CurrentBlock().NumberU64(); i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+			for i := *tail; i <= chain.GetLastFinalizedBlock().Nr(); i++ {
+				//block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+				block := rawdb.ReadBlock(chain.db, rawdb.ReadFinalizedHashByNumber(chain.db, i))
 				if block.Transactions().Len() == 0 {
 					continue
 				}
@@ -2182,12 +2186,13 @@ func TestTransactionIndices(t *testing.T) {
 				}
 			}
 			for i := uint64(0); i < *tail; i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+				//block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+				block := rawdb.ReadBlock(chain.db, rawdb.ReadFinalizedHashByNumber(chain.db, i))
 				if block.Transactions().Len() == 0 {
 					continue
 				}
 				for _, tx := range block.Transactions() {
-					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index != nil {
+					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index != (common.Hash{}) {
 						t.Fatalf("Transaction indice should be deleted, number %d hash %s", i, tx.Hash().Hex())
 					}
 				}
@@ -2296,19 +2301,21 @@ func TestSkipStaleTxIndicesInFastSync(t *testing.T) {
 			t.Fatalf("Oldest indexded block mismatch, want %d, have %d", *tail, *stored)
 		}
 		if tail != nil {
-			for i := *tail; i <= chain.CurrentBlock().NumberU64(); i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+			for i := *tail; i <= chain.GetLastFinalizedBlock().Nr(); i++ {
+				//block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+				block := rawdb.ReadBlock(chain.db, rawdb.ReadFinalizedHashByNumber(chain.db, i))
 				if block.Transactions().Len() == 0 {
 					continue
 				}
 				for _, tx := range block.Transactions() {
-					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index == nil {
+					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index == (common.Hash{}) {
 						t.Fatalf("Miss transaction indice, number %d hash %s", i, tx.Hash().Hex())
 					}
 				}
 			}
 			for i := uint64(0); i < *tail; i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+				//block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
+				block := rawdb.ReadBlock(chain.db, rawdb.ReadFinalizedHashByNumber(chain.db, i))
 				if block.Transactions().Len() == 0 {
 					continue
 				}

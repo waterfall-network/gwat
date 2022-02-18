@@ -367,7 +367,8 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		//}
 		if rawdb.ReadFinalizedHashByNumber(hc.chainDb, number) == hash {
 			ancestorHash := rawdb.ReadFinalizedHashByNumber(hc.chainDb, number-ancestor)
-			if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
+			//if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
+			if rawdb.ReadFinalizedHashByNumber(hc.chainDb, number) == hash {
 				number -= ancestor
 				return ancestorHash, number
 			}
@@ -433,7 +434,8 @@ func (hc *HeaderChain) HasHeader(hash common.Hash) bool {
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
-	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
+	//hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
+	hash := rawdb.ReadFinalizedHashByNumber(hc.chainDb, number)
 	if hash == (common.Hash{}) {
 		hash = rawdb.ReadFinalizedHashByNumber(hc.chainDb, number)
 	}
@@ -444,7 +446,8 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 }
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
-	return rawdb.ReadCanonicalHash(hc.chainDb, number)
+	return rawdb.ReadFinalizedHashByNumber(hc.chainDb, number)
+	//return rawdb.ReadCanonicalHash(hc.chainDb, number)
 }
 
 // GetLastFinalisedHeader retrieves the current head header of the canonical chain. The
@@ -774,7 +777,7 @@ func (hc *HeaderChain) SetHead(headHash common.Hash, updateFn UpdateHeadBlocksCa
 				rawdb.DeleteHeader(batch, hash, &num)
 				rawdb.DeleteFinalizedHashNumber(batch, hash, num)
 			}
-			rawdb.DeleteCanonicalHash(batch, num)
+			//rawdb.DeleteCanonicalHash(batch, num)
 		}
 	}
 	// Flush all accumulated deletions.

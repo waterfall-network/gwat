@@ -281,8 +281,9 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	}
 
 	test := func(expFail int) {
-		for i := uint64(0); i <= blockchain.CurrentHeader().Number.Uint64(); i++ {
-			bhash := rawdb.ReadCanonicalHash(sdb, i)
+		for i := uint64(0); i <= blockchain.GetLastFinalisedHeader().Nr(); i++ {
+			//bhash := rawdb.ReadCanonicalHash(sdb, i)
+			bhash := rawdb.ReadFinalizedHashByNumber(sdb, i)
 			b1, err := fn(NoOdr, sdb, blockchain, nil, bhash)
 			if err != nil {
 				t.Fatalf("error in full-node test for block %d: %v", i, err)

@@ -36,7 +36,8 @@ func TestChainIterator(t *testing.T) {
 	to := common.BytesToAddress([]byte{0x11})
 	block = types.NewBlock(&types.Header{Height: uint64(0)}, nil, nil, newHasher()) // Empty genesis block
 	WriteBlock(chainDb, block)
-	WriteCanonicalHash(chainDb, block.Hash(), block.Height())
+	//WriteCanonicalHash(chainDb, block.Hash(), block.Height())
+	WriteFinalizedHashNumber(chainDb, block.Hash(), block.Height())
 	for i := uint64(1); i <= 10; i++ {
 		var tx *types.Transaction
 		if i%2 == 0 {
@@ -62,7 +63,8 @@ func TestChainIterator(t *testing.T) {
 		txs = append(txs, tx)
 		block = types.NewBlock(&types.Header{Height: uint64(i)}, []*types.Transaction{tx}, nil, newHasher())
 		WriteBlock(chainDb, block)
-		WriteCanonicalHash(chainDb, block.Hash(), block.Height())
+		//WriteCanonicalHash(chainDb, block.Hash(), block.Height())
+		WriteFinalizedHashNumber(chainDb, block.Hash(), block.Height())
 	}
 
 	var cases = []struct {
@@ -113,7 +115,7 @@ func TestIndexTransactions(t *testing.T) {
 	// Write empty genesis block
 	block = types.NewBlock(&types.Header{Height: uint64(0)}, nil, nil, newHasher())
 	WriteBlock(chainDb, block)
-	WriteCanonicalHash(chainDb, block.Hash(), block.Height())
+	//WriteCanonicalHash(chainDb, block.Hash(), block.Height())
 	WriteFinalizedHashNumber(chainDb, block.Hash(), block.Height())
 
 	for i := uint64(1); i <= 10; i++ {

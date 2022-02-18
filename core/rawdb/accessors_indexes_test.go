@@ -107,7 +107,8 @@ func TestLookupStorage(t *testing.T) {
 				}
 			}
 			// Insert all the transactions into the database, and verify contents
-			WriteCanonicalHash(db, block.Hash(), block.Nr())
+			//WriteCanonicalHash(db, block.Hash(), block.Nr())
+			WriteFinalizedHashNumber(db, block.Hash(), block.Nr())
 			WriteBlock(db, block)
 			tc.writeTxLookupEntriesByBlock(db, block)
 

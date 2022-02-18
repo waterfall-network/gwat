@@ -31,38 +31,41 @@ import (
 	"math/big"
 )
 
-// ReadCanonicalHash retrieves the hash assigned to a canonical block number.
-func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
-	data, _ := db.Ancient(freezerHashTable, number)
-	if len(data) == 0 {
-		data, _ = db.Get(headerHashKey(number))
-		// In the background freezer is moving data from leveldb to flatten files.
-		// So during the first check for ancient db, the data is not yet in there,
-		// but when we reach into leveldb, the data was already moved. That would
-		// result in a not found error.
-		if len(data) == 0 {
-			data, _ = db.Ancient(freezerHashTable, number)
-		}
-	}
-	if len(data) == 0 {
-		return common.Hash{}
-	}
-	return common.BytesToHash(data)
-}
+//// ReadCanonicalHash retrieves the hash assigned to a canonical block number.
+//func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
+//	data, _ := db.Ancient(freezerHashTable, number)
+//	if len(data) == 0 {
+//
+//		//data, _ = db.Get(headerHashKey(number))
+//		data, _ = db.Get(finHashByNumberKey(number))
+//
+//		// In the background freezer is moving data from leveldb to flatten files.
+//		// So during the first check for ancient db, the data is not yet in there,
+//		// but when we reach into leveldb, the data was already moved. That would
+//		// result in a not found error.
+//		if len(data) == 0 {
+//			data, _ = db.Ancient(freezerHashTable, number)
+//		}
+//	}
+//	if len(data) == 0 {
+//		return common.Hash{}
+//	}
+//	return common.BytesToHash(data)
+//}
 
-// WriteCanonicalHash stores the hash assigned to a canonical block number.
-func WriteCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Put(headerHashKey(number), hash.Bytes()); err != nil {
-		log.Crit("Failed to store number to hash mapping", "err", err)
-	}
-}
+//// WriteCanonicalHash stores the hash assigned to a canonical block number.
+//func WriteCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+//	if err := db.Put(headerHashKey(number), hash.Bytes()); err != nil {
+//		log.Crit("Failed to store number to hash mapping", "err", err)
+//	}
+//}
 
-// DeleteCanonicalHash removes the number to hash canonical mapping.
-func DeleteCanonicalHash(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Delete(headerHashKey(number)); err != nil {
-		log.Crit("Failed to delete number to hash mapping", "err", err)
-	}
-}
+//// DeleteCanonicalHash removes the number to hash canonical mapping.
+//func DeleteCanonicalHash(db ethdb.KeyValueWriter, number uint64) {
+//	if err := db.Delete(headerHashKey(number)); err != nil {
+//		log.Crit("Failed to delete number to hash mapping", "err", err)
+//	}
+//}
 
 // todo iterator
 //// ReadAllHashes retrieves all the hashes assigned to blocks at a certain heights,
@@ -405,7 +408,8 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	data, _ := db.Ancient(freezerBodiesTable, number)
 	if len(data) == 0 {
 		// Need to get the hash
-		data, _ = db.Get(blockBodyKey(ReadCanonicalHash(db, number)))
+		//data, _ = db.Get(blockBodyKey(ReadCanonicalHash(db, number)))
+		data, _ = db.Get(blockBodyKey(ReadFinalizedHashByNumber(db, number)))
 		// In the background freezer is moving data from leveldb to flatten files.
 		// So during the first check for ancient db, the data is not yet in there,
 		// but when we reach into leveldb, the data was already moved. That would

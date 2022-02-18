@@ -94,10 +94,12 @@ func testChainIndexer(t *testing.T, count int) {
 	inject := func(number uint64) {
 		header := &types.Header{Height: number, Number: &number, Extra: big.NewInt(rand.Int63()).Bytes()}
 		if number > 0 {
-			header.ParentHashes[0] = rawdb.ReadCanonicalHash(db, number-1)
+			//header.ParentHashes[0] = rawdb.ReadCanonicalHash(db, number-1)
+			header.ParentHashes[0] = rawdb.ReadFinalizedHashByNumber(db, number-1)
 		}
 		rawdb.WriteHeader(db, header)
-		rawdb.WriteCanonicalHash(db, header.Hash(), number)
+		//rawdb.WriteCanonicalHash(db, header.Hash(), number)
+		rawdb.WriteFinalizedHashNumber(db, header.Hash(), number)
 	}
 	// Start indexer with an already existing chain
 	for i := uint64(0); i <= 100; i++ {
