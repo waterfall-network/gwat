@@ -782,15 +782,19 @@ func (c *Creator) commitNewWork(timestamp int64) {
 			for _, ph := range bl.ParentHashes() {
 				_, _, _, graph, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash())
 				_dag := c.eth.BlockChain().ReadBockDag(ph)
-				//if parent block is finalised
 				if _dag == nil {
 					parentBlock := c.eth.BlockChain().GetBlock(ph)
-					if parentBlock != nil && parentBlock.Number() != nil {
-						_dag = &types.BlockDAG{
-							Hash:   ph,
-							Height: parentBlock.Height(),
-						}
+					if parentBlock == nil {
+						log.Warn("Creator: reorg tips: bad parent in dag", "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
+						continue
 					}
+					////if parent block is finalised
+					//if parentBlock != nil && parentBlock.Number() != nil {
+					_dag = &types.BlockDAG{
+						Hash:   ph,
+						Height: parentBlock.Height(),
+					}
+					//}
 				}
 				_dag.LastFinalizedHash = tip.LastFinalizedHash
 				_dag.LastFinalizedHeight = tip.LastFinalizedHeight
@@ -801,7 +805,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 				tips.Add(_dag)
 			}
 			delete(tips, bl.Hash())
-			log.Info("Creator: reorg tips", "block", bl.Hash().Hex(), "tips", tips.GetHashes())
+			log.Info("Creator: reorg tips", "blHeight", bl.Height(), "blHash", bl.Hash().Hex(), "tips", tips.Print())
 		} else {
 
 		}
