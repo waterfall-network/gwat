@@ -1328,7 +1328,9 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
 
 	// Wait for the remote response to the head fetch
-	number, hash := uint64(0), common.Hash{}
+	// init by genesis
+	hash := d.blockchain.GetHeaderByNumber(0).Hash()
+	number := uint64(0)
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
@@ -1417,7 +1419,8 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 }
 
 func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (commonAncestor uint64, err error) {
-	hash := common.Hash{}
+	// init by genesis
+	hash := d.blockchain.GetHeaderByNumber(0).Hash()
 
 	// Ancestor not found, we need to binary search over our chain
 	start, end := uint64(0), remoteHeight

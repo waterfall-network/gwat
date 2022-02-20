@@ -32,27 +32,9 @@ func MainnetGenesis() string {
 	return ""
 }
 
-// RopstenGenesis returns the JSON spec to use for the Ropsten test network.
-func RopstenGenesis() string {
-	enc, err := json.Marshal(core.DefaultRopstenGenesisBlock())
-	if err != nil {
-		panic(err)
-	}
-	return string(enc)
-}
-
-// RinkebyGenesis returns the JSON spec to use for the Rinkeby test network
-func RinkebyGenesis() string {
-	enc, err := json.Marshal(core.DefaultRinkebyGenesisBlock())
-	if err != nil {
-		panic(err)
-	}
-	return string(enc)
-}
-
-// GoerliGenesis returns the JSON spec to use for the Goerli test network
-func GoerliGenesis() string {
-	enc, err := json.Marshal(core.DefaultGoerliGenesisBlock())
+// WfTestNetGenesis returns the JSON spec to use for the WfTestNet test network
+func WfTestNetGenesis() string {
+	enc, err := json.Marshal(core.DefaultWfTestNetGenesisBlock())
 	if err != nil {
 		panic(err)
 	}

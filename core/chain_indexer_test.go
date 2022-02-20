@@ -231,7 +231,7 @@ func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Heade
 		// Can't use Fatal since this is not the test's goroutine.
 		// Returning error stops the chainIndexer's updateLoop
 		return errors.New("Unexpected call to Process")
-	case b.processCh <- header.Number.Uint64():
+	case b.processCh <- header.Nr():
 	}
 	return nil
 }

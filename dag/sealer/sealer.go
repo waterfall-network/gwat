@@ -38,7 +38,7 @@ const (
 // Sealer proof-of-authority protocol constants.
 var (
 	checkPontSlots = uint64(30000) // Default number of blocks after which to checkpoint and reset the pending votes
-	slotsPerEpoch  = int64(8)      // Default number of blocks after which to checkpoint and reset the pending votes
+	//slotsPerEpoch  = int64(8)      // Default number of blocks after which to checkpoint and reset the pending votes
 
 	extraVanity = 32                     // Fixed number of extra-data prefix bytes reserved for signer vanity
 	extraSeal   = crypto.SignatureLength // Fixed number of extra-data suffix bytes reserved for signer seal

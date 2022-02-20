@@ -174,6 +174,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 			log.Info("Writing custom genesis block")
 		}
 		block, err := genesis.Commit(db)
+		log.Info("Writing custom genesis block >>>>>>>>>>>>>>>>>>", "hash", block.Hash().Hex())
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -250,12 +251,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return g.Config
 	case ghash == params.MainnetGenesisHash:
 		return params.MainnetChainConfig
-	case ghash == params.RopstenGenesisHash:
-		return params.RopstenChainConfig
-	case ghash == params.RinkebyGenesisHash:
-		return params.RinkebyChainConfig
-	case ghash == params.GoerliGenesisHash:
-		return params.GoerliChainConfig
+	case ghash == params.WfTestNetGenesisHash:
+		return params.WfTestNetChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -380,36 +377,47 @@ func DefaultGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultRopstenGenesisBlock returns the Ropsten network genesis block.
-func DefaultRopstenGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:    params.RopstenChainConfig,
-		Nonce:     66,
-		ExtraData: hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:  16777216,
-		Alloc:     decodePrealloc(ropstenAllocData),
-	}
-}
+// DefaultWfTestNetGenesisBlock returns the Ropsten network genesis block.
+func DefaultWfTestNetGenesisBlock() *Genesis {
+	acc1 := common.HexToAddress("e43bb1b64fc7068d313d24d01d8ccca785b22c72")
+	accBalance1 := new(big.Int)
+	accBalance1.SetString("100000000000000000000000000000000000000000000", 10)
 
-// DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
-func DefaultRinkebyGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:    params.RinkebyChainConfig,
-		Timestamp: 1492009146,
-		ExtraData: hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:  4700000,
-		Alloc:     decodePrealloc(rinkebyAllocData),
-	}
-}
+	acc2 := common.HexToAddress("6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d")
+	acc3 := common.HexToAddress("a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
 
-// DefaultGoerliGenesisBlock returns the Görli network genesis block.
-func DefaultGoerliGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:    params.GoerliChainConfig,
-		Timestamp: 1548854791,
-		ExtraData: hexutil.MustDecode("0x22466c6578692069732061207468696e6722202d204166726900000000000000e0a2bd4258d2768837baa26a28fe71dc079f84c70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:  10485760,
-		Alloc:     decodePrealloc(goerliAllocData),
+		Config: params.WfTestNetChainConfig,
+		Nonce:  0,
+		ExtraData: hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000" +
+			"e43bb1b64fc7068d313d24d01d8ccca785b22c72" +
+			"6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d" +
+			"00000000000000000000000000000000000000000000000000000000"),
+		GasLimit: 1200000000,
+
+		Alloc: GenesisAlloc{
+			acc1: GenesisAccount{
+				Code:       nil,
+				Storage:    nil,
+				Balance:    accBalance1,
+				Nonce:      0,
+				PrivateKey: nil,
+			},
+			acc2: GenesisAccount{
+				Code:       nil,
+				Storage:    nil,
+				Balance:    accBalance1,
+				Nonce:      0,
+				PrivateKey: nil,
+			},
+			acc3: GenesisAccount{
+				Code:       nil,
+				Storage:    nil,
+				Balance:    accBalance1,
+				Nonce:      0,
+				PrivateKey: nil,
+			},
+		},
 	}
 }
 

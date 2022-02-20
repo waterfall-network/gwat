@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -324,10 +323,11 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 		//x.Mul(y, x)
 		//x.Add(parent.Difficulty, x)
 
-		// minimum difficulty can ever be (before exponential factor)
-		if x.Cmp(params.MinimumDifficulty) < 0 {
-			x.Set(params.MinimumDifficulty)
-		}
+		//// minimum difficulty can ever be (before exponential factor)
+		//if x.Cmp(params.MinimumDifficulty) < 0 {
+		//	x.Set(params.MinimumDifficulty)
+		//}
+
 		// calculate a fake block number for the ice-age delay
 		// Specification: https://eips.ethereum.org/EIPS/eip-1234
 		fakeBlockNumber := new(big.Int)
@@ -381,10 +381,11 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	//x.Mul(y, x)
 	//x.Add(parent.Difficulty, x)
 
-	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
-	}
+	//// minimum difficulty can ever be (before exponential factor)
+	//if x.Cmp(params.MinimumDifficulty) < 0 {
+	//	x.Set(params.MinimumDifficulty)
+	//}
+
 	// for the exponential factor
 	periodCount := new(big.Int).Add(new(big.Int).SetUint64(parent.Height), big1)
 	periodCount.Div(periodCount, expDiffPeriod)
@@ -404,31 +405,31 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 // block's time and difficulty. The calculation uses the Frontier rules.
 func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	diff := new(big.Int)
-	//adjust := new(big.Int).Div(parent.Difficulty, params.DifficultyBoundDivisor)
-	bigTime := new(big.Int)
-	bigParentTime := new(big.Int)
-
-	bigTime.SetUint64(time)
-	bigParentTime.SetUint64(parent.Time)
-
-	//if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-	//	diff.Add(parent.Difficulty, adjust)
-	//} else {
-	//	diff.Sub(parent.Difficulty, adjust)
+	////adjust := new(big.Int).Div(parent.Difficulty, params.DifficultyBoundDivisor)
+	//bigTime := new(big.Int)
+	//bigParentTime := new(big.Int)
+	//
+	//bigTime.SetUint64(time)
+	//bigParentTime.SetUint64(parent.Time)
+	//
+	////if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+	////	diff.Add(parent.Difficulty, adjust)
+	////} else {
+	////	diff.Sub(parent.Difficulty, adjust)
+	////}
+	//if diff.Cmp(params.MinimumDifficulty) < 0 {
+	//	diff.Set(params.MinimumDifficulty)
 	//}
-	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		diff.Set(params.MinimumDifficulty)
-	}
-
-	periodCount := new(big.Int).Add(new(big.Int).SetUint64(parent.Height), big1)
-	periodCount.Div(periodCount, expDiffPeriod)
-	if periodCount.Cmp(big1) > 0 {
-		// diff = diff + 2^(periodCount - 2)
-		expDiff := periodCount.Sub(periodCount, big2)
-		expDiff.Exp(big2, expDiff, nil)
-		diff.Add(diff, expDiff)
-		diff = math.BigMax(diff, params.MinimumDifficulty)
-	}
+	//
+	//periodCount := new(big.Int).Add(new(big.Int).SetUint64(parent.Height), big1)
+	//periodCount.Div(periodCount, expDiffPeriod)
+	//if periodCount.Cmp(big1) > 0 {
+	//	// diff = diff + 2^(periodCount - 2)
+	//	expDiff := periodCount.Sub(periodCount, big2)
+	//	expDiff.Exp(big2, expDiff, nil)
+	//	diff.Add(diff, expDiff)
+	//	diff = math.BigMax(diff, params.MinimumDifficulty)
+	//}
 	return diff
 }
 
