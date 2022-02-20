@@ -637,7 +637,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	if len(dag) == 1 {
 		// if remote tips set to last finalized block - do same
 		block := d.blockchain.GetBlockByHash(dag[0])
-		if block.Nr() == lastFinNr {
+		if block != nil && block.Nr() == lastFinNr {
 			return d.blockchain.ResetTips()
 		}
 	}
