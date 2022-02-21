@@ -148,6 +148,9 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
+	if err != nil {
+		return nil, err
+	}
 
 	op, err := NewPropertiesOperation(tokenAddr, tokenId.ToInt())
 	if err != nil {
@@ -193,9 +196,29 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 
 // TokenBalanceOf returns the balance of another account with owner address for a WRC-20 token.
 // For WRC-721 token returns the number of NFTs assigned to an owner, possibly zero.
-func (s *PublicTokenAPI) TokenBalanceOf(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address) (*hexutil.Big, error) {
-	log.Info("Token balance of", "tokenAddr", tokenAddr, "ownerAddr", ownerAddr)
-	return nil, nil
+func (s *PublicTokenAPI) TokenBalanceOf(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+	if err != nil {
+		return nil, err
+	}
+
+	op, err := NewBalanceOfOperation(tokenAddr, ownerAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := tp.BalanceOf(op)
+	if err != nil {
+		return nil, err
+	}
+	if err := tpError(); err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Big)(res), nil
 }
 
 // Wrc20Transfer transfers `value` amount of WRC-20 tokens of a caller to address `to`.
