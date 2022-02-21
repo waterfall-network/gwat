@@ -90,7 +90,7 @@ var (
 
 	// WfTestNetChainConfig contains the chain parameters to run a node on the WfTestNet.
 	WfTestNetChainConfig = &ChainConfig{
-		ChainID:        big.NewInt(333777333),
+		ChainID:        big.NewInt(333777444),
 		HomesteadBlock: big.NewInt(0),
 		//DAOForkBlock:   nil,
 		//DAOForkSupport: true,
