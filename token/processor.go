@@ -236,6 +236,37 @@ func (p *Processor) transferFrom(caller Ref, op TransferFromOperation) ([]byte, 
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
+func (p *Processor) approve(caller Ref, op ApproveOperation) ([]byte, error) {
+	storage, err := p.newStorage(op)
+	if err != nil {
+		return nil, err
+	}
+
+	owner := caller.Address()
+	spender := op.Spender()
+	value := op.Value()
+	switch op.Standard() {
+	case StdWRC20:
+		// name
+		storage.SkipBytes()
+		// symbol
+		storage.SkipBytes()
+		// decimals
+		storage.SkipUint8()
+		// totalSupply
+		storage.SkipUint256()
+
+		mapSlot := storage.ReadMapSlot()
+		key := crypto.Keccak256(owner[:], spender[:])
+		storage.WriteUint256ToMap(mapSlot, key, value)
+	}
+
+	log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)
+	storage.Flush()
+
+	return value.FillBytes(make([]byte, 32)), nil
+}
+
 func (p *Processor) newStorage(op Operation) (*Storage, error) {
 	if !p.state.Exist(op.Address()) {
 		log.Error("Token doesn't exist", "address", op.Address())
