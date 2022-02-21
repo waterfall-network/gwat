@@ -267,6 +267,34 @@ func (p *Processor) approve(caller Ref, op ApproveOperation) ([]byte, error) {
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
+func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
+	storage, err := p.newStorage(op)
+	if err != nil {
+		return nil, err
+	}
+
+	var balance *big.Int
+	switch op.Standard() {
+	case StdWRC20:
+		// name
+		storage.SkipBytes()
+		// symbol
+		storage.SkipBytes()
+		// decimals
+		storage.SkipUint8()
+		// totalSupply
+		storage.SkipUint256()
+		// allowances
+		storage.ReadMapSlot()
+
+		mapSlot := storage.ReadMapSlot()
+		owner := op.Owner()
+		balance = storage.ReadUint256FromMap(mapSlot, owner[:])
+	}
+
+	return balance, nil
+}
+
 func (p *Processor) newStorage(op Operation) (*Storage, error) {
 	if !p.state.Exist(op.Address()) {
 		log.Error("Token doesn't exist", "address", op.Address())
