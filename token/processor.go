@@ -75,6 +75,9 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 		storage.WriteUint8(op.Decimals())
 		v, _ := op.TotalSupply()
 		storage.WriteUint256(v)
+		// allowances
+		storage.ReadMapSlot()
+		// balances
 		mapSlot := storage.ReadMapSlot()
 		// Set balance for the caller
 		addr := caller.Address()
@@ -272,13 +275,13 @@ func (p *Processor) approve(caller Ref, op ApproveOperation) ([]byte, error) {
 }
 
 func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
-	storage, err := p.newStorage(op)
+	storage, standard, err := p.newStorageWithoutStdCheck(op)
 	if err != nil {
 		return nil, err
 	}
 
 	var balance *big.Int
-	switch op.Standard() {
+	switch standard {
 	case StdWRC20:
 		// name
 		storage.SkipBytes()
@@ -327,19 +330,28 @@ func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 	return allowance, nil
 }
 
-func (p *Processor) newStorage(op Operation) (*Storage, error) {
+func (p *Processor) newStorageWithoutStdCheck(op Operation) (*Storage, Std, error) {
 	if !p.state.Exist(op.Address()) {
 		log.Error("Token doesn't exist", "address", op.Address())
-		return nil, ErrTokenNotExists
+		return nil, Std(0), ErrTokenNotExists
 	}
 
 	storage := NewStorage(op.Address(), p.state)
 	std := storage.ReadUint16()
 	if std == 0 {
 		log.Error("Token doesn't exist", "address", op.Address(), "std", std)
-		return nil, ErrTokenNotExists
+		return nil, Std(0), ErrTokenNotExists
 	}
-	standard := Std(std)
+
+	return storage, Std(std), nil
+}
+
+func (p *Processor) newStorage(op Operation) (*Storage, error) {
+	storage, standard, err := p.newStorageWithoutStdCheck(op)
+	if err != nil {
+		return nil, err
+	}
+
 	if standard != op.Standard() {
 		log.Error("Token standard isn't valid for the operation", "address", op.Address(), "standard", standard, "opStandard", op.Standard())
 		return nil, ErrTokenOpStandardNotValid
