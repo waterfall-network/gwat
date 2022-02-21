@@ -261,9 +261,29 @@ func (s *PublicTokenAPI) Wrc20Approve(ctx context.Context, tokenAddr common.Addr
 }
 
 // Wrc20Allowance returns the amount of WRC-20 tokens which spender is still allowed to withdraw from owner.
-func (s *PublicTokenAPI) Wrc20Allowance(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, spenderAddr common.Address) (*hexutil.Big, error) {
-	log.Info("WRC-20 allowance", "tokenAddr", tokenAddr, "ownerAddr", ownerAddr, "spenderAddr", spenderAddr)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc20Allowance(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, spenderAddr common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+	if err != nil {
+		return nil, err
+	}
+
+	op, err := NewAllowanceOperation(tokenAddr, ownerAddr, spenderAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := tp.Allowance(op)
+	if err != nil {
+		return nil, err
+	}
+	if err := tpError(); err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Big)(res), nil
 }
 
 // Wrc721IsApprovedForAll returns true if an operator is the approved operator of WRC-721 tokens for an owner, false otherwise.
