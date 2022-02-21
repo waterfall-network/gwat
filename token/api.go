@@ -246,8 +246,19 @@ func (s *PublicTokenAPI) Wrc20Transfer(ctx context.Context, tokenAddr common.Add
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer a token.
 func (s *PublicTokenAPI) Wrc20TransferFrom(ctx context.Context, tokenAddr common.Address, from common.Address, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
-	log.Info("WRC-20 transfer from", "tokenAddr", tokenAddr, "from", from, "to", to, "value", value.ToInt())
-	return nil, nil
+	v := value.ToInt()
+	op, err := NewTransferFromOperation(StdWRC20, tokenAddr, from, to, v)
+	if err != nil {
+		log.Error("Can't create a transfer from operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token transfer from operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc20Approve allows spender to withdraw WRC-20 tokens from your account multiple times, up to the value amount.

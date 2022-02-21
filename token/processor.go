@@ -45,6 +45,8 @@ func (p *Processor) Call(caller Ref, op Operation) (ret []byte, err error) {
 		}
 	case TransferOperation:
 		ret, err = p.transfer(caller, v)
+	case TransferFromOperation:
+		ret, err = p.transferFrom(caller, v)
 	}
 
 	if err != nil {
