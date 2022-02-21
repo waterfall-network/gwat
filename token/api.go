@@ -111,6 +111,29 @@ func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexut
 	return b, nil
 }
 
+func (s *PublicTokenAPI) newTokenProcessor(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (tp *Processor, cancel context.CancelFunc, tpError func() error, err error) {
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	timeout := s.b.RPCEVMTimeout()
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+
+	tp, tpError, err = s.b.GetTP(ctx, state, header)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return
+}
+
 // TokenProperties returns properties of the token. Returns different structures for WRC-20 and WRC-721 tokens.
 //
 // For a WRC-20 token returns wrc20Properties structure. For a WRC-721 token returns wrc721Properties structure.
@@ -121,28 +144,10 @@ func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexut
 // TokenURI, ownerOf and getApproved are only returned if tokenId parameter is given. Also with tokenId given
 // TokenProperties returns custom metadata field for WRC-721 tokens in the result structure.
 func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.Address, tokenId *hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) (ret interface{}, err error) {
-	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
-
-	// Setup context so it may be cancelled the call has completed
-	// or, in case of unmetered gas, setup a context with a timeout.
-	var cancel context.CancelFunc
-	timeout := s.b.RPCEVMTimeout()
-	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-	} else {
-		ctx, cancel = context.WithCancel(ctx)
-	}
+	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-
-	tp, tpError, err := s.b.GetTP(ctx, state, header)
-	if err != nil {
-		return nil, err
-	}
 
 	op, err := NewPropertiesOperation(tokenAddr, tokenId.ToInt())
 	if err != nil {
