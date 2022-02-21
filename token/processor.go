@@ -295,6 +295,34 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 	return balance, nil
 }
 
+func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
+	storage, err := p.newStorage(op)
+	if err != nil {
+		return nil, err
+	}
+
+	var allowance *big.Int
+	switch op.Standard() {
+	case StdWRC20:
+		// name
+		storage.SkipBytes()
+		// symbol
+		storage.SkipBytes()
+		// decimals
+		storage.SkipUint8()
+		// totalSupply
+		storage.SkipUint256()
+
+		mapSlot := storage.ReadMapSlot()
+		owner := op.Owner()
+		spender := op.Spender()
+		key := crypto.Keccak256(owner[:], spender[:])
+		allowance = storage.ReadUint256FromMap(mapSlot, key)
+	}
+
+	return allowance, nil
+}
+
 func (p *Processor) newStorage(op Operation) (*Storage, error) {
 	if !p.state.Exist(op.Address()) {
 		log.Error("Token doesn't exist", "address", op.Address())
