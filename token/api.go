@@ -143,7 +143,7 @@ func (s *PublicTokenAPI) newTokenProcessor(ctx context.Context, blockNrOrHash rp
 // It also implements view functions of EIP-721: name, symbol, tokenURI, ownerOf, getApproved.
 // TokenURI, ownerOf and getApproved are only returned if tokenId parameter is given. Also with tokenId given
 // TokenProperties returns custom metadata field for WRC-721 tokens in the result structure.
-func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.Address, tokenId *hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) (ret interface{}, err error) {
+func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.Address, blockNrOrHash rpc.BlockNumberOrHash, tokenId *hexutil.Big) (ret interface{}, err error) {
 	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
