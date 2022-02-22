@@ -944,43 +944,48 @@ func rlpEncode(op interface{}) ([]byte, error) {
 
 	re := regexp.MustCompile(`^(.*)Address$`)
 
-	for i := 0; i < opType.NumField(); i++ {
-		f := opType.Field(i)
-		// There are only embedded structures with one field in the package
-		if f.Anonymous {
-			f = f.Type.Field(0)
-		}
+	var fillData func(reflect.Type, reflect.Value)
+	fillData = func(t reflect.Type, v reflect.Value) {
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
 
-		var name string = ""
-		switch f.Name {
-		case "Std":
-			name = f.Name
-		case "Id":
-			name = "TokenId"
-		case "TokenValue":
-			name = "Value"
-		case "TokenAddress":
-			name = "Address"
-		case "metadata":
-			name = "Data"
-		case "data":
-			name = "Data"
-		case "isApproved":
-			name = "IsApproved"
-		case "index":
-			name = "Index"
-		default:
-			if re.MatchString(f.Name) {
-				name = re.ReplaceAllString(f.Name, "$1")
+			// If the field is embedded then traverse all fields in the field recursively
+			if f.Anonymous && f.Type.Kind() == reflect.Struct {
+				fillData(f.Type, v.FieldByName(f.Name))
 			}
-		}
 
-		if name != "" {
-			dv := dataValue.FieldByName(name)
-			ov := opValue.FieldByName(f.Name)
-			dv.Set(ov)
+			var name string = ""
+			switch f.Name {
+			case "Std":
+				name = f.Name
+			case "Id":
+				name = "TokenId"
+			case "TokenValue":
+				name = "Value"
+			case "TokenAddress":
+				name = "Address"
+			case "metadata":
+				name = "Data"
+			case "data":
+				name = "Data"
+			case "isApproved":
+				name = "IsApproved"
+			case "index":
+				name = "Index"
+			default:
+				if re.MatchString(f.Name) {
+					name = re.ReplaceAllString(f.Name, "$1")
+				}
+			}
+
+			if name != "" {
+				dv := dataValue.FieldByName(name)
+				ov := opValue.FieldByName(f.Name)
+				dv.Set(ov)
+			}
 		}
 	}
 
+	fillData(opType, opValue)
 	return rlp.EncodeToBytes(data)
 }
