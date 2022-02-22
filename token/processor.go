@@ -43,10 +43,10 @@ func (p *Processor) Call(caller Ref, op Operation) (ret []byte, err error) {
 		if addr, err := p.tokenCreate(caller, v); err == nil {
 			ret = addr.Bytes()
 		}
-	case TransferOperation:
-		ret, err = p.transfer(caller, v)
 	case TransferFromOperation:
 		ret, err = p.transferFrom(caller, v)
+	case TransferOperation:
+		ret, err = p.transfer(caller, v)
 	case ApproveOperation:
 		ret, err = p.approve(caller, v)
 	}
