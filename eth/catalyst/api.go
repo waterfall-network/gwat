@@ -192,7 +192,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 
 		case core.ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
 			txHeap.Shift()
 
 		case core.ErrNonceTooHigh:

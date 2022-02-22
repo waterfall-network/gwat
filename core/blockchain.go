@@ -2462,7 +2462,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 
 		case errors.Is(err, ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
 			//txs.Shift()
 
 		case errors.Is(err, ErrNonceTooHigh):
