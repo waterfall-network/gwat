@@ -225,9 +225,9 @@ func (s *PublicTokenAPI) TokenBalanceOf(ctx context.Context, tokenAddr common.Ad
 //
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer a token.
-func (s *PublicTokenAPI) Wrc20Transfer(ctx context.Context, tokenAddr common.Address, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc20Transfer(ctx context.Context, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
 	v := value.ToInt()
-	op, err := NewTransferOperation(tokenAddr, to, v)
+	op, err := NewTransferOperation(to, v)
 	if err != nil {
 		log.Error("Can't create a transfer operation", "err", err)
 		return nil, err
@@ -245,9 +245,9 @@ func (s *PublicTokenAPI) Wrc20Transfer(ctx context.Context, tokenAddr common.Add
 //
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer a token.
-func (s *PublicTokenAPI) Wrc20TransferFrom(ctx context.Context, tokenAddr common.Address, from common.Address, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc20TransferFrom(ctx context.Context, from common.Address, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
 	v := value.ToInt()
-	op, err := NewTransferFromOperation(StdWRC20, tokenAddr, from, to, v)
+	op, err := NewTransferFromOperation(StdWRC20, from, to, v)
 	if err != nil {
 		log.Error("Can't create a transfer from operation", "err", err)
 		return nil, err

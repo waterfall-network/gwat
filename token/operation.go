@@ -297,7 +297,6 @@ func (op *balanceOfOperation) MarshalBinary() ([]byte, error) {
 
 type TransferOperation interface {
 	Operation
-	addresser
 	To() common.Address
 	Value() *big.Int
 }
@@ -321,19 +320,15 @@ func (op *toOperation) To() common.Address {
 
 type transferOperation struct {
 	operation
-	addressOperation
 	valueOperation
 	toOperation
 }
 
-func NewTransferOperation(address common.Address, to common.Address, value *big.Int) (TransferOperation, error) {
-	return newTransferOperation(StdWRC20, address, to, value)
+func NewTransferOperation(to common.Address, value *big.Int) (TransferOperation, error) {
+	return newTransferOperation(StdWRC20, to, value)
 }
 
-func newTransferOperation(standard Std, address common.Address, to common.Address, value *big.Int) (*transferOperation, error) {
-	if address == (common.Address{}) {
-		return nil, ErrNoAddress
-	}
+func newTransferOperation(standard Std, to common.Address, value *big.Int) (*transferOperation, error) {
 	if to == (common.Address{}) {
 		return nil, ErrNoTo
 	}
@@ -343,9 +338,6 @@ func newTransferOperation(standard Std, address common.Address, to common.Addres
 	return &transferOperation{
 		operation: operation{
 			Std: standard,
-		},
-		addressOperation: addressOperation{
-			TokenAddress: address,
 		},
 		toOperation: toOperation{
 			ToAddress: to,
@@ -378,11 +370,11 @@ type transferFromOperation struct {
 	FromAddress common.Address
 }
 
-func NewTransferFromOperation(standard Std, address common.Address, from common.Address, to common.Address, value *big.Int) (TransferFromOperation, error) {
+func NewTransferFromOperation(standard Std, from common.Address, to common.Address, value *big.Int) (TransferFromOperation, error) {
 	if from == (common.Address{}) {
 		return nil, ErrNoFrom
 	}
-	transferOp, err := newTransferOperation(standard, address, to, value)
+	transferOp, err := newTransferOperation(standard, to, value)
 	if err != nil {
 		return nil, err
 	}
@@ -415,8 +407,8 @@ type safeTransferFromOperation struct {
 	data []byte
 }
 
-func NewSafeTransferFromOperation(address common.Address, from common.Address, to common.Address, value *big.Int, data []byte) (SafeTransferFromOperation, error) {
-	transferOp, err := NewTransferFromOperation(StdWRC721, address, from, to, value)
+func NewSafeTransferFromOperation(from common.Address, to common.Address, value *big.Int, data []byte) (SafeTransferFromOperation, error) {
+	transferOp, err := NewTransferFromOperation(StdWRC721, from, to, value)
 	if err != nil {
 		return nil, err
 	}
@@ -443,6 +435,7 @@ func (op *safeTransferFromOperation) MarshalBinary() ([]byte, error) {
 
 type ApproveOperation interface {
 	Operation
+	addresser
 	Spender() common.Address
 	Value() *big.Int
 }

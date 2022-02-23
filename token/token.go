@@ -3,8 +3,6 @@ package token
 import (
 	"encoding"
 	"errors"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -52,7 +50,6 @@ const (
 type Operation interface {
 	OpCode() OpCode
 	Standard() Std
-	Address() common.Address // Token address
 
 	encoding.BinaryUnmarshaler
 	encoding.BinaryMarshaler
