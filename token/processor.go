@@ -35,6 +35,10 @@ func NewProcessor(blockCtx vm.BlockContext, statedb vm.StateDB) *Processor {
 }
 
 func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []byte, err error) {
+	if _, ok := op.(CreateOperation); !ok {
+		nonce := p.state.GetNonce(caller.Address())
+		p.state.SetNonce(caller.Address(), nonce+1)
+	}
 	snapshot := p.state.Snapshot()
 
 	ret = nil
@@ -62,6 +66,10 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 	if p.state.Exist(tokenAddr) {
 		return common.Address{}, ErrTokenAlreadyExists
 	}
+
+	nonce := p.state.GetNonce(caller.Address())
+	p.state.SetNonce(caller.Address(), nonce+1)
+
 	p.state.CreateAccount(tokenAddr)
 	p.state.SetNonce(tokenAddr, 1)
 
