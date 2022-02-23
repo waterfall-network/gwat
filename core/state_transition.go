@@ -335,7 +335,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			if err != nil {
 				return nil, err
 			}
-			ret, vmerr = st.tp.Call(sender, op)
+			ret, vmerr = st.tp.Call(sender, st.to(), op)
 		} else {
 			ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 		}

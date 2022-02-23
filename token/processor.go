@@ -34,7 +34,7 @@ func NewProcessor(blockCtx vm.BlockContext, statedb vm.StateDB) *Processor {
 	}
 }
 
-func (p *Processor) Call(caller Ref, op Operation) (ret []byte, err error) {
+func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []byte, err error) {
 	snapshot := p.state.Snapshot()
 
 	ret = nil
@@ -44,9 +44,9 @@ func (p *Processor) Call(caller Ref, op Operation) (ret []byte, err error) {
 			ret = addr.Bytes()
 		}
 	case TransferFromOperation:
-		ret, err = p.transferFrom(caller, v)
+		ret, err = p.transferFrom(caller, token, v)
 	case TransferOperation:
-		ret, err = p.transfer(caller, v)
+		ret, err = p.transfer(caller, token, v)
 	case ApproveOperation:
 		ret, err = p.approve(caller, v)
 	}
@@ -111,7 +111,7 @@ type WRC721PropertiesResult struct {
 
 func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())
-	storage, err := p.newStorage(op)
+	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
 		return nil, err
 	}
@@ -146,8 +146,12 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	return r, nil
 }
 
-func (p *Processor) transfer(caller Ref, op TransferOperation) ([]byte, error) {
-	storage, err := p.newStorage(op)
+func (p *Processor) transfer(caller Ref, token common.Address, op TransferOperation) ([]byte, error) {
+	if token == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+
+	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +175,7 @@ func (p *Processor) transfer(caller Ref, op TransferOperation) ([]byte, error) {
 		}
 	}
 
-	log.Info("Transfer token", "address", op.Address(), "to", op.To(), "value", op.Value())
+	log.Info("Transfer token", "address", token, "to", op.To(), "value", op.Value())
 	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
@@ -211,8 +215,12 @@ func (p *Processor) wrc20SpendAllowance(storage *Storage, owner common.Address, 
 	return nil
 }
 
-func (p *Processor) transferFrom(caller Ref, op TransferFromOperation) ([]byte, error) {
-	storage, err := p.newStorage(op)
+func (p *Processor) transferFrom(caller Ref, token common.Address, op TransferFromOperation) ([]byte, error) {
+	if token == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+
+	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
 	}
@@ -237,14 +245,14 @@ func (p *Processor) transferFrom(caller Ref, op TransferFromOperation) ([]byte, 
 		}
 	}
 
-	log.Info("Transfer token", "address", op.Address(), "from", op.From(), "to", op.To(), "value", op.Value())
+	log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "value", op.Value())
 	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
 func (p *Processor) approve(caller Ref, op ApproveOperation) ([]byte, error) {
-	storage, err := p.newStorage(op)
+	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +283,7 @@ func (p *Processor) approve(caller Ref, op ApproveOperation) ([]byte, error) {
 }
 
 func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
-	storage, standard, err := p.newStorageWithoutStdCheck(op)
+	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +311,7 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 }
 
 func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
-	storage, err := p.newStorage(op)
+	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
 		return nil, err
 	}
@@ -330,30 +338,30 @@ func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 	return allowance, nil
 }
 
-func (p *Processor) newStorageWithoutStdCheck(op Operation) (*Storage, Std, error) {
-	if !p.state.Exist(op.Address()) {
-		log.Error("Token doesn't exist", "address", op.Address())
+func (p *Processor) newStorageWithoutStdCheck(token common.Address, op Operation) (*Storage, Std, error) {
+	if !p.state.Exist(token) {
+		log.Error("Token doesn't exist", "address", token)
 		return nil, Std(0), ErrTokenNotExists
 	}
 
-	storage := NewStorage(op.Address(), p.state)
+	storage := NewStorage(token, p.state)
 	std := storage.ReadUint16()
 	if std == 0 {
-		log.Error("Token doesn't exist", "address", op.Address(), "std", std)
+		log.Error("Token doesn't exist", "address", token, "std", std)
 		return nil, Std(0), ErrTokenNotExists
 	}
 
 	return storage, Std(std), nil
 }
 
-func (p *Processor) newStorage(op Operation) (*Storage, error) {
-	storage, standard, err := p.newStorageWithoutStdCheck(op)
+func (p *Processor) newStorage(token common.Address, op Operation) (*Storage, error) {
+	storage, standard, err := p.newStorageWithoutStdCheck(token, op)
 	if err != nil {
 		return nil, err
 	}
 
 	if standard != op.Standard() {
-		log.Error("Token standard isn't valid for the operation", "address", op.Address(), "standard", standard, "opStandard", op.Standard())
+		log.Error("Token standard isn't valid for the operation", "address", token, "standard", standard, "opStandard", op.Standard())
 		return nil, ErrTokenOpStandardNotValid
 	}
 
