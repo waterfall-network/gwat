@@ -48,7 +48,7 @@ func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []
 	case TransferOperation:
 		ret, err = p.transfer(caller, token, v)
 	case ApproveOperation:
-		ret, err = p.approve(caller, v)
+		ret, err = p.approve(caller, token, v)
 	}
 
 	if err != nil {
@@ -251,8 +251,12 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op TransferFr
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) approve(caller Ref, op ApproveOperation) ([]byte, error) {
-	storage, err := p.newStorage(op.Address(), op)
+func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperation) ([]byte, error) {
+	if token == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+
+	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
 	}

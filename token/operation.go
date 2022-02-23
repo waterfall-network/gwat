@@ -435,7 +435,6 @@ func (op *safeTransferFromOperation) MarshalBinary() ([]byte, error) {
 
 type ApproveOperation interface {
 	Operation
-	addresser
 	Spender() common.Address
 	Value() *big.Int
 }
@@ -451,15 +450,11 @@ func (op *spenderOperation) Spender() common.Address {
 
 type approveOperation struct {
 	operation
-	addressOperation
 	valueOperation
 	spenderOperation
 }
 
-func NewApproveOperation(address common.Address, spender common.Address, value *big.Int) (ApproveOperation, error) {
-	if address == (common.Address{}) {
-		return nil, ErrNoAddress
-	}
+func NewApproveOperation(spender common.Address, value *big.Int) (ApproveOperation, error) {
 	if spender == (common.Address{}) {
 		return nil, ErrNoSpender
 	}
@@ -469,9 +464,6 @@ func NewApproveOperation(address common.Address, spender common.Address, value *
 	return &approveOperation{
 		operation: operation{
 			Std: StdWRC20,
-		},
-		addressOperation: addressOperation{
-			TokenAddress: address,
 		},
 		valueOperation: valueOperation{
 			TokenValue: value,

@@ -266,9 +266,9 @@ func (s *PublicTokenAPI) Wrc20TransferFrom(ctx context.Context, from common.Addr
 //
 // Returns a raw data with approve operation attributes.
 // Use the raw data in the Data field when sending a transaction to allow spender to withdraw a token.
-func (s *PublicTokenAPI) Wrc20Approve(ctx context.Context, tokenAddr common.Address, spenderAddr common.Address, value hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc20Approve(ctx context.Context, spenderAddr common.Address, value hexutil.Big) (hexutil.Bytes, error) {
 	v := value.ToInt()
-	op, err := NewApproveOperation(tokenAddr, spenderAddr, v)
+	op, err := NewApproveOperation(spenderAddr, v)
 	if err != nil {
 		log.Error("Can't create an approve operation", "err", err)
 		return nil, err
