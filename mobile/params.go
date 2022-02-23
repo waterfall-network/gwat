@@ -32,9 +32,9 @@ func MainnetGenesis() string {
 	return ""
 }
 
-// WfTestNetGenesis returns the JSON spec to use for the WfTestNet test network
-func WfTestNetGenesis() string {
-	enc, err := json.Marshal(core.DefaultWfTestNetGenesisBlock())
+// DevNetGenesis returns the JSON spec to use for the DevNet test network
+func DevNetGenesis() string {
+	enc, err := json.Marshal(core.DefaultDevNetGenesisBlock())
 	if err != nil {
 		panic(err)
 	}

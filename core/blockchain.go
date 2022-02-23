@@ -298,7 +298,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		// rewound point is lower than disk layer.
 		var diskRoot common.Hash
 		if bc.cacheConfig.SnapshotLimit > 0 {
-			diskRoot = rawdb.ReadSnapshotRoot(bc.db)
+			//todo uncomment
+			//diskRoot = rawdb.ReadSnapshotRoot(bc.db)
 		}
 		if diskRoot != (common.Hash{}) {
 			log.Warn("Head state missing, repairing", "number", head.Nr(), "hash", head.Hash().Hex(), "snaproot", diskRoot)
@@ -607,7 +608,12 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 					newHeadBlock = bc.GetBlockByNumber(newHeadBlock.Nr()) // Keep rewinding
 					//TODO fix it
 					if rootNumber == newHeadBlock.Nr() {
-						panic("SetHeadBeyondRoot: cycled")
+
+						newHeadBlock = bc.GetBlockByNumber(newHeadBlock.Nr() - 1)
+
+						log.Debug("=========== DECREMENT ================", "rootNumber", rootNumber, "nr", newHeadBlock.Nr(), "hash", newHeadBlock.Hash().Hex())
+
+						//panic("SetHeadBeyondRoot: cycled")
 					}
 				}
 			}

@@ -120,8 +120,8 @@ func remoteConsole(ctx *cli.Context) error {
 			path = ctx.GlobalString(utils.DataDirFlag.Name)
 		}
 		if path != "" {
-			if ctx.GlobalBool(utils.WfTestNetFlag.Name) {
-				path = filepath.Join(path, "wftestnet")
+			if ctx.GlobalBool(utils.DevNetFlag.Name) {
+				path = filepath.Join(path, "devnet")
 			}
 		}
 		endpoint = fmt.Sprintf("%s/geth.ipc", path)

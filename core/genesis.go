@@ -251,8 +251,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return g.Config
 	case ghash == params.MainnetGenesisHash:
 		return params.MainnetChainConfig
-	case ghash == params.WfTestNetGenesisHash:
-		return params.WfTestNetChainConfig
+	case ghash == params.DevNetGenesisHash:
+		return params.DevNetChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -377,8 +377,8 @@ func DefaultGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultWfTestNetGenesisBlock returns the Ropsten network genesis block.
-func DefaultWfTestNetGenesisBlock() *Genesis {
+// DefaultDevNetGenesisBlock returns the Ropsten network genesis block.
+func DefaultDevNetGenesisBlock() *Genesis {
 	acc1 := common.HexToAddress("e43bb1b64fc7068d313d24d01d8ccca785b22c72")
 	accBalance1 := new(big.Int)
 	accBalance1.SetString("100000000000000000000000000000000000000000000", 10)
@@ -387,7 +387,7 @@ func DefaultWfTestNetGenesisBlock() *Genesis {
 	acc3 := common.HexToAddress("a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
 
 	return &Genesis{
-		Config: params.WfTestNetChainConfig,
+		Config: params.DevNetChainConfig,
 		Nonce:  0,
 		ExtraData: hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000" +
 			"e43bb1b64fc7068d313d24d01d8ccca785b22c72" +

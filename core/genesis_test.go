@@ -34,14 +34,14 @@ func TestDefaultGenesisBlock(t *testing.T) {
 		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
 	}
 
-	block = DefaultWfTestNetGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.WfTestNetGenesisHash {
-		t.Errorf("wrong wf test net genesis hash, got %v, want %v", block.Hash(), params.WfTestNetGenesisHash)
+	block = DefaultDevNetGenesisBlock().ToBlock(nil)
+	if block.Hash() != params.DevNetGenesisHash {
+		t.Errorf("wrong wf test net genesis hash, got %v, want %v", block.Hash(), params.DevNetGenesisHash)
 	}
 }
 
 func TestInvalidCliqueConfig(t *testing.T) {
-	block := DefaultWfTestNetGenesisBlock()
+	block := DefaultDevNetGenesisBlock()
 	block.ExtraData = []byte{}
 	if _, err := block.Commit(nil); err == nil {
 		t.Fatal("Expected error on invalid clique config")
@@ -102,14 +102,14 @@ func TestSetupGenesis(t *testing.T) {
 			wantConfig: customg.Config,
 		},
 		{
-			name: "custom block in DB, genesis == wftestnet",
+			name: "custom block in DB, genesis == devnet",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				customg.MustCommit(db)
-				return SetupGenesisBlock(db, DefaultWfTestNetGenesisBlock())
+				return SetupGenesisBlock(db, DefaultDevNetGenesisBlock())
 			},
-			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.WfTestNetGenesisHash},
-			wantHash:   params.WfTestNetGenesisHash,
-			wantConfig: params.WfTestNetChainConfig,
+			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.DevNetGenesisHash},
+			wantHash:   params.DevNetGenesisHash,
+			wantConfig: params.DevNetChainConfig,
 		},
 		//{
 		//	name: "custom block in DB, genesis == ropsten",
@@ -191,8 +191,8 @@ func TestGenesisHashes(t *testing.T) {
 			hash:    params.MainnetGenesisHash,
 		},
 		{
-			genesis: DefaultWfTestNetGenesisBlock(),
-			hash:    params.WfTestNetGenesisHash,
+			genesis: DefaultDevNetGenesisBlock(),
+			hash:    params.DevNetGenesisHash,
 		},
 	}
 	for i, c := range cases {

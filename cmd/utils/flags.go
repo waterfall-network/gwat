@@ -141,8 +141,8 @@ var (
 		Name:  "mainnet",
 		Usage: "Waterfall mainnet",
 	}
-	WfTestNetFlag = cli.BoolFlag{
-		Name:  "wftestnet",
+	DevNetFlag = cli.BoolFlag{
+		Name:  "devnet",
 		Usage: "Waterfall test network: pre-configured Directed Acyclic Graph (DAG) test network",
 	}
 	DeveloperFlag = cli.BoolFlag{
@@ -777,8 +777,8 @@ var (
 // then a subdirectory of the specified datadir will be used.
 func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.GlobalString(DataDirFlag.Name); path != "" {
-		if ctx.GlobalBool(WfTestNetFlag.Name) {
-			return filepath.Join(path, "wftestnet")
+		if ctx.GlobalBool(DevNetFlag.Name) {
+			return filepath.Join(path, "devnet")
 		}
 		return path
 	}
@@ -826,8 +826,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	switch {
 	case ctx.GlobalIsSet(BootnodesFlag.Name):
 		urls = SplitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
-	case ctx.GlobalBool(WfTestNetFlag.Name):
-		urls = params.WfTestNetBootnodes
+	case ctx.GlobalBool(DevNetFlag.Name):
+		urls = params.DevNetBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1231,8 +1231,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
-	case ctx.GlobalBool(WfTestNetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "wftestnet")
+	case ctx.GlobalBool(DevNetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "devnet")
 	}
 }
 
@@ -1418,7 +1418,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, WfTestNetFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, DevNetFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1556,12 +1556,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
-	case ctx.GlobalBool(WfTestNetFlag.Name):
+	case ctx.GlobalBool(DevNetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 333777444
 		}
-		cfg.Genesis = core.DefaultWfTestNetGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.WfTestNetGenesisHash)
+		cfg.Genesis = core.DefaultDevNetGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.DevNetGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1779,8 +1779,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	switch {
 	case ctx.GlobalBool(MainnetFlag.Name):
 		genesis = core.DefaultGenesisBlock()
-	case ctx.GlobalBool(WfTestNetFlag.Name):
-		genesis = core.DefaultWfTestNetGenesisBlock()
+	case ctx.GlobalBool(DevNetFlag.Name):
+		genesis = core.DefaultDevNetGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}

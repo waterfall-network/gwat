@@ -158,9 +158,9 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
 			return nil, fmt.Errorf("invalid genesis spec: %v", err)
 		}
-		// If we have the WfTestNet testnet, hard code the chain configs too
-		if config.EthereumGenesis == WfTestNetGenesis() {
-			genesis.Config = params.WfTestNetChainConfig
+		// If we have the DevNet testnet, hard code the chain configs too
+		if config.EthereumGenesis == DevNetGenesis() {
+			genesis.Config = params.DevNetChainConfig
 			//todo check it
 			if config.EthereumNetworkID == 1 {
 				config.EthereumNetworkID = 5

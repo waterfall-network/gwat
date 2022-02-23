@@ -28,22 +28,22 @@ import (
 // Genesis hashes to enforce below configs on.
 var (
 	MainnetGenesisHash = common.HexToHash("0xa645b86a27d2fe68737d18013e24855d758a1e165dae0aab689b0279a4e20bd6")
-	// WfTestNetGenesisHash  waterfall test net
-	WfTestNetGenesisHash = common.HexToHash("0x73663054e1ed46d352d4fdd67d3f8f24b371c51dca87f9a06f7e304347f79a73")
+	// DevNetGenesisHash  waterfall test net
+	DevNetGenesisHash = common.HexToHash("0x73663054e1ed46d352d4fdd67d3f8f24b371c51dca87f9a06f7e304347f79a73")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
 var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
-	MainnetGenesisHash:   MainnetTrustedCheckpoint,
-	WfTestNetGenesisHash: WfTestNetTrustedCheckpoint,
+	MainnetGenesisHash: MainnetTrustedCheckpoint,
+	DevNetGenesisHash:  DevNetTrustedCheckpoint,
 }
 
 // CheckpointOracles associates each known checkpoint oracles with the genesis hash of
 // the chain it belongs to.
 var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
-	MainnetGenesisHash:   MainnetCheckpointOracle,
-	WfTestNetGenesisHash: WfTestNetCheckpointOracle,
+	MainnetGenesisHash: MainnetCheckpointOracle,
+	DevNetGenesisHash:  DevNetCheckpointOracle,
 }
 
 var (
@@ -88,8 +88,8 @@ var (
 		Threshold: 2,
 	}
 
-	// WfTestNetChainConfig contains the chain parameters to run a node on the WfTestNet.
-	WfTestNetChainConfig = &ChainConfig{
+	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
+	DevNetChainConfig = &ChainConfig{
 		ChainID:        big.NewInt(333777444),
 		HomesteadBlock: big.NewInt(0),
 		//DAOForkBlock:   nil,
@@ -113,16 +113,16 @@ var (
 		// //Ethash:              new(EthashConfig),
 	}
 
-	// WfTestNetTrustedCheckpoint contains the light client trusted checkpoint for the WfTestNet.
-	WfTestNetTrustedCheckpoint = &TrustedCheckpoint{
+	// DevNetTrustedCheckpoint contains the light client trusted checkpoint for the DevNet.
+	DevNetTrustedCheckpoint = &TrustedCheckpoint{
 		//SectionIndex: 329,
 		//SectionHead:  common.HexToHash("0xe66f7038333a01fb95dc9ea03e5a2bdaf4b833cdcb9e393b9127e013bd64d39b"),
 		//CHTRoot:      common.HexToHash("0x1b0c883338ac0d032122800c155a2e73105fbfebfaa50436893282bc2d9feec5"),
 		//BloomRoot:    common.HexToHash("0x3cc98c88d283bf002378246f22c653007655cbcea6ed89f98d739f73bd341a01"),
 	}
 
-	// WfTestNetCheckpointOracle contains a set of configs for the WfTestNet oracle.
-	WfTestNetCheckpointOracle = &CheckpointOracleConfig{
+	// DevNetCheckpointOracle contains a set of configs for the DevNet oracle.
+	DevNetCheckpointOracle = &CheckpointOracleConfig{
 		//Address: common.HexToAddress("0xEF79475013f154E6A65b54cB2742867791bf0B84"),
 		//Signers: []common.Address{
 		//	common.HexToAddress("0x32162F3581E88a5f62e8A61892B42C46E2c18f7b"), // Peter

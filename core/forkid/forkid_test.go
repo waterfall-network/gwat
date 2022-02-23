@@ -69,8 +69,8 @@ func TestCreation(t *testing.T) {
 		},
 		// Mainnet test cases
 		{
-			params.WfTestNetChainConfig,
-			params.WfTestNetGenesisHash,
+			params.DevNetChainConfig,
+			params.DevNetGenesisHash,
 			[]testcase{
 				{0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 0}}, // Unsynced
 			},
