@@ -1103,26 +1103,28 @@ func (c *Creator) getAssignment() Assignment {
 		return *c.cacheAssignment
 	}
 	var (
-		maxEpoch uint64 = 0
-		maxSlot  uint64 = 0
+		lfb      = c.eth.BlockChain().GetLastFinalizedBlock()
+		maxEpoch = lfb.Epoch()
+		maxSlot  = lfb.Slot()
 	)
 	tips := c.eth.BlockChain().GetTips()
 	if len(tips) > 0 {
 		tipsBlocks := c.eth.BlockChain().GetBlocksByHashes(tips.GetHashes())
 		for _, bl := range tipsBlocks {
+			if bl.Coinbase() != c.coinbase {
+				continue
+			}
 			if maxEpoch == 0 || bl.Epoch() > maxEpoch {
 				maxEpoch = bl.Epoch()
 				maxSlot = bl.Slot()
+				continue
 			}
 			if bl.Epoch() == maxEpoch && maxSlot > bl.Slot() {
 				maxEpoch = bl.Epoch()
 				maxSlot = bl.Slot()
+				continue
 			}
 		}
-	} else {
-		bl := c.eth.BlockChain().GetLastFinalizedBlock()
-		maxEpoch = bl.Epoch()
-		maxSlot = bl.Slot()
 	}
 	c.setAssignment(&Assignment{
 		Slot:     maxSlot,
