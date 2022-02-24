@@ -41,8 +41,8 @@ type wrc721Properties struct {
 // wrc20Properties stores results of the following view functions of EIP-20: name, symbol, decimals, totalSupply.
 type wrc20Properties struct {
 	wrc721Properties
-	Decimals    *hexutil.Uint8 `json:"decimals"`
-	TotalSupply *hexutil.Big   `json:"totalSupply"`
+	Decimals    *hexutil.Uint8 `json:"decimals,omitempty"`
+	TotalSupply *hexutil.Big   `json:"totalSupply,omitempty"`
 }
 
 // wrc721ByTokenIdProperties contains Metadata field which is custom field of WRC-721 token.
@@ -66,7 +66,7 @@ type TokenArgs struct {
 	// WRC-20 properties
 	wrc20Properties
 	// WRC-721 properties
-	BaseURI *hexutil.Bytes `json:"baseURI"`
+	BaseURI *hexutil.Bytes `json:"baseURI,omitempty"`
 }
 
 // TokenCreate creates a collection of tokens for a caller. Can be used for creating both WRC-20 and WRC-721 tokens.
@@ -182,13 +182,19 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 	case *WRC721PropertiesResult:
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
-		ret = &wrc721TokenProperties{
-			wrc721Properties{
+		props := struct {
+			wrc721Properties
+			BaseURI hexutil.Bytes `json:"baseURI,omitempty"`
+		}{
+			wrc721Properties: wrc721Properties{
 				Name:   &nameBytes,
 				Symbol: &symbolBytes,
 			},
-			nil,
 		}
+		if len(v.BaseURI) > 0 {
+			props.BaseURI = hexutil.Bytes(v.BaseURI)
+		}
+		ret = props
 	}
 
 	return ret, nil
