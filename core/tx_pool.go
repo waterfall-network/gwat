@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/token"
 )
 
 const (
@@ -634,8 +635,15 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
+
+	// Check if token prefix and opcode are valid in raw data
+	isTokenOp := false
+	if _, err := token.GetOpCode(tx.Data()); err == nil {
+		isTokenOp = true
+	}
+	contractCreation := tx.To() == nil && !isTokenOp
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)
+	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), contractCreation, true, pool.istanbul)
 	if err != nil {
 		return err
 	}
