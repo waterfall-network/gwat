@@ -59,7 +59,7 @@ type wrc721ByTokenIdProperties struct {
 // Properties in the ByTokenId field will not be returned if tokenId isn't given.
 type wrc721TokenProperties struct {
 	wrc721Properties
-	ByTokenId *wrc721ByTokenIdProperties `json:"byTokenId",omitempty`
+	ByTokenId *wrc721ByTokenIdProperties `json:"byTokenId,omitempty"`
 }
 
 type TokenArgs struct {
