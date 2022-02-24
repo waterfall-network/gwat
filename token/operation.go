@@ -197,7 +197,6 @@ func (a *addressOperation) Address() common.Address {
 }
 
 type propertiesOperation struct {
-	operation
 	addressOperation
 	Id *big.Int
 }
@@ -206,19 +205,16 @@ func NewPropertiesOperation(address common.Address, tokenId *big.Int) (Propertie
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
 	}
-	var standard Std = StdWRC20
-	if tokenId != nil {
-		standard = StdWRC721
-	}
 	return &propertiesOperation{
-		operation: operation{
-			Std: standard,
-		},
 		addressOperation: addressOperation{
 			TokenAddress: address,
 		},
 		Id: tokenId,
 	}, nil
+}
+
+func (op *propertiesOperation) Standard() Std {
+	return 0
 }
 
 func (op *propertiesOperation) UnmarshalBinary(b []byte) error {

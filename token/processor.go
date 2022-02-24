@@ -119,7 +119,7 @@ type WRC721PropertiesResult struct {
 
 func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())
-	storage, err := p.newStorage(op.Address(), op)
+	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	symbol := storage.ReadBytes()
 
 	var r interface{}
-	switch op.Standard() {
+	switch standard {
 	case StdWRC20:
 		decimals := storage.ReadUint8()
 		totalSupply := storage.ReadUint256()
