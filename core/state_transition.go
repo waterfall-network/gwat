@@ -290,15 +290,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
 
-	// /////////////////TODO
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockHeight)
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockHeight)
 	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockHeight)
-	contractCreation := msg.To() == nil
-	// /////////////////TODO
-	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
-	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
-	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
 
 	// Check if token prefix and opcode are valid in raw data
 	isTokenOp := false

@@ -18,7 +18,6 @@ package core
 
 import (
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -78,11 +77,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.Prepare(tx.Hash(), i)
-		// TODO !!!!!!!!!!!!!!!!!!!!!!!
-		receipt, err,_ := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockHash, tx, usedGas, vmenv)
-		receipt, err,_:= applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, tokenProcessor)
-		// TODO !!!!!!!!!!!!!!!!!!!!!!!
-		receipt, err, _ := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockHash, tx, usedGas, vmenv)
+		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockHash, tx, usedGas, vmenv, tokenProcessor)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -95,9 +90,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
-// TODO !!!!!!!!!!!!!!!!!!!!!!!
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, tokenProcessor *token.Processor) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, tokenProcessor *token.Processor) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -157,10 +150,6 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 
-		// TODO !!!!!!!!!!!!!!!!!!!!!!!
-		tokenProcessor := token.NewProcessor(blockContext, statedb)
-		return applyTransaction(msg, config, bc, author, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv, tokenProcessor)
-
-		return applyTransaction(msg, config, bc, author, gp, statedb, header.Hash(), tx, usedGas, vmenv)
-
+	tokenProcessor := token.NewProcessor(blockContext, statedb)
+	return applyTransaction(msg, config, bc, author, gp, statedb, header.Hash(), tx, usedGas, vmenv, tokenProcessor)
 }
