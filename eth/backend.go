@@ -56,6 +56,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/token"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -299,6 +300,9 @@ func (s *Ethereum) APIs() []rpc.API {
 
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+
+	// Append token APIs
+	apis = append(apis, token.GetAPIs(s.APIBackend)...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{

@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/token"
 )
 
 type LesApiBackend struct {
@@ -189,6 +190,11 @@ func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
 	return vm.NewEVM(context, txContext, state, b.eth.chainConfig, *vmConfig), state.Error, nil
+}
+
+func (b *LesApiBackend) GetTP(ctx context.Context, state *state.StateDB, header *types.Header) (*token.Processor, func() error, error) {
+	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
+	return token.NewProcessor(context, state), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
