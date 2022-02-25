@@ -59,6 +59,7 @@ type wrc721ByTokenIdProperties struct {
 // Properties in the ByTokenId field will not be returned if tokenId isn't given.
 type wrc721TokenProperties struct {
 	wrc721Properties
+	BaseURI   *hexutil.Bytes             `json:"baseURI,omitempty"`
 	ByTokenId *wrc721ByTokenIdProperties `json:"byTokenId,omitempty"`
 }
 
@@ -182,18 +183,30 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 	case *WRC721PropertiesResult:
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
-		props := struct {
-			wrc721Properties
-			BaseURI hexutil.Bytes `json:"baseURI,omitempty"`
-		}{
+
+		props := &wrc721TokenProperties{
 			wrc721Properties: wrc721Properties{
 				Name:   &nameBytes,
 				Symbol: &symbolBytes,
 			},
 		}
 		if len(v.BaseURI) > 0 {
-			props.BaseURI = hexutil.Bytes(v.BaseURI)
+			baseURIBytes := hexutil.Bytes(v.BaseURI)
+			props.BaseURI = &baseURIBytes
 		}
+
+		if tokenId != nil {
+			tokenURIBytes := hexutil.Bytes(v.TokenURI)
+			metadataBytes := hexutil.Bytes(v.Metadata)
+
+			props.ByTokenId = &wrc721ByTokenIdProperties{
+				TokenURI:    &tokenURIBytes,
+				OwnerOf:     &v.OwnerOf,
+				GetApproved: &v.GetApproved,
+				Metadata:    &metadataBytes,
+			}
+		}
+
 		ret = props
 	}
 
