@@ -648,7 +648,6 @@ func (op *setApprovalForAllOperation) MarshalBinary() ([]byte, error) {
 
 type MintOperation interface {
 	Operation
-	addresser
 	To() common.Address
 	TokenId() *big.Int
 	Metadata() ([]byte, bool)
@@ -664,16 +663,12 @@ func (op *tokenIdOperation) TokenId() *big.Int {
 
 type mintOperation struct {
 	operation
-	addressOperation
 	toOperation
 	tokenIdOperation
-	metadata []byte
+	TokenMetadata []byte
 }
 
-func NewMintOperation(address common.Address, to common.Address, tokenId *big.Int, metadata []byte) (MintOperation, error) {
-	if address == (common.Address{}) {
-		return nil, ErrNoAddress
-	}
+func NewMintOperation(to common.Address, tokenId *big.Int, metadata []byte) (MintOperation, error) {
 	if to == (common.Address{}) {
 		return nil, ErrNoTo
 	}
@@ -684,16 +679,13 @@ func NewMintOperation(address common.Address, to common.Address, tokenId *big.In
 		operation: operation{
 			Std: StdWRC721,
 		},
-		addressOperation: addressOperation{
-			TokenAddress: address,
-		},
 		toOperation: toOperation{
 			ToAddress: to,
 		},
 		tokenIdOperation: tokenIdOperation{
 			Id: tokenId,
 		},
-		metadata: metadata,
+		TokenMetadata: metadata,
 	}, nil
 }
 
@@ -702,10 +694,10 @@ func (op *mintOperation) OpCode() OpCode {
 }
 
 func (op *mintOperation) Metadata() ([]byte, bool) {
-	if len(op.metadata) == 0 {
+	if len(op.TokenMetadata) == 0 {
 		return nil, false
 	}
-	return makeCopy(op.metadata), true
+	return makeCopy(op.TokenMetadata), true
 }
 
 func (op *mintOperation) UnmarshalBinary(b []byte) error {
@@ -908,7 +900,7 @@ func rlpDecode(b []byte, op interface{}) error {
 	case *setApprovalForAllOperation:
 		v.isApproved = data.IsApproved
 	case *mintOperation:
-		v.metadata = data.Data
+		v.TokenMetadata = data.Data
 	case *tokenOfOwnerByIndexOperation:
 		v.index = data.Index
 	}
@@ -933,6 +925,7 @@ func rlpEncode(op interface{}) ([]byte, error) {
 			// If the field is embedded then traverse all fields in the field recursively
 			if f.Anonymous && f.Type.Kind() == reflect.Struct {
 				fillData(f.Type, v.FieldByName(f.Name))
+				continue
 			}
 
 			var name string = ""
@@ -945,7 +938,7 @@ func rlpEncode(op interface{}) ([]byte, error) {
 				name = "Value"
 			case "TokenAddress":
 				name = "Address"
-			case "metadata":
+			case "TokenMetadata":
 				name = "Data"
 			case "data":
 				name = "Data"

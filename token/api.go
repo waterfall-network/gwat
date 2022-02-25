@@ -362,9 +362,25 @@ func (s *PublicTokenAPI) Wrc721SetApprovalForAll(ctx context.Context, tokenAddr 
 //
 // Returns a raw data with mint operation attributes.
 // Use the raw data in the Data field when sending a transaction to mint an NFT.
-func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, tokenAddr common.Address, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (hexutil.Bytes, error) {
-	log.Info("WRC-721 mint", "tokenAddr", tokenAddr, "to", to, "tokenId", tokenId, "metadata", metadata)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	var tokenMeta []byte = nil
+	if metadata != nil {
+		tokenMeta = *metadata
+	}
+
+	op, err := NewMintOperation(to, id, tokenMeta)
+	if err != nil {
+		log.Error("Can't create a token mint operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token mint operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721SafeMint safely mints a new token. Reverts if the given token ID already exists.
