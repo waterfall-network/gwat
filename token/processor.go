@@ -16,6 +16,7 @@ var (
 	ErrTokenOpStandardNotValid = errors.New("token standard isn't valid for the operation")
 	ErrNotEnoughBalance        = errors.New("transfer amount exceeds token balance")
 	ErrInsufficientAllowance   = errors.New("insufficient allowance for token")
+	ErrAlreadyMinted           = errors.New("token has already minted")
 )
 
 type Ref interface {
@@ -53,6 +54,8 @@ func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []
 		ret, err = p.transfer(caller, token, v)
 	case ApproveOperation:
 		ret, err = p.approve(caller, token, v)
+	case MintOperation:
+		ret, err = p.mint(caller, token, v)
 	}
 
 	if err != nil {
@@ -93,6 +96,8 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 	case StdWRC721:
 		if v, ok := op.BaseURI(); ok {
 			storage.Write(v)
+		} else {
+			storage.Write([]byte{})
 		}
 	default:
 		return common.Address{}, ErrStandardNotValid
@@ -348,6 +353,46 @@ func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 	}
 
 	return allowance, nil
+}
+
+func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]byte, error) {
+	storage, err := p.newStorage(token, op)
+	if err != nil {
+		return nil, err
+	}
+
+	// name
+	storage.SkipBytes()
+	// symbol
+	storage.SkipBytes()
+	// baseURI
+	storage.SkipBytes()
+
+	owners := storage.ReadMapSlot()
+	balances := storage.ReadMapSlot()
+
+	tokenId := op.TokenId()
+	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+	if owner != (common.Address{}) {
+		return nil, ErrAlreadyMinted
+	}
+
+	to := op.To()
+	balance := storage.ReadUint256FromMap(balances, to[:])
+	newBalance := new(big.Int).Add(balance, big.NewInt(1))
+	storage.WriteUint256ToMap(balances, to[:], newBalance)
+
+	storage.WriteAddressToMap(owners, tokenId.Bytes(), to)
+
+	if tokenMeta, ok := op.Metadata(); ok {
+		metadata := storage.ReadMapSlot()
+		storage.WriteToMap(metadata, tokenId.Bytes(), tokenMeta[:])
+	}
+
+	log.Info("Token mint", "address", token, "to", to, "tokenId", tokenId)
+	storage.Flush()
+
+	return tokenId.Bytes(), nil
 }
 
 func (p *Processor) newStorageWithoutStdCheck(token common.Address, op Operation) (*Storage, Std, error) {

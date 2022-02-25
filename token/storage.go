@@ -71,10 +71,14 @@ func (s *Storage) ReadMapSlot() common.Hash {
 
 func (s *Storage) WriteUint256ToMap(mapSlot common.Hash, key []byte, value *big.Int) {
 	buf := value.FillBytes(make([]byte, 32))
-	s.writeToMap(mapSlot, key, buf)
+	s.WriteToMap(mapSlot, key, buf)
 }
 
-func (s *Storage) writeToMap(mapSlot common.Hash, key []byte, value []byte) {
+func (s *Storage) WriteAddressToMap(mapSlot common.Hash, key []byte, address common.Address) {
+	s.WriteToMap(mapSlot, key, address[:])
+}
+
+func (s *Storage) WriteToMap(mapSlot common.Hash, key []byte, value []byte) {
 	prevPos := s.pos
 	s.do(value, len(value), func(slotSlice, bSlice []byte) {
 		copy(slotSlice, bSlice)
@@ -86,12 +90,18 @@ func (s *Storage) writeToMap(mapSlot common.Hash, key []byte, value []byte) {
 
 func (s *Storage) ReadUint256FromMap(mapSlot common.Hash, key []byte) *big.Int {
 	buf := make([]byte, 32)
-	s.readFromMap(mapSlot, key, buf)
+	s.ReadFromMap(mapSlot, key, buf)
 	v := new(big.Int)
 	return v.SetBytes(buf)
 }
 
-func (s *Storage) readFromMap(mapSlot common.Hash, key []byte, value []byte) {
+func (s *Storage) ReadAddressFromMap(mapSlot common.Hash, key []byte) common.Address {
+	buf := common.Address{}
+	s.ReadFromMap(mapSlot, key, buf[:])
+	return buf
+}
+
+func (s *Storage) ReadFromMap(mapSlot common.Hash, key []byte, value []byte) {
 	prevPos := s.pos
 	s.do(value, len(value), func(slotSlice, bSlice []byte) {
 		copy(bSlice, slotSlice)
