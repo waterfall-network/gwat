@@ -17,6 +17,7 @@ var (
 	ErrNotEnoughBalance        = errors.New("transfer amount exceeds token balance")
 	ErrInsufficientAllowance   = errors.New("insufficient allowance for token")
 	ErrAlreadyMinted           = errors.New("token has already minted")
+	ErrNotMinted               = errors.New("token hasn't been minted")
 )
 
 type Ref interface {
@@ -117,9 +118,13 @@ type WRC20PropertiesResult struct {
 }
 
 type WRC721PropertiesResult struct {
-	Name    []byte
-	Symbol  []byte
-	BaseURI []byte
+	Name        []byte
+	Symbol      []byte
+	BaseURI     []byte
+	TokenURI    []byte
+	OwnerOf     common.Address
+	GetApproved common.Address
+	Metadata    []byte
 }
 
 func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
@@ -147,16 +152,39 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	case StdWRC721:
 		baseURI := storage.ReadBytes()
 
-		r = &WRC721PropertiesResult{
+		props := &WRC721PropertiesResult{
 			Name:    name,
 			Symbol:  symbol,
 			BaseURI: baseURI,
 		}
+		if id, ok := op.TokenId(); ok {
+			props.TokenURI = concatTokenURI(baseURI, id)
+			owners := storage.ReadMapSlot()
+			props.OwnerOf = storage.ReadAddressFromMap(owners, id.Bytes())
+			if props.OwnerOf == (common.Address{}) {
+				return nil, ErrNotMinted
+			}
+			// Temporarly stub for GetApproved
+			props.GetApproved = common.Address{}
+			// Skip balances
+			storage.ReadMapSlot()
+
+			metadata := storage.ReadMapSlot()
+			props.Metadata = storage.ReadBytesFromMap(metadata, id.Bytes())
+		}
+
+		r = props
 	default:
 		return nil, ErrStandardNotValid
 	}
 
 	return r, nil
+}
+
+func concatTokenURI(baseURI []byte, tokenId *big.Int) []byte {
+	delim := byte('/')
+	b := append(baseURI, delim)
+	return append(b, tokenId.Bytes()...)
 }
 
 func (p *Processor) transfer(caller Ref, token common.Address, op TransferOperation) ([]byte, error) {
@@ -386,7 +414,7 @@ func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]
 
 	if tokenMeta, ok := op.Metadata(); ok {
 		metadata := storage.ReadMapSlot()
-		storage.WriteToMap(metadata, tokenId.Bytes(), tokenMeta[:])
+		storage.WriteBytesToMap(metadata, tokenId.Bytes(), tokenMeta[:])
 	}
 
 	log.Info("Token mint", "address", token, "to", to, "tokenId", tokenId)

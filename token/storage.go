@@ -71,45 +71,90 @@ func (s *Storage) ReadMapSlot() common.Hash {
 
 func (s *Storage) WriteUint256ToMap(mapSlot common.Hash, key []byte, value *big.Int) {
 	buf := value.FillBytes(make([]byte, 32))
-	s.WriteToMap(mapSlot, key, buf)
+	s.writeToMap(mapSlot, key, buf)
 }
 
 func (s *Storage) WriteAddressToMap(mapSlot common.Hash, key []byte, address common.Address) {
-	s.WriteToMap(mapSlot, key, address[:])
+	s.writeToMap(mapSlot, key, address[:])
 }
 
-func (s *Storage) WriteToMap(mapSlot common.Hash, key []byte, value []byte) {
+func (s *Storage) writeToMap(mapSlot common.Hash, key []byte, value []byte) {
 	prevPos := s.pos
+	s.writeToMapWithoutPosReset(mapSlot, key, value, s.makeSlotGetterForWriter(mapSlot, key))
+	s.pos = prevPos
+}
+
+func (s *Storage) WriteBytesToMap(mapSlot common.Hash, key []byte, value []byte) {
+	prevPos := s.pos
+	getSlot := s.makeSlotGetterForWriter(mapSlot, key)
+
+	// Write length of byte array
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(len(value)))
+	s.writeToMapWithoutPosReset(mapSlot, key, buf, getSlot)
+
+	s.writeToMapWithoutPosReset(mapSlot, key, value, getSlot)
+	s.pos = prevPos
+}
+
+func (s *Storage) writeToMapWithoutPosReset(mapSlot common.Hash, key []byte, value []byte, getSlot func() *common.Hash) {
 	s.do(value, len(value), func(slotSlice, bSlice []byte) {
 		copy(slotSlice, bSlice)
-	}, s.makeIthSlotGetter(mapSlot, key, func(common.Hash) *common.Hash {
+	}, getSlot)
+}
+
+func (s *Storage) makeSlotGetterForWriter(mapSlot common.Hash, key []byte) func() *common.Hash {
+	return s.makeIthSlotGetter(mapSlot, key, func(hash common.Hash) *common.Hash {
 		return &common.Hash{}
-	}))
-	s.pos = prevPos
+	})
 }
 
 func (s *Storage) ReadUint256FromMap(mapSlot common.Hash, key []byte) *big.Int {
 	buf := make([]byte, 32)
-	s.ReadFromMap(mapSlot, key, buf)
+	s.readFromMap(mapSlot, key, buf)
 	v := new(big.Int)
 	return v.SetBytes(buf)
 }
 
 func (s *Storage) ReadAddressFromMap(mapSlot common.Hash, key []byte) common.Address {
 	buf := common.Address{}
-	s.ReadFromMap(mapSlot, key, buf[:])
+	s.readFromMap(mapSlot, key, buf[:])
 	return buf
 }
 
-func (s *Storage) ReadFromMap(mapSlot common.Hash, key []byte, value []byte) {
+func (s *Storage) ReadBytesFromMap(mapSlot common.Hash, key []byte) []byte {
 	prevPos := s.pos
+	getSlot := s.makeSlotGetterForReader(mapSlot, key)
+
+	// Get length of byte array
+	buf := make([]byte, 8)
+	s.readFromMapWithoutPosReset(mapSlot, key, buf, getSlot)
+	l := binary.BigEndian.Uint64(buf)
+
+	buf = make([]byte, l)
+	s.readFromMapWithoutPosReset(mapSlot, key, buf, getSlot)
+	s.pos = prevPos
+
+	return buf
+}
+
+func (s *Storage) readFromMap(mapSlot common.Hash, key []byte, value []byte) {
+	prevPos := s.pos
+	s.readFromMapWithoutPosReset(mapSlot, key, value, s.makeSlotGetterForReader(mapSlot, key))
+	s.pos = prevPos
+}
+
+func (s *Storage) readFromMapWithoutPosReset(mapSlot common.Hash, key []byte, value []byte, getSlot func() *common.Hash) {
 	s.do(value, len(value), func(slotSlice, bSlice []byte) {
 		copy(bSlice, slotSlice)
-	}, s.makeIthSlotGetter(mapSlot, key, func(hash common.Hash) *common.Hash {
+	}, getSlot)
+}
+
+func (s *Storage) makeSlotGetterForReader(mapSlot common.Hash, key []byte) func() *common.Hash {
+	return s.makeIthSlotGetter(mapSlot, key, func(hash common.Hash) *common.Hash {
 		slot := s.statedb.GetState(s.addr, hash)
 		return &slot
-	}))
-	s.pos = prevPos
+	})
 }
 
 func (s *Storage) makeIthSlotGetter(mapSlot common.Hash, key []byte, getSlot func(common.Hash) *common.Hash) func() *common.Hash {
