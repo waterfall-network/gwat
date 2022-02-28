@@ -322,6 +322,8 @@ func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperatio
 		mapSlot := storage.ReadMapSlot()
 		key := crypto.Keccak256(owner[:], spender[:])
 		storage.WriteUint256ToMap(mapSlot, key, value)
+	case StdWRC721:
+
 	}
 
 	log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)

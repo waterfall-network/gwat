@@ -334,6 +334,29 @@ func (s *PublicTokenAPI) Wrc721IsApprovedForAll(ctx context.Context, tokenAddr c
 	return false, nil
 }
 
+// Wrc721Approve changes or reaffirmes the approved address for an NFT.
+// The zero address indicates there is no approved address.
+// Throws unless the transaction sender is the current NFT owner, or an authorized
+// operator of the current owner.
+//
+// Returns a raw data with mint operation attributes.
+// Use the raw data in the Data field when sending a transaction to approve address for the NFT.
+func (s *PublicTokenAPI) Wrc721Approve(ctx context.Context, approved common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	op, err := NewApproveOperation(StdWRC721, approved, id)
+	if err != nil {
+		log.Error("Can't create a NFT approve operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a NFT approve operation", "err", err)
+		return nil, err
+	}
+	return b, nil
+}
+
 // Wrc721SafeTransferFrom transfers the ownership of a WRC-721 token with given tokenId from one address to another address.
 // Throws unless a caller is the current owner, an authorized operator, or the approved address for this NFT.
 // Throws if `from` is  not the current owner. Throws if `to` is the zero address.
