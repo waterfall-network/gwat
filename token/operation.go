@@ -710,29 +710,21 @@ func (op *mintOperation) MarshalBinary() ([]byte, error) {
 
 type BurnOperation interface {
 	Operation
-	addresser
 	TokenId() *big.Int
 }
 
 type burnOperation struct {
 	operation
-	addressOperation
 	tokenIdOperation
 }
 
-func NewBurnOperation(address common.Address, tokenId *big.Int) (BurnOperation, error) {
-	if address == (common.Address{}) {
-		return nil, ErrNoAddress
-	}
+func NewBurnOperation(tokenId *big.Int) (BurnOperation, error) {
 	if tokenId == nil {
 		return nil, ErrNoTokenId
 	}
 	return &burnOperation{
 		operation: operation{
 			Std: StdWRC721,
-		},
-		addressOperation: addressOperation{
-			TokenAddress: address,
 		},
 		tokenIdOperation: tokenIdOperation{
 			Id: tokenId,

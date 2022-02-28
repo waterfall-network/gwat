@@ -413,9 +413,20 @@ func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, to common.Address, toke
 //
 // Returns a raw data with mint operation attributes.
 // Use the raw data in the Data field when sending a transaction to burn an NFT.
-func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenAddr common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
-	log.Info("WRC-721 burn", "tokenAddr", tokenAddr, "tokenId", tokenId)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenId hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	op, err := NewBurnOperation(id)
+	if err != nil {
+		log.Error("Can't create a token mint operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token mint operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721TokenOfOwnerByIndex enumerates NFTs assigned to an owner.
