@@ -167,13 +167,14 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 			if props.OwnerOf == (common.Address{}) {
 				return nil, ErrNotMinted
 			}
-			// Temporarly stub for GetApproved
-			props.GetApproved = common.Address{}
+
 			// Skip balances
 			storage.ReadMapSlot()
-
 			metadata := storage.ReadMapSlot()
 			props.Metadata = storage.ReadBytesFromMap(metadata, id.Bytes())
+
+			approvals := storage.ReadMapSlot()
+			props.GetApproved = storage.ReadAddressFromMap(approvals, id.Bytes())
 		}
 
 		r = props
@@ -325,7 +326,7 @@ func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperatio
 
 		log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)
 	case StdWRC721:
-		if err := p.wrc721Approve(caller, token, op); err != nil {
+		if err := p.wrc721Approve(storage, caller, op); err != nil {
 			return nil, err
 		}
 		log.Info("Approve to spend an NFT", "owner", owner, "spender", spender, "tokenId", value)
@@ -336,11 +337,8 @@ func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperatio
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) wrc721Approve(caller Ref, token common.Address, op ApproveOperation) error {
-	storage, owners, _, err := p.prepareNftStorage(token, op)
-	if err != nil {
-		return err
-	}
+func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op ApproveOperation) error {
+	owners, _ := p.prepareNftStorage(storage)
 
 	address := caller.Address()
 	tokenId := op.Value()
@@ -418,10 +416,11 @@ func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 }
 
 func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]byte, error) {
-	storage, owners, balances, err := p.prepareNftStorage(token, op)
+	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
 	}
+	owners, balances := p.prepareNftStorage(storage)
 
 	tokenId := op.TokenId()
 	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
@@ -448,10 +447,11 @@ func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]
 }
 
 func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]byte, error) {
-	storage, owners, balances, err := p.prepareNftStorage(token, op)
+	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
 	}
+	owners, balances := p.prepareNftStorage(storage)
 
 	address := caller.Address()
 	tokenId := op.TokenId()
@@ -476,12 +476,7 @@ func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]
 	return tokenId.Bytes(), nil
 }
 
-func (p *Processor) prepareNftStorage(token common.Address, op Operation) (storage *Storage, owners common.Hash, balances common.Hash, err error) {
-	storage, err = p.newStorage(token, op)
-	if err != nil {
-		return nil, common.Hash{}, common.Hash{}, err
-	}
-
+func (p *Processor) prepareNftStorage(storage *Storage) (owners common.Hash, balances common.Hash) {
 	// name
 	storage.SkipBytes()
 	// symbol
