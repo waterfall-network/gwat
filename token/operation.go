@@ -450,7 +450,7 @@ type approveOperation struct {
 	spenderOperation
 }
 
-func NewApproveOperation(spender common.Address, value *big.Int) (ApproveOperation, error) {
+func NewApproveOperation(standard Std, spender common.Address, value *big.Int) (ApproveOperation, error) {
 	if spender == (common.Address{}) {
 		return nil, ErrNoSpender
 	}
@@ -459,7 +459,7 @@ func NewApproveOperation(spender common.Address, value *big.Int) (ApproveOperati
 	}
 	return &approveOperation{
 		operation: operation{
-			Std: StdWRC20,
+			Std: standard,
 		},
 		valueOperation: valueOperation{
 			TokenValue: value,
