@@ -18,6 +18,7 @@ var (
 	ErrInsufficientAllowance   = errors.New("insufficient allowance for token")
 	ErrAlreadyMinted           = errors.New("token has already minted")
 	ErrNotMinted               = errors.New("token hasn't been minted")
+	ErrIncorrectOwner          = errors.New("token isn't owned by the caller")
 )
 
 type Ref interface {
@@ -57,6 +58,8 @@ func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []
 		ret, err = p.approve(caller, token, v)
 	case MintOperation:
 		ret, err = p.mint(caller, token, v)
+	case BurnOperation:
+		ret, err = p.burn(caller, token, v)
 	}
 
 	if err != nil {
@@ -384,20 +387,10 @@ func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 }
 
 func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]byte, error) {
-	storage, err := p.newStorage(token, op)
+	storage, owners, balances, err := p.prepareNftStorage(token, op)
 	if err != nil {
 		return nil, err
 	}
-
-	// name
-	storage.SkipBytes()
-	// symbol
-	storage.SkipBytes()
-	// baseURI
-	storage.SkipBytes()
-
-	owners := storage.ReadMapSlot()
-	balances := storage.ReadMapSlot()
 
 	tokenId := op.TokenId()
 	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
@@ -421,6 +414,53 @@ func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]
 	storage.Flush()
 
 	return tokenId.Bytes(), nil
+}
+
+func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]byte, error) {
+	storage, owners, balances, err := p.prepareNftStorage(token, op)
+	if err != nil {
+		return nil, err
+	}
+
+	address := caller.Address()
+	tokenId := op.TokenId()
+	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+	if owner != address {
+		return nil, ErrIncorrectOwner
+	}
+
+	balance := storage.ReadUint256FromMap(balances, address[:])
+	newBalance := new(big.Int).Sub(balance, big.NewInt(1))
+	storage.WriteUint256ToMap(balances, address[:], newBalance)
+
+	// Empty value for the owner
+	storage.WriteAddressToMap(owners, tokenId.Bytes(), common.Address{})
+	// Empty metadata for the token
+	metadata := storage.ReadMapSlot()
+	storage.WriteBytesToMap(metadata, tokenId.Bytes(), []byte{})
+
+	log.Info("Token burn", "address", token, "tokenId", tokenId)
+	storage.Flush()
+
+	return tokenId.Bytes(), nil
+}
+
+func (p *Processor) prepareNftStorage(token common.Address, op Operation) (storage *Storage, owners common.Hash, balances common.Hash, err error) {
+	storage, err = p.newStorage(token, op)
+	if err != nil {
+		return nil, common.Hash{}, common.Hash{}, err
+	}
+
+	// name
+	storage.SkipBytes()
+	// symbol
+	storage.SkipBytes()
+	// baseURI
+	storage.SkipBytes()
+
+	owners = storage.ReadMapSlot()
+	balances = storage.ReadMapSlot()
+	return
 }
 
 func (p *Processor) newStorageWithoutStdCheck(token common.Address, op Operation) (*Storage, Std, error) {
