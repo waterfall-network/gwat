@@ -322,14 +322,43 @@ func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperatio
 		mapSlot := storage.ReadMapSlot()
 		key := crypto.Keccak256(owner[:], spender[:])
 		storage.WriteUint256ToMap(mapSlot, key, value)
-	case StdWRC721:
 
+		log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)
+	case StdWRC721:
+		if err := p.wrc721Approve(caller, token, op); err != nil {
+			return nil, err
+		}
+		log.Info("Approve to spend an NFT", "owner", owner, "spender", spender, "tokenId", value)
 	}
 
-	log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)
 	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
+}
+
+func (p *Processor) wrc721Approve(caller Ref, token common.Address, op ApproveOperation) error {
+	storage, owners, _, err := p.prepareNftStorage(token, op)
+	if err != nil {
+		return err
+	}
+
+	address := caller.Address()
+	tokenId := op.Value()
+	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+
+	if owner == (common.Address{}) {
+		return ErrNotMinted
+	}
+	if owner != address {
+		return ErrIncorrectOwner
+	}
+
+	// metadata
+	storage.ReadMapSlot()
+	tokenApprovals := storage.ReadMapSlot()
+	storage.WriteAddressToMap(tokenApprovals, tokenId.Bytes(), op.Spender())
+
+	return nil
 }
 
 func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
