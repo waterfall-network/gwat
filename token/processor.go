@@ -19,6 +19,8 @@ var (
 	ErrAlreadyMinted           = errors.New("token has already minted")
 	ErrNotMinted               = errors.New("token hasn't been minted")
 	ErrIncorrectOwner          = errors.New("token isn't owned by the caller")
+	ErrIncorrectTo             = errors.New("transfer to the zero address")
+	ErrWrongTransferCaller     = errors.New("transfer caller is not owner nor approved")
 )
 
 type Ref interface {
@@ -290,12 +292,62 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op TransferFr
 		if err := p.wrc20Transfer(storage, op.From(), op.To(), op.Value()); err != nil {
 			return nil, err
 		}
+		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "value", value)
+	case StdWRC721:
+		if err := p.wrc721TransferFrom(storage, caller, op); err != nil {
+			return nil, err
+		}
+		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "tokenId", value)
 	}
 
-	log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "value", op.Value())
 	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
+}
+
+func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op TransferFromOperation) error {
+	owners, balances := p.prepareNftStorage(storage)
+
+	address := caller.Address()
+	tokenId := op.Value()
+	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+
+	if owner == (common.Address{}) {
+		return ErrNotMinted
+	}
+
+	// metadata
+	storage.ReadMapSlot()
+	tokenApprovals := storage.ReadMapSlot()
+	approved := storage.ReadAddressFromMap(tokenApprovals, tokenId.Bytes())
+
+	operatorApprovals := storage.ReadMapSlot()
+	key := crypto.Keccak256(owner[:], address[:])
+	isApprovedForAll := storage.ReadBoolFromMap(operatorApprovals, key)
+	if owner != address && approved != address && !isApprovedForAll {
+		return ErrWrongTransferCaller
+	}
+
+	to := op.To()
+	if to == (common.Address{}) {
+		return ErrIncorrectTo
+	}
+
+	// Clear approvals from the previous owner
+	storage.WriteAddressToMap(tokenApprovals, tokenId.Bytes(), common.Address{})
+
+	from := op.From()
+	fromBalance := storage.ReadUint256FromMap(balances, from[:])
+	newFromBalance := new(big.Int).Sub(fromBalance, big.NewInt(1))
+	storage.WriteUint256ToMap(balances, from[:], newFromBalance)
+
+	toBalance := storage.ReadUint256FromMap(balances, to[:])
+	newToBalance := new(big.Int).Add(toBalance, big.NewInt(1))
+	storage.WriteUint256ToMap(balances, from[:], newToBalance)
+
+	storage.WriteAddressToMap(owners, tokenId.Bytes(), to)
+
+	return nil
 }
 
 func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperation) ([]byte, error) {
