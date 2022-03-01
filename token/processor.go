@@ -502,6 +502,25 @@ func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op SetAp
 	return operator[:], nil
 }
 
+func (p *Processor) IsApprovedForAll(op IsApprovedForAllOperation) (bool, error) {
+	storage, err := p.newStorage(op.Address(), op)
+	if err != nil {
+		return false, err
+	}
+	p.prepareNftStorage(storage)
+	owner := op.Owner()
+	operator := op.Operator()
+
+	// metadata
+	storage.ReadMapSlot()
+	// tokenApprovals
+	storage.ReadMapSlot()
+	operatorApprovals := storage.ReadMapSlot()
+
+	key := crypto.Keccak256(owner[:], operator[:])
+	return storage.ReadBoolFromMap(operatorApprovals, key), nil
+}
+
 func (p *Processor) prepareNftStorage(storage *Storage) (owners common.Hash, balances common.Hash) {
 	// name
 	storage.SkipBytes()

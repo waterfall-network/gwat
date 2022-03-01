@@ -329,9 +329,29 @@ func (s *PublicTokenAPI) Wrc20Allowance(ctx context.Context, tokenAddr common.Ad
 
 // Wrc721IsApprovedForAll returns true if an operator is the approved operator of WRC-721 tokens for an owner, false otherwise.
 // The operator can manage all NFTs of the owner.
-func (s *PublicTokenAPI) Wrc721IsApprovedForAll(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, operatorAddr common.Address) (bool, error) {
-	log.Info("WRC-721 is approved for all", "tokenAddr", tokenAddr, "ownerAddr", ownerAddr, "operatorAddr", operatorAddr)
-	return false, nil
+func (s *PublicTokenAPI) Wrc721IsApprovedForAll(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, operatorAddr common.Address, blockNrOrHash rpc.BlockNumberOrHash) (bool, error) {
+	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+	if err != nil {
+		return false, err
+	}
+
+	op, err := NewIsApprovedForAllOperation(tokenAddr, ownerAddr, operatorAddr)
+	if err != nil {
+		return false, err
+	}
+
+	res, err := tp.IsApprovedForAll(op)
+	if err != nil {
+		return false, err
+	}
+	if err := tpError(); err != nil {
+		return false, err
+	}
+
+	return res, nil
 }
 
 // Wrc721Approve changes or reaffirmes the approved address for an NFT.
