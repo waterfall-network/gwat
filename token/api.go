@@ -399,9 +399,20 @@ func (s *PublicTokenAPI) Wrc721SafeTransferFrom(ctx context.Context, tokenAddr c
 //
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer an NFT.
-func (s *PublicTokenAPI) Wrc721TransferFrom(ctx context.Context, tokenAddr common.Address, from common.Address, to common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
-	log.Info("WRC-721 transfer from", "tokenAddr", tokenAddr, "from", from, "to", to, "tokenId", tokenId)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc721TransferFrom(ctx context.Context, from common.Address, to common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	op, err := NewTransferFromOperation(StdWRC721, from, to, id)
+	if err != nil {
+		log.Error("Can't create a transfer NFT from operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a transfer NFT from operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721SetApprovalForAll enables or disables approval for a third party ("operator") to manage all of caller's assets.
