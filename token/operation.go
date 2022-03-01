@@ -597,22 +597,17 @@ func (op *isApprovedForAllOperation) MarshalBinary() ([]byte, error) {
 
 type SetApprovalForAllOperation interface {
 	Operation
-	addresser
 	Operator() common.Address
 	IsApproved() bool
 }
 
 type setApprovalForAllOperation struct {
 	operation
-	addressOperation
 	operatorOperation
-	isApproved bool
+	Approved bool
 }
 
-func NewSetApprovalForAllOperation(address common.Address, operator common.Address, isApproved bool) (SetApprovalForAllOperation, error) {
-	if address == (common.Address{}) {
-		return nil, ErrNoAddress
-	}
+func NewSetApprovalForAllOperation(operator common.Address, isApproved bool) (SetApprovalForAllOperation, error) {
 	if operator == (common.Address{}) {
 		return nil, ErrNoOperator
 	}
@@ -620,13 +615,10 @@ func NewSetApprovalForAllOperation(address common.Address, operator common.Addre
 		operation: operation{
 			Std: StdWRC721,
 		},
-		addressOperation: addressOperation{
-			TokenAddress: address,
-		},
 		operatorOperation: operatorOperation{
 			OperatorAddress: operator,
 		},
-		isApproved: isApproved,
+		Approved: isApproved,
 	}, nil
 }
 
@@ -635,7 +627,7 @@ func (op *setApprovalForAllOperation) OpCode() OpCode {
 }
 
 func (op *setApprovalForAllOperation) IsApproved() bool {
-	return op.isApproved
+	return op.Approved
 }
 
 func (op *setApprovalForAllOperation) UnmarshalBinary(b []byte) error {
@@ -890,7 +882,7 @@ func rlpDecode(b []byte, op interface{}) error {
 	case *safeTransferFromOperation:
 		v.data = data.Data
 	case *setApprovalForAllOperation:
-		v.isApproved = data.IsApproved
+		v.Approved = data.IsApproved
 	case *mintOperation:
 		v.TokenMetadata = data.Data
 	case *tokenOfOwnerByIndexOperation:

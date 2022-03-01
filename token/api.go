@@ -388,9 +388,19 @@ func (s *PublicTokenAPI) Wrc721TransferFrom(ctx context.Context, tokenAddr commo
 //
 // Returns a raw data with approval operation attributes.
 // Use the raw data in the Data field when sending a transaction to enable or disable approval to manage an NFT.
-func (s *PublicTokenAPI) Wrc721SetApprovalForAll(ctx context.Context, tokenAddr common.Address, operatorAddr common.Address, isApproved bool) (hexutil.Bytes, error) {
-	log.Info("WRC-721 set approval for all", "tokenAddr", tokenAddr, "operatorAddr", operatorAddr, "isApproved", isApproved)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc721SetApprovalForAll(ctx context.Context, operatorAddr common.Address, isApproved bool) (hexutil.Bytes, error) {
+	op, err := NewSetApprovalForAllOperation(operatorAddr, isApproved)
+	if err != nil {
+		log.Error("Can't create a set approval for all operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a set approval for all operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721Mint mints a new token. Reverts if the given token ID already exists.
