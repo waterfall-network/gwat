@@ -385,10 +385,12 @@ func (s *PublicTokenAPI) Wrc721Approve(ctx context.Context, approved common.Addr
 //
 // Returns a raw data with safe transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to safe transfer an NFT.
-func (s *PublicTokenAPI) Wrc721SafeTransferFrom(ctx context.Context, tokenAddr common.Address, from common.Address, to common.Address, tokenId hexutil.Big, data *hexutil.Bytes) (hexutil.Bytes, error) {
+//
+// TODO: Implement safeTransferFrom for NFTs.
+/* func (s *PublicTokenAPI) Wrc721SafeTransferFrom(ctx context.Context, tokenAddr common.Address, from common.Address, to common.Address, tokenId hexutil.Big, data *hexutil.Bytes) (hexutil.Bytes, error) {
 	log.Info("WRC-721 safe transfer from", "tokenAddr", tokenAddr, "from", from, "to", to, "tokenId", tokenId, "data", data)
 	return nil, nil
-}
+}*/
 
 // Wrc721TransferFrom transfers ownership of an NFT -- THE CALLER IS RESPONSIBLE TO CONFIRM THAT `to` IS CAPABLE OF RECEIVING NFTS OR ELSE
 // THEY MAY BE PERMANENTLY LOST.
@@ -466,7 +468,7 @@ func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, to common.Address, toke
 //
 // Returns hash of the mint transaction. If the function reverts you can check a status in receipts of the transaction.
 //
-// TODO: Impement safe minting of NFTs.
+// TODO: Implement safe minting of NFTs.
 /* func (s *PublicTokenAPI) Wrc721SafeMint(ctx context.Context, tokenAddr common.Address, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (bool, error) {
 	log.Info("WRC-721 safe mint", "tokenAddr", tokenAddr, "to", to, "tokenId", tokenId, "metadata", metadata)
 	return false, nil
@@ -497,10 +499,12 @@ func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenId hexutil.Big) (h
 // Throws if `index` >= `balanceOf(ownerAddr)` or if `ownerAddr` is the zero address, representing invalid NFTs.
 //
 // Returns the token identifier for the `index`th NFT assigned to `ownerAddr`.
-func (s *PublicTokenAPI) Wrc721TokenOfOwnerByIndex(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, index hexutil.Big) (*hexutil.Big, error) {
+//
+// TODO: Implement tokenOfOwnerByIndex for NFTs.
+/* func (s *PublicTokenAPI) Wrc721TokenOfOwnerByIndex(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, index hexutil.Big) (*hexutil.Big, error) {
 	log.Info("WRC-721 token of owner by index", "tokenAddr", tokenAddr, "ownerAddr", ownerAddr, "index", index)
 	return nil, nil
-}
+}*/
 
 func GetAPIs(apiBackend Backend) []rpc.API {
 	return []rpc.API{
