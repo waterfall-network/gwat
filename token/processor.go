@@ -420,6 +420,7 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 	}
 
 	var balance *big.Int
+	owner := op.Owner()
 	switch standard {
 	case StdWRC20:
 		// name
@@ -434,8 +435,10 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 		storage.ReadMapSlot()
 
 		mapSlot := storage.ReadMapSlot()
-		owner := op.Owner()
 		balance = storage.ReadUint256FromMap(mapSlot, owner[:])
+	case StdWRC721:
+		_, balances := p.prepareNftStorage(storage)
+		balance = storage.ReadUint256FromMap(balances, owner[:])
 	}
 
 	return balance, nil
