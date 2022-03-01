@@ -60,6 +60,8 @@ func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []
 		ret, err = p.mint(caller, token, v)
 	case BurnOperation:
 		ret, err = p.burn(caller, token, v)
+	case SetApprovalForAllOperation:
+		ret, err = p.setApprovalForAll(caller, token, v)
 	}
 
 	if err != nil {
@@ -474,6 +476,30 @@ func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]
 	storage.Flush()
 
 	return tokenId.Bytes(), nil
+}
+
+func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op SetApprovalForAllOperation) ([]byte, error) {
+	storage, err := p.newStorage(token, op)
+	if err != nil {
+		return nil, err
+	}
+	p.prepareNftStorage(storage)
+	owner := caller.Address()
+	operator := op.Operator()
+
+	// metadata
+	storage.ReadMapSlot()
+	// tokenApprovals
+	storage.ReadMapSlot()
+	operatorApprovals := storage.ReadMapSlot()
+
+	key := crypto.Keccak256(owner[:], operator[:])
+	storage.WriteBoolToMap(operatorApprovals, key, op.IsApproved())
+
+	log.Info("Set approval for all WRC-721 tokens", "address", token, "owner", owner, "operator", operator)
+	storage.Flush()
+
+	return operator[:], nil
 }
 
 func (p *Processor) prepareNftStorage(storage *Storage) (owners common.Hash, balances common.Hash) {

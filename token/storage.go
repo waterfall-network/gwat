@@ -69,6 +69,14 @@ func (s *Storage) ReadMapSlot() common.Hash {
 	return hash
 }
 
+func (s *Storage) WriteBoolToMap(mapSlot common.Hash, key []byte, value bool) {
+	buf := []byte{0}
+	if value {
+		buf[0] = 1
+	}
+	s.writeToMap(mapSlot, key, buf)
+}
+
 func (s *Storage) WriteUint256ToMap(mapSlot common.Hash, key []byte, value *big.Int) {
 	buf := value.FillBytes(make([]byte, 32))
 	s.writeToMap(mapSlot, key, buf)
@@ -107,6 +115,16 @@ func (s *Storage) makeSlotGetterForWriter(mapSlot common.Hash, key []byte) func(
 	return s.makeIthSlotGetter(mapSlot, key, func(hash common.Hash) *common.Hash {
 		return &common.Hash{}
 	})
+}
+
+func (s *Storage) ReadBoolFromMap(mapSlot common.Hash, key []byte) bool {
+	buf := make([]byte, 1)
+	s.readFromMap(mapSlot, key, buf)
+	r := false
+	if buf[0] > 0 {
+		r = true
+	}
+	return r
 }
 
 func (s *Storage) ReadUint256FromMap(mapSlot common.Hash, key []byte) *big.Int {

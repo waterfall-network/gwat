@@ -926,7 +926,7 @@ func rlpEncode(op interface{}) ([]byte, error) {
 				name = "Data"
 			case "data":
 				name = "Data"
-			case "isApproved":
+			case "Approved":
 				name = "IsApproved"
 			case "index":
 				name = "Index"
