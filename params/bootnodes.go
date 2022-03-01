@@ -27,7 +27,7 @@ var MainnetBootnodes = []string{
 // DevNetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // DevNet test network.
 var DevNetBootnodes = []string{
-	"enode://35de62dc5c6232cc79c299b1f82b430eea2bcc57c1c66821524a4a3f281b948acf5a8c55485c392b249d86eef3a6a9417e96285b60e3eff3990a6433eebaf32e@3.126.22.202:30303",
+	"enode://3fe5003d398915c46ce1f7050128543f2f7d787cf2284d4e53579153817de3593dc2bccf6749681c75fe069917dcee61aedbf72bca3fcb4416289fa9b22ab55b@3.126.22.202:30303",
 }
 
 var V5Bootnodes = []string{
