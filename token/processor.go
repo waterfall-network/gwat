@@ -160,6 +160,8 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 			TotalSupply: totalSupply,
 		}
 	case StdWRC721:
+		// minter
+		storage.SkipAddress()
 		baseURI := storage.ReadBytes()
 
 		props := &WRC721PropertiesResult{
@@ -195,7 +197,8 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 func concatTokenURI(baseURI []byte, tokenId *big.Int) []byte {
 	delim := byte('/')
 	b := append(baseURI, delim)
-	return append(b, tokenId.Bytes()...)
+	id := []byte(tokenId.String())
+	return append(b, id...)
 }
 
 func (p *Processor) transfer(caller Ref, token common.Address, op TransferOperation) ([]byte, error) {
