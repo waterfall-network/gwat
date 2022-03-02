@@ -20,7 +20,7 @@ var (
 	ErrNotMinted               = errors.New("token hasn't been minted")
 	ErrIncorrectOwner          = errors.New("token isn't owned by the caller")
 	ErrIncorrectTo             = errors.New("transfer to the zero address")
-	ErrWrongTransferCaller     = errors.New("transfer caller is not owner nor approved")
+	ErrWrongCaller             = errors.New("caller is not owner nor approved")
 )
 
 type Ref interface {
@@ -325,7 +325,7 @@ func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op Transfer
 	key := crypto.Keccak256(owner[:], address[:])
 	isApprovedForAll := storage.ReadBoolFromMap(operatorApprovals, key)
 	if owner != address && approved != address && !isApprovedForAll {
-		return ErrWrongTransferCaller
+		return ErrWrongCaller
 	}
 
 	to := op.To()
@@ -343,7 +343,7 @@ func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op Transfer
 
 	toBalance := storage.ReadUint256FromMap(balances, to[:])
 	newToBalance := new(big.Int).Add(toBalance, big.NewInt(1))
-	storage.WriteUint256ToMap(balances, from[:], newToBalance)
+	storage.WriteUint256ToMap(balances, to[:], newToBalance)
 
 	storage.WriteAddressToMap(owners, tokenId.Bytes(), to)
 
@@ -398,16 +398,21 @@ func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op ApproveOperat
 	tokenId := op.Value()
 	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
 
-	if owner == (common.Address{}) {
-		return ErrNotMinted
-	}
-	if owner != address {
-		return ErrIncorrectOwner
-	}
-
 	// metadata
 	storage.ReadMapSlot()
 	tokenApprovals := storage.ReadMapSlot()
+	operatorApprovals := storage.ReadMapSlot()
+
+	if owner == (common.Address{}) {
+		return ErrNotMinted
+	}
+
+	key := crypto.Keccak256(owner[:], address[:])
+	approvedForAll := storage.ReadBoolFromMap(operatorApprovals, key)
+	if owner != address && !approvedForAll {
+		return ErrWrongCaller
+	}
+
 	storage.WriteAddressToMap(tokenApprovals, tokenId.Bytes(), op.Spender())
 
 	return nil
