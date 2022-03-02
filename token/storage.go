@@ -52,6 +52,10 @@ func (s *Storage) SkipUint256() {
 	s.skip(32)
 }
 
+func (s *Storage) SkipAddress() {
+	s.skip(20)
+}
+
 func (s *Storage) skip(l int) {
 	s.do(nil, l, func([]byte, []byte) {}, func() *common.Hash {
 		_, ret := s.addSlot(func(hash common.Hash) common.Hash {
@@ -211,6 +215,10 @@ func (s *Storage) WriteUint256(v *big.Int) {
 	s.write(buf)
 }
 
+func (s *Storage) WriteAddress(a common.Address) {
+	s.write(a[:])
+}
+
 // Implements io.Writer
 func (s *Storage) Write(b []byte) (int, error) {
 	s.WriteUint64(uint64(len(b)))
@@ -261,6 +269,12 @@ func (s *Storage) ReadBytes() []byte {
 	return b
 }
 
+func (s *Storage) ReadAddress() common.Address {
+	a := common.Address{}
+	s.read(a[:])
+	return a
+}
+
 func (s *Storage) read(b []byte) {
 	s.do(b, len(b), func(slotSlice, bSlice []byte) {
 		copy(bSlice, slotSlice)
@@ -279,8 +293,13 @@ func (s *Storage) do(b []byte, l int, action func(slotSlice, bSlice []byte), add
 
 	if s.pos+l > common.HashLength {
 		size := common.HashLength - s.pos
-		defer s.do(b[size:], len(b[size:]), action, addSlot)
-		action(s.slot[s.pos:], b[:size])
+		if b != nil {
+			defer s.do(b[size:], len(b[size:]), action, addSlot)
+			action(s.slot[s.pos:], b[:size])
+		} else {
+			defer s.do(nil, l-size, action, addSlot)
+			action(s.slot[s.pos:], nil)
+		}
 		s.pos += size
 		return
 	}
