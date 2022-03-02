@@ -21,6 +21,7 @@ var (
 	ErrIncorrectOwner          = errors.New("token isn't owned by the caller")
 	ErrIncorrectTo             = errors.New("transfer to the zero address")
 	ErrWrongCaller             = errors.New("caller is not owner nor approved")
+	ErrWrongMinter             = errors.New("caller can't mint or burn NFTs")
 )
 
 type Ref interface {
@@ -102,6 +103,8 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 		addr := caller.Address()
 		storage.WriteUint256ToMap(mapSlot, addr[:], v)
 	case StdWRC721:
+		// minter
+		storage.WriteAddress(caller.Address())
 		if v, ok := op.BaseURI(); ok {
 			storage.Write(v)
 		} else {
@@ -482,7 +485,20 @@ func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]
 	if err != nil {
 		return nil, err
 	}
-	owners, balances := p.prepareNftStorage(storage)
+	// name
+	storage.SkipBytes()
+	// symbol
+	storage.SkipBytes()
+	minter := storage.ReadAddress()
+	if caller.Address() != minter {
+		return nil, ErrWrongMinter
+	}
+
+	// baseURI
+	storage.SkipBytes()
+
+	owners := storage.ReadMapSlot()
+	balances := storage.ReadMapSlot()
 
 	tokenId := op.TokenId()
 	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
@@ -513,7 +529,20 @@ func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]
 	if err != nil {
 		return nil, err
 	}
-	owners, balances := p.prepareNftStorage(storage)
+	// name
+	storage.SkipBytes()
+	// symbol
+	storage.SkipBytes()
+	minter := storage.ReadAddress()
+	if caller.Address() != minter {
+		return nil, ErrWrongMinter
+	}
+
+	// baseURI
+	storage.SkipBytes()
+
+	owners := storage.ReadMapSlot()
+	balances := storage.ReadMapSlot()
 
 	address := caller.Address()
 	tokenId := op.TokenId()
@@ -586,6 +615,8 @@ func (p *Processor) prepareNftStorage(storage *Storage) (owners common.Hash, bal
 	storage.SkipBytes()
 	// symbol
 	storage.SkipBytes()
+	// minter
+	storage.SkipAddress()
 	// baseURI
 	storage.SkipBytes()
 
