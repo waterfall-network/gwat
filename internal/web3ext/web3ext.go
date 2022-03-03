@@ -886,6 +886,30 @@ web3._extend({
 
 				return options;
 			}]
+		}),
+		new web3._extend.Method({
+			name: 'tokenProperties',
+			call: 'wat_tokenProperties',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, web3._extend.utils.fromDecimal],
+			outputFormatter: function(result) {
+				result.name = web3._extend.utils.toUtf8(result.name);
+				result.symbol = web3._extend.utils.toUtf8(result.symbol);
+
+				if (result.baseURI) {
+					result.baseURI = web3._extend.utils.toUtf8(result.baseURI);
+				}
+
+				if (result.decimals) {
+					result.decimals = web3._extend.utils.toDecimal(result.decimals);
+				}
+
+				if (result.totalSupply) {
+					result.totalSupply = web3._extend.utils.toDecimal(result.totalSupply);
+				}
+
+				return result;
+			}
 		})
 	]
 });
