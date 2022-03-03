@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
+	"wat":      WatJs,
 }
 
 const CliqueJs = `
@@ -845,6 +846,47 @@ web3._extend({
 			name: 'requestStats',
 			getter: 'vflux_requestStats'
 		}),
+	]
+});
+`
+
+const WatJs = `
+web3._extend({
+	property: 'wat',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'tokenCreate',
+			call: 'wat_tokenCreate',
+			params: 1,
+			inputFormatter: [function(options) {
+				if (options.name) {
+					options.name = web3._extend.utils.fromUtf8(options.name);
+				} else {
+					throw new Error('The name field is required.');
+				}
+
+				if (options.symbol) {
+					options.symbol = web3._extend.utils.fromUtf8(options.symbol);
+				} else {
+					throw new Error('The symbol field is required.');
+				}
+
+				if (options.decimals) {
+					options.decimals = web3._extend.utils.toHex(options.decimals);
+				}
+
+				if (options.totalSupply) {
+					options.totalSupply = web3._extend.utils.toHex(options.totalSupply);
+				}
+
+				if (options.baseURI) {
+					options.baseURI = web3._extend.utils.fromUtf8(options.baseURI);
+				}
+
+				return options;
+			}]
+		})
 	]
 });
 `
