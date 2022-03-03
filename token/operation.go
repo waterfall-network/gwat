@@ -197,7 +197,6 @@ func (a *addressOperation) Address() common.Address {
 }
 
 type propertiesOperation struct {
-	operation
 	addressOperation
 	Id *big.Int
 }
@@ -206,19 +205,16 @@ func NewPropertiesOperation(address common.Address, tokenId *big.Int) (Propertie
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
 	}
-	var standard Std = StdWRC20
-	if tokenId != nil {
-		standard = StdWRC721
-	}
 	return &propertiesOperation{
-		operation: operation{
-			Std: standard,
-		},
 		addressOperation: addressOperation{
 			TokenAddress: address,
 		},
 		Id: tokenId,
 	}, nil
+}
+
+func (op *propertiesOperation) Standard() Std {
+	return 0
 }
 
 func (op *propertiesOperation) UnmarshalBinary(b []byte) error {
@@ -454,7 +450,7 @@ type approveOperation struct {
 	spenderOperation
 }
 
-func NewApproveOperation(spender common.Address, value *big.Int) (ApproveOperation, error) {
+func NewApproveOperation(standard Std, spender common.Address, value *big.Int) (ApproveOperation, error) {
 	if spender == (common.Address{}) {
 		return nil, ErrNoSpender
 	}
@@ -463,7 +459,7 @@ func NewApproveOperation(spender common.Address, value *big.Int) (ApproveOperati
 	}
 	return &approveOperation{
 		operation: operation{
-			Std: StdWRC20,
+			Std: standard,
 		},
 		valueOperation: valueOperation{
 			TokenValue: value,
@@ -601,22 +597,17 @@ func (op *isApprovedForAllOperation) MarshalBinary() ([]byte, error) {
 
 type SetApprovalForAllOperation interface {
 	Operation
-	addresser
 	Operator() common.Address
 	IsApproved() bool
 }
 
 type setApprovalForAllOperation struct {
 	operation
-	addressOperation
 	operatorOperation
-	isApproved bool
+	Approved bool
 }
 
-func NewSetApprovalForAllOperation(address common.Address, operator common.Address, isApproved bool) (SetApprovalForAllOperation, error) {
-	if address == (common.Address{}) {
-		return nil, ErrNoAddress
-	}
+func NewSetApprovalForAllOperation(operator common.Address, isApproved bool) (SetApprovalForAllOperation, error) {
 	if operator == (common.Address{}) {
 		return nil, ErrNoOperator
 	}
@@ -624,13 +615,10 @@ func NewSetApprovalForAllOperation(address common.Address, operator common.Addre
 		operation: operation{
 			Std: StdWRC721,
 		},
-		addressOperation: addressOperation{
-			TokenAddress: address,
-		},
 		operatorOperation: operatorOperation{
 			OperatorAddress: operator,
 		},
-		isApproved: isApproved,
+		Approved: isApproved,
 	}, nil
 }
 
@@ -639,7 +627,7 @@ func (op *setApprovalForAllOperation) OpCode() OpCode {
 }
 
 func (op *setApprovalForAllOperation) IsApproved() bool {
-	return op.isApproved
+	return op.Approved
 }
 
 func (op *setApprovalForAllOperation) UnmarshalBinary(b []byte) error {
@@ -652,7 +640,6 @@ func (op *setApprovalForAllOperation) MarshalBinary() ([]byte, error) {
 
 type MintOperation interface {
 	Operation
-	addresser
 	To() common.Address
 	TokenId() *big.Int
 	Metadata() ([]byte, bool)
@@ -668,16 +655,12 @@ func (op *tokenIdOperation) TokenId() *big.Int {
 
 type mintOperation struct {
 	operation
-	addressOperation
 	toOperation
 	tokenIdOperation
-	metadata []byte
+	TokenMetadata []byte
 }
 
-func NewMintOperation(address common.Address, to common.Address, tokenId *big.Int, metadata []byte) (MintOperation, error) {
-	if address == (common.Address{}) {
-		return nil, ErrNoAddress
-	}
+func NewMintOperation(to common.Address, tokenId *big.Int, metadata []byte) (MintOperation, error) {
 	if to == (common.Address{}) {
 		return nil, ErrNoTo
 	}
@@ -688,16 +671,13 @@ func NewMintOperation(address common.Address, to common.Address, tokenId *big.In
 		operation: operation{
 			Std: StdWRC721,
 		},
-		addressOperation: addressOperation{
-			TokenAddress: address,
-		},
 		toOperation: toOperation{
 			ToAddress: to,
 		},
 		tokenIdOperation: tokenIdOperation{
 			Id: tokenId,
 		},
-		metadata: metadata,
+		TokenMetadata: metadata,
 	}, nil
 }
 
@@ -706,10 +686,10 @@ func (op *mintOperation) OpCode() OpCode {
 }
 
 func (op *mintOperation) Metadata() ([]byte, bool) {
-	if len(op.metadata) == 0 {
+	if len(op.TokenMetadata) == 0 {
 		return nil, false
 	}
-	return makeCopy(op.metadata), true
+	return makeCopy(op.TokenMetadata), true
 }
 
 func (op *mintOperation) UnmarshalBinary(b []byte) error {
@@ -722,29 +702,21 @@ func (op *mintOperation) MarshalBinary() ([]byte, error) {
 
 type BurnOperation interface {
 	Operation
-	addresser
 	TokenId() *big.Int
 }
 
 type burnOperation struct {
 	operation
-	addressOperation
 	tokenIdOperation
 }
 
-func NewBurnOperation(address common.Address, tokenId *big.Int) (BurnOperation, error) {
-	if address == (common.Address{}) {
-		return nil, ErrNoAddress
-	}
+func NewBurnOperation(tokenId *big.Int) (BurnOperation, error) {
 	if tokenId == nil {
 		return nil, ErrNoTokenId
 	}
 	return &burnOperation{
 		operation: operation{
 			Std: StdWRC721,
-		},
-		addressOperation: addressOperation{
-			TokenAddress: address,
 		},
 		tokenIdOperation: tokenIdOperation{
 			Id: tokenId,
@@ -910,9 +882,9 @@ func rlpDecode(b []byte, op interface{}) error {
 	case *safeTransferFromOperation:
 		v.data = data.Data
 	case *setApprovalForAllOperation:
-		v.isApproved = data.IsApproved
+		v.Approved = data.IsApproved
 	case *mintOperation:
-		v.metadata = data.Data
+		v.TokenMetadata = data.Data
 	case *tokenOfOwnerByIndexOperation:
 		v.index = data.Index
 	}
@@ -937,6 +909,7 @@ func rlpEncode(op interface{}) ([]byte, error) {
 			// If the field is embedded then traverse all fields in the field recursively
 			if f.Anonymous && f.Type.Kind() == reflect.Struct {
 				fillData(f.Type, v.FieldByName(f.Name))
+				continue
 			}
 
 			var name string = ""
@@ -949,11 +922,11 @@ func rlpEncode(op interface{}) ([]byte, error) {
 				name = "Value"
 			case "TokenAddress":
 				name = "Address"
-			case "metadata":
+			case "TokenMetadata":
 				name = "Data"
 			case "data":
 				name = "Data"
-			case "isApproved":
+			case "Approved":
 				name = "IsApproved"
 			case "index":
 				name = "Index"

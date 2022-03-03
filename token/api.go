@@ -41,8 +41,8 @@ type wrc721Properties struct {
 // wrc20Properties stores results of the following view functions of EIP-20: name, symbol, decimals, totalSupply.
 type wrc20Properties struct {
 	wrc721Properties
-	Decimals    *hexutil.Uint8 `json:"decimals"`
-	TotalSupply *hexutil.Big   `json:"totalSupply"`
+	Decimals    *hexutil.Uint8 `json:"decimals,omitempty"`
+	TotalSupply *hexutil.Big   `json:"totalSupply,omitempty"`
 }
 
 // wrc721ByTokenIdProperties contains Metadata field which is custom field of WRC-721 token.
@@ -59,6 +59,7 @@ type wrc721ByTokenIdProperties struct {
 // Properties in the ByTokenId field will not be returned if tokenId isn't given.
 type wrc721TokenProperties struct {
 	wrc721Properties
+	BaseURI   *hexutil.Bytes             `json:"baseURI,omitempty"`
 	ByTokenId *wrc721ByTokenIdProperties `json:"byTokenId,omitempty"`
 }
 
@@ -66,7 +67,7 @@ type TokenArgs struct {
 	// WRC-20 properties
 	wrc20Properties
 	// WRC-721 properties
-	BaseURI *hexutil.Bytes `json:"baseURI"`
+	BaseURI *hexutil.Bytes `json:"baseURI,omitempty"`
 }
 
 // TokenCreate creates a collection of tokens for a caller. Can be used for creating both WRC-20 and WRC-721 tokens.
@@ -182,13 +183,31 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 	case *WRC721PropertiesResult:
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
-		ret = &wrc721TokenProperties{
-			wrc721Properties{
+
+		props := &wrc721TokenProperties{
+			wrc721Properties: wrc721Properties{
 				Name:   &nameBytes,
 				Symbol: &symbolBytes,
 			},
-			nil,
 		}
+		if len(v.BaseURI) > 0 {
+			baseURIBytes := hexutil.Bytes(v.BaseURI)
+			props.BaseURI = &baseURIBytes
+		}
+
+		if tokenId != nil {
+			tokenURIBytes := hexutil.Bytes(v.TokenURI)
+			metadataBytes := hexutil.Bytes(v.Metadata)
+
+			props.ByTokenId = &wrc721ByTokenIdProperties{
+				TokenURI:    &tokenURIBytes,
+				OwnerOf:     &v.OwnerOf,
+				GetApproved: &v.GetApproved,
+				Metadata:    &metadataBytes,
+			}
+		}
+
+		ret = props
 	}
 
 	return ret, nil
@@ -268,7 +287,7 @@ func (s *PublicTokenAPI) Wrc20TransferFrom(ctx context.Context, from common.Addr
 // Use the raw data in the Data field when sending a transaction to allow spender to withdraw a token.
 func (s *PublicTokenAPI) Wrc20Approve(ctx context.Context, spenderAddr common.Address, value hexutil.Big) (hexutil.Bytes, error) {
 	v := value.ToInt()
-	op, err := NewApproveOperation(spenderAddr, v)
+	op, err := NewApproveOperation(StdWRC20, spenderAddr, v)
 	if err != nil {
 		log.Error("Can't create an approve operation", "err", err)
 		return nil, err
@@ -310,9 +329,52 @@ func (s *PublicTokenAPI) Wrc20Allowance(ctx context.Context, tokenAddr common.Ad
 
 // Wrc721IsApprovedForAll returns true if an operator is the approved operator of WRC-721 tokens for an owner, false otherwise.
 // The operator can manage all NFTs of the owner.
-func (s *PublicTokenAPI) Wrc721IsApprovedForAll(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, operatorAddr common.Address) (bool, error) {
-	log.Info("WRC-721 is approved for all", "tokenAddr", tokenAddr, "ownerAddr", ownerAddr, "operatorAddr", operatorAddr)
-	return false, nil
+func (s *PublicTokenAPI) Wrc721IsApprovedForAll(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, operatorAddr common.Address, blockNrOrHash rpc.BlockNumberOrHash) (bool, error) {
+	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+	if err != nil {
+		return false, err
+	}
+
+	op, err := NewIsApprovedForAllOperation(tokenAddr, ownerAddr, operatorAddr)
+	if err != nil {
+		return false, err
+	}
+
+	res, err := tp.IsApprovedForAll(op)
+	if err != nil {
+		return false, err
+	}
+	if err := tpError(); err != nil {
+		return false, err
+	}
+
+	return res, nil
+}
+
+// Wrc721Approve changes or reaffirmes the approved address for an NFT.
+// The zero address indicates there is no approved address.
+// Throws unless the transaction sender is the current NFT owner, or an authorized
+// operator of the current owner.
+//
+// Returns a raw data with mint operation attributes.
+// Use the raw data in the Data field when sending a transaction to approve address for the NFT.
+func (s *PublicTokenAPI) Wrc721Approve(ctx context.Context, approved common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	op, err := NewApproveOperation(StdWRC721, approved, id)
+	if err != nil {
+		log.Error("Can't create a NFT approve operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a NFT approve operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721SafeTransferFrom transfers the ownership of a WRC-721 token with given tokenId from one address to another address.
@@ -323,10 +385,12 @@ func (s *PublicTokenAPI) Wrc721IsApprovedForAll(ctx context.Context, tokenAddr c
 //
 // Returns a raw data with safe transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to safe transfer an NFT.
-func (s *PublicTokenAPI) Wrc721SafeTransferFrom(ctx context.Context, tokenAddr common.Address, from common.Address, to common.Address, tokenId hexutil.Big, data *hexutil.Bytes) (hexutil.Bytes, error) {
+//
+// TODO: Implement safeTransferFrom for NFTs.
+/* func (s *PublicTokenAPI) Wrc721SafeTransferFrom(ctx context.Context, tokenAddr common.Address, from common.Address, to common.Address, tokenId hexutil.Big, data *hexutil.Bytes) (hexutil.Bytes, error) {
 	log.Info("WRC-721 safe transfer from", "tokenAddr", tokenAddr, "from", from, "to", to, "tokenId", tokenId, "data", data)
 	return nil, nil
-}
+}*/
 
 // Wrc721TransferFrom transfers ownership of an NFT -- THE CALLER IS RESPONSIBLE TO CONFIRM THAT `to` IS CAPABLE OF RECEIVING NFTS OR ELSE
 // THEY MAY BE PERMANENTLY LOST.
@@ -337,18 +401,39 @@ func (s *PublicTokenAPI) Wrc721SafeTransferFrom(ctx context.Context, tokenAddr c
 //
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer an NFT.
-func (s *PublicTokenAPI) Wrc721TransferFrom(ctx context.Context, tokenAddr common.Address, from common.Address, to common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
-	log.Info("WRC-721 transfer from", "tokenAddr", tokenAddr, "from", from, "to", to, "tokenId", tokenId)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc721TransferFrom(ctx context.Context, from common.Address, to common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	op, err := NewTransferFromOperation(StdWRC721, from, to, id)
+	if err != nil {
+		log.Error("Can't create a transfer NFT from operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a transfer NFT from operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721SetApprovalForAll enables or disables approval for a third party ("operator") to manage all of caller's assets.
 //
 // Returns a raw data with approval operation attributes.
 // Use the raw data in the Data field when sending a transaction to enable or disable approval to manage an NFT.
-func (s *PublicTokenAPI) Wrc721SetApprovalForAll(ctx context.Context, tokenAddr common.Address, operatorAddr common.Address, isApproved bool) (hexutil.Bytes, error) {
-	log.Info("WRC-721 set approval for all", "tokenAddr", tokenAddr, "operatorAddr", operatorAddr, "isApproved", isApproved)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc721SetApprovalForAll(ctx context.Context, operatorAddr common.Address, isApproved bool) (hexutil.Bytes, error) {
+	op, err := NewSetApprovalForAllOperation(operatorAddr, isApproved)
+	if err != nil {
+		log.Error("Can't create a set approval for all operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a set approval for all operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721Mint mints a new token. Reverts if the given token ID already exists.
@@ -356,9 +441,25 @@ func (s *PublicTokenAPI) Wrc721SetApprovalForAll(ctx context.Context, tokenAddr 
 //
 // Returns a raw data with mint operation attributes.
 // Use the raw data in the Data field when sending a transaction to mint an NFT.
-func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, tokenAddr common.Address, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (hexutil.Bytes, error) {
-	log.Info("WRC-721 mint", "tokenAddr", tokenAddr, "to", to, "tokenId", tokenId, "metadata", metadata)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	var tokenMeta []byte = nil
+	if metadata != nil {
+		tokenMeta = *metadata
+	}
+
+	op, err := NewMintOperation(to, id, tokenMeta)
+	if err != nil {
+		log.Error("Can't create a token mint operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token mint operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721SafeMint safely mints a new token. Reverts if the given token ID already exists.
@@ -367,7 +468,7 @@ func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, tokenAddr common.Addres
 //
 // Returns hash of the mint transaction. If the function reverts you can check a status in receipts of the transaction.
 //
-// TODO: Impement safe minting of NFTs.
+// TODO: Implement safe minting of NFTs.
 /* func (s *PublicTokenAPI) Wrc721SafeMint(ctx context.Context, tokenAddr common.Address, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (bool, error) {
 	log.Info("WRC-721 safe mint", "tokenAddr", tokenAddr, "to", to, "tokenId", tokenId, "metadata", metadata)
 	return false, nil
@@ -378,19 +479,32 @@ func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, tokenAddr common.Addres
 //
 // Returns a raw data with mint operation attributes.
 // Use the raw data in the Data field when sending a transaction to burn an NFT.
-func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenAddr common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
-	log.Info("WRC-721 burn", "tokenAddr", tokenAddr, "tokenId", tokenId)
-	return nil, nil
+func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenId hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	op, err := NewBurnOperation(id)
+	if err != nil {
+		log.Error("Can't create a token mint operation", "err", err)
+		return nil, err
+	}
+
+	b, err := EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token mint operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 // Wrc721TokenOfOwnerByIndex enumerates NFTs assigned to an owner.
 // Throws if `index` >= `balanceOf(ownerAddr)` or if `ownerAddr` is the zero address, representing invalid NFTs.
 //
 // Returns the token identifier for the `index`th NFT assigned to `ownerAddr`.
-func (s *PublicTokenAPI) Wrc721TokenOfOwnerByIndex(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, index hexutil.Big) (*hexutil.Big, error) {
+//
+// TODO: Implement tokenOfOwnerByIndex for NFTs.
+/* func (s *PublicTokenAPI) Wrc721TokenOfOwnerByIndex(ctx context.Context, tokenAddr common.Address, ownerAddr common.Address, index hexutil.Big) (*hexutil.Big, error) {
 	log.Info("WRC-721 token of owner by index", "tokenAddr", tokenAddr, "ownerAddr", ownerAddr, "index", index)
 	return nil, nil
-}
+}*/
 
 func GetAPIs(apiBackend Backend) []rpc.API {
 	return []rpc.API{

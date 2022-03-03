@@ -16,6 +16,12 @@ var (
 	ErrTokenOpStandardNotValid = errors.New("token standard isn't valid for the operation")
 	ErrNotEnoughBalance        = errors.New("transfer amount exceeds token balance")
 	ErrInsufficientAllowance   = errors.New("insufficient allowance for token")
+	ErrAlreadyMinted           = errors.New("token has already minted")
+	ErrNotMinted               = errors.New("token hasn't been minted")
+	ErrIncorrectOwner          = errors.New("token isn't owned by the caller")
+	ErrIncorrectTo             = errors.New("transfer to the zero address")
+	ErrWrongCaller             = errors.New("caller is not owner nor approved")
+	ErrWrongMinter             = errors.New("caller can't mint or burn NFTs")
 )
 
 type Ref interface {
@@ -53,6 +59,12 @@ func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []
 		ret, err = p.transfer(caller, token, v)
 	case ApproveOperation:
 		ret, err = p.approve(caller, token, v)
+	case MintOperation:
+		ret, err = p.mint(caller, token, v)
+	case BurnOperation:
+		ret, err = p.burn(caller, token, v)
+	case SetApprovalForAllOperation:
+		ret, err = p.setApprovalForAll(caller, token, v)
 	}
 
 	if err != nil {
@@ -91,8 +103,12 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 		addr := caller.Address()
 		storage.WriteUint256ToMap(mapSlot, addr[:], v)
 	case StdWRC721:
+		// minter
+		storage.WriteAddress(caller.Address())
 		if v, ok := op.BaseURI(); ok {
 			storage.Write(v)
+		} else {
+			storage.Write([]byte{})
 		}
 	default:
 		return common.Address{}, ErrStandardNotValid
@@ -112,14 +128,18 @@ type WRC20PropertiesResult struct {
 }
 
 type WRC721PropertiesResult struct {
-	Name    []byte
-	Symbol  []byte
-	BaseURI []byte
+	Name        []byte
+	Symbol      []byte
+	BaseURI     []byte
+	TokenURI    []byte
+	OwnerOf     common.Address
+	GetApproved common.Address
+	Metadata    []byte
 }
 
 func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())
-	storage, err := p.newStorage(op.Address(), op)
+	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +148,7 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	symbol := storage.ReadBytes()
 
 	var r interface{}
-	switch op.Standard() {
+	switch standard {
 	case StdWRC20:
 		decimals := storage.ReadUint8()
 		totalSupply := storage.ReadUint256()
@@ -140,18 +160,45 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 			TotalSupply: totalSupply,
 		}
 	case StdWRC721:
+		// minter
+		storage.SkipAddress()
 		baseURI := storage.ReadBytes()
 
-		r = &WRC721PropertiesResult{
+		props := &WRC721PropertiesResult{
 			Name:    name,
 			Symbol:  symbol,
 			BaseURI: baseURI,
 		}
+		if id, ok := op.TokenId(); ok {
+			props.TokenURI = concatTokenURI(baseURI, id)
+			owners := storage.ReadMapSlot()
+			props.OwnerOf = storage.ReadAddressFromMap(owners, id.Bytes())
+			if props.OwnerOf == (common.Address{}) {
+				return nil, ErrNotMinted
+			}
+
+			// Skip balances
+			storage.ReadMapSlot()
+			metadata := storage.ReadMapSlot()
+			props.Metadata = storage.ReadBytesFromMap(metadata, id.Bytes())
+
+			approvals := storage.ReadMapSlot()
+			props.GetApproved = storage.ReadAddressFromMap(approvals, id.Bytes())
+		}
+
+		r = props
 	default:
 		return nil, ErrStandardNotValid
 	}
 
 	return r, nil
+}
+
+func concatTokenURI(baseURI []byte, tokenId *big.Int) []byte {
+	delim := byte('/')
+	b := append(baseURI, delim)
+	id := []byte(tokenId.String())
+	return append(b, id...)
 }
 
 func (p *Processor) transfer(caller Ref, token common.Address, op TransferOperation) ([]byte, error) {
@@ -251,12 +298,62 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op TransferFr
 		if err := p.wrc20Transfer(storage, op.From(), op.To(), op.Value()); err != nil {
 			return nil, err
 		}
+		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "value", value)
+	case StdWRC721:
+		if err := p.wrc721TransferFrom(storage, caller, op); err != nil {
+			return nil, err
+		}
+		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "tokenId", value)
 	}
 
-	log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "value", op.Value())
 	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
+}
+
+func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op TransferFromOperation) error {
+	owners, balances := p.prepareNftStorage(storage)
+
+	address := caller.Address()
+	tokenId := op.Value()
+	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+
+	if owner == (common.Address{}) {
+		return ErrNotMinted
+	}
+
+	// metadata
+	storage.ReadMapSlot()
+	tokenApprovals := storage.ReadMapSlot()
+	approved := storage.ReadAddressFromMap(tokenApprovals, tokenId.Bytes())
+
+	operatorApprovals := storage.ReadMapSlot()
+	key := crypto.Keccak256(owner[:], address[:])
+	isApprovedForAll := storage.ReadBoolFromMap(operatorApprovals, key)
+	if owner != address && approved != address && !isApprovedForAll {
+		return ErrWrongCaller
+	}
+
+	to := op.To()
+	if to == (common.Address{}) {
+		return ErrIncorrectTo
+	}
+
+	// Clear approvals from the previous owner
+	storage.WriteAddressToMap(tokenApprovals, tokenId.Bytes(), common.Address{})
+
+	from := op.From()
+	fromBalance := storage.ReadUint256FromMap(balances, from[:])
+	newFromBalance := new(big.Int).Sub(fromBalance, big.NewInt(1))
+	storage.WriteUint256ToMap(balances, from[:], newFromBalance)
+
+	toBalance := storage.ReadUint256FromMap(balances, to[:])
+	newToBalance := new(big.Int).Add(toBalance, big.NewInt(1))
+	storage.WriteUint256ToMap(balances, to[:], newToBalance)
+
+	storage.WriteAddressToMap(owners, tokenId.Bytes(), to)
+
+	return nil
 }
 
 func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperation) ([]byte, error) {
@@ -286,12 +383,45 @@ func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperatio
 		mapSlot := storage.ReadMapSlot()
 		key := crypto.Keccak256(owner[:], spender[:])
 		storage.WriteUint256ToMap(mapSlot, key, value)
+
+		log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)
+	case StdWRC721:
+		if err := p.wrc721Approve(storage, caller, op); err != nil {
+			return nil, err
+		}
+		log.Info("Approve to spend an NFT", "owner", owner, "spender", spender, "tokenId", value)
 	}
 
-	log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)
 	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
+}
+
+func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op ApproveOperation) error {
+	owners, _ := p.prepareNftStorage(storage)
+
+	address := caller.Address()
+	tokenId := op.Value()
+	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+
+	// metadata
+	storage.ReadMapSlot()
+	tokenApprovals := storage.ReadMapSlot()
+	operatorApprovals := storage.ReadMapSlot()
+
+	if owner == (common.Address{}) {
+		return ErrNotMinted
+	}
+
+	key := crypto.Keccak256(owner[:], address[:])
+	approvedForAll := storage.ReadBoolFromMap(operatorApprovals, key)
+	if owner != address && !approvedForAll {
+		return ErrWrongCaller
+	}
+
+	storage.WriteAddressToMap(tokenApprovals, tokenId.Bytes(), op.Spender())
+
+	return nil
 }
 
 func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
@@ -301,6 +431,7 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 	}
 
 	var balance *big.Int
+	owner := op.Owner()
 	switch standard {
 	case StdWRC20:
 		// name
@@ -315,8 +446,10 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 		storage.ReadMapSlot()
 
 		mapSlot := storage.ReadMapSlot()
-		owner := op.Owner()
 		balance = storage.ReadUint256FromMap(mapSlot, owner[:])
+	case StdWRC721:
+		_, balances := p.prepareNftStorage(storage)
+		balance = storage.ReadUint256FromMap(balances, owner[:])
 	}
 
 	return balance, nil
@@ -348,6 +481,151 @@ func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 	}
 
 	return allowance, nil
+}
+
+func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]byte, error) {
+	storage, err := p.newStorage(token, op)
+	if err != nil {
+		return nil, err
+	}
+	// name
+	storage.SkipBytes()
+	// symbol
+	storage.SkipBytes()
+	minter := storage.ReadAddress()
+	if caller.Address() != minter {
+		return nil, ErrWrongMinter
+	}
+
+	// baseURI
+	storage.SkipBytes()
+
+	owners := storage.ReadMapSlot()
+	balances := storage.ReadMapSlot()
+
+	tokenId := op.TokenId()
+	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+	if owner != (common.Address{}) {
+		return nil, ErrAlreadyMinted
+	}
+
+	to := op.To()
+	balance := storage.ReadUint256FromMap(balances, to[:])
+	newBalance := new(big.Int).Add(balance, big.NewInt(1))
+	storage.WriteUint256ToMap(balances, to[:], newBalance)
+
+	storage.WriteAddressToMap(owners, tokenId.Bytes(), to)
+
+	if tokenMeta, ok := op.Metadata(); ok {
+		metadata := storage.ReadMapSlot()
+		storage.WriteBytesToMap(metadata, tokenId.Bytes(), tokenMeta[:])
+	}
+
+	log.Info("Token mint", "address", token, "to", to, "tokenId", tokenId)
+	storage.Flush()
+
+	return tokenId.Bytes(), nil
+}
+
+func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]byte, error) {
+	storage, err := p.newStorage(token, op)
+	if err != nil {
+		return nil, err
+	}
+	// name
+	storage.SkipBytes()
+	// symbol
+	storage.SkipBytes()
+	minter := storage.ReadAddress()
+	if caller.Address() != minter {
+		return nil, ErrWrongMinter
+	}
+
+	// baseURI
+	storage.SkipBytes()
+
+	owners := storage.ReadMapSlot()
+	balances := storage.ReadMapSlot()
+
+	address := caller.Address()
+	tokenId := op.TokenId()
+	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+	if owner != address {
+		return nil, ErrIncorrectOwner
+	}
+
+	balance := storage.ReadUint256FromMap(balances, address[:])
+	newBalance := new(big.Int).Sub(balance, big.NewInt(1))
+	storage.WriteUint256ToMap(balances, address[:], newBalance)
+
+	// Empty value for the owner
+	storage.WriteAddressToMap(owners, tokenId.Bytes(), common.Address{})
+	// Empty metadata for the token
+	metadata := storage.ReadMapSlot()
+	storage.WriteBytesToMap(metadata, tokenId.Bytes(), []byte{})
+
+	log.Info("Token burn", "address", token, "tokenId", tokenId)
+	storage.Flush()
+
+	return tokenId.Bytes(), nil
+}
+
+func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op SetApprovalForAllOperation) ([]byte, error) {
+	storage, err := p.newStorage(token, op)
+	if err != nil {
+		return nil, err
+	}
+	p.prepareNftStorage(storage)
+	owner := caller.Address()
+	operator := op.Operator()
+
+	// metadata
+	storage.ReadMapSlot()
+	// tokenApprovals
+	storage.ReadMapSlot()
+	operatorApprovals := storage.ReadMapSlot()
+
+	key := crypto.Keccak256(owner[:], operator[:])
+	storage.WriteBoolToMap(operatorApprovals, key, op.IsApproved())
+
+	log.Info("Set approval for all WRC-721 tokens", "address", token, "owner", owner, "operator", operator)
+	storage.Flush()
+
+	return operator[:], nil
+}
+
+func (p *Processor) IsApprovedForAll(op IsApprovedForAllOperation) (bool, error) {
+	storage, err := p.newStorage(op.Address(), op)
+	if err != nil {
+		return false, err
+	}
+	p.prepareNftStorage(storage)
+	owner := op.Owner()
+	operator := op.Operator()
+
+	// metadata
+	storage.ReadMapSlot()
+	// tokenApprovals
+	storage.ReadMapSlot()
+	operatorApprovals := storage.ReadMapSlot()
+
+	key := crypto.Keccak256(owner[:], operator[:])
+	return storage.ReadBoolFromMap(operatorApprovals, key), nil
+}
+
+func (p *Processor) prepareNftStorage(storage *Storage) (owners common.Hash, balances common.Hash) {
+	// name
+	storage.SkipBytes()
+	// symbol
+	storage.SkipBytes()
+	// minter
+	storage.SkipAddress()
+	// baseURI
+	storage.SkipBytes()
+
+	owners = storage.ReadMapSlot()
+	balances = storage.ReadMapSlot()
+	return
 }
 
 func (p *Processor) newStorageWithoutStdCheck(token common.Address, op Operation) (*Storage, Std, error) {
