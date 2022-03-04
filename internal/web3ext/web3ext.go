@@ -910,6 +910,38 @@ web3._extend({
 
 				return result;
 			}
+		}),
+		new web3._extend.Method({
+			name: 'tokenBalanceOf',
+			call: 'wat_tokenBalanceOf',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: web3._extend.utils.toDecimal
+		}),
+		new web3._extend.Method({
+			name: 'wrc20Transfer',
+			call: 'wat_wrc20Transfer',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'wrc20TransferFrom',
+			call: 'wat_wrc20TransferFrom',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'wrc20Approve',
+			call: 'wat_wrc20Approve',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'wrc20Allowance',
+			call: 'wat_wrc20Allowance',
+			params: 4,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: web3._extend.utils.toDecimal
 		})
 	]
 });
