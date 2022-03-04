@@ -891,7 +891,13 @@ web3._extend({
 			name: 'tokenProperties',
 			call: 'wat_tokenProperties',
 			params: 3,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, web3._extend.utils.fromDecimal],
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, function(tokenId) {
+				if (tokenId) {
+					return web3._extend.utils.fromDecimal(tokenId)
+				} else {
+					return undefined
+				}
+			}],
 			outputFormatter: function(result) {
 				result.name = web3._extend.utils.toUtf8(result.name);
 				result.symbol = web3._extend.utils.toUtf8(result.symbol);
@@ -906,6 +912,13 @@ web3._extend({
 
 				if (result.totalSupply) {
 					result.totalSupply = web3._extend.utils.toDecimal(result.totalSupply);
+				}
+
+				if (result.byTokenId) {
+					result.byTokenId.tokenURI = web3._extend.utils.toUtf8(result.byTokenId.tokenURI);
+					result.byTokenId.ownerOf = web3._extend.utils.toAddress(result.byTokenId.ownerOf);
+					result.byTokenId.getApproved = web3._extend.utils.toAddress(result.byTokenId.getApproved);
+					result.byTokenId.metadata = web3._extend.utils.toUtf8(result.byTokenId.metadata);
 				}
 
 				return result;
@@ -942,6 +955,18 @@ web3._extend({
 			params: 4,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter],
 			outputFormatter: web3._extend.utils.toDecimal
+		}),
+		new web3._extend.Method({
+			name: 'wrc721Mint',
+			call: 'wat_wrc721Mint',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex, web3._extend.utils.fromUtf8],
+		}),
+		new web3._extend.Method({
+			name: 'wrc721Burn',
+			call: 'wat_wrc721Burn',
+			params: 1,
+			inputFormatter: [web3._extend.utils.toHex],
 		})
 	]
 });
