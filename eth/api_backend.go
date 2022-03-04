@@ -163,7 +163,11 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	// Pending state is only known by the miner
 	if number == rpc.PendingBlockNumber {
 		block, state := b.eth.dag.Creator().Pending()
-		return state, block.Header(), nil
+		if block != nil && state != nil {
+			return state, block.Header(), nil
+		} else {
+			return nil, nil, errors.New("no pending blocks")
+		}
 	}
 	// Otherwise resolve the block number and return its state
 	header, err := b.HeaderByNumber(ctx, number)

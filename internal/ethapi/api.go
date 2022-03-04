@@ -966,7 +966,16 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, err
 		}
 		if block == nil {
-			return 0, errors.New("block not found")
+			block = b.GetLastFinalizedBlock()
+			if block == nil {
+				return 0, errors.New("block not found")
+			}
+			bNr := rpc.BlockNumber(block.Nr())
+			blockNrOrHash = rpc.BlockNumberOrHash{
+				BlockNumber:      &bNr,
+				BlockHash:        nil,
+				RequireCanonical: false,
+			}
 		}
 		hi = block.GasLimit()
 	}
