@@ -20,6 +20,7 @@ var (
 	ErrNotMinted               = errors.New("token hasn't been minted")
 	ErrIncorrectOwner          = errors.New("token isn't owned by the caller")
 	ErrIncorrectTo             = errors.New("transfer to the zero address")
+	ErrIncorrectTransferFrom   = errors.New("transfer from incorrect owner")
 	ErrWrongCaller             = errors.New("caller is not owner nor approved")
 	ErrWrongMinter             = errors.New("caller can't mint or burn NFTs")
 )
@@ -338,11 +339,14 @@ func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op Transfer
 	if to == (common.Address{}) {
 		return ErrIncorrectTo
 	}
+	from := op.From()
+	if from != owner {
+		return ErrIncorrectTransferFrom
+	}
 
 	// Clear approvals from the previous owner
 	storage.WriteAddressToMap(tokenApprovals, tokenId.Bytes(), common.Address{})
 
-	from := op.From()
 	fromBalance := storage.ReadUint256FromMap(balances, from[:])
 	newFromBalance := new(big.Int).Sub(fromBalance, big.NewInt(1))
 	storage.WriteUint256ToMap(balances, from[:], newFromBalance)
