@@ -967,6 +967,30 @@ web3._extend({
 			call: 'wat_wrc721Burn',
 			params: 1,
 			inputFormatter: [web3._extend.utils.toHex],
+		}),
+		new web3._extend.Method({
+			name: 'wrc721SetApprovalForAll',
+			call: 'wat_wrc721SetApprovalForAll',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null],
+		}),
+		new web3._extend.Method({
+			name: 'wrc721IsApprovedForAll',
+			call: 'wat_wrc721IsApprovedForAll',
+			params: 4,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'wrc721Approve',
+			call: 'wat_wrc721Approve',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'wrc721TransferFrom',
+			call: 'wat_wrc721TransferFrom',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
 		})
 	]
 });
