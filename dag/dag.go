@@ -175,6 +175,12 @@ func (d *Dag) countDagSlots() int {
 		return -1
 	}
 	dag := tips.GetFinalizingDag()
+
+	// todo countDagSlots tmp ad hoc fix
+	if dag == nil {
+		return -1
+	}
+
 	finPoints := append(dag.FinalityPoints.Uniq(), dag.Hash)
 	finPoints = finPoints.Difference(common.HashArray{dag.LastFinalizedHash}).Uniq()
 	return len(finPoints)

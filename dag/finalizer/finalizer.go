@@ -198,7 +198,7 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 	}
 	finPoints := dag.FinalityPoints.Uniq()
 
-	log.Info("Creator colect finalisation points", "finPoints", finPoints)
+	log.Info("Finalizer collect finalisation points", "finPoints", finPoints)
 
 	fpIndex := len(finPoints) - FinalisationDelaySlots
 	if fpIndex < 0 {
@@ -207,7 +207,7 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 	finPoint := finPoints[fpIndex]
 	finOrd := dag.DagChainHashes.Uniq()
 
-	log.Info("Creator select finalisation candidats", "candidats", finOrd)
+	log.Info("Finalizer select candidats", "candidats", finOrd)
 
 	blocks := bc.GetBlocksByHashes(finOrd)
 	finBlock := blocks[finPoint]
