@@ -9,6 +9,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// Storage is sequential stream that writes data to slots of Ethereum words (256 bit or 32 bytes) under the hood.
+// An account storage uses slots of the same size so the stream can be flushed to it using Flush method.
+//
+// Every method of the Storage do operation from the current position in the stream.
+// The only exception is value of map type. Map is written using the following algorithm:
+// 1. Write an empty slot referenced as map slot.
+// 2. Using a position (index) of the map slot and key calculate hash used as a slot index for the value using Keccak256.
+// 3. Write the value in the calculated slot
 type Storage struct {
 	pos     int
 	slots   map[common.Hash]*common.Hash
@@ -19,6 +27,8 @@ type Storage struct {
 	slotNumber uint64
 }
 
+// NewStorage creates new storage for a token with specific address
+// Storage uses StateDB under the hood so its instance should be passed to the factory function.
 func NewStorage(tokenAddr common.Address, statedb vm.StateDB) *Storage {
 	return &Storage{
 		slots:      make(map[common.Hash]*common.Hash),
@@ -39,19 +49,27 @@ func (s *Storage) addSlot(getSlot func(common.Hash) common.Hash) (common.Hash, *
 	return hash, &slot
 }
 
+// SkipBytes skips byte slice
+// It just moves the position in the stream
 func (s *Storage) SkipBytes() {
 	l := s.ReadUint64()
 	s.skip(int(l))
 }
 
+// SkitUint8 skips uint8 value
+// It just moves the position in the stream
 func (s *Storage) SkipUint8() {
 	s.skip(1)
 }
 
+// SkitUint8 skips uint256 value
+// It just moves the position in the stream
 func (s *Storage) SkipUint256() {
 	s.skip(32)
 }
 
+// SkitUint8 skips common.Address value
+// It just moves the position in the stream
 func (s *Storage) SkipAddress() {
 	s.skip(20)
 }
@@ -65,6 +83,8 @@ func (s *Storage) skip(l int) {
 	})
 }
 
+// ReadMapSlot reads a map slot index
+// It can be used for reading or skipping of the map slot
 func (s *Storage) ReadMapSlot() common.Hash {
 	hash, _ := s.addSlot(func(hash common.Hash) common.Hash {
 		return common.Hash{}
@@ -73,6 +93,7 @@ func (s *Storage) ReadMapSlot() common.Hash {
 	return hash
 }
 
+// WriteBoolToMap writes a boolean value to the map using a map slot index
 func (s *Storage) WriteBoolToMap(mapSlot common.Hash, key []byte, value bool) {
 	buf := []byte{0}
 	if value {
@@ -81,11 +102,13 @@ func (s *Storage) WriteBoolToMap(mapSlot common.Hash, key []byte, value bool) {
 	s.writeToMap(mapSlot, key, buf)
 }
 
+// WriteUint256ToMap writes a uint256 value to the map using a map slot index
 func (s *Storage) WriteUint256ToMap(mapSlot common.Hash, key []byte, value *big.Int) {
 	buf := value.FillBytes(make([]byte, 32))
 	s.writeToMap(mapSlot, key, buf)
 }
 
+// WriteAddressToMap writes a common.Address value to the map using a map slot index
 func (s *Storage) WriteAddressToMap(mapSlot common.Hash, key []byte, address common.Address) {
 	s.writeToMap(mapSlot, key, address[:])
 }
@@ -96,6 +119,7 @@ func (s *Storage) writeToMap(mapSlot common.Hash, key []byte, value []byte) {
 	s.pos = prevPos
 }
 
+// WriteBytesToMap writes a byte slice to the map using a map slot index
 func (s *Storage) WriteBytesToMap(mapSlot common.Hash, key []byte, value []byte) {
 	prevPos := s.pos
 	getSlot := s.makeSlotGetterForWriter(mapSlot, key)
@@ -121,6 +145,7 @@ func (s *Storage) makeSlotGetterForWriter(mapSlot common.Hash, key []byte) func(
 	})
 }
 
+// ReadBoolFromMap reads a boolean value from the map using a map slot index
 func (s *Storage) ReadBoolFromMap(mapSlot common.Hash, key []byte) bool {
 	buf := make([]byte, 1)
 	s.readFromMap(mapSlot, key, buf)
@@ -131,6 +156,7 @@ func (s *Storage) ReadBoolFromMap(mapSlot common.Hash, key []byte) bool {
 	return r
 }
 
+// ReadUint256FromMap reads a uint256 value from the map using a map slot index
 func (s *Storage) ReadUint256FromMap(mapSlot common.Hash, key []byte) *big.Int {
 	buf := make([]byte, 32)
 	s.readFromMap(mapSlot, key, buf)
@@ -138,12 +164,14 @@ func (s *Storage) ReadUint256FromMap(mapSlot common.Hash, key []byte) *big.Int {
 	return v.SetBytes(buf)
 }
 
+// ReadAddressFromMap reads a common.Address value from the map using a map slot index
 func (s *Storage) ReadAddressFromMap(mapSlot common.Hash, key []byte) common.Address {
 	buf := common.Address{}
 	s.readFromMap(mapSlot, key, buf[:])
 	return buf
 }
 
+// ReadBytesFromMap reads a byte slice from the map using a map slot index
 func (s *Storage) ReadBytesFromMap(mapSlot common.Hash, key []byte) []byte {
 	prevPos := s.pos
 	getSlot := s.makeSlotGetterForReader(mapSlot, key)
@@ -194,32 +222,38 @@ func (s *Storage) makeIthSlotGetter(mapSlot common.Hash, key []byte, getSlot fun
 	return getIthSlot
 }
 
+// WriteUint8 writes a uint8 value to the stream
 func (s *Storage) WriteUint8(v uint8) {
 	s.write([]byte{v})
 }
 
+// WriteUint16 writes a uint16 value to the stream
 func (s *Storage) WriteUint16(v uint16) {
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf, v)
 	s.write(buf)
 }
 
+// WriteUint64 writes a uint64 value to the stream
 func (s *Storage) WriteUint64(v uint64) {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, v)
 	s.write(buf)
 }
 
+// WriteUint256 writes a uint256 value to the stream
 func (s *Storage) WriteUint256(v *big.Int) {
 	buf := v.FillBytes(make([]byte, 32))
 	s.write(buf)
 }
 
+// WriteAddress writes a common.Address value to the stream
 func (s *Storage) WriteAddress(a common.Address) {
 	s.write(a[:])
 }
 
-// Implements io.Writer
+// Write writes a byte slice to the stream
+// Implements io.Writer.
 func (s *Storage) Write(b []byte) (int, error) {
 	s.WriteUint64(uint64(len(b)))
 	s.write(b)
@@ -237,24 +271,28 @@ func (s *Storage) write(b []byte) {
 	})
 }
 
+// ReadUint8 reads a uint8 value from the stream
 func (s *Storage) ReadUint8() uint8 {
 	buf := make([]byte, 1)
 	s.read(buf)
 	return buf[0]
 }
 
+// ReadUint16 reads a uint16 value from the stream
 func (s *Storage) ReadUint16() uint16 {
 	buf := make([]byte, 2)
 	s.read(buf)
 	return binary.BigEndian.Uint16(buf)
 }
 
+// ReadUint64 reads a uint64 value from the stream
 func (s *Storage) ReadUint64() uint64 {
 	buf := make([]byte, 8)
 	s.read(buf)
 	return binary.BigEndian.Uint64(buf)
 }
 
+// ReadUint256 reads a uint256 value from the stream
 func (s *Storage) ReadUint256() *big.Int {
 	buf := make([]byte, 32)
 	s.read(buf)
@@ -262,6 +300,7 @@ func (s *Storage) ReadUint256() *big.Int {
 	return v.SetBytes(buf)
 }
 
+// ReadBytes reads a byte slice from the stream
 func (s *Storage) ReadBytes() []byte {
 	l := s.ReadUint64()
 	b := make([]byte, l)
@@ -269,6 +308,7 @@ func (s *Storage) ReadBytes() []byte {
 	return b
 }
 
+// ReadAddress reads a common.Address value from the stream
 func (s *Storage) ReadAddress() common.Address {
 	a := common.Address{}
 	s.read(a[:])
@@ -308,6 +348,7 @@ func (s *Storage) do(b []byte, l int, action func(slotSlice, bSlice []byte), add
 	s.pos += l
 }
 
+// Flush flushes the slots of the token storage to StateDB
 func (s *Storage) Flush() {
 	for k, v := range s.slots {
 		s.statedb.SetState(s.addr, k, *v)
