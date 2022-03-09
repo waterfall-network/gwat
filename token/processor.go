@@ -25,15 +25,20 @@ var (
 	ErrWrongMinter             = errors.New("caller can't mint or burn NFTs")
 )
 
+// Ref represents caller of the token processor
 type Ref interface {
 	Address() common.Address
 }
 
+// Processor is a processor of all token related operations.
+// All transaction related operations that mutates state of the token are called using Call method.
+// Methods of the operation name are used for getting state of the token.
 type Processor struct {
 	state vm.StateDB
 	ctx   vm.BlockContext
 }
 
+// NewProcessor creates new token processor
 func NewProcessor(blockCtx vm.BlockContext, statedb vm.StateDB) *Processor {
 	return &Processor{
 		ctx:   blockCtx,
@@ -41,6 +46,18 @@ func NewProcessor(blockCtx vm.BlockContext, statedb vm.StateDB) *Processor {
 	}
 }
 
+// Call performs all transaction related operations that mutates state of the token
+//
+// The only following operations can be performed using the method:
+//  * token creation of WRC-20 or WRC-721 tokens
+//  * transfer from
+//  * transfer
+//  * approve
+//  * mint
+//  * burn
+//  * set approval for all
+//
+// It returns byte represantation of the return value of an operation.
 func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []byte, err error) {
 	if _, ok := op.(CreateOperation); !ok {
 		nonce := p.state.GetNonce(caller.Address())
@@ -121,6 +138,7 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 	return tokenAddr, nil
 }
 
+// WRC20PropertiesResult stores result of the properties operation for WRC-20 tokens
 type WRC20PropertiesResult struct {
 	Name        []byte
 	Symbol      []byte
@@ -128,6 +146,7 @@ type WRC20PropertiesResult struct {
 	TotalSupply *big.Int
 }
 
+// WRC721PropertiesResult stores result of the properties operation for WRC-721 tokens
 type WRC721PropertiesResult struct {
 	Name        []byte
 	Symbol      []byte
@@ -138,6 +157,8 @@ type WRC721PropertiesResult struct {
 	Metadata    []byte
 }
 
+// Properties perfroms the token properties opertaion
+// It returns WRC20PropertiesResult or WRC721PropertiesResult according to the token type.
 func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())
 	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
@@ -428,6 +449,8 @@ func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op ApproveOperat
 	return nil
 }
 
+// BalanceOf performs the token bolance of operations
+// It returns uint256 value with the token balance of number of NFTs.
 func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
 	if err != nil {
@@ -459,6 +482,9 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 	return balance, nil
 }
 
+// Allowance performs the token allowance operation
+// It returns uint256 value with allowed count of the token to spend.
+// The method only works for WRC-20 tokens.
 func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
@@ -598,6 +624,8 @@ func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op SetAp
 	return operator[:], nil
 }
 
+// IsApprovedForAll performs the is approved for all operation for WRC-721 tokens
+// Returns boolean value that indicates whether the operator can perform any operation on the token.
 func (p *Processor) IsApprovedForAll(op IsApprovedForAllOperation) (bool, error) {
 	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
