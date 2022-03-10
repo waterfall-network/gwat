@@ -414,44 +414,44 @@ var (
 		Usage: "Enable mining",
 	}
 	MinerThreadsFlag = cli.IntFlag{
-		Name:  "miner.threads",
+		Name:  "creator.threads",
 		Usage: "Number of CPU threads to use for mining",
 		Value: 0,
 	}
 	MinerNotifyFlag = cli.StringFlag{
-		Name:  "miner.notify",
+		Name:  "creator.notify",
 		Usage: "Comma separated HTTP URL list to notify of new work packages",
 	}
 	MinerNotifyFullFlag = cli.BoolFlag{
-		Name:  "miner.notify.full",
+		Name:  "creator.notify.full",
 		Usage: "Notify with pending block headers instead of work packages",
 	}
 	MinerGasLimitFlag = cli.Uint64Flag{
-		Name:  "miner.gaslimit",
+		Name:  "creator.gaslimit",
 		Usage: "Target gas ceiling for mined blocks",
 		Value: ethconfig.Defaults.Creator.GasCeil,
 	}
 	MinerGasPriceFlag = BigFlag{
-		Name:  "miner.gasprice",
+		Name:  "creator.gasprice",
 		Usage: "Minimum gas price for mining a transaction",
 		Value: ethconfig.Defaults.Creator.GasPrice,
 	}
 	MinerEtherbaseFlag = cli.StringFlag{
-		Name:  "miner.etherbase",
+		Name:  "creator.etherbase",
 		Usage: "Public address for block mining rewards (default = first account)",
 		Value: "0",
 	}
 	MinerExtraDataFlag = cli.StringFlag{
-		Name:  "miner.extradata",
-		Usage: "Block extra data set by the miner (default = client version)",
+		Name:  "creator.extradata",
+		Usage: "Block extra data set by the creator (default = client version)",
 	}
 	MinerRecommitIntervalFlag = cli.DurationFlag{
-		Name:  "miner.recommit",
+		Name:  "creator.recommit",
 		Usage: "Time interval to recreate the block being mined",
 		Value: ethconfig.Defaults.Creator.Recommit,
 	}
 	MinerNoVerifyFlag = cli.BoolFlag{
-		Name:  "miner.noverify",
+		Name:  "creator.noverify",
 		Usage: "Disable remote sealing verification",
 	}
 	// Account settings
@@ -1070,7 +1070,7 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config
 		if ks != nil {
 			account, err := MakeAddress(ks, etherbase)
 			if err != nil {
-				Fatalf("Invalid miner etherbase: %v", err)
+				Fatalf("Invalid creator etherbase: %v", err)
 			}
 			cfg.Creator.Etherbase = account.Address
 		} else {
@@ -1347,7 +1347,7 @@ func setMiner(ctx *cli.Context, cfg *creator.Config) {
 		cfg.Noverify = ctx.GlobalBool(MinerNoVerifyFlag.Name)
 	}
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
-		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
+		log.Warn("The generic --creator.gastarget flag is deprecated and will be removed in the future!")
 	}
 }
 
@@ -1579,7 +1579,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			// when we're definitely concerned with only one account.
 			passphrase = list[0]
 		}
-		// setEtherbase has been called above, configuring the miner address from command line flags.
+		// setEtherbase has been called above, configuring the creator address from command line flags.
 		if cfg.Creator.Etherbase != (common.Address{}) {
 			developer = accounts.Account{Address: cfg.Creator.Etherbase}
 		} else if accs := ks.Accounts(); len(accs) > 0 {

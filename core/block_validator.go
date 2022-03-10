@@ -110,10 +110,12 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 		return limit
 	}
 	if limit > desiredLimit {
-		limit = parentGasLimit - delta
-		if limit < desiredLimit {
-			limit = desiredLimit
-		}
+		//todo tmp
+		limit = desiredLimit
+		//limit = parentGasLimit - delta
+		//if limit < desiredLimit {
+		//	limit = desiredLimit
+		//}
 	}
 	return limit
 }
