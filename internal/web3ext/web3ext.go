@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
+	"wat":      WatJs,
 }
 
 const CliqueJs = `
@@ -845,6 +846,152 @@ web3._extend({
 			name: 'requestStats',
 			getter: 'vflux_requestStats'
 		}),
+	]
+});
+`
+
+const WatJs = `
+web3._extend({
+	property: 'wat',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'tokenCreate',
+			call: 'wat_tokenCreate',
+			params: 1,
+			inputFormatter: [function(options) {
+				if (options.name) {
+					options.name = web3._extend.utils.fromUtf8(options.name);
+				} else {
+					throw new Error('The name field is required.');
+				}
+
+				if (options.symbol) {
+					options.symbol = web3._extend.utils.fromUtf8(options.symbol);
+				} else {
+					throw new Error('The symbol field is required.');
+				}
+
+				if (options.decimals) {
+					options.decimals = web3._extend.utils.toHex(options.decimals);
+				}
+
+				if (options.totalSupply) {
+					options.totalSupply = web3._extend.utils.toHex(options.totalSupply);
+				}
+
+				if (options.baseURI) {
+					options.baseURI = web3._extend.utils.fromUtf8(options.baseURI);
+				}
+
+				return options;
+			}]
+		}),
+		new web3._extend.Method({
+			name: 'tokenProperties',
+			call: 'wat_tokenProperties',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, function(tokenId) {
+				if (tokenId) {
+					return web3._extend.utils.fromDecimal(tokenId)
+				} else {
+					return undefined
+				}
+			}],
+			outputFormatter: function(result) {
+				result.name = web3._extend.utils.toUtf8(result.name);
+				result.symbol = web3._extend.utils.toUtf8(result.symbol);
+
+				if (result.baseURI) {
+					result.baseURI = web3._extend.utils.toUtf8(result.baseURI);
+				}
+
+				if (result.decimals) {
+					result.decimals = web3._extend.utils.toDecimal(result.decimals);
+				}
+
+				if (result.totalSupply) {
+					result.totalSupply = web3._extend.utils.toDecimal(result.totalSupply);
+				}
+
+				if (result.byTokenId) {
+					result.byTokenId.tokenURI = web3._extend.utils.toUtf8(result.byTokenId.tokenURI);
+					result.byTokenId.ownerOf = web3._extend.utils.toAddress(result.byTokenId.ownerOf);
+					result.byTokenId.getApproved = web3._extend.utils.toAddress(result.byTokenId.getApproved);
+					result.byTokenId.metadata = web3._extend.utils.toUtf8(result.byTokenId.metadata);
+				}
+
+				return result;
+			}
+		}),
+		new web3._extend.Method({
+			name: 'tokenBalanceOf',
+			call: 'wat_tokenBalanceOf',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: web3._extend.utils.toDecimal
+		}),
+		new web3._extend.Method({
+			name: 'wrc20Transfer',
+			call: 'wat_wrc20Transfer',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'wrc20TransferFrom',
+			call: 'wat_wrc20TransferFrom',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'wrc20Approve',
+			call: 'wat_wrc20Approve',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'wrc20Allowance',
+			call: 'wat_wrc20Allowance',
+			params: 4,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: web3._extend.utils.toDecimal
+		}),
+		new web3._extend.Method({
+			name: 'wrc721Mint',
+			call: 'wat_wrc721Mint',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex, web3._extend.utils.fromUtf8],
+		}),
+		new web3._extend.Method({
+			name: 'wrc721Burn',
+			call: 'wat_wrc721Burn',
+			params: 1,
+			inputFormatter: [web3._extend.utils.toHex],
+		}),
+		new web3._extend.Method({
+			name: 'wrc721SetApprovalForAll',
+			call: 'wat_wrc721SetApprovalForAll',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null],
+		}),
+		new web3._extend.Method({
+			name: 'wrc721IsApprovedForAll',
+			call: 'wat_wrc721IsApprovedForAll',
+			params: 4,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'wrc721Approve',
+			call: 'wat_wrc721Approve',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'wrc721TransferFrom',
+			call: 'wat_wrc721TransferFrom',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
+		})
 	]
 });
 `
