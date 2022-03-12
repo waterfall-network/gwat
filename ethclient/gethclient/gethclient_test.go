@@ -243,7 +243,8 @@ func testGetNodeInfo(t *testing.T, client *rpc.Client) {
 
 func testSetHead(t *testing.T, client *rpc.Client) {
 	ec := New(client)
-	err := ec.SetHead(context.Background(), &common.Hash{})
+	//err := ec.SetHead(context.Background(), &common.Hash{})
+	err := ec.SetHead(context.Background(), big.NewInt(0))
 	if err != nil {
 		t.Fatal(err)
 	}

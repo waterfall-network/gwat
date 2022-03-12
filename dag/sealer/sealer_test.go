@@ -60,7 +60,6 @@ func TestReimportMirroredState(t *testing.T) {
 			header.ParentHashes[0] = blocks[i-1].Hash()
 		}
 		header.Extra = make([]byte, extraVanity+extraSeal)
-		header.Difficulty = diffInTurn
 
 		sig, _ := crypto.Sign(SealHash(header).Bytes(), key)
 		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
@@ -70,7 +69,7 @@ func TestReimportMirroredState(t *testing.T) {
 	db = rawdb.NewMemoryDatabase()
 	genspec.MustCommit(db)
 
-	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil)
 	defer chain.Stop()
 
 	if _, err := chain.InsertChain(blocks[:2]); err != nil {
@@ -83,7 +82,7 @@ func TestReimportMirroredState(t *testing.T) {
 	// Simulate a crash by creating a new chain on top of the database, without
 	// flushing the dirty states out. Insert the last block, triggering a sidechain
 	// reimport.
-	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil)
 	defer chain.Stop()
 
 	if _, err := chain.InsertChain(blocks[2:]); err != nil {
@@ -96,10 +95,9 @@ func TestReimportMirroredState(t *testing.T) {
 
 func TestSealHash(t *testing.T) {
 	have := SealHash(&types.Header{
-		Difficulty: new(big.Int),
-		Number:     new(uint64),
-		Extra:      make([]byte, 32+65),
-		BaseFee:    new(big.Int),
+		Number:  new(uint64),
+		Extra:   make([]byte, 32+65),
+		BaseFee: new(big.Int),
 	})
 	want := common.HexToHash("0xbd3d1fa43fbc4c5bfcc91b179ec92e2861df3654de60468beb908ff805359e8f")
 	if have != want {

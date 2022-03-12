@@ -68,11 +68,11 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 	var receipts types.Receipts
 	if bc != nil {
 		if number := rawdb.ReadFinalizedNumberByHash(db, bhash); number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number, config)
+			receipts = rawdb.ReadReceipts(db, bhash, config)
 		}
 	} else {
 		if number := rawdb.ReadFinalizedNumberByHash(db, bhash); number != nil {
-			receipts, _ = light.GetBlockReceipts(ctx, lc.Odr(), bhash, *number)
+			receipts, _ = light.GetBlockReceipts(ctx, lc.Odr(), bhash)
 		}
 	}
 	if receipts == nil {
@@ -182,7 +182,7 @@ func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainCon
 			txs = make(types.Transactions, len(btxs))
 			for i, tx := range btxs {
 				var err error
-				txs[i], _, _, _, err = light.GetTransaction(ctx, lc.Odr(), tx.Hash())
+				txs[i], _, _, err = light.GetTransaction(ctx, lc.Odr(), tx.Hash())
 				if err != nil {
 					return nil
 				}
@@ -206,9 +206,9 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 	defer tearDown()
 
 	// Ensure the client has synced all necessary data.
-	clientHead := client.handler.backend.blockchain.CurrentHeader()
-	if clientHead.Number.Uint64() != 4 {
-		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
+	clientHead := client.handler.backend.blockchain.GetLastFinalizedHeader()
+	if clientHead.Nr() != 4 {
+		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Nr())
 	}
 	// Disable the mechanism that we will wait a few time for request
 	// even there is no suitable peer to send right now.
@@ -218,7 +218,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 		// Mark this as a helper to put the failures at the correct lines
 		t.Helper()
 
-		for i := uint64(0); i <= server.handler.blockchain.GetLastFinalisedHeader().Nr(); i++ {
+		for i := uint64(0); i <= server.handler.blockchain.GetLastFinalizedHeader().Nr(); i++ {
 			//bhash := rawdb.ReadCanonicalHash(server.db, i)
 			bhash := rawdb.ReadFinalizedHashByNumber(server.db, i)
 			b1 := fn(light.NoOdr, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
@@ -284,7 +284,7 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 		blockHashes  = make(map[common.Hash]common.Hash)        // Transaction hash to block hash mappings
 		intraIndex   = make(map[common.Hash]uint64)             // Transaction intra-index in block
 	)
-	for number := uint64(1); number < server.backend.Blockchain().CurrentBlock().NumberU64(); number++ {
+	for number := uint64(1); number < server.backend.Blockchain().GetLastFinalizedBlock().Nr(); number++ {
 		block := server.backend.Blockchain().GetBlockByNumber(number)
 		if block == nil {
 			t.Fatalf("Failed to retrieve block %d", number)
@@ -300,9 +300,8 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 				testStatus = light.TxStatus{
 					Status: core.TxStatusIncluded,
 					Lookup: &rawdb.LegacyTxLookupEntry{
-						BlockHash:  block.Hash(),
-						BlockIndex: block.NumberU64(),
-						Index:      uint64(index),
+						BlockHash: block.Hash(),
+						Index:     uint64(index),
 					},
 				}
 			}
@@ -333,9 +332,8 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 			}
 			stats[i].Status = core.TxStatusIncluded
 			stats[i].Lookup = &rawdb.LegacyTxLookupEntry{
-				BlockHash:  blockHashes[hash],
-				BlockIndex: number,
-				Index:      intraIndex[hash],
+				BlockHash: blockHashes[hash],
+				Index:     intraIndex[hash],
 			}
 		}
 		data, _ := rlp.EncodeToBytes(stats)
@@ -377,20 +375,6 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 			txLookups: []uint64{txIndexUnlimited, txIndexUnlimited, txIndexUnlimited},
 			txs:       []common.Hash{randomHash(), testHash},
 			results:   []light.TxStatus{{}, testStatus},
-		},
-		// Retrieve mixed transactions from unindexed peer(but the target is still available)
-		{
-			peers:     3,
-			txLookups: []uint64{uint64(blocks) - testStatus.Lookup.BlockIndex, uint64(blocks) - testStatus.Lookup.BlockIndex - 1, uint64(blocks) - testStatus.Lookup.BlockIndex - 2},
-			txs:       []common.Hash{randomHash(), testHash},
-			results:   []light.TxStatus{{}, testStatus},
-		},
-		// Retrieve mixed transactions from unindexed peer(but the target is not available)
-		{
-			peers:     3,
-			txLookups: []uint64{uint64(blocks) - testStatus.Lookup.BlockIndex - 1, uint64(blocks) - testStatus.Lookup.BlockIndex - 1, uint64(blocks) - testStatus.Lookup.BlockIndex - 2},
-			txs:       []common.Hash{randomHash(), testHash},
-			results:   []light.TxStatus{{}, {}},
 		},
 	}
 	for _, testspec := range testspecs {

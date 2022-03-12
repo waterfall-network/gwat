@@ -169,7 +169,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	}
 	// write request
 	req := &GetBlockHeaders{
-		Origin: eth.HashOrNumber{
+		Origin: &eth.HashOrNumber{
 			Hash: s.chain.blocks[1].Hash(),
 		},
 		Amount:  2,
@@ -203,7 +203,7 @@ func (s *Suite) TestGetBlockHeaders66(t *utesting.T) {
 	}
 	// write request
 	req := &GetBlockHeaders{
-		Origin: eth.HashOrNumber{
+		Origin: &eth.HashOrNumber{
 			Hash: s.chain.blocks[1].Hash(),
 		},
 		Amount:  2,
@@ -241,7 +241,7 @@ func (s *Suite) TestSimultaneousRequests66(t *utesting.T) {
 	req1 := &eth.GetBlockHeadersPacket66{
 		RequestId: uint64(111),
 		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+			Origin: &eth.HashOrNumber{
 				Hash: s.chain.blocks[1].Hash(),
 			},
 			Amount:  2,
@@ -252,7 +252,7 @@ func (s *Suite) TestSimultaneousRequests66(t *utesting.T) {
 	req2 := &eth.GetBlockHeadersPacket66{
 		RequestId: uint64(222),
 		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+			Origin: &eth.HashOrNumber{
 				Hash: s.chain.blocks[1].Hash(),
 			},
 			Amount:  4,
@@ -312,7 +312,7 @@ func (s *Suite) TestSameRequestID66(t *utesting.T) {
 	request1 := &eth.GetBlockHeadersPacket66{
 		RequestId: reqID,
 		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+			Origin: &eth.HashOrNumber{
 				Number: 1,
 			},
 			Amount: 2,
@@ -321,7 +321,7 @@ func (s *Suite) TestSameRequestID66(t *utesting.T) {
 	request2 := &eth.GetBlockHeadersPacket66{
 		RequestId: reqID,
 		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-			Origin: eth.HashOrNumber{
+			Origin: &eth.HashOrNumber{
 				Number: 33,
 			},
 			Amount: 2,
@@ -374,7 +374,7 @@ func (s *Suite) TestZeroRequestID66(t *utesting.T) {
 		t.Fatalf("peering failed: %v", err)
 	}
 	req := &GetBlockHeaders{
-		Origin: eth.HashOrNumber{
+		Origin: &eth.HashOrNumber{
 			Number: 0,
 		},
 		Amount: 2,
@@ -482,15 +482,12 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	blocks := []*NewBlock{
 		{
 			Block: largeBlock(),
-			TD:    s.fullChain.TotalDifficultyAt(nextBlock),
 		},
 		{
 			Block: s.fullChain.blocks[nextBlock],
-			TD:    largeNumber(2),
 		},
 		{
 			Block: largeBlock(),
-			TD:    largeNumber(2),
 		},
 	}
 
@@ -529,15 +526,12 @@ func (s *Suite) TestLargeAnnounce66(t *utesting.T) {
 	blocks := []*NewBlock{
 		{
 			Block: largeBlock(),
-			TD:    s.fullChain.TotalDifficultyAt(nextBlock),
 		},
 		{
 			Block: s.fullChain.blocks[nextBlock],
-			TD:    largeNumber(2),
 		},
 		{
 			Block: largeBlock(),
-			TD:    largeNumber(2),
 		},
 	}
 

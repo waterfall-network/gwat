@@ -18,7 +18,6 @@ package ethash
 
 import (
 	"io/ioutil"
-	"math/big"
 	"math/rand"
 	"os"
 	"sync"
@@ -32,13 +31,14 @@ import (
 
 // Tests that ethash works correctly in test mode.
 func TestTestMode(t *testing.T) {
-	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
+	nr := uint64(1)
+	header := &types.Header{Number: &nr}
 
 	ethash := NewTester(nil, false)
 	defer ethash.Close()
 
 	results := make(chan *types.Block)
-	err := ethash.Seal(nil, types.NewBlockWithHeader(header), results, nil)
+	err := ethash.Seal(nil, types.NewBlockWithHeader(header), nil, results, nil)
 	if err != nil {
 		t.Fatalf("failed to seal block: %v", err)
 	}
@@ -88,11 +88,13 @@ func verifyTest(wg *sync.WaitGroup, e *Ethash, workerIndex, epochs int) {
 	const wiggle = 4 * epochLength
 	r := rand.New(rand.NewSource(int64(workerIndex)))
 	for epoch := 0; epoch < epochs; epoch++ {
-		block := int64(epoch)*epochLength - wiggle/2 + r.Int63n(wiggle)
+		var block int64
+		block = int64(epoch)*epochLength - wiggle/2 + r.Int63n(wiggle)
 		if block < 0 {
 			block = 0
 		}
-		header := &types.Header{Number: big.NewInt(block), Difficulty: big.NewInt(100)}
+		nr := uint64(1)
+		header := &types.Header{Number: &nr}
 		e.verifySeal(nil, header, false)
 	}
 }
@@ -105,13 +107,14 @@ func TestRemoteSealer(t *testing.T) {
 	if _, err := api.GetWork(); err != errNoMiningWork {
 		t.Error("expect to return an error indicate there is no mining work")
 	}
-	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
+	nr := uint64(1)
+	header := &types.Header{Number: &nr}
 	block := types.NewBlockWithHeader(header)
 	sealhash := ethash.SealHash(header)
 
 	// Push new work.
 	results := make(chan *types.Block)
-	ethash.Seal(nil, block, results, nil)
+	ethash.Seal(nil, block, nil, results, nil)
 
 	var (
 		work [4]string
@@ -125,10 +128,11 @@ func TestRemoteSealer(t *testing.T) {
 		t.Error("expect to return false when submit a fake solution")
 	}
 	// Push new block with same block number to replace the original one.
-	header = &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1000)}
+	nr1 := uint64(1)
+	header = &types.Header{Number: &nr1}
 	block = types.NewBlockWithHeader(header)
 	sealhash = ethash.SealHash(header)
-	ethash.Seal(nil, block, results, nil)
+	ethash.Seal(nil, block, nil, results, nil)
 
 	if work, err = api.GetWork(); err != nil || work[0] != sealhash.Hex() {
 		t.Error("expect to return the latest pushed work")

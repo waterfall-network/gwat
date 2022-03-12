@@ -363,8 +363,8 @@ func (b *EthAPIBackend) Engine() consensus.Engine {
 	return b.eth.engine
 }
 
-func (b *EthAPIBackend) GetLastFinalisedHeader() *types.Header {
-	return b.eth.blockchain.GetLastFinalisedHeader()
+func (b *EthAPIBackend) GetLastFinalizedHeader() *types.Header {
+	return b.eth.blockchain.GetLastFinalizedHeader()
 }
 
 func (b *EthAPIBackend) StartMining(threads int) error {

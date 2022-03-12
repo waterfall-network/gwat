@@ -51,7 +51,7 @@ type bodyPack struct {
 
 func (p *bodyPack) PeerId() string { return p.peerID }
 func (p *bodyPack) Items() int     { return len(p.transactions) }
-func (p *bodyPack) Stats() string  { return fmt.Sprintf("%d:%d", len(p.transactions)) }
+func (p *bodyPack) Stats() string  { return fmt.Sprintf("%d", len(p.transactions)) }
 
 // receiptPack is a batch of receipts returned by a peer.
 type receiptPack struct {

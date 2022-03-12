@@ -69,7 +69,7 @@ func newTestBackendWithGenerator(blocks int, generator func(int, *core.BlockGen)
 		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(100_000_000_000_000_000)}},
 	}).MustCommit(db)
 
-	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil)
 
 	bs, _ := core.GenerateChain(params.TestChainConfig, chain.Genesis(), ethash.NewFaker(), db, blocks, generator)
 	if _, err := chain.InsertChain(bs); err != nil {
@@ -140,22 +140,22 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 	}{
 		// A single random block should be retrievable by hash and number too
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Hash: backend.chain.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Hash: backend.chain.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(limit / 2).Hash()},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: limit / 2}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: limit / 2}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(limit / 2).Hash()},
 		},
 		// Multiple headers should be retrievable in both directions
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: limit / 2}, Amount: 3},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: limit / 2}, Amount: 3},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(limit / 2).Hash(),
 				backend.chain.GetBlockByNumber(limit/2 + 1).Hash(),
 				backend.chain.GetBlockByNumber(limit/2 + 2).Hash(),
 			},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: limit / 2}, Amount: 3, Reverse: true},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: limit / 2}, Amount: 3, Reverse: true},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(limit / 2).Hash(),
 				backend.chain.GetBlockByNumber(limit/2 - 1).Hash(),
@@ -164,14 +164,14 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		},
 		// Multiple headers with skip lists should be retrievable
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(limit / 2).Hash(),
 				backend.chain.GetBlockByNumber(limit/2 + 4).Hash(),
 				backend.chain.GetBlockByNumber(limit/2 + 8).Hash(),
 			},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3, Reverse: true},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3, Reverse: true},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(limit / 2).Hash(),
 				backend.chain.GetBlockByNumber(limit/2 - 4).Hash(),
@@ -180,26 +180,26 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		},
 		// The chain endpoints should be retrievable
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 0}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: 0}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(0).Hash()},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 1},
-			[]common.Hash{backend.chain.CurrentBlock().Hash()},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: backend.chain.GetLastFinalizedBlock().Nr()}, Amount: 1},
+			[]common.Hash{backend.chain.GetLastFinalizedBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
-			getHashes(backend.chain.CurrentBlock().NumberU64(), limit),
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: backend.chain.GetLastFinalizedFastBlock().Nr() - 1}, Amount: limit + 10, Reverse: true},
+			getHashes(backend.chain.GetLastFinalizedFastBlock().Nr(), limit),
 		},
 		// Check that requesting more than available is handled gracefully
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: backend.chain.GetLastFinalizedFastBlock().Nr() - 4}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 4).Hash(),
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64()).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.GetLastFinalizedFastBlock().Nr() - 4).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.GetLastFinalizedFastBlock().Nr()).Hash(),
 			},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(4).Hash(),
 				backend.chain.GetBlockByNumber(0).Hash(),
@@ -207,13 +207,13 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		},
 		// Check that requesting more than available is handled gracefully, even if mid skip
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: backend.chain.GetLastFinalizedFastBlock().Nr() - 4}, Skip: 2, Amount: 3},
 			[]common.Hash{
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 4).Hash(),
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 1).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.GetLastFinalizedFastBlock().Nr() - 4).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.GetLastFinalizedFastBlock().Nr() - 1).Hash(),
 			},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(4).Hash(),
 				backend.chain.GetBlockByNumber(1).Hash(),
@@ -221,7 +221,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		},
 		// Check a corner case where requesting more can iterate past the endpoints
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 2}, Amount: 5, Reverse: true},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: 2}, Amount: 5, Reverse: true},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(2).Hash(),
 				backend.chain.GetBlockByNumber(1).Hash(),
@@ -230,24 +230,24 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		},
 		// Check a corner case where skipping overflow loops back into the chain start
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Hash: backend.chain.GetBlockByNumber(3).Hash()}, Amount: 2, Reverse: false, Skip: math.MaxUint64 - 1},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Hash: backend.chain.GetBlockByNumber(3).Hash()}, Amount: 2, Reverse: false, Skip: math.MaxUint64 - 1},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(3).Hash(),
 			},
 		},
 		// Check a corner case where skipping overflow loops back to the same header
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Hash: backend.chain.GetBlockByNumber(1).Hash()}, Amount: 2, Reverse: false, Skip: math.MaxUint64},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Hash: backend.chain.GetBlockByNumber(1).Hash()}, Amount: 2, Reverse: false, Skip: math.MaxUint64},
 			[]common.Hash{
 				backend.chain.GetBlockByNumber(1).Hash(),
 			},
 		},
 		// Check that non existing headers aren't returned
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Hash: unknown}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Hash: unknown}, Amount: 1},
 			[]common.Hash{},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() + 1}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: &HashOrNumber{Number: backend.chain.GetLastFinalizedFastBlock().Nr() + 1}, Amount: 1},
 			[]common.Hash{},
 		},
 	}
@@ -313,9 +313,9 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		{10, nil, nil, 10},           // Multiple random blocks should be retrievable
 		{limit, nil, nil, limit},     // The maximum possible blocks should be retrievable
 		{limit + 1, nil, nil, limit}, // No more than the possible block count should be returned
-		{0, []common.Hash{backend.chain.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
-		{0, []common.Hash{backend.chain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{{}}, []bool{false}, 0},                                 // A non existent block should not be returned
+		{0, []common.Hash{backend.chain.Genesis().Hash()}, []bool{true}, 1},                   // The genesis block should be retrievable
+		{0, []common.Hash{backend.chain.GetLastFinalizedFastBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
+		{0, []common.Hash{{}}, []bool{false}, 0},                                              // A non existent block should not be returned
 
 		// Existing and non-existing blocks interleaved should not cause problems
 		{0, []common.Hash{
@@ -338,14 +338,14 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		)
 		for j := 0; j < tt.random; j++ {
 			for {
-				num := rand.Int63n(int64(backend.chain.CurrentBlock().NumberU64()))
+				num := rand.Int63n(int64(backend.chain.GetLastFinalizedFastBlock().Nr()))
 				if !seen[num] {
 					seen[num] = true
 
 					block := backend.chain.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
 					if len(bodies) < tt.expected {
-						bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+						bodies = append(bodies, &BlockBody{Transactions: block.Transactions()})
 					}
 					break
 				}
@@ -355,7 +355,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := backend.chain.GetBlockByHash(hash)
-				bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+				bodies = append(bodies, &BlockBody{Transactions: block.Transactions()})
 			}
 		}
 		// Send the hash request and verify the response
@@ -463,7 +463,7 @@ func testGetNodeData(t *testing.T, protocol uint) {
 
 	// Sanity check whether all state matches.
 	accounts := []common.Address{testAddr, acc1Addr, acc2Addr}
-	for i := uint64(0); i <= backend.chain.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= backend.chain.GetLastFinalizedFastBlock().Nr(); i++ {
 		root := backend.chain.GetBlockByNumber(i).Root()
 		reconstructed, _ := state.New(root, state.NewDatabase(reconstructDB), nil)
 		for j, acc := range accounts {
@@ -534,7 +534,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		hashes   []common.Hash
 		receipts [][]*types.Receipt
 	)
-	for i := uint64(0); i <= backend.chain.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= backend.chain.GetLastFinalizedFastBlock().Nr(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())

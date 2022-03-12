@@ -69,9 +69,9 @@ var (
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
 	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
 
-	blockReorgMeter         = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
-	blockReorgAddMeter      = metrics.NewRegisteredMeter("chain/reorg/add", nil)
-	blockReorgDropMeter     = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
+	//blockReorgMeter = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
+	//blockReorgAddMeter = metrics.NewRegisteredMeter("chain/reorg/add", nil)
+	//blockReorgDropMeter     = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
 	blockReorgInvalidatedTx = metrics.NewRegisteredMeter("chain/reorg/invalidTx", nil)
 
 	blockPrefetchExecuteTimer   = metrics.NewRegisteredTimer("chain/prefetch/executes", nil)
@@ -215,6 +215,11 @@ type BlockChain struct {
 	//shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 }
 
+func (bc *BlockChain) CurrentHeader() *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
@@ -352,7 +357,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			}
 		}
 		if needRewind {
-			log.Error("Truncating ancient chain", "from", bc.GetLastFinalisedHeader().Nr(), "to", low, "hash", headHash.Hex())
+			log.Error("Truncating ancient chain", "from", bc.GetLastFinalizedHeader().Nr(), "to", low, "hash", headHash.Hex())
 			if err := bc.SetHead(headHash); err != nil {
 				return nil, err
 			}
@@ -361,7 +366,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// The first thing the node will do is reconstruct the verification data for
 	// the head block (ethash cache or clique voting snapshot). Might as well do
 	// it in advance.
-	bc.engine.VerifyHeader(bc, bc.GetLastFinalisedHeader(), true)
+	bc.engine.VerifyHeader(bc, bc.GetLastFinalizedHeader(), true)
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
@@ -601,19 +606,14 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 						}
 					}
 					if beyondRoot || rootNumber == 0 {
-						log.Debug("Rewound to block with state", "number", uint64(rootNumber), "hash", newHeadBlock.Hash().Hex())
+						log.Debug("Rewound to block with state", "number", rootNumber, "hash", newHeadBlock.Hash().Hex())
 						break
 					}
 					log.Debug("Skipping block with threshold state", "number", rootNumber, "hash", newHeadBlock.Hash(), "root", newHeadBlock.Root())
 					newHeadBlock = bc.GetBlockByNumber(newHeadBlock.Nr()) // Keep rewinding
-					//TODO fix it
 					if rootNumber == newHeadBlock.Nr() {
-
 						newHeadBlock = bc.GetBlockByNumber(newHeadBlock.Nr() - 1)
-
-						log.Debug("=========== DECREMENT ================", "rootNumber", rootNumber, "nr", newHeadBlock.Nr(), "hash", newHeadBlock.Hash().Hex())
-
-						//panic("SetHeadBeyondRoot: cycled")
+						log.Warn("set head beyond root: check next root", "rootNumber", rootNumber, "nr", newHeadBlock.Nr(), "hash", newHeadBlock.Hash().Hex())
 					}
 				}
 			}
@@ -1092,7 +1092,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		}
 		defer bc.chainmu.Unlock()
 		// Rewind may have occurred, skip in that case.
-		if bc.GetLastFinalisedHeader().Nr() >= head.Nr() {
+		if bc.GetLastFinalizedHeader().Nr() >= head.Nr() {
 			rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
 			bc.lastFinalizedFastBlock.Store(head)
 			headFastBlockGauge.Update(int64(head.Nr()))
@@ -1313,7 +1313,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	return 0, nil
 }
 
-var lastWrite uint64
+//var lastWrite uint64
 
 // writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
@@ -2292,7 +2292,7 @@ func (bc *BlockChain) CollectStateDataByTips(tips types.Tips) (statedb *state.St
 	//retrieve the stable state block
 	stateHash := tips.GetStableStateHash()
 	if stateHash == (common.Hash{}) {
-		stateHash = bc.GetLastFinalisedHeader().Hash()
+		stateHash = bc.GetLastFinalizedHeader().Hash()
 	}
 	stateBlock = bc.GetBlockByHash(stateHash)
 
@@ -2381,7 +2381,7 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 
 	// collect red blocks (not in finalization points)
 	stateIndex := ordHashes.IndexOf(stateHash)
-	recalcHashes := common.HashArray{}
+	var recalcHashes common.HashArray
 	if stateIndex > -1 {
 		recalcHashes = ordHashes[stateIndex+1:]
 	} else {

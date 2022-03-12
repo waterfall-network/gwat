@@ -37,7 +37,6 @@ var (
 	errInvalidEntryCount   = errors.New("invalid number of response entries")
 	errHeaderUnavailable   = errors.New("header unavailable")
 	errTxHashMismatch      = errors.New("transaction hash mismatch")
-	errUncleHashMismatch   = errors.New("uncle hash mismatch")
 	errReceiptHashMismatch = errors.New("receipt hash mismatch")
 	errDataHashMismatch    = errors.New("data hash mismatch")
 	errCHTHashMismatch     = errors.New("cht hash mismatch")
@@ -111,16 +110,13 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	// Retrieve our stored header and validate block content against it
 	if r.Header == nil {
-		r.Header = rawdb.ReadHeader(db, r.Hash, r.Number)
+		r.Header = rawdb.ReadHeader(db, r.Hash)
 	}
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
 	if r.Header.TxHash != types.DeriveSha(types.Transactions(body.Transactions), trie.NewStackTrie(nil)) {
 		return errTxHashMismatch
-	}
-	if r.Header.UncleHash != types.CalcUncleHash(body.Uncles) {
-		return errUncleHashMismatch
 	}
 	// Validations passed, encode and store RLP
 	data, err := rlp.EncodeToBytes(body)
@@ -169,7 +165,7 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	// Retrieve our stored header and validate receipt content against it
 	if r.Header == nil {
-		r.Header = rawdb.ReadHeader(db, r.Hash, r.Number)
+		r.Header = rawdb.ReadHeader(db, r.Hash)
 	}
 	if r.Header == nil {
 		return errHeaderUnavailable
@@ -386,13 +382,12 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if node.Hash != header.Hash() {
 		return errCHTHashMismatch
 	}
-	if r.BlockNum != header.Number.Uint64() {
+	if r.BlockNum != header.Nr() {
 		return errCHTNumberMismatch
 	}
 	// Verifications passed, store and return
 	r.Header = header
 	r.Proof = nodeSet
-	r.Td = node.Td
 	return nil
 }
 

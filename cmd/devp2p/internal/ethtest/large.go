@@ -60,21 +60,20 @@ func randHash() common.Hash {
 }
 
 func largeHeader() *types.Header {
+	nr := uint64(2)
 	return &types.Header{
-		MixDigest:   randHash(),
-		ReceiptHash: randHash(),
-		TxHash:      randHash(),
-		Nonce:       types.BlockNonce{},
-		Extra:       []byte{},
-		Bloom:       types.Bloom{},
-		GasUsed:     0,
-		Coinbase:    common.Address{},
-		GasLimit:    0,
-		UncleHash:   types.EmptyUncleHash,
-		Time:        1337,
-		ParentHash:  randHash(),
-		Root:        randHash(),
-		Number:      largeNumber(2),
-		Difficulty:  largeNumber(2),
+		MixDigest:    randHash(),
+		ReceiptHash:  randHash(),
+		TxHash:       randHash(),
+		Nonce:        types.BlockNonce{},
+		Extra:        []byte{},
+		Bloom:        types.Bloom{},
+		GasUsed:      0,
+		Coinbase:     common.Address{},
+		GasLimit:     0,
+		Time:         1337,
+		ParentHashes: common.HashArray{randHash()},
+		Root:         randHash(),
+		Number:       &nr,
 	}
 }

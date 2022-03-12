@@ -392,9 +392,8 @@ func TestClique(t *testing.T) {
 		// Assemble a chain of headers from the cast votes
 		config := *params.TestChainConfig
 		config.Clique = &params.CliqueConfig{
-			Period:        5,
-			Epoch:         tt.epoch,
-			SlotsPerEpoch: 8,
+			Period: 5,
+			Epoch:  tt.epoch,
 		}
 		engine := New(db)
 		engine.fakeDiff = true
@@ -420,7 +419,6 @@ func TestClique(t *testing.T) {
 				header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
 				accounts.checkpoint(header, auths)
 			}
-			header.Difficulty = diffInTurn // Ignored, we just need a valid number
 
 			// Generate the signature, embed it into the header and the block
 			accounts.sign(header, tt.votes[j].signer)
@@ -435,7 +433,7 @@ func TestClique(t *testing.T) {
 			batches[len(batches)-1] = append(batches[len(batches)-1], block)
 		}
 		// Pass all the headers through clique and ensure tallying succeeds
-		chain, err := core.NewBlockChain(db, nil, &config, engine, vm.Config{}, nil, nil)
+		chain, err := core.NewBlockChain(db, nil, &config, engine, vm.Config{}, nil)
 		if err != nil {
 			t.Errorf("test %d: failed to create test chain: %v", i, err)
 			continue

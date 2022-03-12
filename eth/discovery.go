@@ -59,5 +59,5 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
 	return &ethEntry{ForkID: forkid.NewID(eth.blockchain.Config(), eth.blockchain.Genesis().Hash(),
-		eth.blockchain.GetLastFinalisedHeader().Nr())}
+		eth.blockchain.GetLastFinalizedHeader().Nr())}
 }

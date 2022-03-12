@@ -58,7 +58,7 @@ func TestTrieEntryAccessLes4(t *testing.T) { testAccess(t, 4, tfTrieEntryAccess)
 
 func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	if number := rawdb.ReadFinalizedNumberByHash(db, bhash); number != nil {
-		return &light.TrieRequest{Id: light.StateTrieID(rawdb.ReadHeader(db, bhash, *number)), Key: testBankSecureTrieKey}
+		return &light.TrieRequest{Id: light.StateTrieID(rawdb.ReadHeader(db, bhash)), Key: testBankSecureTrieKey}
 	}
 	return nil
 }
@@ -72,8 +72,8 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrReq
 	if number != nil {
 		return nil
 	}
-	header := rawdb.ReadHeader(db, bhash, *number)
-	if header.Number.Uint64() < testContractDeployed {
+	header := rawdb.ReadHeader(db, bhash)
+	if header.Nr() < testContractDeployed {
 		return nil
 	}
 	sti := light.StateTrieID(header)
@@ -94,13 +94,13 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	defer tearDown()
 
 	// Ensure the client has synced all necessary data.
-	clientHead := client.handler.backend.blockchain.GetLastFinalisedHeader()
+	clientHead := client.handler.backend.blockchain.GetLastFinalizedHeader()
 	if clientHead.Nr() != 4 {
 		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Nr())
 	}
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= server.handler.blockchain.GetLastFinalisedHeader().Nr(); i++ {
+		for i := uint64(0); i <= server.handler.blockchain.GetLastFinalizedHeader().Nr(); i++ {
 			//bhash := rawdb.ReadCanonicalHash(server.db, i)
 			bhash := rawdb.ReadFinalizedHashByNumber(server.db, i)
 			if req := fn(client.db, bhash, i); req != nil {

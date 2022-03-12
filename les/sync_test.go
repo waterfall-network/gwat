@@ -82,13 +82,13 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			client.handler.backend.blockchain.AddTrustedCheckpoint(cp)
 		} else {
 			// Register the assembled checkpoint into oracle.
-			header := server.backend.Blockchain().CurrentHeader()
+			header := server.backend.Blockchain().GetLastFinalizedHeader()
 
 			data := append([]byte{0x19, 0x00}, append(oracleAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 			sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 			sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 			auth, _ := bind.NewKeyedTransactorWithChainID(signerKey, big.NewInt(1337))
-			if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(auth, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+			if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(auth, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(new(big.Int).SetUint64(header.Nr()), big.NewInt(1)), header.ParentHashes[0], [][]byte{sig}); err != nil {
 				t.Error("register checkpoint failed", err)
 			}
 			server.backend.Commit()
@@ -108,7 +108,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 
 	done := make(chan error)
 	client.handler.syncEnd = func(header *types.Header) {
-		if header.Number.Uint64() == expected {
+		if header.Nr() == expected {
 			done <- nil
 		} else {
 			done <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expected, header.Number)
@@ -170,13 +170,13 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 		BloomRoot:    light.GetBloomTrieRoot(server.db, s-1, head),
 	}
 	// Register the assembled checkpoint into oracle.
-	header := server.backend.Blockchain().CurrentHeader()
+	header := server.backend.Blockchain().GetLastFinalizedHeader()
 
 	data := append([]byte{0x19, 0x00}, append(oracleAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 	sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 	sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	auth, _ := bind.NewKeyedTransactorWithChainID(signerKey, big.NewInt(1337))
-	if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(auth, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+	if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(auth, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(new(big.Int).SetUint64(header.Nr()), big.NewInt(1)), header.ParentHashes[0], [][]byte{sig}); err != nil {
 		t.Error("register checkpoint failed", err)
 	}
 	server.backend.Commit()
@@ -211,7 +211,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 
 	done := make(chan error)
 	client.handler.syncEnd = func(header *types.Header) {
-		if header.Number.Uint64() == expected {
+		if header.Nr() == expected {
 			done <- nil
 		} else {
 			done <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expected, header.Number)
@@ -277,14 +277,14 @@ func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 		expectEnd   = 2*config.ChtSize + config.ChtConfirms
 	)
 	client.handler.syncStart = func(header *types.Header) {
-		if header.Number.Uint64() == expectStart {
+		if header.Nr() == expectStart {
 			start <- nil
 		} else {
 			start <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expectStart, header.Number)
 		}
 	}
 	client.handler.syncEnd = func(header *types.Header) {
-		if header.Number.Uint64() == expectEnd {
+		if header.Nr() == expectEnd {
 			end <- nil
 		} else {
 			end <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expectEnd, header.Number)
@@ -350,14 +350,14 @@ func testSyncAll(t *testing.T, protocol int) {
 		expectEnd   = 2*config.ChtSize + config.ChtConfirms
 	)
 	client.handler.syncStart = func(header *types.Header) {
-		if header.Number.Uint64() == expectStart {
+		if header.Nr() == expectStart {
 			start <- nil
 		} else {
 			start <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expectStart, header.Number)
 		}
 	}
 	client.handler.syncEnd = func(header *types.Header) {
-		if header.Number.Uint64() == expectEnd {
+		if header.Nr() == expectEnd {
 			end <- nil
 		} else {
 			end <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expectEnd, header.Number)

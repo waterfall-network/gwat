@@ -3,9 +3,10 @@ package types
 import (
 	"encoding/binary"
 	"encoding/json"
+	"sort"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"sort"
 )
 
 /********** Tips **********/

@@ -24,7 +24,7 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.GetLastFinalisedHeader()
+		header = api.chain.GetLastFinalizedHeader()
 	} else {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
@@ -51,7 +51,7 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.GetLastFinalisedHeader()
+		header = api.chain.GetLastFinalizedHeader()
 	} else {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
@@ -124,7 +124,7 @@ type status struct {
 func (api *API) Status() (*status, error) {
 	var (
 		numBlocks = uint64(64)
-		header    = api.chain.GetLastFinalisedHeader()
+		header    = api.chain.GetLastFinalizedHeader()
 		optimals  = 0
 	)
 	//snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
@@ -193,7 +193,7 @@ func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address,
 		blockNrOrHash := rlpOrBlockNr.BlockNumberOrHash
 		var header *types.Header
 		if blockNrOrHash == nil {
-			header = api.chain.GetLastFinalisedHeader()
+			header = api.chain.GetLastFinalizedHeader()
 		} else if hash, ok := blockNrOrHash.Hash(); ok {
 			header = api.chain.GetHeaderByHash(hash)
 		} else if number, ok := blockNrOrHash.Number(); ok {

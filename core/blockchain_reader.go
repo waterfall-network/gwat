@@ -217,10 +217,10 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
-// GetLastFinalisedHeader retrieves the current head header of the canonical chain. The
+// GetLastFinalizedHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
-func (bc *BlockChain) GetLastFinalisedHeader() *types.Header {
-	return bc.hc.GetLastFinalisedHeader()
+func (bc *BlockChain) GetLastFinalizedHeader() *types.Header {
+	return bc.hc.GetLastFinalizedHeader()
 }
 
 // GetHeadersByHashes retrieves a blocks headers from the database by hashes, caching it if found.

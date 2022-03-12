@@ -220,9 +220,7 @@ func (ha HashArray) ToBytes() []byte {
 
 func (ha HashArray) Copy() HashArray {
 	c := make(HashArray, len(ha))
-	for k, item := range ha {
-		c[k] = item
-	}
+	copy(c, ha)
 	return c
 }
 
@@ -267,9 +265,7 @@ func (ha HashArray) Uniq() HashArray {
 }
 
 func (ha HashArray) Concat(hashes HashArray) HashArray {
-	for _, item := range hashes {
-		ha = append(ha, item)
-	}
+	ha = append(ha, hashes...)
 	return ha
 }
 
@@ -298,10 +294,11 @@ func (ha HashArray) Sort() HashArray {
 }
 
 func (ha HashArray) Key() Hash {
-	c := make(HashArray, len(ha))
-	for i, hash := range ha {
-		c[i] = hash
-	}
+	c := ha.Copy()
+	//c := make(HashArray, len(ha))
+	//for i, hash := range ha {
+	//	c[i] = hash
+	//}
 	buf := c.Uniq().Sort().ToBytes()
 	sha := sha3.NewLegacyKeccak256()
 	sha.Write(buf[:])

@@ -13,7 +13,7 @@ func (nhm *NrHashMap) GetMinNr() *uint64 {
 		return nil
 	}
 	var res uint64 = 0
-	for k, _ := range *nhm {
+	for k := range *nhm {
 		if res == 0 {
 			res = k
 		} else if res > k {
@@ -29,7 +29,7 @@ func (nhm *NrHashMap) GetMaxNr() *uint64 {
 		return nil
 	}
 	var res uint64 = 0
-	for k, _ := range *nhm {
+	for k := range *nhm {
 		if res == 0 {
 			res = k
 		} else if res < k {

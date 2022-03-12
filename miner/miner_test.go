@@ -60,14 +60,27 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
+func (bc *testBlockChain) GetLastFinalizedBlock() *types.Block {
+	return bc.GetLastFinalizedBlock()
+}
+
+func (bc *testBlockChain) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
+	return bc.ReadFinalizedNumberByHash(hash)
+}
+
+func (bc *testBlockChain) GetBlockByNumber(number uint64) *types.Block {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (bc *testBlockChain) CurrentBlock() *types.Block {
 	return types.NewBlock(&types.Header{
 		GasLimit: bc.gasLimit,
-	}, nil, nil, nil, trie.NewStackTrie(nil))
+	}, nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return bc.CurrentBlock()
+func (bc *testBlockChain) GetBlock(hash common.Hash) *types.Block {
+	return bc.GetBlock(hash)
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
@@ -245,7 +258,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	// Create consensus engine
 	engine := clique.New(chainConfig.Clique, chainDB)
 	// Create Ethereum backend
-	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil)
+	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}

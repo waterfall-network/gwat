@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -96,12 +95,11 @@ func (c *lesCommons) nodeInfo() interface{} {
 	head := c.chainReader.CurrentHeader()
 	hash := head.Hash()
 	return &NodeInfo{
-		Network:    c.config.NetworkId,
-		Difficulty: rawdb.ReadTd(c.chainDb, hash, head.Number.Uint64()),
-		Genesis:    c.genesis,
-		Config:     c.chainConfig,
-		Head:       hash,
-		CHT:        c.latestLocalCheckpoint(),
+		Network: c.config.NetworkId,
+		Genesis: c.genesis,
+		Config:  c.chainConfig,
+		Head:    hash,
+		CHT:     c.latestLocalCheckpoint(),
 	}
 }
 

@@ -164,7 +164,7 @@ func sign(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		num := head.Number.Uint64()
+		num := head.Nr()
 		if num < ((cindex+1)*params.CheckpointFrequency + params.CheckpointProcessConfirmations) {
 			utils.Fatalf("Invalid future checkpoint")
 		}
@@ -287,7 +287,7 @@ func publish(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	num := head.Number.Uint64()
+	num := head.Nr()
 	recent, err := ethclient.NewClient(client).HeaderByNumber(reqCtx, big.NewInt(int64(num-128)))
 	if err != nil {
 		return err
@@ -302,7 +302,7 @@ func publish(ctx *cli.Context) error {
 
 	// Publish the checkpoint into the oracle
 	fmt.Println("Sending publish request to Clef...")
-	tx, err := oracle.RegisterCheckpoint(newClefSigner(ctx), checkpoint.SectionIndex, checkpoint.Hash().Bytes(), recent.Number, recent.Hash(), sigs)
+	tx, err := oracle.RegisterCheckpoint(newClefSigner(ctx), checkpoint.SectionIndex, checkpoint.Hash().Bytes(), new(big.Int).SetUint64(recent.Nr()), recent.Hash(), sigs)
 	if err != nil {
 		utils.Fatalf("Register contract failed %v", err)
 	}

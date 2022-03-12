@@ -18,7 +18,6 @@ package eth
 
 import (
 	"bytes"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,15 +38,15 @@ func TestGetBlockHeadersDataEncodeDecode(t *testing.T) {
 		fail   bool
 	}{
 		// Providing the origin as either a hash or a number should both work
-		{fail: false, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Number: 314}}},
-		{fail: false, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Hash: hash}}},
+		{fail: false, packet: &GetBlockHeadersPacket{Origin: &HashOrNumber{Number: 314}}},
+		{fail: false, packet: &GetBlockHeadersPacket{Origin: &HashOrNumber{Hash: hash}}},
 
 		// Providing arbitrary query field should also work
-		{fail: false, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Number: 314}, Amount: 314, Skip: 1, Reverse: true}},
-		{fail: false, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Hash: hash}, Amount: 314, Skip: 1, Reverse: true}},
+		{fail: false, packet: &GetBlockHeadersPacket{Origin: &HashOrNumber{Number: 314}, Amount: 314, Skip: 1, Reverse: true}},
+		{fail: false, packet: &GetBlockHeadersPacket{Origin: &HashOrNumber{Hash: hash}, Amount: 314, Skip: 1, Reverse: true}},
 
 		// Providing both the origin hash and origin number must fail
-		{fail: true, packet: &GetBlockHeadersPacket{Origin: HashOrNumber{Hash: hash, Number: 314}}},
+		{fail: true, packet: &GetBlockHeadersPacket{Origin: &HashOrNumber{Hash: hash, Number: 314}}},
 	}
 	// Iterate over each of the tests and try to encode and then decode
 	for i, tt := range tests {
@@ -134,13 +133,13 @@ func TestEth66Messages(t *testing.T) {
 
 		err error
 	)
+	nr := uint64(3333)
 	header = &types.Header{
-		Difficulty: big.NewInt(2222),
-		Number:     big.NewInt(3333),
-		GasLimit:   4444,
-		GasUsed:    5555,
-		Time:       6666,
-		Extra:      []byte{0x77, 0x88},
+		Number:   &nr,
+		GasLimit: 4444,
+		GasUsed:  5555,
+		Time:     6666,
+		Extra:    []byte{0x77, 0x88},
 	}
 	// Init the transactions, taken from a different test
 	{
@@ -160,7 +159,6 @@ func TestEth66Messages(t *testing.T) {
 	// init the block body data, both object and rlp form
 	blockBody = &BlockBody{
 		Transactions: txs,
-		Uncles:       []*types.Header{header},
 	}
 	blockBodyRlp, err = rlp.EncodeToBytes(blockBody)
 	if err != nil {
@@ -205,11 +203,11 @@ func TestEth66Messages(t *testing.T) {
 		want    []byte
 	}{
 		{
-			GetBlockHeadersPacket66{1111, &GetBlockHeadersPacket{HashOrNumber{hashes[0], 0}, 5, 5, false}},
+			GetBlockHeadersPacket66{1111, &GetBlockHeadersPacket{&common.HashArray{}, &HashOrNumber{hashes[0], 0}, 5, 5, false}},
 			common.FromHex("e8820457e4a000000000000000000000000000000000000000000000000000000000deadc0de050580"),
 		},
 		{
-			GetBlockHeadersPacket66{1111, &GetBlockHeadersPacket{HashOrNumber{common.Hash{}, 9999}, 5, 5, false}},
+			GetBlockHeadersPacket66{1111, &GetBlockHeadersPacket{&common.HashArray{}, &HashOrNumber{common.Hash{}, 9999}, 5, 5, false}},
 			common.FromHex("ca820457c682270f050580"),
 		},
 		{

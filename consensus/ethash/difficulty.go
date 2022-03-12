@@ -145,10 +145,7 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 			child_diff = max(a,b )
 		*/
 		x := (time - parent.Time) / 9 // (block_timestamp - parent_timestamp) // 9
-		c := uint64(1)                // if parent.unclehash == emptyUncleHashHash
-		//if parent.UncleHash != types.EmptyUncleHash {
-		c = 2
-		//}
+		c := uint64(1)
 		xNeg := x >= c
 		if xNeg {
 			// x is now _negative_ adjustment factor

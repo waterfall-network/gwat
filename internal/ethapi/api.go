@@ -66,7 +66,7 @@ func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) 
 	if err != nil {
 		return nil, err
 	}
-	head := s.b.GetLastFinalisedHeader()
+	head := s.b.GetLastFinalizedHeader()
 	if head.BaseFee != nil {
 		tipcap.Add(tipcap, head.BaseFee)
 	}
@@ -157,7 +157,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 		"queued":  make(map[string]map[string]*RPCTransaction),
 	}
 	pending, queue := s.b.TxPoolContent()
-	curHeader := s.b.GetLastFinalisedHeader()
+	curHeader := s.b.GetLastFinalizedHeader()
 	// Flatten the pending transactions
 	for account, txs := range pending {
 		dump := make(map[string]*RPCTransaction)
@@ -181,7 +181,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RPCTransaction {
 	content := make(map[string]map[string]*RPCTransaction, 2)
 	pending, queue := s.b.TxPoolContentFrom(addr)
-	curHeader := s.b.GetLastFinalisedHeader()
+	curHeader := s.b.GetLastFinalizedHeader()
 
 	// Build the pending transactions
 	dump := make(map[string]*RPCTransaction, len(pending))
@@ -1543,7 +1543,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
-		curHeader := s.b.GetLastFinalisedHeader()
+		curHeader := s.b.GetLastFinalizedHeader()
 		return newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig()), nil
 	}
 
@@ -1806,7 +1806,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 			accounts[account.Address] = struct{}{}
 		}
 	}
-	curHeader := s.b.GetLastFinalisedHeader()
+	curHeader := s.b.GetLastFinalizedHeader()
 	transactions := make([]*RPCTransaction, 0, len(pending))
 	for _, tx := range pending {
 		from, _ := types.Sender(s.signer, tx)

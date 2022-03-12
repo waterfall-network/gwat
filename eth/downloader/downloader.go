@@ -162,8 +162,8 @@ type LightChain interface {
 	// GetHeaderByNumber retrieves a header from the local chain by finalized number.
 	GetHeaderByNumber(number uint64) *types.Header
 
-	// GetLastFinalisedHeader retrieves the head header from the local chain.
-	GetLastFinalisedHeader() *types.Header
+	// GetLastFinalizedHeader retrieves the head header from the local chain.
+	GetLastFinalizedHeader() *types.Header
 
 	// InsertHeaderChain inserts a batch of headers into the local chain.
 	InsertHeaderChain([]*types.Header, int) (int, error)
@@ -289,7 +289,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	case d.blockchain != nil && mode == FastSync:
 		current = d.blockchain.GetLastFinalizedFastBlock().Nr()
 	case d.lightchain != nil:
-		current = d.lightchain.GetLastFinalisedHeader().Nr()
+		current = d.lightchain.GetLastFinalizedHeader().Nr()
 	default:
 		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.blockchain != nil, "mode", mode)
 	}
@@ -477,7 +477,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastF
 		if err != nil {
 			d.mux.Post(FailedEvent{err})
 		} else {
-			latest := d.lightchain.GetLastFinalisedHeader()
+			latest := d.lightchain.GetLastFinalizedHeader()
 			d.mux.Post(DoneEvent{latest})
 		}
 	}()
@@ -808,7 +808,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	//	if err != nil {
 	//		d.mux.Post(FailedEvent{err})
 	//	} else {
-	//		latest := d.lightchain.GetLastFinalisedHeader()
+	//		latest := d.lightchain.GetLastFinalizedHeader()
 	//		log.Info("SINC::EVENT:POST (syncWithPeerDagStage 000)", "latest", latest)
 	//		d.mux.Post(DoneEvent{latest})
 	//	}
@@ -1046,7 +1046,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	//	if err != nil {
 	//		d.mux.Post(FailedEvent{err})
 	//	} else {
-	//		latest := d.lightchain.GetLastFinalisedHeader()
+	//		latest := d.lightchain.GetLastFinalizedHeader()
 	//		log.Info("SINC::EVENT:POST (syncWithPeerDagStage 000)", "latest", latest)
 	//		d.mux.Post(DoneEvent{latest})
 	//	}
@@ -1264,7 +1264,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	case FastSync:
 		localHeight = d.blockchain.GetLastFinalizedFastBlock().Nr()
 	default:
-		lastFinHeader := d.lightchain.GetLastFinalisedHeader()
+		lastFinHeader := d.lightchain.GetLastFinalizedHeader()
 		localHeight = *lastFinHeader.Number
 	}
 	p.log.Info("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
@@ -1283,7 +1283,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	if mode == LightSync {
 		// If we don't know the current CHT position, find it
 		if d.genesis == 0 {
-			header := d.lightchain.GetLastFinalisedHeader()
+			header := d.lightchain.GetLastFinalizedHeader()
 			for header != nil && header.Number != nil {
 				d.genesis = *header.Number
 				if floor >= int64(d.genesis)-1 {
@@ -1662,7 +1662,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 					// Retrieve the current head we're at
 					var head uint64
 					if mode == LightSync {
-						head = *d.lightchain.GetLastFinalisedHeader().Number
+						head = *d.lightchain.GetLastFinalizedHeader().Number
 					} else {
 						full := d.blockchain.GetLastFinalizedNumber()
 						headBlock := d.blockchain.GetLastFinalizedFastBlock()
@@ -2058,7 +2058,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 	)
 	defer func() {
 		if rollback > 0 {
-			lastHeader, lastFastBlock, lastBlock := *d.lightchain.GetLastFinalisedHeader().Number, uint64(0), uint64(0)
+			lastHeader, lastFastBlock, lastBlock := *d.lightchain.GetLastFinalizedHeader().Number, uint64(0), uint64(0)
 			if mode != LightSync {
 				lastFastBlock = *d.blockchain.GetLastFinalizedFastBlock().Number()
 				lastBlock = d.blockchain.GetLastFinalizedNumber()
@@ -2074,7 +2074,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 				curBlock = d.blockchain.GetLastFinalizedNumber()
 			}
 			log.Warn("Rolled back chain segment",
-				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.GetLastFinalisedHeader().Nr()),
+				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.GetLastFinalizedHeader().Nr()),
 				"fast", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
 				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
 		}

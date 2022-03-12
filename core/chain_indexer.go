@@ -53,8 +53,8 @@ type ChainIndexerBackend interface {
 
 // ChainIndexerChain interface is used for connecting the indexer to a blockchain
 type ChainIndexerChain interface {
-	// GetLastFinalisedHeader retrieves the latest locally known header.
-	GetLastFinalisedHeader() *types.Header
+	// GetLastFinalizedHeader retrieves the latest locally known header.
+	GetLastFinalizedHeader() *types.Header
 
 	// SubscribeChainHeadEvent subscribes to new head header notifications.
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
@@ -148,7 +148,7 @@ func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
-	header := chain.GetLastFinalisedHeader()
+	header := chain.GetLastFinalizedHeader()
 	go c.eventLoop(header, events, sub)
 }
 

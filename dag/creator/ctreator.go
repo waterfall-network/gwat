@@ -254,7 +254,7 @@ func (c *Creator) Hashrate() uint64 {
 	return 0
 }
 
-// setEtherbase sets the etherbase used to initialize the block coinbase field.
+// SetEtherbase sets the etherbase used to initialize the block coinbase field.
 func (c *Creator) SetEtherbase(addr common.Address) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -563,7 +563,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
 	c.recentTxsMu.RLock()
 	defer c.recentTxsMu.RUnlock()
-	txs := []*types.Transaction{}
+	var txs []*types.Transaction
 	for _, tx := range c.current.txs {
 		if c.recentTxs[tx.Hash()] == (common.Hash{}) {
 			txs = append(txs, tx)
@@ -574,7 +574,7 @@ func (c *Creator) getUnhandledTxs() []*types.Transaction {
 func (c *Creator) getUnhandledReceips() []*types.Receipt {
 	c.recentTxsMu.RLock()
 	defer c.recentTxsMu.RUnlock()
-	receipts := []*types.Receipt{}
+	var receipts []*types.Receipt
 	for _, tx := range c.current.receipts {
 		if c.recentTxs[tx.TxHash] == (common.Hash{}) {
 			receipts = append(receipts, tx)
@@ -768,7 +768,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 	tps, unload := c.chain.ReviseTips()
 	if len(unload) > 0 {
 		log.Error("Mining skipping", "err", fmt.Errorf("unknown block detected"), "hashes", unload)
-		err := errors.New("Create skipping unknown block detected")
+		err := errors.New("create skipping unknown block detected")
 		c.errWorkCh <- &err
 		return
 	}
@@ -837,7 +837,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 	finDag := tips.GetFinalizingDag()
 	if finDag == nil {
 		log.Error("Tips empty, skipping block creation", "Initial", c.chain.GetTips().Print(), "uncompleted", c.chain.GetUnsynchronizedTipsHashes())
-		err := errors.New("Tips empty, skipping block creation")
+		err := errors.New("tips empty, skipping block creation")
 		c.errWorkCh <- &err
 		return
 	}
@@ -897,7 +897,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 	if c.IsRunning() {
 		if c.coinbase == (common.Address{}) {
 			log.Error("Refusing to create without etherbase")
-			err := errors.New("Refusing to create without etherbase")
+			err := errors.New("refusing to create without etherbase")
 			c.errWorkCh <- &err
 			return
 		}

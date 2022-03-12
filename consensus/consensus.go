@@ -31,8 +31,8 @@ type ChainHeaderReader interface {
 	// Config retrieves the blockchain's chain configuration.
 	Config() *params.ChainConfig
 
-	// GetLastFinalisedHeader retrieves the current header from the local chain.
-	GetLastFinalisedHeader() *types.Header
+	// GetLastFinalizedHeader retrieves the current header from the local chain.
+	GetLastFinalizedHeader() *types.Header
 
 	// GetHeader retrieves a block header from the database by hash and number.
 	GetHeader(hash common.Hash) *types.Header

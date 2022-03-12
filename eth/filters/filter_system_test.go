@@ -69,13 +69,12 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		if number == nil {
 			return nil, nil
 		}
-		num = *number
 	} else {
 		num = uint64(blockNr)
 		//hash = rawdb.ReadCanonicalHash(b.db, num)
 		hash = rawdb.ReadFinalizedHashByNumber(b.db, num)
 	}
-	return rawdb.ReadHeader(b.db, hash, num), nil
+	return rawdb.ReadHeader(b.db, hash), nil
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
@@ -83,12 +82,12 @@ func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 	if number == nil {
 		return nil, nil
 	}
-	return rawdb.ReadHeader(b.db, hash, *number), nil
+	return rawdb.ReadHeader(b.db, hash), nil
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	if number := rawdb.ReadFinalizedNumberByHash(b.db, hash); number != nil {
-		return rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig), nil
+		return rawdb.ReadReceipts(b.db, hash, params.TestChainConfig), nil
 	}
 	return nil, nil
 }
@@ -98,7 +97,7 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types
 	if number == nil {
 		return nil, nil
 	}
-	receipts := rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig)
+	receipts := rawdb.ReadReceipts(b.db, hash, params.TestChainConfig)
 
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {

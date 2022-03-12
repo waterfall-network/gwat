@@ -75,12 +75,12 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	case *BlockRequest:
 		number := rawdb.ReadFinalizedNumberByHash(odr.sdb, req.Hash)
 		if number != nil {
-			req.Rlp = rawdb.ReadBodyRLP(odr.sdb, req.Hash, *number)
+			req.Rlp = rawdb.ReadBodyRLP(odr.sdb, req.Hash)
 		}
 	case *ReceiptsRequest:
 		number := rawdb.ReadFinalizedNumberByHash(odr.sdb, req.Hash)
 		if number != nil {
-			req.Receipts = rawdb.ReadRawReceipts(odr.sdb, req.Hash, *number)
+			req.Receipts = rawdb.ReadRawReceipts(odr.sdb, req.Hash)
 		}
 	case *TrieRequest:
 		t, _ := trie.New(req.Id.Root, trie.NewDatabase(odr.sdb))
@@ -123,12 +123,12 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, bc *core.BlockChain,
 	if bc != nil {
 		number := rawdb.ReadFinalizedNumberByHash(db, bhash)
 		if number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number, bc.Config())
+			receipts = rawdb.ReadReceipts(db, bhash, bc.Config())
 		}
 	} else {
 		number := rawdb.ReadFinalizedNumberByHash(db, bhash)
 		if number != nil {
-			receipts, _ = GetBlockReceipts(ctx, lc.Odr(), bhash, *number)
+			receipts, _ = GetBlockReceipts(ctx, lc.Odr(), bhash)
 		}
 	}
 	if receipts == nil {
@@ -263,7 +263,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	)
 	gspec.MustCommit(ldb)
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil)
 	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		t.Fatal(err)
@@ -283,7 +283,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	}
 
 	test := func(expFail int) {
-		for i := uint64(0); i <= blockchain.GetLastFinalisedHeader().Nr(); i++ {
+		for i := uint64(0); i <= blockchain.GetLastFinalizedHeader().Nr(); i++ {
 			//bhash := rawdb.ReadCanonicalHash(sdb, i)
 			bhash := rawdb.ReadFinalizedHashByNumber(sdb, i)
 			b1, err := fn(NoOdr, sdb, blockchain, nil, bhash)

@@ -783,6 +783,9 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	}
 	// It shouldn't happen in practice.
 	bl, err := api.blockByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
 	if bl.Height() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}

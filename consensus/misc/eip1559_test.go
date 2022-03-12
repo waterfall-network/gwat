@@ -20,7 +20,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -84,17 +83,20 @@ func TestBlockGasLimits(t *testing.T) {
 		{40000000, 5, 39960939, true},  // lower limit
 		{40000000, 5, 39960938, false}, // Lower limit -1
 	} {
+		nrPt := uint64(tc.pNum)
 		parent := &types.Header{
 			GasUsed:  tc.pGasLimit / 2,
 			GasLimit: tc.pGasLimit,
 			BaseFee:  initial,
-			Number:   big.NewInt(tc.pNum),
+			Number:   &nrPt,
 		}
+
+		nrHd := uint64(tc.pNum + 1)
 		header := &types.Header{
 			GasUsed:  tc.gasLimit / 2,
 			GasLimit: tc.gasLimit,
 			BaseFee:  initial,
-			Number:   big.NewInt(tc.pNum + 1),
+			Number:   &nrHd,
 		}
 		err := VerifyEip1559Header(config(), parent, header)
 		if tc.ok && err != nil {
@@ -120,7 +122,7 @@ func TestCalcBaseFee(t *testing.T) {
 	}
 	for i, test := range tests {
 		parent := &types.Header{
-			Number:   common.Big32,
+			Number:   new(uint64),
 			GasLimit: test.parentGasLimit,
 			GasUsed:  test.parentGasUsed,
 			BaseFee:  big.NewInt(test.parentBaseFee),

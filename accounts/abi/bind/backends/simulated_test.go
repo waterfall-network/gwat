@@ -248,8 +248,8 @@ func TestBlockByNumber(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not get recent block: %v", err)
 	}
-	if block.NumberU64() != 0 {
-		t.Errorf("did not get most recent block, instead got block number %v", block.NumberU64())
+	if block.Nr() != 0 {
+		t.Errorf("did not get most recent block, instead got block number %v", block.Nr())
 	}
 
 	// create one block
@@ -259,8 +259,8 @@ func TestBlockByNumber(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not get recent block: %v", err)
 	}
-	if block.NumberU64() != 1 {
-		t.Errorf("did not get most recent block, instead got block number %v", block.NumberU64())
+	if block.Nr() != 1 {
+		t.Errorf("did not get most recent block, instead got block number %v", block.Nr())
 	}
 
 	blockByNumber, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
@@ -656,8 +656,8 @@ func TestHeaderByNumber(t *testing.T) {
 	if latestBlockHeader == nil {
 		t.Errorf("received a nil block header")
 	}
-	if latestBlockHeader.Number.Uint64() != uint64(0) {
-		t.Errorf("expected block header number 0, instead got %v", latestBlockHeader.Number.Uint64())
+	if latestBlockHeader.Nr() != uint64(0) {
+		t.Errorf("expected block header number 0, instead got %v", latestBlockHeader.Nr())
 	}
 
 	sim.Commit()
@@ -675,8 +675,8 @@ func TestHeaderByNumber(t *testing.T) {
 	if blockHeader.Hash() != latestBlockHeader.Hash() {
 		t.Errorf("block header and latest block header are not the same")
 	}
-	if blockHeader.Number.Int64() != int64(1) {
-		t.Errorf("did not get blockheader for block 1. instead got block %v", blockHeader.Number.Int64())
+	if blockHeader.Nr() != uint64(1) {
+		t.Errorf("did not get blockheader for block 1. instead got block %v", blockHeader.Nr())
 	}
 
 	block, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
@@ -1180,14 +1180,14 @@ func TestFork(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	// 1.
-	parent := sim.blockchain.CurrentBlock()
+	parent := sim.blockchain.GetLastFinalizedBlock()
 	// 2.
 	n := int(rand.Int31n(21))
 	for i := 0; i < n; i++ {
 		sim.Commit()
 	}
 	// 3.
-	if sim.blockchain.CurrentBlock().NumberU64() != uint64(n) {
+	if sim.blockchain.GetLastFinalizedBlock().Nr() != uint64(n) {
 		t.Error("wrong chain length")
 	}
 	// 4.
@@ -1197,7 +1197,7 @@ func TestFork(t *testing.T) {
 		sim.Commit()
 	}
 	// 6.
-	if sim.blockchain.CurrentBlock().NumberU64() != uint64(n+1) {
+	if sim.blockchain.GetLastFinalizedBlock().Nr() != uint64(n+1) {
 		t.Error("wrong chain length")
 	}
 }
@@ -1247,7 +1247,7 @@ func TestForkLogsReborn(t *testing.T) {
 	}
 	defer sub.Unsubscribe()
 	// 3.
-	parent := sim.blockchain.CurrentBlock()
+	parent := sim.blockchain.GetLastFinalizedBlock()
 	// 4.
 	tx, err := contract.Transact(auth, "Call")
 	if err != nil {
@@ -1306,7 +1306,7 @@ func TestForkResendTx(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	// 1.
-	parent := sim.blockchain.CurrentBlock()
+	parent := sim.blockchain.GetLastFinalizedBlock()
 	// 2.
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))

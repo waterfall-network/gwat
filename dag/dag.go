@@ -7,7 +7,6 @@ package dag
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -30,7 +29,6 @@ type Backend interface {
 	Downloader() *downloader.Downloader
 }
 
-// Finalizer creates blocks and searches for proof-of-work values.
 type Dag struct {
 	chainConfig *params.ChainConfig
 
@@ -81,7 +79,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 
 	d.setConsensusInfo(data)
 
-	log.Info("============= HandleConsensus::=============", "data", data)
+	log.Info("Handle Consensus: start", "data", data)
 
 	// finalization
 	if len(data.Finalizing) > 0 {
@@ -90,15 +88,15 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 		}
 	}
 
-	log.Info("============= HandleConsensus::finalized=============", "err", errs["finalization"], "data", data)
+	log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
-	// collect next finalization candidats
+	// collect next finalization candidates
 	candidates, err := d.finalizer.GetFinalizingCandidates()
 	if err != nil {
 		errs["candidates"] = err.Error()
 	}
 
-	log.Info("============= HandleConsensus::GetFinalizingCandidates=============", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
+	log.Info("Handle Consensus:: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
 
 	// create block
 	dagSlots := d.countDagSlots()
@@ -119,11 +117,11 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 			if block != nil {
 				crtInfo["newBlock"] = block.Hash().Hex()
 			}
-			log.Info("============= HandleConsensus::create=============", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+			log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 		}()
 	}
 
-	info["elapsed"] = fmt.Sprintf("%s", common.PrettyDuration(time.Since(tstart)))
+	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
 	res := &ConsensusResult{
 		Error:      nil,
 		Info:       &info,
@@ -131,10 +129,10 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	}
 	if len(errs) > 0 {
 		strBuf, _ := json.Marshal(errs)
-		estr := fmt.Sprintf("%s", strBuf)
+		estr := string(strBuf)
 		res.Error = &estr
 	}
-	log.Info("============= HandleConsensus::response=============", "result", res)
+	log.Info("Handle Consensus: response", "result", res)
 	return res
 }
 

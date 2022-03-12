@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -178,12 +177,12 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		TxPool:          core.DefaultTxPoolConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
-		Miner: miner.Config{
-			Etherbase: common.Address{1},
-			GasCeil:   genesis.GasLimit * 11 / 10,
-			GasPrice:  big.NewInt(1),
-			Recommit:  time.Second,
-		},
+		//Miner: miner.Config{
+		//	Etherbase: common.Address{1},
+		//	GasCeil:   genesis.GasLimit * 11 / 10,
+		//	GasPrice:  big.NewInt(1),
+		//	Recommit:  time.Second,
+		//},
 	})
 	if err != nil {
 		return nil, nil, err

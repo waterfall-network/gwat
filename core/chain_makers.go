@@ -264,23 +264,23 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	return header
 }
 
-// makeHeaderChain creates a deterministic chain of headers rooted at parent.
-func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Header {
-	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, engine, db, seed)
-	headers := make([]*types.Header, len(blocks))
-	for i, block := range blocks {
-		headers[i] = block.Header()
-	}
-	return headers
-}
+//// makeHeaderChain creates a deterministic chain of headers rooted at parent.
+//func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Header {
+//	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, engine, db, seed)
+//	headers := make([]*types.Header, len(blocks))
+//	for i, block := range blocks {
+//		headers[i] = block.Header()
+//	}
+//	return headers
+//}
 
-// makeBlockChain creates a deterministic chain of blocks rooted at parent.
-func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Block {
-	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
-	})
-	return blocks
-}
+//// makeBlockChain creates a deterministic chain of blocks rooted at parent.
+//func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Block {
+//	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
+//		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
+//	})
+//	return blocks
+//}
 
 type fakeChainReader struct {
 	config *params.ChainConfig
@@ -291,7 +291,7 @@ func (cr *fakeChainReader) Config() *params.ChainConfig {
 	return cr.config
 }
 
-func (cr *fakeChainReader) GetLastFinalisedHeader() *types.Header          { return nil }
+func (cr *fakeChainReader) GetLastFinalizedHeader() *types.Header          { return nil }
 func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header  { return nil }
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header { return nil }
 func (cr *fakeChainReader) GetHeader(hash common.Hash) *types.Header       { return nil }

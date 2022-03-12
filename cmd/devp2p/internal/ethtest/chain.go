@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"strings"
 
@@ -42,29 +41,6 @@ type Chain struct {
 // Len returns the length of the chain.
 func (c *Chain) Len() int {
 	return len(c.blocks)
-}
-
-// TD calculates the total difficulty of the chain at the
-// chain head.
-func (c *Chain) TD() *big.Int {
-	sum := big.NewInt(0)
-	for _, block := range c.blocks[:c.Len()] {
-		sum.Add(sum, block.Difficulty())
-	}
-	return sum
-}
-
-// TotalDifficultyAt calculates the total difficulty of the chain
-// at the given block height.
-func (c *Chain) TotalDifficultyAt(height int) *big.Int {
-	sum := big.NewInt(0)
-	if height >= c.Len() {
-		return sum
-	}
-	for _, block := range c.blocks[:height+1] {
-		sum.Add(sum, block.Difficulty())
-	}
-	return sum
 }
 
 // ForkID gets the fork id of the chain.
@@ -99,9 +75,9 @@ func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 
 	// range over blocks to check if our chain has the requested header
 	for _, block := range c.blocks {
-		if block.Hash() == req.Origin.Hash || block.Number().Uint64() == req.Origin.Number {
+		if block.Hash() == req.Origin.Hash || block.Nr() == req.Origin.Number {
 			headers[0] = block.Header()
-			blockNumber = block.Number().Uint64()
+			blockNumber = block.Nr()
 		}
 	}
 	if headers[0] == nil {
@@ -179,8 +155,8 @@ func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, erro
 		} else if err != nil {
 			return nil, fmt.Errorf("at block index %d: %v", i, err)
 		}
-		if b.NumberU64() != uint64(i+1) {
-			return nil, fmt.Errorf("block at index %d has wrong number %d", i, b.NumberU64())
+		if b.Nr() != uint64(i+1) {
+			return nil, fmt.Errorf("block at index %d has wrong number %d", i, b.Nr())
 		}
 		blocks = append(blocks, &b)
 	}

@@ -563,10 +563,10 @@ func (f *faucet) refresh(head *types.Header) error {
 		nonce   uint64
 		price   *big.Int
 	)
-	if balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number); err != nil {
+	if balance, err = f.client.BalanceAt(ctx, f.account.Address, new(big.Int).SetUint64(head.Nr())); err != nil {
 		return err
 	}
-	if nonce, err = f.client.NonceAt(ctx, f.account.Address, head.Number); err != nil {
+	if nonce, err = f.client.NonceAt(ctx, f.account.Address, new(big.Int).SetUint64(head.Nr())); err != nil {
 		return err
 	}
 	if price, err = f.client.SuggestGasPrice(ctx); err != nil {

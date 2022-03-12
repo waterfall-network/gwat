@@ -75,13 +75,11 @@ type btHeader struct {
 	Nonce            types.BlockNonce
 	Number           *big.Int
 	Hash             common.Hash
-	ParentHash       common.Hash
+	ParentHashes     common.HashArray
 	ReceiptTrie      common.Hash
 	StateRoot        common.Hash
 	TransactionsTrie common.Hash
-	UncleHash        common.Hash
 	ExtraData        []byte
-	Difficulty       *big.Int
 	GasLimit         uint64
 	GasUsed          uint64
 	Timestamp        uint64
@@ -127,7 +125,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
 	}
-	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil)
 	if err != nil {
 		return err
 	}
@@ -137,7 +135,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	if err != nil {
 		return err
 	}
-	cmlast := chain.CurrentBlock().Hash()
+	cmlast := chain.GetLastFinalizedBlock().Hash()
 	if common.Hash(t.json.BestBlock) != cmlast {
 		return fmt.Errorf("last block hash validation mismatch: want: %x, have: %x", t.json.BestBlock, cmlast)
 	}
@@ -150,7 +148,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
 	if snapshotter {
-		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root()); err != nil {
+		if err := chain.Snapshots().Verify(chain.GetLastFinalizedBlock().Root()); err != nil {
 			return err
 		}
 	}
@@ -159,18 +157,17 @@ func (t *BlockTest) Run(snapshotter bool) error {
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
-		Config:     config,
-		Nonce:      t.json.Genesis.Nonce.Uint64(),
-		Timestamp:  t.json.Genesis.Timestamp,
-		ParentHash: t.json.Genesis.ParentHash,
-		ExtraData:  t.json.Genesis.ExtraData,
-		GasLimit:   t.json.Genesis.GasLimit,
-		GasUsed:    t.json.Genesis.GasUsed,
-		Difficulty: t.json.Genesis.Difficulty,
-		Mixhash:    t.json.Genesis.MixHash,
-		Coinbase:   t.json.Genesis.Coinbase,
-		Alloc:      t.json.Pre,
-		BaseFee:    t.json.Genesis.BaseFeePerGas,
+		Config:       config,
+		Nonce:        t.json.Genesis.Nonce.Uint64(),
+		Timestamp:    t.json.Genesis.Timestamp,
+		ParentHashes: t.json.Genesis.ParentHashes,
+		ExtraData:    t.json.Genesis.ExtraData,
+		GasLimit:     t.json.Genesis.GasLimit,
+		GasUsed:      t.json.Genesis.GasUsed,
+		Mixhash:      t.json.Genesis.MixHash,
+		Coinbase:     t.json.Genesis.Coinbase,
+		Alloc:        t.json.Pre,
+		BaseFee:      t.json.Genesis.BaseFeePerGas,
 	}
 }
 
@@ -239,11 +236,11 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.Nonce != h2.Nonce {
 		return fmt.Errorf("nonce: want: %x have: %x", h.Nonce, h2.Nonce)
 	}
-	if h.Number.Cmp(h2.Number) != 0 {
+	if h.Number.Cmp(new(big.Int).SetUint64(h2.Nr())) != 0 {
 		return fmt.Errorf("number: want: %v have: %v", h.Number, h2.Number)
 	}
-	if h.ParentHash != h2.ParentHash {
-		return fmt.Errorf("parent hash: want: %x have: %x", h.ParentHash, h2.ParentHash)
+	if h.ParentHashes[0] != h2.ParentHashes[0] {
+		return fmt.Errorf("parent hash: want: %x have: %x", h.ParentHashes, h2.ParentHashes)
 	}
 	if h.ReceiptTrie != h2.ReceiptHash {
 		return fmt.Errorf("receipt hash: want: %x have: %x", h.ReceiptTrie, h2.ReceiptHash)
@@ -254,14 +251,8 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.StateRoot != h2.Root {
 		return fmt.Errorf("state hash: want: %x have: %x", h.StateRoot, h2.Root)
 	}
-	if h.UncleHash != h2.UncleHash {
-		return fmt.Errorf("uncle hash: want: %x have: %x", h.UncleHash, h2.UncleHash)
-	}
 	if !bytes.Equal(h.ExtraData, h2.Extra) {
 		return fmt.Errorf("extra data: want: %x have: %x", h.ExtraData, h2.Extra)
-	}
-	if h.Difficulty.Cmp(h2.Difficulty) != 0 {
-		return fmt.Errorf("difficulty: want: %v have: %v", h.Difficulty, h2.Difficulty)
 	}
 	if h.GasLimit != h2.GasLimit {
 		return fmt.Errorf("gasLimit: want: %d have: %d", h.GasLimit, h2.GasLimit)
@@ -306,7 +297,7 @@ func (t *BlockTest) validateImportedHeaders(cm *core.BlockChain, validBlocks []b
 	// block-by-block, so we can only validate imported headers after
 	// all blocks have been processed by BlockChain, as they may not
 	// be part of the longest chain until last block is imported.
-	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlockByHash(b.Header().ParentHash) {
+	for b := cm.GetLastFinalizedBlock(); b != nil && b.Nr() != 0; b = cm.GetBlockByHash(b.Header().ParentHashes[0]) {
 		if err := validateHeader(bmap[b.Hash()].BlockHeader, b.Header()); err != nil {
 			return fmt.Errorf("imported block header validation failed: %v", err)
 		}

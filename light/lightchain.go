@@ -72,6 +72,11 @@ type LightChain struct {
 	disableCheckFreq int32 // disables header verification
 }
 
+func (lc *LightChain) CurrentHeader() *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (lc *LightChain) WriteSyncDagBlock(block *types.Block) (status int, err error) {
 	panic("implement me")
 }
@@ -173,7 +178,7 @@ func (lc *LightChain) loadLastState() error {
 		}
 	}
 	// Issue a status log and return
-	header := lc.hc.GetLastFinalisedHeader()
+	header := lc.hc.GetLastFinalizedHeader()
 	log.Info("Loaded most recent local header", "hash", header.Hash())
 	return nil
 }
@@ -190,7 +195,7 @@ func (lc *LightChain) SetHead(head common.Hash) error {
 
 // GasLimit returns the gas limit of the current HEAD block.
 func (lc *LightChain) GasLimit() uint64 {
-	return lc.hc.GetLastFinalisedHeader().GasLimit
+	return lc.hc.GetLastFinalizedHeader().GasLimit
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -338,7 +343,7 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 		// In theory we should update all in-memory markers in the
 		// last step, however the direction of rollback is from high
 		// to low, so it's safe the update in-memory markers directly.
-		if head := lc.hc.GetLastFinalisedHeader(); head.Hash() == hash {
+		if head := lc.hc.GetLastFinalizedHeader(); head.Hash() == hash {
 			height := rawdb.ReadFinalizedNumberByHash(lc.chainDb, head.Hash())
 			if height == nil || *height == uint64(0) {
 				continue
@@ -361,7 +366,7 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 	for _, event := range events {
 		switch ev := event.(type) {
 		case core.ChainEvent:
-			if lc.GetLastFinalisedHeader().Hash() == ev.Hash {
+			if lc.GetLastFinalizedHeader().Hash() == ev.Hash {
 				lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: ev.Block})
 			}
 			lc.chainFeed.Send(ev)
@@ -420,10 +425,10 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	return 0, err
 }
 
-// GetLastFinalisedHeader retrieves the current head header of the canonical chain. The
+// GetLastFinalizedHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
-func (lc *LightChain) GetLastFinalisedHeader() *types.Header {
-	return lc.hc.GetLastFinalisedHeader()
+func (lc *LightChain) GetLastFinalizedHeader() *types.Header {
+	return lc.hc.GetLastFinalizedHeader()
 }
 
 func (lc *LightChain) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
@@ -504,7 +509,7 @@ func (lc *LightChain) Config() *params.ChainConfig { return lc.hc.Config() }
 // which covered by checkpoint.
 func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.TrustedCheckpoint) bool {
 	// Ensure the remote checkpoint head is ahead of us
-	head := lc.GetLastFinalisedHeader().Nr()
+	head := lc.GetLastFinalizedHeader().Nr()
 
 	latest := (checkpoint.SectionIndex+1)*lc.indexerConfig.ChtSize - 1
 	if clique := lc.hc.Config().Clique; clique != nil {
@@ -519,7 +524,7 @@ func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.Tru
 		defer lc.chainmu.Unlock()
 
 		// Ensure the chain didn't move past the latest block while retrieving it
-		if lc.hc.GetLastFinalisedHeader().Nr() < header.Nr() {
+		if lc.hc.GetLastFinalizedHeader().Nr() < header.Nr() {
 			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
 			rawdb.WriteLastFinalizedHash(lc.chainDb, header.Hash())
 			lc.hc.SetLastFinalisedHeader(header, header.Nr())

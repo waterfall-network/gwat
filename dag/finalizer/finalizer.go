@@ -207,7 +207,7 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 	finPoint := finPoints[fpIndex]
 	finOrd := dag.DagChainHashes.Uniq()
 
-	log.Info("Finalizer select candidats", "candidats", finOrd)
+	log.Info("Finalizer select candidates", "candidates", finOrd)
 
 	blocks := bc.GetBlocksByHashes(finOrd)
 	finBlock := blocks[finPoint]

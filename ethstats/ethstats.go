@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"math/big"
 	"net/http"
 	"runtime"
@@ -38,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/dag/creator"
+	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -62,7 +62,7 @@ const (
 type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
-	GetLastFinalisedHeader() *types.Header
+	GetLastFinalizedHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	Stats() (pending int, queued int)
 	SyncProgress() ethereum.SyncProgress
@@ -639,7 +639,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		if block != nil {
 			header = block.Header()
 		} else {
-			header = s.backend.GetLastFinalisedHeader()
+			header = s.backend.GetLastFinalizedHeader()
 		}
 		txs = []txStats{}
 	}
@@ -672,12 +672,12 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 		indexes = append(indexes, list...)
 	} else {
 		// No indexes requested, send back the top ones
-		head := s.backend.GetLastFinalisedHeader().Nr()
+		head := s.backend.GetLastFinalizedHeader().Nr()
 		start := head - historyUpdateRange + 1
 		if start < 0 {
 			start = 0
 		}
-		for i := uint64(start); i <= uint64(head); i++ {
+		for i := start; i <= head; i++ {
 			indexes = append(indexes, i)
 		}
 	}
@@ -773,19 +773,19 @@ func (s *Service) reportStats(conn *connWrapper) error {
 
 		sync := fullBackend.SyncProgress()
 		//todo require new logic
-		//syncing = fullBackend.GetLastFinalisedHeader().Number.Uint64() >= sync.HighestBlock
+		//syncing = fullBackend.GetLastFinalizedHeader().Number.Uint64() >= sync.HighestBlock
 		syncing = 0 >= sync.HighestBlock
 
 		price, _ := fullBackend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
-		header := fullBackend.GetLastFinalisedHeader()
+		header := fullBackend.GetLastFinalizedHeader()
 		if basefee := header.BaseFee; basefee != nil {
 			gasprice += int(basefee.Uint64())
 		}
 	} else {
 		sync := s.backend.SyncProgress()
 		//todo require new logic
-		//syncing = s.backend.GetLastFinalisedHeader().Number.Uint64() >= sync.HighestBlock
+		//syncing = s.backend.GetLastFinalizedHeader().Number.Uint64() >= sync.HighestBlock
 		syncing = 0 >= sync.HighestBlock
 	}
 	// Assemble the node stats and send it to the server

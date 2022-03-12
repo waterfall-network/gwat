@@ -21,6 +21,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -28,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"math/big"
 )
 
 //// ReadCanonicalHash retrieves the hash assigned to a canonical block number.
@@ -865,29 +866,29 @@ func DeleteBadBlocks(db ethdb.KeyValueWriter) {
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	panic("FindCommonAncestor: no implementation: fix it core/rawdb/accessors_chain.go:1001")
-	for bn := b.Nr(); a.Nr() > bn; {
-		a = ReadHeader(db, a.ParentHashes[0])
-		if a == nil {
-			return nil
-		}
-	}
-	for an := a.Nr(); an < b.Nr(); {
-		b = ReadHeader(db, b.ParentHashes[0])
-		if b == nil {
-			return nil
-		}
-	}
-	for a.Hash() != b.Hash() {
-		a = ReadHeader(db, a.ParentHashes[0])
-		if a == nil {
-			return nil
-		}
-		b = ReadHeader(db, b.ParentHashes[0])
-		if b == nil {
-			return nil
-		}
-	}
-	return a
+	//for bn := b.Nr(); a.Nr() > bn; {
+	//	a = ReadHeader(db, a.ParentHashes[0])
+	//	if a == nil {
+	//		return nil
+	//	}
+	//}
+	//for an := a.Nr(); an < b.Nr(); {
+	//	b = ReadHeader(db, b.ParentHashes[0])
+	//	if b == nil {
+	//		return nil
+	//	}
+	//}
+	//for a.Hash() != b.Hash() {
+	//	a = ReadHeader(db, a.ParentHashes[0])
+	//	if a == nil {
+	//		return nil
+	//	}
+	//	b = ReadHeader(db, b.ParentHashes[0])
+	//	if b == nil {
+	//		return nil
+	//	}
+	//}
+	//return a
 }
 
 ////todo deprecated

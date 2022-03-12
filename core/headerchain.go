@@ -39,7 +39,6 @@ import (
 
 const (
 	headerCacheLimit = 512
-	tdCacheLimit     = 1024
 	numberCacheLimit = 2048
 )
 
@@ -112,7 +111,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 			hc.lastFinalisedHeader.Store(chead)
 		}
 	}
-	hc.lastFinalisedHash = hc.GetLastFinalisedHeader().Hash()
+	hc.lastFinalisedHash = hc.GetLastFinalizedHeader().Hash()
 	hc.tips.Store(&types.Tips{})
 	headHeaderGauge.Update(int64(heihgt))
 	return hc, nil
@@ -450,9 +449,9 @@ func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
 	//return rawdb.ReadCanonicalHash(hc.chainDb, number)
 }
 
-// GetLastFinalisedHeader retrieves the current head header of the canonical chain. The
+// GetLastFinalizedHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
-func (hc *HeaderChain) GetLastFinalisedHeader() *types.Header {
+func (hc *HeaderChain) GetLastFinalizedHeader() *types.Header {
 	lastFinHead := hc.lastFinalisedHeader.Load().(*types.Header)
 	if lastFinHead.Number == nil {
 		finNr := hc.GetBlockFinalizedNumber(lastFinHead.Hash())
@@ -477,7 +476,7 @@ func (hc *HeaderChain) ResetTips() error {
 	hc.tipsMu.Lock()
 	//defer hc.tipsMu.Unlock()
 
-	lastFinHeader := hc.GetLastFinalisedHeader()
+	lastFinHeader := hc.GetLastFinalizedHeader()
 	//set genesis blockDag
 	dag := &types.BlockDAG{
 		Hash:                lastFinHeader.Hash(),
@@ -527,7 +526,7 @@ func (hc *HeaderChain) loadTips() error {
 
 //GetTips retrieves active tips
 func (hc *HeaderChain) GetTips(skipLock ...bool) *types.Tips {
-	if len(skipLock) == 0 || skipLock[0] == false {
+	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()
 		defer hc.tipsMu.Unlock()
 	}
@@ -537,7 +536,7 @@ func (hc *HeaderChain) GetTips(skipLock ...bool) *types.Tips {
 
 //AddTips add BlockDag to tips
 func (hc *HeaderChain) AddTips(blockDag *types.BlockDAG, skipLock ...bool) {
-	if len(skipLock) == 0 || skipLock[0] == false {
+	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()
 		defer hc.tipsMu.Unlock()
 	}
@@ -549,7 +548,7 @@ func (hc *HeaderChain) AddTips(blockDag *types.BlockDAG, skipLock ...bool) {
 
 //RemoveTips remove BlockDag from tips by hashes from tips
 func (hc *HeaderChain) RemoveTips(hashes common.HashArray, skipLock ...bool) {
-	if len(skipLock) == 0 || skipLock[0] == false {
+	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()
 		defer hc.tipsMu.Unlock()
 	}
@@ -594,7 +593,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 
 	// check top hashes in chains
 	ancestors := curTips.GetAncestorsHashes()
-	for hash, _ := range curTips {
+	for hash := range curTips {
 		if ancestors.Has(hash) {
 			curTips.Remove(hash)
 		}
@@ -670,7 +669,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 
 //WriteCurrentTips save current tips blockDags and hashes
 func (hc *HeaderChain) writeCurrentTips(skipLock ...bool) {
-	if len(skipLock) == 0 || skipLock[0] == false {
+	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()
 		defer hc.tipsMu.Unlock()
 	}
@@ -709,8 +708,8 @@ func (hc *HeaderChain) SetHead(headHash common.Hash, updateFn UpdateHeadBlocksCa
 		lastFinNr  = hc.GetBlockFinalizedNumber(headHash)
 	)
 
-	for hdrHeight := hc.GetBlockFinalizedNumber(hc.GetLastFinalisedHeader().Hash()); hdrHeight != nil && lastFinNr != nil && *hdrHeight > *lastFinNr; hdrHeight = hc.GetBlockFinalizedNumber(hc.GetLastFinalisedHeader().Hash()) {
-		hdr := hc.GetLastFinalisedHeader()
+	for hdrHeight := hc.GetBlockFinalizedNumber(hc.GetLastFinalizedHeader().Hash()); hdrHeight != nil && lastFinNr != nil && *hdrHeight > *lastFinNr; hdrHeight = hc.GetBlockFinalizedNumber(hc.GetLastFinalizedHeader().Hash()) {
+		hdr := hc.GetLastFinalizedHeader()
 		num := *hdrHeight
 
 		// Rewind block chain to new head.
@@ -733,7 +732,6 @@ func (hc *HeaderChain) SetHead(headHash common.Hash, updateFn UpdateHeadBlocksCa
 			newHeadHeight := hc.GetBlockFinalizedNumber(newHead)
 			if force && newHeadHeight != nil && *newHeadHeight < *lastFinNr {
 				log.Warn("Force rewinding till ancient limit", "head", newHeadHeight)
-				headHash = newHead
 				lastFinNr = newHeadHeight
 			}
 		}

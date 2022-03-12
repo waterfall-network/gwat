@@ -53,7 +53,7 @@ type Blockchain interface {
 	Genesis() *types.Block
 
 	// CurrentHeader retrieves the current head header of the canonical chain.
-	GetLastFinalisedHeader() *types.Header
+	GetLastFinalizedHeader() *types.Header
 }
 
 // ID is a fork identifier as defined by EIP-2124.
@@ -89,7 +89,7 @@ func NewIDWithChain(chain Blockchain) ID {
 	return NewID(
 		chain.Config(),
 		chain.Genesis().Hash(),
-		chain.GetLastFinalisedHeader().Nr(),
+		chain.GetLastFinalizedHeader().Nr(),
 	)
 }
 
@@ -100,7 +100,7 @@ func NewFilter(chain Blockchain) Filter {
 		chain.Config(),
 		chain.Genesis().Hash(),
 		func() uint64 {
-			return chain.GetLastFinalisedHeader().Nr()
+			return chain.GetLastFinalizedHeader().Nr()
 		},
 	)
 }

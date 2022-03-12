@@ -112,13 +112,12 @@ func (h *serverHandler) handle(p *clientPeer) error {
 
 	// Execute the LES handshake
 	var (
-		head   = h.blockchain.CurrentHeader()
+		head   = h.blockchain.GetLastFinalizedHeader()
 		hash   = head.Hash()
-		number = head.Number.Uint64()
-		td     = h.blockchain.GetTd(hash, number)
-		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.CurrentBlock().NumberU64())
+		number = head.Nr()
+		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.GetLastFinalizedHeader().Nr())
 	)
-	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
+	if err := p.Handshake(hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -409,25 +408,20 @@ func (h *serverHandler) broadcastLoop() {
 	defer headSub.Unsubscribe()
 
 	var (
-		lastHead = h.blockchain.CurrentHeader()
-		lastTd   = common.Big0
+		lastHead = h.blockchain.GetLastFinalizedHeader()
 	)
 	for {
 		select {
 		case ev := <-headCh:
 			header := ev.Block.Header()
-			hash, number := header.Hash(), header.Number.Uint64()
-			td := h.blockchain.GetTd(hash, number)
-			if td == nil || td.Cmp(lastTd) <= 0 {
-				continue
-			}
+			hash, number := header.Hash(), header.Nr()
 			var reorg uint64
 			if lastHead != nil {
-				reorg = lastHead.Number.Uint64() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Number.Uint64()
+				reorg = lastHead.Nr() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Nr()
 			}
-			lastHead, lastTd = header, td
-			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
-			h.server.peers.broadcast(announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg})
+			lastHead = header
+			log.Debug("Announcing block to peers", "number", number, "hash", hash, "reorg", reorg)
+			h.server.peers.broadcast(announceData{Hash: hash, Number: number, ReorgDepth: reorg})
 		case <-h.closeCh:
 			return
 		}

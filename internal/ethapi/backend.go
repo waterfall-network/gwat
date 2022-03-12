@@ -61,7 +61,7 @@ type Backend interface {
 	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
 	HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error)
 	GetLastFinalizedNumber() uint64
-	GetLastFinalisedHeader() *types.Header
+	GetLastFinalizedHeader() *types.Header
 	GetLastFinalizedBlock() *types.Block
 	GetBlockFinalizedNumber(hash common.Hash) *uint64
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
