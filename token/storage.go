@@ -213,11 +213,20 @@ func (s *Storage) makeIthSlotGetter(mapSlot common.Hash, key []byte, getSlot fun
 		indexBuf := make([]byte, 8)
 		binary.BigEndian.PutUint64(indexBuf, i)
 		hash := common.BytesToHash(crypto.Keccak256(mapSlot[:], key, indexBuf))
-		s.slots[hash] = getSlot(hash)
+
+		var (
+			v  *common.Hash
+			ok bool
+		)
+		// Check if the slot has been already read
+		if v, ok = s.slots[hash]; !ok {
+			v = getSlot(hash)
+			s.slots[hash] = v
+		}
 		s.pos = 0
 
 		i += 1
-		return s.slots[hash]
+		return v
 	}
 	return getIthSlot
 }
