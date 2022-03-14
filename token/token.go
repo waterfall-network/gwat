@@ -43,10 +43,13 @@ const (
 	OpSafeTransferFrom    = 0x29
 )
 
+// Prefix for the encoded data field of a token operation
 const (
 	Prefix = 0xF3
 )
 
+// Operation is a token operation
+// Every specific operation should implement this interface
 type Operation interface {
 	OpCode() OpCode
 	Standard() Std
@@ -55,6 +58,8 @@ type Operation interface {
 	encoding.BinaryMarshaler
 }
 
+// GetOpCode gets op code of an encoded token operation
+// It also checks the encoding for length and prefix
 func GetOpCode(b []byte) (OpCode, error) {
 	if len(b) < 2 {
 		return 0, ErrRawDataShort
@@ -68,6 +73,9 @@ func GetOpCode(b []byte) (OpCode, error) {
 	return OpCode(b[1]), nil
 }
 
+// DecodeBytes decodes an encoded token operation
+// It does same checks as GetOpCode.
+// Returns the decoded operation as Operation interface.
 func DecodeBytes(b []byte) (Operation, error) {
 	opCode, err := GetOpCode(b)
 	if err != nil {
@@ -110,6 +118,8 @@ func DecodeBytes(b []byte) (Operation, error) {
 	return op, err
 }
 
+// EncodeToBytes encodes a token operation
+// Returns byte representation of the encoded operation.
 func EncodeToBytes(op Operation) ([]byte, error) {
 	b, err := op.MarshalBinary()
 	if err != nil {
