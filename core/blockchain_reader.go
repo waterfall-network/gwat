@@ -29,6 +29,13 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// CurrentHeader retrieves the current head header of the canonical chain.
+// depracated.
+func (bc *BlockChain) CurrentHeader() *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
 // GetLastFinalizedBlock retrieves the current Last Finalized block of the canonical chain. The
 // block is retrieved from the blockchain's internal cache.
 func (bc *BlockChain) GetLastFinalizedBlock() *types.Block {
@@ -93,10 +100,6 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 		body := cached.(*types.Body)
 		return body
 	}
-	//number := bc.hc.GetBlockFinalizedNumber(hash)
-	//if number == nil {
-	//	return nil
-	//}
 	body := rawdb.ReadBody(bc.db, hash)
 	if body == nil {
 		return nil
@@ -166,6 +169,7 @@ func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 	return bc.GetBlock(hash)
 }
 
+// GetBlocksByHashes retrieves block by hash.
 func (bc *BlockChain) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
 	blocks := make(types.BlockMap, len(hashes))
 	for _, hash := range hashes {
@@ -177,7 +181,6 @@ func (bc *BlockChain) GetBlocksByHashes(hashes common.HashArray) types.BlockMap 
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	//hash := rawdb.ReadCanonicalHash(bc.db, number)
 	hash := rawdb.ReadFinalizedHashByNumber(bc.db, number)
 	if hash == (common.Hash{}) {
 		hash = rawdb.ReadFinalizedHashByNumber(bc.db, number)
@@ -192,9 +195,12 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 	return block
 }
 
+// ReadFinalizedHashByNumber retrieves block finalization hash by number.
 func (bc *BlockChain) ReadFinalizedHashByNumber(number uint64) common.Hash {
 	return rawdb.ReadFinalizedHashByNumber(bc.db, number)
 }
+
+// ReadFinalizedNumberByHash retrieves block finalization number by hash.
 func (bc *BlockChain) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
 	return rawdb.ReadFinalizedNumberByHash(bc.db, hash)
 }
@@ -252,6 +258,7 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
+// SearchPrevFinalizedBlueHeader searches previous finalized blue block
 func (bc *BlockChain) SearchPrevFinalizedBlueHeader(finNr uint64) *types.Header {
 	for i := finNr - 1; i > 0; i-- {
 		header := bc.GetHeaderByNumber(i)

@@ -176,15 +176,9 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction) error {
 	// Filter out any explicitly requested bodies, deliver the rest to the downloader
 	filter := len(txs) > 0
-
-	log.Warn("=============== handleBodies =================== 000", "len(txs)", len(txs))
-
 	if filter {
 		txs, _ = h.blockFetcher.FilterBodies(peer.ID(), txs, time.Now())
 	}
-
-	log.Warn("=============== handleBodies =================== 111", "len(txs)", len(txs), "!filter", !filter)
-
 	if len(txs) > 0 || !filter {
 		err := h.downloader.DeliverBodies(peer.ID(), txs)
 		if err != nil {

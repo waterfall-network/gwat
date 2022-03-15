@@ -781,33 +781,6 @@ func TestHashArray_Sort(t *testing.T) {
 	}
 }
 
-func TestHashArray_Key(t *testing.T) {
-	hashes := HashArray{Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{}, Hash{0x11}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
-	sortedUniq := HashArray{Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
-
-	tests := []struct {
-		name    string
-		ha      HashArray
-		want    driver.Value
-		wantErr bool
-	}{
-		{
-			name:    "HashArray.Key()",
-			ha:      hashes,
-			want:    fmt.Sprintf("%v", sortedUniq.Key()),
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := fmt.Sprintf("%v", tt.ha.Key())
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("HashArray.Key() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestHashArray_Reverse(t *testing.T) {
 	hashesOrig := HashArray{
 		Hash{0x00},

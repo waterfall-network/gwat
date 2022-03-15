@@ -55,12 +55,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash)
 	}
-	//if !v.bc.HasBlockAndState(block.ParentHashes()[0], block.NumberU64()-1) {
-	//	if !v.bc.HasBlock(block.ParentHashes()[0]) {
-	//		return consensus.ErrUnknownAncestor
-	//	}
-	//	return consensus.ErrPrunedAncestor
-	//}
 	return nil
 }
 
@@ -110,7 +104,7 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 		return limit
 	}
 	if limit > desiredLimit {
-		//todo tmp
+		//todo tmp set gasLimit
 		limit = desiredLimit
 		//limit = parentGasLimit - delta
 		//if limit < desiredLimit {

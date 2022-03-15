@@ -34,18 +34,17 @@ type Finalizer struct {
 	// events
 	mux *event.TypeMux
 
-	eth Backend
-	//exitCh  chan struct{}
+	eth     Backend
 	running int32 // The indicator whether the finalizer is running or not.
 	busy    int32 // The indicator whether the finalizer is finalizing blocks.
 }
 
+// New create new instance of Finalizer
 func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux) *Finalizer {
 	f := &Finalizer{
 		chainConfig: chainConfig,
 		eth:         eth,
 		mux:         mux,
-		//exitCh:      make(chan struct{}),
 	}
 	atomic.StoreInt32(&f.running, 0)
 	atomic.StoreInt32(&f.busy, 0)
@@ -53,14 +52,12 @@ func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux) *Fina
 	return f
 }
 
+// Finalize start finalization procedure
 func (f *Finalizer) Finalize(chain NrHashMap) error {
 
 	if f.isSyncing() {
 		return ErrSyncing
 	}
-
-	//f.eth.BlockChain().DagMu.Lock()
-	//defer f.eth.BlockChain().DagMu.Unlock()
 	if atomic.LoadInt32(&f.busy) == 1 {
 		log.Info("⌛ Finalization is skipped: process busy")
 		return ErrBusy
@@ -147,15 +144,17 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 	return nil
 }
 
+// updateTips update tips in accordance of finalized blocks.
 func (f *Finalizer) updateTips(finHashes common.HashArray, lastBlock types.Block) {
 	bc := f.eth.BlockChain()
 	bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height())
 	//remove stale blockDags
 	for _, h := range finHashes {
-		bc.DeleteBockDag(h)
+		bc.DeleteBlockDag(h)
 	}
 }
 
+// finalizeBlock finalize block
 func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) error {
 	bc := f.eth.BlockChain()
 	nr := bc.ReadFinalizedNumberByHash(block.Hash())
@@ -174,10 +173,12 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 	return nil
 }
 
+// isSyncing returns true if sync process is running.
 func (f *Finalizer) isSyncing() bool {
 	return f.eth.Downloader().Synchronising()
 }
 
+// RetrieveFinalizingChain retrieves dag blocks in order of finalization
 func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *types.BlockDAG) {
 	bc := f.eth.BlockChain()
 	dag := tips.GetFinalizingDag()

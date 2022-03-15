@@ -139,7 +139,7 @@ type headerWriteResult struct {
 	lastHeader *types.Header
 }
 
-//todo uncorrect
+// todo fix
 // WriteHeaders writes a chain of headers into the local chain, given that the parents
 // are already known. If the total difficulty of the newly inserted chain becomes
 // greater than the current known TD, the canonical chain is reorged.
@@ -357,16 +357,8 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		return common.Hash{}, 0
 	}
 	for ancestor != 0 {
-		//if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-		//	ancestorHash := rawdb.ReadCanonicalHash(hc.chainDb, number-ancestor)
-		//	if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-		//		number -= ancestor
-		//		return ancestorHash, number
-		//	}
-		//}
 		if rawdb.ReadFinalizedHashByNumber(hc.chainDb, number) == hash {
 			ancestorHash := rawdb.ReadFinalizedHashByNumber(hc.chainDb, number-ancestor)
-			//if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
 			if rawdb.ReadFinalizedHashByNumber(hc.chainDb, number) == hash {
 				number -= ancestor
 				return ancestorHash, number
@@ -433,7 +425,6 @@ func (hc *HeaderChain) HasHeader(hash common.Hash) bool {
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
-	//hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
 	hash := rawdb.ReadFinalizedHashByNumber(hc.chainDb, number)
 	if hash == (common.Hash{}) {
 		hash = rawdb.ReadFinalizedHashByNumber(hc.chainDb, number)
@@ -446,7 +437,6 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
 	return rawdb.ReadFinalizedHashByNumber(hc.chainDb, number)
-	//return rawdb.ReadCanonicalHash(hc.chainDb, number)
 }
 
 // GetLastFinalizedHeader retrieves the current head header of the canonical chain. The
@@ -474,8 +464,6 @@ func (hc *HeaderChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint
 // in case synchronization not finished
 func (hc *HeaderChain) ResetTips() error {
 	hc.tipsMu.Lock()
-	//defer hc.tipsMu.Unlock()
-
 	lastFinHeader := hc.GetLastFinalizedHeader()
 	//set genesis blockDag
 	dag := &types.BlockDAG{
@@ -654,7 +642,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 				dag.FinalityPoints = *graph.GetFinalityPoints()
 				hc.AddTips(dag, true)
 			} else {
-				log.Warn("!!!!!!!!!!!!!! UNLOADED BLOCK DETECTED !!!!!!!!!!!!!!!!", "unloaded", unloaded)
+				log.Warn("Unloaded block detected", "unloaded", unloaded)
 			}
 			saveTips = true
 		}
@@ -775,7 +763,6 @@ func (hc *HeaderChain) SetHead(headHash common.Hash, updateFn UpdateHeadBlocksCa
 				rawdb.DeleteHeader(batch, hash, &num)
 				rawdb.DeleteFinalizedHashNumber(batch, hash, num)
 			}
-			//rawdb.DeleteCanonicalHash(batch, num)
 		}
 	}
 	// Flush all accumulated deletions.

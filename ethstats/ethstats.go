@@ -772,8 +772,8 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		hashrate = int(fullBackend.Creator().Hashrate())
 
 		sync := fullBackend.SyncProgress()
-		//todo require new logic
-		//syncing = fullBackend.GetLastFinalizedHeader().Number.Uint64() >= sync.HighestBlock
+		// todo fix
+		//syncing = fullBackend.GetLastFinalizedHeader().Nr() >= sync.HighestBlock
 		syncing = 0 >= sync.HighestBlock
 
 		price, _ := fullBackend.SuggestGasTipCap(context.Background())
@@ -784,7 +784,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		}
 	} else {
 		sync := s.backend.SyncProgress()
-		//todo require new logic
+		// todo fix
 		//syncing = s.backend.GetLastFinalizedHeader().Number.Uint64() >= sync.HighestBlock
 		syncing = 0 >= sync.HighestBlock
 	}

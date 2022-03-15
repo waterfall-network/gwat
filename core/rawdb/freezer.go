@@ -411,7 +411,6 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			// Always keep the genesis block in active database
 			if first+uint64(i) != 0 {
 				DeleteBlockWithoutNumber(batch, ancients[i])
-				//DeleteCanonicalHash(batch, first+uint64(i))
 			}
 		}
 		if err := batch.Write(); err != nil {
@@ -492,7 +491,6 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for ; number <= limit; number++ {
 			// Retrieve all the components of the canonical block.
-			//hash := ReadCanonicalHash(nfdb, number)
 			hash := ReadFinalizedHashByNumber(nfdb, number)
 			if hash == (common.Hash{}) {
 				return fmt.Errorf("canonical hash missing, can't freeze block %d", number)

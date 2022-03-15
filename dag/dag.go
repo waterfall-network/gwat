@@ -50,6 +50,7 @@ type Dag struct {
 	busy int32
 }
 
+// New creates new instance of Dag
 func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creatorConfig *creator.Config, engine consensus.Engine) *Dag {
 	d := &Dag{
 		chainConfig: chainConfig,
@@ -69,6 +70,11 @@ func (d *Dag) Creator() *creator.Creator {
 	return d.creator
 }
 
+// HandleConsensus handles consensus data
+// 1. block finalization
+// 2. collect next finalization candidates
+// 3. new block creation
+// 4. return result
 func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()

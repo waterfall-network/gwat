@@ -166,7 +166,7 @@ type Config struct {
 	// Mining options
 	Creator creator.Config
 
-	//// Ethash options
+	// Ethash options
 	Ethash ethash.Config
 
 	// Transaction pool options
@@ -200,34 +200,3 @@ type Config struct {
 	// Berlin block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
 }
-
-//// CreateConsensusEngine creates a consensus engine for the given chain configuration.
-//func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
-//	// If proof-of-authority is requested, set it up
-//	if chainConfig.Clique != nil {
-//		return clique.New(chainConfig.Clique, db)
-//	}
-//	// Otherwise assume proof-of-work
-//	switch config.PowMode {
-//	case ethash.ModeFake:
-//		log.Warn("Ethash used in fake mode")
-//	case ethash.ModeTest:
-//		log.Warn("Ethash used in test mode")
-//	case ethash.ModeShared:
-//		log.Warn("Ethash used in shared mode")
-//	}
-//	engine := ethash.New(ethash.Config{
-//		PowMode:          config.PowMode,
-//		CacheDir:         stack.ResolvePath(config.CacheDir),
-//		CachesInMem:      config.CachesInMem,
-//		CachesOnDisk:     config.CachesOnDisk,
-//		CachesLockMmap:   config.CachesLockMmap,
-//		DatasetDir:       config.DatasetDir,
-//		DatasetsInMem:    config.DatasetsInMem,
-//		DatasetsOnDisk:   config.DatasetsOnDisk,
-//		DatasetsLockMmap: config.DatasetsLockMmap,
-//		NotifyFull:       config.NotifyFull,
-//	}, notify, noverify)
-//	engine.SetThreads(-1) // Disable CPU mining
-//	return engine
-//}

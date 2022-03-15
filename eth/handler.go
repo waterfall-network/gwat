@@ -149,7 +149,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// * the last fast sync is not finished while user specifies a full sync this
 		//   time. But we don't have any recent state for full sync.
 		// In these cases however it's safe to reenable fast sync.
-
 		fullBlock, fastBlock := h.chain.GetLastFinalizedBlock(), h.chain.GetLastFinalizedFastBlock()
 		if fullBlock.Height() == 0 && fastBlock.Height() > 0 {
 			h.fastSync = uint32(1)
@@ -203,7 +202,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil, nil
 		}
-
 		// If fast sync is running, deny importing weird blocks. This is a problematic
 		// clause when starting up a new network, because fast-syncing miners might not
 		// accept each others' blocks until a restart. Unfortunately we haven't figured

@@ -479,8 +479,5 @@ func handleDag66(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, DagMsg, res.RequestId)
-
-	log.Info("HANDLERS::handleDag66 >>>>>", "res", res)
-
 	return backend.Handle(peer, &res.DagPacket)
 }

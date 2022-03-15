@@ -5,6 +5,8 @@ import (
 )
 
 /********** NrHashMap  **********/
+
+// NrHashMap represents map of finalization number to block hash
 type NrHashMap map[uint64]*common.Hash
 
 //GetMinNr search the min Nr

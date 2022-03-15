@@ -111,50 +111,6 @@ func TestSetupGenesis(t *testing.T) {
 			wantHash:   params.DevNetGenesisHash,
 			wantConfig: params.DevNetChainConfig,
 		},
-		//{
-		//	name: "custom block in DB, genesis == ropsten",
-		//	fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-		//		customg.MustCommit(db)
-		//		return SetupGenesisBlock(db, DefaultRopstenGenesisBlock())
-		//	},
-		//	wantErr:    &GenesisMismatchError{Stored: customghash, New: params.RopstenGenesisHash},
-		//	wantHash:   params.RopstenGenesisHash,
-		//	wantConfig: params.RopstenChainConfig,
-		//},
-		//{
-		//	name: "compatible config in DB",
-		//	fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-		//		oldcustomg.MustCommit(db)
-		//		return SetupGenesisBlock(db, &customg)
-		//	},
-		//	wantHash:   customghash,
-		//	wantConfig: customg.Config,
-		//},
-		//{
-		//	name: "incompatible config in DB",
-		//	fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-		//		// Commit the 'old' genesis block with Homestead transition at #2.
-		//		// Advance to block #4, past the homestead transition block of customg.
-		//		genesis := oldcustomg.MustCommit(db)
-		//
-		//		bc, _ := NewBlockChain(db, nil, oldcustomg.Config, ethash.NewFullFaker(), vm.Config{}, nil)
-		//		defer bc.Stop()
-		//
-		//		blocks, _ := GenerateChain(oldcustomg.Config, genesis, ethash.NewFaker(), db, 4, nil)
-		//		bc.InsertChain(blocks)
-		//		bc.GetLastFinalizedBlock()
-		//		// This should return a compatibility error.
-		//		return SetupGenesisBlock(db, &customg)
-		//	},
-		//	wantHash:   customghash,
-		//	wantConfig: customg.Config,
-		//	wantErr: &params.ConfigCompatError{
-		//		What:         "Homestead fork block",
-		//		StoredConfig: big.NewInt(2),
-		//		NewConfig:    big.NewInt(3),
-		//		RewindTo:     1,
-		//	},
-		//},
 	}
 
 	for _, test := range tests {

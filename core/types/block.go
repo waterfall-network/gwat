@@ -109,6 +109,7 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(cpy)
 }
 
+// Copy creates copy of Header
 func (h *Header) Copy() *Header {
 	var cpy *Header = nil
 	if h != nil {
@@ -193,10 +194,6 @@ type Block struct {
 	// caches
 	hash atomic.Value
 	size atomic.Value
-
-	//// Td is used by package core to store the total difficulty
-	//// of the chain up to and including the block.
-	//td *big.Int
 
 	// These fields are used by package eth to track
 	// inter-peer block relay.
@@ -349,13 +346,6 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 	*c += writeCounter(len(b))
 	return len(b), nil
 }
-
-//func CalcUncleHash(uncles []*Header) common.Hash {
-//	if len(uncles) == 0 {
-//		return EmptyUncleHash
-//	}
-//	return rlpHash(uncles)
-//}
 
 // WithSeal returns a new block with the data from b but the header replaced with
 // the sealed one.

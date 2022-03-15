@@ -226,7 +226,6 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
 
-				//if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Nr()) != prevHash {
 				if rawdb.ReadFinalizedHashByNumber(c.chainDb, prevHeader.Nr()) != prevHash {
 					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
 						c.newHead(h.Nr(), true)
@@ -284,7 +283,6 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 		if sections > c.knownSections {
 			if c.knownSections < c.checkpointSections {
 				// syncing reached the checkpoint, verify section head
-				//syncedHead := rawdb.ReadCanonicalHash(c.chainDb, c.checkpointSections*c.sectionSize-1)
 				syncedHead := rawdb.ReadFinalizedHashByNumber(c.chainDb, c.checkpointSections*c.sectionSize-1)
 				if syncedHead != c.checkpointHead {
 					c.log.Error("Synced chain does not match checkpoint", "number", c.checkpointSections*c.sectionSize-1, "expected", c.checkpointHead, "synced", syncedHead)
@@ -397,7 +395,6 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 	}
 
 	for number := section * c.sectionSize; number < (section+1)*c.sectionSize; number++ {
-		//hash := rawdb.ReadCanonicalHash(c.chainDb, number)
 		hash := rawdb.ReadFinalizedHashByNumber(c.chainDb, number)
 		if hash == (common.Hash{}) {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
@@ -424,7 +421,6 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 // sections are all valid
 func (c *ChainIndexer) verifyLastHead() {
 	for c.storedSections > 0 && c.storedSections > c.checkpointSections {
-		//if c.SectionHead(c.storedSections-1) == rawdb.ReadCanonicalHash(c.chainDb, c.storedSections*c.sectionSize-1) {
 		if c.SectionHead(c.storedSections-1) == rawdb.ReadFinalizedHashByNumber(c.chainDb, c.storedSections*c.sectionSize-1) {
 			return
 		}

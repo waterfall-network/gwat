@@ -268,7 +268,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	lastFinalizedBlock := h.chain.GetLastFinalizedBlock()
 	lastFinalizedNr := h.chain.GetLastFinalizedNumber()
 
-	log.Info("SYNC::doSync :::::::::::::::::::::::::::::::: 1111",
+	log.Info("Sync process",
 		"lastFinalizedBlock", lastFinalizedBlock,
 		"lastFinalizedNr", lastFinalizedNr,
 		"h.checkpointNumber", h.checkpointNumber,

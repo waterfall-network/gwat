@@ -169,6 +169,7 @@ type blockNumberOrHashOrRLP struct {
 	RLP hexutil.Bytes `json:"rlp,omitempty"`
 }
 
+// UnmarshalJSON decode byte representation to blockNumberOrHashOrRLP structure
 func (sb *blockNumberOrHashOrRLP) UnmarshalJSON(data []byte) error {
 	bnOrHash := new(rpc.BlockNumberOrHash)
 	// Try to unmarshal bNrOrHash

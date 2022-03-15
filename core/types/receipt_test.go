@@ -477,7 +477,6 @@ func clearComputedFieldsOnReceipt(t *testing.T, receipt *Receipt) {
 
 	receipt.TxHash = common.Hash{}
 	receipt.BlockHash = common.Hash{}
-	//receipt.BlockNumber = big.NewInt(math.MaxUint32)
 	receipt.TransactionIndex = math.MaxUint32
 	receipt.ContractAddress = common.Address{}
 	receipt.GasUsed = 0

@@ -1,3 +1,5 @@
+// implements sorting interface for array of uint64
+
 package common
 
 type SorterAskU64 []uint64

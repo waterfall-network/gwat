@@ -71,7 +71,6 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		}
 	} else {
 		num = uint64(blockNr)
-		//hash = rawdb.ReadCanonicalHash(b.db, num)
 		hash = rawdb.ReadFinalizedHashByNumber(b.db, num)
 	}
 	return rawdb.ReadHeader(b.db, hash), nil
@@ -147,7 +146,6 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 				task.Bitsets = make([][]byte, len(task.Sections))
 				for i, section := range task.Sections {
 					if rand.Int()%4 != 0 { // Handle occasional missing deliveries
-						//head := rawdb.ReadCanonicalHash(b.db, (section+1)*params.BloomBitsBlocks-1)
 						head := rawdb.ReadFinalizedHashByNumber(b.db, (section+1)*params.BloomBitsBlocks-1)
 						task.Bitsets[i], _ = rawdb.ReadBloomBits(b.db, task.Bit, section, head)
 					}

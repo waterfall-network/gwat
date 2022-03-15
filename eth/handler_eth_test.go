@@ -327,9 +327,8 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	// Run the handshake locally to avoid spinning up a source handler
 	var (
 		genesis = handler.chain.Genesis()
-		//head    = handler.chain.GetLastFinalizedBlock()
-		lfnr = handler.chain.GetLastFinalizedNumber()
-		dag  = handler.chain.GetDagHashes()
+		lfnr    = handler.chain.GetLastFinalizedNumber()
+		dag     = handler.chain.GetDagHashes()
 	)
 	if err := sink.Handshake(1, lfnr, dag, genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")

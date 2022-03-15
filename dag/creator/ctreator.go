@@ -148,6 +148,7 @@ type Creator struct {
 	shouldStart bool
 }
 
+// New creates new Creator instance
 func New(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux) *Creator {
 	creator := &Creator{
 		config:      config,
@@ -247,6 +248,7 @@ func (c *Creator) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscriptio
 	return c.pendingLogsFeed.Subscribe(ch)
 }
 
+// Hashrate retrieve current hashrate
 func (c *Creator) Hashrate() uint64 {
 	if pow, ok := c.engine.(consensus.PoW); ok {
 		return uint64(pow.Hashrate())
@@ -280,6 +282,7 @@ func (c *Creator) SetGasCeil(ceil uint64) {
 	c.config.GasCeil = ceil
 }
 
+// isSyncing returns tru while sync pocess
 func (c *Creator) isSyncing() bool {
 	//check tips
 	if tips := c.chain.GetTips(); len(tips) == 0 {
@@ -296,7 +299,6 @@ func (c *Creator) isSyncing() bool {
 
 // isSlotLocked compare incoming epoch/slot with latest epoch/slot of chain.
 func (c *Creator) isSlotLocked(info *Assignment) bool {
-	// todo
 	// check epoch/slot info of tips and lastFinalized block
 	// if epoch/slot >= in chain
 	// - rewind to correct position
@@ -369,7 +371,6 @@ func (c *Creator) close() {
 // mainLoop is a standalone goroutine to regenerate the sealing task based on the received event.
 func (c *Creator) mainLoop() {
 	defer c.txsSub.Unsubscribe()
-	//defer c.chainHeadSub.Unsubscribe()
 	defer c.chainSideSub.Unsubscribe()
 
 	for {
@@ -418,7 +419,7 @@ func (c *Creator) taskLoop() {
 		select {
 		case task := <-c.taskCh:
 
-			log.Info("============= HandleConsensus::create: taskLoop continue 0000 =============", "c.newTaskHook", c.newTaskHook != nil, "c.skipSealHook", c.skipSealHook != nil)
+			log.Info("Handle consensus: create", "c.newTaskHook", c.newTaskHook != nil, "c.skipSealHook", c.skipSealHook != nil)
 
 			if c.newTaskHook != nil {
 				c.newTaskHook(task)
@@ -427,9 +428,7 @@ func (c *Creator) taskLoop() {
 			sealHash := c.engine.SealHash(task.block.Header())
 
 			if sealHash == prev {
-				log.Info("============= HandleConsensus::create: taskLoop continue 11111 =============", "sealHash", sealHash, "prev", prev)
-
-				//c.finishWorkCh <- nil
+				log.Info("Handle consensus: create", "sealHash", sealHash, "prev", prev)
 				continue
 			}
 
@@ -438,10 +437,6 @@ func (c *Creator) taskLoop() {
 			stopCh, prev = make(chan struct{}), sealHash
 
 			if c.skipSealHook != nil && c.skipSealHook(task) {
-
-				log.Info("============= HandleConsensus::create: taskLoop continue 22222 =============")
-
-				//c.finishWorkCh <- nil
 				continue
 			}
 
@@ -502,7 +497,6 @@ func (c *Creator) resultHandler(block *types.Block) {
 	for i, receipt := range task.receipts {
 		// add block location fields
 		receipt.BlockHash = hash
-		//receipt.BlockNumber = block.Number()
 		receipt.TransactionIndex = uint(i)
 
 		receipts[i] = new(types.Receipt)
@@ -542,10 +536,6 @@ func (c *Creator) resultHandler(block *types.Block) {
 		FinalityPoints:      tmpFinalityPoints,
 	}
 	c.chain.AddTips(newBlockDag)
-	//upTips, unloaded := c.chain.ReviseTips()
-	//if len(unloaded) == 0 {
-	//	c.chain.EmitTipsSynced(upTips)
-	//}
 	c.chain.ReviseTips()
 
 	log.Info("Successfully sealed new block", "Hash", block.Hash(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
@@ -555,8 +545,6 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.mux.Post(core.NewMinedBlockEvent{Block: block})
 
 	// Insert the block into the set of pending ones to resultLoop for confirmations
-	//c.unconfirmed.Insert(block.Height(), block.Hash())
-
 	log.Info("🔨 created dag block", "height", block.Height(), "hash", hash.Hex(), "parents", block.ParentHashes())
 }
 
@@ -641,10 +629,6 @@ func (c *Creator) updateSnapshot() {
 }
 
 func (c *Creator) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
-	//if c.recentTxs[tx.Hash()] != (common.Hash{}) {
-	//	return nil, nil
-	//}
-
 	snap := c.current.state.Snapshot()
 
 	receipt, err := core.ApplyTransaction(c.chainConfig, c.chain, &coinbase, c.current.gasPool, c.current.state, c.current.header, tx, &c.current.header.GasUsed, *c.chain.GetVMConfig())
@@ -687,15 +671,6 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		//
 		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(c.current.signer, tx)
-
-		//// Check whether the tx is replay protected. If we're not in the EIP155 hf
-		//// phase, start ignoring the sender until we do.
-		//if tx.Protected() && !c.chainConfig.IsEIP155(c.current.header.Number) {
-		//	log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", c.chainConfig.EIP155Block)
-		//
-		//	txs.Pop()
-		//	continue
-		//}
 
 		// Start executing the transaction
 		c.current.state.Prepare(tx.Hash(), c.current.tcount)
@@ -756,9 +731,6 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 
 // commitNewWork generates several new sealing tasks based on the parent block.
 func (c *Creator) commitNewWork(timestamp int64) {
-	//c.eth.BlockChain().DagMu.Lock()
-	//defer c.eth.BlockChain().DagMu.Unlock()
-
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -788,13 +760,10 @@ func (c *Creator) commitNewWork(timestamp int64) {
 						log.Warn("Creator: reorg tips: bad parent in dag", "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
 						continue
 					}
-					////if parent block is finalised
-					//if parentBlock != nil && parentBlock.Number() != nil {
 					_dag = &types.BlockDAG{
 						Hash:   ph,
 						Height: parentBlock.Height(),
 					}
-					//}
 				}
 				_dag.LastFinalizedHash = tip.LastFinalizedHash
 				_dag.LastFinalizedHeight = tip.LastFinalizedHeight
@@ -966,8 +935,6 @@ func (c *Creator) commit(tips types.Tips, interval func(), update bool, start ti
 			tips:      &tips,
 			createdAt: time.Now(),
 		}:
-			//c.unconfirmed.Shift(block.Height() - 1)
-
 			log.Info("Commit new block creation work", "sealhash", c.engine.SealHash(block.Header()),
 				"txs", c.current.tcount,
 				"gas", block.GasUsed(), "fees", totalFees(block, receipts),

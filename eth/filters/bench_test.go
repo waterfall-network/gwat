@@ -91,7 +91,6 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		}
 		var header *types.Header
 		for i := sectionIdx * sectionSize; i < (sectionIdx+1)*sectionSize; i++ {
-			//hash := rawdb.ReadCanonicalHash(db, i)
 			hash := rawdb.ReadFinalizedHashByNumber(db, i)
 			header = rawdb.ReadHeader(db, hash)
 			if header == nil {
@@ -99,7 +98,6 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 			}
 			bc.AddBloom(uint(i-sectionIdx*sectionSize), header.Bloom)
 		}
-		//sectionHead := rawdb.ReadCanonicalHash(db, (sectionIdx+1)*sectionSize-1)
 		sectionHead := rawdb.ReadFinalizedHashByNumber(db, (sectionIdx+1)*sectionSize-1)
 		for i := 0; i < types.BloomBitLength; i++ {
 			data, err := bc.Bitset(uint(i))
@@ -111,9 +109,6 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 			compSize += uint64(len(comp))
 			rawdb.WriteBloomBits(db, uint(i), sectionIdx, sectionHead, comp)
 		}
-		//if sectionIdx%50 == 0 {
-		//	b.Log(" section", sectionIdx, "/", cnt)
-		//}
 	}
 
 	d := time.Since(start)

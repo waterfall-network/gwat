@@ -79,7 +79,6 @@ func BenchmarkFilters(b *testing.B) {
 	})
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
-		//rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 		rawdb.WriteFinalizedHashNumber(db, block.Hash(), block.Nr())
 		rawdb.WriteLastCanonicalHash(db, block.Hash())
 		rawdb.WriteReceipts(db, block.Hash(), receipts[i])
@@ -164,7 +163,6 @@ func TestFilters(t *testing.T) {
 	})
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
-		//rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 		rawdb.WriteFinalizedHashNumber(db, block.Hash(), block.Nr())
 		rawdb.WriteLastCanonicalHash(db, block.Hash())
 		rawdb.WriteReceipts(db, block.Hash(), receipts[i])

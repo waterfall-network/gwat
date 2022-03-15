@@ -243,7 +243,6 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 
-	//todo deprecated (always true)
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
@@ -562,6 +561,7 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 	return pending
 }
 
+// RemoveTx removes tx from pool.
 func (pool *TxPool) RemoveTx(hash common.Hash) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()

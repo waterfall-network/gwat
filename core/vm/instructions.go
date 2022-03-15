@@ -816,7 +816,6 @@ func makeLog(size int) executionFunc {
 		}
 
 		d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
-
 		//blockNumber := uint64(0)
 		//if interpreter.evm.Context.BlockNumber != nil && interpreter.evm.Context.BlockNumber.Cmp(big0) > 0 {
 		//	blockNumber = interpreter.evm.Context.BlockNumber.Uint64()

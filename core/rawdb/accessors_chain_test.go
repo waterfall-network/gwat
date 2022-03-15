@@ -210,8 +210,10 @@ func TestBadBlockStorage(t *testing.T) {
 		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
 	}
 	// Write one more bad block
+	nr := uint64(2)
 	blockTwo := types.NewBlockWithHeader(&types.Header{
-		//Number:      big.NewInt(2),
+		Number:      &nr,
+		Height:      nr,
 		Extra:       []byte("bad block two"),
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,
@@ -228,9 +230,10 @@ func TestBadBlockStorage(t *testing.T) {
 	// Write a bunch of bad blocks, all the blocks are should sorted
 	// in reverse order. The extra blocks should be truncated.
 	for _, n := range rand.Perm(100) {
+		nrBl := uint64(n)
 		block := types.NewBlockWithHeader(&types.Header{
-			//Number:      big.NewInt(int64(n)),
-			Height:      uint64(n),
+			Number:      &nrBl,
+			Height:      nrBl,
 			Extra:       []byte("bad block"),
 			TxHash:      types.EmptyRootHash,
 			ReceiptHash: types.EmptyRootHash,
@@ -261,21 +264,17 @@ func TestCanonicalMappingStorage(t *testing.T) {
 
 	// Create a test canonical number and assinged hash to move around
 	hash, number := common.Hash{0: 0xff}, uint64(314)
-	//if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
 	if entry := ReadFinalizedHashByNumber(db, number); entry != (common.Hash{}) {
 		t.Fatalf("Non existent canonical mapping returned: %v", entry)
 	}
 	// Write and verify the TD in the database
-	//WriteCanonicalHash(db, hash, number)
 	WriteFinalizedHashNumber(db, hash, number)
-	//if entry := ReadCanonicalHash(db, number); entry == (common.Hash{}) {
 	if entry := ReadFinalizedHashByNumber(db, number); entry == (common.Hash{}) {
 		t.Fatalf("Stored canonical mapping not found")
 	} else if entry != hash {
 		t.Fatalf("Retrieved canonical mapping mismatch: have %v, want %v", entry, hash)
 	}
 	//DeleteCanonicalHash(db, number)
-	//if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
 	if entry := ReadFinalizedHashByNumber(db, number); entry != (common.Hash{}) {
 		t.Fatalf("Deleted canonical mapping returned: %v", entry)
 	}
@@ -492,7 +491,6 @@ func TestCanonicalHashIteration(t *testing.T) {
 	}
 	// Fill database with testing data.
 	for i := uint64(1); i <= 8; i++ {
-		//WriteCanonicalHash(db, common.Hash{}, i)
 		WriteFinalizedHashNumber(db, common.Hash{}, i)
 	}
 	for i, c := range cases {
@@ -502,46 +500,6 @@ func TestCanonicalHashIteration(t *testing.T) {
 		}
 	}
 }
-
-//func TestHashesInRange(t *testing.T) {
-//	mkHeader := func(number, seq int) *types.Header {
-//		h := types.Header{
-//			//Number:     big.NewInt(int64(number)),
-//			GasLimit:   uint64(seq),
-//		}
-//		return &h
-//	}
-//	db := NewMemoryDatabase()
-//	// For each number, write N versions of that particular number
-//	total := 0
-//	for i := 0; i < 15; i++ {
-//		for ii := 0; ii < i; ii++ {
-//			WriteHeader(db, mkHeader(i, ii))
-//			total++
-//		}
-//	}
-//	if have, want := len(ReadAllHashesInRange(db, 10, 10)), 10; have != want {
-//		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-//	}
-//	if have, want := len(ReadAllHashesInRange(db, 10, 9)), 0; have != want {
-//		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-//	}
-//	if have, want := len(ReadAllHashesInRange(db, 0, 100)), total; have != want {
-//		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-//	}
-//	if have, want := len(ReadAllHashesInRange(db, 9, 10)), 9+10; have != want {
-//		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-//	}
-//	if have, want := len(ReadAllHashes(db, 10)), 10; have != want {
-//		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-//	}
-//	if have, want := len(ReadAllHashes(db, 16)), 0; have != want {
-//		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-//	}
-//	if have, want := len(ReadAllHashes(db, 1)), 1; have != want {
-//		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-//	}
-//}
 
 // This measures the write speed of the WriteAncientBlocks operation.
 func BenchmarkWriteAncientBlocks(b *testing.B) {

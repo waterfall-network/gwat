@@ -23,7 +23,6 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -117,11 +116,7 @@ func (f *fuzzer) fuzz() int {
 	for i, pair := range []struct {
 		bigFn  calculator
 		u256Fn calculator
-	}{
-		{ethash.FrontierDifficultyCalulator, ethash.CalcDifficultyFrontierU256},
-		{ethash.HomesteadDifficultyCalulator, ethash.CalcDifficultyHomesteadU256},
-		{ethash.DynamicDifficultyCalculator(bombDelay), ethash.MakeDifficultyCalculatorU256(bombDelay)},
-	} {
+	}{} {
 		want := pair.bigFn(time, header)
 		have := pair.u256Fn(time, header)
 		if want.Cmp(have) != 0 {

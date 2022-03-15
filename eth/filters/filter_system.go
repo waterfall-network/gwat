@@ -372,7 +372,6 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 	if oldh == nil {
 		return
 	}
-
 	newh := newHeader
 	// find common ancestor, create list of rolled back and new block hashes
 	var oldHeaders, newHeaders []*types.Header
@@ -396,7 +395,6 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 			}
 		}
 	}
-
 	// roll back old blocks
 	for _, h := range oldHeaders {
 		callBack(h, true)

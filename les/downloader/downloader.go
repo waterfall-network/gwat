@@ -1524,7 +1524,6 @@ func (d *Downloader) processHeaders(origin uint64) error {
 	)
 	defer func() {
 		if rollback > 0 {
-			//lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
 			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, uint64(0), uint64(0)
 			if mode != LightSync {
 				lastFastBlock = d.blockchain.CurrentFastBlock().Nr()

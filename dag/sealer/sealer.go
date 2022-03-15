@@ -629,7 +629,6 @@ func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, tip
 	if err != nil {
 		return err
 	}
-	//todo
 	//copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
 
 	// Wait until sealing is terminated or delay timeout.

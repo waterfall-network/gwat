@@ -57,7 +57,7 @@ func NewProcessor(blockCtx vm.BlockContext, statedb vm.StateDB) *Processor {
 //  * burn
 //  * set approval for all
 //
-// It returns byte represantation of the return value of an operation.
+// It returns byte representation of the return value of an operation.
 func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []byte, err error) {
 	if _, ok := op.(CreateOperation); !ok {
 		nonce := p.state.GetNonce(caller.Address())
@@ -157,7 +157,7 @@ type WRC721PropertiesResult struct {
 	Metadata    []byte
 }
 
-// Properties perfroms the token properties opertaion
+// Properties performs the token properties opertaion
 // It returns WRC20PropertiesResult or WRC721PropertiesResult according to the token type.
 func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())

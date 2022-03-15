@@ -612,11 +612,6 @@ func NewPublicBlockChainAPI(b Backend) *PublicBlockChainAPI {
 func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
 	config := api.b.ChainConfig()
 	return (*hexutil.Big)(config.ChainID), nil
-	//// if current block is at or past the EIP-155 replay-protection fork block, return chainID from config
-	//if config := api.b.ChainConfig(); config.IsEIP155(api.b.GetLastFinalizedBlock().Number()) {
-	//	return (*hexutil.Big)(config.ChainID), nil
-	//}
-	//return nil, fmt.Errorf("chain not synced beyond EIP-155 replay-protection fork block")
 }
 
 // BlockNumber returns the block number of the chain head.
@@ -1483,7 +1478,6 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx conte
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
 func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) *RPCTransaction {
 	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
-		//blockFinNr := s.b.GetBlockFinalizedNumber(blockHash)
 		blockFinNr := block.Number()
 		return newRPCTransactionFromBlockIndex(block, blockFinNr, uint64(index), s.b.ChainConfig())
 	}
@@ -1537,7 +1531,6 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		if err != nil {
 			return nil, err
 		}
-		//blockFinNr := s.b.GetBlockFinalizedNumber(blockHash)
 		blockFinNr := header.Number
 		return newRPCTransaction(tx, blockHash, blockFinNr, index, header.BaseFee, s.b.ChainConfig()), nil
 	}

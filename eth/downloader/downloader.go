@@ -262,6 +262,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 	return dl
 }
 
+// ClearBlockDag removes all BlockDag records
 func (d *Downloader) ClearBlockDag() {
 	dagHashes := rawdb.ReadAllBlockDagHashes(d.stateDB)
 	for _, hash := range dagHashes {
@@ -627,6 +628,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastF
 	return nil
 }
 
+// syncWithPeerDagChain downloads and set on current node dag chain from remote peer
 func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	defer func(start time.Time) {
 		log.Debug("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
@@ -676,12 +678,12 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	for _, gd := range tipsGraph {
 		tmpTips := types.Tips{}
 
-		dagCainHashes := gd.GetDagChainHashes()
-		if dagCainHashes == nil {
-			log.Error("!!!!!!!!!!!! tmpTips=nil 000000", "gd", gd)
+		dagChainHashes := gd.GetDagChainHashes()
+		if dagChainHashes == nil {
+			log.Error("Sync blocks of dag received empty dag hashes", "gd", gd)
 		}
 
-		for _, hash := range *dagCainHashes {
+		for _, hash := range *dagChainHashes {
 			//create and save block and BlockDag for Ancestors in order from finalized block
 			header := headerMap[hash]
 			txs := txsMap[hash]
@@ -801,18 +803,6 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	}
 	d.blockchain.ReviseTips()
 	return err
-
-	//d.mux.Post(StartEvent{})
-	//defer func() {
-	//	// reset on error
-	//	if err != nil {
-	//		d.mux.Post(FailedEvent{err})
-	//	} else {
-	//		latest := d.lightchain.GetLastFinalizedHeader()
-	//		log.Info("SINC::EVENT:POST (syncWithPeerDagStage 000)", "latest", latest)
-	//		d.mux.Post(DoneEvent{latest})
-	//	}
-	//}()
 }
 
 // syncWithPeerUnknownDagBlocks if remote peer has unknown dag blocks only sync such blocks only
@@ -897,13 +887,13 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	for _, gd := range tipsGraph {
 		tmpTips := types.Tips{}
 
-		dagCainHashes := gd.GetDagChainHashes()
-		if dagCainHashes == nil {
-			log.Error("!!!!!!!!!!!! tmpTips=nil 11111111", "gd", gd)
-			dagCainHashes = &common.HashArray{}
+		dagChainHashes := gd.GetDagChainHashes()
+		if dagChainHashes == nil {
+			log.Error("Sync unknown blocks of dag received empty dag hashes", "gd", gd)
+			dagChainHashes = &common.HashArray{}
 		}
 
-		for _, hash := range *dagCainHashes {
+		for _, hash := range *dagChainHashes {
 			// skip existing headers
 			if newHeaderMap[hash] == nil {
 				continue
@@ -1039,18 +1029,6 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	}
 	d.blockchain.ReviseTips()
 	return err
-
-	//d.mux.Post(StartEvent{})
-	//defer func() {
-	//	// reset on error
-	//	if err != nil {
-	//		d.mux.Post(FailedEvent{err})
-	//	} else {
-	//		latest := d.lightchain.GetLastFinalizedHeader()
-	//		log.Info("SINC::EVENT:POST (syncWithPeerDagStage 000)", "latest", latest)
-	//		d.mux.Post(DoneEvent{latest})
-	//	}
-	//}()
 }
 
 // spawnSync runs d.process and all given fetcher functions to completion in
@@ -1299,7 +1277,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	}
 
 	ancestor, err := d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
-	log.Info("findAncestorSpanSearch", "mode", mode, "remoteHeight", remoteHeight, "floor", floor, "ancestor", ancestor, "err", err)
+	log.Info("Looking for common ancestor Span Search result", "mode", mode, "remoteHeight", remoteHeight, "floor", floor, "ancestor", ancestor, "err", err)
 
 	if err == nil {
 		return ancestor, nil
@@ -1313,7 +1291,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	}
 
 	ancestor, err = d.findAncestorBinarySearch(p, mode, remoteHeight, floor)
-	log.Info("findAncestorBinarySearch", "mode", mode, "remoteHeight", remoteHeight, "floor", floor, "ancestor", ancestor, "err", err)
+	log.Info("Looking for common ancestor Binary Search result", "mode", mode, "remoteHeight", remoteHeight, "floor", floor, "ancestor", ancestor, "err", err)
 
 	if err != nil {
 		return 0, err
@@ -1357,8 +1335,6 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			// Make sure the peer's reply conforms to the request
 			for i, header := range headers {
 				expectNumber := uint64(from) + uint64(i)*uint64(skip+1)
-				//expectHeader := d.blockchain.GetHeaderByNumber(expectNumber)
-				//if number := header.Height; number > expectNumber {
 				if number := header.Number; number != nil && *number != expectNumber {
 					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", expectNumber, "received", number)
 					return 0, fmt.Errorf("%w: %v", errInvalidChain, errors.New("head headers broke chain ordering"))
@@ -1891,7 +1867,7 @@ func (d *Downloader) fetchParts(
 			return errCanceled
 
 		case packet := <-deliveryCh:
-			log.Debug("fetchParts::<-deliveryCh", "kind", kind, "packet", packet)
+			log.Debug("Downloader fetched parts", "kind", kind, "packet", packet)
 			deliveryTime := time.Now()
 			// If the peer was previously banned and failed to deliver its pack
 			// in a reasonable time frame, ignore its message.
@@ -1942,7 +1918,6 @@ func (d *Downloader) fetchParts(
 			}
 
 		case <-update:
-			log.Info("fetchParts::<-update", "kind", kind)
 			// Short circuit if we lost all our peers
 			if d.peers.Len() == 0 {
 				return errNoPeers
@@ -2079,9 +2054,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
 		}
 	}()
-	//// Wait for batches of headers to process
-	//gotHeaders := false
-
+	// Wait for batches of headers to process
 	for {
 		select {
 		case <-d.cancelCh:
@@ -2098,13 +2071,11 @@ func (d *Downloader) processHeaders(origin uint64) error {
 					case <-d.cancelCh:
 					}
 				}
-
 				// Disable any rollback and return
 				rollback = 0
 				return nil
 			}
-			//// Otherwise split the chunk of headers into batches and process them
-			//gotHeaders = true
+			// Otherwise split the chunk of headers into batches and process them
 			for len(headers) > 0 {
 				// Terminate if something failed in between processing chunks
 				select {
@@ -2171,7 +2142,6 @@ func (d *Downloader) processHeaders(origin uint64) error {
 					insLen := len(inserts)
 					chLen := len(chunk)
 					if insLen != chLen {
-						//if len(inserts) != len(chunk) {
 						rollbackErr = fmt.Errorf("stale headers: len inserts %v len(chunk) %v", len(inserts), len(chunk))
 						return fmt.Errorf("%w: stale headers", errBadPeer)
 					}
@@ -2522,15 +2492,12 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 	cancel := d.cancelCh
 	d.cancelLock.RUnlock()
 	if cancel == nil {
-		log.Info("******* FETCHER::deliver ********** cancel == nil", "err", errNoSyncActive)
 		return errNoSyncActive
 	}
 	select {
 	case destCh <- packet:
-		log.Info("******* FETCHER::deliver ********** case destCh <- packet:")
 		return nil
 	case <-cancel:
-		log.Info("******* FETCHER::deliver ********** case <-cancel:", "err", errNoSyncActive)
 		return errNoSyncActive
 	}
 }
@@ -2577,9 +2544,7 @@ func (d *Downloader) fetchDagHashes(p *peerConnection, lastFinNr uint64) (dag co
 
 // fetchDagHeaders retrieves the dag headers by hashes from a remote peer.
 func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray) (headers []*types.Header, err error) {
-
 	p.log.Info("Retrieving remote dag headers: start", "hashes", hashes)
-
 	go p.peer.RequestHeadersByHashes(hashes)
 
 	ttl := d.peers.rates.TargetTimeout()

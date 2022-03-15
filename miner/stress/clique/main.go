@@ -208,11 +208,6 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		DatabaseHandles: 256,
 		TxPool:          core.DefaultTxPoolConfig,
 		GPO:             ethconfig.Defaults.GPO,
-		//Miner: miner.Config{
-		//	GasCeil:  genesis.GasLimit * 11 / 10,
-		//	GasPrice: big.NewInt(1),
-		//	Recommit: time.Second,
-		//},
 	})
 	if err != nil {
 		return nil, nil, err

@@ -148,7 +148,6 @@ type ChtRequest struct {
 func (req *ChtRequest) StoreResult(db ethdb.Database) {
 	hash, num := req.Header.Hash(), req.Header.Nr()
 	rawdb.WriteHeader(db, req.Header)
-	//rawdb.WriteCanonicalHash(db, hash, num)
 	rawdb.WriteFinalizedHashNumber(db, hash, num)
 }
 
@@ -167,7 +166,6 @@ type BloomRequest struct {
 // StoreResult stores the retrieved data in local database
 func (req *BloomRequest) StoreResult(db ethdb.Database) {
 	for i, sectionIdx := range req.SectionIndexList {
-		//sectionHead := rawdb.ReadCanonicalHash(db, (sectionIdx+1)*req.Config.BloomTrieSize-1)
 		sectionHead := rawdb.ReadFinalizedHashByNumber(db, (sectionIdx+1)*req.Config.BloomTrieSize-1)
 		// if we don't have the canonical hash stored for this section head number, we'll still store it under
 		// a key with a zero sectionHead. GetBloomBits will look there too if we still don't have the canonical

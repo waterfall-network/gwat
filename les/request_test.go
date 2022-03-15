@@ -101,7 +101,6 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 
 	test := func(expFail uint64) {
 		for i := uint64(0); i <= server.handler.blockchain.GetLastFinalizedHeader().Nr(); i++ {
-			//bhash := rawdb.ReadCanonicalHash(server.db, i)
 			bhash := rawdb.ReadFinalizedHashByNumber(server.db, i)
 			if req := fn(client.db, bhash, i); req != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)

@@ -159,9 +159,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		log.Warn("!!!!!!!!!!!! Rewinding chain to upgrade configuration !!!!!!!!!!!! ", "err", compat)
-		//todo RewindTo
-		//leth.blockchain.SetHead(compat.RewindTo)
+		headerTo := leth.blockchain.GetHeaderByNumber(compat.RewindTo)
+		leth.blockchain.SetHead(headerTo.Hash())
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 

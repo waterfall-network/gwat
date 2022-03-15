@@ -49,18 +49,6 @@ type LesApiBackend struct {
 	gpo                 *gasprice.Oracle
 }
 
-func (b *LesApiBackend) SetHead(hash common.Hash) {
-	b.eth.handler.downloader.Cancel()
-	header := b.eth.blockchain.GetHeaderByHash(hash)
-	if header == nil {
-		panic("head not found")
-	}
-	if header.Number == nil {
-		panic("head not finalized")
-	}
-	b.eth.blockchain.SetHead(header.Hash())
-}
-
 func (b *LesApiBackend) GetLastFinalizedNumber() uint64 {
 	lfHeader := b.eth.blockchain.GetLastFinalizedHeader()
 	if lfHeader == nil {
@@ -94,6 +82,18 @@ func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
 
 func (b *LesApiBackend) CurrentBlock() *types.Block {
 	return types.NewBlockWithHeader(b.eth.BlockChain().GetLastFinalizedHeader())
+}
+
+func (b *LesApiBackend) SetHead(hash common.Hash) {
+	b.eth.handler.downloader.Cancel()
+	header := b.eth.blockchain.GetHeaderByHash(hash)
+	if header == nil {
+		panic("head not found")
+	}
+	if header.Number == nil {
+		panic("head not finalized")
+	}
+	b.eth.blockchain.SetHead(header.Hash())
 }
 
 func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {

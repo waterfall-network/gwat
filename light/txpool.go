@@ -269,7 +269,6 @@ func (pool *TxPool) reorgOnNewHead(ctx context.Context, newHeader *types.Header)
 		idx2 := idx - txPermanent
 		if len(pool.mined) > 0 {
 			for i := pool.clearIdx; i < idx2; i++ {
-				//hash := rawdb.ReadCanonicalHash(pool.chainDb, i)
 				hash := rawdb.ReadFinalizedHashByNumber(pool.chainDb, i)
 				if list, ok := pool.mined[hash]; ok {
 					hashes := make([]common.Hash, len(list))
@@ -321,9 +320,6 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	pool.relay.NewHead(pool.head, m, r)
 
 	// Update fork indicator by next pending block number
-	//next := new(big.Int).Add(head.Number, big.NewInt(1))
-	//pool.istanbul = pool.config.IsIstanbul(next)
-	//pool.eip2718 = pool.config.IsBerlin(next)
 	pool.istanbul = true
 	pool.eip2718 = true
 }

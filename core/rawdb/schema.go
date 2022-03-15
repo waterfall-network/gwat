@@ -143,21 +143,10 @@ func encodeBlockNumber(number uint64) []byte {
 	return enc
 }
 
-//// headerKeyPrefix = headerPrefix + num (uint64 big endian)
-//func headerKeyPrefix() []byte {
-//	return headerPrefix
-//}
-
 // headerKey = headerPrefix + hash
 func headerKey(hash common.Hash) []byte {
 	return append(headerPrefix, hash.Bytes()...)
 }
-
-//// contains genesis hash only
-//// headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
-//func headerHashKey(number uint64) []byte {
-//	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
-//}
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
 func blockBodyKey(hash common.Hash) []byte {

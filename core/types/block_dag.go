@@ -11,8 +11,10 @@ import (
 
 /********** Tips **********/
 
+// Tips represents the tips of dag chain.
 type Tips map[common.Hash]*BlockDAG
 
+// Add adds to tips new item or replace existed
 func (tips Tips) Add(blockDag *BlockDAG) Tips {
 	if blockDag == nil {
 		log.Warn("Tips::Add received BlockDAG=nil")
@@ -26,15 +28,18 @@ func (tips Tips) Add(blockDag *BlockDAG) Tips {
 	return tips
 }
 
+// Remove removes item from tips
 func (tips Tips) Remove(hash common.Hash) Tips {
 	delete(tips, hash)
 	return tips
 }
 
+// Get returns tips' item by hash
 func (tips Tips) Get(hash common.Hash) *BlockDAG {
 	return tips[hash]
 }
 
+// GetHashes returns hashes of tips' items
 func (tips Tips) GetHashes() common.HashArray {
 	hashes := make(common.HashArray, len(tips))
 	i := 0
@@ -45,11 +50,7 @@ func (tips Tips) GetHashes() common.HashArray {
 	return hashes
 }
 
-func (tips Tips) GetKey() common.Hash {
-	return tips.GetHashes().Key()
-}
-
-// Copy duplicates the current storage.
+// Copy creates copy of the current tips.
 func (tips Tips) Copy() Tips {
 	cpy := make(Tips)
 	for key, value := range tips {
@@ -85,16 +86,6 @@ func (tips Tips) GetOrderedDagChainHashes() common.HashArray {
 	return allHashes.Uniq()
 }
 
-func (tips Tips) GetLowestFinNrDag() *BlockDAG {
-	var res *BlockDAG
-	for _, t := range tips {
-		if res == nil || res.LastFinalizedHeight > t.LastFinalizedHeight {
-			res = t
-		}
-	}
-	return res
-}
-
 // GetStableStateHash retrieve the hash of the stable state
 func (tips Tips) GetStableStateHash() common.Hash {
 	finDag := tips.GetFinalizingDag()
@@ -120,6 +111,7 @@ func (tips Tips) GetAncestorsHashes() common.HashArray {
 	return ancestors
 }
 
+// Print returns string representation of tips.
 func (tips Tips) Print() string {
 	mapB, _ := json.Marshal(tips)
 	return string(mapB)
@@ -161,6 +153,8 @@ type BlockDAG struct {
 	FinalityPoints common.HashArray
 }
 
+// ToBytes encodes the BlockDAG structure
+// to byte representation.
 func (b *BlockDAG) ToBytes() []byte {
 	res := []byte{}
 	res = append(res, b.Hash.Bytes()...)
@@ -186,6 +180,7 @@ func (b *BlockDAG) ToBytes() []byte {
 	return res
 }
 
+// SetBytes restores BlockDAG structure from byte representation.
 func (b *BlockDAG) SetBytes(data []byte) *BlockDAG {
 	start := 0
 	end := common.HashLength
@@ -219,18 +214,14 @@ func (b *BlockDAG) SetBytes(data []byte) *BlockDAG {
 	return b
 }
 
-//// deprecated
-//// Height calculate block dag height
-//func (b *BlockDAG) CalcHeight() uint64 {
-//	return b.LastFinalizedHeight + uint64(len(b.DagChainHashes.Uniq())) + 1
-//}
-
+// Print returns string representation of BlockDAG structure.
 func (b *BlockDAG) Print() string {
 	mapB, _ := json.Marshal(b)
 	return string(mapB)
 }
 
 /********** DagGraph **********/
+// BlockState represents state of GraphDag structure
 type BlockState uint8
 
 const (
@@ -264,7 +255,6 @@ func (gd *GraphDag) GetFinalityPoints() *common.HashArray {
 	}
 	lastHeight := lastFinGd.Number
 	for i, itm := range ancestorsLoaded {
-		//log.Info("================= itm >>>>>>>>>>>>>>>>>", "condition", itm.Height == uint64(i)+lastHeight+1, "Height", itm.Height, "Number", uint64(i)+lastHeight+1, "lastHeight", lastHeight, "hash", itm.Hash.Hex())
 		if itm.Height == uint64(i)+lastHeight+1 {
 			*finalityPoints = append(*finalityPoints, itm.Hash)
 		}
@@ -286,7 +276,6 @@ func (gd *GraphDag) GetLastFinalizedAncestor() *GraphDag {
 			lastHeight = itm.Number
 			res = itm
 		}
-		//log.Info("================= itm =================", "condition", itm.Height == itm.Number, "Height", itm.Height, "Number", itm.Number, "lastHeight", lastHeight)
 	}
 	return res
 }
@@ -440,6 +429,7 @@ func (gd *GraphDag) GetAncestors() []*GraphDag {
 	return uniqAncestors
 }
 
+// chainLen calculates the length of dag chain of GraphDag
 func (gd *GraphDag) chainLen() *uint64 {
 	var length uint64 = 1
 	if gd.State == BSS_NOT_LOADED {
@@ -463,9 +453,10 @@ func (gd *GraphDag) chainLen() *uint64 {
 }
 
 /********** HeaderMap **********/
-
+// HeaderMap represents map of block headers
 type HeaderMap map[common.Hash]*Header
 
+// FromArray fills HeaderMap by data from array of headers.
 func (hm HeaderMap) FromArray(headers []*Header) HeaderMap {
 	for _, h := range headers {
 		if h != nil {
@@ -475,6 +466,7 @@ func (hm HeaderMap) FromArray(headers []*Header) HeaderMap {
 	return hm
 }
 
+// RmEmpty removes nil-items
 func (hm HeaderMap) RmEmpty() HeaderMap {
 	for k, h := range hm {
 		if h == nil {
@@ -484,6 +476,7 @@ func (hm HeaderMap) RmEmpty() HeaderMap {
 	return hm
 }
 
+// ToArray casts HeaderMap to array of block headers.
 func (hm HeaderMap) ToArray() []*Header {
 	arr := make([]*Header, len(hm))
 	i := 0
@@ -494,6 +487,7 @@ func (hm HeaderMap) ToArray() []*Header {
 	return arr
 }
 
+// Add adds header to map
 func (hm HeaderMap) Add(header *Header) HeaderMap {
 	if header == nil {
 		log.Warn("HeaderMap::Add received nil Header")
@@ -503,6 +497,7 @@ func (hm HeaderMap) Add(header *Header) HeaderMap {
 	return hm
 }
 
+//Hashes retrieves hashes of map
 func (hm HeaderMap) Hashes() common.HashArray {
 	hashes := make(common.HashArray, 0)
 	for _, h := range hm {
@@ -511,30 +506,8 @@ func (hm HeaderMap) Hashes() common.HashArray {
 	return hashes
 }
 
-func (hm HeaderMap) GetMinHeight() uint64 {
-	var res uint64 = 0
-	for _, itm := range hm {
-		if res == 0 {
-			res = itm.Height
-		} else if res > itm.Height {
-			res = itm.Height
-		}
-	}
-	return res
-}
-
-func (hm HeaderMap) GetMaxHeight() uint64 {
-	var res uint64 = 0
-	for _, itm := range hm {
-		if res == 0 {
-			res = itm.Height
-		} else if res < itm.Height {
-			res = itm.Height
-		}
-	}
-	return res
-}
-
+// GetMaxTime retrieves the max block create time
+// from current HeaderMap
 func (hm HeaderMap) GetMaxTime() uint64 {
 	maxtipsTs := uint64(0)
 	for _, p := range hm {
@@ -545,6 +518,7 @@ func (hm HeaderMap) GetMaxTime() uint64 {
 	return maxtipsTs
 }
 
+// AvgGasLimit retrieves average gas limit of HeaderMap.
 func (hm HeaderMap) AvgGasLimit() uint64 {
 	count := uint64(len(hm))
 	if count < 1 {
@@ -557,6 +531,7 @@ func (hm HeaderMap) AvgGasLimit() uint64 {
 	return sum / count
 }
 
+// ParentHashes retrieves all ParentHases from HeaderMap
 func (hm HeaderMap) ParentHashes() common.HashArray {
 	hashes := make(common.HashArray, 0)
 	for _, h := range hm {
@@ -653,8 +628,10 @@ func (hm HeaderMap) fillGraphDagRecursive(gd *GraphDag, gdMap map[common.Hash]*G
 
 /********** BlockMap **********/
 
+// BlockMap represents map of blocks
 type BlockMap map[common.Hash]*Block
 
+// ToArray casts BlockMap to array of blocks.
 func (bm BlockMap) ToArray() []*Block {
 	arr := make([]*Block, len(bm))
 	i := 0
@@ -665,6 +642,7 @@ func (bm BlockMap) ToArray() []*Block {
 	return arr
 }
 
+// Add adds block to map
 func (bm BlockMap) Add(block *Block) BlockMap {
 	if block == nil {
 		log.Warn("BlockMap::Add received nil Header")
@@ -674,6 +652,7 @@ func (bm BlockMap) Add(block *Block) BlockMap {
 	return bm
 }
 
+// Hashes retrieves hashes of map
 func (bm BlockMap) Hashes() common.HashArray {
 	hashes := make(common.HashArray, 0)
 	for _, block := range bm {
@@ -681,6 +660,8 @@ func (bm BlockMap) Hashes() common.HashArray {
 	}
 	return hashes
 }
+
+// Headers retrieves HeaderMap from current BlockMap.
 func (bm BlockMap) Headers() HeaderMap {
 	headers := HeaderMap{}
 	for _, block := range bm {
@@ -689,13 +670,8 @@ func (bm BlockMap) Headers() HeaderMap {
 	return headers
 }
 
-func (bm BlockMap) GetMinHeight() uint64 {
-	return bm.Headers().GetMinHeight()
-}
-func (bm BlockMap) GetMaxHeight() uint64 {
-	return bm.Headers().GetMaxHeight()
-}
-
+// GetMaxTime retrieves the max block create time
+// from current BlockMap
 func (bm BlockMap) GetMaxTime() uint64 {
 	return bm.Headers().GetMaxTime()
 }
@@ -708,16 +684,4 @@ func (bm BlockMap) AvgGasLimit() uint64 {
 //FinalizingSort sort in finalizing order
 func (bm BlockMap) FinalizingSort() common.HashArray {
 	return bm.Headers().FinalizingSort()
-}
-
-/********** SlotInfo **********/
-
-type SlotInfo struct {
-	Epoch     int64
-	EpochSlot int64
-	Period    int64
-	NodeTime  int64
-	Slot      int64
-	Remain    int64
-	Current   int64
 }

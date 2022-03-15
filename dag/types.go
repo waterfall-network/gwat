@@ -5,7 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/dag/finalizer"
 )
 
-/********** ConsensusInfo **********/
+// ConsensusInfo represents data of consensus request
 type ConsensusInfo struct {
 	Epoch      uint64              `json:"epoch"`
 	Slot       uint64              `json:"slot"`
@@ -23,8 +23,7 @@ func (ci *ConsensusInfo) Copy() *ConsensusInfo {
 	}
 }
 
-/********** ConsensusResult **********/
-
+// ConsensusResult represents result of handling of consensus request
 type ConsensusResult struct {
 	Error      *string              `json:"error"`
 	Info       *map[string]string   `json:"info"`

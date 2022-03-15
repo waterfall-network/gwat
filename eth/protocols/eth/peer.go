@@ -142,11 +142,10 @@ func (p *Peer) GetDagInfo() (lastFinNr uint64, dag *common.HashArray) {
 	return lastFinNr, dag
 }
 
-// SetHead updates the lastFinNr hash, dag and total difficulty of the peer.
+// SetDagInfo updates the lastFinNr, hash and dag of the peer.
 func (p *Peer) SetDagInfo(lastFinNr uint64, dag *common.HashArray) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	//p.dag = dag.Copy()
 	p.dag = dag
 	p.lastFinNr = lastFinNr
 }
@@ -340,7 +339,6 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 		RequestId: id,
 		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			//Hashes: &common.HashArray{hash},
 			Origin:  &HashOrNumber{Hash: hash},
 			Amount:  uint64(1),
 			Skip:    uint64(0),
@@ -395,7 +393,6 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 		RequestId: id,
 		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			//Hashes:  nil,
 			Origin:  &HashOrNumber{Number: origin},
 			Amount:  uint64(amount),
 			Skip:    uint64(skip),

@@ -474,7 +474,6 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum 
 
 	if endNum == nil {
 		endBlock = startBlock
-		//startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
 		startBlock = api.eth.blockchain.GetBlockByNumber(*endNum - 1)
 		if startBlock == nil {
 			return nil, fmt.Errorf("block %v has no parent", endBlock.Hash().Hex())
@@ -502,7 +501,6 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, end
 
 	if endHash == nil {
 		endBlock = startBlock
-		//startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
 		if endBlock.Number() == nil {
 			return nil, fmt.Errorf("block %v has not finalised", endBlock.Hash().Hex())
 		}

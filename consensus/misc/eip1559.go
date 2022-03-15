@@ -32,7 +32,6 @@ import (
 func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
-
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
 		return err
 	}

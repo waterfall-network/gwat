@@ -189,13 +189,6 @@ func TestBlockDAG(t *testing.T) {
 	fmt.Printf("len(test)-4=%v \n", len(test) <= 4)
 	fmt.Print(val)
 	fmt.Print("\n")
-
-	//test = test[:len(test)-4]
-	//fmt.Print( "\n")
-	//fmt.Printf( "len(test)-4=%v \n", len(test)<=4)
-	//fmt.Print(test)
-	//fmt.Print( "\n")
-
 }
 
 func TestTips(t *testing.T) {
@@ -403,17 +396,5 @@ func TestHeaderMap(t *testing.T) {
 	exp = uint64(30)
 	if res != exp {
 		t.Fatalf("GetMaxTime failed, got %v != %v", res, exp)
-	}
-	// GetMaxHeight()
-	res1 := hm.GetMaxHeight()
-	exp1 := uint64(30)
-	if res1 != exp1 {
-		t.Fatalf("GetMaxHeight failed, got %v != %v", res, exp)
-	}
-	// GetMinHeight()
-	res1 = hm.GetMinHeight()
-	exp1 = uint64(10)
-	if res1 != exp1 {
-		t.Fatalf("GetMinHeight failed, got %v != %v", res, exp)
 	}
 }

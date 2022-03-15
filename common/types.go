@@ -196,10 +196,10 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 	return []byte(hex.EncodeToString(h[:])), nil
 }
 
-/////////// HashArray
-
+// HashArray represents the 32 hash array.
 type HashArray []Hash
 
+// HashArrayFromBytes decodes the HashArray from byte representation.
 func HashArrayFromBytes(data []byte) HashArray {
 	count := len(data) / HashLength
 	ha := make(HashArray, count)
@@ -210,6 +210,8 @@ func HashArrayFromBytes(data []byte) HashArray {
 	return ha
 }
 
+// ToBytes encodes the HashArray structure
+// to byte representation.
 func (ha HashArray) ToBytes() []byte {
 	res := []byte{}
 	for i := 0; i < len(ha); i++ {
@@ -218,12 +220,15 @@ func (ha HashArray) ToBytes() []byte {
 	return res
 }
 
+// Copy creates a copy of HashArray.
 func (ha HashArray) Copy() HashArray {
 	c := make(HashArray, len(ha))
 	copy(c, ha)
 	return c
 }
 
+// Intersection calculates an intersection of current HashArray
+// with passed in param.
 func (ha HashArray) Intersection(hashArray HashArray) HashArray {
 	c := make(HashArray, 0)
 	m := make(map[Hash]bool)
@@ -238,6 +243,8 @@ func (ha HashArray) Intersection(hashArray HashArray) HashArray {
 	return c
 }
 
+// Difference calculates a difference of current HashArray
+// with passed in param.
 func (ha HashArray) Difference(hashArray HashArray) HashArray {
 	mb := make(map[Hash]struct{})
 	for _, x := range hashArray {
@@ -252,6 +259,7 @@ func (ha HashArray) Difference(hashArray HashArray) HashArray {
 	return diff
 }
 
+// Uniq returns a new HashArray with unique values.
 func (ha HashArray) Uniq() HashArray {
 	c := make(HashArray, 0)
 	m := make(map[Hash]bool)
@@ -264,11 +272,14 @@ func (ha HashArray) Uniq() HashArray {
 	return c
 }
 
+// Concat concatenates current HashArray with passed in param.
 func (ha HashArray) Concat(hashes HashArray) HashArray {
 	ha = append(ha, hashes...)
 	return ha
 }
 
+// IsEqualTo returns true if values of two HashArrays are same
+// otherwise - false
 func (ha HashArray) IsEqualTo(hashArray HashArray) bool {
 	if len(ha) != len(hashArray) {
 		return false
@@ -281,6 +292,7 @@ func (ha HashArray) IsEqualTo(hashArray HashArray) bool {
 	return true
 }
 
+// Sort sorts lexicographically hashes.
 func (ha HashArray) Sort() HashArray {
 	strs := make([]string, len(ha))
 	for i, hash := range ha {
@@ -293,19 +305,8 @@ func (ha HashArray) Sort() HashArray {
 	return ha
 }
 
-func (ha HashArray) Key() Hash {
-	c := ha.Copy()
-	//c := make(HashArray, len(ha))
-	//for i, hash := range ha {
-	//	c[i] = hash
-	//}
-	buf := c.Uniq().Sort().ToBytes()
-	sha := sha3.NewLegacyKeccak256()
-	sha.Write(buf[:])
-	key := sha.Sum(nil)
-	return BytesToHash(key)
-}
-
+// Has returns true if current HashArray contains passed hash
+// otherwise - false.
 func (ha HashArray) Has(hash Hash) bool {
 	for _, h := range ha {
 		if h == hash {
@@ -315,6 +316,8 @@ func (ha HashArray) Has(hash Hash) bool {
 	return false
 }
 
+// IndexOf returns index of passed hash in current HashArray
+// otherwise -1.
 func (ha HashArray) IndexOf(hash Hash) int {
 	for i, h := range ha {
 		if h == hash {
@@ -324,6 +327,7 @@ func (ha HashArray) IndexOf(hash Hash) int {
 	return -1
 }
 
+// Reverse returns reversed copy of HashArray.
 func (ha HashArray) Reverse() HashArray {
 	cpy := ha.Copy()
 	i := 0
@@ -335,8 +339,6 @@ func (ha HashArray) Reverse() HashArray {
 	}
 	return cpy
 }
-
-/////////// Address
 
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte

@@ -58,7 +58,6 @@ type Genesis struct {
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
-	//Number       uint64        `json:"number"`
 	GasUsed      uint64        `json:"gasUsed"`
 	ParentHashes []common.Hash `json:"parentHashes"`
 	Epoch        uint64        `json:"epoch"`
@@ -164,7 +163,6 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
 	// Just commit the new block if there is no stored genesis block.
-	//stored := rawdb.ReadCanonicalHash(db, 0)
 	stored := rawdb.ReadFinalizedHashByNumber(db, 0)
 	if (stored == common.Hash{}) {
 		if genesis == nil {
@@ -174,13 +172,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 			log.Info("Writing custom genesis block")
 		}
 		block, err := genesis.Commit(db)
-		log.Info("Writing custom genesis block >>>>>>>>>>>>>>>>>>", "hash", block.Hash().Hex())
+		log.Info("Writing custom genesis block", "hash", block.Hash().Hex())
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
 		return genesis.Config, block.Hash(), nil
 	}
-
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored)
@@ -237,10 +234,6 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	if lastFinHash == (common.Hash{}) {
 		return newcfg, stored, fmt.Errorf("missing last finalized blocks for head")
 	}
-	//compatErr := storedcfg.CheckCompatible(newcfg, *height)
-	//if compatErr != nil && *height != 0 && compatErr.RewindTo != 0 {
-	//	return newcfg, stored, compatErr
-	//}
 	rawdb.WriteChainConfig(db, stored, newcfg)
 	return newcfg, stored, nil
 }
@@ -324,8 +317,6 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	}
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), nil)
-
-	//rawdb.WriteCanonicalHash(db, block.Hash(), 0)
 	rawdb.WriteLastCanonicalHash(db, block.Hash())
 
 	rawdb.WriteFinalizedHashNumber(db, block.Hash(), 0)

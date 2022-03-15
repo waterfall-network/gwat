@@ -72,7 +72,7 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 	}
 }
 
-//todo uncorrect
+// todo fix
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
 func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
 	// Cache will initially contain [refHash.parent],

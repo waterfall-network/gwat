@@ -219,7 +219,6 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 		t.Helper()
 
 		for i := uint64(0); i <= server.handler.blockchain.GetLastFinalizedHeader().Nr(); i++ {
-			//bhash := rawdb.ReadCanonicalHash(server.db, i)
 			bhash := rawdb.ReadFinalizedHashByNumber(server.db, i)
 			b1 := fn(light.NoOdr, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
 

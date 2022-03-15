@@ -282,8 +282,7 @@ func XTestDelivery(t *testing.T) {
 			//fmt.Printf("getting headers from %d\n", c)
 			hdrs := world.headers(c)
 			l := len(hdrs)
-			//fmt.Printf("scheduling %d headers, first %d last %d\n",
-			//	l, hdrs[0].Nr(), hdrs[len(hdrs)-1].Nr())
+			fmt.Printf("scheduling %d headers, first %d last %d\n", l, hdrs[0].Nr(), hdrs[len(hdrs)-1].Nr())
 			q.Schedule(hdrs, uint64(c))
 			c += l
 		}

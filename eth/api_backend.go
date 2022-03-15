@@ -49,10 +49,12 @@ type EthAPIBackend struct {
 	gpo                 *gasprice.Oracle
 }
 
+// Dag retrieves current instance of Dag.
 func (b *EthAPIBackend) Dag() *dag.Dag {
 	return b.eth.dag
 }
 
+// GetLastFinalizedNumber retrieves current last finalized number.
 func (b *EthAPIBackend) GetLastFinalizedNumber() uint64 {
 	return b.eth.blockchain.GetLastFinalizedNumber()
 }
@@ -62,25 +64,29 @@ func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.blockchain.Config()
 }
 
+// GetLastFinalizedBlock retrieves current last finalized block.
 func (b *EthAPIBackend) GetLastFinalizedBlock() *types.Block {
 	bl := b.eth.blockchain.GetLastFinalizedBlock()
 	return bl
 }
 
+// ReadFinalizedNumberByHash retrieves block finalized number by block hash.
 func (b *EthAPIBackend) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
 	return b.eth.blockchain.ReadFinalizedNumberByHash(hash)
 }
 
-// GetBlockFinalizedNumber retrieves a block finalized height
+// GetBlockFinalizedNumber retrieves a block finalized number by hash.
 func (b *EthAPIBackend) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
 	return b.eth.blockchain.GetBlockFinalizedNumber(hash)
 }
 
+// SetHead set block as last finalized
 func (b *EthAPIBackend) SetHead(hash common.Hash) {
 	b.eth.handler.downloader.Cancel()
 	b.eth.blockchain.SetHead(hash)
 }
 
+// HeaderByNumber retrieves a block header by finalized number.
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
@@ -95,6 +101,7 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
 }
 
+// HeaderByNumberOrHash retrieves a block header by usaing BlockNumberOrHash structure.
 func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.HeaderByNumber(ctx, blockNr)
@@ -112,10 +119,12 @@ func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+// HeaderByHash retrieves a block header by hash.
 func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return b.eth.blockchain.GetHeaderByHash(hash), nil
 }
 
+// BlockByNumber retrieves a block by fnalized number.
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
@@ -130,10 +139,12 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
 }
 
+// BlockByNumber retrieves a block by hash.
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
 
+// BlockByNumberOrHash retrieves a block by usaing BlockNumberOrHash structure.
 func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
@@ -228,6 +239,7 @@ func (b *EthAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 	return vm.NewEVM(context, txContext, state, b.eth.blockchain.Config(), *vmConfig), vmError, nil
 }
 
+// GetTP retrieves the token processor.
 func (b *EthAPIBackend) GetTP(ctx context.Context, state *state.StateDB, header *types.Header) (*token.Processor, func() error, error) {
 	tpError := func() error { return nil }
 	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)

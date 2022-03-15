@@ -32,91 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//// ReadCanonicalHash retrieves the hash assigned to a canonical block number.
-//func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
-//	data, _ := db.Ancient(freezerHashTable, number)
-//	if len(data) == 0 {
-//
-//		//data, _ = db.Get(headerHashKey(number))
-//		data, _ = db.Get(finHashByNumberKey(number))
-//
-//		// In the background freezer is moving data from leveldb to flatten files.
-//		// So during the first check for ancient db, the data is not yet in there,
-//		// but when we reach into leveldb, the data was already moved. That would
-//		// result in a not found error.
-//		if len(data) == 0 {
-//			data, _ = db.Ancient(freezerHashTable, number)
-//		}
-//	}
-//	if len(data) == 0 {
-//		return common.Hash{}
-//	}
-//	return common.BytesToHash(data)
-//}
-
-//// WriteCanonicalHash stores the hash assigned to a canonical block number.
-//func WriteCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-//	if err := db.Put(headerHashKey(number), hash.Bytes()); err != nil {
-//		log.Crit("Failed to store number to hash mapping", "err", err)
-//	}
-//}
-
-//// DeleteCanonicalHash removes the number to hash canonical mapping.
-//func DeleteCanonicalHash(db ethdb.KeyValueWriter, number uint64) {
-//	if err := db.Delete(headerHashKey(number)); err != nil {
-//		log.Crit("Failed to delete number to hash mapping", "err", err)
-//	}
-//}
-
-// todo iterator
-//// ReadAllHashes retrieves all the hashes assigned to blocks at a certain heights,
-//// both canonical and reorged forks included.
-//func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
-//	prefix := headerKeyPrefix(number)
-//
-//	hashes := make([]common.Hash, 0, 1)
-//	it := db.NewIterator(prefix, nil)
-//	defer it.Release()
-//
-//	for it.Next() {
-//		if key := it.Key(); len(key) == len(prefix)+32 {
-//			hashes = append(hashes, common.BytesToHash(key[len(key)-32:]))
-//		}
-//	}
-//	return hashes
-//}
-//
-//type NumberHash struct {
-//	Number uint64
-//	Hash   common.Hash
-//}
-//
-//// ReadAllHashes retrieves all the hashes assigned to blocks at a certain heights,
-//// both canonical and reorged forks included.
-//// This method considers both limits to be _inclusive_.
-//func ReadAllHashesInRange(db ethdb.Iteratee, first, last uint64) []*NumberHash {
-//	var (
-//		start     = encodeBlockNumber(first)
-//		keyLength = len(headerPrefix) + 8 + 32
-//		hashes    = make([]*NumberHash, 0, 1+last-first)
-//		it        = db.NewIterator(headerPrefix, start)
-//	)
-//	defer it.Release()
-//	for it.Next() {
-//		key := it.Key()
-//		if len(key) != keyLength {
-//			continue
-//		}
-//		num := binary.BigEndian.Uint64(key[len(headerPrefix) : len(headerPrefix)+8])
-//		if num > last {
-//			break
-//		}
-//		hash := common.BytesToHash(key[len(key)-32:])
-//		hashes = append(hashes, &NumberHash{num, hash})
-//	}
-//	return hashes
-//}
-
 // ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
 // certain chain range. If the accumulated entries reaches the given threshold,
 // abort the iteration and return the semi-finish result.
@@ -130,7 +45,6 @@ func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int
 		hashes  []common.Hash
 	)
 	// Construct the key prefix of start point.
-	//start, end := headerHashKey(from), headerHashKey(to)
 	start, end := finHashByNumberKey(from), finHashByNumberKey(to)
 	it := db.NewIterator(nil, start)
 	defer it.Release()
@@ -337,7 +251,7 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	var (
 		hash = header.Hash()
 	)
-	//// Write the hash -> number mapping
+	// Write the hash -> number mapping
 	header.Number = nil
 	// Write the encoded header
 	data, err := rlp.EncodeToBytes(header)
@@ -410,7 +324,6 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	data, _ := db.Ancient(freezerBodiesTable, number)
 	if len(data) == 0 {
 		// Need to get the hash
-		//data, _ = db.Get(blockBodyKey(ReadCanonicalHash(db, number)))
 		data, _ = db.Get(blockBodyKey(ReadFinalizedHashByNumber(db, number)))
 		// In the background freezer is moving data from leveldb to flatten files.
 		// So during the first check for ancient db, the data is not yet in there,
@@ -505,7 +418,6 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
 			}
 		}
 	}
-
 	// Then try to look up the data in leveldb.
 	data, _ = db.Get(blockReceiptsKey(hash))
 	if len(data) > 0 {
@@ -842,7 +754,6 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 		Header: block.Header(),
 		Body:   block.Body(),
 	})
-	//sort.Sort(sort.Reverse(badBlocks))
 	if len(badBlocks) > badBlockToKeep {
 		badBlocks = badBlocks[:badBlockToKeep]
 	}
@@ -862,7 +773,7 @@ func DeleteBadBlocks(db ethdb.KeyValueWriter) {
 	}
 }
 
-//todo uncorrect
+// todo fix
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	panic("FindCommonAncestor: no implementation: fix it core/rawdb/accessors_chain.go:1001")
@@ -890,34 +801,6 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	//}
 	//return a
 }
-
-////todo deprecated
-//// ReadHeadHeader returns the current canonical head header.
-//func ReadHeadHeader(db ethdb.Reader) *types.Header {
-//	headHeaderHash := ReadLastFinalizedHash(db)
-//	if headHeaderHash == (common.Hash{}) {
-//		return nil
-//	}
-//	headHeaderNumber := ReadFinalizedNumberByHash(db, headHeaderHash)
-//	if headHeaderNumber == nil {
-//		return nil
-//	}
-//	return ReadHeader(db, headHeaderHash, *headHeaderNumber)
-//}
-//
-////todo deprecated
-//// ReadHeadBlock returns the current canonical head block.
-//func ReadHeadBlock(db ethdb.Reader) *types.Block {
-//	headBlockHash := ReadLastCanonicalHash(db)
-//	if headBlockHash == (common.Hash{}) {
-//		return nil
-//	}
-//	headBlockNumber := ReadFinalizedNumberByHash(db, headBlockHash)
-//	if headBlockNumber == nil {
-//		return nil
-//	}
-//	return ReadBlock(db, headBlockHash, *headBlockNumber)
-//}
 
 /**** FINALIZED BLOCK DATA ***/
 
@@ -963,7 +846,7 @@ func _writeFinalizedHashByNumber(db ethdb.KeyValueWriter, number uint64, hash co
 	}
 }
 
-//_deleteFinalizedHashByNumber
+//_deleteFinalizedHashByNumber removes the finalised blocks' height->hash mapping.
 func _deleteFinalizedHashByNumber(db ethdb.KeyValueWriter, number uint64) {
 	key := finHashByNumberKey(number)
 	if err := db.Delete(key); err != nil {
@@ -1013,6 +896,7 @@ func ReadLastFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 
 /**** BlockDag ***/
 
+// ReadBlockDag retrieves the BlockDag structure by hash.
 func ReadBlockDag(db ethdb.KeyValueReader, hash common.Hash) *types.BlockDAG {
 	data, _ := db.Get(blockDagKey(hash))
 	minSize := common.HashLength + common.HashLength + 8

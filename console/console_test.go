@@ -99,9 +99,6 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	}
 	ethConf := &ethconfig.Config{
 		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
-		//Miner: miner.Config{
-		//	Etherbase: common.HexToAddress(testAddress),
-		//},
 		Ethash: ethash.Config{
 			PowMode: ethash.ModeTest,
 		},
