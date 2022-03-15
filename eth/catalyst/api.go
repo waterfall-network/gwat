@@ -197,7 +197,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
 			txHeap.Pop()
 
 		case nil:
@@ -209,7 +209,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Error("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txHeap.Shift()
 		}
 	}

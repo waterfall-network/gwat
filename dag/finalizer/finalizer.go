@@ -140,7 +140,7 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 	lastBlock := blocks[*chain[maxNr]]
 
 	f.updateTips(*chain.GetHashes(), *lastBlock)
-	log.Info("⛓ Finalization::End", "blocks", len(chain), "height", lastBlock.Height(), "hash", lastBlock.Hash())
+	log.Info("⛓ Finalization completed", "blocks", len(chain), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 	return nil
 }
 
@@ -190,11 +190,11 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 
 	unl, _, _, _, _err := bc.ExploreChainRecursive(dag.Hash)
 	if _err != nil {
-		log.Error("ERROR::syncInsertChain", "err", _err)
+		log.Error("Finalizer failed while retrieving finalizing chain", "err", _err)
 		return nil, dag
 	}
 	if len(unl) > 0 {
-		log.Error("ERROR::syncInsertChain: unsert unloaded block", "err", _err)
+		log.Error("Finalizer failed due to unknown blocks detected", "hashes", unl)
 		return nil, dag
 	}
 	finPoints := dag.FinalityPoints.Uniq()
@@ -220,7 +220,7 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 			break
 		}
 		if bl.Height() >= finBlock.Height() {
-			log.Error("ERROR::Finalizer: unacceptable block height", "bl.Height", bl.Height(), "finBlock.Height", finBlock.Height(), "bl.Hash", bl.Hash(), "finBlock.Hash()", finBlock.Hash())
+			log.Error("Finalizer failed due to unacceptable block height", "bl.Height", bl.Height(), "finBlock.Height", finBlock.Height(), "bl.Hash", bl.Hash(), "finBlock.Hash()", finBlock.Hash())
 			return nil, dag
 		}
 		finChain = append(finChain, *bl)

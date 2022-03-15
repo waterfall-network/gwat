@@ -319,24 +319,24 @@ func (c *Creator) isSlotLocked(info *Assignment) bool {
 // CreateBlock starts process of block creation
 func (c *Creator) CreateBlock(assigned *Assignment) (*types.Block, error) {
 	if !c.IsRunning() {
-		log.Warn("Creator::stopped")
+		log.Warn("Creator stopped")
 		return nil, ErrCreatorStopped
 	}
 
 	if c.isSlotLocked(assigned) {
-		log.Warn("Creator::skipping:slot locked", "Epoch", assigned.Epoch, "Slot", assigned.Slot, "lastEpoch", c.getAssignment().Epoch, "lastSlot", c.getAssignment().Slot)
+		log.Warn("Creator skipping due to slot locked", "Epoch", assigned.Epoch, "Slot", assigned.Slot, "lastEpoch", c.getAssignment().Epoch, "lastSlot", c.getAssignment().Slot)
 		return nil, ErrSlotLocked
 	}
 
 	if c.isSyncing() {
-		log.Warn("Creator::skipping due to synchronization")
+		log.Warn("Creator skipping due to synchronization")
 		return nil, ErrSynchronization
 	}
 
 	if c.canStart {
 		c.setAssignment(assigned)
 		if !c.isCreatorActive(assigned) {
-			log.Info("Creator::skipping not active")
+			log.Info("Creator skipping due to not active")
 			return nil, ErrCreatorNotActive
 		}
 		c.canStart = false
@@ -418,9 +418,7 @@ func (c *Creator) taskLoop() {
 	for {
 		select {
 		case task := <-c.taskCh:
-
-			log.Info("Handle consensus: create", "c.newTaskHook", c.newTaskHook != nil, "c.skipSealHook", c.skipSealHook != nil)
-
+			log.Info("Creator start", "c.newTaskHook", c.newTaskHook != nil, "c.skipSealHook", c.skipSealHook != nil)
 			if c.newTaskHook != nil {
 				c.newTaskHook(task)
 			}
@@ -428,7 +426,6 @@ func (c *Creator) taskLoop() {
 			sealHash := c.engine.SealHash(task.block.Header())
 
 			if sealHash == prev {
-				log.Info("Handle consensus: create", "sealHash", sealHash, "prev", prev)
 				continue
 			}
 
@@ -538,8 +535,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.chain.AddTips(newBlockDag)
 	c.chain.ReviseTips()
 
-	log.Info("Successfully sealed new block", "Hash", block.Hash(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
-	log.Info("new hash", ">>", block.Hash().Hex())
+	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 	// Broadcast the block and announce chain insertion event
 	c.mux.Post(core.NewMinedBlockEvent{Block: block})
@@ -757,7 +753,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 				if _dag == nil {
 					parentBlock := c.eth.BlockChain().GetBlock(ph)
 					if parentBlock == nil {
-						log.Warn("Creator: reorg tips: bad parent in dag", "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
+						log.Warn("Creator reorg tips failed: bad parent in dag", "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
 						continue
 					}
 					_dag = &types.BlockDAG{
@@ -774,7 +770,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 				tips.Add(_dag)
 			}
 			delete(tips, bl.Hash())
-			log.Info("Creator: reorg tips", "blHeight", bl.Height(), "blHash", bl.Hash().Hex(), "tips", tips.Print())
+			log.Info("Creator reorg tips", "blHeight", bl.Height(), "blHash", bl.Hash().Hex(), "tips", tips.Print())
 		} else {
 
 		}
@@ -789,7 +785,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 				continue
 			}
 			if c.chain.IsAncestorRecursive(block, ancestor) {
-				log.Warn("Creator: remove ancestor tips",
+				log.Warn("Creator remove ancestor tips",
 					"block", block.Hash().Hex(),
 					"ancestor", ancestor.Hex(),
 					"tips", tips.Print(),
@@ -841,7 +837,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 	redCount := len(tmpDagChainHashes) - lastBlueIx
 	newHeight := lastBlueHeight + uint64(redCount)
 
-	log.Warn("Creator: calculate block height", "newHeight", newHeight,
+	log.Warn("Creator calculate block height", "newHeight", newHeight,
 		"lastBlueHeight", lastBlueHeight,
 		"lastBlueIx", lastBlueIx,
 		"len(tmpDagChainHashes)", len(tmpDagChainHashes),

@@ -119,7 +119,7 @@ func (cs *chainSyncer) loop() {
 		select {
 		case peerEventCh := <-cs.peerEventCh:
 			// Peer information changed, recheck.
-			log.Debug("SYNC::loop:<-cs.peerEventCh:", "peerEventCh", peerEventCh)
+			log.Debug("Peer event channel", "evt", peerEventCh)
 		case <-cs.doneCh:
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)

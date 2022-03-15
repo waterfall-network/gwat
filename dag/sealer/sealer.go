@@ -569,7 +569,7 @@ func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, tip
 	stateHeader := chain.GetHeader(stateHash)
 
 	if stateHeader == nil {
-		log.Crit("ERROR:: empty stateHeader")
+		log.Crit("Sealer failed due to empty state header", "hash", stateHash)
 	}
 
 	//stateHeight := stateHeader.Height

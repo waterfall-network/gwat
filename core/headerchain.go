@@ -493,7 +493,7 @@ func (hc *HeaderChain) loadTips() error {
 	}
 	for _, th := range tipsHashes {
 		if th == (common.Hash{}) {
-			log.Error("loadTips:: unacceptable value", "hash", th.Hex())
+			log.Error("Bad tips hash", "hash", th.Hex())
 			continue
 		}
 
@@ -642,7 +642,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 				dag.FinalityPoints = *graph.GetFinalityPoints()
 				hc.AddTips(dag, true)
 			} else {
-				log.Warn("Unloaded block detected", "unloaded", unloaded)
+				log.Warn("Unknown blocks detected", "hashes", unloaded)
 			}
 			saveTips = true
 		}

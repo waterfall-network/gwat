@@ -17,7 +17,7 @@ type Tips map[common.Hash]*BlockDAG
 // Add adds to tips new item or replace existed
 func (tips Tips) Add(blockDag *BlockDAG) Tips {
 	if blockDag == nil {
-		log.Warn("Tips::Add received BlockDAG=nil")
+		log.Warn("Add tips received bad BlockDAG", "item", blockDag)
 		return tips
 	}
 
@@ -490,7 +490,7 @@ func (hm HeaderMap) ToArray() []*Header {
 // Add adds header to map
 func (hm HeaderMap) Add(header *Header) HeaderMap {
 	if header == nil {
-		log.Warn("HeaderMap::Add received nil Header")
+		log.Warn("Add HeaderMap received bad header", "item", header)
 		return hm
 	}
 	hm[header.Hash()] = header
@@ -645,7 +645,7 @@ func (bm BlockMap) ToArray() []*Block {
 // Add adds block to map
 func (bm BlockMap) Add(block *Block) BlockMap {
 	if block == nil {
-		log.Warn("BlockMap::Add received nil Header")
+		log.Warn("Add BlockMap received bad block", "item", block)
 		return bm
 	}
 	bm[block.Hash()] = block

@@ -1645,9 +1645,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
-
-			log.Error("ERROR::syncInsertChain", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
-
+			log.Error("Error of block insertion to chain while sync (processing)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 			return it.index, err
 		}
 		// Update the metrics touched during block processing
@@ -1669,7 +1667,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
 
-			log.Error("ERROR::syncInsertChain", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+			log.Error("Error of block insertion to chain while sync (state validation)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 
 			return it.index, err
 		}
@@ -1686,9 +1684,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "syncInsertChain")
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
-
-			log.Error("ERROR::syncInsertChain", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
-
+			log.Error("Error of block insertion to chain while sync (block writing)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 			return it.index, err
 		}
 		// Update the metrics touched during block commit
@@ -1701,7 +1697,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 
 		switch status {
 		case CanonStatTy:
-			log.Error("Inserted new block :: require FIX lastCanon", "hash", block.Hash(),
+			log.Error("Inserted new block", "hash", block.Hash(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -1744,14 +1740,14 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
 		if err := bc.addFutureBlock(block); err != nil {
-			log.Error("ERROR::syncInsertChain", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+			log.Error("Error of block insertion to chain while sync (future block)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 			return it.index, err
 		}
 		block, err = it.next()
 
 		for ; block != nil && errors.Is(err, consensus.ErrUnknownAncestor); block, err = it.next() {
 			if err := bc.addFutureBlock(block); err != nil {
-				log.Error("ERROR::syncInsertChain", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+				log.Error("Error of block insertion to chain while sync (unknown ancestor)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 				return it.index, err
 			}
 			stats.queued++
@@ -2125,11 +2121,11 @@ func (bc *BlockChain) CollectStateDataByTips(tips types.Tips) (statedb *state.St
 func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
 	unl, _, fnl, graph, _err := bc.ExploreChainRecursive(block.Hash())
 	if _err != nil {
-		log.Error("ERROR::CollectStateDataByBlock", "err", _err)
+		log.Error("Error while collect state data by block", "number", block.Nr(), "height", block.Height(), "hash", block.Hash().Hex(), "err", _err)
 		return statedb, stateBlock, recommitBlocks, err
 	}
 	if len(unl) > 0 {
-		log.Error("ERROR::CollectStateDataByBlock", "Number", block.Nr(), "Height", block.Height(), "Hash", block.Hash().Hex(), "unloaded", unl)
+		log.Error("Error while collect state data by block (unknown blocks detected)", "number", block.Nr(), "height", block.Height(), "hash", block.Hash().Hex(), "unknown", unl)
 		return statedb, stateBlock, recommitBlocks, ErrInsertUncompletedDag
 	}
 
@@ -2158,7 +2154,7 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 		}
 	}
 	if stateHash == (common.Hash{}) {
-		log.Error("ERROR::CollectStateDataByBlock", "error", ErrStateBlockNotFound)
+		log.Error("Error while collect state data by block (bad state hash)", "error", ErrStateBlockNotFound)
 		return statedb, stateBlock, recommitBlocks, ErrStateBlockNotFound
 	}
 	stateBlock = bc.GetBlockByHash(stateHash)
@@ -2291,7 +2287,7 @@ func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *s
 	snap := statedb.Snapshot()
 	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, &block.Header().GasUsed, *bc.GetVMConfig())
 	if err != nil {
-		log.Error("Recommit Block Transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex())
+		log.Error("Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex())
 		statedb.RevertToSnapshot(snap)
 		return nil, nil, err
 	}
