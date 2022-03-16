@@ -551,12 +551,16 @@ func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]
 	owners := storage.ReadMapSlot()
 	balances := storage.ReadMapSlot()
 
+	address := caller.Address()
 	tokenId := op.TokenId()
 	owner := storage.ReadAddressFromMap(owners, tokenId.Bytes())
+	if owner != address {
+		return nil, ErrIncorrectOwner
+	}
 
-	balance := storage.ReadUint256FromMap(balances, owner[:])
+	balance := storage.ReadUint256FromMap(balances, address[:])
 	newBalance := new(big.Int).Sub(balance, big.NewInt(1))
-	storage.WriteUint256ToMap(balances, owner[:], newBalance)
+	storage.WriteUint256ToMap(balances, address[:], newBalance)
 
 	// Empty value for the owner
 	storage.WriteAddressToMap(owners, tokenId.Bytes(), common.Address{})
