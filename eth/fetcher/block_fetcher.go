@@ -123,7 +123,6 @@ type headerFilterTask struct {
 type bodyFilterTask struct {
 	peer         string                 // The source peer of block bodies
 	transactions [][]*types.Transaction // Collection of transactions per block bodies
-	uncles       [][]*types.Header      // Collection of uncles per block bodies
 	time         time.Time              // Arrival time of the blocks' contents
 }
 
@@ -310,7 +309,7 @@ func (f *BlockFetcher) FilterHeaders(peer string, headers []*types.Header, time 
 
 // FilterBodies extracts all the block bodies that were explicitly requested by
 // the fetcher, returning those that should be handled differently.
-func (f *BlockFetcher) FilterBodies(peer string, transactions [][]*types.Transaction, time time.Time) ([][]*types.Transaction, [][]*types.Header) {
+func (f *BlockFetcher) FilterBodies(peer string, transactions [][]*types.Transaction, time time.Time) [][]*types.Transaction {
 	log.Info("Filtering bodies", "peer", peer, "txs", len(transactions))
 
 	// Send the filter channel to the fetcher
@@ -319,20 +318,20 @@ func (f *BlockFetcher) FilterBodies(peer string, transactions [][]*types.Transac
 	select {
 	case f.bodyFilter <- filter:
 	case <-f.quit:
-		return nil, nil
+		return nil
 	}
 	// Request the filtering of the body list
 	select {
 	case filter <- &bodyFilterTask{peer: peer, transactions: transactions, time: time}:
 	case <-f.quit:
-		return nil, nil
+		return nil
 	}
 	// Retrieve the bodies remaining after filtering
 	select {
 	case task := <-filter:
-		return task.transactions, task.uncles
+		return task.transactions
 	case <-f.quit:
-		return nil, nil
+		return nil
 	}
 }
 
@@ -429,6 +428,15 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
+
+			bl := f.getBlock(op.block.Hash())
+			if bl != nil {
+				log.Debug("Fetcher skipping duplicate block", "hash", bl.Hash().Hex())
+				f.forgetHash(bl.Hash())
+				f.forgetBlock(bl.Hash())
+				continue
+			}
+
 			f.enqueue(op.origin, nil, op.block)
 
 		case hash := <-f.done:
@@ -823,7 +831,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		}
 		// Run the actual import and log any issues
 		if _, err, unl := f.insertChain(peer, types.Blocks{block}); err != nil {
-			log.Debug("Propagated block import failed", "peer", peer, "number", block.Nr(), "hash", hash, "err", err, "unknown", unl)
+			log.Error("Propagated block import failed", "peer", peer, "number", block.Nr(), "hash", hash.Hex(), "err", err, "unknown", unl)
 			return
 		}
 		// If import succeeded, broadcast the block

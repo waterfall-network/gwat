@@ -511,6 +511,8 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	if node := t.db.node(hash); node != nil {
 		return node, nil
 	}
+	////todo RM
+	//panic("Propagated block import failed")
 	return nil, &MissingNodeError{NodeHash: hash, Path: prefix}
 }
 

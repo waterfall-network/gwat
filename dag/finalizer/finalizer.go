@@ -212,9 +212,16 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 
 	blocks := bc.GetBlocksByHashes(finOrd)
 	finBlock := blocks[finPoint]
+	if finBlock == nil {
+		log.Error("Finalizer failed due to block of finality point not found", "hash", finPoint.Hex())
+		return nil, dag
+	}
 	finChain := []types.Block{}
 	for _, h := range finOrd {
 		bl := blocks[h]
+		if bl == nil {
+			return &finChain, dag
+		}
 		if bl.Hash() == finBlock.Hash() {
 			finChain = append(finChain, *bl)
 			break
@@ -231,13 +238,18 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 // GetFinalizingCandidates returns the ordered dag block hashes for finalization
 func (f *Finalizer) GetFinalizingCandidates() (*NrHashMap, error) {
 	bc := f.eth.BlockChain()
+	candidates := NrHashMap{}
 	tips, unloaded := bc.ReviseTips()
 	if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
+		if tips == nil {
+			log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips)
+		} else {
+			log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips.Print())
+		}
 		return nil, ErrBadDag
 	}
-	candidates := NrHashMap{}
 	finChain, finDag := f.RetrieveFinalizingChain(*tips)
-	if finChain == nil {
+	if finChain == nil || len(*finChain) == 0 {
 		return &candidates, nil
 	}
 

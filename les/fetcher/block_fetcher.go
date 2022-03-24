@@ -809,7 +809,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		}
 		// Run the actual import and log any issues
 		if _, err := f.insertChain("", types.Blocks{block}); err != nil {
-			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
+			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash.Hex(), "err", err)
 			return
 		}
 		// If import succeeded, broadcast the block

@@ -177,7 +177,7 @@ func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction) er
 	// Filter out any explicitly requested bodies, deliver the rest to the downloader
 	filter := len(txs) > 0
 	if filter {
-		txs, _ = h.blockFetcher.FilterBodies(peer.ID(), txs, time.Now())
+		txs = h.blockFetcher.FilterBodies(peer.ID(), txs, time.Now())
 	}
 	if len(txs) > 0 || !filter {
 		err := h.downloader.DeliverBodies(peer.ID(), txs)

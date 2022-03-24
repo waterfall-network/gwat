@@ -1707,7 +1707,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		case SideStatTy:
 			log.Debug("Inserted forked block", "hash", block.Hash(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles",
+				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
 
 		default:
@@ -1715,7 +1715,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			// a log, instead of trying to track down blocks imports that don't emit logs.
 			log.Warn("Inserted block with unknown status", "hash", block.Hash(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles",
+				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
 		}
 		stats.processed++
@@ -2247,15 +2247,15 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Trace("Gas limit exceeded for current block", "sender", from)
+			log.Error("Gas limit exceeded for current block", "sender", from, "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
@@ -2263,12 +2263,12 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
-			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			log.Error("Skipping unsupported transaction type", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Error("Transaction failed, account skipped", "hash", tx.Hash().Hex(), "err", err)
 		}
 	}
 
@@ -2287,7 +2287,7 @@ func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *s
 	snap := statedb.Snapshot()
 	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, &block.Header().GasUsed, *bc.GetVMConfig())
 	if err != nil {
-		log.Error("Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex())
+		log.Error("Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
 		statedb.RevertToSnapshot(snap)
 		return nil, nil, err
 	}
@@ -2920,17 +2920,32 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
 			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
 	}
+
+	txCount := len(block.Transactions())
+
 	log.Error(fmt.Sprintf(`
 ########## BAD BLOCK #########
 Chain config: %v
 
 Number: %v
 Hash: 0x%x
-%v
+%d
 
 Error: %v
 ##############################
-`, bc.chainConfig, block.Nr(), block.Hash(), receiptString, err))
+`, bc.chainConfig, block.Nr(), block.Hash(), txCount, err))
+
+	//	log.Error(fmt.Sprintf(`
+	//########## BAD BLOCK #########
+	//Chain config: %v
+	//
+	//Number: %v
+	//Hash: 0x%x
+	//%v
+	//
+	//Error: %v
+	//##############################
+	//`, bc.chainConfig, block.Nr(), block.Hash(), receiptString, err))
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local
@@ -2975,7 +2990,8 @@ func (bc *BlockChain) GetDagHashes() *common.HashArray {
 // GetUnsynchronizedTipsHashes retrieves tips with incomplete chain to finalized state
 func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
 	tipsHashes := common.HashArray{}
-	for hash, dag := range *bc.hc.GetTips() {
+	tips := bc.hc.GetTips()
+	for hash, dag := range *tips {
 		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
 			tipsHashes = append(tipsHashes, hash)
 		}
