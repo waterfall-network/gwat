@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	FinalisationDelaySlots = 3
+	FinalisationDelaySlots = 4
 )
 
 // Backend wraps all methods required for finalizing.

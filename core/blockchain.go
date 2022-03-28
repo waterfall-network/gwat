@@ -1889,13 +1889,15 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			upTips, _ := bc.ReviseTips()
 			finDag := upTips.GetFinalizingDag()
 			if finDag.Hash != block.Hash() {
-				log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.Print())
+				//log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.Print())
+				log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
 				// create transaction lookup
 				rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
 				bc.CacheTransactionLookup(block)
 				continue
 			}
-			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.GetHashes())
+			//log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.GetHashes())
+			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
 		}
 
 		start := time.Now()
