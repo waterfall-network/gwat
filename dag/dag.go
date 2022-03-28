@@ -112,13 +112,13 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	dagSlots := d.countDagSlots()
 
 	log.Info("Handle Consensus: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= 3,
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
 		"dagSlots", dagSlots,
 	)
 
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= 3 {
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Epoch:    data.Epoch,
