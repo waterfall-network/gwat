@@ -211,7 +211,16 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash().Hex())
 			return 0, nil, nil
 		}
+
+		//tstart := time.Now()
+		//log.Warn("<<<<<<<<<<   >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+
+		tstart := time.Now()
+
 		n, err := h.chain.InsertPropagatedBlocks(blocks)
+
+		log.Warn("<<<<<<<<<< h.chain.InsertPropagatedBlocks(blocks)  >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+
 		if err == core.ErrInsertUncompletedDag {
 			unloaded := common.HashArray{}
 			for _, block := range blocks {
@@ -361,7 +370,7 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 	defer h.peerWG.Done()
 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
-		peer.Log().Error("Snapshot extension registration failed", "err", err)
+		peer.Log().Trace("Snapshot extension registration failed", "err", err)
 		return err
 	}
 	return handler(peer)
@@ -452,10 +461,10 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		//// Send the block to a subset of our peers
-		//transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-		// temp sent to all peers
-		transfer := peers[:]
+		// Send the block to a subset of our peers
+		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		// //temp sent to all peers
+		//transfer := peers[:]
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block)
 		}
@@ -467,7 +476,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range peers {
 			peer.AsyncSendNewBlockHash(block)
 		}
-		log.Info("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Info("Announced block", "hash", hash.Hex(), "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 

@@ -151,8 +151,11 @@ func (bc *BlockChain) GetBlock(hash common.Hash) *types.Block {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
 		blk := block.(*types.Block)
-		blk.SetNumber(finNr)
-		return blk
+		if blk != nil {
+			blk.SetNumber(finNr)
+			return blk
+		}
+		bc.blockCache.Remove(hash)
 	}
 	block := rawdb.ReadBlock(bc.db, hash)
 	if block == nil {

@@ -386,7 +386,7 @@ func (c *ChainIndexer) updateLoop() {
 // held while processing, the continuity can be broken by a long reorg, in which
 // case the function returns with an error.
 func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (common.Hash, error) {
-	c.log.Trace("Processing new chain section", "section", section)
+	c.log.Debug("Processing new chain section", "section", section)
 
 	// Reset and partial processing
 	if err := c.backend.Reset(c.ctx, section, lastHead); err != nil {

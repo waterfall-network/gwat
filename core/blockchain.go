@@ -1297,13 +1297,14 @@ func (bc *BlockChain) WriteMinedBlock(block *types.Block, receipts []*types.Rece
 	return bc.writeBlockWithState(block, receipts, logs, state, ET_MINING, "WriteMinedBlock")
 }
 
+//todo not in use
 // WriteMinedBlock writes the block and all associated state to the database.
-func (bc *BlockChain) WriteRecommitedBlock(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) (status WriteStatus, err error) {
+func (bc *BlockChain) WriteBlueBlock(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) (status WriteStatus, err error) {
 	if !bc.chainmu.TryLock() {
 		return NonStatTy, errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
-	return bc.writeBlockWithState(block, receipts, logs, state, ET_SKIP, "WriteRecommitedBlock")
+	return bc.writeBlockWithState(block, receipts, logs, state, ET_SKIP, "WriteBlueBlock")
 }
 
 // writeBlockWithState writes the block and all associated state to the database,
@@ -1948,9 +1949,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
+
+			log.Error("Insert Propagated Block validation error", "error", err)
+
+			//bc.reportBlock(block, receipts, err)
+			//atomic.StoreUint32(&followupInterrupt, 1)
+			//return it.index, err
 		}
 		proctime := time.Since(start)
 
@@ -2236,6 +2240,9 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 	var receipts []*types.Receipt
 	var rlogs []*types.Log
 
+	hightNonce := false
+	lowNonce := false
+
 	for i, tx := range block.Transactions() {
 		from, _ := types.Sender(signer, tx)
 		// Start executing the transaction
@@ -2250,15 +2257,39 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			log.Error("Gas limit exceeded for current block", "sender", from, "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooLow):
+			//todo rm
+			if lowNonce {
+				continue
+			}
+			lowNonce = true
 			// New head notification data race between the transaction pool and miner, shift
-			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+			log.Error("Skipping transaction with low nonce", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
+			// if tx already in block
+			if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
+				txBlock := bc.GetBlock(blockHash)
+				log.Error("=========== transaction with low nonce ===========", "bls.CMP", blockHash == block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "hash", tx.Hash().Hex())
+			}
 		case errors.Is(err, ErrNonceTooHigh):
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Error("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+			//todo rm
+			if hightNonce {
+				continue
+			}
+			hightNonce = true
 
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Error("Skipping account with hight nonce", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+
+			// if tx already in block
+			if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
+				txBlock := bc.GetBlock(blockHash)
+				log.Error("=========== transaction with higth nonce ===========", "bls.CMP", blockHash == block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "hash", tx.Hash().Hex())
+			}
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
+			receipts = append(receipts, receipt)
+			rlogs = append(rlogs, logs...)
+
 			coalescedLogs = append(coalescedLogs, logs...)
 
 		case errors.Is(err, ErrTxTypeNotSupported):
@@ -2287,7 +2318,8 @@ func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *s
 	snap := statedb.Snapshot()
 	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, &block.Header().GasUsed, *bc.GetVMConfig())
 	if err != nil {
-		log.Error("Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
+		//todo
+		//log.Error("Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
 		statedb.RevertToSnapshot(snap)
 		return nil, nil, err
 	}
@@ -2920,9 +2952,6 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
 			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
 	}
-
-	txCount := len(block.Transactions())
-
 	log.Error(fmt.Sprintf(`
 ########## BAD BLOCK #########
 Chain config: %v
@@ -2933,7 +2962,7 @@ Hash: 0x%x
 
 Error: %v
 ##############################
-`, bc.chainConfig, block.Nr(), block.Hash(), txCount, err))
+`, bc.chainConfig, block.Nr(), block.Hash(), len(block.Transactions()), err))
 
 	//	log.Error(fmt.Sprintf(`
 	//########## BAD BLOCK #########

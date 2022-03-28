@@ -519,6 +519,14 @@ func (hc *HeaderChain) GetTips(skipLock ...bool) *types.Tips {
 		defer hc.tipsMu.Unlock()
 	}
 	cpy := hc.tips.Load().(*types.Tips).Copy()
+	if len(cpy) > 1 {
+		// if last finalised block stuck in tips - rm it
+		lfHash := hc.GetLastFinalizedHeader().Hash()
+		if tip := cpy.Get(lfHash); tip != nil {
+			cpy = cpy.Remove(lfHash)
+			hc.tips.Store(&cpy)
+		}
+	}
 	return &cpy
 }
 

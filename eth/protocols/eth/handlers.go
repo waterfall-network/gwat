@@ -19,6 +19,7 @@ package eth
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -103,23 +104,32 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 				current = *nr
 				next = current + query.Skip + 1
 			}
+
 			if next <= current {
 				infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
-				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
+				peer.Log().Warn("GetBlockHeaders skip overflow attack 0000", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
+				peer.Log().Warn("GetBlockHeaders skip overflow attack 0000", "current", current, "skip", query.Skip, "next", next, "attacker", peer.Peer.Info())
 				unknown = true
-			} else {
-				if header := backend.Chain().GetHeaderByNumber(next); header != nil {
-					nextHash := header.Hash()
-					expOldHash, _ := backend.Chain().GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
-					if expOldHash == query.Origin.Hash {
-						query.Origin.Hash, query.Origin.Number = nextHash, next
-					} else {
-						unknown = true
-					}
+			}
+
+			//if next <= current {
+			//	infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
+			//	peer.Log().Warn("GetBlockHeaders skip overflow attack 0000", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
+			//	peer.Log().Warn("GetBlockHeaders skip overflow attack 0000", "current", current, "skip", query.Skip, "next", next, "attacker", peer.Peer.Info())
+			//	unknown = true
+			//} else {
+			if header := backend.Chain().GetHeaderByNumber(next); header != nil {
+				nextHash := header.Hash()
+				expOldHash, _ := backend.Chain().GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
+				if expOldHash == query.Origin.Hash {
+					query.Origin.Hash, query.Origin.Number = nextHash, next
 				} else {
 					unknown = true
 				}
+			} else {
+				unknown = true
 			}
+			//}
 		case query.Reverse:
 			// Number based traversal towards the genesis block
 			if query.Origin.Number >= query.Skip+1 {
@@ -244,6 +254,9 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 }
 
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
+
+	tstart := time.Now()
+
 	// A batch of new block announcements just arrived
 	ann := new(NewBlockHashesPacket)
 	if err := msg.Decode(ann); err != nil {
@@ -254,10 +267,17 @@ func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
 		peer.markBlock(block.Hash)
 	}
 	// Deliver them all to the backend for queuing
-	return backend.Handle(peer, ann)
+	resp := backend.Handle(peer, ann)
+	log.Warn("<<<<<<<<<<  handleNewBlockhashes >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+	return resp
+
+	//return backend.Handle(peer, ann)
 }
 
 func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
+
+	tstart := time.Now()
+
 	// Retrieve and decode the propagated block
 	ann := new(NewBlockPacket)
 	if err := msg.Decode(ann); err != nil {
@@ -275,11 +295,18 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 
 	// Mark the peer as owning the block
 	peer.markBlock(ann.Block.Hash())
+	log.Warn("<<<<<<<<<< handleNewBlock  >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+	resp := backend.Handle(peer, ann)
 
-	return backend.Handle(peer, ann)
+	return resp
+
+	//return backend.Handle(peer, ann)
 }
 
 func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
+
+	tstart := time.Now()
+
 	// A batch of headers arrived to one of our previous requests
 	res := new(BlockHeadersPacket66)
 	if err := msg.Decode(res); err != nil {
@@ -287,10 +314,17 @@ func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	requestTracker.Fulfil(peer.id, peer.version, BlockHeadersMsg, res.RequestId)
 
-	return backend.Handle(peer, &res.BlockHeadersPacket)
+	resp := backend.Handle(peer, &res.BlockHeadersPacket)
+	log.Warn("<<<<<<<<<< handleBlockHeaders66  >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+	return resp
+
+	//return backend.Handle(peer, &res.BlockHeadersPacket)
 }
 
 func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
+
+	tstart := time.Now()
+
 	// A batch of block bodies arrived to one of our previous requests
 	res := new(BlockBodiesPacket66)
 	if err := msg.Decode(res); err != nil {
@@ -298,7 +332,12 @@ func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	requestTracker.Fulfil(peer.id, peer.version, BlockBodiesMsg, res.RequestId)
 
-	return backend.Handle(peer, &res.BlockBodiesPacket)
+	resp := backend.Handle(peer, &res.BlockBodiesPacket)
+
+	log.Warn("<<<<<<<<<<  handleBlockBodies66 >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+	return resp
+
+	//return backend.Handle(peer, &res.BlockBodiesPacket)
 }
 
 func handleNodeData66(backend Backend, msg Decoder, peer *Peer) error {
@@ -313,6 +352,9 @@ func handleNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
+
+	tstart := time.Now()
+
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket66)
 	if err := msg.Decode(res); err != nil {
@@ -320,10 +362,17 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	requestTracker.Fulfil(peer.id, peer.version, ReceiptsMsg, res.RequestId)
 
-	return backend.Handle(peer, &res.ReceiptsPacket)
+	resp := backend.Handle(peer, &res.ReceiptsPacket)
+	log.Warn("<<<<<<<<<<  handleReceipts66 >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+	return resp
+
+	//return backend.Handle(peer, &res.ReceiptsPacket)
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
+
+	tstart := time.Now()
+
 	// New transaction announcement arrived, make sure we have
 	// a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
@@ -337,7 +386,12 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	for _, hash := range *ann {
 		peer.markTransaction(hash)
 	}
-	return backend.Handle(peer, ann)
+
+	resp := backend.Handle(peer, ann)
+	log.Warn("<<<<<<<<<<  handleNewPooledTransactionHashes >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+	return resp
+
+	//return backend.Handle(peer, ann)
 }
 
 func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {

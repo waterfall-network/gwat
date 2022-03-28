@@ -817,7 +817,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		return err
 	}
 	txsMap, err := d.fetchDagTxs(p, dag)
-	log.Info("Synchronization of unknown dag blocks: dag transactions retrieved", "count", len(txsMap), "txs", txsMap, "err", err)
+	log.Info("Synchronization of unknown dag blocks: dag transactions retrieved", "count", len(txsMap), "err", err)
 	if err != nil {
 		return err
 	}

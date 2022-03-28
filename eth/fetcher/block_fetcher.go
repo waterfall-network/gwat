@@ -376,9 +376,18 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				f.importHeaders(op.origin, op.header)
 			} else {
+
+				tstart := time.Now()
+
 				f.importBlocks(op.origin, op.block)
+
+				log.Warn("<<<<<<<<<< f.importBlocks(op.origin, op.block) >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+
 			}
 		}
+
+		tstart := time.Now()
+
 		// Wait for an outside event to occur
 		select {
 		case <-f.quit:
@@ -438,6 +447,8 @@ func (f *BlockFetcher) loop() {
 			}
 
 			f.enqueue(op.origin, nil, op.block)
+
+			log.Warn("<<<<<<<<<< f.enqueue(op.origin, nil, op.block) >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
 
 		case hash := <-f.done:
 			// A pending import finished, remove all traces of the notification
@@ -608,6 +619,9 @@ func (f *BlockFetcher) loop() {
 			}
 
 		case filter := <-f.bodyFilter:
+
+			tstart0 := time.Now()
+
 			// Block bodies arrived, extract any explicitly requested blocks, return the rest
 			var task *bodyFilterTask
 			select {
@@ -654,6 +668,9 @@ func (f *BlockFetcher) loop() {
 				}
 			}
 			bodyFilterOutMeter.Mark(int64(len(task.transactions)))
+
+			log.Warn("<<<<<<<<<< ilter := <-f.bodyFilter: >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart0)))
+
 			select {
 			case filter <- task:
 			case <-f.quit:
@@ -829,11 +846,17 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 			f.dropPeer(peer)
 			return
 		}
+
+		tstart := time.Now()
+
 		// Run the actual import and log any issues
 		if _, err, unl := f.insertChain(peer, types.Blocks{block}); err != nil {
 			log.Error("Propagated block import failed", "peer", peer, "number", block.Nr(), "hash", hash.Hex(), "err", err, "unknown", unl)
 			return
 		}
+
+		log.Warn("<<<<<<<<<< f.insertChain(peer, types.Blocks{block}) >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
+
 		// If import succeeded, broadcast the block
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
 		go f.broadcastBlock(block, false)

@@ -675,17 +675,17 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Error("Gas limit exceeded for current block", "sender", from)
+			log.Error("Gas limit exceeded for current block", "sender", from, "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 			txs.Shift()
 
 		case errors.Is(err, core.ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Error("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		case errors.Is(err, nil):
@@ -696,13 +696,13 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
-			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Info("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Info("Transaction failed, account skipped", "hash", tx.Hash().Hex(), "err", err)
 			txs.Shift()
 		}
 	}

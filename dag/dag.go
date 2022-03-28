@@ -102,10 +102,22 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 		errs["candidates"] = err.Error()
 	}
 
-	log.Info("Handle Consensus:: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
+	if candidates == nil || len(*candidates) == 0 {
+		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
+	}
+
+	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
 
 	// create block
 	dagSlots := d.countDagSlots()
+
+	log.Info("Handle Consensus: create condition",
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= 3,
+		"IsRunning", d.creator.IsRunning(),
+		"errs", errs,
+		"dagSlots", dagSlots,
+	)
+
 	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= 3 {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
