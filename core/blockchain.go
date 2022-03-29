@@ -2663,9 +2663,6 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			}
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			receipts = append(receipts, receipt)
-			rlogs = append(rlogs, logs...)
-
 			coalescedLogs = append(coalescedLogs, logs...)
 
 		case errors.Is(err, ErrTxTypeNotSupported):
