@@ -152,6 +152,9 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 		}
 
 		if block.Height() == i {
+
+			log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state : start >>>>>>>>>>>>>>>", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
+
 			//	if blue block - check state
 			blueState, stateErr := bc.StateAt(block.Root())
 			if stateErr != nil {
@@ -166,7 +169,7 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 					log.Error("FinalizingBlueBlock failed", "err", err)
 					panic("FinalizingBlueBlock failed")
 				}
-				log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state >>>>>>>>>>>>>>>", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
+				log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state : end >>>>>>>>>>>>>>>", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 			} else {
 				statedb = blueState
 			}
