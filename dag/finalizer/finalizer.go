@@ -155,12 +155,14 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 
 			log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state : start >>>>>>>>>>>>>>>", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 
+			var blueState *state.StateDB
+			var stateErr error = nil
 			//	if blue block - check state
-			blueState, stateErr := bc.StateAt(block.Root())
+			blueState, stateErr = bc.StateAt(block.Root())
 			if stateErr != nil {
 				// recommit red blocks transactions
 				for rnr, bl := range recommitBlocks {
-					log.Info("<<<<<<<<<<<<<<<<<< RecommitBlockTransactions >>>>>>>>>>>>>>>", "finNr", "nr", rnr, "height", block.Height(), "hash", block.Hash().Hex())
+					log.Info("<<<<<<<<<<<<<<<<<< RecommitBlockTransactions >>>>>>>>>>>>>>>", "nr", rnr, "height", block.Height(), "hash", block.Hash().Hex())
 					statedb = bc.RecommitBlockTransactions(bl, statedb)
 				}
 				// recalculate state
@@ -169,7 +171,7 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 					log.Error("FinalizingBlueBlock failed", "err", err)
 					panic("FinalizingBlueBlock failed")
 				}
-				log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state : end >>>>>>>>>>>>>>>", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
+				log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state : end >>>>>>>>>>>>>>>", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 			} else {
 				statedb = blueState
 			}
