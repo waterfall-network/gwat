@@ -78,7 +78,9 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 	}
 
 	bc := f.eth.BlockChain()
-	lastFinNr := bc.GetLastFinalizedNumber()
+	lastFinBlock := bc.GetLastFinalizedBlock()
+	//lastFinNr := bc.GetLastFinalizedNumber()
+	lastFinNr := lastFinBlock.Nr()
 
 	mnr := chain.GetMinNr()
 	if mnr == nil {
@@ -124,6 +126,20 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 		}
 	}
 
+	//todo ???
+	//bc.DagMu.Lock()
+	//defer bc.DagMu.Unlock()
+
+	//get current state
+	statedb, err := bc.StateAt(lastFinBlock.Root())
+	if err != nil {
+		log.Error("Bad last finalized state", "nr", lastFinBlock.Nr(), "height", lastFinBlock.Height(), "hash", lastFinBlock.Hash().Hex())
+		return err
+	}
+	// Enable prefetching to pull in trie node paths while processing transactions
+	statedb.StartPrefetcher("chain")
+	//activeState := statedb
+
 	// blocks finalizing
 	for i := minNr; i <= maxNr; i++ {
 		hash := chain[i]
@@ -132,7 +148,7 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 		if isHead && block.Height() != i {
 			log.Error("Block height mismatch finalizing number", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 		}
-		if err := f.finalizeBlock(i, *block, isHead); err != nil {
+		if statedb, err = f.finalizeBlock(i, *block, statedb, isHead); err != nil {
 			log.Error("block finalization failed", "nr", i, "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 			return err
 		}
@@ -155,22 +171,47 @@ func (f *Finalizer) updateTips(finHashes common.HashArray, lastBlock types.Block
 }
 
 // finalizeBlock finalize block
-func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) error {
+func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, statedb *state.StateDB, isHead bool) (*state.StateDB, error) {
 	bc := f.eth.BlockChain()
 	nr := bc.ReadFinalizedNumberByHash(block.Hash())
 	if nr != nil && *nr == finNr {
 		log.Warn("Block already finalized", "finNr", "nr", nr, "height", block.Height(), "hash", block.Hash().Hex())
-		return nil
+		return statedb, nil
 	}
 	//if hash := bc.ReadFinalizedHashByNumber(finNr); hash != (common.Hash{}) && hash != block.Hash() {
 	//	return fmt.Errorf(fmt.Sprintf("block already finalised finNr=%d new hash=%v existed=%v", finNr, block.Hash(), hash))
 	//}
+
+	var upStatedb *state.StateDB
+	var err error
+
+	if block.Height() == finNr {
+
+		log.Info("<<<<<<<<<<<<<<<<<< FinalizingBlueBlock >>>>>>>>>>>>>>>", "finNr", "nr", nr, "height", block.Height(), "hash", block.Hash().Hex())
+
+		//	if blue block
+		upStatedb, err = bc.FinalizingBlueBlock(&block, statedb, true)
+		if err != nil {
+			log.Error("FinalizingBlueBlock failed", "err", err)
+			panic("FinalizingBlueBlock failed")
+		}
+	} else {
+		log.Info("<<<<<<<<<<<<<<<<<< RecommitBlockTransactions >>>>>>>>>>>>>>>", "finNr", "nr", nr, "height", block.Height(), "hash", block.Hash().Hex())
+		//	if red block
+		upStatedb = bc.RecommitBlockTransactions(&block, statedb)
+	}
+
+	//statedb, err = bc.StateAt(stateBlock.Root())
+	//if err != nil {
+	//	return statedb, stateBlock, recommitBlocks, err
+	//}
+
 	if err := bc.WriteFinalizedBlock(finNr, &block, []*types.Receipt{}, []*types.Log{}, &state.StateDB{}, isHead); err != nil {
-		return err
+		return upStatedb, err
 	}
 
 	log.Info("🔗 block finalized", "Number", finNr, "Height", block.Height(), "hash", block.Hash().Hex())
-	return nil
+	return upStatedb, nil
 }
 
 // isSyncing returns true if sync process is running.
