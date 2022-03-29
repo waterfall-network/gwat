@@ -2033,6 +2033,146 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	return it.index, err
 }
 
+//todo rm no use
+// insertPropagatedBlocksNoState inserts propagated block without state
+func (bc *BlockChain) insertPropagatedBlocksNoState(chain types.Blocks, verifySeals bool) (int, error) {
+	// If the chain is terminating, don't even bother starting up
+	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+		return 0, nil
+	}
+
+	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
+	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
+
+	var (
+		stats = insertStats{startTime: mclock.Now()}
+		//lastCanon *types.Block
+	)
+
+	//// Fire a single chain head event if we've progressed the chain
+	//defer func() {
+	//	lfb := bc.GetLastFinalizedBlock()
+	//	if lastCanon != nil && lfb.Hash() == lastCanon.Hash() {
+	//		bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon, ET_SYNC_FIN})
+	//	}
+	//}()
+
+	// Start the parallel header verifier
+	headers := make([]*types.Header, len(chain))
+	headerMap := make(types.HeaderMap, len(chain))
+	seals := make([]bool, len(chain))
+
+	for i, block := range chain {
+		headers[i] = block.Header()
+		headerMap[block.Hash()] = block.Header()
+		seals[i] = verifySeals
+	}
+	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
+	defer close(abort)
+
+	// Peek the error for the first block to decide the directing import logic
+	it := newInsertIterator(chain, results, bc.validator)
+
+	block, err := it.next()
+
+	switch {
+	// First block is pruned, insert as sidechain and reorg
+	case errors.Is(err, consensus.ErrPrunedAncestor):
+		log.Debug("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
+		return bc.insertSideChain(block, it)
+
+	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
+	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHashes()[0])):
+		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
+			log.Debug("Future block, postponing import", "hash", block.Hash())
+			if err := bc.addFutureBlock(block); err != nil {
+				return it.index, err
+			}
+			block, err = it.next()
+		}
+		stats.queued += it.processed()
+		stats.ignored += it.remaining()
+
+		// If there are any still remaining, mark as ignored
+		return it.index, err
+
+	// Some other error occurred, abort
+	case err != nil:
+		bc.futureBlocks.Remove(block.Hash())
+		stats.ignored += len(it.chain)
+		bc.reportBlock(block, nil, err)
+		return it.index, err
+	}
+	//// No validation errors for the first block (or chain prefix skipped)
+	//var activeState *state.StateDB
+	//defer func() {
+	//	// The chain importer is starting and stopping trie prefetchers. If a bad
+	//	// block or other error is hit however, an early return may not properly
+	//	// terminate the background threads. This defer ensures that we clean up
+	//	// and dangling prefetcher, without defering each and holding on live refs.
+	//	if activeState != nil {
+	//		activeState.StopPrefetcher()
+	//	}
+	//}()
+
+	for ; block != nil && err == nil; block, err = it.next() {
+		//// If the chain is terminating, stop processing blocks
+		//if bc.insertStopped() {
+		//	log.Debug("Abort during block processing")
+		//	break
+		//}
+
+		log.Info("---- Insert propagated block ---", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
+
+		if checkBlock := bc.GetBlock(block.Hash()); checkBlock != nil {
+			if checkBlock.Nr() > 0 {
+				log.Info("Insert propagated block: check block finalized", "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
+				continue
+			}
+			log.Info("Insert propagated block: check block exists", "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
+		}
+
+		rawdb.WriteBlock(bc.db, block)
+		bc.AppendToChildren(block.Hash(), block.ParentHashes())
+
+		// update tips
+		bc.RemoveTips(block.ParentHashes())
+		bc.AddTips(&types.BlockDAG{
+			Hash:                block.Hash(),
+			Height:              block.Height(),
+			LastFinalizedHash:   common.Hash{},
+			LastFinalizedHeight: 0,
+			DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
+		})
+		//if block is red - skip processing
+		upTips, _ := bc.ReviseTips()
+
+		log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.Print())
+		//log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
+		// create transaction lookup
+		rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
+		bc.CacheTransactionLookup(block)
+	}
+
+	// Any blocks remaining here? The only ones we care about are the future ones
+	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
+		if err := bc.addFutureBlock(block); err != nil {
+			return it.index, err
+		}
+		block, err = it.next()
+
+		for ; block != nil && errors.Is(err, consensus.ErrUnknownAncestor); block, err = it.next() {
+			if err := bc.addFutureBlock(block); err != nil {
+				return it.index, err
+			}
+			stats.queued++
+		}
+	}
+	stats.ignored += it.remaining()
+
+	return it.index, err
+}
+
 // FinalizeBlock finalizing block
 func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.StateDB, verifySeals bool) (*state.StateDB, error) {
 	// If the chain is terminating, don't even bother starting up
