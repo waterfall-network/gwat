@@ -153,7 +153,7 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 
 		if block.Height() == i {
 			//	if blue block - check state
-			_, stateErr := bc.StateAt(block.Root())
+			blueState, stateErr := bc.StateAt(block.Root())
 			if stateErr != nil {
 				// recommit red blocks transactions
 				for rnr, bl := range recommitBlocks {
@@ -167,6 +167,8 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 					panic("FinalizingBlueBlock failed")
 				}
 				log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state >>>>>>>>>>>>>>>", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
+			} else {
+				statedb = blueState
 			}
 			recommitBlocks = []*types.Block{}
 		} else {
