@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -224,7 +225,7 @@ type BlockChain interface {
 	ReviseTips() (tips *types.Tips, unloadedHashes common.HashArray)
 	ResetTips() error
 	GetUnsynchronizedTipsHashes() common.HashArray
-	ExploreChainRecursive(headHash common.Hash) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, err error)
+	ExploreChainRecursive(headHash common.Hash, memo ...core.ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, err error)
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.

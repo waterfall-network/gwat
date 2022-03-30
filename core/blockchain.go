@@ -3377,7 +3377,8 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 // GetDagHashes retrieves all non finalized block's hashes
 func (bc *BlockChain) GetDagHashes() *common.HashArray {
 	dagHashes := common.HashArray{}
-	for hash, tip := range *bc.hc.GetTips() {
+	tips := *bc.hc.GetTips()
+	for hash, tip := range tips {
 		if hash == tip.LastFinalizedHash {
 			dagHashes = append(dagHashes, hash)
 			continue
@@ -3407,10 +3408,25 @@ func (bc *BlockChain) ReviseTips() (tips *types.Tips, unloadedHashes common.Hash
 	return bc.hc.ReviseTips(bc)
 }
 
+type ExploreResult struct {
+	unloaded  common.HashArray
+	loaded    common.HashArray
+	finalized common.HashArray
+	graph     *types.GraphDag
+	err       error
+}
+
+type ExploreResultMap map[common.Hash]*ExploreResult
+
 // ExploreChainRecursive recursively collect chain info about
 // locally unknown, existed and latest finalized parent blocks,
 // creates GraphDag structure until latest finalized ancestors.
-func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, err error) {
+func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, err error) {
+	//cycle detection
+	if len(memo) == 0 {
+		memo = append(memo, make(ExploreResultMap))
+	}
+
 	block := bc.GetBlockByHash(headHash)
 	graph = &types.GraphDag{
 		Hash:   headHash,
@@ -3424,7 +3440,7 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash) (unloaded, loa
 	}
 	graph.State = types.BSS_LOADED
 	graph.Height = block.Height()
-	if nr := rawdb.ReadFinalizedNumberByHash(bc.db, headHash); nr != nil {
+	if nr := block.Number(); nr != nil {
 		// if finalized
 		graph.State = types.BSS_FINALIZED
 		graph.Number = *nr
@@ -3440,10 +3456,33 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash) (unloaded, loa
 		return unloaded, loaded, finalized, graph, err
 	}
 	for _, ph := range block.ParentHashes() {
-		_unloaded, _loaded, _finalized, _graph, _err := bc.ExploreChainRecursive(ph)
-		unloaded = unloaded.Concat(_unloaded).Uniq()
-		loaded = loaded.Concat(_loaded).Uniq()
-		finalized = finalized.Concat(_finalized).Uniq()
+		var (
+			_unloaded, _loaded, _finalized common.HashArray
+			_graph                         *types.GraphDag
+			_err                           error
+		)
+
+		if memo[0][ph] != nil {
+			_unloaded = memo[0][ph].unloaded
+			_loaded = memo[0][ph].loaded
+			_finalized = memo[0][ph].finalized
+			_graph = memo[0][ph].graph
+			_err = memo[0][ph].err
+		} else {
+			_unloaded, _loaded, _finalized, _graph, _err = bc.ExploreChainRecursive(ph, memo[0])
+			memo[0][ph] = &ExploreResult{
+				unloaded:  _unloaded,
+				loaded:    _loaded,
+				finalized: _finalized,
+				graph:     _graph,
+				err:       _err,
+			}
+		}
+		//_unloaded, _loaded, _finalized, _graph, _err = bc.ExploreChainRecursive(ph, memo[0])
+
+		unloaded = unloaded.Concat(_unloaded)    //.Uniq()
+		loaded = loaded.Concat(_loaded)          //.Uniq()
+		finalized = finalized.Concat(_finalized) //.Uniq()
 		graph.Graph = append(graph.Graph, _graph)
 		err = _err
 	}
