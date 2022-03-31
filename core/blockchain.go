@@ -1756,8 +1756,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		return 0, nil
 	}
 
+	tstart_1 := time.Now()
+
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
+
+	log.Error("<<<<<<<<<< insertPropagatedBlocks:senderCacher.recoverFromBlocks >>>>>>>>>>>>>", "txsCount", len(chain[0].Transactions()), "Height", chain[0].Height(), "hash", chain[0].Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_1)))
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -1856,14 +1860,22 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			log.Info("Insert propagated block: check block exists", "stateOnly", stateOnly, "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
 		}
 
+		tstart_0 := time.Now()
+
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
+
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: WriteBlock >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_0)))
+
+		tstart_2 := time.Now()
 
 		//retrieve state data
 		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
 			return it.index, stateErr
 		}
+
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: CollectStateDataByParents >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_2)))
 
 		if !stateOnly {
 			// update tips
@@ -1880,9 +1892,15 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			finDag := upTips.GetFinalizingDag()
 			if finDag.Hash != block.Hash() {
 				log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
+
+				tstart_3 := time.Now()
+
 				// create transaction lookup
 				rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
 				bc.CacheTransactionLookup(block)
+
+				log.Error("<<<<<<<<<< insertPropagatedBlocks: RED BLOCK WriteTxLookupEntriesByBlock >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_3)))
+
 				continue
 			}
 			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
@@ -1893,10 +1911,14 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		statedb.StartPrefetcher("chain")
 		activeState = statedb
 
+		tstart_4 := time.Now()
+
 		// recommit red blocks transactions
 		for _, bl := range recommitBlocks {
 			statedb = bc.RecommitBlockTransactions(bl, statedb)
 		}
+
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK recommitBlocks >>>>>>>>>>>>>", "recommitBlocks", len(recommitBlocks), "elapsed", common.PrettyDuration(time.Since(tstart_4)))
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
@@ -1917,7 +1939,13 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
+
+		tstart_5 := time.Now()
+
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.processor.Process(block, statedb, bc.vmConfig) >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_5)))
+
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
@@ -1936,6 +1964,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
 
+		tstart_6 := time.Now()
+
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
@@ -1945,15 +1975,22 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		}
 		proctime := time.Since(start)
 
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.validator.ValidateState >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_6)))
+
 		// Update the metrics touched during block validation
 		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
 		storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
 
 		blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
 
+		tstart_7 := time.Now()
+
 		// Write the block to the chain and get the status.
 		substart = time.Now()
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
+
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK writeBlockWithState >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_7)))
+
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
