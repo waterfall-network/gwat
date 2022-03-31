@@ -495,7 +495,7 @@ func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.
 	fromFinNr := uint64(query)
 
 	for _, h := range backend.Chain().GetTips().GetHashes() {
-		unloaded, loaded, _, _, err := backend.Chain().ExploreChainRecursive(h)
+		unloaded, loaded, _, _, _, err := backend.Chain().ExploreChainRecursive(h)
 		if err != nil {
 			return dag, 0, err
 		}

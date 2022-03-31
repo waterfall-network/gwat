@@ -227,8 +227,11 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
 
 				if rawdb.ReadFinalizedHashByNumber(c.chainDb, prevHeader.Nr()) != prevHash {
-					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-						c.newHead(h.Nr(), true)
+					log.Error("FindCommonAncestor", "nr", prevHeader.Nr(), "height", prevHeader.Height, "hash", prevHash.Hex())
+					if prevHeader.Nr() > 0 {
+						if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
+							c.newHead(h.Nr(), true)
+						}
 					}
 				}
 			}

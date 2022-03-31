@@ -620,7 +620,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 				continue
 			}
 			// if block exists - check all ancestors to finalized state
-			unloaded, loaded, finalized, graph, err := bc.ExploreChainRecursive(hash)
+			unloaded, loaded, finalized, graph, _, err := bc.ExploreChainRecursive(hash)
 			if err != nil {
 				hc.RemoveTips(common.HashArray{hash}, true)
 				saveTips = true

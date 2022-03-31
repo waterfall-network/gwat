@@ -318,6 +318,9 @@ func (c *Creator) isSlotLocked(info *Assignment) bool {
 
 // CreateBlock starts process of block creation
 func (c *Creator) CreateBlock(assigned *Assignment) (*types.Block, error) {
+	c.eth.BlockChain().DagMu.Lock()
+	defer c.eth.BlockChain().DagMu.Unlock()
+
 	if !c.IsRunning() {
 		log.Warn("Creator stopped")
 		return nil, ErrCreatorStopped
@@ -572,7 +575,7 @@ func (c *Creator) makeCurrent(tips types.Tips, header *types.Header) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 
-	state, _, recommitBlocks, stateErr := c.chain.CollectStateDataByTips(tips)
+	state, _, recommitBlocks, stateErr := c.chain.CollectStateDataByParents(tips.GetHashes())
 	if stateErr != nil {
 		return stateErr
 	}
@@ -748,7 +751,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 		if bl.Epoch() > slotInfo.Epoch || (bl.Epoch() == slotInfo.Epoch && bl.Slot() >= slotInfo.Slot) {
 			tip := tips.Get(bl.Hash())
 			for _, ph := range bl.ParentHashes() {
-				_, _, _, graph, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash())
+				_, _, _, graph, _, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash())
 				_dag := c.eth.BlockChain().ReadBockDag(ph)
 				if _dag == nil {
 					parentBlock := c.eth.BlockChain().GetBlock(ph)
@@ -883,19 +886,19 @@ func (c *Creator) commitNewWork(timestamp int64) {
 		c.errWorkCh <- &err
 		return
 	}
+
+	//recommit transactions of dag chain
+	for _, bl := range c.current.recommitBlocks {
+		c.chain.RecommitBlockTransactions(bl, c.current.state)
+	}
+
 	// Fill the block with all available pending transactions.
 	pending := c.getPending()
-
 	// Short circuit if no pending transactions
 	if len(pending) == 0 {
 		log.Warn("Skipping block creation: no assigned txs")
 		c.errWorkCh <- &ErrNoTxs
 		return
-	}
-
-	//recommit transactions of dag chain
-	for _, bl := range c.current.recommitBlocks {
-		c.chain.RecommitBlockTransactions(bl, c.current.state)
 	}
 
 	if len(pending) > 0 {

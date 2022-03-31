@@ -85,7 +85,7 @@ const (
 	bodyCacheLimit      = 256
 	blockCacheLimit     = 256
 	receiptsCacheLimit  = 32
-	txLookupCacheLimit  = 1024
+	txLookupCacheLimit  = 100000 //262144 // 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
@@ -1870,7 +1870,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByBlock(block)
+		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -2341,7 +2341,7 @@ func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.Sta
 
 	// Write the block to the chain and get the status.
 	substart = time.Now()
-	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "FinalizingBloc")
+	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "FinalizingBlock")
 	//atomic.StoreUint32(&followupInterrupt, 1)
 	if err != nil {
 		return statedb, err
@@ -2459,53 +2459,35 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	return bc.insertChain(types.Blocks([]*types.Block{block}), false)
 }
 
-// CollectStateDataByTips retrieves state data to calculate rootState for insertion new block to chain
-// by parsing tips
-func (bc *BlockChain) CollectStateDataByTips(tips types.Tips) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
-	//retrieve the stable state block
-	stateHash := tips.GetStableStateHash()
-	if stateHash == (common.Hash{}) {
-		stateHash = bc.GetLastFinalizedHeader().Hash()
+// CollectStateDataByParents collects state data of current dag chain to insert block.
+func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
+	graph := &types.GraphDag{
+		Hash:   common.Hash{},
+		Height: 0,
+		Number: 0,
+		Graph:  nil,
+		State:  0,
 	}
-	stateBlock = bc.GetBlockByHash(stateHash)
-
-	statedb, err = bc.StateAt(stateBlock.Root())
-	if err != nil {
-		return statedb, stateBlock, recommitBlocks, err
-	}
-	// collect red blocks (not in finalization points)
-	ordHashes := tips.GetOrderedDagChainHashes()
-	stateIndex := ordHashes.IndexOf(stateHash)
-	recalcHashes := common.HashArray{}
-	if stateIndex > -1 {
-		recalcHashes = ordHashes[stateIndex+1:]
-	}
-
-	recommitBlocks = []*types.Block{}
-	for _, h := range recalcHashes {
-		bl := bc.GetBlockByHash(h)
-		if bl == nil {
-			log.Warn("Insert block: red block not found", "block", h)
-			continue
+	var (
+		cache = ExploreResultMap{}
+		fnl   = common.HashArray{}
+		unl   = common.HashArray{}
+	)
+	for _, h := range parents {
+		u, _, f, gr, c, e := bc.ExploreChainRecursive(h, cache)
+		if e != nil {
+			log.Error("Error while collect state data by block", "hash", h.Hex(), "parents", parents, "err", e)
+			return statedb, stateBlock, recommitBlocks, err
 		}
-		// skip already finalized blocks
-		if bl.Number() != nil {
-			continue
+		if len(u) > 0 {
+			unl = unl.Concat(u)
 		}
-		recommitBlocks = append(recommitBlocks, bl)
-	}
-	return statedb, stateBlock, recommitBlocks, err
-}
-
-// CollectStateDataByBlock collects state data of current dag chain to insert new block.
-func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
-	unl, _, fnl, graph, _err := bc.ExploreChainRecursive(block.Hash())
-	if _err != nil {
-		log.Error("Error while collect state data by block", "number", block.Nr(), "height", block.Height(), "hash", block.Hash().Hex(), "err", _err)
-		return statedb, stateBlock, recommitBlocks, err
+		cache = c
+		graph.Graph = append(graph.Graph, gr)
+		fnl = fnl.Concat(f).Uniq()
 	}
 	if len(unl) > 0 {
-		log.Error("Error while collect state data by block (unknown blocks detected)", "number", block.Nr(), "height", block.Height(), "hash", block.Hash().Hex(), "unknown", unl)
+		log.Error("Error while collect state data by block (unknown blocks detected)", "parents", parents, "unknown", unl)
 		return statedb, stateBlock, recommitBlocks, ErrInsertUncompletedDag
 	}
 
@@ -2804,7 +2786,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByBlock(block)
+		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -3383,7 +3365,7 @@ func (bc *BlockChain) GetDagHashes() *common.HashArray {
 			dagHashes = append(dagHashes, hash)
 			continue
 		}
-		_, loaded, _, _, _ := bc.ExploreChainRecursive(hash)
+		_, loaded, _, _, _, _ := bc.ExploreChainRecursive(hash)
 		dagHashes = dagHashes.Concat(loaded)
 	}
 	dagHashes = dagHashes.Uniq()
@@ -3413,6 +3395,7 @@ type ExploreResult struct {
 	loaded    common.HashArray
 	finalized common.HashArray
 	graph     *types.GraphDag
+	cache     ExploreResultMap
 	err       error
 }
 
@@ -3421,8 +3404,7 @@ type ExploreResultMap map[common.Hash]*ExploreResult
 // ExploreChainRecursive recursively collect chain info about
 // locally unknown, existed and latest finalized parent blocks,
 // creates GraphDag structure until latest finalized ancestors.
-func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, err error) {
-	//cycle detection
+func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache ExploreResultMap, err error) {
 	if len(memo) == 0 {
 		memo = append(memo, make(ExploreResultMap))
 	}
@@ -3436,7 +3418,7 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 	}
 	if block == nil {
 		// if block not loaded
-		return common.HashArray{headHash}, loaded, finalized, graph, nil
+		return common.HashArray{headHash}, loaded, finalized, graph, memo[0], nil
 	}
 	graph.State = types.BSS_LOADED
 	graph.Height = block.Height()
@@ -3444,22 +3426,25 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		// if finalized
 		graph.State = types.BSS_FINALIZED
 		graph.Number = *nr
-		return unloaded, loaded, common.HashArray{headHash}, graph, nil
+		return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
 	}
 	loaded = common.HashArray{headHash}
 	if block.ParentHashes() == nil || len(block.ParentHashes()) < 1 {
 		if block.Hash() == bc.genesisBlock.Hash() {
-			return unloaded, loaded, common.HashArray{headHash}, graph, nil
+			return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
 		}
 		log.Warn("Detect block without parents", "hash", block.Hash(), "height", block.Height(), "epoch", block.Epoch(), "slot", block.Slot())
 		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
-		return unloaded, loaded, finalized, graph, err
+		return unloaded, loaded, finalized, graph, memo[0], err
 	}
 	for _, ph := range block.ParentHashes() {
 		var (
-			_unloaded, _loaded, _finalized common.HashArray
-			_graph                         *types.GraphDag
-			_err                           error
+			_unloaded  common.HashArray
+			_loaded    common.HashArray
+			_finalized common.HashArray
+			_graph     *types.GraphDag
+			_cache     ExploreResultMap
+			_err       error
 		)
 
 		if memo[0][ph] != nil {
@@ -3467,26 +3452,29 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 			_loaded = memo[0][ph].loaded
 			_finalized = memo[0][ph].finalized
 			_graph = memo[0][ph].graph
+			_cache = memo[0]
 			_err = memo[0][ph].err
 		} else {
-			_unloaded, _loaded, _finalized, _graph, _err = bc.ExploreChainRecursive(ph, memo[0])
+			_unloaded, _loaded, _finalized, _graph, _cache, _err = bc.ExploreChainRecursive(ph, memo[0])
+			if memo[0] == nil {
+				memo[0] = make(ExploreResultMap, 1)
+			}
 			memo[0][ph] = &ExploreResult{
 				unloaded:  _unloaded,
 				loaded:    _loaded,
 				finalized: _finalized,
 				graph:     _graph,
+				cache:     _cache,
 				err:       _err,
 			}
 		}
-		//_unloaded, _loaded, _finalized, _graph, _err = bc.ExploreChainRecursive(ph, memo[0])
-
-		unloaded = unloaded.Concat(_unloaded)    //.Uniq()
-		loaded = loaded.Concat(_loaded)          //.Uniq()
-		finalized = finalized.Concat(_finalized) //.Uniq()
+		unloaded = unloaded.Concat(_unloaded).Uniq()
+		loaded = loaded.Concat(_loaded).Uniq()
+		finalized = finalized.Concat(_finalized).Uniq()
 		graph.Graph = append(graph.Graph, _graph)
 		err = _err
 	}
-	return unloaded, loaded, finalized, graph, err
+	return unloaded, loaded, finalized, graph, cache, err
 }
 
 // IsAncestorRecursive checks the passed ancestorHash is an acesstor of the given block.

@@ -233,7 +233,7 @@ func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *t
 		return nil, dag
 	}
 
-	unl, _, _, _, _err := bc.ExploreChainRecursive(dag.Hash)
+	unl, _, _, _, _, _err := bc.ExploreChainRecursive(dag.Hash)
 	if _err != nil {
 		log.Error("Finalizer failed while retrieving finalizing chain", "err", _err)
 		return nil, dag
