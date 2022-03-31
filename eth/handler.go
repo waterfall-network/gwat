@@ -211,16 +211,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash().Hex())
 			return 0, nil, nil
 		}
-
-		//tstart := time.Now()
-		//log.Warn("<<<<<<<<<<   >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
-
-		tstart := time.Now()
-
 		n, err := h.chain.InsertPropagatedBlocks(blocks)
-
-		log.Warn("<<<<<<<<<< h.chain.InsertPropagatedBlocks(blocks)  >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart)))
-
 		if err == core.ErrInsertUncompletedDag {
 			unloaded := common.HashArray{}
 			for _, block := range blocks {
@@ -461,10 +452,10 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-		// //temp sent to all peers
-		//transfer := peers[:]
+		//// Send the block to a subset of our peers
+		//transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		//temp sent to all peers
+		transfer := peers[:]
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block)
 		}

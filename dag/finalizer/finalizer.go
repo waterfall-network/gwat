@@ -79,7 +79,6 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 
 	bc := f.eth.BlockChain()
 	lastFinBlock := bc.GetLastFinalizedBlock()
-	//lastFinNr := bc.GetLastFinalizedNumber()
 	lastFinNr := lastFinBlock.Nr()
 
 	mnr := chain.GetMinNr()
@@ -126,6 +125,7 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 		}
 	}
 
+	// todo recalculate state
 	////get current state
 	//statedb, err := bc.StateAt(lastFinBlock.Root())
 	//if err != nil {
@@ -147,17 +147,18 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 			log.Error("Block height mismatch finalizing number", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 		}
 
+		// todo recalculate state
 		//if block.Height() == i {
 		//	var blueState *state.StateDB
 		//	var stateErr error = nil
 		//	//	if blue block - check state
 		//	blueState, stateErr = bc.StateAt(block.Root())
 		//	if stateErr != nil || isRecommit {
-		//		log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state : start >>>>>>>>>>>>>>>", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
+		//		log.Info("Recalculate blue block state : start", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 		//		isRecommit = true
 		//		// recommit red blocks transactions
 		//		for rnr, bl := range recommitBlocks {
-		//			log.Info("<<<<<<<<<<<<<<<<<< RecommitBlockTransactions >>>>>>>>>>>>>>>", "nr", rnr, "height", block.Height(), "hash", block.Hash().Hex())
+		//			log.Info("RecommitBlockTransactions", "nr", rnr, "height", block.Height(), "hash", block.Hash().Hex())
 		//			statedb = bc.RecommitBlockTransactions(bl, statedb)
 		//		}
 		//		// recalculate state
@@ -166,10 +167,10 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 		//			log.Error("FinalizingBlueBlock failed", "err", err)
 		//			panic("FinalizingBlueBlock failed")
 		//		}
-		//		log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state : end >>>>>>>>>>>>>>>", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
+		//		log.Info("Recalculate blue block state : end", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 		//	} else {
 		//		statedb = blueState
-		//		log.Info("<<<<<<<<<<<<<<<<<< Recalculate blue block state : SET statedb >>>>>>>>>>>>>>>", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
+		//		log.Info("Recalculate blue block state : SET statedb", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 		//	}
 		//	recommitBlocks = []*types.Block{}
 		//} else {

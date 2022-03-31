@@ -1297,16 +1297,6 @@ func (bc *BlockChain) WriteMinedBlock(block *types.Block, receipts []*types.Rece
 	return bc.writeBlockWithState(block, receipts, logs, state, ET_MINING, "WriteMinedBlock")
 }
 
-//todo not in use
-// WriteMinedBlock writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlueBlock(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) (status WriteStatus, err error) {
-	if !bc.chainmu.TryLock() {
-		return NonStatTy, errInsertionInterrupted
-	}
-	defer bc.chainmu.Unlock()
-	return bc.writeBlockWithState(block, receipts, logs, state, ET_SKIP, "WriteBlueBlock")
-}
-
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent NewBlockEvtType, kind string) (status WriteStatus, err error) {
@@ -1889,14 +1879,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			upTips, _ := bc.ReviseTips()
 			finDag := upTips.GetFinalizingDag()
 			if finDag.Hash != block.Hash() {
-				//log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.Print())
 				log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
 				// create transaction lookup
 				rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
 				bc.CacheTransactionLookup(block)
 				continue
 			}
-			//log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.GetHashes())
 			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
 		}
 
@@ -1951,12 +1939,9 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-
-			log.Error("Insert Propagated Block validation error", "error", err)
-
-			//bc.reportBlock(block, receipts, err)
-			//atomic.StoreUint32(&followupInterrupt, 1)
-			//return it.index, err
+			bc.reportBlock(block, receipts, err)
+			atomic.StoreUint32(&followupInterrupt, 1)
+			return it.index, err
 		}
 		proctime := time.Since(start)
 
@@ -2033,146 +2018,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	return it.index, err
 }
 
-//todo rm no use
-// insertPropagatedBlocksNoState inserts propagated block without state
-func (bc *BlockChain) insertPropagatedBlocksNoState(chain types.Blocks, verifySeals bool) (int, error) {
-	// If the chain is terminating, don't even bother starting up
-	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
-		return 0, nil
-	}
-
-	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
-
-	var (
-		stats = insertStats{startTime: mclock.Now()}
-		//lastCanon *types.Block
-	)
-
-	//// Fire a single chain head event if we've progressed the chain
-	//defer func() {
-	//	lfb := bc.GetLastFinalizedBlock()
-	//	if lastCanon != nil && lfb.Hash() == lastCanon.Hash() {
-	//		bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon, ET_SYNC_FIN})
-	//	}
-	//}()
-
-	// Start the parallel header verifier
-	headers := make([]*types.Header, len(chain))
-	headerMap := make(types.HeaderMap, len(chain))
-	seals := make([]bool, len(chain))
-
-	for i, block := range chain {
-		headers[i] = block.Header()
-		headerMap[block.Hash()] = block.Header()
-		seals[i] = verifySeals
-	}
-	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
-	defer close(abort)
-
-	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
-
-	block, err := it.next()
-
-	switch {
-	// First block is pruned, insert as sidechain and reorg
-	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Debug("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
-		return bc.insertSideChain(block, it)
-
-	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
-	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHashes()[0])):
-		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
-			log.Debug("Future block, postponing import", "hash", block.Hash())
-			if err := bc.addFutureBlock(block); err != nil {
-				return it.index, err
-			}
-			block, err = it.next()
-		}
-		stats.queued += it.processed()
-		stats.ignored += it.remaining()
-
-		// If there are any still remaining, mark as ignored
-		return it.index, err
-
-	// Some other error occurred, abort
-	case err != nil:
-		bc.futureBlocks.Remove(block.Hash())
-		stats.ignored += len(it.chain)
-		bc.reportBlock(block, nil, err)
-		return it.index, err
-	}
-	//// No validation errors for the first block (or chain prefix skipped)
-	//var activeState *state.StateDB
-	//defer func() {
-	//	// The chain importer is starting and stopping trie prefetchers. If a bad
-	//	// block or other error is hit however, an early return may not properly
-	//	// terminate the background threads. This defer ensures that we clean up
-	//	// and dangling prefetcher, without defering each and holding on live refs.
-	//	if activeState != nil {
-	//		activeState.StopPrefetcher()
-	//	}
-	//}()
-
-	for ; block != nil && err == nil; block, err = it.next() {
-		//// If the chain is terminating, stop processing blocks
-		//if bc.insertStopped() {
-		//	log.Debug("Abort during block processing")
-		//	break
-		//}
-
-		log.Info("---- Insert propagated block ---", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
-
-		if checkBlock := bc.GetBlock(block.Hash()); checkBlock != nil {
-			if checkBlock.Nr() > 0 {
-				log.Info("Insert propagated block: check block finalized", "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
-				continue
-			}
-			log.Info("Insert propagated block: check block exists", "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
-		}
-
-		rawdb.WriteBlock(bc.db, block)
-		bc.AppendToChildren(block.Hash(), block.ParentHashes())
-
-		// update tips
-		bc.RemoveTips(block.ParentHashes())
-		bc.AddTips(&types.BlockDAG{
-			Hash:                block.Hash(),
-			Height:              block.Height(),
-			LastFinalizedHash:   common.Hash{},
-			LastFinalizedHeight: 0,
-			DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
-		})
-		//if block is red - skip processing
-		upTips, _ := bc.ReviseTips()
-
-		log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.Print())
-		//log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
-		// create transaction lookup
-		rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
-		bc.CacheTransactionLookup(block)
-	}
-
-	// Any blocks remaining here? The only ones we care about are the future ones
-	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
-		if err := bc.addFutureBlock(block); err != nil {
-			return it.index, err
-		}
-		block, err = it.next()
-
-		for ; block != nil && errors.Is(err, consensus.ErrUnknownAncestor); block, err = it.next() {
-			if err := bc.addFutureBlock(block); err != nil {
-				return it.index, err
-			}
-			stats.queued++
-		}
-	}
-	stats.ignored += it.remaining()
-
-	return it.index, err
-}
-
 // FinalizeBlock finalizing block
 func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.StateDB, verifySeals bool) (*state.StateDB, error) {
 	// If the chain is terminating, don't even bother starting up
@@ -2200,7 +2045,6 @@ func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.Sta
 	seals := make([]bool, 1)
 	seals[0] = verifySeals
 
-	//abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
 	abort, _ := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
 	defer close(abort)
 
@@ -2215,91 +2059,7 @@ func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.Sta
 			activeState.StopPrefetcher()
 		}
 	}()
-
-	//// If the header is a banned one, straight out abort
-	//if BadHashes[block.Hash()] {
-	//	bc.reportBlock(block, nil, ErrBannedHash)
-	//	return it.index, ErrBannedHash
-	//}
-
-	log.Info("<<<<<<<<<<<<< Finalizing Block >>>>>>>>>>>>>>>>>", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
-
-	//if checkBlock := bc.GetBlock(block.Hash()); checkBlock != nil && !stateOnly {
-	//	if checkBlock.Nr() > 0 {
-	//		log.Info("Insert propagated block: check block finalized", "stateOnly", stateOnly, "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
-	//		stateOnly = true
-	//		continue
-	//	}
-	//	if tips := bc.GetTips(); tips.GetHashes().Has(block.Hash()) || tips.GetAncestorsHashes().Has(block.Hash()) {
-	//		stateOnly = true
-	//	} else if children := bc.ReadChildren(block.Hash()); len(children) > 0 {
-	//		stateOnly = true
-	//	}
-	//	log.Info("Insert propagated block: check block exists", "stateOnly", stateOnly, "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
-	//}
-
-	//rawdb.WriteBlock(bc.db, block)
-	//bc.AppendToChildren(block.Hash(), block.ParentHashes())
-
-	////retrieve state data
-	//statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByBlock(block)
-	//if stateErr != nil {
-	//	return it.index, stateErr
-	//}
-
-	//if !stateOnly {
-	//	// update tips
-	//	bc.RemoveTips(block.ParentHashes())
-	//	bc.AddTips(&types.BlockDAG{
-	//		Hash:                block.Hash(),
-	//		Height:              block.Height(),
-	//		LastFinalizedHash:   common.Hash{},
-	//		LastFinalizedHeight: 0,
-	//		DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
-	//	})
-	//	//if block is red - skip processing
-	//	upTips, _ := bc.ReviseTips()
-	//	finDag := upTips.GetFinalizingDag()
-	//	if finDag.Hash != block.Hash() {
-	//		//log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.Print())
-	//		log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
-	//		// create transaction lookup
-	//		rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
-	//		bc.CacheTransactionLookup(block)
-	//		continue
-	//	}
-	//	//log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex(), "upTips", upTips.GetHashes())
-	//	log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
-	//}
-
 	start := time.Now()
-	//// Enable prefetching to pull in trie node paths while processing transactions
-	//statedb.StartPrefetcher("chain")
-	//activeState = statedb
-
-	//// recommit red blocks transactions
-	//for _, bl := range recommitBlocks {
-	//	statedb = bc.RecommitBlockTransactions(bl, statedb)
-	//}
-
-	//// If we have a followup block, run that against the current state to pre-cache
-	//// transactions and probabilistically some of the account/storage trie nodes.
-	//var followupInterrupt uint32
-	//if !bc.cacheConfig.TrieCleanNoPrefetch {
-	//	if followup, err := it.peek(); followup != nil && err == nil {
-	//		throwaway, _ := state.New(stateBlock.Root(), bc.stateCache, bc.snaps)
-	//
-	//		go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
-	//			bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
-	//
-	//			blockPrefetchExecuteTimer.Update(time.Since(start))
-	//			if atomic.LoadUint32(interrupt) == 1 {
-	//				blockPrefetchInterruptMeter.Mark(1)
-	//			}
-	//		}(time.Now(), followup, throwaway, &followupInterrupt)
-	//	}
-	//}
-
 	// Process block using the parent state as reference point
 	substart := time.Now()
 	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
@@ -2324,12 +2084,8 @@ func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.Sta
 	// Validate the state using the default validator
 	substart = time.Now()
 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-
-		log.Error("<<<<<<<<<<<<< Finalizing Block  validation error >>>>>>>>>>>>>>>>>", "error", err)
-
-		//bc.reportBlock(block, receipts, err)
-		//atomic.StoreUint32(&followupInterrupt, 1)
-		//return it.index, err
+		bc.reportBlock(block, receipts, err)
+		return statedb, err
 	}
 	proctime := time.Since(start)
 
@@ -2360,9 +2116,7 @@ func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.Sta
 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
 			"elapsed", common.PrettyDuration(time.Since(start)),
 			"root", block.Root())
-
 		lastCanon = block
-
 		// Only count canonical blocks for GC processing time
 		bc.gcproc += proctime
 
@@ -2383,27 +2137,9 @@ func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.Sta
 	stats.processed++
 	stats.usedGas += usedGas
 
-	//todo
 	//dirty, _ := bc.stateCache.TrieDB().Size()
 	//stats.report(chain, it.index, dirty)
 
-	//// Any blocks remaining here? The only ones we care about are the future ones
-	//if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
-	//	if err := bc.addFutureBlock(block); err != nil {
-	//		return it.index, err
-	//	}
-	//	block, err = it.next()
-	//
-	//	for ; block != nil && errors.Is(err, consensus.ErrUnknownAncestor); block, err = it.next() {
-	//		if err := bc.addFutureBlock(block); err != nil {
-	//			return it.index, err
-	//		}
-	//		stats.queued++
-	//	}
-	//}
-	//stats.ignored += it.remaining()
-	//
-	//return it.index, err
 	return statedb, err
 }
 
@@ -2615,7 +2351,6 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			log.Error("Gas limit exceeded for current block", "sender", from, "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooLow):
-			//todo rm
 			if lowNonce {
 				continue
 			}
@@ -2626,10 +2361,9 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			// if tx already in block
 			if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
 				txBlock := bc.GetBlock(blockHash)
-				log.Error("=========== transaction with low nonce ===========", "bls.CMP", blockHash == block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "hash", tx.Hash().Hex())
+				log.Debug("transaction with low nonce", "isOtherBlock", blockHash != block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "txHash", tx.Hash().Hex())
 			}
 		case errors.Is(err, ErrNonceTooHigh):
-			//todo rm
 			if hightNonce {
 				continue
 			}
@@ -2641,7 +2375,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			// if tx already in block
 			if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
 				txBlock := bc.GetBlock(blockHash)
-				log.Error("=========== transaction with higth nonce ===========", "bls.CMP", blockHash == block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "hash", tx.Hash().Hex())
+				log.Debug("transaction with higth nonce", "isOtherBlock", blockHash != block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "hash", tx.Hash().Hex())
 			}
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
@@ -2673,8 +2407,7 @@ func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *s
 	snap := statedb.Snapshot()
 	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, &block.Header().GasUsed, *bc.GetVMConfig())
 	if err != nil {
-		//todo
-		//log.Error("Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
+		log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
 		statedb.RevertToSnapshot(snap)
 		return nil, nil, err
 	}
@@ -3318,18 +3051,6 @@ Hash: 0x%x
 Error: %v
 ##############################
 `, bc.chainConfig, block.Nr(), block.Hash(), len(block.Transactions()), err))
-
-	//	log.Error(fmt.Sprintf(`
-	//########## BAD BLOCK #########
-	//Chain config: %v
-	//
-	//Number: %v
-	//Hash: 0x%x
-	//%v
-	//
-	//Error: %v
-	//##############################
-	//`, bc.chainConfig, block.Nr(), block.Hash(), receiptString, err))
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local
