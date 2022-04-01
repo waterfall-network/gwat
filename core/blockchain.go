@@ -1761,7 +1761,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
 
-	log.Error("<<<<<<<<<< insertPropagatedBlocks:senderCacher.recoverFromBlocks >>>>>>>>>>>>>", "txsCount", len(chain[0].Transactions()), "Height", chain[0].Height(), "hash", chain[0].Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_1)))
+	log.Error("<<<<<<<<<< insertPropagatedBlocks:senderCacher.recoverFromBlocks >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "txsCount", len(chain[0].Transactions()), "Height", chain[0].Height(), "hash", chain[0].Hash().Hex())
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -1865,7 +1865,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: WriteBlock >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_0)))
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: WriteBlock >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
 		tstart_2 := time.Now()
 
@@ -1875,7 +1875,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			return it.index, stateErr
 		}
 
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: CollectStateDataByParents >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_2)))
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: CollectStateDataByParents >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_2)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
 		if !stateOnly {
 			// update tips
@@ -1899,7 +1899,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 				rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
 				bc.CacheTransactionLookup(block)
 
-				log.Error("<<<<<<<<<< insertPropagatedBlocks: RED BLOCK WriteTxLookupEntriesByBlock >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_3)))
+				log.Error("<<<<<<<<<< insertPropagatedBlocks: RED BLOCK WriteTxLookupEntriesByBlock >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_3)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
 				continue
 			}
@@ -1918,7 +1918,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			statedb = bc.RecommitBlockTransactions(bl, statedb)
 		}
 
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK recommitBlocks >>>>>>>>>>>>>", "recommitBlocks", len(recommitBlocks), "elapsed", common.PrettyDuration(time.Since(tstart_4)))
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK recommitBlocks >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_4)), "recommitBlocks", len(recommitBlocks))
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
@@ -1944,7 +1944,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.processor.Process(block, statedb, bc.vmConfig) >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_5)))
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.processor.Process(block, statedb, bc.vmConfig) >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_5)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
@@ -1975,7 +1975,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		}
 		proctime := time.Since(start)
 
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.validator.ValidateState >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_6)))
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.validator.ValidateState >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_6)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
 		// Update the metrics touched during block validation
 		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
@@ -1989,7 +1989,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		substart = time.Now()
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
 
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK writeBlockWithState >>>>>>>>>>>>>", "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(tstart_7)))
+		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK writeBlockWithState >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_7)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
@@ -2429,7 +2429,11 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 		}
 	}
 
+	tstart_0 := time.Now()
+
 	rawdb.WriteReceipts(bc.db, block.Hash(), receipts)
+
+	log.Error("<<<<<<<<<< Recommit:: WriteReceipts >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "receiptsCount", len(receipts), "block", block.Hash().Hex())
 
 	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: rlogs})
 	if len(rlogs) > 0 {

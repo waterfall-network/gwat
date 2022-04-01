@@ -109,16 +109,18 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
 
 	// create block
-	dagSlots := d.countDagSlots()
+	tips, unloaded := d.bc.ReviseTips()
+	dagSlots := d.countDagSlots(tips)
 
 	log.Info("Handle Consensus: create condition",
 		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
+		"unloaded", unloaded,
 		"dagSlots", dagSlots,
 	)
 
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Epoch:    data.Epoch,
@@ -128,7 +130,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 		go func() {
 			crtStart := time.Now()
 			crtInfo := map[string]string{}
-			block, crtErr := d.creator.CreateBlock(assigned)
+			block, crtErr := d.creator.CreateBlock(assigned, tips)
 			if crtErr != nil {
 				crtInfo["error"] = crtErr.Error()
 			}
@@ -184,12 +186,12 @@ func (d *Dag) emitDagSyncInfo() bool {
 
 // countDagSlots count number of slots in dag chain
 // if it has unknown blocks returns  -1
-func (d *Dag) countDagSlots() int {
-	tips, unloaded := d.bc.ReviseTips()
-	//if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
-	if len(unloaded) > 0 {
-		return -1
-	}
+func (d *Dag) countDagSlots(tips *types.Tips) int {
+	//tips, unloaded := d.bc.ReviseTips()
+	////if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
+	//if len(unloaded) > 0 {
+	//	return -1
+	//}
 	dag := tips.GetFinalizingDag()
 
 	// todo countDagSlots tmp ad hoc fix

@@ -80,6 +80,7 @@ type task struct {
 
 // newWorkReq represents a request for new sealing work submitting with relative interrupt notifier.
 type newWorkReq struct {
+	tips      types.Tips
 	timestamp int64
 }
 
@@ -317,7 +318,7 @@ func (c *Creator) isSlotLocked(info *Assignment) bool {
 }
 
 // CreateBlock starts process of block creation
-func (c *Creator) CreateBlock(assigned *Assignment) (*types.Block, error) {
+func (c *Creator) CreateBlock(assigned *Assignment, tips *types.Tips) (*types.Block, error) {
 	c.eth.BlockChain().DagMu.Lock()
 	defer c.eth.BlockChain().DagMu.Unlock()
 
@@ -343,7 +344,7 @@ func (c *Creator) CreateBlock(assigned *Assignment) (*types.Block, error) {
 			return nil, ErrCreatorNotActive
 		}
 		c.canStart = false
-		c.newWorkCh <- &newWorkReq{timestamp: time.Now().Unix()}
+		c.newWorkCh <- &newWorkReq{tips: tips.Copy(), timestamp: time.Now().Unix()}
 		for {
 			select {
 			case block := <-c.finishWorkCh:
@@ -379,7 +380,7 @@ func (c *Creator) mainLoop() {
 	for {
 		select {
 		case req := <-c.newWorkCh:
-			c.commitNewWork(req.timestamp)
+			c.commitNewWork(req.tips, req.timestamp)
 		case ev := <-c.chainSideCh:
 			c.addRecentTxs(ev.Block.Hash(), ev.Block.Transactions())
 		case <-c.txsCh:
@@ -450,7 +451,7 @@ func (c *Creator) taskLoop() {
 				c.errWorkCh <- &err
 			}
 			p, q := c.eth.TxPool().Stats()
-			log.Error("<<<<<<<<<< Creator:: c.engine.Seal >>>>>>>>>>>>>", "pool.pending", p, "pool.queue", q, "txsCount", len(task.block.Transactions()), "elapsed", common.PrettyDuration(time.Since(tstart_1)))
+			log.Error("<<<<<<<<<< Creator:: c.engine.Seal >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "pool.pending", p, "pool.queue", q, "txsCount", len(task.block.Transactions()))
 
 		case <-c.exitCh:
 			interrupt()
@@ -472,7 +473,7 @@ func (c *Creator) resultLoop() {
 			c.finishWorkCh <- block
 
 			p, q := c.eth.TxPool().Stats()
-			log.Error("<<<<<<<<<< Creator::  c.resultHandler >>>>>>>>>>>>>", "pool.pending", p, "pool.queue", q, "txsCount", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(tstart_1)))
+			log.Error("<<<<<<<<<< Creator::  c.resultHandler >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "pool.pending", p, "pool.queue", q, "txsCount", len(block.Transactions()))
 
 		case <-c.exitCh:
 			return
@@ -553,7 +554,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.chain.ReviseTips()
 
 	p, q := c.eth.TxPool().Stats()
-	log.Error("<<<<<<<<<< Creator::  c.chain.ReviseTips() >>>>>>>>>>>>>", "pool.pending", p, "pool.queue", q, "txsCount", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(tstart_1)))
+	log.Error("<<<<<<<<<< Creator::  c.chain.ReviseTips() >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "pool.pending", p, "pool.queue", q, "txsCount", len(block.Transactions()))
 
 	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
@@ -604,13 +605,13 @@ func (c *Creator) makeCurrent(tips types.Tips, header *types.Header) error {
 		rcTxCount += len(bl.Transactions())
 	}
 	p, q := c.eth.TxPool().Stats()
-	log.Error("<<<<<<<<<< Creator:: CollectStateDataByParents >>>>>>>>>>>>>", "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(recommitBlocks), "elapsed", common.PrettyDuration(time.Since(tstart_0)))
+	log.Error("<<<<<<<<<< Creator:: CollectStateDataByParents >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(recommitBlocks))
 
 	tstart_1 := time.Now()
 
 	state.StartPrefetcher("miner")
 
-	log.Error("<<<<<<<<<< Creator:: StartPrefetcher >>>>>>>>>>>>>", "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(recommitBlocks), "elapsed", common.PrettyDuration(time.Since(tstart_1)))
+	log.Error("<<<<<<<<<< Creator:: StartPrefetcher >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(recommitBlocks))
 
 	env := &environment{
 		signer:         types.MakeSigner(c.chainConfig),
@@ -759,21 +760,22 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
-func (c *Creator) commitNewWork(timestamp int64) {
+func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	genesis := c.eth.BlockChain().Genesis().Hash()
 	tstart := time.Now()
 
-	tps, unload := c.chain.ReviseTips()
-	if len(unload) > 0 {
-		log.Error("Mining skipping", "err", fmt.Errorf("unknown block detected"), "hashes", unload)
-		err := errors.New("create skipping unknown block detected")
-		c.errWorkCh <- &err
-		return
-	}
-	tips := tps.Copy()
+	//tps, unload := c.chain.ReviseTips()
+	//if len(unload) > 0 {
+	//	log.Error("Mining skipping", "err", fmt.Errorf("unknown block detected"), "hashes", unload)
+	//	err := errors.New("create skipping unknown block detected")
+	//	c.errWorkCh <- &err
+	//	return
+	//}
+	//tips := tps.Copy()
+
 	slotInfo := c.getAssignment()
 	tipsBlocks := c.chain.GetBlocksByHashes(tips.GetHashes())
 	blocks := c.eth.BlockChain().GetBlocksByHashes(tipsBlocks.Hashes())
@@ -929,7 +931,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 		rcTxCount += len(bl.Transactions())
 	}
 	p, q := c.eth.TxPool().Stats()
-	log.Error("<<<<<<<<<< Creator:: RecommitBlockTransactions >>>>>>>>>>>>>", "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(c.current.recommitBlocks), "elapsed", common.PrettyDuration(time.Since(tstart_0)))
+	log.Error("<<<<<<<<<< Creator:: RecommitBlockTransactions >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(c.current.recommitBlocks))
 
 	_tstart := time.Now()
 
@@ -940,7 +942,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 	for _, acc := range pending {
 		txCount += acc.Len()
 	}
-	log.Error("<<<<<<<<<< Creator::   pending := c.getPending() >>>>>>>>>>>>>", "pool.pending", p, "pool.queue", q, "txCount", txCount, "elapsed", common.PrettyDuration(time.Since(_tstart)))
+	log.Error("<<<<<<<<<< Creator::   pending := c.getPending() >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(_tstart)), "pool.pending", p, "pool.queue", q, "txCount", txCount)
 
 	// Short circuit if no pending transactions
 	if len(pending) == 0 {
@@ -958,7 +960,7 @@ func (c *Creator) commitNewWork(timestamp int64) {
 			return
 		}
 
-		log.Error("<<<<<<<<<< Creator::  commitTransactions  >>>>>>>>>>>>>", "c.getUnhandledTxs() len", len(c.getUnhandledTxs()), "elapsed", common.PrettyDuration(time.Since(tstart_0)))
+		log.Error("<<<<<<<<<< Creator::  commitTransactions  >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "c.getUnhandledTxs() len", len(c.getUnhandledTxs()))
 
 	}
 
