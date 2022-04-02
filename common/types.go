@@ -340,6 +340,19 @@ func (ha HashArray) Reverse() HashArray {
 	return cpy
 }
 
+// Key converts HashArray to a hash key.
+func (ha HashArray) Key() Hash {
+	c := make(HashArray, len(ha))
+	for i, hash := range ha {
+		c[i] = hash
+	}
+	buf := c.Uniq().Sort().ToBytes()
+	sha := sha3.NewLegacyKeccak256()
+	sha.Write(buf[:])
+	key := sha.Sum(nil)
+	return BytesToHash(key)
+}
+
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte
 

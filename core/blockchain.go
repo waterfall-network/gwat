@@ -89,6 +89,7 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
+	recommitCacheLimit  = 512
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -198,6 +199,7 @@ type BlockChain struct {
 	blockCache    *lru.Cache     // Cache for the most recent entire blocks
 	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
 	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
+	recommitCache *lru.Cache     // Cache for the most recent states of recommited blocks.
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -226,6 +228,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
+	recommitCache, _ := lru.New(recommitCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -244,6 +247,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		receiptsCache: receiptsCache,
 		blockCache:    blockCache,
 		txLookupCache: txLookupCache,
+		recommitCache: recommitCache,
 		futureBlocks:  futureBlocks,
 		engine:        engine,
 		vmConfig:      vmConfig,
@@ -701,6 +705,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()
+	bc.recommitCache.Purge()
 
 	return rootNumber, bc.loadLastState()
 }
@@ -1872,6 +1877,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		//retrieve state data
 		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
+			if stateBlock != nil {
+				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.TxHash().Hex(), "err", stateErr)
+			} else {
+				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
+			}
+
 			return it.index, stateErr
 		}
 
@@ -1914,8 +1925,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		tstart_4 := time.Now()
 
 		// recommit red blocks transactions
+		cacheCain := common.HashArray{}
 		for _, bl := range recommitBlocks {
 			statedb = bc.RecommitBlockTransactions(bl, statedb)
+			//cache state
+			cacheCain = append(cacheCain, bl.Hash())
+			bc.SetCashedRecommit(cacheCain, statedb)
 		}
 
 		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK recommitBlocks >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_4)), "recommitBlocks", len(recommitBlocks))
@@ -1943,6 +1958,10 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		tstart_5 := time.Now()
 
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+
+		////cache state
+		//cacheCain = append(cacheCain, block.Hash())
+		//bc.SetCashedRecommit(cacheCain, statedb)
 
 		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.processor.Process(block, statedb, bc.vmConfig) >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_5)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
@@ -2308,6 +2327,21 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		recalcHashes = ordHashes
 	}
 
+	//check cached recommited state
+	if st, rh := bc.GetCashedRecommit(recalcHashes); st != nil {
+		statedb = st
+		recalcHashes = rh
+	}
+	//else if _st, _rh := bc.GetCashedRecommit(common.HashArray{stateHash}.Concat(recalcHashes)); _st != nil {
+	//
+	//	log.Info("+++ CREATE MODE +++", "statedb", _st != nil, "chain", common.HashArray{stateHash}.Concat(recalcHashes), "_rh", _rh, "len", len(common.HashArray{stateHash}.Concat(recalcHashes)))
+	//
+	//	statedb = _st
+	//	recalcHashes = _rh
+	//} else {
+	//	log.Info("+++ CREATE MODE +++", "statedb", _st != nil, "chain", common.HashArray{stateHash}.Concat(recalcHashes), "_rh", _rh, "len", len(common.HashArray{stateHash}.Concat(recalcHashes)))
+	//}
+
 	recommitBlocks = []*types.Block{}
 	for _, h := range recalcHashes {
 		bl := bc.GetBlockByHash(h)
@@ -2569,8 +2603,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		activeState = statedb
 
 		// recommit red blocks transactions
+		//cacheCain := common.HashArray{}
 		for _, bl := range recommitBlocks {
 			statedb = bc.RecommitBlockTransactions(bl, statedb)
+			////cache state
+			//cacheCain = append(cacheCain, bl.Hash())
+			//bc.SetCashedRecommit(cacheCain, statedb)
 		}
 
 		// If we have a followup block, run that against the current state to pre-cache
@@ -2593,6 +2631,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Process block using the parent state as reference point
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+
+		////cache state
+		//cacheCain = append(cacheCain, block.Hash())
+		//bc.SetCashedRecommit(cacheCain, statedb)
+
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)

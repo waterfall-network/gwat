@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -411,6 +412,44 @@ func (bc *BlockChain) CacheTransactionLookup(block *types.Block) {
 		lookup := &rawdb.LegacyTxLookupEntry{BlockHash: block.Hash(), Index: uint64(i)}
 		bc.txLookupCache.Add(tx.Hash(), lookup)
 	}
+}
+
+// GetTxBlockHash retrieves statedb for recently recommited block sequence.
+func (bc *BlockChain) GetCashedRecommit(chain common.HashArray) (statedb *state.StateDB, outStateHashes common.HashArray) {
+	for i, _ := range chain {
+		key := chain[:i].Key()
+		if data, exist := bc.recommitCache.Get(key); exist {
+			outStateHashes = chain[i:]
+			root := data.(common.Hash)
+			if root != (common.Hash{}) {
+				var err error
+				statedb, err = bc.StateAt(root)
+				if statedb != nil {
+					log.Info("+++++ GetCashedRecommit +++++", "statedb", statedb != nil, "root", root.Hex(), "chain", chain, "outStateHashes", outStateHashes, "len", len(chain), "i", i)
+					//return statedb.Copy(), outStateHashes
+					return statedb, outStateHashes
+				} else {
+					log.Info("+++++ GetCashedRecommit::ERROR +++++", "statedb", statedb != nil, "root", root.Hex(), "err", err, "len", len(chain), "i", i)
+				}
+			}
+		}
+	}
+	log.Info("----- GetCashedRecommit -----", "statedb", statedb, "outStateHashes", outStateHashes, "len", len(chain))
+	return statedb, outStateHashes
+}
+
+// SetCashedRecommit add to cache statedb for recommited block sequence.
+func (bc *BlockChain) SetCashedRecommit(chain common.HashArray, statedb *state.StateDB) {
+	if len(chain) == 0 {
+		return
+	}
+	st := statedb.Copy()
+	//root := st.IntermediateRoot(false)
+	root, err := st.Commit(false)
+	if err != nil {
+		return
+	}
+	bc.recommitCache.Add(chain.Key(), root)
 }
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.

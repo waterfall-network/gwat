@@ -520,6 +520,10 @@ func (c *Creator) resultHandler(block *types.Block) {
 		}
 		logs = append(logs, receipt.Logs...)
 	}
+
+	////cache state
+	//c.chain.SetCashedRecommit(append(common.HashArray{}, block.Hash()), task.state)
+
 	// Commit block and state to database.
 	_, err := c.chain.WriteMinedBlock(block, receipts, logs, task.state)
 	if err != nil {
@@ -922,8 +926,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	tstart_0 := time.Now()
 
 	//recommit transactions of dag chain
+	cacheCain := common.HashArray{}
 	for _, bl := range c.current.recommitBlocks {
-		c.chain.RecommitBlockTransactions(bl, c.current.state)
+		statedb := c.chain.RecommitBlockTransactions(bl, c.current.state)
+		//cache state
+		cacheCain = append(cacheCain, bl.Hash())
+		c.chain.SetCashedRecommit(cacheCain, statedb)
 	}
 
 	rcTxCount := 0
