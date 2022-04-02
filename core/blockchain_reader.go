@@ -443,13 +443,15 @@ func (bc *BlockChain) SetCashedRecommit(chain common.HashArray, statedb *state.S
 	if len(chain) == 0 {
 		return
 	}
-	st := statedb.Copy()
-	//root := st.IntermediateRoot(false)
-	root, err := st.Commit(false)
-	if err != nil {
-		return
+	key := chain.Key()
+	if _, exist := bc.recommitCache.Get(key); !exist {
+		st := statedb.Copy()
+		root, err := st.Commit(false)
+		if err != nil {
+			return
+		}
+		bc.recommitCache.Add(key, root)
 	}
-	bc.recommitCache.Add(chain.Key(), root)
 }
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
