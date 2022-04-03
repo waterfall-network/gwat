@@ -521,9 +521,6 @@ func (c *Creator) resultHandler(block *types.Block) {
 		logs = append(logs, receipt.Logs...)
 	}
 
-	////cache state
-	//c.chain.SetCashedRecommit(append(common.HashArray{}, block.Hash()), task.state)
-
 	// Commit block and state to database.
 	_, err := c.chain.WriteMinedBlock(block, receipts, logs, task.state)
 	if err != nil {
@@ -599,7 +596,7 @@ func (c *Creator) makeCurrent(tips types.Tips, header *types.Header) error {
 
 	tstart_0 := time.Now()
 
-	state, _, recommitBlocks, stateErr := c.chain.CollectStateDataByParents(tips.GetHashes())
+	state, _, recommitBlocks, _, stateErr := c.chain.CollectStateDataByParents(tips.GetHashes())
 	if stateErr != nil {
 		return stateErr
 	}
@@ -926,12 +923,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	tstart_0 := time.Now()
 
 	//recommit transactions of dag chain
-	cacheCain := common.HashArray{}
+	cacheChain := common.HashArray{}
 	for _, bl := range c.current.recommitBlocks {
 		statedb := c.chain.RecommitBlockTransactions(bl, c.current.state)
 		//cache state
-		cacheCain = append(cacheCain, bl.Hash())
-		c.chain.SetCashedRecommit(cacheCain, statedb)
+		cacheChain = append(cacheChain, bl.Hash())
+		c.chain.SetCashedRecommit(cacheChain, statedb, nil)
 	}
 
 	rcTxCount := 0

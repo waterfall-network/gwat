@@ -415,40 +415,48 @@ func (bc *BlockChain) CacheTransactionLookup(block *types.Block) {
 }
 
 // GetTxBlockHash retrieves statedb for recently recommited block sequence.
-func (bc *BlockChain) GetCashedRecommit(chain common.HashArray) (statedb *state.StateDB, outStateHashes common.HashArray) {
+func (bc *BlockChain) GetCashedRecommit(chain common.HashArray) (statedb *state.StateDB, noCachedHashes, cachedHashes common.HashArray) {
 	for i, _ := range chain {
-		key := chain[:i].Key()
+		cachedHashes = chain[:i]
+		key := cachedHashes.Key()
 		if data, exist := bc.recommitCache.Get(key); exist {
-			outStateHashes = chain[i:]
+			noCachedHashes = chain[i:]
 			root := data.(common.Hash)
 			if root != (common.Hash{}) {
 				var err error
 				statedb, err = bc.StateAt(root)
 				if statedb != nil {
-					log.Info("+++++ GetCashedRecommit +++++", "statedb", statedb != nil, "root", root.Hex(), "chain", chain, "outStateHashes", outStateHashes, "len", len(chain), "i", i)
-					//return statedb.Copy(), outStateHashes
-					return statedb, outStateHashes
+					log.Info("+++++ GetCashedRecommit +++++", "statedb", statedb != nil, "root", root.Hex(), "chain", chain, "cachedHashes", cachedHashes, "noCachedHashes", noCachedHashes, "len", len(chain), "i", i)
+					return statedb, noCachedHashes, cachedHashes
 				} else {
 					log.Info("+++++ GetCashedRecommit::ERROR +++++", "statedb", statedb != nil, "root", root.Hex(), "err", err, "len", len(chain), "i", i)
 				}
 			}
 		}
 	}
-	log.Info("----- GetCashedRecommit -----", "statedb", statedb, "outStateHashes", outStateHashes, "len", len(chain))
-	return statedb, outStateHashes
+	log.Info("----- GetCashedRecommit -----", "statedb", statedb, "chain", chain, "len", len(chain))
+	return statedb, chain, common.HashArray{}
 }
 
 // SetCashedRecommit add to cache statedb for recommited block sequence.
-func (bc *BlockChain) SetCashedRecommit(chain common.HashArray, statedb *state.StateDB) {
+func (bc *BlockChain) SetCashedRecommit(chain common.HashArray, statedb *state.StateDB, blueRoot *common.Hash) {
 	if len(chain) == 0 {
 		return
 	}
 	key := chain.Key()
 	if _, exist := bc.recommitCache.Get(key); !exist {
-		st := statedb.Copy()
-		root, err := st.Commit(false)
-		if err != nil {
-			return
+		var (
+			root common.Hash
+			err  error
+		)
+		if blueRoot != nil && *blueRoot != (common.Hash{}) {
+			root = *blueRoot
+			log.Info(">>>>> GetCashedRecommit::BLUE ROOT <<<<<", "root", root.Hex(), "chain", chain)
+		} else {
+			root, err = statedb.Commit(false)
+			if err != nil {
+				return
+			}
 		}
 		bc.recommitCache.Add(key, root)
 	}

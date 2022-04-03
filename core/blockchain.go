@@ -1875,7 +1875,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		tstart_2 := time.Now()
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+		statedb, stateBlock, recommitBlocks, cachedHashes, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
 			if stateBlock != nil {
 				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.TxHash().Hex(), "err", stateErr)
@@ -1925,12 +1925,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		tstart_4 := time.Now()
 
 		// recommit red blocks transactions
-		cacheCain := common.HashArray{}
+		cacheChain := cachedHashes.Copy()
 		for _, bl := range recommitBlocks {
 			statedb = bc.RecommitBlockTransactions(bl, statedb)
 			//cache state
-			cacheCain = append(cacheCain, bl.Hash())
-			bc.SetCashedRecommit(cacheCain, statedb)
+			cacheChain = append(cacheChain, bl.Hash())
+			bc.SetCashedRecommit(cacheChain, statedb, nil)
 		}
 
 		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK recommitBlocks >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_4)), "recommitBlocks", len(recommitBlocks))
@@ -1958,10 +1958,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		tstart_5 := time.Now()
 
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-
-		////cache state
-		//cacheCain = append(cacheCain, block.Hash())
-		//bc.SetCashedRecommit(cacheCain, statedb)
 
 		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.processor.Process(block, statedb, bc.vmConfig) >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_5)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
@@ -2252,7 +2248,7 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 }
 
 // CollectStateDataByParents collects state data of current dag chain to insert block.
-func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
+func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, cachedHashes common.HashArray, err error) {
 	graph := &types.GraphDag{
 		Hash:   common.Hash{},
 		Height: 0,
@@ -2269,7 +2265,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		u, _, f, gr, c, e := bc.ExploreChainRecursive(h, cache)
 		if e != nil {
 			log.Error("Error while collect state data by block", "hash", h.Hex(), "parents", parents, "err", e)
-			return statedb, stateBlock, recommitBlocks, err
+			return statedb, stateBlock, recommitBlocks, cachedHashes, err
 		}
 		if len(u) > 0 {
 			unl = unl.Concat(u)
@@ -2280,7 +2276,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	}
 	if len(unl) > 0 {
 		log.Error("Error while collect state data by block (unknown blocks detected)", "parents", parents, "unknown", unl)
-		return statedb, stateBlock, recommitBlocks, ErrInsertUncompletedDag
+		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrInsertUncompletedDag
 	}
 
 	ordHashes := *graph.GetDagChainHashes()
@@ -2309,13 +2305,13 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	}
 	if stateHash == (common.Hash{}) {
 		log.Error("Error while collect state data by block (bad state hash)", "error", ErrStateBlockNotFound)
-		return statedb, stateBlock, recommitBlocks, ErrStateBlockNotFound
+		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrStateBlockNotFound
 	}
 	stateBlock = bc.GetBlockByHash(stateHash)
 
 	statedb, err = bc.StateAt(stateBlock.Root())
 	if err != nil {
-		return statedb, stateBlock, recommitBlocks, err
+		return statedb, stateBlock, recommitBlocks, cachedHashes, err
 	}
 
 	// collect red blocks (not in finalization points)
@@ -2328,19 +2324,11 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	}
 
 	//check cached recommited state
-	if st, rh := bc.GetCashedRecommit(recalcHashes); st != nil {
+	if st, noCached, cached := bc.GetCashedRecommit(recalcHashes); st != nil {
 		statedb = st
-		recalcHashes = rh
+		recalcHashes = noCached
+		cachedHashes = cached
 	}
-	//else if _st, _rh := bc.GetCashedRecommit(common.HashArray{stateHash}.Concat(recalcHashes)); _st != nil {
-	//
-	//	log.Info("+++ CREATE MODE +++", "statedb", _st != nil, "chain", common.HashArray{stateHash}.Concat(recalcHashes), "_rh", _rh, "len", len(common.HashArray{stateHash}.Concat(recalcHashes)))
-	//
-	//	statedb = _st
-	//	recalcHashes = _rh
-	//} else {
-	//	log.Info("+++ CREATE MODE +++", "statedb", _st != nil, "chain", common.HashArray{stateHash}.Concat(recalcHashes), "_rh", _rh, "len", len(common.HashArray{stateHash}.Concat(recalcHashes)))
-	//}
 
 	recommitBlocks = []*types.Block{}
 	for _, h := range recalcHashes {
@@ -2351,7 +2339,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		}
 		recommitBlocks = append(recommitBlocks, bl)
 	}
-	return statedb, stateBlock, recommitBlocks, err
+	return statedb, stateBlock, recommitBlocks, cachedHashes, err
 }
 
 // CollectStateDataByFinalizedBlock collects state data of current dag chain to insert new block.
@@ -2594,7 +2582,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+		statedb, stateBlock, recommitBlocks, _, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -2603,12 +2591,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		activeState = statedb
 
 		// recommit red blocks transactions
-		//cacheCain := common.HashArray{}
 		for _, bl := range recommitBlocks {
 			statedb = bc.RecommitBlockTransactions(bl, statedb)
-			////cache state
-			//cacheCain = append(cacheCain, bl.Hash())
-			//bc.SetCashedRecommit(cacheCain, statedb)
 		}
 
 		// If we have a followup block, run that against the current state to pre-cache
@@ -2631,10 +2615,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Process block using the parent state as reference point
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-
-		////cache state
-		//cacheCain = append(cacheCain, block.Hash())
-		//bc.SetCashedRecommit(cacheCain, statedb)
 
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
@@ -3173,7 +3153,7 @@ func (bc *BlockChain) GetDagHashes() *common.HashArray {
 		_, loaded, _, _, _, _ := bc.ExploreChainRecursive(hash)
 		dagHashes = dagHashes.Concat(loaded)
 	}
-	dagHashes = dagHashes.Uniq()
+	dagHashes = dagHashes.Uniq().Sort()
 	return &dagHashes
 }
 
