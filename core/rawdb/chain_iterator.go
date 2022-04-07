@@ -79,8 +79,9 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 }
 
 type blockTxHashes struct {
-	number uint64
-	hashes []common.Hash
+	blockHash common.Hash
+	number    uint64
+	hashes    []common.Hash
 }
 
 // iterateTransactions iterates over all transactions in the (canon) block
@@ -141,13 +142,15 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 				log.Warn("Failed to decode block body", "block", data.number, "error", err)
 				return
 			}
+			blHash := ReadFinalizedHashByNumber(db, data.number)
 			var hashes []common.Hash
 			for _, tx := range body.Transactions {
 				hashes = append(hashes, tx.Hash())
 			}
 			result := &blockTxHashes{
-				hashes: hashes,
-				number: data.number,
+				blockHash: blHash,
+				hashes:    hashes,
+				number:    data.number,
 			}
 			// Feed the block to the aggregator, or abort on interrupt
 			select {
@@ -208,7 +211,11 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			delivery := queue.PopItem().(*blockTxHashes)
 			lastNum = delivery.number
 			blHash := ReadFinalizedHashByNumber(db, delivery.number)
-			WriteTxLookupEntries(batch, blHash, delivery.hashes)
+			for _, txHash := range delivery.hashes {
+				if existed := ReadTxLookupEntry(db, txHash); existed == (common.Hash{}) {
+					WriteTxLookupEntry(batch, blHash, txHash)
+				}
+			}
 			blocks++
 			txs += len(delivery.hashes)
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
@@ -296,7 +303,12 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			}
 			delivery := queue.PopItem().(*blockTxHashes)
 			nextNum = delivery.number + 1
-			DeleteTxLookupEntries(batch, delivery.hashes)
+			blHash := delivery.blockHash
+			for _, txHash := range delivery.hashes {
+				if existed := ReadTxLookupEntry(db, txHash); existed == blHash {
+					DeleteTxLookupEntry(batch, txHash)
+				}
+			}
 			txs += len(delivery.hashes)
 			blocks++
 

@@ -51,29 +51,12 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) common.Hash {
 	return entry.BlockHash
 }
 
-// writeTxLookupEntry stores a positional metadata for a transaction,
+// WriteTxLookupEntry stores a positional metadata for a transaction,
 // enabling hash based transaction and receipt lookups.
-func writeTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, blHashBytes []byte) {
+func WriteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, blHash common.Hash) {
+	blHashBytes := blHash.Bytes()
 	if err := db.Put(txLookupKey(hash), blHashBytes); err != nil {
 		log.Crit("Failed to store transaction lookup entry", "err", err)
-	}
-}
-
-// WriteTxLookupEntries is identical to WriteTxLookupEntry, but it works on
-// a list of hashes
-func WriteTxLookupEntries(db ethdb.KeyValueWriter, blHash common.Hash, hashes []common.Hash) {
-	blHashBytes := blHash.Bytes()
-	for _, hash := range hashes {
-		writeTxLookupEntry(db, hash, blHashBytes)
-	}
-}
-
-// WriteTxLookupEntriesByBlock stores a positional metadata for every transaction from
-// a block, enabling hash based transaction and receipt lookups.
-func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block) {
-	blHashBytes := block.Hash().Bytes()
-	for _, tx := range block.Transactions() {
-		writeTxLookupEntry(db, tx.Hash(), blHashBytes)
 	}
 }
 
@@ -81,13 +64,6 @@ func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block) {
 func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(txLookupKey(hash)); err != nil {
 		log.Crit("Failed to delete transaction lookup entry", "err", err)
-	}
-}
-
-// DeleteTxLookupEntries removes all transaction lookups for a given block.
-func DeleteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash) {
-	for _, hash := range hashes {
-		DeleteTxLookupEntry(db, hash)
 	}
 }
 

@@ -495,6 +495,9 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, receipts types.Rec
 	// Convert the receipts into their storage form and serialize them
 	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
 	for i, receipt := range receipts {
+		if receipt == nil {
+			receipt = &types.Receipt{}
+		}
 		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
 	}
 	bytes, err := rlp.EncodeToBytes(storageReceipts)

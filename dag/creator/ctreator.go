@@ -138,11 +138,6 @@ type Creator struct {
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 
-	// recentTxs stores transactions from propagated blocks in order to
-	// prevent adding them another time
-	recentTxsMu sync.RWMutex
-	recentTxs   map[common.Hash]common.Hash
-
 	cacheAssignment *Assignment
 
 	canStart    bool
@@ -169,7 +164,6 @@ func New(config *Config, chainConfig *params.ChainConfig, engine consensus.Engin
 		finishWorkCh: make(chan *types.Block),
 		errWorkCh:    make(chan *error),
 		exitCh:       make(chan struct{}),
-		recentTxs:    make(map[common.Hash]common.Hash, 1000),
 
 		cacheAssignment: nil,
 		canStart:        true,
@@ -381,8 +375,7 @@ func (c *Creator) mainLoop() {
 		select {
 		case req := <-c.newWorkCh:
 			c.commitNewWork(req.tips, req.timestamp)
-		case ev := <-c.chainSideCh:
-			c.addRecentTxs(ev.Block.Hash(), ev.Block.Transactions())
+		case <-c.chainSideCh:
 		case <-c.txsCh:
 			// Apply transactions to the pending state if we're not creator.
 			//
@@ -567,26 +560,10 @@ func (c *Creator) resultHandler(block *types.Block) {
 }
 
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
-	c.recentTxsMu.RLock()
-	defer c.recentTxsMu.RUnlock()
-	var txs []*types.Transaction
-	for _, tx := range c.current.txs {
-		if c.recentTxs[tx.Hash()] == (common.Hash{}) {
-			txs = append(txs, tx)
-		}
-	}
-	return txs
+	return c.current.txs
 }
 func (c *Creator) getUnhandledReceips() []*types.Receipt {
-	c.recentTxsMu.RLock()
-	defer c.recentTxsMu.RUnlock()
-	var receipts []*types.Receipt
-	for _, tx := range c.current.receipts {
-		if c.recentTxs[tx.TxHash] == (common.Hash{}) {
-			receipts = append(receipts, tx)
-		}
-	}
-	return receipts
+	return c.current.receipts
 }
 
 // makeCurrent creates a new environment for the current cycle.
@@ -619,6 +596,8 @@ func (c *Creator) makeCurrent(tips types.Tips, header *types.Header) error {
 		state:          state,
 		header:         header,
 		recommitBlocks: recommitBlocks,
+		txs:            []*types.Transaction{},
+		receipts:       []*types.Receipt{},
 	}
 
 	// Keep track of transactions which return errors so they can be removed
@@ -650,13 +629,6 @@ func (c *Creator) updateSnapshot() {
 	)
 	c.snapshotReceipts = copyReceipts(receipts)
 	c.snapshotState = c.current.state.Copy()
-
-	c.recentTxsMu.Lock()
-	defer c.recentTxsMu.Unlock()
-
-	for _, tx := range txs {
-		c.recentTxs[tx.Hash()] = c.snapshotBlock.Hash()
-	}
 }
 
 func (c *Creator) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
@@ -710,17 +682,17 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Error("Gas limit exceeded for current block", "sender", from, "hash", tx.Hash().Hex())
+			log.Error("Gas limit exceeded for current block while create", "sender", from, "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+			log.Trace("Skipping tx with low nonce while create", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 			txs.Shift()
 
 		case errors.Is(err, core.ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Error("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+			log.Error("Skipping account with hight nonce while create", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		case errors.Is(err, nil):
@@ -731,13 +703,13 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
-			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
+			log.Trace("Skipping unsupported tx type while create", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Info("Transaction failed, account skipped", "hash", tx.Hash().Hex(), "err", err)
+			log.Info("Tx failed, account skipped while create", "hash", tx.Hash().Hex(), "err", err)
 			txs.Shift()
 		}
 	}
@@ -1066,26 +1038,10 @@ func (c *Creator) isCreatorActive(assigned *Assignment) bool {
 // getPending returns all pending transactions for current miner
 func (c *Creator) getPending() map[common.Address]types.Transactions {
 	pending := c.eth.TxPool().Pending(true)
-
-	c.recentTxsMu.Lock()
-	defer c.recentTxsMu.Unlock()
-
-	recentTxs := map[common.Hash]common.Hash{}
 	for k, txs := range pending {
 		_txs := types.Transactions{}
-		for _, tx := range txs {
-			// if tx already in block - rm from recentTxs and skip
-			if blockHash := c.chain.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
-				if c.recentTxs[tx.Hash()] != (common.Hash{}) {
-					delete(c.recentTxs, tx.Hash())
-				}
-				continue
-			}
-			if c.recentTxs[tx.Hash()] == (common.Hash{}) && c.isAddressAssigned(k) {
-				_txs = append(_txs, tx)
-			} else {
-				recentTxs[tx.Hash()] = c.recentTxs[tx.Hash()]
-			}
+		if c.isAddressAssigned(k) {
+			_txs = txs
 		}
 		if len(_txs) > 0 {
 			pending[k] = _txs
@@ -1093,18 +1049,7 @@ func (c *Creator) getPending() map[common.Address]types.Transactions {
 			delete(pending, k)
 		}
 	}
-
-	c.recentTxs = recentTxs
 	return pending
-}
-
-// addRecentTxs adds transactions to recent txs.
-func (c *Creator) addRecentTxs(block common.Hash, txs types.Transactions) {
-	c.recentTxsMu.Lock()
-	defer c.recentTxsMu.Unlock()
-	for _, tx := range txs {
-		c.recentTxs[tx.Hash()] = block
-	}
 }
 
 // isAddressAssigned checks if miner is allowed to add transaction from that address

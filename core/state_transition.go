@@ -214,6 +214,11 @@ func (st *StateTransition) buyGas() error {
 	return nil
 }
 
+// PreCheck make sure this transaction's data is correct.
+func (st *StateTransition) PreCheck() error {
+	return st.preCheck()
+}
+
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	if !st.msg.IsFake() {

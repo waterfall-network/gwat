@@ -182,10 +182,16 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, txc txS
 	// If some transactions have been mined, write the needed data to disk and update
 	if list != nil {
 		// Retrieve all the receipts belonging to this block and write the loopup table
-		if _, err := GetBlockReceipts(ctx, pool.odr, hash); err != nil { // ODR caches, ignore results
+		receips, err := GetBlockReceipts(ctx, pool.odr, hash)
+		if err != nil { // ODR caches, ignore results
 			return err
 		}
-		rawdb.WriteTxLookupEntriesByBlock(pool.chainDb, block)
+		for i, tx := range block.Transactions() {
+			if receips[i].Status == types.ReceiptStatusFailed {
+				continue
+			}
+			rawdb.WriteTxLookupEntry(pool.chainDb, tx.Hash(), block.Hash())
+		}
 
 		// Update the transaction pool's state
 		for _, tx := range list {
@@ -204,7 +210,9 @@ func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
 	if list, ok := pool.mined[hash]; ok {
 		for _, tx := range list {
 			txHash := tx.Hash()
-			rawdb.DeleteTxLookupEntry(batch, txHash)
+			if checkHash := rawdb.ReadTxLookupEntry(pool.chainDb, txHash); checkHash == hash {
+				rawdb.DeleteTxLookupEntry(batch, txHash)
+			}
 			pool.pending[txHash] = tx
 			txc.setState(txHash, false)
 		}

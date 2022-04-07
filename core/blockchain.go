@@ -422,10 +422,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
-	// cache TransactionLookup for dag chain
-	for _, block := range bc.GetBlocksByHashes(*bc.GetDagHashes()) {
-		bc.CacheTransactionLookup(block)
-	}
 	return bc, nil
 }
 
@@ -822,9 +818,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	// ~Add the block to the canonical chain number scheme and mark as the head~
 	// Add the block to the finalized chain number scheme
 	batch := bc.db.NewBatch()
-	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 
-	bc.CacheTransactionLookup(block)
 	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 
 	// update finalized number cache
@@ -1075,9 +1069,17 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		var batch = bc.db.NewBatch()
 		for _, block := range blockChain {
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.Nr() >= ancientLimit-bc.txLookupLimit {
-				rawdb.WriteTxLookupEntriesByBlock(batch, block)
+				for i, tx := range block.Transactions() {
+					if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
+						bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+					}
+				}
 			} else if rawdb.ReadTxIndexTail(bc.db) != nil {
-				rawdb.WriteTxLookupEntriesByBlock(batch, block)
+				for i, tx := range block.Transactions() {
+					if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
+						bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+					}
+				}
 			}
 			stats.processed++
 		}
@@ -1155,8 +1157,12 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			rawdb.WriteBody(batch, block.Hash(), block.Body())
 			rawdb.WriteReceipts(batch, block.Hash(), receiptChain[i])
 
-			rawdb.WriteTxLookupEntriesByBlock(batch, block) // Always write tx indices for live blocks, we assume they are needed
-			bc.CacheTransactionLookup(block)                // Always write tx indices for live blocks, we assume they are needed
+			// Always write tx indices for live blocks, we assume they are needed
+			for i, tx := range block.Transactions() {
+				if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
+					bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+				}
+			}
 
 			// Write everything belongs to the blocks into the database. So that
 			// we can ensure all components of body is completed(body, receipts,
@@ -1318,8 +1324,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteReceipts(blockBatch, block.Hash(), receipts)
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 
-	rawdb.WriteTxLookupEntriesByBlock(blockBatch, block)
-	bc.CacheTransactionLookup(block)
+	// create transaction lookup for applied txs.
+	for i, tx := range block.Transactions() {
+		if receipts[i] != nil {
+			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+		}
+	}
 
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -1332,6 +1342,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	log.Info("Block committed root", "root", root.Hex(), "height", block.Height(), "Nr", block.Nr(), "kind", kind)
 
 	if err != nil {
+		log.Error("Block committed root error", "height", block.Height(), "Nr", block.Nr(), "kind", kind, "err", err)
 		return NonStatTy, err
 	}
 	triedb := bc.stateCache.TrieDB()
@@ -1903,15 +1914,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			finDag := upTips.GetFinalizingDag()
 			if finDag.Hash != block.Hash() {
 				log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
-
-				tstart_3 := time.Now()
-
-				// create transaction lookup
-				rawdb.WriteTxLookupEntriesByBlock(bc.db, block)
-				bc.CacheTransactionLookup(block)
-
-				log.Error("<<<<<<<<<< insertPropagatedBlocks: RED BLOCK WriteTxLookupEntriesByBlock >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_3)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
-
 				continue
 			}
 			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
@@ -2068,131 +2070,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	stats.ignored += it.remaining()
 
 	return it.index, err
-}
-
-// FinalizeBlock finalizing block
-func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.StateDB, verifySeals bool) (*state.StateDB, error) {
-	// If the chain is terminating, don't even bother starting up
-	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
-		return statedb, nil
-	}
-
-	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), []*types.Block{block})
-
-	var (
-		stats     = insertStats{startTime: mclock.Now()}
-		lastCanon *types.Block
-	)
-	// Fire a single chain head event if we've progressed the chain
-	defer func() {
-		lfb := bc.GetLastFinalizedBlock()
-		if lastCanon != nil && lfb.Hash() == lastCanon.Hash() {
-			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon, ET_SYNC_FIN})
-		}
-	}()
-	// Start the parallel header verifier
-	headerMap := make(types.HeaderMap, 1)
-	headerMap[block.Hash()] = block.Header()
-	seals := make([]bool, 1)
-	seals[0] = verifySeals
-
-	abort, _ := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
-	defer close(abort)
-
-	// No validation errors for the first block (or chain prefix skipped)
-	var activeState *state.StateDB
-	defer func() {
-		// The chain importer is starting and stopping trie prefetchers. If a bad
-		// block or other error is hit however, an early return may not properly
-		// terminate the background threads. This defer ensures that we clean up
-		// and dangling prefetcher, without defering each and holding on live refs.
-		if activeState != nil {
-			activeState.StopPrefetcher()
-		}
-	}()
-	start := time.Now()
-	// Process block using the parent state as reference point
-	substart := time.Now()
-	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-	if err != nil {
-		bc.reportBlock(block, receipts, err)
-		//atomic.StoreUint32(&followupInterrupt, 1)
-		return statedb, err
-	}
-	// Update the metrics touched during block processing
-	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-	triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
-	trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
-
-	blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
-
-	// Validate the state using the default validator
-	substart = time.Now()
-	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-		bc.reportBlock(block, receipts, err)
-		return statedb, err
-	}
-	proctime := time.Since(start)
-
-	// Update the metrics touched during block validation
-	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-
-	blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
-
-	// Write the block to the chain and get the status.
-	substart = time.Now()
-	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "FinalizingBlock")
-	//atomic.StoreUint32(&followupInterrupt, 1)
-	if err != nil {
-		return statedb, err
-	}
-	// Update the metrics touched during block commit
-	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
-	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
-	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-
-	blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
-	blockInsertTimer.UpdateSince(start)
-
-	switch status {
-	case CanonStatTy:
-		log.Debug("Inserted new block", "hash", block.Hash(),
-			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-			"elapsed", common.PrettyDuration(time.Since(start)),
-			"root", block.Root())
-		lastCanon = block
-		// Only count canonical blocks for GC processing time
-		bc.gcproc += proctime
-
-	case SideStatTy:
-		log.Debug("Inserted forked block", "hash", block.Hash(),
-			"elapsed", common.PrettyDuration(time.Since(start)),
-			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-			"root", block.Root())
-
-	default:
-		// This in theory is impossible, but lets be nice to our future selves and leave
-		// a log, instead of trying to track down blocks imports that don't emit logs.
-		log.Warn("Inserted block with unknown status", "hash", block.Hash(),
-			"elapsed", common.PrettyDuration(time.Since(start)),
-			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-			"root", block.Root())
-	}
-	stats.processed++
-	stats.usedGas += usedGas
-
-	//dirty, _ := bc.stateCache.TrieDB().Size()
-	//stats.report(chain, it.index, dirty)
-
-	return statedb, err
 }
 
 // InsertChain attempts to insert the given batch of blocks in to the canonical
@@ -2407,7 +2284,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Error("Gas limit exceeded for current block", "sender", from, "hash", tx.Hash().Hex())
+			log.Error("Gas limit exceeded for current block while recommit", "sender", from, "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooLow):
 			if lowNonce {
@@ -2415,13 +2292,13 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			}
 			lowNonce = true
 			// New head notification data race between the transaction pool and miner, shift
-			log.Error("Skipping transaction with low nonce", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+			log.Error("Skipping transaction with low nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
-			// if tx already in block
-			if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
-				txBlock := bc.GetBlock(blockHash)
-				log.Debug("transaction with low nonce", "isOtherBlock", blockHash != block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "txHash", tx.Hash().Hex())
-			}
+			//// if tx already in block
+			//if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
+			//	txBlock := bc.GetBlock(blockHash)
+			//	log.Error("transaction with low nonce while recommit", "isOtherBlock", blockHash != block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "txHash", tx.Hash().Hex())
+			//}
 		case errors.Is(err, ErrNonceTooHigh):
 			if hightNonce {
 				continue
@@ -2429,25 +2306,25 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			hightNonce = true
 
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Error("Skipping account with hight nonce", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+			log.Error("Skipping account with hight nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
-			// if tx already in block
-			if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
-				txBlock := bc.GetBlock(blockHash)
-				log.Debug("transaction with higth nonce", "isOtherBlock", blockHash != block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "hash", tx.Hash().Hex())
-			}
+			//// if tx already in block
+			//if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
+			//	txBlock := bc.GetBlock(blockHash)
+			//	log.Error("transaction with higth nonce while recommit", "isOtherBlock", blockHash != block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "hash", tx.Hash().Hex())
+			//}
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
-
+			// create transaction lookup
+			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
-			log.Error("Skipping unsupported transaction type", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
-
+			log.Error("Skipping unsupported transaction type while recommit", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Error("Transaction failed, account skipped", "hash", tx.Hash().Hex(), "err", err)
+			log.Error("Transaction failed, account skipped while recommit", "hash", tx.Hash().Hex(), "err", err)
 		}
 	}
 
@@ -3360,4 +3237,13 @@ func (bc *BlockChain) DeleteBlockDag(hash common.Hash) {
 // ReadBockDag retrieves BlockDag by hash.
 func (bc *BlockChain) ReadBockDag(hash common.Hash) *types.BlockDAG {
 	return rawdb.ReadBlockDag(bc.db, hash)
+}
+
+// WriteTxLookupEntry write TxLookupEntry and cache it.
+func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.Hash) {
+	// create transaction lookup
+	rawdb.WriteTxLookupEntry(bc.db, txHash, blockHash)
+	//cash tx lookup
+	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: uint64(txIndex)}
+	bc.txLookupCache.Add(txHash, lookup)
 }

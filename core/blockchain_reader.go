@@ -406,14 +406,6 @@ func (bc *BlockChain) GetTxBlockHash(txHash common.Hash) common.Hash {
 	return rawdb.ReadTxLookupEntry(bc.db, txHash)
 }
 
-// CacheTransactionLookup add to cache positions of block transactions
-func (bc *BlockChain) CacheTransactionLookup(block *types.Block) {
-	for i, tx := range block.Transactions() {
-		lookup := &rawdb.LegacyTxLookupEntry{BlockHash: block.Hash(), Index: uint64(i)}
-		bc.txLookupCache.Add(tx.Hash(), lookup)
-	}
-}
-
 // GetTxBlockHash retrieves statedb for recently recommited block sequence.
 func (bc *BlockChain) GetCashedRecommit(chain common.HashArray) (statedb *state.StateDB, noCachedHashes, cachedHashes common.HashArray) {
 	for i, _ := range chain {
