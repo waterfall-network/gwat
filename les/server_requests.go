@@ -207,11 +207,7 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 				)
 				if next <= current {
 					infos, _ := json.Marshal(p.Peer.Info())
-					infos1111, _ := json.MarshalIndent(p.Peer.Info(), "", "  ")
-					p.Log().Warn("1. GetBlockHeaders skip overflow attack", "current", current, "skip", r.Query.Skip, "next", next, "attacker", string(infos))
-					p.Log().Warn("2. GetBlockHeaders skip overflow attack", "current", current, "skip", r.Query.Skip, "next", next, "attacker", infos)
-					p.Log().Warn("3. GetBlockHeaders skip overflow attack", "current", current, "skip", r.Query.Skip, "next", next, "attacker", p.Peer.Info())
-					p.Log().Warn("4. GetBlockHeaders skip overflow attack", "current", current, "skip", r.Query.Skip, "next", next, "attacker", infos1111)
+					p.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", r.Query.Skip, "next", next, "attacker", infos)
 					unknown = true
 				} else {
 					if header := bc.GetHeaderByNumber(next); header != nil {

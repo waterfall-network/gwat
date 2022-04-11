@@ -187,11 +187,6 @@ func (d *Dag) emitDagSyncInfo() bool {
 // countDagSlots count number of slots in dag chain
 // if it has unknown blocks returns  -1
 func (d *Dag) countDagSlots(tips *types.Tips) int {
-	//tips, unloaded := d.bc.ReviseTips()
-	////if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
-	//if len(unloaded) > 0 {
-	//	return -1
-	//}
 	dag := tips.GetFinalizingDag()
 
 	// todo countDagSlots tmp ad hoc fix

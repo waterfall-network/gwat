@@ -85,7 +85,7 @@ const (
 	bodyCacheLimit      = 256
 	blockCacheLimit     = 256
 	receiptsCacheLimit  = 32
-	txLookupCacheLimit  = 100000 //262144 // 1024
+	txLookupCacheLimit  = 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
@@ -1772,12 +1772,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		return 0, nil
 	}
 
-	tstart_1 := time.Now()
-
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
-
-	log.Error("<<<<<<<<<< insertPropagatedBlocks:senderCacher.recoverFromBlocks >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "txsCount", len(chain[0].Transactions()), "Height", chain[0].Height(), "hash", chain[0].Hash().Hex())
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -1876,14 +1872,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			log.Info("Insert propagated block: check block exists", "stateOnly", stateOnly, "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
 		}
 
-		tstart_0 := time.Now()
-
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
-
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: WriteBlock >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
-
-		tstart_2 := time.Now()
 
 		//retrieve state data
 		statedb, stateBlock, recommitBlocks, cachedHashes, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
@@ -1896,8 +1886,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 			return it.index, stateErr
 		}
-
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: CollectStateDataByParents >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_2)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
 
 		if !stateOnly {
 			// update tips
@@ -1924,8 +1912,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		statedb.StartPrefetcher("chain")
 		activeState = statedb
 
-		tstart_4 := time.Now()
-
 		// recommit red blocks transactions
 		cacheChain := cachedHashes.Copy()
 		for _, bl := range recommitBlocks {
@@ -1934,8 +1920,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			cacheChain = append(cacheChain, bl.Hash())
 			bc.SetCashedRecommit(cacheChain, statedb, nil)
 		}
-
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK recommitBlocks >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_4)), "recommitBlocks", len(recommitBlocks))
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
@@ -1956,13 +1940,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
-
-		tstart_5 := time.Now()
-
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.processor.Process(block, statedb, bc.vmConfig) >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_5)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
-
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
@@ -1981,8 +1959,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
 
-		tstart_6 := time.Now()
-
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
@@ -1992,22 +1968,15 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		}
 		proctime := time.Since(start)
 
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK bc.validator.ValidateState >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_6)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
-
 		// Update the metrics touched during block validation
 		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
 		storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
 
 		blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
 
-		tstart_7 := time.Now()
-
 		// Write the block to the chain and get the status.
 		substart = time.Now()
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
-
-		log.Error("<<<<<<<<<< insertPropagatedBlocks: BLUE BLOCK writeBlockWithState >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_7)), "txsCount", len(block.Transactions()), "Height", block.Height(), "hash", block.Hash().Hex())
-
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
@@ -2294,33 +2263,24 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			// New head notification data race between the transaction pool and miner, shift
 			log.Error("Skipping transaction with low nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
-			//// if tx already in block
-			//if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
-			//	txBlock := bc.GetBlock(blockHash)
-			//	log.Error("transaction with low nonce while recommit", "isOtherBlock", blockHash != block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "txHash", tx.Hash().Hex())
-			//}
 		case errors.Is(err, ErrNonceTooHigh):
 			if hightNonce {
 				continue
 			}
 			hightNonce = true
-
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Error("Skipping account with hight nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
-			//// if tx already in block
-			//if blockHash := bc.GetTxBlockHash(tx.Hash()); blockHash != (common.Hash{}) {
-			//	txBlock := bc.GetBlock(blockHash)
-			//	log.Error("transaction with higth nonce while recommit", "isOtherBlock", blockHash != block.Hash(), "tx.blockHash", blockHash.Hex(), "bl.hash", block.Hash().Hex(), "tx.blockHeight", txBlock.Height(), "bl.height", block.Height(), "hash", tx.Hash().Hex())
-			//}
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			// create transaction lookup
 			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Error("Skipping unsupported transaction type while recommit", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
+
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
@@ -2328,11 +2288,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 		}
 	}
 
-	tstart_0 := time.Now()
-
 	rawdb.WriteReceipts(bc.db, block.Hash(), receipts)
-
-	log.Error("<<<<<<<<<< Recommit:: WriteReceipts >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "receiptsCount", len(receipts), "block", block.Hash().Hex())
 
 	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: rlogs})
 	if len(rlogs) > 0 {
@@ -2492,7 +2448,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Process block using the parent state as reference point
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)

@@ -180,7 +180,6 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	PriceBump:  10,
 
 	AccountSlots: 16,
-	//GlobalSlots:  4096 + 1024, // urgent + floating queue capacity with 4:1 ratio
 	GlobalSlots:  (4096 + 1024) * 20, // urgent + floating queue capacity with 4:1 ratio
 	AccountQueue: 64,
 	GlobalQueue:  1024,
@@ -1326,10 +1325,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.addTxsLocked(reinject, false)
 
 	// Update all fork indicator by next pending block number.
-	//next := new(big.Int).SetUint64(newHead.Height + 1)
-	//pool.istanbul = pool.chainconfig.IsIstanbul(next)
-	//pool.eip2718 = pool.chainconfig.IsBerlin(next)
-	//pool.eip1559 = pool.chainconfig.IsLondon(next)
 	pool.istanbul = true
 	pool.eip2718 = true
 	pool.eip1559 = true

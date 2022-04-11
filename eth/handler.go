@@ -452,10 +452,9 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		//todo UNCOMMENT !!!!!!!!!!!!!!!!!!!!!!
 		//// Send the block to a subset of our peers
 		//transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-		//temp sent to all peers
+		// temp sent to all peers
 		transfer := peers[:]
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block)

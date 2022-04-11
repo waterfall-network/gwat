@@ -434,8 +434,6 @@ func (c *Creator) taskLoop() {
 				continue
 			}
 
-			tstart_1 := time.Now()
-
 			c.pendingMu.Lock()
 			c.pendingTasks[sealHash] = task
 			c.pendingMu.Unlock()
@@ -443,8 +441,6 @@ func (c *Creator) taskLoop() {
 				log.Warn("Block sealing failed", "err", err)
 				c.errWorkCh <- &err
 			}
-			p, q := c.eth.TxPool().Stats()
-			log.Error("<<<<<<<<<< Creator:: c.engine.Seal >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "pool.pending", p, "pool.queue", q, "txsCount", len(task.block.Transactions()))
 
 		case <-c.exitCh:
 			interrupt()
@@ -459,15 +455,8 @@ func (c *Creator) resultLoop() {
 	for {
 		select {
 		case block := <-c.resultCh:
-
-			tstart_1 := time.Now()
-
 			c.resultHandler(block)
 			c.finishWorkCh <- block
-
-			p, q := c.eth.TxPool().Stats()
-			log.Error("<<<<<<<<<< Creator::  c.resultHandler >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "pool.pending", p, "pool.queue", q, "txsCount", len(block.Transactions()))
-
 		case <-c.exitCh:
 			return
 		}
@@ -542,13 +531,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 		FinalityPoints:      tmpFinalityPoints,
 	}
 	c.chain.AddTips(newBlockDag)
-
-	tstart_1 := time.Now()
-
 	c.chain.ReviseTips()
-
-	p, q := c.eth.TxPool().Stats()
-	log.Error("<<<<<<<<<< Creator::  c.chain.ReviseTips() >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "pool.pending", p, "pool.queue", q, "txsCount", len(block.Transactions()))
 
 	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
@@ -571,25 +554,12 @@ func (c *Creator) makeCurrent(tips types.Tips, header *types.Header) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 
-	tstart_0 := time.Now()
-
 	state, _, recommitBlocks, _, stateErr := c.chain.CollectStateDataByParents(tips.GetHashes())
 	if stateErr != nil {
 		return stateErr
 	}
 
-	rcTxCount := 0
-	for _, bl := range recommitBlocks {
-		rcTxCount += len(bl.Transactions())
-	}
-	p, q := c.eth.TxPool().Stats()
-	log.Error("<<<<<<<<<< Creator:: CollectStateDataByParents >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(recommitBlocks))
-
-	tstart_1 := time.Now()
-
 	state.StartPrefetcher("miner")
-
-	log.Error("<<<<<<<<<< Creator:: StartPrefetcher >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)), "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(recommitBlocks))
 
 	env := &environment{
 		signer:         types.MakeSigner(c.chainConfig),
@@ -740,15 +710,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	genesis := c.eth.BlockChain().Genesis().Hash()
 	tstart := time.Now()
 
-	//tps, unload := c.chain.ReviseTips()
-	//if len(unload) > 0 {
-	//	log.Error("Mining skipping", "err", fmt.Errorf("unknown block detected"), "hashes", unload)
-	//	err := errors.New("create skipping unknown block detected")
-	//	c.errWorkCh <- &err
-	//	return
-	//}
-	//tips := tps.Copy()
-
 	slotInfo := c.getAssignment()
 	tipsBlocks := c.chain.GetBlocksByHashes(tips.GetHashes())
 	blocks := c.eth.BlockChain().GetBlocksByHashes(tipsBlocks.Hashes())
@@ -892,8 +853,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		return
 	}
 
-	tstart_0 := time.Now()
-
 	//recommit transactions of dag chain
 	cacheChain := common.HashArray{}
 	for _, bl := range c.current.recommitBlocks {
@@ -903,23 +862,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		c.chain.SetCashedRecommit(cacheChain, statedb, nil)
 	}
 
-	rcTxCount := 0
-	for _, bl := range c.current.recommitBlocks {
-		rcTxCount += len(bl.Transactions())
-	}
-	p, q := c.eth.TxPool().Stats()
-	log.Error("<<<<<<<<<< Creator:: RecommitBlockTransactions >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "pool.pending", p, "pool.queue", q, "txCount", rcTxCount, "blocksCount", len(c.current.recommitBlocks))
-
-	_tstart := time.Now()
-
 	// Fill the block with all available pending transactions.
 	pending := c.getPending()
-
-	txCount := 0
-	for _, acc := range pending {
-		txCount += acc.Len()
-	}
-	log.Error("<<<<<<<<<< Creator::   pending := c.getPending() >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(_tstart)), "pool.pending", p, "pool.queue", q, "txCount", txCount)
 
 	// Short circuit if no pending transactions
 	if len(pending) == 0 {
@@ -929,24 +873,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	if len(pending) > 0 {
-
-		tstart_0 := time.Now()
-
 		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pending, header.BaseFee)
 		if c.commitTransactions(txs, c.coinbase) {
 			return
 		}
-
-		log.Error("<<<<<<<<<< Creator::  commitTransactions  >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_0)), "c.getUnhandledTxs() len", len(c.getUnhandledTxs()))
-
 	}
-
-	tstart_1 := time.Now()
-
 	c.commit(tips, c.fullTaskHook, true, tstart)
-
-	log.Error("<<<<<<<<<< Creator::  c.commit(tips, c.fullTaskHook, true, tstart) >>>>>>>>>>>>>", "elapsed", common.PrettyDuration(time.Since(tstart_1)))
-
 }
 
 // commit runs any post-transaction state modifications, assembles the final block

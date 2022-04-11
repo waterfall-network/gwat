@@ -106,12 +106,6 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", peer.Peer.Info())
 				unknown = true
 			}
-
-			//if next <= current {
-			//	infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
-			//	peer.Log().Warn("GetBlockHeaders skip overflow attack 0000", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
-			//	peer.Log().Warn("GetBlockHeaders skip overflow attack 0000", "current", current, "skip", query.Skip, "next", next, "attacker", peer.Peer.Info())
-			//	unknown = true
 			//} else {
 			if header := backend.Chain().GetHeaderByNumber(next); header != nil {
 				nextHash := header.Hash()

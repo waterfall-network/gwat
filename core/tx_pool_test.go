@@ -136,8 +136,8 @@ func setupTxPoolWithConfig(config *params.ChainConfig) (*TxPool, *ecdsa.PrivateK
 	key, _ := crypto.GenerateKey()
 	pool := NewTxPool(testTxPoolConfig, config, blockchain)
 
-	// wait for the pool to initialize
-	<-pool.initDoneCh
+	//// wait for the pool to initialize
+	//<-pool.initDoneCh
 	return pool, key
 }
 

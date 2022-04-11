@@ -125,19 +125,6 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 		}
 	}
 
-	// todo recalculate state
-	////get current state
-	//statedb, err := bc.StateAt(lastFinBlock.Root())
-	//if err != nil {
-	//	log.Error("Bad last finalized state", "nr", lastFinBlock.Nr(), "height", lastFinBlock.Height(), "hash", lastFinBlock.Hash().Hex())
-	//	return err
-	//}
-	//// Enable prefetching to pull in trie node paths while processing transactions
-	//statedb.StartPrefetcher("chain")
-	////activeState := statedb
-	//var recommitBlocks []*types.Block
-	//var isRecommit bool
-
 	// blocks finalizing
 	for i := minNr; i <= maxNr; i++ {
 		hash := chain[i]
@@ -146,38 +133,6 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 		if isHead && block.Height() != i {
 			log.Error("Block height mismatch finalizing number", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
 		}
-
-		// todo recalculate state
-		//if block.Height() == i {
-		//	var blueState *state.StateDB
-		//	var stateErr error = nil
-		//	//	if blue block - check state
-		//	blueState, stateErr = bc.StateAt(block.Root())
-		//	if stateErr != nil || isRecommit {
-		//		log.Info("Recalculate blue block state : start", "finNr", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
-		//		isRecommit = true
-		//		// recommit red blocks transactions
-		//		for rnr, bl := range recommitBlocks {
-		//			log.Info("RecommitBlockTransactions", "nr", rnr, "height", block.Height(), "hash", block.Hash().Hex())
-		//			statedb = bc.RecommitBlockTransactions(bl, statedb)
-		//		}
-		//		// recalculate state
-		//		statedb, err = bc.FinalizingBlueBlock(block, statedb, true)
-		//		if err != nil {
-		//			log.Error("FinalizingBlueBlock failed", "err", err)
-		//			panic("FinalizingBlueBlock failed")
-		//		}
-		//		log.Info("Recalculate blue block state : end", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
-		//	} else {
-		//		statedb = blueState
-		//		log.Info("Recalculate blue block state : SET statedb", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
-		//	}
-		//	recommitBlocks = []*types.Block{}
-		//} else {
-		//	//	if red block
-		//	recommitBlocks = append(recommitBlocks, block)
-		//}
-
 		if err := f.finalizeBlock(i, *block, isHead); err != nil {
 			log.Error("block finalization failed", "nr", i, "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 			return err

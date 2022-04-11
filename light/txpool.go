@@ -182,12 +182,12 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, txc txS
 	// If some transactions have been mined, write the needed data to disk and update
 	if list != nil {
 		// Retrieve all the receipts belonging to this block and write the loopup table
-		receips, err := GetBlockReceipts(ctx, pool.odr, hash)
+		receipts, err := GetBlockReceipts(ctx, pool.odr, hash)
 		if err != nil { // ODR caches, ignore results
 			return err
 		}
 		for i, tx := range block.Transactions() {
-			if receips[i].Status == types.ReceiptStatusFailed {
+			if receipts[i].Status == types.ReceiptStatusFailed {
 				continue
 			}
 			rawdb.WriteTxLookupEntry(pool.chainDb, tx.Hash(), block.Hash())

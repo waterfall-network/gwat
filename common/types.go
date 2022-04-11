@@ -342,10 +342,7 @@ func (ha HashArray) Reverse() HashArray {
 
 // Key converts HashArray to a hash key.
 func (ha HashArray) Key() Hash {
-	c := make(HashArray, len(ha))
-	for i, hash := range ha {
-		c[i] = hash
-	}
+	c := ha.Copy()
 	buf := c.Uniq().Sort().ToBytes()
 	sha := sha3.NewLegacyKeccak256()
 	sha.Write(buf[:])

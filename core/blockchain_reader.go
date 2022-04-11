@@ -408,7 +408,7 @@ func (bc *BlockChain) GetTxBlockHash(txHash common.Hash) common.Hash {
 
 // GetTxBlockHash retrieves statedb for recently recommited block sequence.
 func (bc *BlockChain) GetCashedRecommit(chain common.HashArray) (statedb *state.StateDB, noCachedHashes, cachedHashes common.HashArray) {
-	for i, _ := range chain {
+	for i := range chain {
 		cachedHashes = chain[:i]
 		key := cachedHashes.Key()
 		if data, exist := bc.recommitCache.Get(key); exist {
@@ -418,15 +418,15 @@ func (bc *BlockChain) GetCashedRecommit(chain common.HashArray) (statedb *state.
 				var err error
 				statedb, err = bc.StateAt(root)
 				if statedb != nil {
-					log.Info("+++++ GetCashedRecommit +++++", "statedb", statedb != nil, "root", root.Hex(), "chain", chain, "cachedHashes", cachedHashes, "noCachedHashes", noCachedHashes, "len", len(chain), "i", i)
+					log.Debug("Get cashed recommit", "statedb", statedb != nil, "root", root.Hex(), "cachedHashes", cachedHashes, "noCachedHashes", noCachedHashes, "len", len(chain), "i", i)
 					return statedb, noCachedHashes, cachedHashes
 				} else {
-					log.Info("+++++ GetCashedRecommit::ERROR +++++", "statedb", statedb != nil, "root", root.Hex(), "err", err, "len", len(chain), "i", i)
+					log.Debug("Get cashed recommit error", "statedb", statedb != nil, "root", root.Hex(), "err", err, "cachedHashes", cachedHashes, "noCachedHashes", noCachedHashes, "len", len(chain), "i", i)
 				}
 			}
 		}
 	}
-	log.Info("----- GetCashedRecommit -----", "statedb", statedb, "chain", chain, "len", len(chain))
+	log.Debug("Get cashed recommit not found", "statedb", statedb != nil, "chain", chain)
 	return statedb, chain, common.HashArray{}
 }
 
@@ -443,7 +443,7 @@ func (bc *BlockChain) SetCashedRecommit(chain common.HashArray, statedb *state.S
 		)
 		if blueRoot != nil && *blueRoot != (common.Hash{}) {
 			root = *blueRoot
-			log.Info(">>>>> GetCashedRecommit::BLUE ROOT <<<<<", "root", root.Hex(), "chain", chain)
+			log.Debug("Set cashed recommit", "root", root.Hex(), "chain", chain)
 		} else {
 			root, err = statedb.Commit(false)
 			if err != nil {
