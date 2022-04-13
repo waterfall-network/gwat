@@ -395,7 +395,7 @@ func (gd *GraphDag) GetOrderedLoadedAncestors() []*GraphDag {
 	return uniqAncestors
 }
 
-//GetAncestors retrieves graph ancestors
+//GetAncestorsHashes retrieves graph ancestors
 func (gd *GraphDag) GetAncestorsHashes() common.HashArray {
 	res := common.HashArray{}
 	for _, itm := range gd.GetAncestors() {

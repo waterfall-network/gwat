@@ -179,19 +179,25 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	}
 
 	localTips := cs.handler.chain.GetTips()
+	dagHashes := common.HashArray{}
+	if dhs := cs.handler.chain.GetDagHashes(); dhs != nil {
+		dagHashes = *dhs
+	}
 	_, dag := peer.GetDagInfo()
 	for _, hash := range *dag {
 		block := cs.handler.chain.GetBlockByHash(hash)
-		if block == nil {
+		if len(localTips) == 0 && block.Nr() == lastFinNr {
+			// if remote tips set to last finalized block - do same
+			cs.handler.chain.ResetTips()
+			break
+		}
+		if block == nil || !dagHashes.Has(hash) {
 			// dag sync required
 			if op.dag == nil {
 				op.dag = common.HashArray{}
 			}
 			op.dag = append(op.dag, hash)
 			op.dagOnly = true
-		} else if len(localTips) == 0 && block.Nr() == lastFinNr {
-			// if remote tips set to last finalized block - do same
-			cs.handler.chain.ResetTips()
 		}
 	}
 	if op.dagOnly {

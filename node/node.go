@@ -581,36 +581,35 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
 func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string, readonly bool) (ethdb.Database, error) {
-	//TODO FREEZER TEMPORARY OFF
-	// rm
-	return n.OpenDatabase(name, cache, handles, namespace, readonly)
-	//TODO FREEZER TEMPORARY OFF
-	// uncomment
-	//n.lock.Lock()
-	//defer n.lock.Unlock()
-	//if n.state == closedState {
-	//	return nil, ErrNodeStopped
-	//}
-	//
-	//var db ethdb.Database
-	//var err error
-	//if n.config.DataDir == "" {
-	//	db = rawdb.NewMemoryDatabase()
-	//} else {
-	//	root := n.ResolvePath(name)
-	//	switch {
-	//	case freezer == "":
-	//		freezer = filepath.Join(root, "ancient")
-	//	case !filepath.IsAbs(freezer):
-	//		freezer = n.ResolvePath(freezer)
-	//	}
-	//	db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
-	//}
-	//
-	//if err == nil {
-	//	db = n.wrapDatabase(db)
-	//}
-	//return db, err
+	//to disable Freezer
+	//return n.OpenDatabase(name, cache, handles, namespace, readonly)
+
+	//Start Freezer
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	if n.state == closedState {
+		return nil, ErrNodeStopped
+	}
+
+	var db ethdb.Database
+	var err error
+	if n.config.DataDir == "" {
+		db = rawdb.NewMemoryDatabase()
+	} else {
+		root := n.ResolvePath(name)
+		switch {
+		case freezer == "":
+			freezer = filepath.Join(root, "ancient")
+		case !filepath.IsAbs(freezer):
+			freezer = n.ResolvePath(freezer)
+		}
+		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
+	}
+
+	if err == nil {
+		db = n.wrapDatabase(db)
+	}
+	return db, err
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.

@@ -464,6 +464,17 @@ func (hc *HeaderChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint
 // in case synchronization not finished
 func (hc *HeaderChain) ResetTips() error {
 	hc.tipsMu.Lock()
+
+	// Clear out any stale content from the caches
+	hc.headerCache.Purge()
+	hc.numberCache.Purge()
+	if head := rawdb.ReadLastFinalizedHash(hc.chainDb); head != (common.Hash{}) {
+		if chead := hc.GetHeaderByHash(head); chead != nil {
+			lfnr := *rawdb.ReadFinalizedNumberByHash(hc.chainDb, head)
+			hc.SetLastFinalisedHeader(chead, lfnr)
+		}
+	}
+
 	lastFinHeader := hc.GetLastFinalizedHeader()
 	//set genesis blockDag
 	dag := &types.BlockDAG{

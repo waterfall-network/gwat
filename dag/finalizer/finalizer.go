@@ -163,9 +163,6 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 		log.Warn("Block already finalized", "finNr", "nr", nr, "height", block.Height(), "hash", block.Hash().Hex())
 		return nil
 	}
-	//if hash := bc.ReadFinalizedHashByNumber(finNr); hash != (common.Hash{}) && hash != block.Hash() {
-	//	return fmt.Errorf(fmt.Sprintf("block already finalised finNr=%d new hash=%v existed=%v", finNr, block.Hash(), hash))
-	//}
 	if err := bc.WriteFinalizedBlock(finNr, &block, []*types.Receipt{}, []*types.Log{}, &state.StateDB{}, isHead); err != nil {
 		return err
 	}

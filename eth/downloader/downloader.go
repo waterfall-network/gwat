@@ -1308,7 +1308,8 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 
 	// Wait for the remote response to the head fetch
 	// init by genesis
-	hash := d.blockchain.GetHeaderByNumber(0).Hash()
+	genesisHash := d.blockchain.GetHeaderByNumber(0).Hash()
+	hash := genesisHash
 	number := uint64(0)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -1384,9 +1385,9 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 		}
 	}
 	// If the head fetch already found an ancestor, return
-	if hash != (common.Hash{}) {
+	if hash != genesisHash {
 		if int64(number) <= floor {
-			p.log.Warn("Ancestor below allowance", "number", number, "hash", hash, "allowance", floor)
+			p.log.Warn("Ancestor below allowance", "number", number, "hash", hash.Hex(), "allowance", floor)
 			return 0, errInvalidAncestor
 		}
 		p.log.Info("Found common ancestor", "number", number, "hash", hash.Hex())
@@ -1479,7 +1480,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 	}
 	// Ensure valid ancestry and return
 	if int64(start) <= floor {
-		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
+		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash.Hex(), "allowance", floor)
 		return 0, errInvalidAncestor
 	}
 	p.log.Debug("Found common ancestor", "number", start, "hash", hash)

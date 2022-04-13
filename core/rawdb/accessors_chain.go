@@ -749,7 +749,7 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 	}
 	for _, b := range badBlocks {
 		if b.Header.Nr() == block.Nr() && b.Header.Hash() == block.Hash() {
-			log.Info("Skip duplicated bad block", "number", block.Nr(), "hash", block.Hash())
+			log.Info("Skip duplicated bad block", "number", block.Nr(), "hash", block.Hash().Hex())
 			return
 		}
 	}

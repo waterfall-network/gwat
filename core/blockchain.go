@@ -278,14 +278,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	var txIndexBlock uint64
 
 	if bc.empty() {
-		////TODO FREEZER TEMPORARY OFF
-		//rawdb.InitDatabaseFromFreezer(bc.db)
-		//// If ancient database is not empty, reconstruct all missing
-		//// indices in the background.
-		//frozen, _ := bc.db.Ancients()
-		//if frozen > 0 {
-		//	txIndexBlock = frozen
-		//}
+		//Start Freezer
+		rawdb.InitDatabaseFromFreezer(bc.db)
+		// If ancient database is not empty, reconstruct all missing
+		// indices in the background.
+		frozen, _ := bc.db.Ancients()
+		if frozen > 0 {
+			txIndexBlock = frozen
+		}
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
@@ -459,6 +459,25 @@ func (bc *BlockChain) loadLastState() error {
 		return bc.Reset()
 	}
 
+	if lastFinalisedBlock.Nr() != lastFinalisedBlock.Height() {
+		log.Warn("Head block is red, search valid head", "hash", lastFinHash.Hex())
+		_, err := bc.SetHeadBeyondRoot(lastFinHash, common.Hash{})
+		if err != nil {
+			return bc.Reset()
+		}
+		return nil
+	}
+	//remove finalized numbers that more than last one
+	rmNr := bc.GetLastFinalizedNumber() + 1
+	for {
+		rmHash := rawdb.ReadFinalizedHashByNumber(bc.db, rmNr)
+		if rmHash == (common.Hash{}) {
+			break
+		}
+		rawdb.DeleteFinalizedHashNumber(bc.db, rmHash, rmNr)
+		rmNr++
+	}
+
 	// Everything seems to be fine, set as the lastFinHash block
 	bc.lastFinalizedBlock.Store(lastFinalisedBlock)
 	headBlockGauge.Update(int64(lastFinNr))
@@ -529,6 +548,26 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+
+	hdr := rawdb.ReadHeader(bc.db, head)
+	if hdr.Nr() != hdr.Height {
+		currNr := hdr.Nr()
+		if hdr.Number == nil {
+			currNr = rawdb.ReadLastFinalizedNumber(bc.db)
+		}
+		for currNr > 0 {
+			currHash := rawdb.ReadFinalizedHashByNumber(bc.db, currNr)
+			if currHash != (common.Hash{}) {
+				currHeader := rawdb.ReadHeader(bc.db, currHash)
+				if currHeader.Nr() == currHeader.Height {
+					head = currHeader.Hash()
+					//root = currHeader.Root
+					break
+				}
+			}
+			currNr--
+		}
+	}
 
 	// Track the block number of the requested root hash
 	var rootNumber uint64 // (no root == always 0)
