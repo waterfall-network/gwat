@@ -191,7 +191,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 			cs.handler.chain.ResetTips()
 			break
 		}
-		if block == nil || !dagHashes.Has(hash) {
+		if block == nil || (!dagHashes.Has(hash) && block.Number() == nil) {
 			// dag sync required
 			if op.dag == nil {
 				op.dag = common.HashArray{}
