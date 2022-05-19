@@ -117,7 +117,7 @@ func (h *Header) Copy() *Header {
 			ParentHashes: h.ParentHashes,
 			Epoch:        h.Epoch,
 			Slot:         h.Slot,
-			Height:       h.Slot,
+			Height:       h.Height,
 			Coinbase:     h.Coinbase,
 			Root:         h.Root,
 			TxHash:       h.TxHash,
