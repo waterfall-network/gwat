@@ -24,11 +24,11 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	ethash "github.com/ethereum/go-ethereum/dag/sealer"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -53,7 +53,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	// Create Ethereum Service
 	config := &ethconfig.Config{Genesis: genesis}
-	config.Ethash.PowMode = ethash.ModeFake
 	ethservice, err := eth.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
@@ -62,7 +61,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
-	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
+	if _, err := ethservice.BlockChain().SyncInsertChain(blocks[1:]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
 	return n, blocks
@@ -82,8 +81,12 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		g.SetExtra([]byte("test"))
 	}
 	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
+	engine := ethash.New(db)
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, 1, generate)
+	for _, bl := range blocks {
+		nr := bl.Height()
+		bl.SetNumber(&nr)
+	}
 	blocks = append([]*types.Block{gblock}, blocks...)
 	return genesis, blocks
 }

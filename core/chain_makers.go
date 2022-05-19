@@ -42,7 +42,6 @@ type BlockGen struct {
 	gasPool  *GasPool
 	txs      []*types.Transaction
 	receipts []*types.Receipt
-	uncles   []*types.Header
 
 	config *params.ChainConfig
 	engine consensus.Engine
@@ -145,11 +144,6 @@ func (b *BlockGen) TxNonce(addr common.Address) uint64 {
 		panic("account does not exist")
 	}
 	return b.statedb.GetNonce(addr)
-}
-
-// AddUncle adds an uncle header to the generated block.
-func (b *BlockGen) AddUncle(h *types.Header) {
-	b.uncles = append(b.uncles, h)
 }
 
 // PrevBlock returns a previously generated block by number. It panics if
