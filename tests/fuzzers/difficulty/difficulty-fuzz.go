@@ -23,7 +23,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/core/types"
 )
 
 type fuzzer struct {

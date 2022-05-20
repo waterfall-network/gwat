@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum/tests/fuzzers/rangeproof"
+	"github.com/waterfall-foundation/gwat/tests/fuzzers/rangeproof"
 )
 
 func main() {
