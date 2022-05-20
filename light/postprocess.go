@@ -25,16 +25,16 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/bitutil"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 // IndexerConfig includes a set of configs for chain indexers.

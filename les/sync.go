@@ -21,11 +21,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/les/downloader"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/les/downloader"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var errInvalidCheckpoint = errors.New("invalid advertised checkpoint")

@@ -20,15 +20,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/metrics"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/p2p/enr"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 const (

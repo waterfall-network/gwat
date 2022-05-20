@@ -19,11 +19,11 @@ package state
 import (
 	"bytes"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 // NewStateSync create a new state trie download scheduler.

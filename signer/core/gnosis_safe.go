@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/signer/core/apitypes"
 )
 
 // GnosisSafeTx is a type to parse the safe-tx returned by the relayer,

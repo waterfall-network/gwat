@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/tests"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/tests"
 	"gopkg.in/urfave/cli.v1"
 )
 

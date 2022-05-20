@@ -23,12 +23,12 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
+	ethereum "github.com/waterfall-foundation/gwat"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 // Client is a wrapper around rpc.Client that implements geth-specific functionality.

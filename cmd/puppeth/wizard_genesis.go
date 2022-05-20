@@ -29,10 +29,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // makeGenesis creates a new genesis struct based on some user input.

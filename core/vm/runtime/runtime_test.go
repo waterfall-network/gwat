@@ -24,17 +24,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/asm"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/accounts/abi"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/asm"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/eth/tracers"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 func TestDefaults(t *testing.T) {

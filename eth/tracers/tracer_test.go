@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 type account struct{}

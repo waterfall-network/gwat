@@ -24,11 +24,11 @@ import (
 	"io/ioutil"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/waterfall-foundation/gwat/accounts"
+	"github.com/waterfall-foundation/gwat/accounts/keystore"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/crypto"
 )
 
 // SignerUIAPI implements methods Clef provides for a UI to query, in the bidirectional communication

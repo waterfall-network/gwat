@@ -20,10 +20,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/prque"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/ethdb"
 )
 
 // ErrNotRequested is returned by the trie sync when it's requested to process a

@@ -1,6 +1,6 @@
 package creator
 
-import "github.com/ethereum/go-ethereum/common"
+import "github.com/waterfall-foundation/gwat/common"
 
 // Assignment represents consensus data of block creators assignment
 type Assignment struct {

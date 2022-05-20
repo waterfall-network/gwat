@@ -23,11 +23,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/metrics"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 

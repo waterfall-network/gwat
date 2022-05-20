@@ -27,11 +27,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/p2p/simulations/adapters"
 )
 
 var DialBanTimeout = 200 * time.Millisecond
