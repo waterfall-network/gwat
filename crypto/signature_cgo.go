@@ -25,7 +25,7 @@ import (
 	"fmt"
 
 	"github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 // Ecrecover returns the uncompressed public key that created the given signature.
