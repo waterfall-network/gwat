@@ -203,8 +203,8 @@ type Block struct {
 
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
-	Header *Header
-	Txs    []*Transaction
+	Header *Header        `json:"header"           gencodec:"required"`
+	Txs    []*Transaction `json:"transactions"     gencodec:"required"`
 }
 
 // NewBlock creates a new block. The input data is copied,

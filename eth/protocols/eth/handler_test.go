@@ -407,10 +407,8 @@ func testGetNodeData(t *testing.T, protocol uint) {
 			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
 			b2 := block.PrevBlock(1).Header()
 			b2.Extra = []byte("foo")
-			block.AddUncle(b2)
 			b3 := block.PrevBlock(2).Header()
 			b3.Extra = []byte("foo")
-			block.AddUncle(b3)
 		}
 	}
 	// Assemble the test environment
@@ -516,10 +514,8 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
 			b2 := block.PrevBlock(1).Header()
 			b2.Extra = []byte("foo")
-			block.AddUncle(b2)
 			b3 := block.PrevBlock(2).Header()
 			b3.Extra = []byte("foo")
-			block.AddUncle(b3)
 		}
 	}
 	// Assemble the test environment
