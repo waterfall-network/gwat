@@ -1,4 +1,4 @@
-module github.com/ethereum/go-ethereum
+module github.com/waterfall-foundation/gwat
 
 go 1.15
 

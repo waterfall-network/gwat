@@ -29,11 +29,11 @@ import (
 	"syscall"
 
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
-	"github.com/ethereum/go-ethereum/internal/web3ext"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/waterfall-foundation/gwat/console/prompt"
+	"github.com/waterfall-foundation/gwat/internal/jsre"
+	"github.com/waterfall-foundation/gwat/internal/jsre/deps"
+	"github.com/waterfall-foundation/gwat/internal/web3ext"
+	"github.com/waterfall-foundation/gwat/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 )
