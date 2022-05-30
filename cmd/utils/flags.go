@@ -33,6 +33,8 @@ import (
 	"text/template"
 	"time"
 
+	pcsclite "github.com/gballet/go-libpcsclite"
+	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/waterfall-foundation/gwat/accounts"
 	"github.com/waterfall-foundation/gwat/accounts/keystore"
 	"github.com/waterfall-foundation/gwat/common"
@@ -64,8 +66,6 @@ import (
 	"github.com/waterfall-foundation/gwat/p2p/nat"
 	"github.com/waterfall-foundation/gwat/p2p/netutil"
 	"github.com/waterfall-foundation/gwat/params"
-	pcsclite "github.com/gballet/go-libpcsclite"
-	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -1558,7 +1558,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 	case ctx.GlobalBool(DevNetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 333777444
+			cfg.NetworkId = 333777555
 		}
 		cfg.Genesis = core.DefaultDevNetGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.DevNetGenesisHash)
