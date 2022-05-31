@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/mclock"
 	"github.com/waterfall-foundation/gwat/common/prque"
@@ -42,7 +43,6 @@ import (
 	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/trie"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -1445,7 +1445,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	bc.futureBlocks.Remove(block.Hash())
 
-	if status == CanonStatTy {
+	if status == CanonStatTy || kind == "syncInsertChain" {
 		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
