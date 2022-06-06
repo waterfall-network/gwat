@@ -7,21 +7,6 @@ import (
 	"testing"
 )
 
-var testOpData = &opData{
-	Std:        StdWRC721,
-	Address:    common.Address{},
-	TokenId:    big.NewInt(22222),
-	Owner:      common.Address{},
-	Spender:    common.Address{},
-	Operator:   common.Address{},
-	From:       common.Address{},
-	To:         common.Address{},
-	Value:      nil,
-	Index:      nil,
-	IsApproved: false,
-	Data:       nil,
-}
-
 var (
 	wantCreateOperation = []byte{
 		243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5,
@@ -101,7 +86,7 @@ var testingOperation = struct {
 	nil,
 }
 
-func TestMintOperation(t *testing.T) {
+func TestMintOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	mintOp, err := NewMintOperation(
@@ -110,7 +95,14 @@ func TestMintOperation(t *testing.T) {
 		testingOperation.data,
 	)
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoTo:
+			t.Logf("error: %+v", err)
+		case ErrNoTokenId:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(mintOp)
@@ -123,15 +115,21 @@ func TestMintOperation(t *testing.T) {
 	}
 }
 
-func TestSetApprovalForAllOperation(t *testing.T) {
+func TestSetApprovalForAllOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	setApprovalForAllOp, err := NewSetApprovalForAllOperation(
 		testingOperation.operator,
 		testingOperation.isApproved,
 	)
+
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoOperator:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(setApprovalForAllOp)
@@ -144,7 +142,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 	}
 }
 
-func TestIsApprovedForAllOperation(t *testing.T) {
+func TestIsApprovedForAllOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	isApprovedForAllOp, err := NewIsApprovedForAllOperation(
@@ -153,7 +151,16 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 		testingOperation.operator,
 	)
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoOperator:
+			t.Logf("error: %+v", err)
+		case ErrNoOwner:
+			t.Logf("error: %+v", err)
+		case ErrNoAddress:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(isApprovedForAllOp)
@@ -166,7 +173,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 	}
 }
 
-func TestAllowanceOperation(t *testing.T) {
+func TestAllowanceOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	allowanceOp, err := NewAllowanceOperation(
@@ -175,7 +182,16 @@ func TestAllowanceOperation(t *testing.T) {
 		testingOperation.spender,
 	)
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoSpender:
+			t.Logf("error: %+v", err)
+		case ErrNoOwner:
+			t.Logf("error: %+v", err)
+		case ErrNoAddress:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(allowanceOp)
@@ -188,7 +204,7 @@ func TestAllowanceOperation(t *testing.T) {
 	}
 }
 
-func TestApproveOperation(t *testing.T) {
+func TestApproveOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	approveOp, err := NewApproveOperation(
@@ -197,7 +213,14 @@ func TestApproveOperation(t *testing.T) {
 		testingOperation.value,
 	)
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoSpender:
+			t.Logf("error: %+v", err)
+		case ErrNoValue:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(approveOp)
@@ -210,7 +233,7 @@ func TestApproveOperation(t *testing.T) {
 	}
 }
 
-func TestSafeTransferFromOperation(t *testing.T) {
+func TestSafeTransferFromOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	safeTransferFromOp, err := NewSafeTransferFromOperation(
@@ -233,7 +256,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 	}
 }
 
-func TestTransferFromOperation(t *testing.T) {
+func TestTransferFromOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	transferFromOp, err := NewTransferFromOperation(
@@ -243,7 +266,12 @@ func TestTransferFromOperation(t *testing.T) {
 		testingOperation.value,
 	)
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoFrom:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(transferFromOp)
@@ -256,12 +284,19 @@ func TestTransferFromOperation(t *testing.T) {
 	}
 }
 
-func TestTransferOperation(t *testing.T) {
+func TestTransferOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	transferOp, err := NewTransferOperation(testingOperation.to, testingOperation.value)
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoTo:
+			t.Logf("error: %+v", err)
+		case ErrNoValue:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, _ := EncodeToBytes(transferOp)
@@ -279,7 +314,14 @@ func TestBalanceOfOperationEncode(t *testing.T) {
 
 	balanceOp, err := NewBalanceOfOperation(testingOperation.tokenAddress, testingOperation.owner)
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoOwner:
+			t.Logf("error: %+v", err)
+		case ErrNoAddress:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(balanceOp)
@@ -297,7 +339,12 @@ func TestBurnOperationEncode(t *testing.T) {
 
 	burnOp, err := NewBurnOperation(big.NewInt(testingOperation.tokenId.Id.Int64()))
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoTokenId:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(burnOp)
@@ -332,7 +379,7 @@ func TestCreateOperationEncode(t *testing.T) {
 	}
 }
 
-func TestPropertiesOperation(t *testing.T) {
+func TestPropertiesOperationEncode(t *testing.T) {
 	t.Parallel()
 
 	propertiesOp, err := NewPropertiesOperation(
@@ -340,7 +387,12 @@ func TestPropertiesOperation(t *testing.T) {
 		testingOperation.tokenId.Id,
 	)
 	if err != nil {
-		t.Fatal(err)
+		switch err {
+		case ErrNoAddress:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
 	}
 
 	have, err := EncodeToBytes(propertiesOp)
@@ -360,6 +412,18 @@ func TestTokenOfOwnerByIndexOperationEncode(t *testing.T) {
 		testingOperation.tokenAddress,
 		testingOperation.owner,
 		testingOperation.index)
+	if err != nil {
+		switch err {
+		case ErrNoIndex:
+			t.Logf("error: %+v", err)
+		case ErrNoOwner:
+			t.Logf("error: %+v", err)
+		case ErrNoAddress:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
+	}
 
 	have, err := EncodeToBytes(tokenOfOwnerByIndexOp)
 	if err != nil {
@@ -371,21 +435,582 @@ func TestTokenOfOwnerByIndexOperationEncode(t *testing.T) {
 	}
 }
 
-//func TestCreateOperationDecode(t *testing.T) {
-//	op, _ := DecodeBytes(wantBurnOperation)
-//	s := op.Standard()
-//	code := op.OpCode()
-//
-//}
+func TestCreateOperationDecode(t *testing.T) {
+	t.Parallel()
 
-//func TestTokenOfOwnerByIndexOperationDecode(t *testing.T) {
-//	var have *tokenOfOwnerByIndexOperation
-//	ok := testRlpDecode(wantTokenOfOwnerByIndexOperation, &have)
-//	if !ok {
-//		t.Errorf("can`t decode struct %+v", wantTokenOfOwnerByIndexOperation)
-//	}
-//
-//	if have != testTokenOfOwnerByIndexOperation {
-//		t.Errorf("mismutches types: have: %+v\nwant: %+v", have, testTokenOfOwnerByIndexOperation)
-//	}
-//}
+	op, err := DecodeBytes(wantCreateOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(CreateOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != testingOperation.op.Std {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.op.Std, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantCreateOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	name := o.Name()
+	if !bytes.Equal(name, testingOperation.name) {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", string(testingOperation.name), string(name))
+	}
+
+	symbol := o.Symbol()
+	if !bytes.Equal(symbol, testingOperation.symbol) {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", string(testingOperation.symbol), string(symbol))
+	}
+
+	decimals := o.Decimals()
+	if decimals != testingOperation.decimals {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.decimals, decimals)
+	}
+
+	totalSupply, ok := o.TotalSupply()
+	if !ok {
+		t.Fatalf("totalSupply cannot be nil")
+	}
+
+	if totalSupply.Int64() != testingOperation.totalSupply.Int64() {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.totalSupply.Int64(), totalSupply.Int64())
+	}
+}
+
+func TestTokenOfOwnerByIndexOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantTokenOfOwnerByIndexOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(TokenOfOwnerByIndexOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != StdWRC721 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantTokenOfOwnerByIndexOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	haveIndex := o.Index()
+	wantIndex := testingOperation.index
+	if haveIndex.Int64() != wantIndex.Int64() {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantIndex, haveIndex)
+	}
+
+	owner := o.Owner()
+	if owner != testingOperation.owner {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.owner, owner)
+	}
+
+	address := o.Address()
+	if address != testingOperation.tokenAddress {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.tokenAddress, address)
+	}
+}
+
+func TestBurnOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantBurnOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(BurnOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != StdWRC721 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantBurnOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	id := o.TokenId()
+	if id.Int64() != testingOperation.tokenId.Id.Int64() {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.tokenId.Id.Int64(), id)
+	}
+}
+
+func TestMintOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantMintOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(MintOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != StdWRC721 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantMintOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	address := o.To()
+	if address != testingOperation.to {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.to, address)
+	}
+
+	data, ok := o.Metadata()
+	if !ok {
+		t.Logf("data is empty")
+	}
+
+	if !bytes.Equal(data, testingOperation.data) {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.data, data)
+	}
+}
+
+func TestSetApprovalForAllOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantSetApprovalForAllOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(SetApprovalForAllOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != StdWRC721 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantSetApprovalForAllOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	operator := o.Operator()
+	if operator != testingOperation.to {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.operator, operator)
+	}
+
+	isApproved := o.IsApproved()
+	if isApproved != testingOperation.isApproved {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.isApproved, isApproved)
+	}
+}
+
+func TestIsApprovedForAllOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantIsApprovedForAllOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(IsApprovedForAllOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != StdWRC721 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantIsApprovedForAllOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	operator := o.Operator()
+	if operator != testingOperation.to {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.operator, operator)
+	}
+
+	owner := o.Owner()
+	if owner != testingOperation.owner {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.owner, owner)
+	}
+
+	address := o.Address()
+	if address != testingOperation.tokenAddress {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.tokenAddress, address)
+	}
+}
+
+func TestAllowanceOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantAllowanceOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(AllowanceOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != StdWRC20 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", StdWRC20, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantAllowanceOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	spender := o.Spender()
+	if spender != testingOperation.to {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.spender, spender)
+	}
+
+	owner := o.Owner()
+	if owner != testingOperation.owner {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.owner, owner)
+	}
+
+	address := o.Address()
+	if address != testingOperation.tokenAddress {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.tokenAddress, address)
+	}
+}
+
+func TestApproveOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantApproveOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(ApproveOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != testingOperation.op.Std {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.op.Std, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantApproveOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	spender := o.Spender()
+	if spender != testingOperation.to {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.spender, spender)
+	}
+
+	value := o.Value().Int64()
+	if value != testingOperation.value.Int64() {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.value.Int64(), value)
+	}
+}
+
+func TestSafeTransferFromOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantSafeTransferFromOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(SafeTransferFromOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != StdWRC721 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, std)
+	}
+
+	haveOpCode, err := GetOpCode(wantSafeTransferFromOperation)
+	if err != nil {
+		switch err {
+		case ErrRawDataShort, ErrPrefixNotValid:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
+	}
+	if haveOpCode != OpSafeTransferFrom {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", OpSafeTransferFrom, haveOpCode)
+	}
+
+	from := o.From()
+	if from != testingOperation.from {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.from, from)
+	}
+
+	to := o.To()
+	if to != testingOperation.to {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.to, to)
+	}
+
+	value := o.Value().Int64()
+	if value != testingOperation.value.Int64() {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.value.Int64(), value)
+	}
+
+	data, ok := o.Data()
+	if !ok {
+		t.Logf("data is empty")
+	}
+
+	if !bytes.Equal(data, testingOperation.data) {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.data, data)
+	}
+}
+
+func TestTransferFromOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantTransferFromOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(TransferFromOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != testingOperation.op.Std {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.op.Std, std)
+	}
+
+	haveOpCode, err := GetOpCode(wantTransferFromOperation)
+	if err != nil {
+		switch err {
+		case ErrRawDataShort, ErrPrefixNotValid:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
+	}
+
+	if haveOpCode != OpTransferFrom {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", OpTransferFrom, haveOpCode)
+	}
+
+	from := o.From()
+	if from != testingOperation.from {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.from, from)
+	}
+
+	to := o.To()
+	if to != testingOperation.to {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.to, to)
+	}
+
+	value := o.Value().Int64()
+	if value != testingOperation.value.Int64() {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.value.Int64(), value)
+	}
+}
+
+func TestTransferOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantTransferOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(TransferOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != StdWRC20 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", StdWRC20, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantTransferOperation)
+	if err != nil {
+		switch err {
+		case ErrRawDataShort, ErrPrefixNotValid:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	to := o.To()
+	if to != testingOperation.to {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.to, to)
+	}
+
+	value := o.Value().Int64()
+	if value != testingOperation.value.Int64() {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.value.Int64(), value)
+	}
+}
+
+func TestBalanceOfOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantBalanceOfOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(BalanceOfOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != 0 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", 0, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantBalanceOfOperation)
+	if err != nil {
+		switch err {
+		case ErrRawDataShort, ErrPrefixNotValid:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	address := o.Address()
+	if address != testingOperation.tokenAddress {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.tokenAddress, address)
+	}
+
+	owner := o.Owner()
+	if owner != testingOperation.owner {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.owner, owner)
+	}
+}
+
+func TestPropertiesOperationDecode(t *testing.T) {
+	t.Parallel()
+
+	op, err := DecodeBytes(wantPropertiesOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := op.(PropertiesOperation)
+	if !ok {
+		t.Fatalf("invalid operation type")
+	}
+
+	std := o.Standard()
+	if std != 0 {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.op.Std, std)
+	}
+
+	haveOpCode := o.OpCode()
+	wantOpCode, err := GetOpCode(wantPropertiesOperation)
+	if err != nil {
+		switch err {
+		case ErrRawDataShort, ErrPrefixNotValid:
+			t.Logf("error: %+v", err)
+		default:
+			t.Fatal(err)
+		}
+	}
+
+	if haveOpCode != wantOpCode {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantOpCode, haveOpCode)
+	}
+
+	address := o.Address()
+	if address != testingOperation.tokenAddress {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.tokenAddress, address)
+	}
+
+	id, ok := o.TokenId()
+	if !ok {
+		t.Logf("tokenId is empty")
+	}
+	if id.Int64() != testingOperation.tokenId.Id.Int64() {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", testingOperation.tokenId.Id.Int64(), id.Int64())
+	}
+}
