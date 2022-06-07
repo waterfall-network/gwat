@@ -169,9 +169,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// If we have trusted checkpoints, enforce them on the chain
 	if config.Checkpoint != nil {
-		h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+		//h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+		h.checkpointNumber = (config.Checkpoint.SectionIndex) * params.CHTFrequency
 		h.checkpointHash = config.Checkpoint.SectionHead
 	}
+
 	// Construct the downloader (long sync) and its backing state bloom if fast
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
@@ -199,7 +201,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// case when starting new networks, where the genesis might be ancient (0 unix)
 		// which would prevent full nodes from accepting it.
 		if h.chain.GetLastFinalizedNumber() < h.checkpointNumber {
-			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash())
 			return 0, nil, nil
 		}
 		// If fast sync is running, deny importing weird blocks. This is a problematic
