@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/tyler-smith/go-bip39"
 	"github.com/waterfall-foundation/gwat/accounts"
 	"github.com/waterfall-foundation/gwat/accounts/abi"
 	"github.com/waterfall-foundation/gwat/accounts/keystore"
@@ -46,7 +47,6 @@ import (
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/rlp"
 	"github.com/waterfall-foundation/gwat/rpc"
-	"github.com/tyler-smith/go-bip39"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -2057,3 +2057,8 @@ func NewPublicDagAPI(b Backend) *PublicDagAPI {
 func (api *PublicDagAPI) Sync(ctx context.Context, data *dag.ConsensusInfo) (*dag.ConsensusResult, error) {
 	return api.b.Dag().HandleConsensus(data), nil
 }
+
+//// Sync retrieves the seed hash of a block.
+//func (api *PublicDagAPI) Sync(ctx context.Context, data *dag.ConsensusInfo) (*dag.ConsensusResult, error) {
+//	return api.b.Dag().HandleConsensus(data), nil
+//}
