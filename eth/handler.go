@@ -173,7 +173,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		h.checkpointNumber = (config.Checkpoint.SectionIndex) * params.CHTFrequency
 		h.checkpointHash = config.Checkpoint.SectionHead
 	}
-
 	// Construct the downloader (long sync) and its backing state bloom if fast
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
