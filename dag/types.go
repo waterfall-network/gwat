@@ -24,8 +24,19 @@ func (ci *ConsensusInfo) Copy() *ConsensusInfo {
 }
 
 // ConsensusResult represents result of handling of consensus request
+// todo deprecated
 type ConsensusResult struct {
 	Error      *string              `json:"error"`
 	Info       *map[string]string   `json:"info"`
+	Candidates *finalizer.NrHashMap `json:"candidates"`
+}
+
+type FinalizationResult struct {
+	Error *string            `json:"error"`
+	Info  *map[string]string `json:"info"`
+}
+
+type CandidatesResult struct {
+	Error      *string              `json:"error"`
 	Candidates *finalizer.NrHashMap `json:"candidates"`
 }

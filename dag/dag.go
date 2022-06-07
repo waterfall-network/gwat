@@ -75,6 +75,7 @@ func (d *Dag) Creator() *creator.Creator {
 // 2. collect next finalization candidates
 // 3. new block creation
 // 4. return result
+// todo deprecated
 func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
@@ -150,6 +151,99 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	if len(errs) > 0 {
 		strBuf, _ := json.Marshal(errs)
 		estr := string(strBuf)
+		res.Error = &estr
+	}
+	log.Info("Handle Consensus: response", "result", res)
+	return res
+}
+
+// HandleFinalize handles consensus data
+// 1. blocks finalization
+// 3. new block creation
+// 4. return result
+func (d *Dag) HandleFinalize(data *ConsensusInfo) *FinalizationResult {
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+
+	errs := map[string]string{}
+
+	d.setConsensusInfo(data)
+
+	log.Info("Handle Consensus: start", "data", data)
+
+	// finalization
+	if len(data.Finalizing) > 0 {
+		if err := d.finalizer.Finalize(*data.Finalizing.Copy()); err != nil {
+			errs["finalization"] = err.Error()
+		}
+	}
+
+	log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
+
+	// create block
+	tips, unloaded := d.bc.ReviseTips()
+	dagSlots := d.countDagSlots(tips)
+
+	log.Info("Handle Consensus: create condition",
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
+		"IsRunning", d.creator.IsRunning(),
+		"errs", errs,
+		"unloaded", unloaded,
+		"dagSlots", dagSlots,
+	)
+
+	if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+		assigned := &creator.Assignment{
+			Slot:     data.Slot,
+			Epoch:    data.Epoch,
+			Creators: data.Creators,
+		}
+
+		go func() {
+			crtStart := time.Now()
+			crtInfo := map[string]string{}
+			block, crtErr := d.creator.CreateBlock(assigned, tips)
+			if crtErr != nil {
+				crtInfo["error"] = crtErr.Error()
+			}
+			if block != nil {
+				crtInfo["newBlock"] = block.Hash().Hex()
+			}
+			log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+		}()
+	}
+
+	res := &FinalizationResult{
+		Error: nil,
+	}
+	if len(errs) > 0 {
+		strBuf, _ := json.Marshal(errs)
+		estr := string(strBuf)
+		res.Error = &estr
+	}
+	log.Info("Handle Consensus: response", "result", res)
+	return res
+}
+
+// HandleGetCandidates collect next finalization candidates
+func (d *Dag) HandleGetCandidates() *CandidatesResult {
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+
+	tstart := time.Now()
+
+	// collect next finalization candidates
+	candidates, err := d.finalizer.GetFinalizingCandidates()
+	if candidates == nil || len(*candidates) == 0 {
+		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
+	}
+	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
+	res := &CandidatesResult{
+		Error:      nil,
+		Candidates: candidates,
+	}
+	if err != nil {
+		estr := err.Error()
 		res.Error = &estr
 	}
 	log.Info("Handle Consensus: response", "result", res)
