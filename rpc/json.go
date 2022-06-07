@@ -63,7 +63,7 @@ func (msg *jsonrpcMessage) isNotification() bool {
 
 // isDagSync if request is a call of consensus api
 func (msg *jsonrpcMessage) isDagSync() bool {
-	return msg.Method == "dag_sync"
+	return msg.Method == "dag_sync" || msg.Method == "dag_finalize"
 }
 
 func (msg *jsonrpcMessage) isCall() bool {

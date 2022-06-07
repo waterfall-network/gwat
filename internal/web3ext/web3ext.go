@@ -860,6 +860,15 @@ web3._extend({
 			call: 'dag_sync',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'finalize',
+			call: 'dag_finalize',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getCandidates',
+			call: 'dag_getCandidates',
+		}),
 	]
 });
 `

@@ -2053,12 +2053,18 @@ func NewPublicDagAPI(b Backend) *PublicDagAPI {
 	return &PublicDagAPI{b}
 }
 
-// Sync retrieves the seed hash of a block.
+// Sync start consensus procedure.
+// deprecated
 func (api *PublicDagAPI) Sync(ctx context.Context, data *dag.ConsensusInfo) (*dag.ConsensusResult, error) {
 	return api.b.Dag().HandleConsensus(data), nil
 }
 
-//// Sync retrieves the seed hash of a block.
-//func (api *PublicDagAPI) Sync(ctx context.Context, data *dag.ConsensusInfo) (*dag.ConsensusResult, error) {
-//	return api.b.Dag().HandleConsensus(data), nil
-//}
+// Finalize finalise blocks.
+func (api *PublicDagAPI) Finalize(ctx context.Context, data *dag.ConsensusInfo) (*dag.FinalizationResult, error) {
+	return api.b.Dag().HandleFinalize(data), nil
+}
+
+// HandleGetCandidates retrieves finalization candidates.
+func (api *PublicDagAPI) GetCandidates(ctx context.Context) (*dag.CandidatesResult, error) {
+	return api.b.Dag().HandleGetCandidates(), nil
+}

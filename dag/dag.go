@@ -159,8 +159,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 
 // HandleFinalize handles consensus data
 // 1. blocks finalization
-// 3. new block creation
-// 4. return result
+// 2. new block creation
 func (d *Dag) HandleFinalize(data *ConsensusInfo) *FinalizationResult {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
