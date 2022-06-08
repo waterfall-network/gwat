@@ -624,23 +624,22 @@ func TestApproveOperation(t *testing.T) {
 
 func TestSafeTransferFromOperation(t *testing.T) {
 	type decodedOp struct {
-		transferFromOp transferFromOperation
-		data           []byte
+		op    Std
+		to    common.Address
+		value *big.Int
+		from  common.Address
+		data  []byte
 	}
 
 	cases := []testCase{
 		{
 			caseName: "SafeTransferFromOperation 1",
 			decoded: decodedOp{
-				transferFromOp: transferFromOperation{
-					transferOperation: transferOperation{
-						operation:      operation{StdWRC721},
-						valueOperation: valueOperation{value},
-						toOperation:    toOperation{to},
-					},
-					FromAddress: from,
-				},
-				data: data,
+				op:    StdWRC721,
+				to:    to,
+				value: value,
+				from:  from,
+				data:  data,
 			},
 			encoded: []byte{
 				243, 41, 248, 150, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 141, 243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5,
@@ -650,15 +649,11 @@ func TestSafeTransferFromOperation(t *testing.T) {
 		{
 			caseName: "SafeTransferFromOperation 2",
 			decoded: decodedOp{
-				transferFromOp: transferFromOperation{
-					transferOperation: transferOperation{
-						operation:      operation{StdWRC721},
-						valueOperation: valueOperation{},
-						toOperation:    toOperation{to},
-					},
-					FromAddress: from,
-				},
-				data: nil,
+				op:    StdWRC721,
+				to:    to,
+				value: nil,
+				from:  from,
+				data:  nil,
 			},
 			encoded: []byte{
 				243, 41, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 128,
@@ -668,15 +663,11 @@ func TestSafeTransferFromOperation(t *testing.T) {
 		{
 			caseName: "SafeTransferFromOperation 3",
 			decoded: decodedOp{
-				transferFromOp: transferFromOperation{
-					transferOperation: transferOperation{
-						operation:      operation{},
-						valueOperation: valueOperation{value},
-						toOperation:    toOperation{to},
-					},
-					FromAddress: common.Address{},
-				},
-				data: nil,
+				op:    0,
+				to:    to,
+				value: value,
+				from:  common.Address{},
+				data:  nil,
 			},
 			encoded: []byte{
 				243, 41, 248, 135, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
@@ -686,15 +677,11 @@ func TestSafeTransferFromOperation(t *testing.T) {
 		{
 			caseName: "SafeTransferFromOperation 4",
 			decoded: decodedOp{
-				transferFromOp: transferFromOperation{
-					transferOperation: transferOperation{
-						operation:      operation{StdWRC721},
-						valueOperation: valueOperation{},
-						toOperation:    toOperation{},
-					},
-					FromAddress: from,
-				},
-				data: nil,
+				op:    StdWRC721,
+				to:    common.Address{},
+				value: nil,
+				from:  from,
+				data:  nil,
 			},
 			encoded: []byte{
 				243, 41, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -707,9 +694,9 @@ func TestSafeTransferFromOperation(t *testing.T) {
 		o := i.(decodedOp)
 
 		op, err := NewSafeTransferFromOperation(
-			o.transferFromOp.FromAddress,
-			o.transferFromOp.toOperation.ToAddress,
-			o.transferFromOp.valueOperation.TokenValue,
+			o.from,
+			o.to,
+			o.value,
 			o.data,
 		)
 		if err != nil {
@@ -750,7 +737,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.data, data)
 		}
 
-		err = checkBigInt(opDecoded.Value(), o.transferFromOp.valueOperation.TokenValue)
+		err = checkBigInt(opDecoded.Value(), o.value)
 		if err != nil {
 			return err
 		}
@@ -763,20 +750,20 @@ func TestSafeTransferFromOperation(t *testing.T) {
 
 func TestTransferFromOperation(t *testing.T) {
 	type decodedOp struct {
-		transferOp transferOperation
-		from       common.Address
+		op    Std
+		to    common.Address
+		value *big.Int
+		from  common.Address
 	}
 
 	cases := []testCase{
 		{
 			caseName: "TransferFromOperation 1",
 			decoded: decodedOp{
-				transferOp: transferOperation{
-					operation:      operation{StdWRC20},
-					valueOperation: valueOperation{value},
-					toOperation:    toOperation{to},
-				},
-				from: from,
+				op:    StdWRC20,
+				to:    to,
+				value: value,
+				from:  from,
 			},
 			encoded: []byte{
 				243, 31, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
@@ -786,12 +773,10 @@ func TestTransferFromOperation(t *testing.T) {
 		{
 			caseName: "TransferFromOperation 2",
 			decoded: decodedOp{
-				transferOp: transferOperation{
-					operation:      operation{StdWRC721},
-					valueOperation: valueOperation{id},
-					toOperation:    toOperation{to},
-				},
-				from: from,
+				op:    StdWRC721,
+				to:    to,
+				value: id,
+				from:  from,
 			},
 			encoded: []byte{
 				243, 31, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 130, 48, 57, 128, 128, 128,
@@ -801,12 +786,10 @@ func TestTransferFromOperation(t *testing.T) {
 		{
 			caseName: "TransferFromOperation 3",
 			decoded: decodedOp{
-				transferOp: transferOperation{
-					operation:      operation{StdWRC721},
-					valueOperation: valueOperation{id},
-					toOperation:    toOperation{to},
-				},
-				from: common.Address{},
+				op:    StdWRC721,
+				to:    to,
+				value: value,
+				from:  common.Address{},
 			},
 			encoded: []byte{
 				243, 31, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 130, 48, 57, 128, 128, 128,
@@ -816,12 +799,10 @@ func TestTransferFromOperation(t *testing.T) {
 		{
 			caseName: "TransferFromOperation 4",
 			decoded: decodedOp{
-				transferOp: transferOperation{
-					operation:      operation{StdWRC20},
-					valueOperation: valueOperation{value},
-					toOperation:    toOperation{},
-				},
-				from: from,
+				op:    StdWRC20,
+				to:    common.Address{},
+				value: value,
+				from:  from,
 			},
 			encoded: []byte{
 				243, 31, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
@@ -834,10 +815,10 @@ func TestTransferFromOperation(t *testing.T) {
 		o := i.(decodedOp)
 
 		op, err := NewTransferFromOperation(
-			o.transferOp.operation.Std,
+			o.op,
 			o.from,
-			o.transferOp.toOperation.ToAddress,
-			o.transferOp.valueOperation.TokenValue,
+			o.to,
+			o.value,
 		)
 		if err != nil {
 			return err
@@ -863,12 +844,12 @@ func TestTransferFromOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, o.transferOp.operation.Std)
+		err = checkOpCodeAndStandart(b, opDecoded, o.op)
 		if err != nil {
 			return err
 		}
 
-		err = checkBigInt(opDecoded.Value(), o.transferOp.valueOperation.TokenValue)
+		err = checkBigInt(opDecoded.Value(), o.value)
 		if err != nil {
 			return err
 		}
@@ -877,8 +858,8 @@ func TestTransferFromOperation(t *testing.T) {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.From(), from)
 		}
 
-		if o.transferOp.toOperation.ToAddress != opDecoded.To() {
-			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.To(), o.transferOp.toOperation.ToAddress)
+		if o.to != opDecoded.To() {
+			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.To(), o.to)
 		}
 
 		return nil
