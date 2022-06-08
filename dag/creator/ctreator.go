@@ -811,6 +811,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		"lastBlueIx", lastBlueIx,
 		"len(tmpDagChainHashes)", len(tmpDagChainHashes),
 		"redCount", redCount,
+		"lastBlueHash", lastBlueHash,
+		"tmpDagChainHashes", tmpDagChainHashes,
 	)
 
 	log.Info("Creator data", "tips", tips.Print())
