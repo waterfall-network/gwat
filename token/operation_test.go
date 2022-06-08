@@ -2,9 +2,9 @@ package token
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"log"
 	"math/big"
 	"testing"
 )
@@ -27,6 +27,13 @@ var (
 	data        = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
 )
 
+type testCase struct {
+	caseName string
+	decoded  interface{}
+	encoded  []byte
+	errs     []error
+}
+
 func TestMintOperation(t *testing.T) {
 	type decodedOp struct {
 		op   Std
@@ -35,13 +42,7 @@ func TestMintOperation(t *testing.T) {
 		data []byte
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "mintOperation 1",
 			decoded: decodedOp{
@@ -53,6 +54,7 @@ func TestMintOperation(t *testing.T) {
 			encoded: []byte{
 				243, 38, 248, 149, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 141, 243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "mintOperation 2",
@@ -65,6 +67,7 @@ func TestMintOperation(t *testing.T) {
 			encoded: []byte{
 				243, 38, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoTokenId},
 		},
 		{
 			caseName: "mintOperation 3",
@@ -77,6 +80,7 @@ func TestMintOperation(t *testing.T) {
 			encoded: []byte{
 				243, 38, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoTo, ErrNoTokenId},
 		},
 		{
 			caseName: "mintOperation 4",
@@ -89,10 +93,13 @@ func TestMintOperation(t *testing.T) {
 			encoded: []byte{
 				243, 38, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewMintOperation(
 			o.to,
 			o.id,
@@ -110,22 +117,19 @@ func TestMintOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(MintOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != StdWRC721 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.op, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -136,7 +140,7 @@ func TestMintOperation(t *testing.T) {
 
 		haveData, ok := opDecoded.Metadata()
 		if !ok {
-			log.Printf("have data is empty")
+			t.Log("have data is empty")
 		}
 
 		if !bytes.Equal(haveData, o.data) {
@@ -151,33 +155,7 @@ func TestMintOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoTo, ErrNoTokenId:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoTo, ErrNoTokenId, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestSetApprovalForAllOperation(t *testing.T) {
@@ -187,13 +165,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 		approve  bool
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "setApprovalForAllOperation 1",
 			decoded: decodedOp{
@@ -204,6 +176,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			encoded: []byte{
 				243, 37, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 1, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "setApprovalForAllOperation 2",
@@ -213,7 +186,9 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 				approve:  true,
 			},
 			encoded: []byte{
-				243, 37, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 1, 128},
+				243, 37, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 1, 128,
+			},
+			errs: []error{ErrNoOperator},
 		},
 		{
 			caseName: "setApprovalForAllOperation 3",
@@ -224,7 +199,9 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 				approve:  false,
 			},
 			encoded: []byte{
-				243, 37, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128},
+				243, 37, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{},
 		},
 		{
 			caseName: "setApprovalForAllOperation 4",
@@ -236,10 +213,13 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			encoded: []byte{
 				243, 37, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoOperator},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewSetApprovalForAllOperation(
 			o.operator,
 			o.approve,
@@ -256,22 +236,19 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(SetApprovalForAllOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != StdWRC721 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.op, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -289,33 +266,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoOperator:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoOperator, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestIsApprovedForAllOperation(t *testing.T) {
@@ -326,13 +277,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 		operator common.Address
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "isApprovedForAllOperation 1",
 			decoded: decodedOp{
@@ -342,7 +287,9 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 				operator: operator,
 			},
 			encoded: []byte{
-				243, 36, 248, 134, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128},
+				243, 36, 248, 134, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{},
 		},
 		{
 			caseName: "setApprovalForAllOperation 2",
@@ -355,6 +302,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			encoded: []byte{
 				243, 36, 248, 132, 20, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoOwner},
 		},
 		{
 			caseName: "setApprovalForAllOperation 3",
@@ -365,7 +313,9 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 				operator: operator,
 			},
 			encoded: []byte{
-				243, 36, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128},
+				243, 36, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{ErrNoAddress},
 		},
 		{
 			caseName: "setApprovalForAllOperation 4",
@@ -378,10 +328,13 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			encoded: []byte{
 				243, 36, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoOperator},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewIsApprovedForAllOperation(
 			o.address,
 			o.owner,
@@ -399,22 +352,19 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(IsApprovedForAllOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != StdWRC721 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -437,33 +387,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoOperator, ErrNoOwner, ErrNoAddress:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoOperator, ErrNoOwner, ErrNoAddress, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestAllowanceOperation(t *testing.T) {
@@ -474,13 +398,7 @@ func TestAllowanceOperation(t *testing.T) {
 		spender common.Address
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "AllowanceOperation 1",
 			decoded: decodedOp{
@@ -490,7 +408,9 @@ func TestAllowanceOperation(t *testing.T) {
 				spender: spender,
 			},
 			encoded: []byte{
-				243, 35, 248, 132, 20, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128},
+				243, 35, 248, 132, 20, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{},
 		},
 		{
 			caseName: "AllowanceOperation 2",
@@ -503,6 +423,7 @@ func TestAllowanceOperation(t *testing.T) {
 			encoded: []byte{
 				243, 35, 248, 132, 20, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoOwner},
 		},
 		{
 			caseName: "AllowanceOperation 3",
@@ -515,6 +436,7 @@ func TestAllowanceOperation(t *testing.T) {
 			encoded: []byte{
 				243, 35, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoAddress},
 		},
 		{
 			caseName: "AllowanceOperation 4",
@@ -525,11 +447,15 @@ func TestAllowanceOperation(t *testing.T) {
 				spender: common.Address{},
 			},
 			encoded: []byte{
-				243, 35, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128},
+				243, 35, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{ErrNoSpender},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewAllowanceOperation(
 			o.address,
 			o.owner,
@@ -547,22 +473,19 @@ func TestAllowanceOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(AllowanceOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != StdWRC20 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", StdWRC20, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, StdWRC20)
 		if err != nil {
 			return err
 		}
@@ -585,33 +508,7 @@ func TestAllowanceOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoSpender, ErrNoOwner, ErrNoAddress, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoSpender, ErrNoOwner, ErrNoAddress:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestApproveOperation(t *testing.T) {
@@ -621,13 +518,7 @@ func TestApproveOperation(t *testing.T) {
 		value   *big.Int
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "ApproveOperation 1",
 			decoded: decodedOp{
@@ -638,6 +529,7 @@ func TestApproveOperation(t *testing.T) {
 			encoded: []byte{
 				243, 13, 248, 137, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "ApproveOperation 2",
@@ -649,6 +541,7 @@ func TestApproveOperation(t *testing.T) {
 			encoded: []byte{
 				243, 13, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "ApproveOperation 3",
@@ -660,6 +553,7 @@ func TestApproveOperation(t *testing.T) {
 			encoded: []byte{
 				243, 13, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoValue},
 		},
 		{
 			caseName: "ApproveOperation 4",
@@ -671,10 +565,13 @@ func TestApproveOperation(t *testing.T) {
 			encoded: []byte{
 				243, 13, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoSpender, ErrNoValue},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewApproveOperation(
 			o.op,
 			o.spender,
@@ -692,22 +589,19 @@ func TestApproveOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(ApproveOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != o.op {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.op, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, o.op)
 		if err != nil {
 			return err
 		}
@@ -725,33 +619,7 @@ func TestApproveOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoSpender, ErrNoValue:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoSpender, ErrNoValue, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestSafeTransferFromOperation(t *testing.T) {
@@ -760,13 +628,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 		data           []byte
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "SafeTransferFromOperation 1",
 			decoded: decodedOp{
@@ -783,6 +645,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 41, 248, 150, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 141, 243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "SafeTransferFromOperation 2",
@@ -800,6 +663,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 41, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoValue},
 		},
 		{
 			caseName: "SafeTransferFromOperation 3",
@@ -817,6 +681,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 41, 248, 135, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
 			},
+			errs: []error{ErrNoFrom},
 		},
 		{
 			caseName: "SafeTransferFromOperation 4",
@@ -834,10 +699,13 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 41, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoTo, ErrNoValue},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewSafeTransferFromOperation(
 			o.transferFromOp.FromAddress,
 			o.transferFromOp.toOperation.ToAddress,
@@ -856,22 +724,19 @@ func TestSafeTransferFromOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(SafeTransferFromOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != StdWRC721 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -893,33 +758,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoFrom, ErrNoTo, ErrNoValue:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoFrom, ErrNoTo, ErrNoValue, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestTransferFromOperation(t *testing.T) {
@@ -928,13 +767,7 @@ func TestTransferFromOperation(t *testing.T) {
 		from       common.Address
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "TransferFromOperation 1",
 			decoded: decodedOp{
@@ -948,6 +781,7 @@ func TestTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 31, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "TransferFromOperation 2",
@@ -962,6 +796,7 @@ func TestTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 31, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 130, 48, 57, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "TransferFromOperation 3",
@@ -976,6 +811,7 @@ func TestTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 31, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 130, 48, 57, 128, 128, 128,
 			},
+			errs: []error{ErrNoFrom},
 		},
 		{
 			caseName: "TransferFromOperation 4",
@@ -990,10 +826,13 @@ func TestTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 31, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
 			},
+			errs: []error{ErrNoTo},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewTransferFromOperation(
 			o.transferOp.operation.Std,
 			o.from,
@@ -1012,22 +851,19 @@ func TestTransferFromOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(TransferFromOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != o.transferOp.operation.Std {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.transferOp.operation.Std, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, o.transferOp.operation.Std)
 		if err != nil {
 			return err
 		}
@@ -1048,33 +884,7 @@ func TestTransferFromOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoFrom, ErrNoTo, ErrNoValue:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoFrom, ErrNoTo, ErrNoValue, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestTransferOperation(t *testing.T) {
@@ -1084,13 +894,7 @@ func TestTransferOperation(t *testing.T) {
 		to    common.Address
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "TransferOperation 1",
 			decoded: decodedOp{
@@ -1101,6 +905,7 @@ func TestTransferOperation(t *testing.T) {
 			encoded: []byte{
 				243, 30, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "TransferOperation 2",
@@ -1112,6 +917,7 @@ func TestTransferOperation(t *testing.T) {
 			encoded: []byte{
 				243, 30, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoTo, ErrNoValue},
 		},
 		{
 			caseName: "TransferOperation 3",
@@ -1123,6 +929,7 @@ func TestTransferOperation(t *testing.T) {
 			encoded: []byte{
 				243, 30, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
 			},
+			errs: []error{ErrNoTo},
 		},
 		{
 			caseName: "TransferOperation 4",
@@ -1134,21 +941,13 @@ func TestTransferOperation(t *testing.T) {
 			encoded: []byte{
 				243, 30, 248, 132, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoValue},
 		},
 	}
 
-	for _, o := range operations {
-		m := transferOperation{
-			operation:      operation{o.decoded.op},
-			valueOperation: valueOperation{o.decoded.value},
-			toOperation:    toOperation{o.decoded.to},
-		}
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
 
-		t, _ := EncodeToBytes(&m)
-		log.Printf("Case %s\nBytes %+v", o.caseName, t)
-	}
-
-	operationEncode := func(o decodedOp, b []byte) error {
 		op, err := NewTransferOperation(
 			o.to,
 			o.value,
@@ -1165,22 +964,19 @@ func TestTransferOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(TransferOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != o.op {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.op, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, o.op)
 		if err != nil {
 			return err
 		}
@@ -1197,33 +993,7 @@ func TestTransferOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoTo, ErrNoValue:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoTo, ErrNoValue, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestBalanceOfOperation(t *testing.T) {
@@ -1233,13 +1003,7 @@ func TestBalanceOfOperation(t *testing.T) {
 		owner   common.Address
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "BalanceOfOperation 1",
 			decoded: decodedOp{
@@ -1250,6 +1014,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "BalanceOfOperation 2",
@@ -1261,6 +1026,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "TransferOperation 3",
@@ -1272,6 +1038,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoOwner},
 		},
 		{
 			caseName: "TransferOperation 4",
@@ -1283,10 +1050,13 @@ func TestBalanceOfOperation(t *testing.T) {
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoAddress},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewBalanceOfOperation(
 			o.address,
 			o.owner,
@@ -1303,22 +1073,19 @@ func TestBalanceOfOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(BalanceOfOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != 0 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", 0, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, 0)
 		if err != nil {
 			return err
 		}
@@ -1334,33 +1101,7 @@ func TestBalanceOfOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoAddress, ErrNoOwner:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoAddress, ErrNoOwner, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestBurnOperation(t *testing.T) {
@@ -1369,13 +1110,7 @@ func TestBurnOperation(t *testing.T) {
 		id *big.Int
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "BurnOperation 1",
 			decoded: decodedOp{
@@ -1385,6 +1120,7 @@ func TestBurnOperation(t *testing.T) {
 			encoded: []byte{
 				243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "BurnOperation 2",
@@ -1395,6 +1131,7 @@ func TestBurnOperation(t *testing.T) {
 			encoded: []byte{
 				243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "BurnOperation 3",
@@ -1405,6 +1142,7 @@ func TestBurnOperation(t *testing.T) {
 			encoded: []byte{
 				243, 39, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoTokenId},
 		},
 		{
 			caseName: "BurnOperation 4",
@@ -1413,11 +1151,15 @@ func TestBurnOperation(t *testing.T) {
 				id: id,
 			},
 			encoded: []byte{
-				243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128},
+				243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewBurnOperation(
 			o.id,
 		)
@@ -1433,22 +1175,19 @@ func TestBurnOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(BurnOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != StdWRC721 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -1461,33 +1200,7 @@ func TestBurnOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoTokenId:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoTokenId, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestTokenOfOwnerByIndexOperation(t *testing.T) {
@@ -1498,13 +1211,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 		index   *big.Int
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "TokenOfOwnerByIndexOperation 1",
 			decoded: decodedOp{
@@ -1516,6 +1223,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			encoded: []byte{
 				243, 40, 248, 136, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 130, 217, 3, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "TokenOfOwnerByIndexOperation 2",
@@ -1528,6 +1236,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			encoded: []byte{
 				243, 40, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 130, 217, 3, 128, 128,
 			},
+			errs: []error{ErrNoAddress},
 		},
 		{
 			caseName: "TokenOfOwnerByIndexOperation 3",
@@ -1540,6 +1249,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			encoded: []byte{
 				243, 40, 248, 136, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 130, 217, 3, 128, 128,
 			},
+			errs: []error{ErrNoOwner},
 		},
 		{
 			caseName: "TokenOfOwnerByIndexOperation 4",
@@ -1552,10 +1262,13 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			encoded: []byte{
 				243, 40, 248, 134, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoIndex},
 		},
 	}
 
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
 		op, err := NewTokenOfOwnerByIndexOperation(
 			o.address,
 			o.owner,
@@ -1573,22 +1286,19 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(TokenOfOwnerByIndexOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != StdWRC721 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", StdWRC721, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -1609,33 +1319,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoIndex, ErrNoOwner, ErrNoAddress:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoIndex, ErrNoOwner, ErrNoAddress, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestPropertiesOperation(t *testing.T) {
@@ -1644,13 +1328,7 @@ func TestPropertiesOperation(t *testing.T) {
 		id      *big.Int
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "PropertiesOperation 1",
 			decoded: decodedOp{
@@ -1660,6 +1338,7 @@ func TestPropertiesOperation(t *testing.T) {
 			encoded: []byte{
 				243, 33, 248, 134, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{},
 		},
 		{
 			caseName: "PropertiesOperation 2",
@@ -1670,6 +1349,7 @@ func TestPropertiesOperation(t *testing.T) {
 			encoded: []byte{
 				243, 33, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoTokenId},
 		},
 		{
 			caseName: "PropertiesOperation 3",
@@ -1680,6 +1360,7 @@ func TestPropertiesOperation(t *testing.T) {
 			encoded: []byte{
 				243, 33, 248, 134, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoAddress},
 		},
 		{
 			caseName: "PropertiesOperation 4",
@@ -1690,20 +1371,13 @@ func TestPropertiesOperation(t *testing.T) {
 			encoded: []byte{
 				243, 33, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
+			errs: []error{ErrNoAddress, ErrNoTokenId},
 		},
 	}
 
-	for _, o := range operations {
-		m := propertiesOperation{
-			addressOperation: addressOperation{o.decoded.address},
-			Id:               o.decoded.id,
-		}
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
 
-		t, _ := EncodeToBytes(&m)
-		log.Printf("Case %s\nBytes %+v", o.caseName, t)
-	}
-
-	operationEncode := func(o decodedOp, b []byte) error {
 		op, err := NewPropertiesOperation(
 			o.address,
 			o.id,
@@ -1720,29 +1394,26 @@ func TestPropertiesOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(PropertiesOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != 0 {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", 0, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, 0)
 		if err != nil {
 			return err
 		}
 
 		tokenId, ok := opDecoded.TokenId()
 		if !ok {
-			return fmt.Errorf("invalid tokenId")
+			return errors.New("invalid tokenId")
 		}
 
 		err = checkBigInt(tokenId, o.id)
@@ -1757,33 +1428,7 @@ func TestPropertiesOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
-		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
-			if err != nil {
-				switch err {
-				case ErrNoAddress:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-
-		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
-			if err != nil {
-				switch err {
-				case ErrNoAddress, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
-				}
-			}
-		})
-	}
+	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
 func TestCreateOperationOperation(t *testing.T) {
@@ -1796,13 +1441,7 @@ func TestCreateOperationOperation(t *testing.T) {
 		baseURI     []byte
 	}
 
-	type op struct {
-		caseName string
-		decoded  decodedOp
-		encoded  []byte
-	}
-
-	operations := []op{
+	cases := []testCase{
 		{
 			caseName: "CreateOperation 1",
 			decoded: decodedOp{
@@ -1816,6 +1455,7 @@ func TestCreateOperationOperation(t *testing.T) {
 			encoded: []byte{
 				243, 12, 212, 20, 139, 84, 101, 115, 116, 32, 84, 111, 107, 107, 101, 110, 130, 84, 84, 130, 39, 15, 100,
 			},
+			errs: []error{ErrNoBaseURI},
 		},
 		{
 			caseName: "CreateOperation 2",
@@ -1830,6 +1470,7 @@ func TestCreateOperationOperation(t *testing.T) {
 			encoded: []byte{
 				243, 12, 227, 130, 2, 209, 139, 84, 101, 115, 116, 32, 84, 111, 107, 107, 101, 110, 130, 84, 84, 128, 128, 142, 116, 101, 115, 116, 46, 116, 111, 107, 101, 110, 46, 99, 111, 109,
 			},
+			errs: []error{ErrNoTokenSupply},
 		},
 		{
 			caseName: "CreateOperation 3",
@@ -1844,6 +1485,7 @@ func TestCreateOperationOperation(t *testing.T) {
 			encoded: []byte{
 				243, 12, 223, 128, 139, 84, 101, 115, 116, 32, 84, 111, 107, 107, 101, 110, 128, 128, 100, 142, 116, 101, 115, 116, 46, 116, 111, 107, 101, 110, 46, 99, 111, 109,
 			},
+			errs: []error{ErrNoTokenSupply, ErrNoSymbol},
 		},
 		{
 			caseName: "CreateOperation 4",
@@ -1858,24 +1500,12 @@ func TestCreateOperationOperation(t *testing.T) {
 			encoded: []byte{
 				243, 12, 214, 130, 2, 209, 139, 84, 101, 115, 116, 32, 84, 111, 107, 107, 101, 110, 130, 84, 84, 130, 39, 15, 128,
 			},
+			errs: []error{ErrNoTokenSupply},
 		},
 	}
 
-	for _, o := range operations {
-		m := createOperation{
-			operation:   operation{o.decoded.op},
-			name:        o.decoded.name,
-			symbol:      o.decoded.symbol,
-			decimals:    o.decoded.decimals,
-			totalSupply: o.decoded.totalSupply,
-			baseURI:     o.decoded.baseURI,
-		}
-
-		t, _ := EncodeToBytes(&m)
-		log.Printf("Case %s\nBytes %+v", o.caseName, t)
-	}
-
-	operationEncode := func(o decodedOp, b []byte) error {
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
 		switch o.op {
 		case StdWRC20:
 			createOp, err := NewWrc20CreateOperation(
@@ -1911,22 +1541,19 @@ func TestCreateOperationOperation(t *testing.T) {
 		return nil
 	}
 
-	operationDecode := func(b []byte, o decodedOp) error {
+	operationDecode := func(b []byte, i interface{}) error {
 		op, err := DecodeBytes(b)
 		if err != nil {
 			return err
 		}
 
+		o := i.(decodedOp)
 		opDecoded, ok := op.(CreateOperation)
 		if !ok {
-			return fmt.Errorf("invalid operation type")
+			return errors.New("invalid operation type")
 		}
 
-		if opDecoded.Standard() != o.op {
-			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.op, opDecoded.Standard())
-		}
-
-		err = checkOpCode(b, opDecoded)
+		err = checkOpCodeAndStandart(b, opDecoded, o.op)
 		if err != nil {
 			return err
 		}
@@ -1964,36 +1591,36 @@ func TestCreateOperationOperation(t *testing.T) {
 		return nil
 	}
 
-	for _, op := range operations {
+	startSubTests(t, cases, operationEncode, operationDecode)
+}
+
+func startSubTests(t *testing.T, cases []testCase, operationEncode, operationDecode func([]byte, interface{}) error) {
+	for _, c := range cases {
 		t.Run("encoding", func(t *testing.T) {
-			err := operationEncode(op.decoded, op.encoded)
+			err := operationEncode(c.encoded, c.decoded)
 			if err != nil {
-				switch err {
-				case ErrNoName, ErrNoSymbol, ErrNoTokenSupply, ErrNoBaseURI:
-					t.Log(err)
-				default:
-					t.Logf("operationEncode: invalid test case %s", op.caseName)
-					t.Fatal(err)
+				if err = findNotCorrectError(err, c.errs); err != nil {
+					t.Fatalf("operationEncode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 				}
 			}
 		})
 
 		t.Run("decoding", func(t *testing.T) {
-			err := operationDecode(op.encoded, op.decoded)
+			err := operationDecode(c.encoded, c.decoded)
 			if err != nil {
-				switch err {
-				case ErrNoName, ErrNoSymbol, ErrNoTokenSupply, ErrNoBaseURI, ErrOpNotValid:
-					t.Log(err)
-				default:
-					t.Logf("operationDecode: invalid test case %s", op.caseName)
-					t.Fatal(err)
+				if err = findNotCorrectError(err, c.errs); err != nil {
+					t.Fatalf("operationDecode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 				}
 			}
 		})
 	}
 }
 
-func checkOpCode(b []byte, op Operation) error {
+func checkOpCodeAndStandart(b []byte, op Operation, std Std) error {
+	if op.Standard() != std {
+		return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", std, op.Standard())
+	}
+
 	haveOpCode, err := GetOpCode(b)
 	if err != nil {
 		return err
@@ -2032,4 +1659,14 @@ func equalOpBytes(op Operation, b []byte) error {
 	}
 
 	return nil
+}
+
+func findNotCorrectError(e error, arr []error) error {
+	for _, err := range arr {
+		if e == err {
+			return nil
+		}
+	}
+
+	return e
 }
