@@ -1941,7 +1941,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
 
 			if stateErr != nil {
-				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.TxHash().Hex(), "err", stateErr)
+				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.Hash().Hex(), "err", stateErr)
 				continue
 				//return it.index, stateErr
 			}
