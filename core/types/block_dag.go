@@ -255,6 +255,15 @@ func (gd *GraphDag) GetFinalityPoints() *common.HashArray {
 	}
 	lastHeight := lastFinGd.Number
 	for i, itm := range ancestorsLoaded {
+		log.Info("Ordering",
+			"i", i,
+			"calcNr", uint64(i)+lastHeight+1,
+			"height", itm.Height,
+			"isBlue", itm.Height == uint64(i)+lastHeight+1,
+			"hash", itm.Hash.Hex(),
+			"lastHeight", lastHeight,
+		)
+
 		if itm.Height == uint64(i)+lastHeight+1 {
 			*finalityPoints = append(*finalityPoints, itm.Hash)
 		}

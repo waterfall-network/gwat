@@ -2196,6 +2196,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 
 	statedb, err = bc.StateAt(stateBlock.Root())
 	if err != nil {
+		log.Error("Bad state", "stateHash", stateHash, "stateHeight", stateBlock.Height(), "finPoints", finPoints, "error", err)
 		return statedb, stateBlock, recommitBlocks, cachedHashes, err
 	}
 

@@ -813,6 +813,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		"redCount", redCount,
 	)
 
+	log.Info("Creator data", "tips", tips.Print())
+
 	header := &types.Header{
 		ParentHashes: tipsBlocks.Hashes(),
 		Epoch:        slotInfo.Epoch,
