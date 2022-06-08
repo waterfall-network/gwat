@@ -1916,13 +1916,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		//retrieve state data
 		statedb, stateBlock, recommitBlocks, cachedHashes, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
-		if stateErr != nil {
-			if stateBlock != nil {
-				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.TxHash().Hex(), "err", stateErr)
-			} else {
-				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
-			}
-
+		if stateErr != nil && stateBlock == nil {
+			log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
 			return it.index, stateErr
 		}
 
@@ -1944,6 +1939,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 				continue
 			}
 			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
+
+			if stateErr != nil {
+				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.TxHash().Hex(), "err", stateErr)
+				continue
+				//return it.index, stateErr
+			}
 		}
 
 		start := time.Now()
@@ -2196,7 +2197,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 
 	statedb, err = bc.StateAt(stateBlock.Root())
 	if err != nil {
-		log.Error("Bad state", "stateHash", stateHash, "stateHeight", stateBlock.Height(), "finPoints", finPoints, "error", err)
+		log.Error("Bad state", "stateHash", stateHash.Hex(), "stateHeight", stateBlock.Height(), "finPoints", finPoints, "error", err)
 		return statedb, stateBlock, recommitBlocks, cachedHashes, err
 	}
 
