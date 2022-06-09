@@ -66,9 +66,9 @@ func (tips Tips) GetOrderedDagChainHashes() common.HashArray {
 	dagHashes := tips.getOrderedHashes()
 	for _, dagHash := range dagHashes {
 		dag := tips.Get(dagHash)
-		allHashes = append(allHashes, dag.DagChainHashes...).Uniq()
+		allHashes = append(allHashes, dag.DagChainHashes...)
+		allHashes = append(allHashes, dagHash).Uniq()
 	}
-	allHashes = append(allHashes, dagHashes...)
 	return allHashes.Uniq()
 }
 
