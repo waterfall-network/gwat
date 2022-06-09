@@ -268,6 +268,15 @@ func (f *Finalizer) GetFinalizingCandidates() (*NrHashMap, error) {
 		count++
 	}
 	if lastBlock.Height() != nextFinNr-1 {
+		log.Error("Get finalized candidates",
+			"lastFinNr", lastFinNr,
+			"expHeight", nextFinNr-1,
+			"blHeight", lastBlock.Height(),
+			"blHash", lastBlock.Hash().Hex(),
+			"err", ErrMismatchFinalisingPosition,
+			"count", count,
+			"finDag", finDag.Print(),
+		)
 		return nil, ErrMismatchFinalisingPosition
 	}
 	return &candidates, nil
