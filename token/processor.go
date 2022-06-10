@@ -23,6 +23,7 @@ var (
 	ErrIncorrectTransferFrom   = errors.New("transfer from incorrect owner")
 	ErrWrongCaller             = errors.New("caller is not owner nor approved")
 	ErrWrongMinter             = errors.New("caller can't mint or burn NFTs")
+	ErrNotNilTo                = errors.New("address to is not nil")
 )
 
 // Ref represents caller of the token processor
@@ -68,6 +69,9 @@ func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []
 	ret = nil
 	switch v := op.(type) {
 	case CreateOperation:
+		if token != (common.Address{}) {
+			return nil, ErrNotNilTo
+		}
 		if addr, err := p.tokenCreate(caller, v); err == nil {
 			ret = addr.Bytes()
 		}
@@ -132,7 +136,6 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 		return common.Address{}, ErrStandardNotValid
 	}
 
-	log.Info("Create token", "address", tokenAddr)
 	storage.Flush()
 
 	return tokenAddr, nil
