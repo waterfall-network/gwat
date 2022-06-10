@@ -1931,16 +1931,17 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 				LastFinalizedHeight: 0,
 				DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
 			})
-			//if block is red - skip processing
-			upTips, _ := bc.ReviseTips()
-			finDag := upTips.GetFinalizingDag()
-			if finDag.Hash != block.Hash() {
-				log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
-				continue
-			}
+			// TODO RED BLOCKS
+			////if block is red - skip processing
+			//upTips, _ := bc.ReviseTips()
+			//finDag := upTips.GetFinalizingDag()
+			//if finDag.Hash != block.Hash() {
+			//	log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
+			//	continue
+			//}
 			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
 
-			if stateErr != nil {
+			if stateErr != nil || statedb == nil {
 				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.Hash().Hex(), "err", stateErr)
 				continue
 				//return it.index, stateErr
