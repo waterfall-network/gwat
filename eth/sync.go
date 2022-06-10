@@ -186,7 +186,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	_, dag := peer.GetDagInfo()
 	for _, hash := range *dag {
 		block := cs.handler.chain.GetBlockByHash(hash)
-		if len(localTips) == 0 && block.Nr() == lastFinNr {
+		if len(localTips) == 0 && block != nil && block.Nr() == lastFinNr {
 			// if remote tips set to last finalized block - do same
 			cs.handler.chain.ResetTips()
 			break
