@@ -22,8 +22,10 @@ var (
 	to            = common.HexToAddress("7dc9c9730689ff0b0fd506c67db815f12d90a448")
 	from          = common.HexToAddress("7986bad81f4cbd9317f5a46861437dae58d69113")
 	value         = big.NewInt(10)
-	id            = big.NewInt(1111)
-	idNFT         = big.NewInt(2222)
+	id            = big.NewInt(2221)
+	id2           = big.NewInt(2222)
+	id3           = big.NewInt(2223)
+	id4           = big.NewInt(2224)
 	totalSupply   = big.NewInt(100)
 	index         = big.NewInt(20)
 	decimals      = uint8(5)
@@ -209,17 +211,10 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 			errs: []error{nil},
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
-				mintOp, err := NewMintOperation(owner, id, data)
-				if err != nil {
-					t.Fatal(err)
-				}
 
-				_, err = p.Call(v.caller, v.tokenAddress, mintOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				mintNewToken(t, owner, wrc721Address, id, data, caller, c.errs)
 
-				balance := checkBalance(t, wrc20Address, owner)
+				balance := checkBalance(t, wrc721Address, owner)
 
 				approveOp, err := NewApproveOperation(StdWRC721, spender, id)
 				if err != nil {
@@ -235,7 +230,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
 				}
 
-				balanceAfter := checkBalance(t, wrc20Address, owner)
+				balanceAfter := checkBalance(t, wrc721Address, owner)
 
 				var res big.Int
 				if res.Sub(balance, big.NewInt(1)).Cmp(balanceAfter) != 0 {
@@ -245,7 +240,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 			},
 		},
 		{
-			caseName: "Not mint WRC721 token",
+			caseName: "Unknown caller",
 			testData: testData{
 				caller:       vm.AccountRef(owner),
 				tokenAddress: wrc721Address,
@@ -280,7 +275,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 }
 
 func TestProcessorMintOperationCall(t *testing.T) {
-	mintOp, err := NewMintOperation(owner, idNFT, data)
+	mintOp, err := NewMintOperation(owner, id2, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,8 +325,78 @@ func TestProcessorMintOperationCall(t *testing.T) {
 	}
 }
 
+func TestProcessorTransferOperationCall(t *testing.T) {
+	transferOp, err := NewTransferOperation(to, value)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []test{
+		{
+			caseName: "Correct transfer test",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: wrc20Address,
+			},
+			errs: []error{nil},
+			fn: func(c *test, a *common.Address) {
+				v := c.testData.(testData)
+				balance := checkBalance(t, wrc20Address, owner)
+
+				_, err = p.Call(v.caller, v.tokenAddress, transferOp)
+				if !checkError(err, c.errs) {
+					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
+				}
+
+				balanceAfter := checkBalance(t, wrc20Address, owner)
+
+				z := new(big.Int)
+				if balanceAfter.Cmp(z.Sub(balance, value)) != 0 {
+					t.Fatal()
+				}
+			},
+		}, {
+			caseName: "No empty address",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: common.Address{},
+			},
+			errs: []error{ErrNoAddress},
+			fn: func(c *test, a *common.Address) {
+				v := c.testData.(testData)
+				_, err = p.Call(v.caller, v.tokenAddress, transferOp)
+				if !checkError(err, c.errs) {
+					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
+				}
+			},
+		},
+		{
+			caseName: "Unknown caller",
+			testData: testData{
+				caller:       vm.AccountRef(address),
+				tokenAddress: wrc20Address,
+			},
+			errs: []error{ErrNotEnoughBalance},
+			fn: func(c *test, a *common.Address) {
+				v := c.testData.(testData)
+				_, err = p.Call(v.caller, v.tokenAddress, transferOp)
+				if !checkError(err, c.errs) {
+					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
+				}
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.caseName, func(t *testing.T) {
+			c.fn(&c, &common.Address{})
+		})
+	}
+
+}
+
 func TestProcessorBurnOperationCall(t *testing.T) {
-	burnOp, err := NewBurnOperation(idNFT)
+	burnOp, err := NewBurnOperation(id4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,6 +412,8 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
 
+				mintNewToken(t, owner, wrc721Address, id4, data, caller, c.errs)
+
 				balance := checkBalance(t, wrc721Address, owner)
 
 				_, err = p.Call(v.caller, v.tokenAddress, burnOp)
@@ -356,7 +423,8 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 
 				balanceAfter := checkBalance(t, wrc721Address, owner)
 
-				if balanceAfter.Sub(balance, big.NewInt(1)) != balanceAfter {
+				z := new(big.Int)
+				if balanceAfter.Cmp(z.Sub(balance, big.NewInt(1))) != 0 {
 					t.Fatal()
 				}
 			},
@@ -384,6 +452,80 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 	}
 }
 
+//TODO complete this test
+//func TestProcessorApprovalForAllOperation(t *testing.T) {
+//	op, err := NewSetApprovalForAllOperation(spender, true)
+//	if err != nil {
+//		t.Fatal()
+//	}
+//
+//	cases := []test{
+//		{
+//			caseName: "Correct test",
+//			testData: testData{
+//				caller:       vm.AccountRef(owner),
+//				tokenAddress: wrc721Address,
+//			},
+//			errs: []error{nil},
+//			fn: func(c *test, a *common.Address) {
+//				v := c.testData.(testData)
+//
+//				mintNewToken(t, owner, v.tokenAddress, id3, data, caller, c.errs)
+//
+//				_, err = p.Call(v.caller, v.tokenAddress, op)
+//				if !checkError(err, c.errs) {
+//					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
+//				}
+//
+//				transferOp, err := NewTransferFromOperation(StdWRC721, owner, to, id3)
+//				if err != nil {
+//					t.Fatal(err)
+//				}
+//
+//				_, err = p.Call(vm.AccountRef(spender), v.tokenAddress, transferOp)
+//				if !checkError(err, c.errs) {
+//					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
+//				}
+//
+//				transferOp2, err := NewTransferFromOperation(StdWRC721, owner, from, id3)
+//				if err != nil {
+//					t.Fatal(err)
+//				}
+//
+//				//
+//				//burnOp, err := NewBurnOperation(id3)
+//
+//				_, err = p.Call(vm.AccountRef(spender), v.tokenAddress, transferOp2)
+//				if !checkError(err, c.errs) {
+//					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
+//				}
+//
+//			},
+//		},
+//		//{
+//		//	caseName: "Unknown minter",
+//		//	testData: testData{
+//		//		caller:       vm.AccountRef(to),
+//		//		tokenAddress: wrc721Address,
+//		//	},
+//		//	errs: []error{ErrWrongMinter},
+//		//	fn: func(c *test, a *common.Address) {
+//		//		v := c.testData.(testData)
+//		//		_, err = p.Call(v.caller, v.tokenAddress, burnOp)
+//		//		if !checkError(err, c.errs) {
+//		//			t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
+//		//		}
+//		//	},
+//		//},
+//	}
+//
+//	for _, c := range cases {
+//		t.Run(c.caseName, func(t *testing.T) {
+//			c.fn(&c, &common.Address{})
+//		})
+//	}
+//}
+
 func checkError(e error, arr []error) bool {
 	for _, err := range arr {
 		if e == err {
@@ -406,4 +548,16 @@ func checkBalance(t *testing.T, tokenAddress, owner common.Address) *big.Int {
 	}
 
 	return balance
+}
+
+func mintNewToken(t *testing.T, owner, tokenAddress common.Address, id *big.Int, data []byte, caller Ref, errs []error) {
+	mintOp, err := NewMintOperation(owner, id, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = p.Call(caller, tokenAddress, mintOp)
+	if !checkError(err, errs) {
+		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", errs, err)
+	}
 }
