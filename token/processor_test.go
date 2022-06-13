@@ -81,6 +81,11 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
 				}
 				*a = common.BytesToAddress(adr)
+
+				balance := checkBalance(t, wrc20Address, owner)
+				if balance.Cmp(totalSupply) != 0 {
+					t.Fatal()
+				}
 			},
 		},
 		{
@@ -186,14 +191,8 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				if !checkError(err, c.errs) {
 					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
 				}
-				balanceOp, err := NewBalanceOfOperation(wrc20Address, owner)
-				if err != nil {
-					t.Fatal(err)
-				}
-				balance, err := p.BalanceOf(balanceOp)
-				if err != nil {
-					t.Fatal(err)
-				}
+
+				balance := checkBalance(t, wrc20Address, owner)
 
 				var z, res big.Int
 				if res.Sub(balance, z.Sub(totalSupply, value)).Cmp(big.NewInt(0)) != 0 {
@@ -220,14 +219,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
 				}
 
-				balanceOp, err := NewBalanceOfOperation(wrc721Address, owner)
-				if err != nil {
-					t.Fatal(err)
-				}
-				balance, err := p.BalanceOf(balanceOp)
-				if err != nil {
-					t.Fatal(err)
-				}
+				balance := checkBalance(t, wrc20Address, owner)
 
 				approveOp, err := NewApproveOperation(StdWRC721, spender, id)
 				if err != nil {
@@ -242,14 +234,8 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				if !checkError(err, c.errs) {
 					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
 				}
-				balanceAfterOp, err := NewBalanceOfOperation(wrc721Address, owner)
-				if err != nil {
-					t.Fatal(err)
-				}
-				balanceAfter, err := p.BalanceOf(balanceAfterOp)
-				if err != nil {
-					t.Fatal(err)
-				}
+
+				balanceAfter := checkBalance(t, wrc20Address, owner)
 
 				var res big.Int
 				if res.Sub(balance, big.NewInt(1)).Cmp(balanceAfter) != 0 {
@@ -314,14 +300,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
 				}
 
-				balanceOp, err := NewBalanceOfOperation(wrc721Address, owner)
-				if err != nil {
-					t.Fatal(err)
-				}
-				balance, err := p.BalanceOf(balanceOp)
-				if err != nil {
-					t.Fatal(err)
-				}
+				balance := checkBalance(t, wrc721Address, owner)
 
 				if balance.Cmp(big.NewInt(1)) != 0 {
 					t.Fatal()
