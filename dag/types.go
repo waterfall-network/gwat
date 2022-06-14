@@ -26,15 +26,26 @@ func (ci *ConsensusInfo) Copy() *ConsensusInfo {
 	}
 }
 
+type ConsensusInfoMarshaling struct {
+	Epoch      *hexutil.Uint64     `json:"epoch"`
+	Slot       *hexutil.Uint64     `json:"slot"`
+	Creators   []common.Address    `json:"creators"`
+	Finalizing finalizer.NrHashMap `json:"finalizing"`
+}
+
+func (ci *ConsensusInfo) MarshalJSON() ([]byte, error) {
+	out := ConsensusInfoMarshaling{
+		Epoch:      (*hexutil.Uint64)(&ci.Epoch),
+		Slot:       (*hexutil.Uint64)(&ci.Slot),
+		Creators:   ci.Creators,
+		Finalizing: ci.Finalizing,
+	}
+	return json.Marshal(out)
+}
+
 // UnmarshalJSON unmarshals from JSON.
 func (ci *ConsensusInfo) UnmarshalJSON(input []byte) error {
-	type ConsensusInfo struct {
-		Epoch      *hexutil.Uint64     `json:"epoch"`
-		Slot       *hexutil.Uint64     `json:"slot"`
-		Creators   *[]common.Address   `json:"creators"`
-		Finalizing finalizer.NrHashMap `json:"finalizing"`
-	}
-	var dec ConsensusInfo
+	var dec ConsensusInfoMarshaling
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
@@ -45,7 +56,7 @@ func (ci *ConsensusInfo) UnmarshalJSON(input []byte) error {
 		ci.Slot = uint64(*dec.Slot)
 	}
 	if dec.Creators != nil {
-		ci.Creators = *dec.Creators
+		ci.Creators = dec.Creators
 	}
 	if dec.Finalizing != nil {
 		ci.Finalizing = dec.Finalizing
