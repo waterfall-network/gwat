@@ -1,6 +1,8 @@
 package token
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -10,31 +12,31 @@ import (
 )
 
 var (
-	stateDb       *state.StateDB
-	p             *Processor
-	wrc20Address  = common.Address{}
-	wrc721Address = common.Address{}
-	caller        = vm.AccountRef(owner)
-	operator      = common.HexToAddress("13e4acefe6a6700604929946e70e6443e4e73447")
-	address       = common.HexToAddress("d049bfd667cb46aa3ef5df0da3e57db3be39e511")
-	spender       = common.HexToAddress("2cccf5e0538493c235d1c5ef6580f77d99e91396")
-	owner         = common.HexToAddress("2e068e8bd9e38e801a592fc61118e66d29d1124c")
-	to            = common.HexToAddress("7dc9c9730689ff0b0fd506c67db815f12d90a448")
-	from          = common.HexToAddress("7986bad81f4cbd9317f5a46861437dae58d69113")
-	value         = big.NewInt(10)
-	id            = big.NewInt(2221)
-	id2           = big.NewInt(2222)
-	id3           = big.NewInt(2223)
-	id4           = big.NewInt(2224)
-	id5           = big.NewInt(2225)
-	id6           = big.NewInt(2226)
-	totalSupply   = big.NewInt(100)
-	index         = big.NewInt(20)
-	decimals      = uint8(5)
-	name          = []byte("Test Tokken")
-	symbol        = []byte("TT")
-	baseURI       = []byte("test.token.com")
-	data          = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
+	stateDb        *state.StateDB
+	p              *Processor
+	wrc20Address   = common.Address{}
+	wrc721Address  = common.Address{}
+	caller         = vm.AccountRef(owner)
+	operator       = common.HexToAddress("13e4acefe6a6700604929946e70e6443e4e73447")
+	address        = common.HexToAddress("d049bfd667cb46aa3ef5df0da3e57db3be39e511")
+	spender        = common.HexToAddress("2cccf5e0538493c235d1c5ef6580f77d99e91396")
+	owner          = common.HexToAddress("2e068e8bd9e38e801a592fc61118e66d29d1124c")
+	to             = common.HexToAddress("7dc9c9730689ff0b0fd506c67db815f12d90a448")
+	approveAddress = common.HexToAddress("7986bad81f4cbd9317f5a46861437dae58d69113")
+	value          = big.NewInt(10)
+	id             = big.NewInt(2221)
+	id2            = big.NewInt(2222)
+	id3            = big.NewInt(2223)
+	id4            = big.NewInt(2224)
+	id5            = big.NewInt(2225)
+	id6            = big.NewInt(2226)
+	id7            = big.NewInt(2227)
+	totalSupply    = big.NewInt(100)
+	decimals       = uint8(5)
+	name           = []byte("Test Tokken")
+	symbol         = []byte("TT")
+	baseURI        = []byte("test.token.com")
+	data           = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
 )
 
 func init() {
@@ -222,7 +224,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 			},
 		},
 		{
-			caseName: "Unknown caller",
+			caseName: "Wrong caller",
 			testData: testData{
 				caller:       vm.AccountRef(owner),
 				tokenAddress: wrc721Address,
@@ -238,6 +240,24 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				call(t, v.caller, v.tokenAddress, approveOp, c.errs)
 				call(t, vm.AccountRef(spender), v.tokenAddress, opWrc721, c.errs)
 
+			},
+		},
+		{
+			caseName: "Not minted token",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: wrc721Address,
+			},
+			errs: []error{ErrNotMinted},
+			fn: func(c *test, a *common.Address) {
+				v := c.testData.(testData)
+
+				op, err := NewTransferFromOperation(StdWRC721, owner, to, id7)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				call(t, v.caller, v.tokenAddress, op, c.errs)
 			},
 		},
 	}
@@ -410,7 +430,7 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 	}
 }
 
-func TestProcessorApprovalForAllOperation(t *testing.T) {
+func TestProcessorApprovalForAllCall(t *testing.T) {
 	op, err := NewSetApprovalForAllOperation(spender, true)
 	if err != nil {
 		t.Fatal()
@@ -484,7 +504,7 @@ func TestProcessorApprovalForAllOperation(t *testing.T) {
 	}
 }
 
-func TestProcessorIsApprovedForAllOperation(t *testing.T) {
+func TestProcessorIsApprovedForAll(t *testing.T) {
 	cases := []test{
 		{
 			caseName: "IsApprovalForAll",
@@ -545,6 +565,151 @@ func TestProcessorIsApprovedForAllOperation(t *testing.T) {
 	}
 }
 
+func TestProcessorPropertiesWRC20(t *testing.T) {
+	wrc20Op, err := NewPropertiesOperation(wrc20Address, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	i, err := p.Properties(wrc20Op)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prop := i.(*WRC20PropertiesResult)
+	err = compareBytes(prop.Name, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = compareBytes(prop.Symbol, symbol)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = compareBigInt(prop.TotalSupply, totalSupply)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if prop.Decimals != decimals {
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", decimals, prop.Decimals)
+	}
+}
+
+func TestProcessorPropertiesWRC721(t *testing.T) {
+	mintNewToken(t, owner, wrc721Address, id7, data, caller, []error{nil})
+	approveOp, err := NewApproveOperation(StdWRC721, spender, id7)
+	call(t, vm.AccountRef(owner), wrc721Address, approveOp, []error{nil})
+
+	wrc721Op, err := NewPropertiesOperation(wrc721Address, id7)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	i, err := p.Properties(wrc721Op)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prop := i.(*WRC721PropertiesResult)
+	err = compareBytes(prop.Name, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = compareBytes(prop.Symbol, symbol)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = compareBytes(prop.BaseURI, baseURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = compareBytes(prop.Metadata, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = compareBytes(prop.TokenURI, concatTokenURI(baseURI, id7))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if prop.OwnerOf != owner {
+		t.Fatal()
+	}
+
+	if prop.GetApproved != spender {
+		t.Fatal()
+	}
+}
+
+func TestProcessorApproveCall(t *testing.T) {
+	approveOp, err := NewApproveOperation(StdWRC20, approveAddress, value)
+	if err != nil {
+		t.Fatal()
+	}
+
+	cases := []test{
+		{
+			caseName: "Use approve",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: wrc20Address,
+			},
+			errs: []error{nil},
+			fn: func(c *test, a *common.Address) {
+				v := c.testData.(testData)
+
+				call(t, v.caller, v.tokenAddress, approveOp, c.errs)
+
+				allowanceOp, err := NewAllowanceOperation(wrc20Address, owner, approveAddress)
+
+				total, err := p.Allowance(allowanceOp)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if total.Cmp(value) != 0 {
+					t.Fatal()
+				}
+			},
+		},
+		{
+			caseName: "Non approved address",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: wrc20Address,
+			},
+			errs: []error{nil, ErrWrongCaller},
+			fn: func(c *test, a *common.Address) {
+				allowanceOp, err := NewAllowanceOperation(wrc20Address, owner, to)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				total, err := p.Allowance(allowanceOp)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if total.Cmp(big.NewInt(0)) != 0 {
+					t.Fatal()
+				}
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.caseName, func(t *testing.T) {
+			c.fn(&c, &common.Address{})
+		})
+	}
+}
+
 func checkError(e error, arr []error) bool {
 	for _, err := range arr {
 		if e == err {
@@ -585,4 +750,27 @@ func call(t *testing.T, caller Ref, tokenAddress common.Address, op Operation, e
 	}
 
 	return res
+}
+
+func compareBigInt(a, b *big.Int) error {
+	haveValue := a
+	wantValue := b
+
+	if wantValue == nil {
+		wantValue = big.NewInt(0)
+	}
+
+	if haveValue.Cmp(wantValue) != 0 {
+		return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", wantValue, haveValue)
+	}
+
+	return nil
+}
+
+func compareBytes(a, b []byte) error {
+	if !bytes.Equal(b, a) {
+		return fmt.Errorf("values do not match:\n want: %+v\nhave: %+v", b, a)
+	}
+
+	return nil
 }
