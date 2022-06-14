@@ -26,6 +26,8 @@ var (
 	id2           = big.NewInt(2222)
 	id3           = big.NewInt(2223)
 	id4           = big.NewInt(2224)
+	id5           = big.NewInt(2225)
+	id6           = big.NewInt(2226)
 	totalSupply   = big.NewInt(100)
 	index         = big.NewInt(20)
 	decimals      = uint8(5)
@@ -99,10 +101,7 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 			errs: []error{ErrNotNilTo},
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
-				_, err := p.Call(v.caller, v.tokenAddress, createOpWrc20)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, createOpWrc20, c.errs)
 			},
 		},
 	}
@@ -145,10 +144,7 @@ func TestProcessorCreateOperationWRC721Call(t *testing.T) {
 			errs: []error{ErrNotNilTo},
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
-				_, err := p.Call(v.caller, v.tokenAddress, createOpWrc721)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, createOpWrc721, c.errs)
 			},
 		},
 	}
@@ -184,15 +180,8 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = p.Call(v.caller, v.tokenAddress, approveOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
-
-				_, err = p.Call(vm.AccountRef(spender), v.tokenAddress, opWrc20)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, approveOp, c.errs)
+				call(t, vm.AccountRef(spender), v.tokenAddress, opWrc20, c.errs)
 
 				balance := checkBalance(t, wrc20Address, owner)
 
@@ -220,15 +209,8 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = p.Call(v.caller, v.tokenAddress, approveOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
-
-				_, err = p.Call(vm.AccountRef(spender), v.tokenAddress, opWrc721)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, approveOp, c.errs)
+				call(t, vm.AccountRef(spender), v.tokenAddress, opWrc721, c.errs)
 
 				balanceAfter := checkBalance(t, wrc721Address, owner)
 
@@ -253,15 +235,8 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = p.Call(v.caller, v.tokenAddress, approveOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
-
-				_, err = p.Call(vm.AccountRef(spender), v.tokenAddress, opWrc721)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, approveOp, c.errs)
+				call(t, vm.AccountRef(spender), v.tokenAddress, opWrc721, c.errs)
 
 			},
 		},
@@ -290,10 +265,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 			errs: []error{nil},
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
-				_, err = p.Call(v.caller, v.tokenAddress, mintOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, mintOp, c.errs)
 
 				balance := checkBalance(t, wrc721Address, owner)
 
@@ -310,10 +282,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 			errs: []error{ErrWrongMinter},
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
-				_, err = p.Call(v.caller, v.tokenAddress, mintOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, mintOp, c.errs)
 			},
 		},
 	}
@@ -343,10 +312,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 				v := c.testData.(testData)
 				balance := checkBalance(t, wrc20Address, owner)
 
-				_, err = p.Call(v.caller, v.tokenAddress, transferOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, transferOp, c.errs)
 
 				balanceAfter := checkBalance(t, wrc20Address, owner)
 
@@ -364,10 +330,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 			errs: []error{ErrNoAddress},
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
-				_, err = p.Call(v.caller, v.tokenAddress, transferOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, transferOp, c.errs)
 			},
 		},
 		{
@@ -379,10 +342,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 			errs: []error{ErrNotEnoughBalance},
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
-				_, err = p.Call(v.caller, v.tokenAddress, transferOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, transferOp, c.errs)
 			},
 		},
 	}
@@ -396,7 +356,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 }
 
 func TestProcessorBurnOperationCall(t *testing.T) {
-	burnOp, err := NewBurnOperation(id4)
+	burnOp, err := NewBurnOperation(id3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,14 +372,11 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 			fn: func(c *test, a *common.Address) {
 				v := c.testData.(testData)
 
-				mintNewToken(t, owner, wrc721Address, id4, data, caller, c.errs)
+				mintNewToken(t, owner, wrc721Address, id3, data, caller, c.errs)
 
 				balance := checkBalance(t, wrc721Address, owner)
 
-				_, err = p.Call(v.caller, v.tokenAddress, burnOp)
-				if !checkError(err, c.errs) {
-					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-				}
+				call(t, v.caller, v.tokenAddress, burnOp, c.errs)
 
 				balanceAfter := checkBalance(t, wrc721Address, owner)
 
@@ -428,7 +385,8 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 					t.Fatal()
 				}
 			},
-		}, {
+		},
+		{
 			caseName: "Unknown minter",
 			testData: testData{
 				caller:       vm.AccountRef(to),
@@ -452,79 +410,79 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 	}
 }
 
-//TODO complete this test
-//func TestProcessorApprovalForAllOperation(t *testing.T) {
-//	op, err := NewSetApprovalForAllOperation(spender, true)
-//	if err != nil {
-//		t.Fatal()
-//	}
-//
-//	cases := []test{
-//		{
-//			caseName: "Correct test",
-//			testData: testData{
-//				caller:       vm.AccountRef(owner),
-//				tokenAddress: wrc721Address,
-//			},
-//			errs: []error{nil},
-//			fn: func(c *test, a *common.Address) {
-//				v := c.testData.(testData)
-//
-//				mintNewToken(t, owner, v.tokenAddress, id3, data, caller, c.errs)
-//
-//				_, err = p.Call(v.caller, v.tokenAddress, op)
-//				if !checkError(err, c.errs) {
-//					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-//				}
-//
-//				transferOp, err := NewTransferFromOperation(StdWRC721, owner, to, id3)
-//				if err != nil {
-//					t.Fatal(err)
-//				}
-//
-//				_, err = p.Call(vm.AccountRef(spender), v.tokenAddress, transferOp)
-//				if !checkError(err, c.errs) {
-//					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-//				}
-//
-//				transferOp2, err := NewTransferFromOperation(StdWRC721, owner, from, id3)
-//				if err != nil {
-//					t.Fatal(err)
-//				}
-//
-//				//
-//				//burnOp, err := NewBurnOperation(id3)
-//
-//				_, err = p.Call(vm.AccountRef(spender), v.tokenAddress, transferOp2)
-//				if !checkError(err, c.errs) {
-//					t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-//				}
-//
-//			},
-//		},
-//		//{
-//		//	caseName: "Unknown minter",
-//		//	testData: testData{
-//		//		caller:       vm.AccountRef(to),
-//		//		tokenAddress: wrc721Address,
-//		//	},
-//		//	errs: []error{ErrWrongMinter},
-//		//	fn: func(c *test, a *common.Address) {
-//		//		v := c.testData.(testData)
-//		//		_, err = p.Call(v.caller, v.tokenAddress, burnOp)
-//		//		if !checkError(err, c.errs) {
-//		//			t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", c.errs, err)
-//		//		}
-//		//	},
-//		//},
-//	}
-//
-//	for _, c := range cases {
-//		t.Run(c.caseName, func(t *testing.T) {
-//			c.fn(&c, &common.Address{})
-//		})
-//	}
-//}
+func TestProcessorApprovalForAllOperation(t *testing.T) {
+	op, err := NewSetApprovalForAllOperation(spender, true)
+	if err != nil {
+		t.Fatal()
+	}
+
+	unapproveOp, err := NewSetApprovalForAllOperation(spender, false)
+	if err != nil {
+		t.Fatal()
+	}
+
+	cases := []test{
+		{
+			caseName: "Use approvalForAll",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: wrc721Address,
+			},
+			errs: []error{nil},
+			fn: func(c *test, a *common.Address) {
+				v := c.testData.(testData)
+
+				call(t, v.caller, v.tokenAddress, op, c.errs)
+
+				mintNewToken(t, owner, v.tokenAddress, id4, data, caller, c.errs)
+
+				transferOp, err := NewTransferFromOperation(StdWRC721, owner, to, id4)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				call(t, vm.AccountRef(spender), v.tokenAddress, transferOp, c.errs)
+			},
+		},
+		{
+			caseName: "Cancel approvalForAll",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: wrc721Address,
+			},
+			errs: []error{nil, ErrWrongCaller},
+			fn: func(c *test, a *common.Address) {
+				v := c.testData.(testData)
+
+				call(t, v.caller, v.tokenAddress, op, c.errs)
+
+				mintNewToken(t, owner, v.tokenAddress, id5, data, caller, c.errs)
+				mintNewToken(t, owner, v.tokenAddress, id6, data, caller, c.errs)
+
+				transferOp, err := NewTransferFromOperation(StdWRC721, owner, to, id5)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				call(t, vm.AccountRef(spender), v.tokenAddress, transferOp, c.errs)
+				call(t, v.caller, v.tokenAddress, unapproveOp, c.errs)
+
+				transferOp2, err := NewTransferFromOperation(StdWRC721, owner, to, id6)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				call(t, vm.AccountRef(spender), v.tokenAddress, transferOp2, c.errs)
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.caseName, func(t *testing.T) {
+			c.fn(&c, &common.Address{})
+		})
+	}
+}
 
 func checkError(e error, arr []error) bool {
 	for _, err := range arr {
@@ -556,7 +514,11 @@ func mintNewToken(t *testing.T, owner, tokenAddress common.Address, id *big.Int,
 		t.Fatal(err)
 	}
 
-	_, err = p.Call(caller, tokenAddress, mintOp)
+	call(t, caller, tokenAddress, mintOp, errs)
+}
+
+func call(t *testing.T, caller Ref, tokenAddress common.Address, op Operation, errs []error) {
+	_, err := p.Call(caller, tokenAddress, op)
 	if !checkError(err, errs) {
 		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", errs, err)
 	}
