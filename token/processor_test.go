@@ -484,6 +484,67 @@ func TestProcessorApprovalForAllOperation(t *testing.T) {
 	}
 }
 
+func TestProcessorIsApprovedForAllOperation(t *testing.T) {
+	cases := []test{
+		{
+			caseName: "IsApprovalForAll",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: wrc721Address,
+			},
+			errs: []error{nil},
+			fn: func(c *test, a *common.Address) {
+				v := c.testData.(testData)
+				op, err := NewIsApprovedForAllOperation(wrc721Address, owner, operator)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				approvalOp, err := NewSetApprovalForAllOperation(operator, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				call(t, v.caller, v.tokenAddress, approvalOp, c.errs)
+				ok, err := p.IsApprovedForAll(op)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !ok {
+					t.Fatal()
+				}
+			},
+		},
+		{
+			caseName: "IsNotApprovalForAll",
+			testData: testData{
+				caller:       vm.AccountRef(owner),
+				tokenAddress: wrc721Address,
+			},
+			errs: []error{nil},
+			fn: func(c *test, a *common.Address) {
+				op, err := NewIsApprovedForAllOperation(wrc721Address, owner, spender)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				ok, err := p.IsApprovedForAll(op)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if ok {
+					t.Fatal()
+				}
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.caseName, func(t *testing.T) {
+			c.fn(&c, &common.Address{})
+		})
+	}
+}
+
 func checkError(e error, arr []error) bool {
 	for _, err := range arr {
 		if e == err {
@@ -517,9 +578,11 @@ func mintNewToken(t *testing.T, owner, tokenAddress common.Address, id *big.Int,
 	call(t, caller, tokenAddress, mintOp, errs)
 }
 
-func call(t *testing.T, caller Ref, tokenAddress common.Address, op Operation, errs []error) {
-	_, err := p.Call(caller, tokenAddress, op)
+func call(t *testing.T, caller Ref, tokenAddress common.Address, op Operation, errs []error) []byte {
+	res, err := p.Call(caller, tokenAddress, op)
 	if !checkError(err, errs) {
 		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", errs, err)
 	}
+
+	return res
 }
