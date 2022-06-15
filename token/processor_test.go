@@ -2,13 +2,14 @@ package token
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
+	"math/rand"
 	"testing"
+	"time"
 )
 
 var (
@@ -16,27 +17,28 @@ var (
 	p              *Processor
 	wrc20Address   = common.Address{}
 	wrc721Address  = common.Address{}
-	caller         = vm.AccountRef(owner)
-	operator       = common.HexToAddress("13e4acefe6a6700604929946e70e6443e4e73447")
-	address        = common.HexToAddress("d049bfd667cb46aa3ef5df0da3e57db3be39e511")
-	spender        = common.HexToAddress("2cccf5e0538493c235d1c5ef6580f77d99e91396")
-	owner          = common.HexToAddress("2e068e8bd9e38e801a592fc61118e66d29d1124c")
-	to             = common.HexToAddress("7dc9c9730689ff0b0fd506c67db815f12d90a448")
-	approveAddress = common.HexToAddress("7986bad81f4cbd9317f5a46861437dae58d69113")
-	value          = big.NewInt(10)
-	id             = big.NewInt(2221)
-	id2            = big.NewInt(2222)
-	id3            = big.NewInt(2223)
-	id4            = big.NewInt(2224)
-	id5            = big.NewInt(2225)
-	id6            = big.NewInt(2226)
-	id7            = big.NewInt(2227)
-	totalSupply    = big.NewInt(100)
-	decimals       = uint8(5)
-	name           = []byte("Test Tokken")
-	symbol         = []byte("TT")
-	baseURI        = []byte("test.token.com")
-	data           = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
+	caller         = vm.AccountRef{}
+	operator       = common.Address{}
+	address        = common.Address{}
+	spender        = common.Address{}
+	owner          = common.Address{}
+	to             = common.Address{}
+	approveAddress = common.Address{}
+	value          *big.Int
+	id             *big.Int
+	id2            *big.Int
+	id3            *big.Int
+	id4            *big.Int
+	id5            *big.Int
+	id6            *big.Int
+	id7            *big.Int
+	totalSupply    *big.Int
+	decimals       uint8
+	name           []byte
+	symbol         []byte
+	baseURI        []byte
+	data           []byte
+	letters        = []byte("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890")
 )
 
 func init() {
@@ -52,6 +54,33 @@ func init() {
 	}
 
 	p = NewProcessor(ctx, stateDb)
+
+	operator = common.HexToAddress(randomAddress(40))
+	address = common.HexToAddress(randomAddress(40))
+	spender = common.HexToAddress(randomAddress(40))
+	owner = common.HexToAddress(randomAddress(40))
+	to = common.HexToAddress(randomAddress(40))
+	approveAddress = common.HexToAddress(randomAddress(40))
+
+	caller = vm.AccountRef(owner)
+
+	value = big.NewInt(int64(randomInt(30, 10)))
+	id = big.NewInt(int64(randomInt(9999999, 1000)))
+	id2 = big.NewInt(int64(randomInt(9999999, 1000)))
+	id3 = big.NewInt(int64(randomInt(9999999, 1000)))
+	id4 = big.NewInt(int64(randomInt(9999999, 1000)))
+	id5 = big.NewInt(int64(randomInt(9999999, 1000)))
+	id6 = big.NewInt(int64(randomInt(9999999, 1000)))
+	id7 = big.NewInt(int64(randomInt(9999999, 1000)))
+	totalSupply = big.NewInt(int64(randomInt(1000, 100)))
+
+	decimals = uint8(randomInt(255, 0))
+
+	name = randomStringInBytes(randomInt(20, 10))
+	symbol = randomStringInBytes(randomInt(7, 4))
+	baseURI = randomStringInBytes(randomInt(40, 20))
+
+	data = randomData(randomInt(50, 20))
 }
 
 type test struct {
@@ -532,20 +561,11 @@ func TestProcessorPropertiesWRC20(t *testing.T) {
 	}
 
 	prop := i.(*WRC20PropertiesResult)
-	err = compareBytes(prop.Name, name)
-	if err != nil {
-		t.Fatal(err)
-	}
+	compareBytes(t, prop.Name, name)
 
-	err = compareBytes(prop.Symbol, symbol)
-	if err != nil {
-		t.Fatal(err)
-	}
+	compareBytes(t, prop.Symbol, symbol)
 
-	err = compareBigInt(prop.TotalSupply, totalSupply)
-	if err != nil {
-		t.Fatal(err)
-	}
+	compareBigInt(t, prop.TotalSupply, totalSupply)
 
 	if prop.Decimals != decimals {
 		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", decimals, prop.Decimals)
@@ -568,30 +588,15 @@ func TestProcessorPropertiesWRC721(t *testing.T) {
 	}
 
 	prop := i.(*WRC721PropertiesResult)
-	err = compareBytes(prop.Name, name)
-	if err != nil {
-		t.Fatal(err)
-	}
+	compareBytes(t, prop.Name, name)
 
-	err = compareBytes(prop.Symbol, symbol)
-	if err != nil {
-		t.Fatal(err)
-	}
+	compareBytes(t, prop.Symbol, symbol)
 
-	err = compareBytes(prop.BaseURI, baseURI)
-	if err != nil {
-		t.Fatal(err)
-	}
+	compareBytes(t, prop.BaseURI, baseURI)
 
-	err = compareBytes(prop.Metadata, data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	compareBytes(t, prop.Metadata, data)
 
-	err = compareBytes(prop.TokenURI, concatTokenURI(baseURI, id7))
-	if err != nil {
-		t.Fatal(err)
-	}
+	compareBytes(t, prop.TokenURI, concatTokenURI(baseURI, id7))
 
 	if prop.OwnerOf != owner {
 		t.Fatal()
@@ -707,7 +712,7 @@ func call(t *testing.T, caller Ref, tokenAddress common.Address, op Operation, e
 	return res
 }
 
-func compareBigInt(a, b *big.Int) error {
+func compareBigInt(t *testing.T, a, b *big.Int) {
 	haveValue := a
 	wantValue := b
 
@@ -716,18 +721,14 @@ func compareBigInt(a, b *big.Int) error {
 	}
 
 	if haveValue.Cmp(wantValue) != 0 {
-		return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", wantValue, haveValue)
+		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantValue, haveValue)
 	}
-
-	return nil
 }
 
-func compareBytes(a, b []byte) error {
+func compareBytes(t *testing.T, a, b []byte) {
 	if !bytes.Equal(b, a) {
-		return fmt.Errorf("values do not match:\n want: %+v\nhave: %+v", b, a)
+		t.Fatalf("values do not match:\n want: %+v\nhave: %+v", b, a)
 	}
-
-	return nil
 }
 
 func callTransferFrom(
@@ -767,4 +768,53 @@ func callApprove(t *testing.T, std Std, spender, tokenAddress common.Address, ca
 	}
 
 	call(t, caller, tokenAddress, approveOp, errs)
+}
+
+func randomInt(max, min int) int {
+	rand.Seed(time.Now().UTC().UnixNano())
+	a := rand.Intn(max-min+1) + min
+	return a
+}
+
+func randomStringInBytes(l int) []byte {
+	b := make([]byte, l)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+
+	return b
+}
+
+func randomAddress(n int) string {
+	const (
+		letterBytes   = "abcdef0123456789"
+		letterIdxBits = 4
+		letterIdxMask = 1<<letterIdxBits - 1
+		letterIdxMax  = 63 / letterIdxBits
+	)
+
+	var src = rand.NewSource(time.Now().UnixNano())
+
+	b := make([]byte, n)
+
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return string(b)
+}
+
+func randomData(n int) []byte {
+	b := make([]byte, n)
+	rand.Read(b)
+
+	return b
 }
