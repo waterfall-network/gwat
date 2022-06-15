@@ -44,7 +44,7 @@ func TestMintOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "mintOperation 1",
+			caseName: "Correct test",
 			decoded: decodedOp{
 				op:   StdWRC721,
 				to:   to,
@@ -57,7 +57,7 @@ func TestMintOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "mintOperation 2",
+			caseName: "No empty tokenID",
 			decoded: decodedOp{
 				op:   StdWRC20,
 				to:   to,
@@ -70,7 +70,7 @@ func TestMintOperation(t *testing.T) {
 			errs: []error{ErrNoTokenId},
 		},
 		{
-			caseName: "mintOperation 3",
+			caseName: "No empty to",
 			decoded: decodedOp{
 				op:   0,
 				to:   common.Address{},
@@ -83,7 +83,7 @@ func TestMintOperation(t *testing.T) {
 			errs: []error{ErrNoTo, ErrNoTokenId},
 		},
 		{
-			caseName: "mintOperation 4",
+			caseName: "Correct test without op and data",
 			decoded: decodedOp{
 				op:   0,
 				to:   to,
@@ -167,7 +167,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "setApprovalForAllOperation 1",
+			caseName: "Correct test approve",
 			decoded: decodedOp{
 				op:       StdWRC721,
 				operator: operator,
@@ -179,7 +179,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "setApprovalForAllOperation 2",
+			caseName: "Approve no empty operator",
 			decoded: decodedOp{
 				op:       StdWRC20,
 				operator: common.Address{},
@@ -191,7 +191,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			errs: []error{ErrNoOperator},
 		},
 		{
-			caseName: "setApprovalForAllOperation 3",
+			caseName: "Correct test unapprove",
 			decoded: decodedOp{
 
 				op:       StdWRC721,
@@ -204,7 +204,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "setApprovalForAllOperation 4",
+			caseName: "Unapprove no empty operator",
 			decoded: decodedOp{
 				op:       0,
 				operator: common.Address{},
@@ -279,7 +279,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "isApprovedForAllOperation 1",
+			caseName: "Correct test",
 			decoded: decodedOp{
 				op:       StdWRC721,
 				address:  address,
@@ -292,7 +292,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "setApprovalForAllOperation 2",
+			caseName: "No empty owner",
 			decoded: decodedOp{
 				op:       StdWRC20,
 				address:  address,
@@ -305,7 +305,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			errs: []error{ErrNoOwner},
 		},
 		{
-			caseName: "setApprovalForAllOperation 3",
+			caseName: "No empty address",
 			decoded: decodedOp{
 				op:       0,
 				address:  common.Address{},
@@ -318,7 +318,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			errs: []error{ErrNoAddress},
 		},
 		{
-			caseName: "setApprovalForAllOperation 4",
+			caseName: "No empty operator",
 			decoded: decodedOp{
 				op:       0,
 				address:  address,
@@ -400,7 +400,7 @@ func TestAllowanceOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "AllowanceOperation 1",
+			caseName: "Correct test",
 			decoded: decodedOp{
 				op:      StdWRC721,
 				address: address,
@@ -413,7 +413,7 @@ func TestAllowanceOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "AllowanceOperation 2",
+			caseName: "No empty owner",
 			decoded: decodedOp{
 				op:      StdWRC20,
 				address: address,
@@ -426,7 +426,7 @@ func TestAllowanceOperation(t *testing.T) {
 			errs: []error{ErrNoOwner},
 		},
 		{
-			caseName: "AllowanceOperation 3",
+			caseName: "No empty token address",
 			decoded: decodedOp{
 				op:      0,
 				address: common.Address{},
@@ -439,7 +439,7 @@ func TestAllowanceOperation(t *testing.T) {
 			errs: []error{ErrNoAddress},
 		},
 		{
-			caseName: "AllowanceOperation 4",
+			caseName: "No empty spender",
 			decoded: decodedOp{
 				op:      0,
 				address: address,
@@ -520,19 +520,19 @@ func TestApproveOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "ApproveOperation 1",
+			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
 				op:      StdWRC721,
-				value:   value,
+				value:   id,
 				spender: spender,
 			},
 			encoded: []byte{
-				243, 13, 248, 137, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
+				243, 13, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 128, 128, 128,
 			},
 			errs: []error{},
 		},
 		{
-			caseName: "ApproveOperation 2",
+			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
 				op:      StdWRC20,
 				value:   value,
@@ -544,7 +544,7 @@ func TestApproveOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "ApproveOperation 3",
+			caseName: "No empty value",
 			decoded: decodedOp{
 				op:      0,
 				value:   nil,
@@ -556,16 +556,16 @@ func TestApproveOperation(t *testing.T) {
 			errs: []error{ErrNoValue},
 		},
 		{
-			caseName: "ApproveOperation 4",
+			caseName: "No empty spender",
 			decoded: decodedOp{
-				op:      0,
-				value:   nil,
+				op:      StdWRC721,
+				value:   id,
 				spender: common.Address{},
 			},
 			encoded: []byte{
 				243, 13, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{ErrNoSpender, ErrNoValue},
+			errs: []error{ErrNoSpender},
 		},
 	}
 
@@ -633,7 +633,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "SafeTransferFromOperation 1",
+			caseName: "Correct test",
 			decoded: decodedOp{
 				op:    StdWRC721,
 				to:    to,
@@ -647,7 +647,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "SafeTransferFromOperation 2",
+			caseName: "No empty value",
 			decoded: decodedOp{
 				op:    StdWRC721,
 				to:    to,
@@ -661,7 +661,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			errs: []error{ErrNoValue},
 		},
 		{
-			caseName: "SafeTransferFromOperation 3",
+			caseName: "No empty from",
 			decoded: decodedOp{
 				op:    0,
 				to:    to,
@@ -675,18 +675,18 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			errs: []error{ErrNoFrom},
 		},
 		{
-			caseName: "SafeTransferFromOperation 4",
+			caseName: "No empty to",
 			decoded: decodedOp{
 				op:    StdWRC721,
 				to:    common.Address{},
-				value: nil,
+				value: value,
 				from:  from,
 				data:  nil,
 			},
 			encoded: []byte{
 				243, 41, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{ErrNoTo, ErrNoValue},
+			errs: []error{ErrNoTo},
 		},
 	}
 
@@ -758,7 +758,7 @@ func TestTransferFromOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "TransferFromOperation 1",
+			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
 				op:    StdWRC20,
 				to:    to,
@@ -771,7 +771,7 @@ func TestTransferFromOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "TransferFromOperation 2",
+			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
 				op:    StdWRC721,
 				to:    to,
@@ -784,7 +784,7 @@ func TestTransferFromOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "TransferFromOperation 3",
+			caseName: "No empty from",
 			decoded: decodedOp{
 				op:    StdWRC721,
 				to:    to,
@@ -797,7 +797,7 @@ func TestTransferFromOperation(t *testing.T) {
 			errs: []error{ErrNoFrom},
 		},
 		{
-			caseName: "TransferFromOperation 4",
+			caseName: "No empty to",
 			decoded: decodedOp{
 				op:    StdWRC20,
 				to:    common.Address{},
@@ -877,7 +877,7 @@ func TestTransferOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "TransferOperation 1",
+			caseName: "Correct test",
 			decoded: decodedOp{
 				op:    StdWRC20,
 				value: value,
@@ -889,19 +889,7 @@ func TestTransferOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "TransferOperation 2",
-			decoded: decodedOp{
-				op:    0,
-				value: nil,
-				to:    common.Address{},
-			},
-			encoded: []byte{
-				243, 30, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
-			},
-			errs: []error{ErrNoTo, ErrNoValue},
-		},
-		{
-			caseName: "TransferOperation 3",
+			caseName: "No empty to",
 			decoded: decodedOp{
 				op:    StdWRC20,
 				value: value,
@@ -913,7 +901,7 @@ func TestTransferOperation(t *testing.T) {
 			errs: []error{ErrNoTo},
 		},
 		{
-			caseName: "TransferOperation 4",
+			caseName: "No empty value",
 			decoded: decodedOp{
 				op:    StdWRC20,
 				value: nil,
@@ -986,7 +974,7 @@ func TestBalanceOfOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "BalanceOfOperation 1",
+			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
 				op:      StdWRC20,
 				address: address,
@@ -998,7 +986,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "BalanceOfOperation 2",
+			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
 				op:      StdWRC721,
 				address: address,
@@ -1010,7 +998,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "TransferOperation 3",
+			caseName: "No empty owner",
 			decoded: decodedOp{
 				op:      StdWRC20,
 				address: address,
@@ -1022,7 +1010,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			errs: []error{ErrNoOwner},
 		},
 		{
-			caseName: "TransferOperation 4",
+			caseName: "No empty token address",
 			decoded: decodedOp{
 				op:      0,
 				address: common.Address{},
@@ -1093,18 +1081,7 @@ func TestBurnOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "BurnOperation 1",
-			decoded: decodedOp{
-				op: StdWRC20,
-				id: id,
-			},
-			encoded: []byte{
-				243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
-			},
-			errs: []error{},
-		},
-		{
-			caseName: "BurnOperation 2",
+			caseName: "Correct test",
 			decoded: decodedOp{
 				op: StdWRC721,
 				id: id,
@@ -1115,26 +1092,15 @@ func TestBurnOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "BurnOperation 3",
+			caseName: "No empty token id",
 			decoded: decodedOp{
-				op: StdWRC20,
+				op: StdWRC721,
 				id: nil,
 			},
 			encoded: []byte{
 				243, 39, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
 			errs: []error{ErrNoTokenId},
-		},
-		{
-			caseName: "BurnOperation 4",
-			decoded: decodedOp{
-				op: 0,
-				id: id,
-			},
-			encoded: []byte{
-				243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
-			},
-			errs: []error{},
 		},
 	}
 
@@ -1194,7 +1160,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "TokenOfOwnerByIndexOperation 1",
+			caseName: "Correct test",
 			decoded: decodedOp{
 				op:      StdWRC721,
 				address: address,
@@ -1207,7 +1173,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "TokenOfOwnerByIndexOperation 2",
+			caseName: "No empty token address",
 			decoded: decodedOp{
 				op:      StdWRC721,
 				address: common.Address{},
@@ -1220,7 +1186,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			errs: []error{ErrNoAddress},
 		},
 		{
-			caseName: "TokenOfOwnerByIndexOperation 3",
+			caseName: "No empty owner",
 			decoded: decodedOp{
 				op:      StdWRC721,
 				address: address,
@@ -1233,7 +1199,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			errs: []error{ErrNoOwner},
 		},
 		{
-			caseName: "TokenOfOwnerByIndexOperation 4",
+			caseName: "No empty index",
 			decoded: decodedOp{
 				op:      StdWRC721,
 				address: address,
@@ -1311,7 +1277,7 @@ func TestPropertiesOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "PropertiesOperation 1",
+			caseName: "Correct test",
 			decoded: decodedOp{
 				address: address,
 				id:      id,
@@ -1322,7 +1288,7 @@ func TestPropertiesOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "PropertiesOperation 2",
+			caseName: "No empty token id",
 			decoded: decodedOp{
 				address: address,
 				id:      nil,
@@ -1333,7 +1299,7 @@ func TestPropertiesOperation(t *testing.T) {
 			errs: []error{ErrNoTokenId},
 		},
 		{
-			caseName: "PropertiesOperation 3",
+			caseName: "No empty token address",
 			decoded: decodedOp{
 				address: common.Address{},
 				id:      id,
@@ -1342,17 +1308,6 @@ func TestPropertiesOperation(t *testing.T) {
 				243, 33, 248, 134, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
 			errs: []error{ErrNoAddress},
-		},
-		{
-			caseName: "PropertiesOperation 4",
-			decoded: decodedOp{
-				address: common.Address{},
-				id:      nil,
-			},
-			encoded: []byte{
-				243, 33, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
-			},
-			errs: []error{ErrNoAddress, ErrNoTokenId},
 		},
 	}
 
@@ -1424,7 +1379,7 @@ func TestCreateOperationOperation(t *testing.T) {
 
 	cases := []testCase{
 		{
-			caseName: "CreateOperation 1",
+			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
 				op:          StdWRC20,
 				name:        name,
@@ -1439,7 +1394,7 @@ func TestCreateOperationOperation(t *testing.T) {
 			errs: []error{ErrNoBaseURI},
 		},
 		{
-			caseName: "CreateOperation 2",
+			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
 				op:          StdWRC721,
 				name:        name,
@@ -1454,13 +1409,13 @@ func TestCreateOperationOperation(t *testing.T) {
 			errs: []error{ErrNoTokenSupply},
 		},
 		{
-			caseName: "CreateOperation 3",
+			caseName: "No empty symbol",
 			decoded: decodedOp{
 				op:          0,
 				name:        name,
 				symbol:      nil,
 				decimals:    decimals,
-				totalSupply: nil,
+				totalSupply: totalSupply,
 				baseURI:     baseURI,
 			},
 			encoded: []byte{
@@ -1469,7 +1424,7 @@ func TestCreateOperationOperation(t *testing.T) {
 			errs: []error{ErrNoTokenSupply, ErrNoSymbol},
 		},
 		{
-			caseName: "CreateOperation 4",
+			caseName: "No empty token supply ",
 			decoded: decodedOp{
 				op:          0,
 				name:        name,
@@ -1577,7 +1532,7 @@ func TestCreateOperationOperation(t *testing.T) {
 
 func startSubTests(t *testing.T, cases []testCase, operationEncode, operationDecode func([]byte, interface{}) error) {
 	for _, c := range cases {
-		t.Run("encoding", func(t *testing.T) {
+		t.Run("encoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationEncode(c.encoded, c.decoded)
 			if err != nil {
 				if err = findNotCorrectError(err, c.errs); err != nil {
@@ -1586,7 +1541,7 @@ func startSubTests(t *testing.T, cases []testCase, operationEncode, operationDec
 			}
 		})
 
-		t.Run("decoding", func(t *testing.T) {
+		t.Run("decoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationDecode(c.encoded, c.decoded)
 			if err != nil {
 				if err = findNotCorrectError(err, c.errs); err != nil {
