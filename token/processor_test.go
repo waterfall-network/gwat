@@ -15,15 +15,15 @@ import (
 var (
 	stateDb        *state.StateDB
 	p              *Processor
-	wrc20Address   = common.Address{}
-	wrc721Address  = common.Address{}
-	caller         = vm.AccountRef{}
-	operator       = common.Address{}
-	address        = common.Address{}
-	spender        = common.Address{}
-	owner          = common.Address{}
-	to             = common.Address{}
-	approveAddress = common.Address{}
+	wrc20Address   common.Address
+	wrc721Address  common.Address
+	caller         Ref
+	operator       common.Address
+	address        common.Address
+	spender        common.Address
+	owner          common.Address
+	to             common.Address
+	approveAddress common.Address
 	value          *big.Int
 	id             *big.Int
 	id2            *big.Int
@@ -38,7 +38,6 @@ var (
 	symbol         []byte
 	baseURI        []byte
 	data           []byte
-	letters        = []byte("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890")
 )
 
 func init() {
@@ -55,32 +54,32 @@ func init() {
 
 	p = NewProcessor(ctx, stateDb)
 
-	operator = common.HexToAddress(randomAddress(40))
-	address = common.HexToAddress(randomAddress(40))
-	spender = common.HexToAddress(randomAddress(40))
-	owner = common.HexToAddress(randomAddress(40))
-	to = common.HexToAddress(randomAddress(40))
-	approveAddress = common.HexToAddress(randomAddress(40))
+	operator = common.BytesToAddress(randomData(20))
+	address = common.BytesToAddress(randomData(20))
+	spender = common.BytesToAddress(randomData(20))
+	owner = common.BytesToAddress(randomData(20))
+	to = common.BytesToAddress(randomData(20))
+	approveAddress = common.BytesToAddress(randomData(20))
 
 	caller = vm.AccountRef(owner)
 
-	value = big.NewInt(int64(randomInt(30, 10)))
-	id = big.NewInt(int64(randomInt(9999999, 1000)))
-	id2 = big.NewInt(int64(randomInt(9999999, 1000)))
-	id3 = big.NewInt(int64(randomInt(9999999, 1000)))
-	id4 = big.NewInt(int64(randomInt(9999999, 1000)))
-	id5 = big.NewInt(int64(randomInt(9999999, 1000)))
-	id6 = big.NewInt(int64(randomInt(9999999, 1000)))
-	id7 = big.NewInt(int64(randomInt(9999999, 1000)))
-	totalSupply = big.NewInt(int64(randomInt(1000, 100)))
+	value = big.NewInt(int64(randomInt(10, 30)))
+	id = big.NewInt(int64(randomInt(1000, 99999999)))
+	id2 = big.NewInt(int64(randomInt(1000, 99999999)))
+	id3 = big.NewInt(int64(randomInt(1000, 99999999)))
+	id4 = big.NewInt(int64(randomInt(1000, 99999999)))
+	id5 = big.NewInt(int64(randomInt(1000, 99999999)))
+	id6 = big.NewInt(int64(randomInt(1000, 99999999)))
+	id7 = big.NewInt(int64(randomInt(1000, 99999999)))
+	totalSupply = big.NewInt(int64(randomInt(100, 1000)))
 
-	decimals = uint8(randomInt(255, 0))
+	decimals = uint8(randomInt(0, 255))
 
-	name = randomStringInBytes(randomInt(20, 10))
-	symbol = randomStringInBytes(randomInt(7, 4))
-	baseURI = randomStringInBytes(randomInt(40, 20))
+	name = randomStringInBytes(randomInt(10, 20))
+	symbol = randomStringInBytes(randomInt(5, 8))
+	baseURI = randomStringInBytes(randomInt(20, 40))
 
-	data = randomData(randomInt(50, 20))
+	data = randomData(randomInt(20, 50))
 }
 
 type test struct {
@@ -770,46 +769,22 @@ func callApprove(t *testing.T, std Std, spender, tokenAddress common.Address, ca
 	call(t, caller, tokenAddress, approveOp, errs)
 }
 
-func randomInt(max, min int) int {
+func randomInt(min, max int) int {
 	rand.Seed(time.Now().UTC().UnixNano())
 	a := rand.Intn(max-min+1) + min
+
 	return a
 }
 
 func randomStringInBytes(l int) []byte {
+	letters := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+
 	b := make([]byte, l)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 
 	return b
-}
-
-func randomAddress(n int) string {
-	const (
-		letterBytes   = "abcdef0123456789"
-		letterIdxBits = 4
-		letterIdxMask = 1<<letterIdxBits - 1
-		letterIdxMax  = 63 / letterIdxBits
-	)
-
-	var src = rand.NewSource(time.Now().UnixNano())
-
-	b := make([]byte, n)
-
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-
-	return string(b)
 }
 
 func randomData(n int) []byte {
