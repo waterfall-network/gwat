@@ -10,21 +10,21 @@ import (
 )
 
 var (
-	operator    = common.HexToAddress("13e4acefe6a6700604929946e70e6443e4e73447")
-	address     = common.HexToAddress("d049bfd667cb46aa3ef5df0da3e57db3be39e511")
-	spender     = common.HexToAddress("2cccf5e0538493c235d1c5ef6580f77d99e91396")
-	owner       = common.HexToAddress("1977c248e1014cc103929dd7f154199c916e39ec")
-	to          = common.HexToAddress("7dc9c9730689ff0b0fd506c67db815f12d90a448")
-	from        = common.HexToAddress("7986bad81f4cbd9317f5a46861437dae58d69113")
-	value       = big.NewInt(112233)
-	id          = big.NewInt(12345)
-	totalSupply = big.NewInt(9999)
-	index       = big.NewInt(55555)
-	decimals    = uint8(100)
-	name        = []byte("Test Tokken")
-	symbol      = []byte("TT")
-	baseURI     = []byte("test.token.com")
-	data        = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
+	opOperator    = common.HexToAddress("13e4acefe6a6700604929946e70e6443e4e73447")
+	opAddress     = common.HexToAddress("d049bfd667cb46aa3ef5df0da3e57db3be39e511")
+	opSpender     = common.HexToAddress("2cccf5e0538493c235d1c5ef6580f77d99e91396")
+	opOwner       = common.HexToAddress("1977c248e1014cc103929dd7f154199c916e39ec")
+	opTo          = common.HexToAddress("7dc9c9730689ff0b0fd506c67db815f12d90a448")
+	opFrom        = common.HexToAddress("7986bad81f4cbd9317f5a46861437dae58d69113")
+	opValue       = big.NewInt(112233)
+	opId          = big.NewInt(12345)
+	opTotalSupply = big.NewInt(9999)
+	opIndex       = big.NewInt(55555)
+	opDecimals    = uint8(100)
+	opName        = []byte("Test Tokken")
+	opSymbol      = []byte("TT")
+	opBaseURI     = []byte("test.token.com")
+	oData         = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
 )
 
 type testCase struct {
@@ -47,9 +47,9 @@ func TestMintOperation(t *testing.T) {
 			caseName: "Correct test",
 			decoded: decodedOp{
 				op:   StdWRC721,
-				to:   to,
-				id:   id,
-				data: data,
+				to:   opTo,
+				id:   opId,
+				data: oData,
 			},
 			encoded: []byte{
 				243, 38, 248, 149, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 141, 243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5,
@@ -60,7 +60,7 @@ func TestMintOperation(t *testing.T) {
 			caseName: "No empty tokenID",
 			decoded: decodedOp{
 				op:   StdWRC20,
-				to:   to,
+				to:   opTo,
 				id:   nil,
 				data: nil,
 			},
@@ -86,8 +86,8 @@ func TestMintOperation(t *testing.T) {
 			caseName: "Correct test without op and data",
 			decoded: decodedOp{
 				op:   0,
-				to:   to,
-				id:   id,
+				to:   opTo,
+				id:   opId,
 				data: nil,
 			},
 			encoded: []byte{
@@ -170,7 +170,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			caseName: "Correct test approve",
 			decoded: decodedOp{
 				op:       StdWRC721,
-				operator: operator,
+				operator: opOperator,
 				approve:  true,
 			},
 			encoded: []byte{
@@ -195,7 +195,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			decoded: decodedOp{
 
 				op:       StdWRC721,
-				operator: operator,
+				operator: opOperator,
 				approve:  false,
 			},
 			encoded: []byte{
@@ -282,9 +282,9 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			caseName: "Correct test",
 			decoded: decodedOp{
 				op:       StdWRC721,
-				address:  address,
-				owner:    owner,
-				operator: operator,
+				address:  opAddress,
+				owner:    opOwner,
+				operator: opOperator,
 			},
 			encoded: []byte{
 				243, 36, 248, 134, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -295,9 +295,9 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			caseName: "No empty owner",
 			decoded: decodedOp{
 				op:       StdWRC20,
-				address:  address,
+				address:  opAddress,
 				owner:    common.Address{},
-				operator: operator,
+				operator: opOperator,
 			},
 			encoded: []byte{
 				243, 36, 248, 132, 20, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -309,8 +309,8 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			decoded: decodedOp{
 				op:       0,
 				address:  common.Address{},
-				owner:    owner,
-				operator: operator,
+				owner:    opOwner,
+				operator: opOperator,
 			},
 			encoded: []byte{
 				243, 36, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -321,8 +321,8 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			caseName: "No empty operator",
 			decoded: decodedOp{
 				op:       0,
-				address:  address,
-				owner:    owner,
+				address:  opAddress,
+				owner:    opOwner,
 				operator: common.Address{},
 			},
 			encoded: []byte{
@@ -403,9 +403,9 @@ func TestAllowanceOperation(t *testing.T) {
 			caseName: "Correct test",
 			decoded: decodedOp{
 				op:      StdWRC721,
-				address: address,
-				owner:   owner,
-				spender: spender,
+				address: opAddress,
+				owner:   opOwner,
+				spender: opSpender,
 			},
 			encoded: []byte{
 				243, 35, 248, 132, 20, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -416,9 +416,9 @@ func TestAllowanceOperation(t *testing.T) {
 			caseName: "No empty owner",
 			decoded: decodedOp{
 				op:      StdWRC20,
-				address: address,
+				address: opAddress,
 				owner:   common.Address{},
-				spender: spender,
+				spender: opSpender,
 			},
 			encoded: []byte{
 				243, 35, 248, 132, 20, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -430,8 +430,8 @@ func TestAllowanceOperation(t *testing.T) {
 			decoded: decodedOp{
 				op:      0,
 				address: common.Address{},
-				owner:   owner,
-				spender: spender,
+				owner:   opOwner,
+				spender: opSpender,
 			},
 			encoded: []byte{
 				243, 35, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -442,8 +442,8 @@ func TestAllowanceOperation(t *testing.T) {
 			caseName: "No empty spender",
 			decoded: decodedOp{
 				op:      0,
-				address: address,
-				owner:   owner,
+				address: opAddress,
+				owner:   opOwner,
 				spender: common.Address{},
 			},
 			encoded: []byte{
@@ -523,8 +523,8 @@ func TestApproveOperation(t *testing.T) {
 			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
 				op:      StdWRC721,
-				value:   id,
-				spender: spender,
+				value:   opId,
+				spender: opSpender,
 			},
 			encoded: []byte{
 				243, 13, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 128, 128, 128,
@@ -535,8 +535,8 @@ func TestApproveOperation(t *testing.T) {
 			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
 				op:      StdWRC20,
-				value:   value,
-				spender: spender,
+				value:   opValue,
+				spender: opSpender,
 			},
 			encoded: []byte{
 				243, 13, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
@@ -548,7 +548,7 @@ func TestApproveOperation(t *testing.T) {
 			decoded: decodedOp{
 				op:      0,
 				value:   nil,
-				spender: spender,
+				spender: opSpender,
 			},
 			encoded: []byte{
 				243, 13, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -559,7 +559,7 @@ func TestApproveOperation(t *testing.T) {
 			caseName: "No empty spender",
 			decoded: decodedOp{
 				op:      StdWRC721,
-				value:   id,
+				value:   opId,
 				spender: common.Address{},
 			},
 			encoded: []byte{
@@ -636,10 +636,10 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			caseName: "Correct test",
 			decoded: decodedOp{
 				op:    StdWRC721,
-				to:    to,
-				value: value,
-				from:  from,
-				data:  data,
+				to:    opTo,
+				value: opValue,
+				from:  opFrom,
+				data:  oData,
 			},
 			encoded: []byte{
 				243, 41, 248, 150, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 141, 243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5,
@@ -650,9 +650,9 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			caseName: "No empty value",
 			decoded: decodedOp{
 				op:    StdWRC721,
-				to:    to,
+				to:    opTo,
 				value: nil,
-				from:  from,
+				from:  opFrom,
 				data:  nil,
 			},
 			encoded: []byte{
@@ -664,8 +664,8 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			caseName: "No empty from",
 			decoded: decodedOp{
 				op:    0,
-				to:    to,
-				value: value,
+				to:    opTo,
+				value: opValue,
 				from:  common.Address{},
 				data:  nil,
 			},
@@ -679,8 +679,8 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			decoded: decodedOp{
 				op:    StdWRC721,
 				to:    common.Address{},
-				value: value,
-				from:  from,
+				value: opValue,
+				from:  opFrom,
 				data:  nil,
 			},
 			encoded: []byte{
@@ -761,9 +761,9 @@ func TestTransferFromOperation(t *testing.T) {
 			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
 				op:    StdWRC20,
-				to:    to,
-				value: value,
-				from:  from,
+				to:    opTo,
+				value: opValue,
+				from:  opFrom,
 			},
 			encoded: []byte{
 				243, 31, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
@@ -774,9 +774,9 @@ func TestTransferFromOperation(t *testing.T) {
 			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
 				op:    StdWRC721,
-				to:    to,
-				value: id,
-				from:  from,
+				to:    opTo,
+				value: opId,
+				from:  opFrom,
 			},
 			encoded: []byte{
 				243, 31, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 130, 48, 57, 128, 128, 128,
@@ -787,8 +787,8 @@ func TestTransferFromOperation(t *testing.T) {
 			caseName: "No empty from",
 			decoded: decodedOp{
 				op:    StdWRC721,
-				to:    to,
-				value: value,
+				to:    opTo,
+				value: opValue,
 				from:  common.Address{},
 			},
 			encoded: []byte{
@@ -801,8 +801,8 @@ func TestTransferFromOperation(t *testing.T) {
 			decoded: decodedOp{
 				op:    StdWRC20,
 				to:    common.Address{},
-				value: value,
-				from:  from,
+				value: opValue,
+				from:  opFrom,
 			},
 			encoded: []byte{
 				243, 31, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
@@ -855,7 +855,7 @@ func TestTransferFromOperation(t *testing.T) {
 		}
 
 		if o.from != opDecoded.From() {
-			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.From(), from)
+			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.From(), o.from)
 		}
 
 		if o.to != opDecoded.To() {
@@ -880,8 +880,8 @@ func TestTransferOperation(t *testing.T) {
 			caseName: "Correct test",
 			decoded: decodedOp{
 				op:    StdWRC20,
-				value: value,
-				to:    to,
+				value: opValue,
+				to:    opTo,
 			},
 			encoded: []byte{
 				243, 30, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
@@ -892,7 +892,7 @@ func TestTransferOperation(t *testing.T) {
 			caseName: "No empty to",
 			decoded: decodedOp{
 				op:    StdWRC20,
-				value: value,
+				value: opValue,
 				to:    common.Address{},
 			},
 			encoded: []byte{
@@ -905,7 +905,7 @@ func TestTransferOperation(t *testing.T) {
 			decoded: decodedOp{
 				op:    StdWRC20,
 				value: nil,
-				to:    to,
+				to:    opTo,
 			},
 			encoded: []byte{
 				243, 30, 248, 132, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 128,
@@ -977,8 +977,8 @@ func TestBalanceOfOperation(t *testing.T) {
 			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
 				op:      StdWRC20,
-				address: address,
-				owner:   to,
+				address: opAddress,
+				owner:   opTo,
 			},
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -989,8 +989,8 @@ func TestBalanceOfOperation(t *testing.T) {
 			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
 				op:      StdWRC721,
-				address: address,
-				owner:   to,
+				address: opAddress,
+				owner:   opTo,
 			},
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -1001,7 +1001,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			caseName: "No empty owner",
 			decoded: decodedOp{
 				op:      StdWRC20,
-				address: address,
+				address: opAddress,
 				owner:   common.Address{},
 			},
 			encoded: []byte{
@@ -1014,7 +1014,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			decoded: decodedOp{
 				op:      0,
 				address: common.Address{},
-				owner:   to,
+				owner:   opTo,
 			},
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -1084,7 +1084,7 @@ func TestBurnOperation(t *testing.T) {
 			caseName: "Correct test",
 			decoded: decodedOp{
 				op: StdWRC721,
-				id: id,
+				id: opId,
 			},
 			encoded: []byte{
 				243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -1163,9 +1163,9 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			caseName: "Correct test",
 			decoded: decodedOp{
 				op:      StdWRC721,
-				address: address,
-				owner:   owner,
-				index:   index,
+				address: opAddress,
+				owner:   opOwner,
+				index:   opIndex,
 			},
 			encoded: []byte{
 				243, 40, 248, 136, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 130, 217, 3, 128, 128,
@@ -1177,8 +1177,8 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			decoded: decodedOp{
 				op:      StdWRC721,
 				address: common.Address{},
-				owner:   owner,
-				index:   index,
+				owner:   opOwner,
+				index:   opIndex,
 			},
 			encoded: []byte{
 				243, 40, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 130, 217, 3, 128, 128,
@@ -1189,9 +1189,9 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			caseName: "No empty owner",
 			decoded: decodedOp{
 				op:      StdWRC721,
-				address: address,
+				address: opAddress,
 				owner:   common.Address{},
-				index:   index,
+				index:   opIndex,
 			},
 			encoded: []byte{
 				243, 40, 248, 136, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 130, 217, 3, 128, 128,
@@ -1202,8 +1202,8 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			caseName: "No empty index",
 			decoded: decodedOp{
 				op:      StdWRC721,
-				address: address,
-				owner:   owner,
+				address: opAddress,
+				owner:   opOwner,
 				index:   nil,
 			},
 			encoded: []byte{
@@ -1279,8 +1279,8 @@ func TestPropertiesOperation(t *testing.T) {
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
-				address: address,
-				id:      id,
+				address: opAddress,
+				id:      opId,
 			},
 			encoded: []byte{
 				243, 33, 248, 134, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -1290,7 +1290,7 @@ func TestPropertiesOperation(t *testing.T) {
 		{
 			caseName: "No empty token id",
 			decoded: decodedOp{
-				address: address,
+				address: opAddress,
 				id:      nil,
 			},
 			encoded: []byte{
@@ -1302,7 +1302,7 @@ func TestPropertiesOperation(t *testing.T) {
 			caseName: "No empty token address",
 			decoded: decodedOp{
 				address: common.Address{},
-				id:      id,
+				id:      opId,
 			},
 			encoded: []byte{
 				243, 33, 248, 134, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
@@ -1382,10 +1382,10 @@ func TestCreateOperationOperation(t *testing.T) {
 			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
 				op:          StdWRC20,
-				name:        name,
-				symbol:      symbol,
-				decimals:    decimals,
-				totalSupply: totalSupply,
+				name:        opName,
+				symbol:      opSymbol,
+				decimals:    opDecimals,
+				totalSupply: opTotalSupply,
 				baseURI:     nil,
 			},
 			encoded: []byte{
@@ -1397,11 +1397,11 @@ func TestCreateOperationOperation(t *testing.T) {
 			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
 				op:          StdWRC721,
-				name:        name,
-				symbol:      symbol,
-				decimals:    decimals,
-				totalSupply: totalSupply,
-				baseURI:     baseURI,
+				name:        opName,
+				symbol:      opSymbol,
+				decimals:    opDecimals,
+				totalSupply: opTotalSupply,
+				baseURI:     opBaseURI,
 			},
 			encoded: []byte{
 				243, 12, 227, 130, 2, 209, 139, 84, 101, 115, 116, 32, 84, 111, 107, 107, 101, 110, 130, 84, 84, 128, 128, 142, 116, 101, 115, 116, 46, 116, 111, 107, 101, 110, 46, 99, 111, 109,
@@ -1412,11 +1412,11 @@ func TestCreateOperationOperation(t *testing.T) {
 			caseName: "No empty symbol",
 			decoded: decodedOp{
 				op:          0,
-				name:        name,
+				name:        opName,
 				symbol:      nil,
-				decimals:    decimals,
-				totalSupply: totalSupply,
-				baseURI:     baseURI,
+				decimals:    opDecimals,
+				totalSupply: opTotalSupply,
+				baseURI:     opBaseURI,
 			},
 			encoded: []byte{
 				243, 12, 223, 128, 139, 84, 101, 115, 116, 32, 84, 111, 107, 107, 101, 110, 128, 128, 100, 142, 116, 101, 115, 116, 46, 116, 111, 107, 101, 110, 46, 99, 111, 109,
@@ -1427,10 +1427,10 @@ func TestCreateOperationOperation(t *testing.T) {
 			caseName: "No empty token supply ",
 			decoded: decodedOp{
 				op:          0,
-				name:        name,
-				symbol:      symbol,
+				name:        opName,
+				symbol:      opSymbol,
 				decimals:    0,
-				totalSupply: totalSupply,
+				totalSupply: opTotalSupply,
 				baseURI:     nil,
 			},
 			encoded: []byte{
