@@ -85,7 +85,7 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "Correct test WRC20",
 			testData: testData{
@@ -93,7 +93,7 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 				tokenAddress: common.Address{},
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				adr := call(t, v.caller, v.tokenAddress, createOpWrc20, c.errs)
 				*a = common.BytesToAddress(adr)
@@ -111,7 +111,7 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 				tokenAddress: address,
 			},
 			errs: []error{ErrNotNilTo},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				call(t, v.caller, v.tokenAddress, createOpWrc20, c.errs)
 			},
@@ -130,7 +130,7 @@ func TestProcessorCreateOperationWRC721Call(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "Correct test WRC721",
 			testData: testData{
@@ -138,7 +138,7 @@ func TestProcessorCreateOperationWRC721Call(t *testing.T) {
 				tokenAddress: common.Address{},
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				adr := call(t, v.caller, v.tokenAddress, createOpWrc721, c.errs)
 				*a = common.BytesToAddress(adr)
@@ -151,7 +151,7 @@ func TestProcessorCreateOperationWRC721Call(t *testing.T) {
 				tokenAddress: address,
 			},
 			errs: []error{ErrNotNilTo},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				call(t, v.caller, v.tokenAddress, createOpWrc721, c.errs)
 			},
@@ -175,7 +175,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "Correct test WRC20",
 			testData: testData{
@@ -183,7 +183,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				tokenAddress: wrc20Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 
 				callApprove(t, StdWRC20, spender, v.tokenAddress, v.caller, value, c.errs)
@@ -205,7 +205,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 
 				mintNewToken(t, owner, wrc721Address, id, data, caller, c.errs)
@@ -232,7 +232,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{ErrWrongCaller},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 
 				callApprove(t, StdWRC721, spender, v.tokenAddress, v.caller, id, c.errs)
@@ -247,7 +247,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{ErrNotMinted},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 
 				op, err := NewTransferFromOperation(StdWRC721, owner, to, id7)
@@ -273,7 +273,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "Correct test",
 			testData: testData{
@@ -281,7 +281,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				call(t, v.caller, v.tokenAddress, mintOp, c.errs)
 
@@ -298,7 +298,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{ErrWrongMinter},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				call(t, v.caller, v.tokenAddress, mintOp, c.errs)
 			},
@@ -318,7 +318,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "Correct transfer test",
 			testData: testData{
@@ -326,7 +326,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 				tokenAddress: wrc20Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				balance := checkBalance(t, wrc20Address, owner)
 
@@ -346,7 +346,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 				tokenAddress: common.Address{},
 			},
 			errs: []error{ErrNoAddress},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				call(t, v.caller, v.tokenAddress, transferOp, c.errs)
 			},
@@ -358,7 +358,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 				tokenAddress: wrc20Address,
 			},
 			errs: []error{ErrNotEnoughBalance},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				call(t, v.caller, v.tokenAddress, transferOp, c.errs)
 			},
@@ -379,7 +379,7 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "Correct test",
 			testData: testData{
@@ -387,7 +387,7 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 
 				mintNewToken(t, owner, wrc721Address, id3, data, caller, c.errs)
@@ -411,7 +411,7 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{ErrWrongMinter},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				call(t, v.caller, v.tokenAddress, burnOp, c.errs)
 			},
@@ -436,7 +436,7 @@ func TestProcessorApprovalForAllCall(t *testing.T) {
 		t.Fatal()
 	}
 
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "Use approvalForAll",
 			testData: testData{
@@ -444,7 +444,7 @@ func TestProcessorApprovalForAllCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 
 				call(t, v.caller, v.tokenAddress, op, c.errs)
@@ -461,7 +461,7 @@ func TestProcessorApprovalForAllCall(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{nil, ErrWrongCaller},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 
 				call(t, v.caller, v.tokenAddress, op, c.errs)
@@ -486,7 +486,7 @@ func TestProcessorApprovalForAllCall(t *testing.T) {
 }
 
 func TestProcessorIsApprovedForAll(t *testing.T) {
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "IsApprovalForAll",
 			testData: testData{
@@ -494,7 +494,7 @@ func TestProcessorIsApprovedForAll(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 				approvalOp, err := NewSetApprovalForAllOperation(operator, true)
 				if err != nil {
@@ -517,7 +517,7 @@ func TestProcessorIsApprovedForAll(t *testing.T) {
 				tokenAddress: wrc721Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				ok := checkApprove(t, wrc721Address, owner, spender)
 
 				if ok {
@@ -597,7 +597,7 @@ func TestProcessorApproveCall(t *testing.T) {
 		t.Fatal()
 	}
 
-	cases := []test{
+	cases := []testCase{
 		{
 			caseName: "Use approve",
 			testData: testData{
@@ -605,7 +605,7 @@ func TestProcessorApproveCall(t *testing.T) {
 				tokenAddress: wrc20Address,
 			},
 			errs: []error{nil},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				v := c.testData.(testData)
 
 				call(t, v.caller, v.tokenAddress, approveOp, c.errs)
@@ -629,7 +629,7 @@ func TestProcessorApproveCall(t *testing.T) {
 				tokenAddress: wrc20Address,
 			},
 			errs: []error{nil, ErrWrongCaller},
-			fn: func(c *test, a *common.Address) {
+			fn: func(c *testCase, a *common.Address) {
 				allowanceOp, err := NewAllowanceOperation(wrc20Address, owner, to)
 				if err != nil {
 					t.Fatal(err)

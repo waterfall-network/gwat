@@ -27,6 +27,13 @@ var (
 	oData         = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
 )
 
+type operationTestCase struct {
+	caseName string
+	decoded  interface{}
+	encoded  []byte
+	errs     []error
+}
+
 func TestMintOperation(t *testing.T) {
 	type decodedOp struct {
 		op   Std
@@ -35,7 +42,7 @@ func TestMintOperation(t *testing.T) {
 		data []byte
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
@@ -152,7 +159,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 		approve  bool
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test approve",
 			decoded: decodedOp{
@@ -261,7 +268,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 		operator common.Address
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
@@ -379,7 +386,7 @@ func TestAllowanceOperation(t *testing.T) {
 		spender common.Address
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
@@ -496,7 +503,7 @@ func TestApproveOperation(t *testing.T) {
 		value   *big.Int
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct WRC721 test",
 			decoded: decodedOp{
@@ -603,7 +610,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 		data  []byte
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
@@ -722,7 +729,7 @@ func TestTransferFromOperation(t *testing.T) {
 		from  common.Address
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
@@ -835,7 +842,7 @@ func TestTransferOperation(t *testing.T) {
 		to    common.Address
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
@@ -926,7 +933,7 @@ func TestBalanceOfOperation(t *testing.T) {
 		owner   common.Address
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
@@ -1030,7 +1037,7 @@ func TestBurnOperation(t *testing.T) {
 		id *big.Int
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
@@ -1103,7 +1110,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 		index   *big.Int
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
@@ -1214,7 +1221,7 @@ func TestPropertiesOperation(t *testing.T) {
 		id      *big.Int
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct test",
 			decoded: decodedOp{
@@ -1310,7 +1317,7 @@ func TestCreateOperationOperation(t *testing.T) {
 		baseURI     []byte
 	}
 
-	cases := []testCase{
+	cases := []operationTestCase{
 		{
 			caseName: "Correct WRC20 test",
 			decoded: decodedOp{
@@ -1454,7 +1461,7 @@ func TestCreateOperationOperation(t *testing.T) {
 	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
-func startSubTests(t *testing.T, cases []testCase, operationEncode, operationDecode func([]byte, interface{}) error) {
+func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, operationDecode func([]byte, interface{}) error) {
 	for _, c := range cases {
 		t.Run("encoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationEncode(c.encoded, c.decoded)

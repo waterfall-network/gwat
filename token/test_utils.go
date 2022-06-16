@@ -13,16 +13,9 @@ import (
 
 type testCase struct {
 	caseName string
-	decoded  interface{}
-	encoded  []byte
-	errs     []error
-}
-
-type test struct {
-	caseName string
 	testData interface{}
 	errs     []error
-	fn       func(c *test, a *common.Address)
+	fn       func(c *testCase, a *common.Address)
 }
 
 type testData struct {
