@@ -33,9 +33,9 @@ func NewApproveOperation(standard Std, spender common.Address, value *big.Int) (
 	}, nil
 }
 
-// OpCode returns op code of a balance of operation
-func (op *approveOperation) OpCode() OpCode {
-	return OpApprove
+// Code returns op code of a balance of operation
+func (op *approveOperation) OpCode() Code {
+	return Approve
 }
 
 // UnmarshalBinary unmarshals a token approve operation from byte encoding
@@ -71,9 +71,9 @@ func NewBalanceOfOperation(address common.Address, owner common.Address) (Balanc
 	}, nil
 }
 
-// OpCode returns op code of a balance of operation
-func (op *balanceOfOperation) OpCode() OpCode {
-	return OpBalanceOf
+// Code returns op code of a balance of operation
+func (op *balanceOfOperation) OpCode() Code {
+	return BalanceOf
 }
 
 // Standard method is just a stub to implement Operation interface.
@@ -127,9 +127,9 @@ func (op *propertiesOperation) MarshalBinary() ([]byte, error) {
 	return rlpEncode(op)
 }
 
-// OpCode returns op code of a create operation
-func (op *propertiesOperation) OpCode() OpCode {
-	return OpProperties
+// Code returns op code of a create operation
+func (op *propertiesOperation) OpCode() Code {
+	return Properties
 }
 
 // TokenId returns copy of the token id if the field is set.
@@ -169,9 +169,9 @@ func (op *transferFromOperation) From() common.Address {
 	return op.FromAddress
 }
 
-// OpCode returns op code of a balance of operation
-func (op *transferFromOperation) OpCode() OpCode {
-	return OpTransferFrom
+// Code returns op code of a balance of operation
+func (op *transferFromOperation) OpCode() Code {
+	return TransferFrom
 }
 
 // UnmarshalBinary unmarshals a token transfer from operation from byte encoding

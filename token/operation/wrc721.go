@@ -35,9 +35,9 @@ func NewMintOperation(to common.Address, tokenId *big.Int, metadata []byte) (Min
 	}, nil
 }
 
-// OpCode returns op code of a mint token operation
-func (op *mintOperation) OpCode() OpCode {
-	return OpMint
+// Code returns op code of a mint token operation
+func (op *mintOperation) OpCode() Code {
+	return Mint
 }
 
 // Metadata returns copy of the metadata bytes if the field is set.
@@ -80,9 +80,9 @@ func NewBurnOperation(tokenId *big.Int) (BurnOperation, error) {
 	}, nil
 }
 
-// OpCode returns op code of a burn token operation
-func (op *burnOperation) OpCode() OpCode {
-	return OpBurn
+// Code returns op code of a burn token operation
+func (op *burnOperation) OpCode() Code {
+	return Burn
 }
 
 // UnmarshalBinary unmarshals a burn operation from byte encoding
@@ -118,9 +118,9 @@ func NewSetApprovalForAllOperation(operator common.Address, isApproved bool) (Se
 	}, nil
 }
 
-// OpCode returns op code of an set approval for all operation
-func (op *setApprovalForAllOperation) OpCode() OpCode {
-	return OpSetApprovalForAll
+// Code returns op code of an set approval for all operation
+func (op *setApprovalForAllOperation) OpCode() Code {
+	return SetApprovalForAll
 }
 
 // Returns flag whether operations on NFT are approved or not
@@ -173,9 +173,9 @@ func NewIsApprovedForAllOperation(address common.Address, owner common.Address, 
 	}, nil
 }
 
-// OpCode returns op code of an opproved for all operation
-func (op *isApprovedForAllOperation) OpCode() OpCode {
-	return OpIsApprovedForAll
+// Code returns op code of an opproved for all operation
+func (op *isApprovedForAllOperation) OpCode() Code {
+	return IsApprovedForAll
 }
 
 // UnmarshalBinary unmarshals a token allowance operation from byte encoding
@@ -215,9 +215,9 @@ func (op *safeTransferFromOperation) Data() ([]byte, bool) {
 	return makeCopy(op.OperationData), true
 }
 
-// OpCode returns op code of a balance of operation
-func (op *safeTransferFromOperation) OpCode() OpCode {
-	return OpSafeTransferFrom
+// Code returns op code of a balance of operation
+func (op *safeTransferFromOperation) OpCode() Code {
+	return SafeTransferFrom
 }
 
 // UnmarshalBinary unmarshals a token safe transfer from operation from byte encoding
@@ -263,9 +263,9 @@ func NewTokenOfOwnerByIndexOperation(address common.Address, owner common.Addres
 	}, nil
 }
 
-// OpCode returns op code of a token of owner by index token operation
-func (op *tokenOfOwnerByIndexOperation) OpCode() OpCode {
-	return OpTokenOfOwnerByIndex
+// Code returns op code of a token of owner by index token operation
+func (op *tokenOfOwnerByIndexOperation) OpCode() Code {
+	return TokenOfOwnerByIndex
 }
 
 // Index returns copy of the index field

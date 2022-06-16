@@ -102,12 +102,12 @@ func (op *createOperation) MarshalBinary() ([]byte, error) {
 	return rlp.EncodeToBytes(&opData)
 }
 
-// OpCode returns op code of a create operation
-func (op *createOperation) OpCode() OpCode {
-	return OpCreate
+// Code returns op code of a create operation
+func (op *createOperation) OpCode() Code {
+	return Create
 }
 
-// OpCode always returns an empty address
+// Code always returns an empty address
 // It's just a stub for the Operation interface.
 func (op *createOperation) Address() common.Address {
 	return common.Address{}

@@ -25,23 +25,23 @@ const (
 )
 
 // Token operation code
-type OpCode byte
+type Code byte
 
 // Token operation codes use invalid op codes of EVM instructions to prevent clashes.
 const (
-	OpCreate              = 0x0C
-	OpApprove             = 0x0D
-	OpTransfer            = 0x1E
-	OpTransferFrom        = 0x1F
-	OpProperties          = 0x21
-	OpBalanceOf           = 0x22
-	OpAllowance           = 0x23
-	OpIsApprovedForAll    = 0x24
-	OpSetApprovalForAll   = 0x25
-	OpMint                = 0x26
-	OpBurn                = 0x27
-	OpTokenOfOwnerByIndex = 0x28
-	OpSafeTransferFrom    = 0x29
+	Create              = 0x0C
+	Approve             = 0x0D
+	Transfer            = 0x1E
+	TransferFrom        = 0x1F
+	Properties          = 0x21
+	BalanceOf           = 0x22
+	Allowance           = 0x23
+	IsApprovedForAll    = 0x24
+	SetApprovalForAll   = 0x25
+	Mint                = 0x26
+	Burn                = 0x27
+	TokenOfOwnerByIndex = 0x28
+	SafeTransferFrom    = 0x29
 )
 
 // Prefix for the encoded data field of a token operation
@@ -52,7 +52,7 @@ const (
 // Operation is a token operation
 // Every specific operation should implement this interface
 type Operation interface {
-	OpCode() OpCode
+	OpCode() Code
 	Standard() Std
 
 	encoding.BinaryUnmarshaler
@@ -61,7 +61,7 @@ type Operation interface {
 
 // GetOpCode gets op code of an encoded token operation
 // It also checks the encoding for length and prefix
-func GetOpCode(b []byte) (OpCode, error) {
+func GetOpCode(b []byte) (Code, error) {
 	if len(b) < 2 {
 		return 0, ErrRawDataShort
 	}
@@ -71,7 +71,7 @@ func GetOpCode(b []byte) (OpCode, error) {
 		return 0, ErrPrefixNotValid
 	}
 
-	return OpCode(b[1]), nil
+	return Code(b[1]), nil
 }
 
 // DecodeBytes decodes an encoded token operation
@@ -85,31 +85,31 @@ func DecodeBytes(b []byte) (Operation, error) {
 
 	var op Operation
 	switch opCode {
-	case OpCreate:
+	case Create:
 		op = &createOperation{}
-	case OpApprove:
+	case Approve:
 		op = &approveOperation{}
-	case OpTransfer:
+	case Transfer:
 		op = &transferOperation{}
-	case OpTransferFrom:
+	case TransferFrom:
 		op = &transferFromOperation{}
-	case OpProperties:
+	case Properties:
 		op = &propertiesOperation{}
-	case OpBalanceOf:
+	case BalanceOf:
 		op = &balanceOfOperation{}
-	case OpAllowance:
+	case Allowance:
 		op = &allowanceOperation{}
-	case OpIsApprovedForAll:
+	case IsApprovedForAll:
 		op = &isApprovedForAllOperation{}
-	case OpSetApprovalForAll:
+	case SetApprovalForAll:
 		op = &setApprovalForAllOperation{}
-	case OpMint:
+	case Mint:
 		op = &mintOperation{}
-	case OpBurn:
+	case Burn:
 		op = &burnOperation{}
-	case OpTokenOfOwnerByIndex:
+	case TokenOfOwnerByIndex:
 		op = &tokenOfOwnerByIndexOperation{}
-	case OpSafeTransferFrom:
+	case SafeTransferFrom:
 		op = &safeTransferFromOperation{}
 	default:
 		return nil, ErrOpNotValid
@@ -133,31 +133,31 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 
 	switch op.(type) {
 	case *createOperation:
-		buf[1] = OpCreate
+		buf[1] = Create
 	case *approveOperation:
-		buf[1] = OpApprove
+		buf[1] = Approve
 	case *transferOperation:
-		buf[1] = OpTransfer
+		buf[1] = Transfer
 	case *transferFromOperation:
-		buf[1] = OpTransferFrom
+		buf[1] = TransferFrom
 	case *propertiesOperation:
-		buf[1] = OpProperties
+		buf[1] = Properties
 	case *balanceOfOperation:
-		buf[1] = OpBalanceOf
+		buf[1] = BalanceOf
 	case *allowanceOperation:
-		buf[1] = OpAllowance
+		buf[1] = Allowance
 	case *isApprovedForAllOperation:
-		buf[1] = OpIsApprovedForAll
+		buf[1] = IsApprovedForAll
 	case *setApprovalForAllOperation:
-		buf[1] = OpSetApprovalForAll
+		buf[1] = SetApprovalForAll
 	case *mintOperation:
-		buf[1] = OpMint
+		buf[1] = Mint
 	case *burnOperation:
-		buf[1] = OpBurn
+		buf[1] = Burn
 	case *tokenOfOwnerByIndexOperation:
-		buf[1] = OpTokenOfOwnerByIndex
+		buf[1] = TokenOfOwnerByIndex
 	case *safeTransferFromOperation:
-		buf[1] = OpSafeTransferFrom
+		buf[1] = SafeTransferFrom
 	}
 
 	buf = append(buf, b...)

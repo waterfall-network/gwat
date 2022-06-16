@@ -41,9 +41,9 @@ func NewAllowanceOperation(address common.Address, owner common.Address, spender
 	}, nil
 }
 
-// OpCode returns op code of an allowance operation
-func (op *allowanceOperation) OpCode() OpCode {
-	return OpAllowance
+// Code returns op code of an allowance operation
+func (op *allowanceOperation) OpCode() Code {
+	return Allowance
 }
 
 // UnmarshalBinary unmarshals a token allowance operation from byte encoding
@@ -88,9 +88,9 @@ func newTransferOperation(standard Std, to common.Address, value *big.Int) (*tra
 	}, nil
 }
 
-// OpCode returns op code of a balance of operation
-func (op *transferOperation) OpCode() OpCode {
-	return OpTransfer
+// Code returns op code of a balance of operation
+func (op *transferOperation) OpCode() Code {
+	return Transfer
 }
 
 // UnmarshalBinary unmarshals a token transfer operation from byte encoding
