@@ -1,18 +1,19 @@
-package token
+package operation
+
+// Marshaling and unmarshaling of operations in the package is impelemented using Ethereum rlp encoding.
+// All marshal and unmarshal methods of operations suppose that an encoding prefix has already handled.
+// Byte encoding of the operation should be given to the methods without the prefix.
+//
+// The operations are implement using a philosophy of immutable data structures. Every method that returns
+// a data field of an operation always make its copy before returning. That prevents situations when the
+// operation structure can be mutated accidentally.
 
 import (
 	"encoding"
-	"errors"
 )
 
 const (
 	DefaultDecimals = 18
-)
-
-var (
-	ErrPrefixNotValid = errors.New("not valid value for prefix")
-	ErrRawDataShort   = errors.New("binary data for token operation is short")
-	ErrOpNotValid     = errors.New("not valid op code for token operation")
 )
 
 // Token standard
