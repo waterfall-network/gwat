@@ -440,6 +440,11 @@ func (op *transferFromOperation) From() common.Address {
 	return op.FromAddress
 }
 
+// OpCode returns op code of a balance of operation
+func (op *transferFromOperation) OpCode() OpCode {
+	return OpTransferFrom
+}
+
 // UnmarshalBinary unmarshals a token transfer from operation from byte encoding
 func (op *transferFromOperation) UnmarshalBinary(b []byte) error {
 	return rlpDecode(b, op)
@@ -458,7 +463,7 @@ type SafeTransferFromOperation interface {
 
 type safeTransferFromOperation struct {
 	transferFromOperation
-	data []byte
+	OperationData []byte
 }
 
 // NewSafeTransferFromOperation creates a safe token transfer operation.
@@ -470,17 +475,22 @@ func NewSafeTransferFromOperation(from common.Address, to common.Address, value 
 	}
 	return &safeTransferFromOperation{
 		transferFromOperation: *transferOp.(*transferFromOperation),
-		data:                  data,
+		OperationData:         data,
 	}, nil
 }
 
 // Data returns copy of the data bytes if the field is set.
 // Otherwise it returns nil.
 func (op *safeTransferFromOperation) Data() ([]byte, bool) {
-	if len(op.data) == 0 {
+	if len(op.OperationData) == 0 {
 		return nil, false
 	}
-	return makeCopy(op.data), true
+	return makeCopy(op.OperationData), true
+}
+
+// OpCode returns op code of a balance of operation
+func (op *safeTransferFromOperation) OpCode() OpCode {
+	return OpSafeTransferFrom
 }
 
 // UnmarshalBinary unmarshals a token safe transfer from operation from byte encoding
@@ -855,7 +865,7 @@ type tokenOfOwnerByIndexOperation struct {
 	operation
 	addressOperation
 	ownerOperation
-	index *big.Int
+	TokenIndex *big.Int
 }
 
 // NewBurnOperation creates a token of owner by index operation.
@@ -880,7 +890,7 @@ func NewTokenOfOwnerByIndexOperation(address common.Address, owner common.Addres
 		ownerOperation: ownerOperation{
 			OwnerAddress: owner,
 		},
-		index: index,
+		TokenIndex: index,
 	}, nil
 }
 
@@ -891,7 +901,7 @@ func (op *tokenOfOwnerByIndexOperation) OpCode() OpCode {
 
 // Index returns copy of the index field
 func (op *tokenOfOwnerByIndexOperation) Index() *big.Int {
-	return new(big.Int).Set(op.index)
+	return new(big.Int).Set(op.TokenIndex)
 }
 
 // UnmarshalBinary unmarshals a token of owner by index operation from byte encoding
@@ -994,13 +1004,13 @@ func rlpDecode(b []byte, op interface{}) error {
 
 	switch v := op.(type) {
 	case *safeTransferFromOperation:
-		v.data = data.Data
+		v.OperationData = data.Data
 	case *setApprovalForAllOperation:
 		v.Approved = data.IsApproved
 	case *mintOperation:
 		v.TokenMetadata = data.Data
 	case *tokenOfOwnerByIndexOperation:
-		v.index = data.Index
+		v.TokenIndex = data.Index
 	}
 
 	return nil
@@ -1038,11 +1048,11 @@ func rlpEncode(op interface{}) ([]byte, error) {
 				name = "Address"
 			case "TokenMetadata":
 				name = "Data"
-			case "data":
+			case "OperationData":
 				name = "Data"
 			case "Approved":
 				name = "IsApproved"
-			case "index":
+			case "TokenIndex":
 				name = "Index"
 			default:
 				if re.MatchString(f.Name) {
