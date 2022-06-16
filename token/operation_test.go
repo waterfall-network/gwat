@@ -27,13 +27,6 @@ var (
 	oData         = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
 )
 
-type testCase struct {
-	caseName string
-	decoded  interface{}
-	encoded  []byte
-	errs     []error
-}
-
 func TestMintOperation(t *testing.T) {
 	type decodedOp struct {
 		op   Std
@@ -54,7 +47,7 @@ func TestMintOperation(t *testing.T) {
 			encoded: []byte{
 				243, 38, 248, 149, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 141, 243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty tokenID",
@@ -93,7 +86,7 @@ func TestMintOperation(t *testing.T) {
 			encoded: []byte{
 				243, 38, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 128, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 	}
 
@@ -109,10 +102,7 @@ func TestMintOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -147,10 +137,7 @@ func TestMintOperation(t *testing.T) {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.data, haveData)
 		}
 
-		err = checkBigInt(opDecoded.TokenId(), o.id)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, opDecoded.TokenId(), o.id)
 
 		return nil
 	}
@@ -176,7 +163,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			encoded: []byte{
 				243, 37, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 1, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "Approve no empty operator",
@@ -201,7 +188,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			encoded: []byte{
 				243, 37, 248, 134, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "Unapprove no empty operator",
@@ -228,10 +215,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -289,7 +273,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			encoded: []byte{
 				243, 36, 248, 134, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 19, 228, 172, 239, 230, 166, 112, 6, 4, 146, 153, 70, 231, 14, 100, 67, 228, 231, 52, 71, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty owner",
@@ -344,10 +328,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -465,10 +446,7 @@ func TestAllowanceOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -541,7 +519,7 @@ func TestApproveOperation(t *testing.T) {
 			encoded: []byte{
 				243, 13, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 44, 204, 245, 224, 83, 132, 147, 194, 53, 209, 197, 239, 101, 128, 247, 125, 153, 233, 19, 150, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty value",
@@ -581,10 +559,7 @@ func TestApproveOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -611,10 +586,7 @@ func TestApproveOperation(t *testing.T) {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.spender, operator)
 		}
 
-		err = checkBigInt(opDecoded.Value(), o.value)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, opDecoded.Value(), o.value)
 
 		return nil
 	}
@@ -644,7 +616,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 41, 248, 150, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 141, 243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty value",
@@ -703,10 +675,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -737,10 +706,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.data, data)
 		}
 
-		err = checkBigInt(opDecoded.Value(), o.value)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, opDecoded.Value(), o.value)
 
 		return nil
 	}
@@ -768,7 +734,7 @@ func TestTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 31, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "Correct WRC721 test",
@@ -781,7 +747,7 @@ func TestTransferFromOperation(t *testing.T) {
 			encoded: []byte{
 				243, 31, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 121, 134, 186, 216, 31, 76, 189, 147, 23, 245, 164, 104, 97, 67, 125, 174, 88, 214, 145, 19, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 130, 48, 57, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty from",
@@ -824,10 +790,7 @@ func TestTransferFromOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -849,10 +812,7 @@ func TestTransferFromOperation(t *testing.T) {
 			return err
 		}
 
-		err = checkBigInt(opDecoded.Value(), o.value)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, opDecoded.Value(), o.value)
 
 		if o.from != opDecoded.From() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.From(), o.from)
@@ -886,7 +846,7 @@ func TestTransferOperation(t *testing.T) {
 			encoded: []byte{
 				243, 30, 248, 135, 20, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 131, 1, 182, 105, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty to",
@@ -925,10 +885,7 @@ func TestTransferOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -950,10 +907,7 @@ func TestTransferOperation(t *testing.T) {
 			return err
 		}
 
-		err = checkBigInt(opDecoded.Value(), o.value)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, opDecoded.Value(), o.value)
 
 		if o.to != opDecoded.To() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.To(), o.to)
@@ -983,7 +937,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "Correct WRC721 test",
@@ -995,7 +949,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			encoded: []byte{
 				243, 34, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 125, 201, 201, 115, 6, 137, 255, 11, 15, 213, 6, 198, 125, 184, 21, 241, 45, 144, 164, 72, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty owner",
@@ -1034,10 +988,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -1089,7 +1040,7 @@ func TestBurnOperation(t *testing.T) {
 			encoded: []byte{
 				243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty token id",
@@ -1114,10 +1065,7 @@ func TestBurnOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -1139,10 +1087,7 @@ func TestBurnOperation(t *testing.T) {
 			return err
 		}
 
-		err = checkBigInt(opDecoded.TokenId(), o.id)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, opDecoded.TokenId(), o.id)
 
 		return nil
 	}
@@ -1170,7 +1115,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			encoded: []byte{
 				243, 40, 248, 136, 130, 2, 209, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 25, 119, 194, 72, 225, 1, 76, 193, 3, 146, 157, 215, 241, 84, 25, 156, 145, 110, 57, 236, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 130, 217, 3, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty token address",
@@ -1225,10 +1170,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -1250,10 +1192,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			return err
 		}
 
-		err = checkBigInt(opDecoded.Index(), o.index)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, opDecoded.Index(), o.index)
 
 		if o.owner != opDecoded.Owner() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.owner, opDecoded.Owner())
@@ -1285,7 +1224,7 @@ func TestPropertiesOperation(t *testing.T) {
 			encoded: []byte{
 				243, 33, 248, 134, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{},
+			errs: []error{nil},
 		},
 		{
 			caseName: "No empty token id",
@@ -1322,10 +1261,7 @@ func TestPropertiesOperation(t *testing.T) {
 			return err
 		}
 
-		err = equalOpBytes(op, b)
-		if err != nil {
-			return err
-		}
+		equalOpBytes(t, op, b)
 
 		return nil
 	}
@@ -1352,10 +1288,7 @@ func TestPropertiesOperation(t *testing.T) {
 			return errors.New("invalid tokenId")
 		}
 
-		err = checkBigInt(tokenId, o.id)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, tokenId, o.id)
 
 		if o.address != opDecoded.Address() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.address, opDecoded.Address())
@@ -1454,10 +1387,7 @@ func TestCreateOperationOperation(t *testing.T) {
 				return err
 			}
 
-			err = equalOpBytes(createOp, b)
-			if err != nil {
-				return err
-			}
+			equalOpBytes(t, createOp, b)
 		case StdWRC721:
 			createOp, err := NewWrc721CreateOperation(
 				o.name,
@@ -1468,10 +1398,7 @@ func TestCreateOperationOperation(t *testing.T) {
 				return err
 			}
 
-			err = equalOpBytes(createOp, b)
-			if err != nil {
-				return err
-			}
+			equalOpBytes(t, createOp, b)
 		}
 
 		return nil
@@ -1499,10 +1426,7 @@ func TestCreateOperationOperation(t *testing.T) {
 			return ErrNoTokenSupply
 		}
 
-		err = checkBigInt(tS, o.totalSupply)
-		if err != nil {
-			return err
-		}
+		compareBigInt(t, tS, o.totalSupply)
 
 		if opDecoded.Decimals() != o.decimals {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.decimals, opDecoded.Decimals())
@@ -1528,81 +1452,4 @@ func TestCreateOperationOperation(t *testing.T) {
 	}
 
 	startSubTests(t, cases, operationEncode, operationDecode)
-}
-
-func startSubTests(t *testing.T, cases []testCase, operationEncode, operationDecode func([]byte, interface{}) error) {
-	for _, c := range cases {
-		t.Run("encoding"+" "+c.caseName, func(t *testing.T) {
-			err := operationEncode(c.encoded, c.decoded)
-			if err != nil {
-				if err = findNotCorrectError(err, c.errs); err != nil {
-					t.Fatalf("operationEncode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
-				}
-			}
-		})
-
-		t.Run("decoding"+" "+c.caseName, func(t *testing.T) {
-			err := operationDecode(c.encoded, c.decoded)
-			if err != nil {
-				if err = findNotCorrectError(err, c.errs); err != nil {
-					t.Fatalf("operationDecode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
-				}
-			}
-		})
-	}
-}
-
-func checkOpCodeAndStandart(b []byte, op Operation, std Std) error {
-	if op.Standard() != std {
-		return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", std, op.Standard())
-	}
-
-	haveOpCode, err := GetOpCode(b)
-	if err != nil {
-		return err
-	}
-
-	if haveOpCode != op.OpCode() {
-		return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", op.OpCode(), haveOpCode)
-	}
-
-	return nil
-}
-
-func checkBigInt(a, b *big.Int) error {
-	haveValue := a
-	wantValue := b
-
-	if wantValue == nil {
-		wantValue = big.NewInt(0)
-	}
-
-	if haveValue.Cmp(wantValue) != 0 {
-		return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", wantValue, haveValue)
-	}
-
-	return nil
-}
-
-func equalOpBytes(op Operation, b []byte) error {
-	have, err := EncodeToBytes(op)
-	if err != nil {
-		return fmt.Errorf("can`t encode operation %+v\nerror: %+v", op, err)
-	}
-
-	if !bytes.Equal(b, have) {
-		return fmt.Errorf("values do not match:\n want: %+v\nhave: %+v", b, have)
-	}
-
-	return nil
-}
-
-func findNotCorrectError(e error, arr []error) error {
-	for _, err := range arr {
-		if e == err {
-			return nil
-		}
-	}
-
-	return e
 }
