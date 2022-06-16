@@ -1453,3 +1453,25 @@ func TestCreateOperationOperation(t *testing.T) {
 
 	startSubTests(t, cases, operationEncode, operationDecode)
 }
+
+func startSubTests(t *testing.T, cases []testCase, operationEncode, operationDecode func([]byte, interface{}) error) {
+	for _, c := range cases {
+		t.Run("encoding"+" "+c.caseName, func(t *testing.T) {
+			err := operationEncode(c.encoded, c.decoded)
+			if err != nil {
+				if !checkError(err, c.errs) {
+					t.Fatalf("operationEncode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
+				}
+			}
+		})
+
+		t.Run("decoding"+" "+c.caseName, func(t *testing.T) {
+			err := operationDecode(c.encoded, c.decoded)
+			if err != nil {
+				if !checkError(err, c.errs) {
+					t.Fatalf("operationDecode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
+				}
+			}
+		})
+	}
+}
