@@ -61,7 +61,7 @@ func NewProcessor(blockCtx vm.BlockContext, statedb vm.StateDB) *Processor {
 //
 // It returns byte represantation of the return value of an operation.
 func (p *Processor) Call(caller Ref, token common.Address, op operation.Operation) (ret []byte, err error) {
-	if _, ok := op.(operation.CreateOperation); !ok {
+	if _, ok := op.(operation.Create); !ok {
 		nonce := p.state.GetNonce(caller.Address())
 		p.state.SetNonce(caller.Address(), nonce+1)
 	}
@@ -69,24 +69,24 @@ func (p *Processor) Call(caller Ref, token common.Address, op operation.Operatio
 
 	ret = nil
 	switch v := op.(type) {
-	case operation.CreateOperation:
+	case operation.Create:
 		if token != (common.Address{}) {
 			return nil, ErrNotNilTo
 		}
 		if addr, err := p.tokenCreate(caller, v); err == nil {
 			ret = addr.Bytes()
 		}
-	case operation.TransferFromOperation:
+	case operation.TransferFrom:
 		ret, err = p.transferFrom(caller, token, v)
-	case operation.TransferOperation:
+	case operation.Transfer:
 		ret, err = p.transfer(caller, token, v)
-	case operation.ApproveOperation:
+	case operation.Approve:
 		ret, err = p.approve(caller, token, v)
-	case operation.MintOperation:
+	case operation.Mint:
 		ret, err = p.mint(caller, token, v)
-	case operation.BurnOperation:
+	case operation.Burn:
 		ret, err = p.burn(caller, token, v)
-	case operation.SetApprovalForAllOperation:
+	case operation.SetApprovalForAll:
 		ret, err = p.setApprovalForAll(caller, token, v)
 	}
 
@@ -96,7 +96,7 @@ func (p *Processor) Call(caller Ref, token common.Address, op operation.Operatio
 	return ret, err
 }
 
-func (p *Processor) tokenCreate(caller Ref, op operation.CreateOperation) (tokenAddr common.Address, err error) {
+func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr common.Address, err error) {
 	tokenAddr = crypto.CreateAddress(caller.Address(), p.state.GetNonce(caller.Address()))
 	if p.state.Exist(tokenAddr) {
 		return common.Address{}, ErrTokenAlreadyExists
@@ -163,7 +163,7 @@ type WRC721PropertiesResult struct {
 
 // Properties perfroms the token properties opertaion
 // It returns WRC20PropertiesResult or WRC721PropertiesResult according to the token type.
-func (p *Processor) Properties(op operation.PropertiesOperation) (interface{}, error) {
+func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())
 	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
 	if err != nil {
@@ -227,7 +227,7 @@ func concatTokenURI(baseURI []byte, tokenId *big.Int) []byte {
 	return append(b, id...)
 }
 
-func (p *Processor) transfer(caller Ref, token common.Address, op operation.TransferOperation) ([]byte, error) {
+func (p *Processor) transfer(caller Ref, token common.Address, op operation.Transfer) ([]byte, error) {
 	if token == (common.Address{}) {
 		return nil, operation.ErrNoAddress
 	}
@@ -296,7 +296,7 @@ func (p *Processor) wrc20SpendAllowance(storage *Storage, owner common.Address, 
 	return nil
 }
 
-func (p *Processor) transferFrom(caller Ref, token common.Address, op operation.TransferFromOperation) ([]byte, error) {
+func (p *Processor) transferFrom(caller Ref, token common.Address, op operation.TransferFrom) ([]byte, error) {
 	if token == (common.Address{}) {
 		return nil, operation.ErrNoAddress
 	}
@@ -337,7 +337,7 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op operation.
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op operation.TransferFromOperation) error {
+func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op operation.TransferFrom) error {
 	owners, balances := p.prepareNftStorage(storage)
 
 	address := caller.Address()
@@ -385,7 +385,7 @@ func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op operatio
 	return nil
 }
 
-func (p *Processor) approve(caller Ref, token common.Address, op operation.ApproveOperation) ([]byte, error) {
+func (p *Processor) approve(caller Ref, token common.Address, op operation.Approve) ([]byte, error) {
 	if token == (common.Address{}) {
 		return nil, operation.ErrNoAddress
 	}
@@ -426,7 +426,7 @@ func (p *Processor) approve(caller Ref, token common.Address, op operation.Appro
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op operation.ApproveOperation) error {
+func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op operation.Approve) error {
 	owners, _ := p.prepareNftStorage(storage)
 
 	address := caller.Address()
@@ -455,7 +455,7 @@ func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op operation.App
 
 // BalanceOf performs the token bolance of operations
 // It returns uint256 value with the token balance of number of NFTs.
-func (p *Processor) BalanceOf(op operation.BalanceOfOperation) (*big.Int, error) {
+func (p *Processor) BalanceOf(op operation.BalanceOf) (*big.Int, error) {
 	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
 	if err != nil {
 		return nil, err
@@ -489,7 +489,7 @@ func (p *Processor) BalanceOf(op operation.BalanceOfOperation) (*big.Int, error)
 // Allowance performs the token allowance operation
 // It returns uint256 value with allowed count of the token to spend.
 // The method only works for WRC-20 tokens.
-func (p *Processor) Allowance(op operation.AllowanceOperation) (*big.Int, error) {
+func (p *Processor) Allowance(op operation.Allowance) (*big.Int, error) {
 	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
 		return nil, err
@@ -517,7 +517,7 @@ func (p *Processor) Allowance(op operation.AllowanceOperation) (*big.Int, error)
 	return allowance, nil
 }
 
-func (p *Processor) mint(caller Ref, token common.Address, op operation.MintOperation) ([]byte, error) {
+func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([]byte, error) {
 	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
@@ -561,7 +561,7 @@ func (p *Processor) mint(caller Ref, token common.Address, op operation.MintOper
 	return tokenId.Bytes(), nil
 }
 
-func (p *Processor) burn(caller Ref, token common.Address, op operation.BurnOperation) ([]byte, error) {
+func (p *Processor) burn(caller Ref, token common.Address, op operation.Burn) ([]byte, error) {
 	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
@@ -604,7 +604,7 @@ func (p *Processor) burn(caller Ref, token common.Address, op operation.BurnOper
 	return tokenId.Bytes(), nil
 }
 
-func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op operation.SetApprovalForAllOperation) ([]byte, error) {
+func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op operation.SetApprovalForAll) ([]byte, error) {
 	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
@@ -630,7 +630,7 @@ func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op opera
 
 // IsApprovedForAll performs the is approved for all operation for WRC-721 tokens
 // Returns boolean value that indicates whether the operator can perform any operation on the token.
-func (p *Processor) IsApprovedForAll(op operation.IsApprovedForAllOperation) (bool, error) {
+func (p *Processor) IsApprovedForAll(op operation.IsApprovedForAll) (bool, error) {
 	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
 		return false, err

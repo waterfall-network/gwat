@@ -14,7 +14,7 @@ type allowanceOperation struct {
 
 // NewAllowanceOperation creates a token allowance operation.
 // The operation only supports WRC-20 tokens so its Standard field sets to StdWRC20.
-func NewAllowanceOperation(address common.Address, owner common.Address, spender common.Address) (AllowanceOperation, error) {
+func NewAllowanceOperation(address common.Address, owner common.Address, spender common.Address) (Allowance, error) {
 
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
@@ -43,7 +43,7 @@ func NewAllowanceOperation(address common.Address, owner common.Address, spender
 
 // Code returns op code of an allowance operation
 func (op *allowanceOperation) OpCode() Code {
-	return Allowance
+	return AllowanceCode
 }
 
 // UnmarshalBinary unmarshals a token allowance operation from byte encoding
@@ -64,7 +64,7 @@ type transferOperation struct {
 
 // NewTransferOperation creates a token trasnsfer operation
 // Only WRC-20 tokens support the operation so its Standard alwasys sets to StdWRC20.
-func NewTransferOperation(to common.Address, value *big.Int) (TransferOperation, error) {
+func NewTransferOperation(to common.Address, value *big.Int) (Transfer, error) {
 	return newTransferOperation(StdWRC20, to, value)
 }
 
@@ -90,7 +90,7 @@ func newTransferOperation(standard Std, to common.Address, value *big.Int) (*tra
 
 // Code returns op code of a balance of operation
 func (op *transferOperation) OpCode() Code {
-	return Transfer
+	return TransferCode
 }
 
 // UnmarshalBinary unmarshals a token transfer operation from byte encoding

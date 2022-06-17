@@ -13,7 +13,7 @@ type approveOperation struct {
 
 // NewApproveOperation creates a token approve operation.
 // Same logic with standard parameter applies as with the transfer from factory function.
-func NewApproveOperation(standard Std, spender common.Address, value *big.Int) (ApproveOperation, error) {
+func NewApproveOperation(standard Std, spender common.Address, value *big.Int) (Approve, error) {
 	if spender == (common.Address{}) {
 		return nil, ErrNoSpender
 	}
@@ -35,7 +35,7 @@ func NewApproveOperation(standard Std, spender common.Address, value *big.Int) (
 
 // Code returns op code of a balance of operation
 func (op *approveOperation) OpCode() Code {
-	return Approve
+	return ApproveCode
 }
 
 // UnmarshalBinary unmarshals a token approve operation from byte encoding
@@ -54,7 +54,7 @@ type balanceOfOperation struct {
 }
 
 // NewBalanceOfOperation creates a balance of operation
-func NewBalanceOfOperation(address common.Address, owner common.Address) (BalanceOfOperation, error) {
+func NewBalanceOfOperation(address common.Address, owner common.Address) (BalanceOf, error) {
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
 	}
@@ -73,7 +73,7 @@ func NewBalanceOfOperation(address common.Address, owner common.Address) (Balanc
 
 // Code returns op code of a balance of operation
 func (op *balanceOfOperation) OpCode() Code {
-	return BalanceOf
+	return BalanceOfCode
 }
 
 // Standard method is just a stub to implement Operation interface.
@@ -99,7 +99,7 @@ type propertiesOperation struct {
 
 // NewPropertiesOperation creates a token properties operation
 // tokenId parameters isn't required.
-func NewPropertiesOperation(address common.Address, tokenId *big.Int) (PropertiesOperation, error) {
+func NewPropertiesOperation(address common.Address, tokenId *big.Int) (Properties, error) {
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
 	}
@@ -129,7 +129,7 @@ func (op *propertiesOperation) MarshalBinary() ([]byte, error) {
 
 // Code returns op code of a create operation
 func (op *propertiesOperation) OpCode() Code {
-	return Properties
+	return PropertiesCode
 }
 
 // TokenId returns copy of the token id if the field is set.
@@ -149,7 +149,7 @@ type transferFromOperation struct {
 // NewTransferFromOperation creates a token transfer operation.
 // Standard of the token is selected using the standard parameter.
 // For WRC-20 tokens the value parameter is value itself. For WRC-721 tokens the value parameter is a token id.
-func NewTransferFromOperation(standard Std, from common.Address, to common.Address, value *big.Int) (TransferFromOperation, error) {
+func NewTransferFromOperation(standard Std, from common.Address, to common.Address, value *big.Int) (TransferFrom, error) {
 	if from == (common.Address{}) {
 		return nil, ErrNoFrom
 	}
@@ -171,7 +171,7 @@ func (op *transferFromOperation) From() common.Address {
 
 // Code returns op code of a balance of operation
 func (op *transferFromOperation) OpCode() Code {
-	return TransferFrom
+	return TransferFromCode
 }
 
 // UnmarshalBinary unmarshals a token transfer from operation from byte encoding

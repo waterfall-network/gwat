@@ -52,7 +52,7 @@ func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals *u
 
 // NewWrc20CreateOperation creates an operation for creating WRC-20 token
 // It sets Standard of the operation to StdWRC20 and all other WRC-20 related fields
-func NewWrc20CreateOperation(name []byte, symbol []byte, decimals *uint8, totalSupply *big.Int) (CreateOperation, error) {
+func NewWrc20CreateOperation(name []byte, symbol []byte, decimals *uint8, totalSupply *big.Int) (Create, error) {
 	op := createOperation{}
 	if err := op.init(StdWRC20, name, symbol, decimals, totalSupply, nil); err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func NewWrc20CreateOperation(name []byte, symbol []byte, decimals *uint8, totalS
 
 // NewWRC721CreateOperation creates an operation for creating WRC-721 token
 // It sets Standard of the operation to StdWRC721 and all other WRC-721 related fields
-func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (CreateOperation, error) {
+func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (Create, error) {
 	op := createOperation{}
 	if err := op.init(StdWRC721, name, symbol, nil, nil, baseURI); err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func (op *createOperation) MarshalBinary() ([]byte, error) {
 
 // Code returns op code of a create operation
 func (op *createOperation) OpCode() Code {
-	return Create
+	return CreateCode
 }
 
 // Code always returns an empty address

@@ -29,19 +29,19 @@ type Code byte
 
 // Token operation codes use invalid op codes of EVM instructions to prevent clashes.
 const (
-	Create              = 0x0C
-	Approve             = 0x0D
-	Transfer            = 0x1E
-	TransferFrom        = 0x1F
-	Properties          = 0x21
-	BalanceOf           = 0x22
-	Allowance           = 0x23
-	IsApprovedForAll    = 0x24
-	SetApprovalForAll   = 0x25
-	Mint                = 0x26
-	Burn                = 0x27
-	TokenOfOwnerByIndex = 0x28
-	SafeTransferFrom    = 0x29
+	CreateCode              = 0x0C
+	ApproveCode             = 0x0D
+	TransferCode            = 0x1E
+	TransferFromCode        = 0x1F
+	PropertiesCode          = 0x21
+	BalanceOfCode           = 0x22
+	AllowanceCode           = 0x23
+	IsApprovedForAllCode    = 0x24
+	SetApprovalForAllCode   = 0x25
+	MintCode                = 0x26
+	BurnCode                = 0x27
+	TokenOfOwnerByIndexCode = 0x28
+	SafeTransferFromCode    = 0x29
 )
 
 // Prefix for the encoded data field of a token operation
@@ -85,31 +85,31 @@ func DecodeBytes(b []byte) (Operation, error) {
 
 	var op Operation
 	switch opCode {
-	case Create:
+	case CreateCode:
 		op = &createOperation{}
-	case Approve:
+	case ApproveCode:
 		op = &approveOperation{}
-	case Transfer:
+	case TransferCode:
 		op = &transferOperation{}
-	case TransferFrom:
+	case TransferFromCode:
 		op = &transferFromOperation{}
-	case Properties:
+	case PropertiesCode:
 		op = &propertiesOperation{}
-	case BalanceOf:
+	case BalanceOfCode:
 		op = &balanceOfOperation{}
-	case Allowance:
+	case AllowanceCode:
 		op = &allowanceOperation{}
-	case IsApprovedForAll:
+	case IsApprovedForAllCode:
 		op = &isApprovedForAllOperation{}
-	case SetApprovalForAll:
+	case SetApprovalForAllCode:
 		op = &setApprovalForAllOperation{}
-	case Mint:
+	case MintCode:
 		op = &mintOperation{}
-	case Burn:
+	case BurnCode:
 		op = &burnOperation{}
-	case TokenOfOwnerByIndex:
+	case TokenOfOwnerByIndexCode:
 		op = &tokenOfOwnerByIndexOperation{}
-	case SafeTransferFrom:
+	case SafeTransferFromCode:
 		op = &safeTransferFromOperation{}
 	default:
 		return nil, ErrOpNotValid
@@ -133,31 +133,31 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 
 	switch op.(type) {
 	case *createOperation:
-		buf[1] = Create
+		buf[1] = CreateCode
 	case *approveOperation:
-		buf[1] = Approve
+		buf[1] = ApproveCode
 	case *transferOperation:
-		buf[1] = Transfer
+		buf[1] = TransferCode
 	case *transferFromOperation:
-		buf[1] = TransferFrom
+		buf[1] = TransferFromCode
 	case *propertiesOperation:
-		buf[1] = Properties
+		buf[1] = PropertiesCode
 	case *balanceOfOperation:
-		buf[1] = BalanceOf
+		buf[1] = BalanceOfCode
 	case *allowanceOperation:
-		buf[1] = Allowance
+		buf[1] = AllowanceCode
 	case *isApprovedForAllOperation:
-		buf[1] = IsApprovedForAll
+		buf[1] = IsApprovedForAllCode
 	case *setApprovalForAllOperation:
-		buf[1] = SetApprovalForAll
+		buf[1] = SetApprovalForAllCode
 	case *mintOperation:
-		buf[1] = Mint
+		buf[1] = MintCode
 	case *burnOperation:
-		buf[1] = Burn
+		buf[1] = BurnCode
 	case *tokenOfOwnerByIndexOperation:
-		buf[1] = TokenOfOwnerByIndex
+		buf[1] = TokenOfOwnerByIndexCode
 	case *safeTransferFromOperation:
-		buf[1] = SafeTransferFrom
+		buf[1] = SafeTransferFromCode
 	}
 
 	buf = append(buf, b...)

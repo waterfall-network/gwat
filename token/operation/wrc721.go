@@ -14,7 +14,7 @@ type mintOperation struct {
 
 // NewMintOperation creates a mint operation.
 // The operation only supports WRC-721 tokens so its Standard field sets to StdWRC721.
-func NewMintOperation(to common.Address, tokenId *big.Int, metadata []byte) (MintOperation, error) {
+func NewMintOperation(to common.Address, tokenId *big.Int, metadata []byte) (Mint, error) {
 	if to == (common.Address{}) {
 		return nil, ErrNoTo
 	}
@@ -37,7 +37,7 @@ func NewMintOperation(to common.Address, tokenId *big.Int, metadata []byte) (Min
 
 // Code returns op code of a mint token operation
 func (op *mintOperation) OpCode() Code {
-	return Mint
+	return MintCode
 }
 
 // Metadata returns copy of the metadata bytes if the field is set.
@@ -66,7 +66,7 @@ type burnOperation struct {
 
 // NewBurnOperation creates a burn operation.
 // The operation only supports WRC-721 tokens so its Standard field sets to StdWRC721.
-func NewBurnOperation(tokenId *big.Int) (BurnOperation, error) {
+func NewBurnOperation(tokenId *big.Int) (Burn, error) {
 	if tokenId == nil {
 		return nil, ErrNoTokenId
 	}
@@ -82,7 +82,7 @@ func NewBurnOperation(tokenId *big.Int) (BurnOperation, error) {
 
 // Code returns op code of a burn token operation
 func (op *burnOperation) OpCode() Code {
-	return Burn
+	return BurnCode
 }
 
 // UnmarshalBinary unmarshals a burn operation from byte encoding
@@ -103,7 +103,7 @@ type setApprovalForAllOperation struct {
 
 // NewSetApprovalForAllOperation creates a set approval for all operation.
 // The operation only supports WRC-721 tokens so its Standard field sets to StdWRC721.
-func NewSetApprovalForAllOperation(operator common.Address, isApproved bool) (SetApprovalForAllOperation, error) {
+func NewSetApprovalForAllOperation(operator common.Address, isApproved bool) (SetApprovalForAll, error) {
 	if operator == (common.Address{}) {
 		return nil, ErrNoOperator
 	}
@@ -120,7 +120,7 @@ func NewSetApprovalForAllOperation(operator common.Address, isApproved bool) (Se
 
 // Code returns op code of an set approval for all operation
 func (op *setApprovalForAllOperation) OpCode() Code {
-	return SetApprovalForAll
+	return SetApprovalForAllCode
 }
 
 // Returns flag whether operations on NFT are approved or not
@@ -147,7 +147,7 @@ type isApprovedForAllOperation struct {
 
 // NewIsApprovedForAllOperation creates an approved for all operation.
 // The operation only supports WRC-721 tokens so its Standard field sets to StdWRC721.
-func NewIsApprovedForAllOperation(address common.Address, owner common.Address, operator common.Address) (IsApprovedForAllOperation, error) {
+func NewIsApprovedForAllOperation(address common.Address, owner common.Address, operator common.Address) (IsApprovedForAll, error) {
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
 	}
@@ -175,7 +175,7 @@ func NewIsApprovedForAllOperation(address common.Address, owner common.Address, 
 
 // Code returns op code of an opproved for all operation
 func (op *isApprovedForAllOperation) OpCode() Code {
-	return IsApprovedForAll
+	return IsApprovedForAllCode
 }
 
 // UnmarshalBinary unmarshals a token allowance operation from byte encoding
@@ -195,7 +195,7 @@ type safeTransferFromOperation struct {
 
 // NewSafeTransferFromOperation creates a safe token transfer operation.
 // The operation only supports WRC-721 tokens so its Standard field sets to StdWRC721.
-func NewSafeTransferFromOperation(from common.Address, to common.Address, value *big.Int, data []byte) (SafeTransferFromOperation, error) {
+func NewSafeTransferFromOperation(from common.Address, to common.Address, value *big.Int, data []byte) (SafeTransferFrom, error) {
 	transferOp, err := NewTransferFromOperation(StdWRC721, from, to, value)
 	if err != nil {
 		return nil, err
@@ -217,7 +217,7 @@ func (op *safeTransferFromOperation) Data() ([]byte, bool) {
 
 // Code returns op code of a balance of operation
 func (op *safeTransferFromOperation) OpCode() Code {
-	return SafeTransferFrom
+	return SafeTransferFromCode
 }
 
 // UnmarshalBinary unmarshals a token safe transfer from operation from byte encoding
@@ -239,7 +239,7 @@ type tokenOfOwnerByIndexOperation struct {
 
 // NewBurnOperation creates a token of owner by index operation.
 // The operation only supports WRC-721 tokens so its Standard field sets to StdWRC721.
-func NewTokenOfOwnerByIndexOperation(address common.Address, owner common.Address, index *big.Int) (TokenOfOwnerByIndexOperation, error) {
+func NewTokenOfOwnerByIndexOperation(address common.Address, owner common.Address, index *big.Int) (TokenOfOwnerByIndex, error) {
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
 	}
@@ -265,7 +265,7 @@ func NewTokenOfOwnerByIndexOperation(address common.Address, owner common.Addres
 
 // Code returns op code of a token of owner by index token operation
 func (op *tokenOfOwnerByIndexOperation) OpCode() Code {
-	return TokenOfOwnerByIndex
+	return TokenOfOwnerByIndexCode
 }
 
 // Index returns copy of the index field
