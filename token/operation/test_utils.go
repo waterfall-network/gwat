@@ -3,7 +3,6 @@ package operation
 import (
 	"bytes"
 	"fmt"
-	"math/big"
 	"testing"
 )
 
@@ -32,28 +31,5 @@ func equalOpBytes(t *testing.T, op Operation, b []byte) {
 
 	if !bytes.Equal(b, have) {
 		t.Fatalf("values do not match:\n want: %+v\nhave: %+v", b, have)
-	}
-}
-
-func checkError(e error, arr []error) bool {
-	for _, err := range arr {
-		if e == err {
-			return true
-		}
-	}
-
-	return false
-}
-
-func compareBigInt(t *testing.T, a, b *big.Int) {
-	haveValue := a
-	wantValue := b
-
-	if wantValue == nil {
-		wantValue = big.NewInt(0)
-	}
-
-	if haveValue.Cmp(wantValue) != 0 {
-		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantValue, haveValue)
 	}
 }

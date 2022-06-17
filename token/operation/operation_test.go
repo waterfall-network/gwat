@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/token/test"
 	"math/big"
 	"testing"
 )
@@ -144,7 +145,7 @@ func TestMintOperation(t *testing.T) {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.data, haveData)
 		}
 
-		compareBigInt(t, opDecoded.TokenId(), o.id)
+		test.CompareBigInt(t, opDecoded.TokenId(), o.id)
 
 		return nil
 	}
@@ -593,7 +594,7 @@ func TestApproveOperation(t *testing.T) {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.spender, operator)
 		}
 
-		compareBigInt(t, opDecoded.Value(), o.value)
+		test.CompareBigInt(t, opDecoded.Value(), o.value)
 
 		return nil
 	}
@@ -713,7 +714,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.data, data)
 		}
 
-		compareBigInt(t, opDecoded.Value(), o.value)
+		test.CompareBigInt(t, opDecoded.Value(), o.value)
 
 		return nil
 	}
@@ -819,7 +820,7 @@ func TestTransferFromOperation(t *testing.T) {
 			return err
 		}
 
-		compareBigInt(t, opDecoded.Value(), o.value)
+		test.CompareBigInt(t, opDecoded.Value(), o.value)
 
 		if o.from != opDecoded.From() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.From(), o.from)
@@ -914,7 +915,7 @@ func TestTransferOperation(t *testing.T) {
 			return err
 		}
 
-		compareBigInt(t, opDecoded.Value(), o.value)
+		test.CompareBigInt(t, opDecoded.Value(), o.value)
 
 		if o.to != opDecoded.To() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.To(), o.to)
@@ -1094,7 +1095,7 @@ func TestBurnOperation(t *testing.T) {
 			return err
 		}
 
-		compareBigInt(t, opDecoded.TokenId(), o.id)
+		test.CompareBigInt(t, opDecoded.TokenId(), o.id)
 
 		return nil
 	}
@@ -1199,7 +1200,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			return err
 		}
 
-		compareBigInt(t, opDecoded.Index(), o.index)
+		test.CompareBigInt(t, opDecoded.Index(), o.index)
 
 		if o.owner != opDecoded.Owner() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.owner, opDecoded.Owner())
@@ -1295,7 +1296,7 @@ func TestPropertiesOperation(t *testing.T) {
 			return errors.New("invalid tokenId")
 		}
 
-		compareBigInt(t, tokenId, o.id)
+		test.CompareBigInt(t, tokenId, o.id)
 
 		if o.address != opDecoded.Address() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.address, opDecoded.Address())
@@ -1433,7 +1434,7 @@ func TestCreateOperationOperation(t *testing.T) {
 			return ErrNoTokenSupply
 		}
 
-		compareBigInt(t, tS, o.totalSupply)
+		test.CompareBigInt(t, tS, o.totalSupply)
 
 		if opDecoded.Decimals() != o.decimals {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.decimals, opDecoded.Decimals())
@@ -1466,7 +1467,7 @@ func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, ope
 		t.Run("encoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationEncode(c.encoded, c.decoded)
 			if err != nil {
-				if !checkError(err, c.errs) {
+				if !test.CheckError(err, c.errs) {
 					t.Fatalf("operationEncode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 				}
 			}
@@ -1475,7 +1476,7 @@ func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, ope
 		t.Run("decoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationDecode(c.encoded, c.decoded)
 			if err != nil {
-				if !checkError(err, c.errs) {
+				if !test.CheckError(err, c.errs) {
 					t.Fatalf("operationDecode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 				}
 			}

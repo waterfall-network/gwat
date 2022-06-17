@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/token/operation"
+	"github.com/ethereum/go-ethereum/token/test"
 	"math/big"
 	"testing"
 )
@@ -15,7 +16,7 @@ var (
 	p              *Processor
 	wrc20Address   common.Address
 	wrc721Address  common.Address
-	caller         Ref
+	Caller         Ref
 	operator       common.Address
 	address        common.Address
 	spender        common.Address
@@ -52,32 +53,32 @@ func init() {
 
 	p = NewProcessor(ctx, stateDb)
 
-	operator = common.BytesToAddress(randomData(20))
-	address = common.BytesToAddress(randomData(20))
-	spender = common.BytesToAddress(randomData(20))
-	owner = common.BytesToAddress(randomData(20))
-	to = common.BytesToAddress(randomData(20))
-	approveAddress = common.BytesToAddress(randomData(20))
+	operator = common.BytesToAddress(test.RandomData(20))
+	address = common.BytesToAddress(test.RandomData(20))
+	spender = common.BytesToAddress(test.RandomData(20))
+	owner = common.BytesToAddress(test.RandomData(20))
+	to = common.BytesToAddress(test.RandomData(20))
+	approveAddress = common.BytesToAddress(test.RandomData(20))
 
-	caller = vm.AccountRef(owner)
+	Caller = vm.AccountRef(owner)
 
-	value = big.NewInt(int64(randomInt(10, 30)))
-	id = big.NewInt(int64(randomInt(1000, 99999999)))
-	id2 = big.NewInt(int64(randomInt(1000, 99999999)))
-	id3 = big.NewInt(int64(randomInt(1000, 99999999)))
-	id4 = big.NewInt(int64(randomInt(1000, 99999999)))
-	id5 = big.NewInt(int64(randomInt(1000, 99999999)))
-	id6 = big.NewInt(int64(randomInt(1000, 99999999)))
-	id7 = big.NewInt(int64(randomInt(1000, 99999999)))
-	totalSupply = big.NewInt(int64(randomInt(100, 1000)))
+	value = big.NewInt(int64(test.RandomInt(10, 30)))
+	id = big.NewInt(int64(test.RandomInt(1000, 99999999)))
+	id2 = big.NewInt(int64(test.RandomInt(1000, 99999999)))
+	id3 = big.NewInt(int64(test.RandomInt(1000, 99999999)))
+	id4 = big.NewInt(int64(test.RandomInt(1000, 99999999)))
+	id5 = big.NewInt(int64(test.RandomInt(1000, 99999999)))
+	id6 = big.NewInt(int64(test.RandomInt(1000, 99999999)))
+	id7 = big.NewInt(int64(test.RandomInt(1000, 99999999)))
+	totalSupply = big.NewInt(int64(test.RandomInt(100, 1000)))
 
-	decimals = uint8(randomInt(0, 255))
+	decimals = uint8(test.RandomInt(0, 255))
 
-	name = randomStringInBytes(randomInt(10, 20))
-	symbol = randomStringInBytes(randomInt(5, 8))
-	baseURI = randomStringInBytes(randomInt(20, 40))
+	name = test.RandomStringInBytes(test.RandomInt(10, 20))
+	symbol = test.RandomStringInBytes(test.RandomInt(5, 8))
+	baseURI = test.RandomStringInBytes(test.RandomInt(20, 40))
 
-	data = randomData(randomInt(20, 50))
+	data = test.RandomData(test.RandomInt(20, 50))
 }
 
 func TestProcessorCreateOperationWRC20Call(t *testing.T) {
@@ -86,17 +87,17 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "Correct test WRC20",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: common.Address{},
+			CaseName: "Correct test WRC20",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: common.Address{},
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				adr := call(t, v.caller, v.tokenAddress, createOpWrc20, c.errs)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				adr := call(t, v.Caller, v.TokenAddress, createOpWrc20, c.Errs)
 				*a = common.BytesToAddress(adr)
 
 				balance := checkBalance(t, wrc20Address, owner)
@@ -106,22 +107,22 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 			},
 		},
 		{
-			caseName: "WRC20 non empty token address",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: address,
+			CaseName: "WRC20 non empty token address",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: address,
 			},
-			errs: []error{ErrNotNilTo},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				call(t, v.caller, v.tokenAddress, createOpWrc20, c.errs)
+			Errs: []error{ErrNotNilTo},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				call(t, v.Caller, v.TokenAddress, createOpWrc20, c.Errs)
 			},
 		},
 	}
 
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &wrc20Address)
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &wrc20Address)
 		})
 	}
 }
@@ -131,37 +132,37 @@ func TestProcessorCreateOperationWRC721Call(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "Correct test WRC721",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: common.Address{},
+			CaseName: "Correct test WRC721",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: common.Address{},
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				adr := call(t, v.caller, v.tokenAddress, createOpWrc721, c.errs)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				adr := call(t, v.Caller, v.TokenAddress, createOpWrc721, c.Errs)
 				*a = common.BytesToAddress(adr)
 			},
 		},
 		{
-			caseName: "WRC721 non empty token address",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: address,
+			CaseName: "WRC721 non empty token address",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: address,
 			},
-			errs: []error{ErrNotNilTo},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				call(t, v.caller, v.tokenAddress, createOpWrc721, c.errs)
+			Errs: []error{ErrNotNilTo},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				call(t, v.Caller, v.TokenAddress, createOpWrc721, c.Errs)
 			},
 		},
 	}
 
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &wrc721Address)
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &wrc721Address)
 		})
 	}
 }
@@ -176,20 +177,20 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "Correct test WRC20",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc20Address,
+			CaseName: "Correct test WRC20",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc20Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 
-				callApprove(t, operation.StdWRC20, spender, v.tokenAddress, v.caller, value, c.errs)
+				callApprove(t, operation.StdWRC20, spender, v.TokenAddress, v.Caller, value, c.Errs)
 
-				call(t, vm.AccountRef(spender), v.tokenAddress, opWrc20, c.errs)
+				call(t, vm.AccountRef(spender), v.TokenAddress, opWrc20, c.Errs)
 
 				balance := checkBalance(t, wrc20Address, owner)
 
@@ -200,22 +201,22 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 			},
 		},
 		{
-			caseName: "Correct test WRC721",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "Correct test WRC721",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 
-				mintNewToken(t, owner, wrc721Address, id, data, caller, c.errs)
+				mintNewToken(t, owner, wrc721Address, id, data, Caller, c.Errs)
 
 				balance := checkBalance(t, wrc721Address, owner)
 
-				callApprove(t, operation.StdWRC721, spender, v.tokenAddress, v.caller, id, c.errs)
+				callApprove(t, operation.StdWRC721, spender, v.TokenAddress, v.Caller, id, c.Errs)
 
-				call(t, vm.AccountRef(spender), v.tokenAddress, opWrc721, c.errs)
+				call(t, vm.AccountRef(spender), v.TokenAddress, opWrc721, c.Errs)
 
 				balanceAfter := checkBalance(t, wrc721Address, owner)
 
@@ -227,43 +228,43 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 			},
 		},
 		{
-			caseName: "Wrong caller",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "Wrong Caller",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{ErrWrongCaller},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{ErrWrongCaller},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 
-				callApprove(t, operation.StdWRC721, spender, v.tokenAddress, v.caller, id, c.errs)
+				callApprove(t, operation.StdWRC721, spender, v.TokenAddress, v.Caller, id, c.Errs)
 
-				call(t, vm.AccountRef(spender), v.tokenAddress, opWrc721, c.errs)
+				call(t, vm.AccountRef(spender), v.TokenAddress, opWrc721, c.Errs)
 			},
 		},
 		{
-			caseName: "Not minted token",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "Not minted token",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{ErrNotMinted},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{ErrNotMinted},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 
 				op, err := operation.NewTransferFromOperation(operation.StdWRC721, owner, to, id7)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				call(t, v.caller, v.tokenAddress, op, c.errs)
+				call(t, v.Caller, v.TokenAddress, op, c.Errs)
 			},
 		},
 	}
 
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &common.Address{})
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &common.Address{})
 		})
 	}
 }
@@ -274,17 +275,17 @@ func TestProcessorMintOperationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "Correct test",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "Correct test",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				call(t, v.caller, v.tokenAddress, mintOp, c.errs)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				call(t, v.Caller, v.TokenAddress, mintOp, c.Errs)
 
 				balance := checkBalance(t, wrc721Address, owner)
 
@@ -293,22 +294,22 @@ func TestProcessorMintOperationCall(t *testing.T) {
 				}
 			},
 		}, {
-			caseName: "Unknown minter",
-			testData: testData{
-				caller:       vm.AccountRef(to),
-				tokenAddress: wrc721Address,
+			CaseName: "Unknown minter",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(to),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{ErrWrongMinter},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				call(t, v.caller, v.tokenAddress, mintOp, c.errs)
+			Errs: []error{ErrWrongMinter},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				call(t, v.Caller, v.TokenAddress, mintOp, c.Errs)
 			},
 		},
 	}
 
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &common.Address{})
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &common.Address{})
 		})
 	}
 }
@@ -319,19 +320,19 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "Correct transfer test",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc20Address,
+			CaseName: "Correct transfer test",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc20Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 				balance := checkBalance(t, wrc20Address, owner)
 
-				call(t, v.caller, v.tokenAddress, transferOp, c.errs)
+				call(t, v.Caller, v.TokenAddress, transferOp, c.Errs)
 
 				balanceAfter := checkBalance(t, wrc20Address, owner)
 
@@ -341,34 +342,34 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 				}
 			},
 		}, {
-			caseName: "No empty address",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: common.Address{},
+			CaseName: "No empty address",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: common.Address{},
 			},
-			errs: []error{operation.ErrNoAddress},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				call(t, v.caller, v.tokenAddress, transferOp, c.errs)
+			Errs: []error{operation.ErrNoAddress},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				call(t, v.Caller, v.TokenAddress, transferOp, c.Errs)
 			},
 		},
 		{
-			caseName: "Unknown caller",
-			testData: testData{
-				caller:       vm.AccountRef(address),
-				tokenAddress: wrc20Address,
+			CaseName: "Unknown Caller",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(address),
+				TokenAddress: wrc20Address,
 			},
-			errs: []error{ErrNotEnoughBalance},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				call(t, v.caller, v.tokenAddress, transferOp, c.errs)
+			Errs: []error{ErrNotEnoughBalance},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				call(t, v.Caller, v.TokenAddress, transferOp, c.Errs)
 			},
 		},
 	}
 
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &common.Address{})
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &common.Address{})
 		})
 	}
 
@@ -380,22 +381,22 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "Correct test",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "Correct test",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 
-				mintNewToken(t, owner, wrc721Address, id3, data, caller, c.errs)
+				mintNewToken(t, owner, wrc721Address, id3, data, Caller, c.Errs)
 
 				balance := checkBalance(t, wrc721Address, owner)
 
-				call(t, v.caller, v.tokenAddress, burnOp, c.errs)
+				call(t, v.Caller, v.TokenAddress, burnOp, c.Errs)
 
 				balanceAfter := checkBalance(t, wrc721Address, owner)
 
@@ -406,22 +407,22 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 			},
 		},
 		{
-			caseName: "Unknown minter",
-			testData: testData{
-				caller:       vm.AccountRef(to),
-				tokenAddress: wrc721Address,
+			CaseName: "Unknown minter",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(to),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{ErrWrongMinter},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
-				call(t, v.caller, v.tokenAddress, burnOp, c.errs)
+			Errs: []error{ErrWrongMinter},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
+				call(t, v.Caller, v.TokenAddress, burnOp, c.Errs)
 			},
 		},
 	}
 
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &common.Address{})
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &common.Address{})
 		})
 	}
 }
@@ -437,72 +438,72 @@ func TestProcessorApprovalForAllCall(t *testing.T) {
 		t.Fatal()
 	}
 
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "Use approvalForAll",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "Use approvalForAll",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 
-				call(t, v.caller, v.tokenAddress, op, c.errs)
+				call(t, v.Caller, v.TokenAddress, op, c.Errs)
 
-				mintNewToken(t, owner, v.tokenAddress, id4, data, caller, c.errs)
+				mintNewToken(t, owner, v.TokenAddress, id4, data, Caller, c.Errs)
 
-				callTransferFrom(t, operation.StdWRC721, owner, to, v.tokenAddress, id4, vm.AccountRef(spender), c.errs)
+				callTransferFrom(t, operation.StdWRC721, owner, to, v.TokenAddress, id4, vm.AccountRef(spender), c.Errs)
 			},
 		},
 		{
-			caseName: "Cancel approvalForAll",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "Cancel approvalForAll",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{nil, ErrWrongCaller},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{nil, ErrWrongCaller},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 
-				call(t, v.caller, v.tokenAddress, op, c.errs)
+				call(t, v.Caller, v.TokenAddress, op, c.Errs)
 
-				mintNewToken(t, owner, v.tokenAddress, id5, data, caller, c.errs)
-				mintNewToken(t, owner, v.tokenAddress, id6, data, caller, c.errs)
+				mintNewToken(t, owner, v.TokenAddress, id5, data, Caller, c.Errs)
+				mintNewToken(t, owner, v.TokenAddress, id6, data, Caller, c.Errs)
 
-				callTransferFrom(t, operation.StdWRC721, owner, to, v.tokenAddress, id5, vm.AccountRef(spender), c.errs)
+				callTransferFrom(t, operation.StdWRC721, owner, to, v.TokenAddress, id5, vm.AccountRef(spender), c.Errs)
 
-				call(t, v.caller, v.tokenAddress, unapproveOp, c.errs)
+				call(t, v.Caller, v.TokenAddress, unapproveOp, c.Errs)
 
-				callTransferFrom(t, operation.StdWRC721, owner, to, v.tokenAddress, id6, vm.AccountRef(spender), c.errs)
+				callTransferFrom(t, operation.StdWRC721, owner, to, v.TokenAddress, id6, vm.AccountRef(spender), c.Errs)
 			},
 		},
 	}
 
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &common.Address{})
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &common.Address{})
 		})
 	}
 }
 
 func TestProcessorIsApprovedForAll(t *testing.T) {
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "IsApprovalForAll",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "IsApprovalForAll",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 				approvalOp, err := operation.NewSetApprovalForAllOperation(operator, true)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				call(t, v.caller, v.tokenAddress, approvalOp, c.errs)
+				call(t, v.Caller, v.TokenAddress, approvalOp, c.Errs)
 
 				ok := checkApprove(t, wrc721Address, owner, operator)
 
@@ -512,13 +513,13 @@ func TestProcessorIsApprovedForAll(t *testing.T) {
 			},
 		},
 		{
-			caseName: "IsNotApprovalForAll",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc721Address,
+			CaseName: "IsNotApprovalForAll",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
 				ok := checkApprove(t, wrc721Address, owner, spender)
 
 				if ok {
@@ -528,8 +529,8 @@ func TestProcessorIsApprovedForAll(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &common.Address{})
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &common.Address{})
 		})
 	}
 }
@@ -546,11 +547,11 @@ func TestProcessorPropertiesWRC20(t *testing.T) {
 	}
 
 	prop := i.(*WRC20PropertiesResult)
-	compareBytes(t, prop.Name, name)
+	test.CompareBytes(t, prop.Name, name)
 
-	compareBytes(t, prop.Symbol, symbol)
+	test.CompareBytes(t, prop.Symbol, symbol)
 
-	compareBigInt(t, prop.TotalSupply, totalSupply)
+	test.CompareBigInt(t, prop.TotalSupply, totalSupply)
 
 	if prop.Decimals != decimals {
 		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", decimals, prop.Decimals)
@@ -558,7 +559,7 @@ func TestProcessorPropertiesWRC20(t *testing.T) {
 }
 
 func TestProcessorPropertiesWRC721(t *testing.T) {
-	mintNewToken(t, owner, wrc721Address, id7, data, caller, []error{nil})
+	mintNewToken(t, owner, wrc721Address, id7, data, Caller, []error{nil})
 	approveOp, err := operation.NewApproveOperation(operation.StdWRC721, spender, id7)
 	call(t, vm.AccountRef(owner), wrc721Address, approveOp, []error{nil})
 
@@ -573,15 +574,15 @@ func TestProcessorPropertiesWRC721(t *testing.T) {
 	}
 
 	prop := i.(*WRC721PropertiesResult)
-	compareBytes(t, prop.Name, name)
+	test.CompareBytes(t, prop.Name, name)
 
-	compareBytes(t, prop.Symbol, symbol)
+	test.CompareBytes(t, prop.Symbol, symbol)
 
-	compareBytes(t, prop.BaseURI, baseURI)
+	test.CompareBytes(t, prop.BaseURI, baseURI)
 
-	compareBytes(t, prop.Metadata, data)
+	test.CompareBytes(t, prop.Metadata, data)
 
-	compareBytes(t, prop.TokenURI, concatTokenURI(baseURI, id7))
+	test.CompareBytes(t, prop.TokenURI, concatTokenURI(baseURI, id7))
 
 	if prop.OwnerOf != owner {
 		t.Fatal()
@@ -598,18 +599,18 @@ func TestProcessorApproveCall(t *testing.T) {
 		t.Fatal()
 	}
 
-	cases := []testCase{
+	cases := []test.TestCase{
 		{
-			caseName: "Use approve",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc20Address,
+			CaseName: "Use approve",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc20Address,
 			},
-			errs: []error{nil},
-			fn: func(c *testCase, a *common.Address) {
-				v := c.testData.(testData)
+			Errs: []error{nil},
+			Fn: func(c *test.TestCase, a *common.Address) {
+				v := c.TestData.(test.TestData)
 
-				call(t, v.caller, v.tokenAddress, approveOp, c.errs)
+				call(t, v.Caller, v.TokenAddress, approveOp, c.Errs)
 
 				allowanceOp, err := operation.NewAllowanceOperation(wrc20Address, owner, approveAddress)
 
@@ -624,13 +625,13 @@ func TestProcessorApproveCall(t *testing.T) {
 			},
 		},
 		{
-			caseName: "Non approved address",
-			testData: testData{
-				caller:       vm.AccountRef(owner),
-				tokenAddress: wrc20Address,
+			CaseName: "Non approved address",
+			TestData: test.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc20Address,
 			},
-			errs: []error{nil, ErrWrongCaller},
-			fn: func(c *testCase, a *common.Address) {
+			Errs: []error{nil, ErrWrongCaller},
+			Fn: func(c *test.TestCase, a *common.Address) {
 				allowanceOp, err := operation.NewAllowanceOperation(wrc20Address, owner, to)
 				if err != nil {
 					t.Fatal(err)
@@ -649,14 +650,14 @@ func TestProcessorApproveCall(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		t.Run(c.caseName, func(t *testing.T) {
-			c.fn(&c, &common.Address{})
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(&c, &common.Address{})
 		})
 	}
 }
 
-func checkBalance(t *testing.T, tokenAddress, owner common.Address) *big.Int {
-	balanceOp, err := operation.NewBalanceOfOperation(tokenAddress, owner)
+func checkBalance(t *testing.T, TokenAddress, owner common.Address) *big.Int {
+	balanceOp, err := operation.NewBalanceOfOperation(TokenAddress, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -669,26 +670,26 @@ func checkBalance(t *testing.T, tokenAddress, owner common.Address) *big.Int {
 	return balance
 }
 
-func mintNewToken(t *testing.T, owner, tokenAddress common.Address, id *big.Int, data []byte, caller Ref, errs []error) {
+func mintNewToken(t *testing.T, owner, TokenAddress common.Address, id *big.Int, data []byte, Caller Ref, Errs []error) {
 	mintOp, err := operation.NewMintOperation(owner, id, data)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	call(t, caller, tokenAddress, mintOp, errs)
+	call(t, Caller, TokenAddress, mintOp, Errs)
 }
 
-func call(t *testing.T, caller Ref, tokenAddress common.Address, op operation.Operation, errs []error) []byte {
-	res, err := p.Call(caller, tokenAddress, op)
-	if !checkError(err, errs) {
-		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", errs, err)
+func call(t *testing.T, Caller Ref, TokenAddress common.Address, op operation.Operation, Errs []error) []byte {
+	res, err := p.Call(Caller, TokenAddress, op)
+	if !test.CheckError(err, Errs) {
+		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", Errs, err)
 	}
 
 	return res
 }
 
-func checkApprove(t *testing.T, tokenAddress, owner, operator common.Address) bool {
-	op, err := operation.NewIsApprovedForAllOperation(tokenAddress, owner, operator)
+func checkApprove(t *testing.T, TokenAddress, owner, operator common.Address) bool {
+	op, err := operation.NewIsApprovedForAllOperation(TokenAddress, owner, operator)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -701,27 +702,27 @@ func checkApprove(t *testing.T, tokenAddress, owner, operator common.Address) bo
 	return ok
 }
 
-func callApprove(t *testing.T, std operation.Std, spender, tokenAddress common.Address, caller Ref, value *big.Int, errs []error) {
+func callApprove(t *testing.T, std operation.Std, spender, TokenAddress common.Address, Caller Ref, value *big.Int, Errs []error) {
 	approveOp, err := operation.NewApproveOperation(std, spender, value)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	call(t, caller, tokenAddress, approveOp, errs)
+	call(t, Caller, TokenAddress, approveOp, Errs)
 }
 
 func callTransferFrom(
 	t *testing.T,
 	std operation.Std,
-	owner, to, tokenAddress common.Address,
+	owner, to, TokenAddress common.Address,
 	id *big.Int,
-	caller Ref,
-	errs []error,
+	Caller Ref,
+	Errs []error,
 ) {
 	transferOp, err := operation.NewTransferFromOperation(std, owner, to, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	call(t, caller, tokenAddress, transferOp, errs)
+	call(t, Caller, TokenAddress, transferOp, Errs)
 }
