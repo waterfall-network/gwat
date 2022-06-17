@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/token/operation"
 	"math"
 	"math/big"
 
@@ -295,7 +296,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Check if token prefix and opcode are valid in raw data
 	isTokenOp := false
-	if _, err := token.GetOpCode(msg.Data()); err == nil {
+	if _, err := operation.GetOpCode(msg.Data()); err == nil {
 		isTokenOp = true
 	}
 
@@ -329,7 +330,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 
 		if isTokenOp {
-			op, err := token.DecodeBytes(msg.Data())
+			op, err := operation.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
 			}

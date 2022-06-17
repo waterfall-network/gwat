@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/token/operation"
 	"math"
 	"math/big"
 	"sort"
@@ -34,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/token"
 )
 
 const (
@@ -638,7 +638,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	// Check if token prefix and opcode are valid in raw data
 	isTokenOp := false
-	if _, err := token.GetOpCode(tx.Data()); err == nil {
+	if _, err := operation.GetOpCode(tx.Data()); err == nil {
 		isTokenOp = true
 	}
 	contractCreation := tx.To() == nil && !isTokenOp

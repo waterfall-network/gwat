@@ -1,18 +1,19 @@
-package token
+package operation
+
+// Marshaling and unmarshaling of operations in the package is impelemented using Ethereum rlp encoding.
+// All marshal and unmarshal methods of operations suppose that an encoding prefix has already handled.
+// Byte encoding of the operation should be given to the methods without the prefix.
+//
+// The operations are implement using a philosophy of immutable data structures. Every method that returns
+// a data field of an operation always make its copy before returning. That prevents situations when the
+// operation structure can be mutated accidentally.
 
 import (
 	"encoding"
-	"errors"
 )
 
 const (
 	DefaultDecimals = 18
-)
-
-var (
-	ErrPrefixNotValid = errors.New("not valid value for prefix")
-	ErrRawDataShort   = errors.New("binary data for token operation is short")
-	ErrOpNotValid     = errors.New("not valid op code for token operation")
 )
 
 // Token standard
@@ -24,23 +25,23 @@ const (
 )
 
 // Token operation code
-type OpCode byte
+type Code byte
 
 // Token operation codes use invalid op codes of EVM instructions to prevent clashes.
 const (
-	OpCreate              = 0x0C
-	OpApprove             = 0x0D
-	OpTransfer            = 0x1E
-	OpTransferFrom        = 0x1F
-	OpProperties          = 0x21
-	OpBalanceOf           = 0x22
-	OpAllowance           = 0x23
-	OpIsApprovedForAll    = 0x24
-	OpSetApprovalForAll   = 0x25
-	OpMint                = 0x26
-	OpBurn                = 0x27
-	OpTokenOfOwnerByIndex = 0x28
-	OpSafeTransferFrom    = 0x29
+	CreateCode              = 0x0C
+	ApproveCode             = 0x0D
+	TransferCode            = 0x1E
+	TransferFromCode        = 0x1F
+	PropertiesCode          = 0x21
+	BalanceOfCode           = 0x22
+	AllowanceCode           = 0x23
+	IsApprovedForAllCode    = 0x24
+	SetApprovalForAllCode   = 0x25
+	MintCode                = 0x26
+	BurnCode                = 0x27
+	TokenOfOwnerByIndexCode = 0x28
+	SafeTransferFromCode    = 0x29
 )
 
 // Prefix for the encoded data field of a token operation
@@ -51,7 +52,7 @@ const (
 // Operation is a token operation
 // Every specific operation should implement this interface
 type Operation interface {
-	OpCode() OpCode
+	OpCode() Code
 	Standard() Std
 
 	encoding.BinaryUnmarshaler
@@ -60,7 +61,7 @@ type Operation interface {
 
 // GetOpCode gets op code of an encoded token operation
 // It also checks the encoding for length and prefix
-func GetOpCode(b []byte) (OpCode, error) {
+func GetOpCode(b []byte) (Code, error) {
 	if len(b) < 2 {
 		return 0, ErrRawDataShort
 	}
@@ -70,7 +71,7 @@ func GetOpCode(b []byte) (OpCode, error) {
 		return 0, ErrPrefixNotValid
 	}
 
-	return OpCode(b[1]), nil
+	return Code(b[1]), nil
 }
 
 // DecodeBytes decodes an encoded token operation
@@ -84,31 +85,31 @@ func DecodeBytes(b []byte) (Operation, error) {
 
 	var op Operation
 	switch opCode {
-	case OpCreate:
+	case CreateCode:
 		op = &createOperation{}
-	case OpApprove:
+	case ApproveCode:
 		op = &approveOperation{}
-	case OpTransfer:
+	case TransferCode:
 		op = &transferOperation{}
-	case OpTransferFrom:
+	case TransferFromCode:
 		op = &transferFromOperation{}
-	case OpProperties:
+	case PropertiesCode:
 		op = &propertiesOperation{}
-	case OpBalanceOf:
+	case BalanceOfCode:
 		op = &balanceOfOperation{}
-	case OpAllowance:
+	case AllowanceCode:
 		op = &allowanceOperation{}
-	case OpIsApprovedForAll:
+	case IsApprovedForAllCode:
 		op = &isApprovedForAllOperation{}
-	case OpSetApprovalForAll:
+	case SetApprovalForAllCode:
 		op = &setApprovalForAllOperation{}
-	case OpMint:
+	case MintCode:
 		op = &mintOperation{}
-	case OpBurn:
+	case BurnCode:
 		op = &burnOperation{}
-	case OpTokenOfOwnerByIndex:
+	case TokenOfOwnerByIndexCode:
 		op = &tokenOfOwnerByIndexOperation{}
-	case OpSafeTransferFrom:
+	case SafeTransferFromCode:
 		op = &safeTransferFromOperation{}
 	default:
 		return nil, ErrOpNotValid
@@ -132,31 +133,31 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 
 	switch op.(type) {
 	case *createOperation:
-		buf[1] = OpCreate
+		buf[1] = CreateCode
 	case *approveOperation:
-		buf[1] = OpApprove
+		buf[1] = ApproveCode
 	case *transferOperation:
-		buf[1] = OpTransfer
+		buf[1] = TransferCode
 	case *transferFromOperation:
-		buf[1] = OpTransferFrom
+		buf[1] = TransferFromCode
 	case *propertiesOperation:
-		buf[1] = OpProperties
+		buf[1] = PropertiesCode
 	case *balanceOfOperation:
-		buf[1] = OpBalanceOf
+		buf[1] = BalanceOfCode
 	case *allowanceOperation:
-		buf[1] = OpAllowance
+		buf[1] = AllowanceCode
 	case *isApprovedForAllOperation:
-		buf[1] = OpIsApprovedForAll
+		buf[1] = IsApprovedForAllCode
 	case *setApprovalForAllOperation:
-		buf[1] = OpSetApprovalForAll
+		buf[1] = SetApprovalForAllCode
 	case *mintOperation:
-		buf[1] = OpMint
+		buf[1] = MintCode
 	case *burnOperation:
-		buf[1] = OpBurn
+		buf[1] = BurnCode
 	case *tokenOfOwnerByIndexOperation:
-		buf[1] = OpTokenOfOwnerByIndex
+		buf[1] = TokenOfOwnerByIndexCode
 	case *safeTransferFromOperation:
-		buf[1] = OpSafeTransferFrom
+		buf[1] = SafeTransferFromCode
 	}
 
 	buf = append(buf, b...)

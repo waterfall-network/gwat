@@ -2,6 +2,7 @@ package token
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/token/operation"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -59,8 +60,8 @@ func NewProcessor(blockCtx vm.BlockContext, statedb vm.StateDB) *Processor {
 //  * set approval for all
 //
 // It returns byte represantation of the return value of an operation.
-func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []byte, err error) {
-	if _, ok := op.(CreateOperation); !ok {
+func (p *Processor) Call(caller Ref, token common.Address, op operation.Operation) (ret []byte, err error) {
+	if _, ok := op.(operation.Create); !ok {
 		nonce := p.state.GetNonce(caller.Address())
 		p.state.SetNonce(caller.Address(), nonce+1)
 	}
@@ -68,24 +69,24 @@ func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []
 
 	ret = nil
 	switch v := op.(type) {
-	case CreateOperation:
+	case operation.Create:
 		if token != (common.Address{}) {
 			return nil, ErrNotNilTo
 		}
 		if addr, err := p.tokenCreate(caller, v); err == nil {
 			ret = addr.Bytes()
 		}
-	case TransferFromOperation:
+	case operation.TransferFrom:
 		ret, err = p.transferFrom(caller, token, v)
-	case TransferOperation:
+	case operation.Transfer:
 		ret, err = p.transfer(caller, token, v)
-	case ApproveOperation:
+	case operation.Approve:
 		ret, err = p.approve(caller, token, v)
-	case MintOperation:
+	case operation.Mint:
 		ret, err = p.mint(caller, token, v)
-	case BurnOperation:
+	case operation.Burn:
 		ret, err = p.burn(caller, token, v)
-	case SetApprovalForAllOperation:
+	case operation.SetApprovalForAll:
 		ret, err = p.setApprovalForAll(caller, token, v)
 	}
 
@@ -95,7 +96,7 @@ func (p *Processor) Call(caller Ref, token common.Address, op Operation) (ret []
 	return ret, err
 }
 
-func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr common.Address, err error) {
+func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr common.Address, err error) {
 	tokenAddr = crypto.CreateAddress(caller.Address(), p.state.GetNonce(caller.Address()))
 	if p.state.Exist(tokenAddr) {
 		return common.Address{}, ErrTokenAlreadyExists
@@ -113,7 +114,7 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 	storage.Write(op.Symbol())
 
 	switch op.Standard() {
-	case StdWRC20:
+	case operation.StdWRC20:
 		storage.WriteUint8(op.Decimals())
 		v, _ := op.TotalSupply()
 		storage.WriteUint256(v)
@@ -124,7 +125,7 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 		// Set balance for the caller
 		addr := caller.Address()
 		storage.WriteUint256ToMap(mapSlot, addr[:], v)
-	case StdWRC721:
+	case operation.StdWRC721:
 		// minter
 		storage.WriteAddress(caller.Address())
 		if v, ok := op.BaseURI(); ok {
@@ -133,7 +134,7 @@ func (p *Processor) tokenCreate(caller Ref, op CreateOperation) (tokenAddr commo
 			storage.Write([]byte{})
 		}
 	default:
-		return common.Address{}, ErrStandardNotValid
+		return common.Address{}, operation.ErrStandardNotValid
 	}
 
 	storage.Flush()
@@ -162,7 +163,7 @@ type WRC721PropertiesResult struct {
 
 // Properties perfroms the token properties opertaion
 // It returns WRC20PropertiesResult or WRC721PropertiesResult according to the token type.
-func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
+func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())
 	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
 	if err != nil {
@@ -174,7 +175,7 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 
 	var r interface{}
 	switch standard {
-	case StdWRC20:
+	case operation.StdWRC20:
 		decimals := storage.ReadUint8()
 		totalSupply := storage.ReadUint256()
 
@@ -184,7 +185,7 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 			Decimals:    decimals,
 			TotalSupply: totalSupply,
 		}
-	case StdWRC721:
+	case operation.StdWRC721:
 		// minter
 		storage.SkipAddress()
 		baseURI := storage.ReadBytes()
@@ -213,7 +214,7 @@ func (p *Processor) Properties(op PropertiesOperation) (interface{}, error) {
 
 		r = props
 	default:
-		return nil, ErrStandardNotValid
+		return nil, operation.ErrStandardNotValid
 	}
 
 	return r, nil
@@ -226,9 +227,9 @@ func concatTokenURI(baseURI []byte, tokenId *big.Int) []byte {
 	return append(b, id...)
 }
 
-func (p *Processor) transfer(caller Ref, token common.Address, op TransferOperation) ([]byte, error) {
+func (p *Processor) transfer(caller Ref, token common.Address, op operation.Transfer) ([]byte, error) {
 	if token == (common.Address{}) {
-		return nil, ErrNoAddress
+		return nil, operation.ErrNoAddress
 	}
 
 	storage, err := p.newStorage(token, op)
@@ -238,7 +239,7 @@ func (p *Processor) transfer(caller Ref, token common.Address, op TransferOperat
 
 	value := op.Value()
 	switch op.Standard() {
-	case StdWRC20:
+	case operation.StdWRC20:
 		// name
 		storage.SkipBytes()
 		// symbol
@@ -295,9 +296,9 @@ func (p *Processor) wrc20SpendAllowance(storage *Storage, owner common.Address, 
 	return nil
 }
 
-func (p *Processor) transferFrom(caller Ref, token common.Address, op TransferFromOperation) ([]byte, error) {
+func (p *Processor) transferFrom(caller Ref, token common.Address, op operation.TransferFrom) ([]byte, error) {
 	if token == (common.Address{}) {
-		return nil, ErrNoAddress
+		return nil, operation.ErrNoAddress
 	}
 
 	storage, err := p.newStorage(token, op)
@@ -307,7 +308,7 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op TransferFr
 
 	value := op.Value()
 	switch op.Standard() {
-	case StdWRC20:
+	case operation.StdWRC20:
 		// name
 		storage.SkipBytes()
 		// symbol
@@ -324,7 +325,7 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op TransferFr
 			return nil, err
 		}
 		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "value", value)
-	case StdWRC721:
+	case operation.StdWRC721:
 		if err := p.wrc721TransferFrom(storage, caller, op); err != nil {
 			return nil, err
 		}
@@ -336,7 +337,7 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op TransferFr
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op TransferFromOperation) error {
+func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op operation.TransferFrom) error {
 	owners, balances := p.prepareNftStorage(storage)
 
 	address := caller.Address()
@@ -384,9 +385,9 @@ func (p *Processor) wrc721TransferFrom(storage *Storage, caller Ref, op Transfer
 	return nil
 }
 
-func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperation) ([]byte, error) {
+func (p *Processor) approve(caller Ref, token common.Address, op operation.Approve) ([]byte, error) {
 	if token == (common.Address{}) {
-		return nil, ErrNoAddress
+		return nil, operation.ErrNoAddress
 	}
 
 	storage, err := p.newStorage(token, op)
@@ -398,7 +399,7 @@ func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperatio
 	spender := op.Spender()
 	value := op.Value()
 	switch op.Standard() {
-	case StdWRC20:
+	case operation.StdWRC20:
 		// name
 		storage.SkipBytes()
 		// symbol
@@ -413,7 +414,7 @@ func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperatio
 		storage.WriteUint256ToMap(mapSlot, key, value)
 
 		log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)
-	case StdWRC721:
+	case operation.StdWRC721:
 		if err := p.wrc721Approve(storage, caller, op); err != nil {
 			return nil, err
 		}
@@ -425,7 +426,7 @@ func (p *Processor) approve(caller Ref, token common.Address, op ApproveOperatio
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op ApproveOperation) error {
+func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op operation.Approve) error {
 	owners, _ := p.prepareNftStorage(storage)
 
 	address := caller.Address()
@@ -454,7 +455,7 @@ func (p *Processor) wrc721Approve(storage *Storage, caller Ref, op ApproveOperat
 
 // BalanceOf performs the token bolance of operations
 // It returns uint256 value with the token balance of number of NFTs.
-func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
+func (p *Processor) BalanceOf(op operation.BalanceOf) (*big.Int, error) {
 	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
 	if err != nil {
 		return nil, err
@@ -463,7 +464,7 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 	var balance *big.Int
 	owner := op.Owner()
 	switch standard {
-	case StdWRC20:
+	case operation.StdWRC20:
 		// name
 		storage.SkipBytes()
 		// symbol
@@ -477,7 +478,7 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 
 		mapSlot := storage.ReadMapSlot()
 		balance = storage.ReadUint256FromMap(mapSlot, owner[:])
-	case StdWRC721:
+	case operation.StdWRC721:
 		_, balances := p.prepareNftStorage(storage)
 		balance = storage.ReadUint256FromMap(balances, owner[:])
 	}
@@ -488,7 +489,7 @@ func (p *Processor) BalanceOf(op BalanceOfOperation) (*big.Int, error) {
 // Allowance performs the token allowance operation
 // It returns uint256 value with allowed count of the token to spend.
 // The method only works for WRC-20 tokens.
-func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
+func (p *Processor) Allowance(op operation.Allowance) (*big.Int, error) {
 	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
 		return nil, err
@@ -496,7 +497,7 @@ func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 
 	var allowance *big.Int
 	switch op.Standard() {
-	case StdWRC20:
+	case operation.StdWRC20:
 		// name
 		storage.SkipBytes()
 		// symbol
@@ -516,7 +517,7 @@ func (p *Processor) Allowance(op AllowanceOperation) (*big.Int, error) {
 	return allowance, nil
 }
 
-func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]byte, error) {
+func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([]byte, error) {
 	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
@@ -560,7 +561,7 @@ func (p *Processor) mint(caller Ref, token common.Address, op MintOperation) ([]
 	return tokenId.Bytes(), nil
 }
 
-func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]byte, error) {
+func (p *Processor) burn(caller Ref, token common.Address, op operation.Burn) ([]byte, error) {
 	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
@@ -603,7 +604,7 @@ func (p *Processor) burn(caller Ref, token common.Address, op BurnOperation) ([]
 	return tokenId.Bytes(), nil
 }
 
-func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op SetApprovalForAllOperation) ([]byte, error) {
+func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op operation.SetApprovalForAll) ([]byte, error) {
 	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
@@ -629,7 +630,7 @@ func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op SetAp
 
 // IsApprovedForAll performs the is approved for all operation for WRC-721 tokens
 // Returns boolean value that indicates whether the operator can perform any operation on the token.
-func (p *Processor) IsApprovedForAll(op IsApprovedForAllOperation) (bool, error) {
+func (p *Processor) IsApprovedForAll(op operation.IsApprovedForAll) (bool, error) {
 	storage, err := p.newStorage(op.Address(), op)
 	if err != nil {
 		return false, err
@@ -663,23 +664,23 @@ func (p *Processor) prepareNftStorage(storage *Storage) (owners common.Hash, bal
 	return
 }
 
-func (p *Processor) newStorageWithoutStdCheck(token common.Address, op Operation) (*Storage, Std, error) {
+func (p *Processor) newStorageWithoutStdCheck(token common.Address, op operation.Operation) (*Storage, operation.Std, error) {
 	if !p.state.Exist(token) {
 		log.Error("Token doesn't exist", "address", token)
-		return nil, Std(0), ErrTokenNotExists
+		return nil, operation.Std(0), ErrTokenNotExists
 	}
 
 	storage := NewStorage(token, p.state)
 	std := storage.ReadUint16()
 	if std == 0 {
 		log.Error("Token doesn't exist", "address", token, "std", std)
-		return nil, Std(0), ErrTokenNotExists
+		return nil, operation.Std(0), ErrTokenNotExists
 	}
 
-	return storage, Std(std), nil
+	return storage, operation.Std(std), nil
 }
 
-func (p *Processor) newStorage(token common.Address, op Operation) (*Storage, error) {
+func (p *Processor) newStorage(token common.Address, op operation.Operation) (*Storage, error) {
 	storage, standard, err := p.newStorageWithoutStdCheck(token, op)
 	if err != nil {
 		return nil, err
