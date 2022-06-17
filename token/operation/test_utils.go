@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/token/test"
+	"github.com/ethereum/go-ethereum/internal/token/testutils"
 	"math/big"
 	"testing"
 )
@@ -67,7 +67,7 @@ func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, ope
 		t.Run("encoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationEncode(c.encoded, c.decoded)
 			if err != nil {
-				if !test.CheckError(err, c.errs) {
+				if !testutils.CheckError(err, c.errs) {
 					t.Fatalf("operationEncode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 				}
 			}
@@ -76,7 +76,7 @@ func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, ope
 		t.Run("decoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationDecode(c.encoded, c.decoded)
 			if err != nil {
-				if !test.CheckError(err, c.errs) {
+				if !testutils.CheckError(err, c.errs) {
 					t.Fatalf("operationDecode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 				}
 			}

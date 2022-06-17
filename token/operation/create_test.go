@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/token/testutils"
 	"math/big"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/token/test"
 )
 
 func TestCreateOperationOperation(t *testing.T) {
@@ -136,7 +135,7 @@ func TestCreateOperationOperation(t *testing.T) {
 			return ErrNoTokenSupply
 		}
 
-		test.CompareBigInt(t, tS, o.totalSupply)
+		testutils.CompareBigInt(t, tS, o.totalSupply)
 
 		if opDecoded.Decimals() != o.decimals {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.decimals, opDecoded.Decimals())

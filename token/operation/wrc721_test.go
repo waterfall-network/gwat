@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/token/testutils"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/token/test"
 )
 
 func TestBurnOperation(t *testing.T) {
@@ -74,7 +74,7 @@ func TestBurnOperation(t *testing.T) {
 			return err
 		}
 
-		test.CompareBigInt(t, opDecoded.TokenId(), o.id)
+		testutils.CompareBigInt(t, opDecoded.TokenId(), o.id)
 
 		return nil
 	}
@@ -192,7 +192,7 @@ func TestMintOperation(t *testing.T) {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.data, haveData)
 		}
 
-		test.CompareBigInt(t, opDecoded.TokenId(), o.id)
+		testutils.CompareBigInt(t, opDecoded.TokenId(), o.id)
 
 		return nil
 	}
@@ -538,7 +538,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.data, data)
 		}
 
-		test.CompareBigInt(t, opDecoded.Value(), o.value)
+		testutils.CompareBigInt(t, opDecoded.Value(), o.value)
 
 		return nil
 	}
@@ -643,7 +643,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			return err
 		}
 
-		test.CompareBigInt(t, opDecoded.Index(), o.index)
+		testutils.CompareBigInt(t, opDecoded.Index(), o.index)
 
 		if o.owner != opDecoded.Owner() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.owner, opDecoded.Owner())

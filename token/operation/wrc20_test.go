@@ -3,11 +3,11 @@ package operation
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/token/testutils"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/token/test"
 )
 
 func TestTransferOperation(t *testing.T) {
@@ -89,7 +89,7 @@ func TestTransferOperation(t *testing.T) {
 			return err
 		}
 
-		test.CompareBigInt(t, opDecoded.Value(), o.value)
+		testutils.CompareBigInt(t, opDecoded.Value(), o.value)
 
 		if o.to != opDecoded.To() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.To(), o.to)

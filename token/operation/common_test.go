@@ -3,11 +3,11 @@ package operation
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/token/testutils"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/token/test"
 )
 
 func TestApproveOperation(t *testing.T) {
@@ -107,7 +107,7 @@ func TestApproveOperation(t *testing.T) {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.spender, operator)
 		}
 
-		test.CompareBigInt(t, opDecoded.Value(), o.value)
+		testutils.CompareBigInt(t, opDecoded.Value(), o.value)
 
 		return nil
 	}
@@ -300,7 +300,7 @@ func TestPropertiesOperation(t *testing.T) {
 			return errors.New("invalid tokenId")
 		}
 
-		test.CompareBigInt(t, tokenId, o.id)
+		testutils.CompareBigInt(t, tokenId, o.id)
 
 		if o.address != opDecoded.Address() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.address, opDecoded.Address())
@@ -410,7 +410,7 @@ func TestTransferFromOperation(t *testing.T) {
 			return err
 		}
 
-		test.CompareBigInt(t, opDecoded.Value(), o.value)
+		testutils.CompareBigInt(t, opDecoded.Value(), o.value)
 
 		if o.from != opDecoded.From() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.From(), o.from)
