@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -18,14 +19,17 @@ var (
 
 func TestWriteStream(t *testing.T) {
 	stream := NewStorageStream(opAddress, stateDb)
-	_, err := stream.WriteAt(b, 15)
+	_, err := stream.WriteAt(b, 25)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = stream.ReadAt(buf, 15)
+	_, err = stream.ReadAt(buf, 25)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	if !bytes.Equal(b, buf) {
+		t.Fatal()
+	}
 }

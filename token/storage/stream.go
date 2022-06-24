@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"log"
 )
 
 type storageStream interface {
@@ -17,17 +16,17 @@ type storageStream interface {
 type Slot common.Hash
 
 type StorageStream struct {
-	stateDb      vm.StateDB
-	tokenAddress common.Address
-	slots        map[common.Hash]*Slot
-	slot         *Slot
+	stateDb       vm.StateDB
+	tokenAddress  common.Address
+	bufferedSlots map[common.Hash]*Slot
+	buf           []byte
 }
 
 func NewStorageStream(tokenAddr common.Address, statedb vm.StateDB) *StorageStream {
 	return &StorageStream{
-		stateDb:      statedb,
-		tokenAddress: tokenAddr,
-		slots:        make(map[common.Hash]*Slot),
+		stateDb:       statedb,
+		tokenAddress:  tokenAddr,
+		bufferedSlots: make(map[common.Hash]*Slot),
 	}
 }
 
@@ -36,41 +35,23 @@ func (s *StorageStream) WriteAt(b []byte, off int) (int, error) {
 		return 0, errors.New("negative offset")
 	}
 
-	if len(s.slots) == 0 {
-		err := s.addSlot(0, func(hash common.Hash) Slot {
-			return Slot{}
-		})
-		if err != nil {
-			return 0, err
-		}
+	slotPos, err := position(off)
+	if err != nil {
+		return 0, err
 	}
 
 	var res int
 	for res = 0; res < len(b); {
-		if off+len(b) > common.HashLength {
-			slotPos, err := position(off)
-			if err != nil {
-				return 0, err
-			}
-			size := common.HashLength - slotPos
-			if len(b)-res < common.HashLength {
-				size = len(b) - res
-			}
-			wb := copy(s.slot[slotPos:], b[:size])
-			res += wb
-			err = s.addSlot(off+size, func(hash common.Hash) Slot {
-				return Slot{}
-			})
-
-			if err != nil {
-				return 0, err
-			}
-			off = 0
-		} else {
-			res = copy(s.slot[off:], b)
+		err = s.getSlot(off + res)
+		if err != nil {
+			return 0, err
 		}
+
+		wb := copy(s.buf[slotPos:], b[res:])
+		res += wb
+		slotPos = 0
 	}
-	log.Printf("REsult Write--------%v", res)
+
 	return res, nil
 }
 
@@ -79,56 +60,48 @@ func (s *StorageStream) ReadAt(b []byte, off int) (int, error) {
 		return 0, errors.New("negative offset")
 	}
 
+	slotPos, err := position(off)
+	if err != nil {
+		return 0, err
+	}
+
 	var res int
 	for res = 0; res < len(b); {
-		if off+len(b) > common.HashLength {
-			slotPos, err := position(off)
-			if err != nil {
-				return 0, err
-			}
-			size := common.HashLength - slotPos
-			if len(b)-res < common.HashLength {
-				size = len(b) - res
-				copy(b[res:], s.slot[slotPos:size])
-			} else {
-				copy(b[res:], s.slot[slotPos:])
-			}
-			wb := s.slot[slotPos : slotPos+size]
-			res += len(wb)
-			err = s.addSlot(off+size, func(hash common.Hash) Slot {
-				return Slot(s.stateDb.GetState(s.tokenAddress, hash))
-			})
-
-			if err != nil {
-				return 0, err
-			}
-			off = 0
-		} else {
-			res = copy(b, s.slot[off:])
+		err = s.getSlot(off + res)
+		if err != nil {
+			return 0, err
 		}
-	}
-	log.Printf("REsult Read--------%v", res)
-	return res, nil
 
+		wb := copy(b[res:], s.buf[slotPos:])
+		res += wb
+		slotPos = 0
+	}
+
+	return res, nil
 }
 
 func (s *StorageStream) Flush() {
-	for k, v := range s.slots {
+	for k, v := range s.bufferedSlots {
 		s.stateDb.SetState(s.tokenAddress, k, common.Hash(*v))
 	}
 }
 
-func (s *StorageStream) addSlot(off int, getSlot func(common.Hash) Slot) error {
+func (s *StorageStream) getSlot(off int) error {
 	slotIndex, err := slot(off)
 	if err != nil {
 		return err
 	}
-
 	slotKey := common.Hash{}
 	binary.BigEndian.PutUint64(slotKey[:], slotIndex)
-	slot := getSlot(slotKey)
-	s.slots[slotKey] = &slot
-	s.slot = &slot
+
+	slot, ok := s.bufferedSlots[slotKey]
+	if !ok {
+		tmp := Slot(s.stateDb.GetState(s.tokenAddress, slotKey))
+		slot = &tmp
+		s.bufferedSlots[slotKey] = slot
+	}
+
+	s.buf = slot[:]
 
 	return nil
 }
