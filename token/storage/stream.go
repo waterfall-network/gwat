@@ -7,12 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-type storageStream interface {
-	ReadAt(b []byte, off int) (int, error)
-	WriteAt(b []byte, off int) (int, error)
-	Flush()
-}
-
 type Slot common.Hash
 
 type StorageStream struct {
