@@ -93,7 +93,7 @@ func slot(shift int) (uint64, error) {
 		return 0, errors.New("negative shift")
 	}
 
-	return uint64(shift / 32), nil
+	return uint64(shift / len(Slot{})), nil
 }
 
 func position(shift int) (int, error) {
@@ -101,9 +101,5 @@ func position(shift int) (int, error) {
 		return 0, errors.New("negative shift")
 	}
 
-	if shift == 0 {
-		return 0, nil
-	}
-
-	return shift % 32, nil
+	return shift % len(Slot{}), nil
 }
