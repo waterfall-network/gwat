@@ -31,59 +31,47 @@ func NewStorageStream(tokenAddr common.Address, statedb vm.StateDB) *StorageStre
 }
 
 func (s *StorageStream) WriteAt(b []byte, off int) (int, error) {
-	if off < 0 {
-		return 0, errors.New("negative offset")
-	}
 
-	slotPos, err := position(off)
-	if err != nil {
-		return 0, err
-	}
-
-	var res int
-	for res = 0; res < len(b); {
-		err = s.getSlot(off + res)
-		if err != nil {
-			return 0, err
-		}
-
-		wb := copy(s.buf[slotPos:], b[res:])
-		res += wb
-		slotPos = 0
-	}
-
-	return res, nil
+	return s.do(b, off, func(streamBuf, b []byte) int {
+		return copy(streamBuf, b)
+	})
 }
 
 func (s *StorageStream) ReadAt(b []byte, off int) (int, error) {
-	if off < 0 {
-		return 0, errors.New("negative offset")
-	}
-
-	slotPos, err := position(off)
-	if err != nil {
-		return 0, err
-	}
-
-	var res int
-	for res = 0; res < len(b); {
-		err = s.getSlot(off + res)
-		if err != nil {
-			return 0, err
-		}
-
-		wb := copy(b[res:], s.buf[slotPos:])
-		res += wb
-		slotPos = 0
-	}
-
-	return res, nil
+	return s.do(b, off, func(streamBuf, b []byte) int {
+		return copy(b, streamBuf)
+	})
 }
 
 func (s *StorageStream) Flush() {
 	for k, v := range s.bufferedSlots {
 		s.stateDb.SetState(s.tokenAddress, k, common.Hash(*v))
 	}
+}
+
+func (s *StorageStream) do(b []byte, off int, action func(streamBuf, b []byte) int) (int, error) {
+	if off < 0 {
+		return 0, errors.New("negative offset")
+	}
+
+	slotPos, err := position(off)
+	if err != nil {
+		return 0, err
+	}
+
+	var res int
+	for res = 0; res < len(b); {
+		err = s.getSlot(off + res)
+		if err != nil {
+			return 0, err
+		}
+
+		wb := action(s.buf[slotPos:], b[res:])
+		res += wb
+		slotPos = 0
+	}
+
+	return res, nil
 }
 
 func (s *StorageStream) getSlot(off int) error {
