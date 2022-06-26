@@ -7,6 +7,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
+var ErrInvalidOff = errors.New("negative offset")
+
 type Slot common.Hash
 
 type StorageStream struct {
@@ -45,7 +47,7 @@ func (s *StorageStream) Flush() {
 
 func (s *StorageStream) do(b []byte, off int, action func(streamBuf, b []byte) int) (int, error) {
 	if off < 0 {
-		return 0, errors.New("negative offset")
+		return 0, ErrInvalidOff
 	}
 
 	slotPos, err := position(off)
@@ -90,7 +92,7 @@ func (s *StorageStream) getSlot(off int) error {
 
 func slot(shift int) (uint64, error) {
 	if shift < 0 {
-		return 0, errors.New("negative shift")
+		return 0, ErrInvalidOff
 	}
 
 	return uint64(shift / len(Slot{})), nil
@@ -98,7 +100,7 @@ func slot(shift int) (uint64, error) {
 
 func position(shift int) (int, error) {
 	if shift < 0 {
-		return 0, errors.New("negative shift")
+		return 0, ErrInvalidOff
 	}
 
 	return shift % len(Slot{}), nil
