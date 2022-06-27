@@ -16,12 +16,14 @@ var (
 )
 
 func init() {
-
 	stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	address = common.BytesToAddress(testutils.RandomData(20))
 	lenBuf := testutils.RandomInt(0, 200)
 	buf = testutils.RandomData(lenBuf)
-	off = testutils.RandomInt(0, len(buf))
+	// -2 because RandomInt is inclusive [min,max].
+	// It is needed for offset to be smaller than buffer`s length
+	// because of test case "Test reading with offset".
+	off = testutils.RandomInt(0, len(buf)-2)
 }
 
 type testData struct {
@@ -37,11 +39,11 @@ func TestWriteStream(t *testing.T) {
 			TestData: testData{
 				scr: buf,
 				dst: make([]byte, len(buf)),
-				off: off,
+				off: 0,
 			},
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
-				runWithoutFlush(t, a, *c)
+				runWithoutFlush(t, a, c)
 			},
 		},
 		{
@@ -53,7 +55,7 @@ func TestWriteStream(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
-				runWithoutFlush(t, a, *c)
+				runWithoutFlush(t, a, c)
 			},
 		},
 		{
@@ -82,7 +84,7 @@ func TestWriteStream(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
-				runWithoutFlush(t, a, *c)
+				runWithoutFlush(t, a, c)
 			},
 		},
 		{
@@ -94,7 +96,7 @@ func TestWriteStream(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
-				runWithFlush(t, a, *c)
+				runWithFlush(t, a, c)
 			},
 		},
 		{
@@ -106,7 +108,7 @@ func TestWriteStream(t *testing.T) {
 			},
 			Errs: []error{ErrInvalidOff},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
-				runWithFlush(t, a, *c)
+				runWithFlush(t, a, c)
 			},
 		},
 	}
@@ -137,7 +139,7 @@ func write(t *testing.T, s *StorageStream, b []byte, off int, errs []error) {
 	}
 }
 
-func runWithoutFlush(t *testing.T, a *common.Address, c testutils.TestCase) {
+func runWithoutFlush(t *testing.T, a *common.Address, c *testutils.TestCase) {
 	v := c.TestData.(testData)
 	stream := NewStorageStream(*a, stateDb)
 	write(t, stream, v.scr, off, c.Errs)
@@ -149,7 +151,7 @@ func runWithoutFlush(t *testing.T, a *common.Address, c testutils.TestCase) {
 	testutils.CompareBytes(t, v.dst, v.scr)
 }
 
-func runWithFlush(t *testing.T, a *common.Address, c testutils.TestCase) {
+func runWithFlush(t *testing.T, a *common.Address, c *testutils.TestCase) {
 	v := c.TestData.(testData)
 	stream := NewStorageStream(*a, stateDb)
 	write(t, stream, v.scr, off, c.Errs)
