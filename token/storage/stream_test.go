@@ -9,130 +9,116 @@ import (
 )
 
 var (
-	stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	Address    = common.HexToAddress("d049bfd667cb46aa3ef5df0da3e57db3be39e511")
-	buf        = []byte{
-		243, 39, 248, 136, 130, 2, 209, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
-	}
+	stateDb *state.StateDB
+	address common.Address
+	buf     []byte
+	off     int
 )
 
-func TestWriteStream(t *testing.T) {
-	type testData struct {
-		scr []byte
-		dst []byte
-		off int
-	}
+func init() {
 
+	stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	address = common.BytesToAddress(testutils.RandomData(20))
+	lenBuf := testutils.RandomInt(0, 200)
+	buf = testutils.RandomData(lenBuf)
+	off = testutils.RandomInt(0, len(buf))
+}
+
+type testData struct {
+	scr []byte
+	dst []byte
+	off int
+}
+
+func TestWriteStream(t *testing.T) {
 	cases := []testutils.TestCase{
 		{
 			CaseName: "Test full result without offset",
 			TestData: testData{
 				scr: buf,
-				dst: make([]byte, len(buf), len(buf)),
-				off: 0,
+				dst: make([]byte, len(buf)),
+				off: off,
 			},
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testData)
-				stream := NewStorageStream(*a, stateDb)
-				write(t, stream, v.scr, v.off, c.Errs)
-				read(t, stream, v.dst, v.off, c.Errs)
-
-				testutils.CompareBytes(t, v.dst, v.scr)
+				runWithoutFlush(t, a, v.scr, v.dst, 0, c.Errs)
 			},
 		},
 		{
-			CaseName: "Test full result with offset 25",
+			CaseName: "Test full result with offset",
 			TestData: testData{
 				scr: buf,
-				dst: make([]byte, len(buf), len(buf)),
-				off: 25,
+				dst: make([]byte, len(buf)),
+				off: off,
 			},
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testData)
-				stream := NewStorageStream(*a, stateDb)
-				write(t, stream, v.scr, v.off, c.Errs)
-				read(t, stream, v.dst, v.off, c.Errs)
-
-				testutils.CompareBytes(t, v.dst, v.scr)
+				runWithoutFlush(t, a, v.scr, v.dst, v.off, c.Errs)
 			},
 		},
 		{
-			CaseName: "Test reading with offset 30",
+			CaseName: "Test reading with offset",
 			TestData: testData{
 				scr: buf,
-				dst: make([]byte, 110, len(buf)),
-				off: 30,
+				dst: make([]byte, len(buf)-off),
+				off: off,
 			},
 			Errs: []error{},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testData)
 				stream := NewStorageStream(*a, stateDb)
 				write(t, stream, v.scr, 0, c.Errs)
-				read(t, stream, v.dst, v.off, c.Errs)
+				read(t, stream, v.dst, off, c.Errs)
 
-				testutils.CompareBytes(t, v.dst, v.scr[v.off:])
+				testutils.CompareBytes(t, v.dst, v.scr[off:])
 			},
 		},
 		{
 			CaseName: "Test with empty slice",
 			TestData: testData{
 				scr: []byte{},
-				dst: make([]byte, 0, 10),
+				dst: make([]byte, 0),
 				off: 0,
 			},
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testData)
-				stream := NewStorageStream(*a, stateDb)
-				write(t, stream, v.scr, v.off, c.Errs)
-				read(t, stream, v.dst, v.off, c.Errs)
-
-				testutils.CompareBytes(t, v.dst, v.scr)
+				runWithoutFlush(t, a, v.scr, v.dst, v.off, c.Errs)
 			},
 		},
 		{
 			CaseName: "Test with flush",
 			TestData: testData{
 				scr: buf,
-				dst: make([]byte, len(buf), len(buf)),
-				off: 10,
+				dst: make([]byte, len(buf)),
+				off: off,
 			},
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testData)
-				stream := NewStorageStream(*a, stateDb)
-				write(t, stream, v.scr, v.off, c.Errs)
-				stream.Flush()
-				read(t, stream, v.dst, v.off, c.Errs)
-
-				testutils.CompareBytes(t, v.dst, v.scr)
+				runWithFlush(t, a, v.scr, v.dst, v.off, c.Errs)
 			},
 		},
 		{
 			CaseName: "Test with negative offset",
 			TestData: testData{
 				scr: buf,
-				dst: make([]byte, len(buf), len(buf)),
-				off: -50,
+				dst: make([]byte, len(buf)),
+				off: -off,
 			},
 			Errs: []error{ErrInvalidOff},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testData)
-				stream := NewStorageStream(*a, stateDb)
-				write(t, stream, v.scr, v.off, c.Errs)
-				stream.Flush()
-				read(t, stream, v.dst, v.off, c.Errs)
-
-				testutils.CompareBytes(t, v.dst, make([]byte, len(buf), len(buf)))
+				runWithFlush(t, a, v.scr, v.dst, v.off, c.Errs)
 			},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.CaseName, func(t *testing.T) {
-			c.Fn(&c, &Address)
+			c.Fn(&c, &address)
 		})
 	}
 
@@ -154,4 +140,28 @@ func write(t *testing.T, s *StorageStream, b []byte, off int, errs []error) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func runWithoutFlush(t *testing.T, a *common.Address, scr, dst []byte, off int, errs []error) {
+	stream := NewStorageStream(*a, stateDb)
+	write(t, stream, scr, off, errs)
+	read(t, stream, dst, off, errs)
+
+	if off < 0 {
+		return
+	}
+	testutils.CompareBytes(t, dst, scr)
+}
+
+func runWithFlush(t *testing.T, a *common.Address, scr, dst []byte, off int, errs []error) {
+	stream := NewStorageStream(*a, stateDb)
+	write(t, stream, scr, off, errs)
+	stream.Flush()
+	stream = NewStorageStream(*a, stateDb)
+	read(t, stream, dst, off, errs)
+
+	if off < 0 {
+		return
+	}
+	testutils.CompareBytes(t, dst, scr)
 }
