@@ -22,6 +22,24 @@ const (
 	totalSupplySize            = 32
 )
 
+var (
+	stdSize     = int(reflect.TypeOf(operation.Std(0)).Size())
+	versionSize = int(reflect.TypeOf(uint16(0)).Size())
+)
+
+type field struct {
+	offset int
+	length int
+}
+
+type Signature interface {
+	Version() uint16
+	Name() (int, int)
+	Symbol() (int, int)
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+}
+
 type WRC20Signature interface {
 	Decimals() (int, int)
 	TotalSupply() (int, int)
@@ -33,35 +51,17 @@ type WRC721Signature interface {
 	Signature
 }
 
-type field struct {
-	offset int
-	length int
-}
-
 type wrc20SignatureV0 struct {
 	fields      []field
 	totalLength int
 }
 
 func newWrc20SignatureV0(name, symbol int) WRC20Signature {
-	stdSize := int(reflect.TypeOf(operation.Std(0)).Size())
-	versionSize := int(reflect.TypeOf(uint16(0)).Size())
-	shift := stdSize + versionSize + wrc20V0FieldsAmount
-
 	input := []int{
 		name, symbol, decimalsSize, totalSupplySize,
 	}
 
-	sign := make([]field, wrc20V0FieldsAmount)
-
-	total := name
-	sign[0].offset = shift
-	sign[0].length = name
-	for i := 0; i < len(input)-1; i++ {
-		sign[i+1].offset = sign[i].offset + input[i]
-		sign[i+1].length = input[i+1]
-		total += input[i+1]
-	}
+	sign, total := newSignature(input, wrc20V0FieldsAmount)
 
 	return &wrc20SignatureV0{
 		fields:      sign,
@@ -117,24 +117,10 @@ type wrc721SignatureV0 struct {
 }
 
 func newWrc721SignatureV0(name, symbol, baseUri int) WRC721Signature {
-	stdSize := int(reflect.TypeOf(operation.Std(0)).Size())
-	versionSize := int(reflect.TypeOf(uint16(0)).Size())
-	shift := stdSize + versionSize + wrc721V0FieldsAmount
-
 	input := []int{
 		name, symbol, baseUri,
 	}
-
-	sign := make([]field, wrc721V0FieldsAmount)
-
-	total := name
-	sign[0].offset = shift
-	sign[0].length = name
-	for i := 0; i < len(input)-1; i++ {
-		sign[i+1].offset = sign[i].offset + input[i]
-		sign[i+1].length = input[i+1]
-		total += input[i+1]
-	}
+	sign, total := newSignature(input, wrc721V0FieldsAmount)
 
 	return &wrc721SignatureV0{
 		fields:      sign,
@@ -180,18 +166,7 @@ func (s *wrc721SignatureV0) Version() uint16 {
 	return 0
 }
 
-type Signature interface {
-	Version() uint16
-	Name() (int, int)
-	Symbol() (int, int)
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-}
-
-// Checks the standard and version.
-// Based on the received data, call the desired factory function
-func readSignatureFromStream(stream StorageStream) (Signature, error) {
-	stdSize := int(reflect.TypeOf(operation.Std(0)).Size())
+func readSignatureFromStream(stream *StorageStream) (Signature, error) {
 	b := make([]byte, stdSize)
 
 	_, err := stream.ReadAt(b, 0)
@@ -202,52 +177,37 @@ func readSignatureFromStream(stream StorageStream) (Signature, error) {
 	std := int(binary.BigEndian.Uint16(b))
 	switch std {
 	case operation.StdWRC20:
-		versionSize := int(reflect.TypeOf(uint16(0)).Size())
-		b := make([]byte, versionSize)
-		_, err := stream.ReadAt(b, stdSize)
+		ver, err := readVersion(stream)
 		if err != nil {
 			return nil, err
 		}
 
-		ver := int(binary.BigEndian.Uint16(b))
 		switch ver {
 		case 0:
-			buf := make([]byte, wrc20V0FieldsAmount)
-			var s wrc20SignatureV0
-			_, err := stream.ReadAt(buf, stdSize+versionSize)
+			s, err := readSignature(stream, wrc20V0FieldsAmount)
 			if err != nil {
 				return nil, err
 			}
-
-			_ = s.UnmarshalBinary(buf)
-			wrc20Signature := newWrc20SignatureV0(s.fields[nameField].length, s.fields[symbolField].length)
-			return wrc20Signature, nil
+			return s, nil
 
 		default:
 			return nil, errors.New("unsupported version of wrc20 signature")
 		}
 
 	case operation.StdWRC721:
-		versionSize := int(reflect.TypeOf(uint16(0)).Size())
-		b := make([]byte, versionSize)
-		_, err := stream.ReadAt(b, stdSize)
+		ver, err := readVersion(stream)
 		if err != nil {
 			return nil, err
 		}
 
-		ver := int(binary.BigEndian.Uint16(b))
 		switch ver {
 		case 0:
-			buf := make([]byte, wrc721V0FieldsAmount)
-			var s wrc721SignatureV0
-			_, err := stream.ReadAt(buf, stdSize+versionSize)
+			s, err := readSignature(stream, wrc721V0FieldsAmount)
 			if err != nil {
 				return nil, err
 			}
 
-			_ = s.UnmarshalBinary(buf)
-			wrc721Signature := newWrc721SignatureV0(s.fields[nameField].length, s.fields[symbolField].length, s.fields[baseUriField].length)
-			return wrc721Signature, nil
+			return s, nil
 
 		default:
 			return nil, errors.New("unsupported version of wrc721 signature")
@@ -258,23 +218,76 @@ func readSignatureFromStream(stream StorageStream) (Signature, error) {
 	}
 }
 
-func writeSignatureToStream(stream *StorageStream, sign Signature) {
-	stdSize := int(reflect.TypeOf(operation.Std(0)).Size())
-	versionSize := int(reflect.TypeOf(uint16(0)).Size())
+func writeSignatureToStream(stream *StorageStream, sign Signature) error {
 	buf := make([]byte, stdSize+versionSize)
 	binary.BigEndian.PutUint16(buf[stdSize:], sign.Version())
 
 	switch sign.(type) {
 	case WRC20Signature:
-		binary.BigEndian.PutUint16(buf[:stdSize], operation.StdWRC20)
-		off, _ := stream.WriteAt(buf, 0)
-		b, _ := sign.MarshalBinary()
-		stream.WriteAt(b, off)
+		err := writeToStream(stream, sign, buf, operation.StdWRC20)
+		if err != nil {
+			return err
+		}
 
 	case WRC721Signature:
-		binary.BigEndian.PutUint16(buf[:stdSize], operation.StdWRC721)
-		off, _ := stream.WriteAt(buf, 0)
-		b, _ := sign.MarshalBinary()
-		stream.WriteAt(b, off)
+		err := writeToStream(stream, sign, buf, operation.StdWRC721)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
+}
+
+func writeToStream(stream *StorageStream, sign Signature, buf []byte, std operation.Std) error {
+	binary.BigEndian.PutUint16(buf[:stdSize], uint16(std))
+	off, _ := stream.WriteAt(buf, 0)
+	b, _ := sign.MarshalBinary()
+	_, err := stream.WriteAt(b, off)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func readVersion(stream *StorageStream) (int, error) {
+	b := make([]byte, versionSize)
+	_, err := stream.ReadAt(b, stdSize)
+	if err != nil {
+		return -1, err
+	}
+
+	ver := int(binary.BigEndian.Uint16(b))
+
+	return ver, nil
+}
+
+func readSignature(stream *StorageStream, l int) (Signature, error) {
+	buf := make([]byte, l)
+	var s wrc721SignatureV0
+	_, err := stream.ReadAt(buf, stdSize+versionSize)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.UnmarshalBinary(buf)
+
+	return &s, nil
+}
+
+func newSignature(buf []int, fieldsAmount int) ([]field, int) {
+	shift := stdSize + versionSize + fieldsAmount
+	sign := make([]field, fieldsAmount)
+
+	total := buf[0]
+	sign[0].offset = shift
+	sign[0].length = buf[0]
+	for i := 0; i < len(buf)-1; i++ {
+		sign[i+1].offset = sign[i].offset + buf[i]
+		sign[i+1].length = buf[i+1]
+		total += buf[i+1]
+	}
+
+	return sign, total
 }
