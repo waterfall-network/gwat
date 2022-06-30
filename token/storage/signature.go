@@ -113,7 +113,7 @@ func (s *signatureV1) Symbol() (int, int) {
 }
 
 func (s *signatureV1) Version() uint16 {
-	return 0
+	return 1
 }
 
 func (s *signatureV1) WriteToStream(stream *StorageStream) error {
@@ -178,7 +178,7 @@ func lastWrc20Signature(name, symbol int) wrc20Signature {
 }
 
 func (s *wrc20SignatureV1) Decimals() (int, int) {
-	return s.fields[decimalsField].offset, s.fields[symbolField].length
+	return s.fields[decimalsField].offset, s.fields[decimalsField].length
 }
 
 func (s *wrc20SignatureV1) TotalSupply() (int, int) {
