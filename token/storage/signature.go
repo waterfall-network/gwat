@@ -249,7 +249,9 @@ func readSignature(stream *StorageStream, f func(ver uint16) (streamReader, erro
 }
 
 func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler, buf []byte, std operation.Std) error {
-	_ = std.UnmarshalBinary(buf[:stdSize])
+	stdBuf, _ := std.MarshalBinary()
+	copy(buf[:stdSize], stdBuf)
+
 	off, _ := stream.WriteAt(buf, 0)
 	b, _ := sign.MarshalBinary()
 	_, err := stream.WriteAt(b, off)
