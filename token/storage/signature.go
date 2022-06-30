@@ -189,7 +189,7 @@ type wrc721SignatureV1 struct {
 	*signatureV1
 }
 
-func readWrc721SignatureV1(stream *StorageStream) (wrc721Signature, error) {
+func readWrc721Signature(stream *StorageStream) (wrc721Signature, error) {
 	newSign := func(ver uint16) (streamReader, error) {
 		switch ver {
 		case 1:
