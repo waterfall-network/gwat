@@ -83,7 +83,7 @@ func newSignatureV1(buf []int, fieldsAmount int, std operation.Std) *signatureV1
 }
 
 func (s *signatureV1) BytesSize() int {
-	return len(s.fields)
+	return len(s.fields) + stdSize + versionSize
 }
 
 func (s *signatureV1) MarshalBinary() ([]byte, error) {
@@ -97,7 +97,23 @@ func (s *signatureV1) MarshalBinary() ([]byte, error) {
 }
 
 func (s *signatureV1) UnmarshalBinary(buf []byte) error {
-	for i, b := range buf {
+	var std operation.Std
+	err := std.UnmarshalBinary(buf[:stdSize])
+	if err != nil {
+		return err
+	}
+
+	ver := binary.BigEndian.Uint16(buf[stdSize : stdSize+versionSize])
+
+	if ver != 1 {
+		return ErrUnsupportedSignatureVersion
+	}
+
+	if std != s.std {
+		return operation.ErrStandardNotValid
+	}
+
+	for i, b := range buf[stdSize+versionSize:] {
 		s.fields[i].length = int(b)
 	}
 
@@ -129,7 +145,7 @@ func (s *signatureV1) WriteToStream(stream *StorageStream) error {
 
 func (s *signatureV1) ReadFromStream(stream *StorageStream) error {
 	buf := make([]byte, s.BytesSize())
-	_, err := stream.ReadAt(buf, stdSize+versionSize)
+	_, err := stream.ReadAt(buf, 0)
 	if err != nil {
 		return err
 	}
@@ -251,6 +267,8 @@ func readSignature(stream *StorageStream, f func(ver uint16) (streamReader, erro
 func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler, buf []byte, std operation.Std) error {
 	stdBuf, _ := std.MarshalBinary()
 	copy(buf[:stdSize], stdBuf)
+
+	_ = std.UnmarshalBinary(buf[:stdSize])
 
 	off, _ := stream.WriteAt(buf, 0)
 	b, _ := sign.MarshalBinary()
