@@ -56,12 +56,13 @@ type wrc721Signature interface {
 	encoding.BinaryUnmarshaler
 }
 
-type signatureV0 struct {
+type signatureV1 struct {
 	fields      []field
 	totalLength int
+	std         operation.Std
 }
 
-func newSignatureV0(buf []int, fieldsAmount int) *signatureV0 {
+func newSignatureV1(buf []int, fieldsAmount int, std operation.Std) *signatureV1 {
 	shift := stdSize + versionSize + fieldsAmount
 	sign := make([]field, fieldsAmount)
 
@@ -74,17 +75,18 @@ func newSignatureV0(buf []int, fieldsAmount int) *signatureV0 {
 		total += buf[i+1]
 	}
 
-	return &signatureV0{
+	return &signatureV1{
 		fields:      sign,
 		totalLength: total,
+		std:         std,
 	}
 }
 
-func (s *signatureV0) BytesSize() int {
+func (s *signatureV1) BytesSize() int {
 	return len(s.fields)
 }
 
-func (s *signatureV0) MarshalBinary() ([]byte, error) {
+func (s *signatureV1) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, len(s.fields))
 
 	for i, f := range s.fields {
@@ -94,7 +96,7 @@ func (s *signatureV0) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-func (s *signatureV0) UnmarshalBinary(buf []byte) error {
+func (s *signatureV1) UnmarshalBinary(buf []byte) error {
 	for i, b := range buf {
 		s.fields[i].length = int(b)
 	}
@@ -102,19 +104,30 @@ func (s *signatureV0) UnmarshalBinary(buf []byte) error {
 	return nil
 }
 
-func (s *signatureV0) Name() (int, int) {
+func (s *signatureV1) Name() (int, int) {
 	return s.fields[nameField].offset, s.fields[nameField].length
 }
 
-func (s *signatureV0) Symbol() (int, int) {
+func (s *signatureV1) Symbol() (int, int) {
 	return s.fields[symbolField].offset, s.fields[symbolField].length
 }
 
-func (s *signatureV0) Version() uint16 {
+func (s *signatureV1) Version() uint16 {
 	return 0
 }
 
-func (s *signatureV0) readFromStream(stream *StorageStream) error {
+func (s *signatureV1) WriteToStream(stream *StorageStream) error {
+	buf := make([]byte, stdSize+versionSize)
+	binary.BigEndian.PutUint16(buf[stdSize:], s.Version())
+	err := writeToStream(stream, s, buf, s.std)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *signatureV1) ReadFromStream(stream *StorageStream) error {
 	buf := make([]byte, s.BytesSize())
 	_, err := stream.ReadAt(buf, stdSize+versionSize)
 	if err != nil {
@@ -126,121 +139,117 @@ func (s *signatureV0) readFromStream(stream *StorageStream) error {
 	return nil
 }
 
-type wrc20SignatureV0 struct {
-	*signatureV0
+type wrc20SignatureV1 struct {
+	*signatureV1
 }
 
-func newWrc20SignatureV0(name, symbol int) *wrc20SignatureV0 {
+func readWrc20Signature(stream *StorageStream) (wrc20Signature, error) {
+	newSign := func(ver uint16) (streamReader, error) {
+		switch ver {
+		case 1:
+			return newWrc20SignatureV1(0, 0), nil
+
+		default:
+			return nil, ErrUnsupportedSignatureVersion
+		}
+	}
+
+	reader, err := readSignature(stream, newSign, operation.StdWRC20)
+	if err != nil {
+		return nil, err
+	}
+
+	return reader.(wrc20Signature), nil
+}
+
+func newWrc20SignatureV1(name, symbol int) *wrc20SignatureV1 {
 	input := []int{
 		name, symbol, decimalsSize, totalSupplySize,
 	}
 
-	sign := newSignatureV0(input, len(input))
+	sign := newSignatureV1(input, len(input), operation.StdWRC20)
 
-	return &wrc20SignatureV0{signatureV0: sign}
+	return &wrc20SignatureV1{sign}
 }
 
 func lastWrc20Signature(name, symbol int) wrc20Signature {
-	return newWrc20SignatureV0(name, symbol)
+	return newWrc20SignatureV1(name, symbol)
+
 }
 
-func (s *wrc20SignatureV0) Decimals() (int, int) {
+func (s *wrc20SignatureV1) Decimals() (int, int) {
 	return s.fields[decimalsField].offset, s.fields[symbolField].length
 }
 
-func (s *wrc20SignatureV0) TotalSupply() (int, int) {
+func (s *wrc20SignatureV1) TotalSupply() (int, int) {
 	return s.fields[totalSupplyField].offset, s.fields[totalSupplyField].length
 }
 
-func (s *wrc20SignatureV0) ReadFromStream(stream *StorageStream) error {
-	ver, err := readStdAndVersion(stream, operation.StdWRC20)
-	if err != nil {
-		return err
-	}
+type wrc721SignatureV1 struct {
+	*signatureV1
+}
 
-	switch ver {
-	case 0:
-		s := newWrc20SignatureV0(0, 0)
-		err := s.readFromStream(stream)
-		if err != nil {
-			return err
+func readWrc721SignatureV1(stream *StorageStream) (wrc721Signature, error) {
+	newSign := func(ver uint16) (streamReader, error) {
+		switch ver {
+		case 1:
+			return newWrc721SignatureV1(0, 0, 0), nil
+
+		default:
+			return nil, ErrUnsupportedSignatureVersion
 		}
-
-		return nil
-
-	default:
-		return ErrUnsupportedSignatureVersion
 	}
 
-}
-
-func (s *wrc20SignatureV0) WriteToStream(stream *StorageStream) error {
-	buf := make([]byte, stdSize+versionSize)
-	binary.BigEndian.PutUint16(buf[stdSize:], s.Version())
-	err := writeToStream(stream, s, buf, operation.StdWRC20)
+	reader, err := readSignature(stream, newSign, operation.StdWRC721)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return reader.(wrc721Signature), nil
 }
 
-type wrc721SignatureV0 struct {
-	*signatureV0
-}
-
-func newWrc721SignatureV0(name, symbol, baseUri int) *wrc721SignatureV0 {
+func newWrc721SignatureV1(name, symbol, baseUri int) *wrc721SignatureV1 {
 	input := []int{
 		name, symbol, baseUri,
 	}
-	sign := newSignatureV0(input, len(input))
+	sign := newSignatureV1(input, len(input), operation.StdWRC721)
 
-	return &wrc721SignatureV0{signatureV0: sign}
+	return &wrc721SignatureV1{sign}
 }
 
 func lastWrc721Signature(name, symbol, baseUri int) wrc721Signature {
-	return newWrc721SignatureV0(name, symbol, baseUri)
+	return newWrc721SignatureV1(name, symbol, baseUri)
 }
 
-func (s *wrc721SignatureV0) BaseUri() (int, int) {
+func (s *wrc721SignatureV1) BaseUri() (int, int) {
 	return s.fields[baseUriField].offset, s.fields[baseUriField].length
 }
 
-func (s *wrc721SignatureV0) ReadFromStream(stream *StorageStream) error {
-	ver, err := readStdAndVersion(stream, operation.StdWRC721)
-	if err != nil {
-		return err
-	}
-
-	switch ver {
-	case 0:
-		s := newWrc721SignatureV0(0, 0, 0)
-		err := s.readFromStream(stream)
-		if err != nil {
-			return err
-		}
-
-		return nil
-
-	default:
-		return ErrUnsupportedSignatureVersion
-	}
-
+type streamReader interface {
+	ReadFromStream(*StorageStream) error
 }
 
-func (s *wrc721SignatureV0) WriteToStream(stream *StorageStream) error {
-	buf := make([]byte, stdSize+versionSize)
-	binary.BigEndian.PutUint16(buf[stdSize:], s.Version())
-	err := writeToStream(stream, s, buf, operation.StdWRC721)
+func readSignature(stream *StorageStream, f func(ver uint16) (streamReader, error), std operation.Std) (streamReader, error) {
+	ver, err := readVersionAndCheckStd(stream, std)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	reader, err := f(ver)
+	if err != nil {
+		return nil, err
+	}
+
+	err = reader.ReadFromStream(stream)
+	if err != nil {
+		return nil, err
+	}
+
+	return reader, nil
 }
 
 func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler, buf []byte, std operation.Std) error {
-	binary.BigEndian.PutUint16(buf[:stdSize], uint16(std))
+	_ = std.UnmarshalBinary(buf[:stdSize])
 	off, _ := stream.WriteAt(buf, 0)
 	b, _ := sign.MarshalBinary()
 	_, err := stream.WriteAt(b, off)
@@ -251,35 +260,36 @@ func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler, buf []b
 	return nil
 }
 
-func readVersion(stream *StorageStream) (int, error) {
+func readVersion(stream *StorageStream) (uint16, error) {
 	b := make([]byte, versionSize)
 	_, err := stream.ReadAt(b, stdSize)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 
-	ver := int(binary.BigEndian.Uint16(b))
+	ver := binary.BigEndian.Uint16(b)
 
 	return ver, nil
 }
 
-func readStdAndVersion(stream *StorageStream, std int) (int, error) {
+func readVersionAndCheckStd(stream *StorageStream, std operation.Std) (uint16, error) {
+	var s operation.Std
 	b := make([]byte, stdSize)
 
 	_, err := stream.ReadAt(b, 0)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 
-	s := int(binary.BigEndian.Uint16(b))
+	_ = s.UnmarshalBinary(b)
 
 	if s != std {
-		return -1, operation.ErrStandardNotValid
+		return 0, operation.ErrStandardNotValid
 	}
 
 	ver, err := readVersion(stream)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 
 	return ver, nil
