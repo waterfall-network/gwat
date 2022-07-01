@@ -114,7 +114,12 @@ func (s *signatureV1) UnmarshalBinary(buf []byte) error {
 	}
 
 	for i, b := range buf[stdSize+versionSize:] {
-		s.fields[i].length = int(b)
+		if i == 0 {
+			s.fields[i].length = int(b)
+		} else {
+			s.fields[i].length = int(b)
+			s.fields[i].offset = s.fields[i-1].offset + s.fields[i-1].length
+		}
 	}
 
 	return nil
