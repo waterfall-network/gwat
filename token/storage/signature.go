@@ -62,24 +62,28 @@ type signatureV1 struct {
 	std         operation.Std
 }
 
-func newSignatureV1(buf []int, fieldsAmount int, std operation.Std) *signatureV1 {
-	shift := stdSize + versionSize + fieldsAmount
-	sign := make([]field, fieldsAmount)
+func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
+	shift := stdSize + versionSize + len(fieldSizes)
+	sign := make([]field, len(fieldSizes))
 
-	total := shift + buf[0]
-	sign[0].offset = shift
-	sign[0].length = buf[0]
-	for i := 0; i < len(buf)-1; i++ {
-		sign[i+1].offset = sign[i].offset + buf[i]
-		sign[i+1].length = buf[i+1]
-		total += buf[i+1]
+	if fieldSizes != nil {
+		total := shift + fieldSizes[0]
+		sign[0].offset = shift
+		sign[0].length = fieldSizes[0]
+		for i := 0; i < len(fieldSizes)-1; i++ {
+			sign[i+1].offset = sign[i].offset + fieldSizes[i]
+			sign[i+1].length = fieldSizes[i+1]
+			total += fieldSizes[i+1]
+		}
+
+		return &signatureV1{
+			fields:      sign,
+			totalLength: total,
+			std:         std,
+		}
 	}
 
-	return &signatureV1{
-		fields:      sign,
-		totalLength: total,
-		std:         std,
-	}
+	return nil
 }
 
 func (s *signatureV1) BytesSize() int {
@@ -87,10 +91,17 @@ func (s *signatureV1) BytesSize() int {
 }
 
 func (s *signatureV1) MarshalBinary() ([]byte, error) {
-	buf := make([]byte, len(s.fields))
+	buf := make([]byte, len(s.fields)+stdSize+versionSize)
+	stdBuf, err := s.std.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	copy(buf[:stdSize], stdBuf)
+	binary.BigEndian.PutUint16(buf[stdSize:stdSize+versionSize], s.Version())
 
 	for i, f := range s.fields {
-		buf[i] = uint8(f.length)
+		buf[stdSize+versionSize+i] = uint8(f.length)
 	}
 
 	return buf, nil
@@ -105,7 +116,7 @@ func (s *signatureV1) UnmarshalBinary(buf []byte) error {
 
 	ver := binary.BigEndian.Uint16(buf[stdSize : stdSize+versionSize])
 
-	if ver != 1 {
+	if ver != s.Version() {
 		return ErrUnsupportedSignatureVersion
 	}
 
@@ -138,9 +149,7 @@ func (s *signatureV1) Version() uint16 {
 }
 
 func (s *signatureV1) WriteToStream(stream *StorageStream) error {
-	buf := make([]byte, stdSize+versionSize)
-	binary.BigEndian.PutUint16(buf[stdSize:], s.Version())
-	err := writeToStream(stream, s, buf, s.std)
+	err := writeToStream(stream, s)
 	if err != nil {
 		return err
 	}
@@ -188,7 +197,7 @@ func newWrc20SignatureV1(name, symbol int) *wrc20SignatureV1 {
 		name, symbol, decimalsSize, totalSupplySize,
 	}
 
-	sign := newSignatureV1(input, len(input), operation.StdWRC20)
+	sign := newSignatureV1(input, operation.StdWRC20)
 
 	return &wrc20SignatureV1{sign}
 }
@@ -233,7 +242,7 @@ func newWrc721SignatureV1(name, symbol, baseUri int) *wrc721SignatureV1 {
 	input := []int{
 		name, symbol, baseUri,
 	}
-	sign := newSignatureV1(input, len(input), operation.StdWRC721)
+	sign := newSignatureV1(input, operation.StdWRC721)
 
 	return &wrc721SignatureV1{sign}
 }
@@ -269,15 +278,9 @@ func readSignature(stream *StorageStream, f func(ver uint16) (streamReader, erro
 	return reader, nil
 }
 
-func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler, buf []byte, std operation.Std) error {
-	stdBuf, _ := std.MarshalBinary()
-	copy(buf[:stdSize], stdBuf)
-
-	_ = std.UnmarshalBinary(buf[:stdSize])
-
-	off, _ := stream.WriteAt(buf, 0)
+func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler) error {
 	b, _ := sign.MarshalBinary()
-	_, err := stream.WriteAt(b, off)
+	_, err := stream.WriteAt(b, 0)
 	if err != nil {
 		return err
 	}
