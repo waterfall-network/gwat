@@ -24,6 +24,7 @@ var (
 	stdSize                        = int(reflect.TypeOf(operation.Std(0)).Size())
 	versionSize                    = int(reflect.TypeOf(uint16(0)).Size())
 	ErrUnsupportedSignatureVersion = errors.New("unsupported version of signature")
+	ErrEmptyBuf                    = errors.New("buffer is empty")
 )
 
 type field struct {
@@ -66,7 +67,7 @@ func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
 	shift := stdSize + versionSize + len(fieldSizes)
 	sign := make([]field, len(fieldSizes))
 
-	if fieldSizes != nil {
+	if len(fieldSizes) > 0 {
 		total := shift + fieldSizes[0]
 		sign[0].offset = shift
 		sign[0].length = fieldSizes[0]
@@ -108,6 +109,10 @@ func (s *signatureV1) MarshalBinary() ([]byte, error) {
 }
 
 func (s *signatureV1) UnmarshalBinary(buf []byte) error {
+	if len(buf) == 0 {
+		return ErrEmptyBuf
+	}
+
 	var std operation.Std
 	err := std.UnmarshalBinary(buf[:stdSize])
 	if err != nil {
@@ -124,13 +129,10 @@ func (s *signatureV1) UnmarshalBinary(buf []byte) error {
 		return operation.ErrStandardNotValid
 	}
 
-	for i, b := range buf[stdSize+versionSize:] {
-		if i == 0 {
-			s.fields[i].length = int(b)
-		} else {
-			s.fields[i].length = int(b)
-			s.fields[i].offset = s.fields[i-1].offset + s.fields[i-1].length
-		}
+	s.fields[0].length = int(buf[stdSize+versionSize])
+	for i := 0; i < len(buf[stdSize+versionSize:])-1; i++ {
+		s.fields[i+1].length = int(buf[stdSize+versionSize+i+1])
+		s.fields[i+1].offset = s.fields[i].offset + s.fields[i].length
 	}
 
 	return nil
