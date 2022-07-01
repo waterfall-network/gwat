@@ -66,7 +66,7 @@ func newSignatureV1(buf []int, fieldsAmount int, std operation.Std) *signatureV1
 	shift := stdSize + versionSize + fieldsAmount
 	sign := make([]field, fieldsAmount)
 
-	total := buf[0]
+	total := shift + buf[0]
 	sign[0].offset = shift
 	sign[0].length = buf[0]
 	for i := 0; i < len(buf)-1; i++ {
