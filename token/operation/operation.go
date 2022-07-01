@@ -10,6 +10,7 @@ package operation
 
 import (
 	"encoding"
+	"encoding/binary"
 )
 
 const (
@@ -18,6 +19,19 @@ const (
 
 // Token standard
 type Std uint16
+
+func (s Std) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf, uint16(s))
+
+	return buf, nil
+}
+
+func (s *Std) UnmarshalBinary(buf []byte) error {
+	*s = Std(binary.BigEndian.Uint16(buf))
+
+	return nil
+}
 
 const (
 	StdWRC20  = 20
