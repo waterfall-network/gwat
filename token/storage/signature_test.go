@@ -11,18 +11,30 @@ import (
 )
 
 var (
-	name    []byte
-	symbol  []byte
-	baseUri []byte
-	db      vm.StateDB
-	addr    common.Address
+	name            []byte
+	symbol          []byte
+	baseUri         []byte
+	db              vm.StateDB
+	addr            common.Address
+	wrc20InputData  testCase
+	wrc721InputData testCase
 )
 
 type testCase struct {
-	fields  []field
-	totalL  int
+	fields struct {
+		name        fieldParams
+		symbol      fieldParams
+		baseUri     fieldParams
+		decimals    fieldParams
+		totalSupply fieldParams
+	}
 	std     operation.Std
 	version uint16
+}
+
+type fieldParams struct {
+	offset int
+	length int
 }
 
 func init() {
@@ -31,29 +43,74 @@ func init() {
 	name = testutils.RandomStringInBytes(testutils.RandomInt(0, 255))
 	symbol = testutils.RandomStringInBytes(testutils.RandomInt(0, 10))
 	baseUri = testutils.RandomStringInBytes(testutils.RandomInt(0, 255))
-}
 
-func TestWRC20Signature(t *testing.T) {
-	cases := testCase{
-		fields: []field{
-			{
-				8, len(name),
+	wrc20InputData = testCase{
+		fields: struct {
+			name        fieldParams
+			symbol      fieldParams
+			baseUri     fieldParams
+			decimals    fieldParams
+			totalSupply fieldParams
+		}{fieldParams{
+			offset: 8,
+			length: len(name),
+		},
+			fieldParams{
+				offset: 8 + len(name),
+				length: len(symbol),
 			},
-			{
-				8 + len(name), len(symbol),
+			fieldParams{},
+			fieldParams{
+				offset: 8 + len(name) + len(symbol),
+				length: decimalsSize,
 			},
-			{
-				8 + len(name) + len(symbol), decimalsSize,
-			},
-			{
-				8 + len(name) + len(symbol) + decimalsSize, totalSupplySize,
+			fieldParams{
+				offset: 8 + len(name) + len(symbol) + decimalsSize,
+				length: totalSupplySize,
 			},
 		},
-		totalL:  8 + len(name) + len(symbol) + decimalsSize + totalSupplySize,
 		std:     operation.StdWRC20,
 		version: 1,
 	}
 
+	wrc721InputData = testCase{
+		fields: struct {
+			name        fieldParams
+			symbol      fieldParams
+			baseUri     fieldParams
+			decimals    fieldParams
+			totalSupply fieldParams
+		}{fieldParams{
+			offset: 7,
+			length: len(name),
+		},
+			fieldParams{
+				offset: 7 + len(name),
+				length: len(symbol),
+			},
+			fieldParams{
+				offset: 7 + len(name) + len(symbol),
+				length: len(baseUri),
+			},
+			fieldParams{},
+			fieldParams{},
+		},
+		std:     operation.StdWRC721,
+		version: 1,
+	}
+}
+
+func TestWRC20CreateSignature(t *testing.T) {
+	sign := newWrc20SignatureV1(len(name), len(symbol))
+
+	if sign.Version() != wrc20InputData.version {
+		t.Fatal()
+	}
+
+	compareWrc20Values(t, sign, wrc20InputData)
+}
+
+func TestWRC20ReadWriteSignature(t *testing.T) {
 	sign := newWrc20SignatureV1(len(name), len(symbol))
 
 	stream := NewStorageStream(addr, db)
@@ -67,45 +124,34 @@ func TestWRC20Signature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if readingSign.Version() != cases.version {
+	if readingSign.Version() != wrc20InputData.version {
 		t.Fatal()
 	}
 
-	offLength, fieldLength := readingSign.Name()
-	compareValues(t, offLength, cases.fields[nameField].offset)
-	compareValues(t, fieldLength, cases.fields[nameField].length)
-
-	offLength, fieldLength = readingSign.Symbol()
-	compareValues(t, offLength, cases.fields[symbolField].offset)
-	compareValues(t, fieldLength, cases.fields[symbolField].length)
-
-	offLength, fieldLength = readingSign.Decimals()
-	compareValues(t, offLength, cases.fields[decimalsField].offset)
-	compareValues(t, fieldLength, cases.fields[decimalsField].length)
-
-	offLength, fieldLength = readingSign.TotalSupply()
-	compareValues(t, offLength, cases.fields[totalSupplyField].offset)
-	compareValues(t, fieldLength, cases.fields[totalSupplyField].length)
+	compareWrc20Values(t, readingSign, wrc20InputData)
 }
 
-func TestWRC721Signature(t *testing.T) {
-	cases := testCase{
-		fields: []field{
-			{
-				7, len(name),
-			},
-			{
-				7 + len(name), len(symbol),
-			},
-			{
-				7 + len(name) + len(symbol), len(baseUri),
-			},
-		},
-		totalL:  7 + len(name) + len(symbol) + len(baseUri),
-		std:     operation.StdWRC721,
-		version: 1,
+func TestWRC721CreateSignature(t *testing.T) {
+	sign := newWrc721SignatureV1(len(name), len(symbol), len(baseUri))
+
+	if sign.Version() != wrc721InputData.version {
+		t.Fatal()
 	}
 
+	offLength, fieldLength := sign.Name()
+	compareValues(t, offLength, wrc721InputData.fields.name.offset)
+	compareValues(t, fieldLength, wrc721InputData.fields.name.length)
+
+	offLength, fieldLength = sign.Symbol()
+	compareValues(t, offLength, wrc721InputData.fields.symbol.offset)
+	compareValues(t, fieldLength, wrc721InputData.fields.symbol.length)
+
+	offLength, fieldLength = sign.BaseUri()
+	compareValues(t, offLength, wrc721InputData.fields.baseUri.offset)
+	compareValues(t, fieldLength, wrc721InputData.fields.baseUri.length)
+}
+
+func TestWRC721ReadWriteSignature(t *testing.T) {
 	sign := newWrc721SignatureV1(len(name), len(symbol), len(baseUri))
 
 	stream := NewStorageStream(addr, db)
@@ -119,25 +165,47 @@ func TestWRC721Signature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if readingSign.Version() != cases.version {
+	if readingSign.Version() != wrc721InputData.version {
 		t.Fatal()
 	}
 
-	offLength, fieldLength := readingSign.Name()
-	compareValues(t, offLength, cases.fields[nameField].offset)
-	compareValues(t, fieldLength, cases.fields[nameField].length)
-
-	offLength, fieldLength = readingSign.Symbol()
-	compareValues(t, offLength, cases.fields[symbolField].offset)
-	compareValues(t, fieldLength, cases.fields[symbolField].length)
-
-	offLength, fieldLength = readingSign.BaseUri()
-	compareValues(t, offLength, cases.fields[baseUriField].offset)
-	compareValues(t, fieldLength, cases.fields[baseUriField].length)
+	compareWrc721Values(t, readingSign, wrc721InputData)
 }
 
 func compareValues(t *testing.T, a, b int) {
 	if a != b {
 		t.Fatal()
 	}
+}
+
+func compareWrc20Values(t *testing.T, sign wrc20Signature, inputData testCase) {
+	offLength, fieldLength := sign.Name()
+	compareValues(t, offLength, inputData.fields.name.offset)
+	compareValues(t, fieldLength, inputData.fields.name.length)
+
+	offLength, fieldLength = sign.Symbol()
+	compareValues(t, offLength, inputData.fields.symbol.offset)
+	compareValues(t, fieldLength, inputData.fields.symbol.length)
+
+	offLength, fieldLength = sign.Decimals()
+	compareValues(t, offLength, inputData.fields.decimals.offset)
+	compareValues(t, fieldLength, inputData.fields.decimals.length)
+
+	offLength, fieldLength = sign.TotalSupply()
+	compareValues(t, offLength, inputData.fields.totalSupply.offset)
+	compareValues(t, fieldLength, inputData.fields.totalSupply.length)
+}
+
+func compareWrc721Values(t *testing.T, sign wrc721Signature, inputData testCase) {
+	offLength, fieldLength := sign.Name()
+	compareValues(t, offLength, inputData.fields.name.offset)
+	compareValues(t, fieldLength, inputData.fields.name.length)
+
+	offLength, fieldLength = sign.Symbol()
+	compareValues(t, offLength, inputData.fields.symbol.offset)
+	compareValues(t, fieldLength, inputData.fields.symbol.length)
+
+	offLength, fieldLength = sign.BaseUri()
+	compareValues(t, offLength, inputData.fields.baseUri.offset)
+	compareValues(t, fieldLength, inputData.fields.baseUri.length)
 }
