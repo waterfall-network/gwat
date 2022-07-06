@@ -138,17 +138,7 @@ func TestWRC721CreateSignature(t *testing.T) {
 		t.Fatal()
 	}
 
-	offLength, fieldLength := sign.Name()
-	compareValues(t, offLength, wrc721InputData.fields.name.offset)
-	compareValues(t, fieldLength, wrc721InputData.fields.name.length)
-
-	offLength, fieldLength = sign.Symbol()
-	compareValues(t, offLength, wrc721InputData.fields.symbol.offset)
-	compareValues(t, fieldLength, wrc721InputData.fields.symbol.length)
-
-	offLength, fieldLength = sign.BaseUri()
-	compareValues(t, offLength, wrc721InputData.fields.baseUri.offset)
-	compareValues(t, fieldLength, wrc721InputData.fields.baseUri.length)
+	compareWrc721Values(t, sign, wrc721InputData)
 }
 
 func TestWRC721ReadWriteSignature(t *testing.T) {
