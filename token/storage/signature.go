@@ -58,9 +58,8 @@ type wrc721Signature interface {
 }
 
 type signatureV1 struct {
-	fields      []field
-	totalLength int
-	std         operation.Std
+	fields []field
+	std    operation.Std
 }
 
 func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
@@ -78,9 +77,8 @@ func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
 		}
 
 		return &signatureV1{
-			fields:      sign,
-			totalLength: total,
-			std:         std,
+			fields: sign,
+			std:    std,
 		}
 	}
 
