@@ -10,11 +10,10 @@ import (
 )
 
 var (
-	stateDb     *state.StateDB
-	address     common.Address
-	buf         []byte
-	off         *big.Int
-	negativeOff = big.NewInt(0)
+	stateDb *state.StateDB
+	address common.Address
+	buf     []byte
+	off     *big.Int
 )
 
 func init() {
@@ -106,7 +105,7 @@ func TestWriteStream(t *testing.T) {
 			TestData: testData{
 				scr: make([]byte, 0),
 				dst: make([]byte, 0),
-				off: negativeOff.Neg(off),
+				off: new(big.Int).Neg(off),
 			},
 			Errs: []error{ErrInvalidOff},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
