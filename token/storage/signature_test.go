@@ -103,10 +103,6 @@ func init() {
 func TestWRC20CreateSignature(t *testing.T) {
 	sign := newWrc20SignatureV1(len(name), len(symbol))
 
-	if sign.Version() != wrc20InputData.version {
-		t.Fatal()
-	}
-
 	compareWrc20Values(t, sign, wrc20InputData)
 }
 
@@ -124,19 +120,11 @@ func TestWRC20ReadWriteSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if readingSign.Version() != wrc20InputData.version {
-		t.Fatal()
-	}
-
 	compareWrc20Values(t, readingSign, wrc20InputData)
 }
 
 func TestWRC721CreateSignature(t *testing.T) {
 	sign := newWrc721SignatureV1(len(name), len(symbol), len(baseUri))
-
-	if sign.Version() != wrc721InputData.version {
-		t.Fatal()
-	}
 
 	compareWrc721Values(t, sign, wrc721InputData)
 }
@@ -155,10 +143,6 @@ func TestWRC721ReadWriteSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if readingSign.Version() != wrc721InputData.version {
-		t.Fatal()
-	}
-
 	compareWrc721Values(t, readingSign, wrc721InputData)
 }
 
@@ -169,6 +153,10 @@ func compareValues(t *testing.T, a, b int) {
 }
 
 func compareWrc20Values(t *testing.T, sign wrc20Signature, inputData testCase) {
+	if sign.Version() != inputData.version {
+		t.Fatal()
+	}
+
 	offLength, fieldLength := sign.Name()
 	compareValues(t, offLength, inputData.fields.name.offset)
 	compareValues(t, fieldLength, inputData.fields.name.length)
@@ -187,6 +175,10 @@ func compareWrc20Values(t *testing.T, sign wrc20Signature, inputData testCase) {
 }
 
 func compareWrc721Values(t *testing.T, sign wrc721Signature, inputData testCase) {
+	if sign.Version() != inputData.version {
+		t.Fatal()
+	}
+
 	offLength, fieldLength := sign.Name()
 	compareValues(t, offLength, inputData.fields.name.offset)
 	compareValues(t, fieldLength, inputData.fields.name.length)
