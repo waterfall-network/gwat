@@ -1,10 +1,10 @@
 package storage
 
 import (
-	"encoding/binary"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"math/big"
 )
 
 var ErrInvalidOff = errors.New("negative offset")
@@ -26,14 +26,14 @@ func NewStorageStream(tokenAddr common.Address, statedb vm.StateDB) *StorageStre
 	}
 }
 
-func (s *StorageStream) WriteAt(b []byte, off int) (int, error) {
+func (s *StorageStream) WriteAt(b []byte, off *big.Int) (int, error) {
 
 	return s.do(b, off, func(streamBuf, b []byte) int {
 		return copy(streamBuf, b)
 	})
 }
 
-func (s *StorageStream) ReadAt(b []byte, off int) (int, error) {
+func (s *StorageStream) ReadAt(b []byte, off *big.Int) (int, error) {
 	return s.do(b, off, func(streamBuf, b []byte) int {
 		return copy(b, streamBuf)
 	})
@@ -45,8 +45,8 @@ func (s *StorageStream) Flush() {
 	}
 }
 
-func (s *StorageStream) do(b []byte, off int, action func(streamBuf, b []byte) int) (int, error) {
-	if off < 0 {
+func (s *StorageStream) do(b []byte, off *big.Int, action func(streamBuf, b []byte) int) (int, error) {
+	if off.Cmp(big.NewInt(0)) < 0 {
 		return 0, ErrInvalidOff
 	}
 
@@ -57,7 +57,8 @@ func (s *StorageStream) do(b []byte, off int, action func(streamBuf, b []byte) i
 
 	var res int
 	for res = 0; res < len(b); {
-		err = s.getSlot(off + res)
+		slotOffset := big.NewInt(0)
+		err = s.getSlot(slotOffset.Add(off, big.NewInt(int64(res))))
 		if err != nil {
 			return 0, err
 		}
@@ -70,13 +71,11 @@ func (s *StorageStream) do(b []byte, off int, action func(streamBuf, b []byte) i
 	return res, nil
 }
 
-func (s *StorageStream) getSlot(off int) error {
-	slotIndex, err := slot(off)
+func (s *StorageStream) getSlot(off *big.Int) error {
+	slotKey, err := slot(off)
 	if err != nil {
 		return err
 	}
-	slotKey := common.Hash{}
-	binary.BigEndian.PutUint64(slotKey[:], slotIndex)
 
 	slot, ok := s.bufferedSlots[slotKey]
 	if !ok {
@@ -90,18 +89,30 @@ func (s *StorageStream) getSlot(off int) error {
 	return nil
 }
 
-func slot(shift int) (uint64, error) {
-	if shift < 0 {
-		return 0, ErrInvalidOff
+func slot(shift *big.Int) (common.Hash, error) {
+	res := new(big.Int)
+
+	if shift.Cmp(big.NewInt(0)) < 0 {
+		return common.Hash{}, ErrInvalidOff
 	}
 
-	return uint64(shift / len(Slot{})), nil
+	res.Div(shift, big.NewInt(int64(len(Slot{}))))
+
+	s := common.Hash{}
+	res.FillBytes(s[:])
+
+	return s, nil
 }
 
-func position(shift int) (int, error) {
-	if shift < 0 {
+func position(shift *big.Int) (int, error) {
+	res := new(big.Int)
+
+	if shift.Cmp(big.NewInt(0)) < 0 {
 		return 0, ErrInvalidOff
 	}
 
-	return shift % len(Slot{}), nil
+	res.Rem(shift, big.NewInt(int64(len(Slot{}))))
+
+	// It`s safe because slot has 32 bytes size.
+	return int(res.Uint64()), nil
 }
