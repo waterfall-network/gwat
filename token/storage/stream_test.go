@@ -104,8 +104,8 @@ func TestWriteStream(t *testing.T) {
 		{
 			CaseName: "Test with negative offset",
 			TestData: testData{
-				scr: buf,
-				dst: make([]byte, len(buf)),
+				scr: make([]byte, 0),
+				dst: make([]byte, 0),
 				off: negativeOff.Neg(off),
 			},
 			Errs: []error{ErrInvalidOff},
@@ -146,9 +146,6 @@ func runWithoutFlush(t *testing.T, a *common.Address, c *testutils.TestCase) {
 	write(t, stream, v.scr, v.off, c.Errs)
 	read(t, stream, v.dst, v.off, c.Errs)
 
-	if off.Cmp(big.NewInt(0)) < 0 {
-		return
-	}
 	testutils.CompareBytes(t, v.dst, v.scr)
 }
 
@@ -160,8 +157,5 @@ func runWithFlush(t *testing.T, a *common.Address, c *testutils.TestCase) {
 	stream = NewStorageStream(*a, stateDb)
 	read(t, stream, v.dst, v.off, c.Errs)
 
-	if off.Cmp(big.NewInt(0)) < 0 {
-		return
-	}
 	testutils.CompareBytes(t, v.dst, v.scr)
 }
