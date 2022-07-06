@@ -5,19 +5,21 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/ethereum/go-ethereum/token/operation"
+	"math/big"
 	"reflect"
 )
 
-type Field int
+type fieldSize int
 
 const (
-	nameField Field = iota
+	nameField fieldSize = iota
 	symbolField
 	decimalsField
 	totalSupplyField
-	baseUriField    Field = 2
-	decimalsSize          = 1
-	totalSupplySize       = 32
+	baseUriField    fieldSize = 2
+	decimalsSize              = 1
+	totalSupplySize           = 32
+	mapSize                   = 1
 )
 
 var (
@@ -25,20 +27,30 @@ var (
 	versionSize                    = int(reflect.TypeOf(uint16(0)).Size())
 	ErrUnsupportedSignatureVersion = errors.New("unsupported version of signature")
 	ErrEmptyBuf                    = errors.New("buffer is empty")
+	initialOffset                  = big.NewInt(0)
 )
 
-type field struct {
-	offset int
+type Field struct {
+	offset *big.Int
 	length int
 }
 
+func (f *Field) Offset() *big.Int {
+	return f.offset
+}
+
+func (f *Field) Length() int {
+	return f.length
+}
+
 type wrc20Signature interface {
-	Decimals() (int, int)
-	TotalSupply() (int, int)
+	Decimals() Field
+	TotalSupply() Field
 	Version() uint16
-	Name() (int, int)
-	Symbol() (int, int)
+	Name() Field
+	Symbol() Field
 	BytesSize() int
+	TotalLength() *big.Int
 	ReadFromStream(stream *StorageStream) error
 	WriteToStream(stream *StorageStream) error
 	encoding.BinaryMarshaler
@@ -46,11 +58,12 @@ type wrc20Signature interface {
 }
 
 type wrc721Signature interface {
-	BaseUri() (int, int)
+	BaseUri() Field
 	Version() uint16
-	Name() (int, int)
-	Symbol() (int, int)
+	Name() Field
+	Symbol() Field
 	BytesSize() int
+	TotalLength() *big.Int
 	ReadFromStream(stream *StorageStream) error
 	WriteToStream(stream *StorageStream) error
 	encoding.BinaryMarshaler
@@ -58,27 +71,29 @@ type wrc721Signature interface {
 }
 
 type signatureV1 struct {
-	fields []field
+	fields []Field
 	std    operation.Std
+	total  *big.Int
 }
 
 func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
 	shift := stdSize + versionSize + len(fieldSizes)
-	sign := make([]field, len(fieldSizes))
+	sign := make([]Field, len(fieldSizes))
 
 	if len(fieldSizes) > 0 {
-		total := shift + fieldSizes[0]
-		sign[0].offset = shift
+		total := big.NewInt(int64(shift + fieldSizes[0]))
+		sign[0].offset = big.NewInt(int64(shift))
 		sign[0].length = fieldSizes[0]
 		for i := 0; i < len(fieldSizes)-1; i++ {
-			sign[i+1].offset = sign[i].offset + fieldSizes[i]
+			sign[i+1].offset = big.NewInt(0).Add(sign[i].offset, big.NewInt(int64(fieldSizes[i])))
 			sign[i+1].length = fieldSizes[i+1]
-			total += fieldSizes[i+1]
+			total.Add(total, big.NewInt(int64(fieldSizes[i+1])))
 		}
 
 		return &signatureV1{
 			fields: sign,
 			std:    std,
+			total:  total,
 		}
 	}
 
@@ -87,6 +102,10 @@ func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
 
 func (s *signatureV1) BytesSize() int {
 	return len(s.fields) + stdSize + versionSize
+}
+
+func (s *signatureV1) TotalLength() *big.Int {
+	return s.total
 }
 
 func (s *signatureV1) MarshalBinary() ([]byte, error) {
@@ -117,31 +136,33 @@ func (s *signatureV1) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
+	if std != s.std {
+		return operation.ErrStandardNotValid
+	}
+
 	ver := binary.BigEndian.Uint16(buf[stdSize : stdSize+versionSize])
 
 	if ver != s.Version() {
 		return ErrUnsupportedSignatureVersion
 	}
 
-	if std != s.std {
-		return operation.ErrStandardNotValid
-	}
-
 	s.fields[0].length = int(buf[stdSize+versionSize])
+	s.total.Add(s.total, big.NewInt(int64(s.fields[0].length)))
 	for i := 0; i < len(buf[stdSize+versionSize:])-1; i++ {
 		s.fields[i+1].length = int(buf[stdSize+versionSize+i+1])
-		s.fields[i+1].offset = s.fields[i].offset + s.fields[i].length
+		s.fields[i+1].offset.Add(s.fields[i].offset, big.NewInt(int64(s.fields[i].length)))
+		s.total.Add(s.total, big.NewInt(int64(s.fields[i+1].length)))
 	}
 
 	return nil
 }
 
-func (s *signatureV1) Name() (int, int) {
-	return s.fields[nameField].offset, s.fields[nameField].length
+func (s *signatureV1) Name() Field {
+	return s.fields[nameField]
 }
 
-func (s *signatureV1) Symbol() (int, int) {
-	return s.fields[symbolField].offset, s.fields[symbolField].length
+func (s *signatureV1) Symbol() Field {
+	return s.fields[symbolField]
 }
 
 func (s *signatureV1) Version() uint16 {
@@ -159,7 +180,7 @@ func (s *signatureV1) WriteToStream(stream *StorageStream) error {
 
 func (s *signatureV1) ReadFromStream(stream *StorageStream) error {
 	buf := make([]byte, s.BytesSize())
-	_, err := stream.ReadAt(buf, 0)
+	_, err := stream.ReadAt(buf, initialOffset)
 	if err != nil {
 		return err
 	}
@@ -193,8 +214,10 @@ func readWrc20Signature(stream *StorageStream) (wrc20Signature, error) {
 }
 
 func newWrc20SignatureV1(name, symbol int) *wrc20SignatureV1 {
+
+	//wrc20 token signature has 2 maps: balances and allowances.
 	input := []int{
-		name, symbol, decimalsSize, totalSupplySize,
+		name, symbol, decimalsSize, totalSupplySize, mapSize, mapSize,
 	}
 
 	sign := newSignatureV1(input, operation.StdWRC20)
@@ -207,12 +230,12 @@ func lastWrc20Signature(name, symbol int) wrc20Signature {
 
 }
 
-func (s *wrc20SignatureV1) Decimals() (int, int) {
-	return s.fields[decimalsField].offset, s.fields[decimalsField].length
+func (s *wrc20SignatureV1) Decimals() Field {
+	return s.fields[decimalsField]
 }
 
-func (s *wrc20SignatureV1) TotalSupply() (int, int) {
-	return s.fields[totalSupplyField].offset, s.fields[totalSupplyField].length
+func (s *wrc20SignatureV1) TotalSupply() Field {
+	return s.fields[totalSupplyField]
 }
 
 type wrc721SignatureV1 struct {
@@ -239,8 +262,10 @@ func readWrc721Signature(stream *StorageStream) (wrc721Signature, error) {
 }
 
 func newWrc721SignatureV1(name, symbol, baseUri int) *wrc721SignatureV1 {
+
+	//wrc721 token signature has 4 maps: balances, owners, tokenApprovals, operatorApprovals.
 	input := []int{
-		name, symbol, baseUri,
+		name, symbol, baseUri, mapSize, mapSize, mapSize, mapSize,
 	}
 	sign := newSignatureV1(input, operation.StdWRC721)
 
@@ -251,8 +276,8 @@ func lastWrc721Signature(name, symbol, baseUri int) wrc721Signature {
 	return newWrc721SignatureV1(name, symbol, baseUri)
 }
 
-func (s *wrc721SignatureV1) BaseUri() (int, int) {
-	return s.fields[baseUriField].offset, s.fields[baseUriField].length
+func (s *wrc721SignatureV1) BaseUri() Field {
+	return s.fields[baseUriField]
 }
 
 type streamReader interface {
@@ -280,7 +305,7 @@ func readSignature(stream *StorageStream, f func(ver uint16) (streamReader, erro
 
 func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler) error {
 	b, _ := sign.MarshalBinary()
-	_, err := stream.WriteAt(b, 0)
+	_, err := stream.WriteAt(b, initialOffset)
 	if err != nil {
 		return err
 	}
@@ -290,7 +315,7 @@ func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler) error {
 
 func readVersion(stream *StorageStream) (uint16, error) {
 	b := make([]byte, versionSize)
-	_, err := stream.ReadAt(b, stdSize)
+	_, err := stream.ReadAt(b, big.NewInt(int64(stdSize)))
 	if err != nil {
 		return 0, err
 	}
@@ -304,7 +329,7 @@ func readVersionAndCheckStd(stream *StorageStream, std operation.Std) (uint16, e
 	var s operation.Std
 	b := make([]byte, stdSize)
 
-	_, err := stream.ReadAt(b, 0)
+	_, err := stream.ReadAt(b, initialOffset)
 	if err != nil {
 		return 0, err
 	}
