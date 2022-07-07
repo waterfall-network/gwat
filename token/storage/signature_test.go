@@ -11,6 +11,11 @@ import (
 	"testing"
 )
 
+const (
+	wrc20SignatureOffset  = 10
+	wrc721SignatureOffset = 11
+)
+
 var (
 	name            []byte
 	symbol          []byte
@@ -54,26 +59,26 @@ func init() {
 			decimals    fieldParams
 			totalSupply fieldParams
 		}{fieldParams{
-			offset: big.NewInt(10),
+			offset: big.NewInt(wrc20SignatureOffset),
 			length: len(name),
 		},
 			fieldParams{
-				offset: big.NewInt(int64(10 + len(name))),
+				offset: big.NewInt(int64(wrc20SignatureOffset + len(name))),
 				length: len(symbol),
 			},
 			fieldParams{},
 			fieldParams{
-				offset: big.NewInt(int64(10 + len(name) + len(symbol))),
+				offset: big.NewInt(int64(wrc20SignatureOffset + len(name) + len(symbol))),
 				length: decimalsSize,
 			},
 			fieldParams{
-				offset: big.NewInt(int64(10 + len(name) + len(symbol) + decimalsSize)),
+				offset: big.NewInt(int64(wrc20SignatureOffset + len(name) + len(symbol) + decimalsSize)),
 				length: totalSupplySize,
 			},
 		},
 		std:     operation.StdWRC20,
 		version: 1,
-		total:   10 + len(name) + len(symbol) + decimalsSize + totalSupplySize + mapSize + mapSize,
+		total:   wrc20SignatureOffset + len(name) + len(symbol) + decimalsSize + totalSupplySize + mapSize + mapSize,
 	}
 
 	wrc721InputData = testCase{
@@ -84,15 +89,15 @@ func init() {
 			decimals    fieldParams
 			totalSupply fieldParams
 		}{fieldParams{
-			offset: big.NewInt(11),
+			offset: big.NewInt(wrc721SignatureOffset),
 			length: len(name),
 		},
 			fieldParams{
-				offset: big.NewInt(int64(11 + len(name))),
+				offset: big.NewInt(int64(wrc721SignatureOffset + len(name))),
 				length: len(symbol),
 			},
 			fieldParams{
-				offset: big.NewInt(int64(11 + len(name) + len(symbol))),
+				offset: big.NewInt(int64(wrc721SignatureOffset + len(name) + len(symbol))),
 				length: len(baseUri),
 			},
 			fieldParams{},
@@ -100,7 +105,7 @@ func init() {
 		},
 		std:     operation.StdWRC721,
 		version: 1,
-		total:   11 + len(name) + len(symbol) + len(baseUri) + mapSize + mapSize + mapSize + mapSize,
+		total:   wrc721SignatureOffset + len(name) + len(symbol) + len(baseUri) + mapSize + mapSize + mapSize + mapSize,
 	}
 }
 

@@ -156,7 +156,7 @@ func (s *signatureV1) UnmarshalBinary(buf []byte) error {
 
 	s.fields[0].length = int(buf[stdSize+versionSize])
 	s.fieldsTotalLength = s.fields[0].length
-	for i := 0; i < len(buf[stdSize+versionSize:])-1; i++ {
+	for i := 0; i < len(buf[stdSize+versionSize:s.SignatureLength()])-1; i++ {
 		s.fields[i+1].length = int(buf[stdSize+versionSize+i+1])
 		s.fields[i+1].offset.Add(s.fields[i].offset, big.NewInt(int64(s.fields[i].length)))
 		s.fieldsTotalLength += s.fields[i+1].length
