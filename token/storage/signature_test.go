@@ -31,7 +31,7 @@ type testCase struct {
 	}
 	std     operation.Std
 	version uint16
-	total   *big.Int
+	total   int
 }
 
 type fieldParams struct {
@@ -73,7 +73,7 @@ func init() {
 		},
 		std:     operation.StdWRC20,
 		version: 1,
-		total:   big.NewInt(int64(10 + len(name) + len(symbol) + decimalsSize + totalSupplySize + mapSize + mapSize)),
+		total:   10 + len(name) + len(symbol) + decimalsSize + totalSupplySize + mapSize + mapSize,
 	}
 
 	wrc721InputData = testCase{
@@ -100,7 +100,7 @@ func init() {
 		},
 		std:     operation.StdWRC721,
 		version: 1,
-		total:   big.NewInt(int64(11 + len(name) + len(symbol) + len(baseUri) + mapSize + mapSize + mapSize + mapSize)),
+		total:   11 + len(name) + len(symbol) + len(baseUri) + mapSize + mapSize + mapSize + mapSize,
 	}
 }
 
@@ -161,7 +161,7 @@ func compareWrc20Values(t *testing.T, sign wrc20Signature, inputData testCase) {
 		t.Fatal()
 	}
 
-	testutils.CompareBigInt(t, sign.TotalLength(), inputData.total)
+	compareValues(t, sign.TotalLength(), inputData.total)
 
 	fieldName := sign.Name()
 	testutils.CompareBigInt(t, fieldName.offset, inputData.fields.name.offset)
@@ -185,7 +185,7 @@ func compareWrc721Values(t *testing.T, sign wrc721Signature, inputData testCase)
 		t.Fatal()
 	}
 
-	testutils.CompareBigInt(t, sign.TotalLength(), inputData.total)
+	compareValues(t, sign.TotalLength(), inputData.total)
 
 	fieldName := sign.Name()
 	testutils.CompareBigInt(t, fieldName.offset, inputData.fields.name.offset)

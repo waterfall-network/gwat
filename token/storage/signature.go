@@ -26,7 +26,7 @@ var (
 	stdSize                        = int(reflect.TypeOf(operation.Std(0)).Size())
 	versionSize                    = int(reflect.TypeOf(uint16(0)).Size())
 	ErrUnsupportedSignatureVersion = errors.New("unsupported version of signature")
-	ErrEmptyBuf                    = errors.New("buffer is empty")
+	ErrWrongBuf                    = errors.New("wrong buffer size")
 	initialOffset                  = big.NewInt(0)
 )
 
@@ -49,8 +49,9 @@ type wrc20Signature interface {
 	Version() uint16
 	Name() Field
 	Symbol() Field
-	BytesSize() int
-	TotalLength() *big.Int
+	SignatureLength() int
+	FieldsLength() int
+	TotalLength() int
 	ReadFromStream(stream *StorageStream) error
 	WriteToStream(stream *StorageStream) error
 	encoding.BinaryMarshaler
@@ -62,8 +63,9 @@ type wrc721Signature interface {
 	Version() uint16
 	Name() Field
 	Symbol() Field
-	BytesSize() int
-	TotalLength() *big.Int
+	SignatureLength() int
+	FieldsLength() int
+	TotalLength() int
 	ReadFromStream(stream *StorageStream) error
 	WriteToStream(stream *StorageStream) error
 	encoding.BinaryMarshaler
@@ -71,9 +73,9 @@ type wrc721Signature interface {
 }
 
 type signatureV1 struct {
-	fields []Field
-	std    operation.Std
-	total  *big.Int
+	fields            []Field
+	std               operation.Std
+	fieldsTotalLength int
 }
 
 func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
@@ -81,31 +83,37 @@ func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
 	sign := make([]Field, len(fieldSizes))
 
 	if len(fieldSizes) > 0 {
-		total := big.NewInt(int64(shift + fieldSizes[0]))
+		total := fieldSizes[0]
 		sign[0].offset = big.NewInt(int64(shift))
 		sign[0].length = fieldSizes[0]
 		for i := 0; i < len(fieldSizes)-1; i++ {
 			sign[i+1].offset = big.NewInt(0).Add(sign[i].offset, big.NewInt(int64(fieldSizes[i])))
 			sign[i+1].length = fieldSizes[i+1]
-			total.Add(total, big.NewInt(int64(fieldSizes[i+1])))
+			total += fieldSizes[i+1]
 		}
 
 		return &signatureV1{
-			fields: sign,
-			std:    std,
-			total:  total,
+			fields:            sign,
+			std:               std,
+			fieldsTotalLength: total,
 		}
 	}
 
 	return nil
 }
 
-func (s *signatureV1) BytesSize() int {
+// SignatureLength returns size of the signature in bytes.
+func (s *signatureV1) SignatureLength() int {
 	return len(s.fields) + stdSize + versionSize
 }
 
-func (s *signatureV1) TotalLength() *big.Int {
-	return s.total
+// FieldsLength returns total size of all signature fields in bytes.
+func (s *signatureV1) FieldsLength() int {
+	return s.fieldsTotalLength
+}
+
+func (s *signatureV1) TotalLength() int {
+	return s.SignatureLength() + s.FieldsLength()
 }
 
 func (s *signatureV1) MarshalBinary() ([]byte, error) {
@@ -126,8 +134,8 @@ func (s *signatureV1) MarshalBinary() ([]byte, error) {
 }
 
 func (s *signatureV1) UnmarshalBinary(buf []byte) error {
-	if len(buf) == 0 {
-		return ErrEmptyBuf
+	if len(buf) < s.SignatureLength() {
+		return ErrWrongBuf
 	}
 
 	var std operation.Std
@@ -147,11 +155,11 @@ func (s *signatureV1) UnmarshalBinary(buf []byte) error {
 	}
 
 	s.fields[0].length = int(buf[stdSize+versionSize])
-	s.total.Add(s.total, big.NewInt(int64(s.fields[0].length)))
+	s.fieldsTotalLength = s.fields[0].length
 	for i := 0; i < len(buf[stdSize+versionSize:])-1; i++ {
 		s.fields[i+1].length = int(buf[stdSize+versionSize+i+1])
 		s.fields[i+1].offset.Add(s.fields[i].offset, big.NewInt(int64(s.fields[i].length)))
-		s.total.Add(s.total, big.NewInt(int64(s.fields[i+1].length)))
+		s.fieldsTotalLength += s.fields[i+1].length
 	}
 
 	return nil
@@ -179,7 +187,7 @@ func (s *signatureV1) WriteToStream(stream *StorageStream) error {
 }
 
 func (s *signatureV1) ReadFromStream(stream *StorageStream) error {
-	buf := make([]byte, s.BytesSize())
+	buf := make([]byte, s.SignatureLength())
 	_, err := stream.ReadAt(buf, initialOffset)
 	if err != nil {
 		return err
