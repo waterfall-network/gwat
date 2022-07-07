@@ -7,7 +7,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/token/testutils"
 	"github.com/ethereum/go-ethereum/token/operation"
+	"math/big"
 	"testing"
+)
+
+const (
+	wrc20SignatureOffset  = 10
+	wrc721SignatureOffset = 11
 )
 
 var (
@@ -30,10 +36,11 @@ type testCase struct {
 	}
 	std     operation.Std
 	version uint16
+	total   int
 }
 
 type fieldParams struct {
-	offset int
+	offset *big.Int
 	length int
 }
 
@@ -52,25 +59,26 @@ func init() {
 			decimals    fieldParams
 			totalSupply fieldParams
 		}{fieldParams{
-			offset: 8,
+			offset: big.NewInt(wrc20SignatureOffset),
 			length: len(name),
 		},
 			fieldParams{
-				offset: 8 + len(name),
+				offset: big.NewInt(int64(wrc20SignatureOffset + len(name))),
 				length: len(symbol),
 			},
 			fieldParams{},
 			fieldParams{
-				offset: 8 + len(name) + len(symbol),
+				offset: big.NewInt(int64(wrc20SignatureOffset + len(name) + len(symbol))),
 				length: decimalsSize,
 			},
 			fieldParams{
-				offset: 8 + len(name) + len(symbol) + decimalsSize,
+				offset: big.NewInt(int64(wrc20SignatureOffset + len(name) + len(symbol) + decimalsSize)),
 				length: totalSupplySize,
 			},
 		},
 		std:     operation.StdWRC20,
 		version: 1,
+		total:   wrc20SignatureOffset + len(name) + len(symbol) + decimalsSize + totalSupplySize + mapSize + mapSize,
 	}
 
 	wrc721InputData = testCase{
@@ -81,15 +89,15 @@ func init() {
 			decimals    fieldParams
 			totalSupply fieldParams
 		}{fieldParams{
-			offset: 7,
+			offset: big.NewInt(wrc721SignatureOffset),
 			length: len(name),
 		},
 			fieldParams{
-				offset: 7 + len(name),
+				offset: big.NewInt(int64(wrc721SignatureOffset + len(name))),
 				length: len(symbol),
 			},
 			fieldParams{
-				offset: 7 + len(name) + len(symbol),
+				offset: big.NewInt(int64(wrc721SignatureOffset + len(name) + len(symbol))),
 				length: len(baseUri),
 			},
 			fieldParams{},
@@ -97,6 +105,7 @@ func init() {
 		},
 		std:     operation.StdWRC721,
 		version: 1,
+		total:   wrc721SignatureOffset + len(name) + len(symbol) + len(baseUri) + mapSize + mapSize + mapSize + mapSize,
 	}
 }
 
@@ -157,21 +166,23 @@ func compareWrc20Values(t *testing.T, sign wrc20Signature, inputData testCase) {
 		t.Fatal()
 	}
 
-	offLength, fieldLength := sign.Name()
-	compareValues(t, offLength, inputData.fields.name.offset)
-	compareValues(t, fieldLength, inputData.fields.name.length)
+	compareValues(t, sign.TotalLength(), inputData.total)
 
-	offLength, fieldLength = sign.Symbol()
-	compareValues(t, offLength, inputData.fields.symbol.offset)
-	compareValues(t, fieldLength, inputData.fields.symbol.length)
+	fieldName := sign.Name()
+	testutils.CompareBigInt(t, fieldName.offset, inputData.fields.name.offset)
+	compareValues(t, fieldName.length, inputData.fields.name.length)
 
-	offLength, fieldLength = sign.Decimals()
-	compareValues(t, offLength, inputData.fields.decimals.offset)
-	compareValues(t, fieldLength, inputData.fields.decimals.length)
+	fieldSymbol := sign.Symbol()
+	testutils.CompareBigInt(t, fieldSymbol.offset, inputData.fields.symbol.offset)
+	compareValues(t, fieldSymbol.length, inputData.fields.symbol.length)
 
-	offLength, fieldLength = sign.TotalSupply()
-	compareValues(t, offLength, inputData.fields.totalSupply.offset)
-	compareValues(t, fieldLength, inputData.fields.totalSupply.length)
+	fieldDecimals := sign.Decimals()
+	testutils.CompareBigInt(t, fieldDecimals.offset, inputData.fields.decimals.offset)
+	compareValues(t, fieldDecimals.length, inputData.fields.decimals.length)
+
+	fieldTotalSupply := sign.TotalSupply()
+	testutils.CompareBigInt(t, fieldTotalSupply.offset, inputData.fields.totalSupply.offset)
+	compareValues(t, fieldTotalSupply.length, inputData.fields.totalSupply.length)
 }
 
 func compareWrc721Values(t *testing.T, sign wrc721Signature, inputData testCase) {
@@ -179,15 +190,17 @@ func compareWrc721Values(t *testing.T, sign wrc721Signature, inputData testCase)
 		t.Fatal()
 	}
 
-	offLength, fieldLength := sign.Name()
-	compareValues(t, offLength, inputData.fields.name.offset)
-	compareValues(t, fieldLength, inputData.fields.name.length)
+	compareValues(t, sign.TotalLength(), inputData.total)
 
-	offLength, fieldLength = sign.Symbol()
-	compareValues(t, offLength, inputData.fields.symbol.offset)
-	compareValues(t, fieldLength, inputData.fields.symbol.length)
+	fieldName := sign.Name()
+	testutils.CompareBigInt(t, fieldName.offset, inputData.fields.name.offset)
+	compareValues(t, fieldName.length, inputData.fields.name.length)
 
-	offLength, fieldLength = sign.BaseUri()
-	compareValues(t, offLength, inputData.fields.baseUri.offset)
-	compareValues(t, fieldLength, inputData.fields.baseUri.length)
+	fieldSymbol := sign.Symbol()
+	testutils.CompareBigInt(t, fieldSymbol.offset, inputData.fields.symbol.offset)
+	compareValues(t, fieldSymbol.length, inputData.fields.symbol.length)
+
+	fieldBaseUri := sign.BaseUri()
+	testutils.CompareBigInt(t, fieldBaseUri.offset, inputData.fields.baseUri.offset)
+	compareValues(t, fieldBaseUri.length, inputData.fields.baseUri.length)
 }
