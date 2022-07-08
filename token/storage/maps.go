@@ -54,7 +54,7 @@ func (m *ByteMap) Get(keys ...[]byte) ([]byte, error) {
 func mapPosition(mapIndex []byte, totalLength int, keys ...[]byte) *big.Int {
 	slotLen := len(Slot{})
 	total := (totalLength/slotLen + 1) * slotLen
-	args := make([][]byte, len(mapIndex)+len(keys))
+	args := make([][]byte, len(keys)+1)
 	args = append(args, mapIndex)
 	args = append(args, keys...)
 
