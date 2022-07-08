@@ -24,10 +24,8 @@ func newByteMap(stream *StorageStream, mapIndex uint8, totalLength, valueSize in
 	return &m, nil
 }
 
-func (m *ByteMap) Put(value []byte, key ...[]byte) error {
-	keys := createKeys(key...)
-
-	off := mapPosition(m.mapIndex, keys, m.totalLength)
+func (m *ByteMap) Put(value []byte, keys ...[]byte) error {
+	off := mapPosition(m.mapIndex, m.totalLength, keys...)
 
 	if len(value) < m.valueSize {
 		return ErrWrongBuf
@@ -41,11 +39,9 @@ func (m *ByteMap) Put(value []byte, key ...[]byte) error {
 	return nil
 }
 
-func (m *ByteMap) Get(key ...[]byte) ([]byte, error) {
-	keys := createKeys(key...)
-
+func (m *ByteMap) Get(keys ...[]byte) ([]byte, error) {
 	buf := make([]byte, m.valueSize)
-	off := mapPosition(m.mapIndex, keys, m.totalLength)
+	off := mapPosition(m.mapIndex, m.totalLength, keys...)
 
 	_, err := m.stream.ReadAt(buf, off)
 	if err != nil {
@@ -55,11 +51,14 @@ func (m *ByteMap) Get(key ...[]byte) ([]byte, error) {
 	return buf, err
 }
 
-func mapPosition(mapIndex, key []byte, totalLength int) *big.Int {
+func mapPosition(mapIndex []byte, totalLength int, keys ...[]byte) *big.Int {
 	slotLen := len(Slot{})
 	total := (totalLength/slotLen + 1) * slotLen
+	args := make([][]byte, len(mapIndex)+len(keys))
+	args = append(args, mapIndex)
+	args = append(args, keys...)
 
-	off := new(big.Int).SetBytes(crypto.Keccak256(mapIndex, key))
+	off := new(big.Int).SetBytes(crypto.Keccak256(args...))
 	off.Mul(off, big.NewInt(int64(slotLen)))
 	off.Add(off, big.NewInt(int64(total)))
 
@@ -137,7 +136,7 @@ type uint256ReadWriter struct {
 func NewUint256ReadWriter(byteMap *ByteMap, address ...common.Address) Uint256ReadWriter {
 	readWriter := uint256ReadWriter{
 		byteMap: byteMap,
-		key:     nil,
+		key:     make([][]byte, len(address)),
 	}
 
 	for i, addr := range address {
@@ -159,13 +158,4 @@ func (r *uint256ReadWriter) Read() (*big.Int, error) {
 
 func (r *uint256ReadWriter) Write(value *big.Int) error {
 	return r.byteMap.Put(value.Bytes(), r.key...)
-}
-
-func createKeys(key ...[]byte) []byte {
-	keys := make([]byte, len(key))
-	for _, bytes := range key {
-		keys = append(keys, bytes...)
-	}
-
-	return keys
 }
