@@ -16,10 +16,15 @@ const (
 	symbolField
 	decimalsField
 	totalSupplyField
-	baseUriField    fieldSize = 2
-	decimalsSize              = 1
-	totalSupplySize           = 32
-	mapSize                   = 1
+	balancesField
+	allowancesField
+	baseUriField           fieldSize = 2
+	ownersField            fieldSize = 3
+	tokenApprovalsField    fieldSize = 5
+	operatorApprovalsField fieldSize = 6
+	decimalsSize                     = 1
+	totalSupplySize                  = 32
+	mapSize                          = 1
 )
 
 var (
@@ -52,6 +57,8 @@ type wrc20Signature interface {
 	SignatureLength() int
 	FieldsLength() int
 	TotalLength() int
+	Balance() Field
+	Allowance() Field
 	ReadFromStream(stream *StorageStream) error
 	WriteToStream(stream *StorageStream) error
 	encoding.BinaryMarshaler
@@ -66,6 +73,10 @@ type wrc721Signature interface {
 	SignatureLength() int
 	FieldsLength() int
 	TotalLength() int
+	Balance() Field
+	OperatorApprovals() Field
+	TokenApproval() Field
+	Owner() Field
 	ReadFromStream(stream *StorageStream) error
 	WriteToStream(stream *StorageStream) error
 	encoding.BinaryMarshaler
@@ -173,6 +184,10 @@ func (s *signatureV1) Symbol() Field {
 	return s.fields[symbolField]
 }
 
+func (s *signatureV1) Balance() Field {
+	return s.fields[balancesField]
+}
+
 func (s *signatureV1) Version() uint16 {
 	return 1
 }
@@ -246,6 +261,10 @@ func (s *wrc20SignatureV1) TotalSupply() Field {
 	return s.fields[totalSupplyField]
 }
 
+func (s *wrc20SignatureV1) Allowance() Field {
+	return s.fields[allowancesField]
+}
+
 type wrc721SignatureV1 struct {
 	*signatureV1
 }
@@ -286,6 +305,18 @@ func lastWrc721Signature(name, symbol, baseUri int) wrc721Signature {
 
 func (s *wrc721SignatureV1) BaseUri() Field {
 	return s.fields[baseUriField]
+}
+
+func (s *wrc721SignatureV1) Owner() Field {
+	return s.fields[ownersField]
+}
+
+func (s *wrc721SignatureV1) TokenApproval() Field {
+	return s.fields[tokenApprovalsField]
+}
+
+func (s *wrc721SignatureV1) OperatorApprovals() Field {
+	return s.fields[operatorApprovalsField]
 }
 
 type streamReader interface {
