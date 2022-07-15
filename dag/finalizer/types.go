@@ -2,7 +2,10 @@ package finalizer
 
 import (
 	"encoding/binary"
+	"sort"
+
 	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
 )
 
 /********** NrHashMap  **********/
@@ -60,11 +63,17 @@ func (nhm *NrHashMap) HasGap() bool {
 // GetHashes retrieves all hashes
 func (nhm *NrHashMap) GetHashes() *common.HashArray {
 	if len(*nhm) == 0 {
-		return nil
+		return &common.HashArray{}
 	}
+	// sort by height
+	keys := make(common.SorterAskU64, 0, len(*nhm))
+	for k := range *nhm {
+		keys = append(keys, k)
+	}
+	sort.Sort(keys)
 	res := common.HashArray{}
-	for _, h := range *nhm {
-		res = append(res, *h)
+	for _, nr := range keys {
+		res = append(res, *(*nhm)[nr])
 	}
 	return &res
 }
@@ -84,9 +93,16 @@ func (nhm *NrHashMap) Copy() *NrHashMap {
 // ToBytes encodes the NrHashMap instance
 // to byte representation.
 func (nhm *NrHashMap) ToBytes() []byte {
+	// sort by height
+	keys := make(common.SorterAskU64, 0, len(*nhm))
+	for k := range *nhm {
+		keys = append(keys, k)
+	}
+	sort.Sort(keys)
 	res := []byte{}
-	for nr, hash := range *nhm {
+	for _, nr := range keys {
 		bNr := make([]byte, 8)
+		hash := (*nhm)[nr]
 		binary.BigEndian.PutUint64(bNr, nr)
 		res = append(res, bNr...)
 		if hash == nil {
@@ -131,4 +147,9 @@ func (nhm *NrHashMap) SetBytes(data []byte) *NrHashMap {
 		}
 	}
 	return nhm
+}
+
+// Hex converts a NrHashMap to a hex string.
+func (nhm *NrHashMap) Hex() string {
+	return hexutil.Encode(nhm.ToBytes())
 }

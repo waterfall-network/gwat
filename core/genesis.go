@@ -28,9 +28,11 @@ import (
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
 	"github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/contracts/deposit"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
 	"github.com/waterfall-foundation/gwat/core/state"
 	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
 	"github.com/waterfall-foundation/gwat/crypto"
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/log"
@@ -55,6 +57,7 @@ type Genesis struct {
 	Mixhash   common.Hash         `json:"mixHash"`
 	Coinbase  common.Address      `json:"coinbase"`
 	Alloc     GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Deposit   common.Address      `json:"deposit"    gencodec:"required"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -269,7 +272,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	root := statedb.IntermediateRoot(false)
 	head := &types.Header{
 		Nonce:        types.EncodeNonce(g.Nonce),
 		Time:         g.Timestamp,
@@ -283,7 +285,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		BaseFee:      g.BaseFee,
 		MixDigest:    g.Mixhash,
 		Coinbase:     g.Coinbase,
-		Root:         root,
 	}
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
@@ -295,10 +296,23 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
+
+	g.CreateDepositContract(statedb, head)
+
+	root := statedb.IntermediateRoot(false)
+	head.Root = root
+
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
 
 	return types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
+}
+
+// CreateDepositContract creates deposit contract for genesis state.
+func (g *Genesis) CreateDepositContract(statedb *state.StateDB, preHead *types.Header) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	context := NewEVMBlockContext(preHead, nil, &common.Address{})
+	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, g.configOrDefault(common.Hash{}), vm.Config{})
+	return vmenv.CreateGenesisContract(g.Deposit, common.FromHex(deposit.DepositContractBin))
 }
 
 // Commit writes the block and state of a genesis specification to the database.
@@ -365,6 +379,7 @@ func DefaultGenesisBlock() *Genesis {
 		ExtraData: hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:  5000,
 		Alloc:     decodePrealloc(mainnetAllocData),
+		Deposit:   common.HexToAddress("0xf30097f8c858c1f6b0c6efe72240319efa65b825"),
 	}
 }
 

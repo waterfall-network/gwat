@@ -684,6 +684,10 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		}
 	}
 
+	if c.current.tcount == 0 {
+		return true
+	}
+
 	if !c.IsRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are creating. The reason is that
 		// when we are creating, the Creator will regenerate a created block every 3 seconds.
@@ -879,6 +883,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	if len(pending) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pending, header.BaseFee)
 		if c.commitTransactions(txs, c.coinbase) {
+			log.Warn("Skipping block creation: no assigned txs")
+			c.errWorkCh <- &ErrNoTxs
 			return
 		}
 	}
