@@ -5,7 +5,6 @@
 package finalizer
 
 import (
-	"errors"
 	"sync/atomic"
 
 	"github.com/waterfall-foundation/gwat/common"
@@ -93,8 +92,8 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 	for minNr <= lastFinNr {
 		block := bc.GetBlock(*chain[minNr])
 		if block == nil || block.Nr() != minNr {
-			log.Error("sequence of candidates does not match to the sequence of finalized blocks", "minNr", minNr, "minNrHash", *chain[minNr], "lastFinNr", lastFinNr)
-			return errors.New("sequence of candidates does not match to the sequence of finalized blocks")
+			log.Error("Sequence of candidates does not match to the sequence of finalized blocks", "minNr", minNr, "minNrHash", *chain[minNr], "lastFinNr", lastFinNr)
+			return ErrBadFinalizedSequence
 		}
 		delete(chain, minNr)
 		minNrPtr := chain.GetMinNr()
