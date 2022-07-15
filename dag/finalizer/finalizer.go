@@ -7,14 +7,14 @@ package finalizer
 import (
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 const (
@@ -89,6 +89,20 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 	minNr := *chain.GetMinNr()
 	maxNr := *chain.GetMaxNr()
 	// check start from current head number
+	for minNr <= lastFinNr {
+		block := bc.GetBlock(*chain[minNr])
+		if block == nil || block.Nr() != minNr {
+			log.Error("Sequence of candidates does not match to the sequence of finalized blocks", "minNr", minNr, "minNrHash", *chain[minNr], "lastFinNr", lastFinNr)
+			return ErrBadFinalizedSequence
+		}
+		delete(chain, minNr)
+		minNrPtr := chain.GetMinNr()
+		if minNrPtr == nil {
+			log.Info("⌛ Finalization is skipped: received chain empty")
+			return nil
+		}
+		minNr = *minNrPtr
+	}
 	if lastFinNr+1 != minNr {
 		log.Info("Finalization: reconstructing finalising chain")
 		candidates, err := f.GetFinalizingCandidates()
@@ -268,6 +282,15 @@ func (f *Finalizer) GetFinalizingCandidates() (*NrHashMap, error) {
 		count++
 	}
 	if lastBlock.Height() != nextFinNr-1 {
+		log.Error("Get finalized candidates",
+			"lastFinNr", lastFinNr,
+			"expHeight", nextFinNr-1,
+			"blHeight", lastBlock.Height(),
+			"blHash", lastBlock.Hash().Hex(),
+			"err", ErrMismatchFinalisingPosition,
+			"count", count,
+			"finDag", finDag.Print(),
+		)
 		return nil, ErrMismatchFinalisingPosition
 	}
 	return &candidates, nil

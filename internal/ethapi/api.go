@@ -25,28 +25,28 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/accounts/scwallet"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/dag"
-	"github.com/ethereum/go-ethereum/dag/sealer"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tyler-smith/go-bip39"
+	"github.com/waterfall-foundation/gwat/accounts"
+	"github.com/waterfall-foundation/gwat/accounts/abi"
+	"github.com/waterfall-foundation/gwat/accounts/keystore"
+	"github.com/waterfall-foundation/gwat/accounts/scwallet"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/consensus/misc"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -2053,7 +2053,18 @@ func NewPublicDagAPI(b Backend) *PublicDagAPI {
 	return &PublicDagAPI{b}
 }
 
-// Sync retrieves the seed hash of a block.
+// Sync start consensus procedure.
+// deprecated
 func (api *PublicDagAPI) Sync(ctx context.Context, data *dag.ConsensusInfo) (*dag.ConsensusResult, error) {
 	return api.b.Dag().HandleConsensus(data), nil
+}
+
+// Finalize finalise blocks.
+func (api *PublicDagAPI) Finalize(ctx context.Context, data *dag.ConsensusInfo) (*dag.FinalizationResult, error) {
+	return api.b.Dag().HandleFinalize(data), nil
+}
+
+// HandleGetCandidates retrieves finalization candidates.
+func (api *PublicDagAPI) GetCandidates(ctx context.Context) (*dag.CandidatesResult, error) {
+	return api.b.Dag().HandleGetCandidates(), nil
 }

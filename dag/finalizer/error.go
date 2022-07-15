@@ -28,4 +28,8 @@ var (
 
 	// ErrMismatchFinalisingPosition  returned when height of blue block mismatch to finalizing number.
 	ErrMismatchFinalisingPosition = errors.New("mismatch finalising block position")
+
+	// ErrBadFinalizedSequence  returned when finalizing numbers of candidates contain already finalized numbers
+	// but related hashes does not match.
+	ErrBadFinalizedSequence = errors.New("sequence of candidates does not match to the sequence of finalized blocks")
 )

@@ -1,7 +1,11 @@
 package finalizer
 
 import (
-	"github.com/ethereum/go-ethereum/common"
+	"encoding/binary"
+	"sort"
+
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
 )
 
 /********** NrHashMap  **********/
@@ -59,11 +63,17 @@ func (nhm *NrHashMap) HasGap() bool {
 // GetHashes retrieves all hashes
 func (nhm *NrHashMap) GetHashes() *common.HashArray {
 	if len(*nhm) == 0 {
-		return nil
+		return &common.HashArray{}
 	}
+	// sort by height
+	keys := make(common.SorterAskU64, 0, len(*nhm))
+	for k := range *nhm {
+		keys = append(keys, k)
+	}
+	sort.Sort(keys)
 	res := common.HashArray{}
-	for _, h := range *nhm {
-		res = append(res, *h)
+	for _, nr := range keys {
+		res = append(res, *(*nhm)[nr])
 	}
 	return &res
 }
@@ -78,4 +88,68 @@ func (nhm *NrHashMap) Copy() *NrHashMap {
 		res[k] = v
 	}
 	return &res
+}
+
+// ToBytes encodes the NrHashMap instance
+// to byte representation.
+func (nhm *NrHashMap) ToBytes() []byte {
+	// sort by height
+	keys := make(common.SorterAskU64, 0, len(*nhm))
+	for k := range *nhm {
+		keys = append(keys, k)
+	}
+	sort.Sort(keys)
+	res := []byte{}
+	for _, nr := range keys {
+		bNr := make([]byte, 8)
+		hash := (*nhm)[nr]
+		binary.BigEndian.PutUint64(bNr, nr)
+		res = append(res, bNr...)
+		if hash == nil {
+			empty := common.Hash{}
+			hash = &empty
+		}
+		res = append(res, hash.Bytes()...)
+	}
+	return res
+}
+
+// SetBytes restores NrHashMap instance from byte representation.
+func (nhm *NrHashMap) SetBytes(data []byte) *NrHashMap {
+	const (
+		lenNr   int = 8
+		lenHash int = common.HashLength
+		lenItm  int = lenNr + lenHash
+	)
+	for k := range *nhm {
+		delete(*nhm, k)
+	}
+	if data == nil {
+		return nil
+	}
+	if len(data)%lenItm != 0 {
+		return nil
+	}
+	lenmap := len(data) / lenItm
+	for i := 0; i < lenmap; i++ {
+		itmStart := i * lenItm
+		itmEnd := itmStart + lenItm
+		itm := data[itmStart:itmEnd]
+		start := 0
+		end := 8
+		itmNr := binary.BigEndian.Uint64(itm[start:end])
+		start = end
+		end += lenHash
+		itmHash := common.BytesToHash(itm[start:end])
+		(*nhm)[itmNr] = &itmHash
+		if itmHash == (common.Hash{}) {
+			(*nhm)[itmNr] = nil
+		}
+	}
+	return nhm
+}
+
+// Hex converts a NrHashMap to a hex string.
+func (nhm *NrHashMap) Hex() string {
+	return hexutil.Encode(nhm.ToBytes())
 }

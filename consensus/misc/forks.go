@@ -17,8 +17,8 @@
 package misc
 
 import (
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // VerifyForkHashes verifies that blocks conforming to network hard-forks do have

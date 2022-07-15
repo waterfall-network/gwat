@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/waterfall-foundation/gwat/common"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -29,7 +29,7 @@ import (
 var (
 	MainnetGenesisHash = common.HexToHash("0xa645b86a27d2fe68737d18013e24855d758a1e165dae0aab689b0279a4e20bd6")
 	// DevNetGenesisHash  waterfall test net
-	DevNetGenesisHash = common.HexToHash("0x73663054e1ed46d352d4fdd67d3f8f24b371c51dca87f9a06f7e304347f79a73")
+	DevNetGenesisHash = common.HexToHash("0xe6e0f3cc76502a94cdb3e1365e75bb2c72dd7db996b5a96580688ef64de1269c")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -90,7 +90,7 @@ var (
 
 	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
 	DevNetChainConfig = &ChainConfig{
-		ChainID:        big.NewInt(333777444),
+		ChainID:        big.NewInt(333777555),
 		HomesteadBlock: big.NewInt(0),
 		//DAOForkBlock:   nil,
 		//DAOForkSupport: true,

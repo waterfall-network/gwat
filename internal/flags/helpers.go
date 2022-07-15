@@ -20,7 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

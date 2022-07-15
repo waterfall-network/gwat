@@ -8,18 +8,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/consensus/misc"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 const (
@@ -684,6 +684,10 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		}
 	}
 
+	if c.current.tcount == 0 {
+		return true
+	}
+
 	if !c.IsRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are creating. The reason is that
 		// when we are creating, the Creator will regenerate a created block every 3 seconds.
@@ -811,7 +815,11 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		"lastBlueIx", lastBlueIx,
 		"len(tmpDagChainHashes)", len(tmpDagChainHashes),
 		"redCount", redCount,
+		"lastBlueHash", lastBlueHash.Hex(),
+		"tmpDagChainHashes", tmpDagChainHashes,
 	)
+
+	log.Info("Creator data", "tips", tips.Print())
 
 	header := &types.Header{
 		ParentHashes: tipsBlocks.Hashes(),
@@ -875,6 +883,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	if len(pending) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pending, header.BaseFee)
 		if c.commitTransactions(txs, c.coinbase) {
+			log.Warn("Skipping block creation: no assigned txs")
+			c.errWorkCh <- &ErrNoTxs
 			return
 		}
 	}

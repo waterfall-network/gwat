@@ -4,13 +4,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // This test case is a repro of an annoying bug that took us forever to catch.
@@ -64,6 +64,8 @@ func TestReimportMirroredState(t *testing.T) {
 		sig, _ := crypto.Sign(SealHash(header).Bytes(), key)
 		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
 		blocks[i] = block.WithSeal(header)
+		nr := blocks[i].Height()
+		blocks[i].SetNumber(&nr)
 	}
 	// Insert the first two blocks and make sure the chain is valid
 	db = rawdb.NewMemoryDatabase()
@@ -72,7 +74,7 @@ func TestReimportMirroredState(t *testing.T) {
 	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil)
 	defer chain.Stop()
 
-	if _, err := chain.InsertChain(blocks[:2]); err != nil {
+	if _, err := chain.SyncInsertChain(blocks[:2]); err != nil {
 		t.Fatalf("failed to insert initial blocks: %v", err)
 	}
 	if head := chain.GetLastFinalizedNumber(); head != 2 {
@@ -85,7 +87,7 @@ func TestReimportMirroredState(t *testing.T) {
 	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil)
 	defer chain.Stop()
 
-	if _, err := chain.InsertChain(blocks[2:]); err != nil {
+	if _, err := chain.SyncInsertChain(blocks[2:]); err != nil {
 		t.Fatalf("failed to insert final block: %v", err)
 	}
 	if head := chain.GetLastFinalizedNumber(); head != 3 {
@@ -99,7 +101,7 @@ func TestSealHash(t *testing.T) {
 		Extra:   make([]byte, 32+65),
 		BaseFee: new(big.Int),
 	})
-	want := common.HexToHash("0xbd3d1fa43fbc4c5bfcc91b179ec92e2861df3654de60468beb908ff805359e8f")
+	want := common.HexToHash("4b90024d2ddcbed94ae978c233f908aee094ce6cd20494d77187df05ca2ddd72")
 	if have != want {
 		t.Errorf("have %x, want %x", have, want)
 	}

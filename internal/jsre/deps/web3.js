@@ -3831,6 +3831,9 @@ var outputBlockFormatter = function(block) {
     if (block.baseFeePerGas !== undefined) {
       block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
     }
+    block.epoch = utils.toDecimal(block.epoch);
+    block.height = utils.toDecimal(block.height);
+    block.slot = utils.toDecimal(block.slot);
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);

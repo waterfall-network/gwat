@@ -20,12 +20,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 const (
@@ -186,7 +186,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	_, dag := peer.GetDagInfo()
 	for _, hash := range *dag {
 		block := cs.handler.chain.GetBlockByHash(hash)
-		if len(localTips) == 0 && block.Nr() == lastFinNr {
+		if len(localTips) == 0 && block != nil && block.Nr() == lastFinNr {
 			// if remote tips set to last finalized block - do same
 			cs.handler.chain.ResetTips()
 			break

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 /********** Tips **********/
@@ -66,22 +66,8 @@ func (tips Tips) GetOrderedDagChainHashes() common.HashArray {
 	dagHashes := tips.getOrderedHashes()
 	for _, dagHash := range dagHashes {
 		dag := tips.Get(dagHash)
-		hashesAll := append(dag.DagChainHashes, dagHash)
-		hashesAdd := hashesAll.Copy()
-		allHashesReorg := allHashes.Copy()
-		for i, h := range allHashes {
-			ix := hashesAll.IndexOf(h)
-			if ix >= 0 {
-				hashesAdd = hashesAll[ix+1:]
-
-				hashesRmd := hashesAll[:ix]
-				tmpix := allHashesReorg.IndexOf(h)
-				allHashesTmp := append(allHashesReorg[:tmpix], hashesRmd...)
-				allHashesReorg = append(allHashesTmp, allHashes[i:]...)
-				allHashesReorg = allHashesReorg.Uniq()
-			}
-		}
-		allHashes = append(allHashesReorg, hashesAdd...)
+		allHashes = append(allHashes, dag.DagChainHashes...)
+		allHashes = append(allHashes, dagHash).Uniq()
 	}
 	return allHashes.Uniq()
 }
@@ -255,6 +241,15 @@ func (gd *GraphDag) GetFinalityPoints() *common.HashArray {
 	}
 	lastHeight := lastFinGd.Number
 	for i, itm := range ancestorsLoaded {
+		log.Info("Ordering",
+			"i", i,
+			"calcNr", uint64(i)+lastHeight+1,
+			"height", itm.Height,
+			"isBlue", itm.Height == uint64(i)+lastHeight+1,
+			"hash", itm.Hash.Hex(),
+			"lastHeight", lastHeight,
+		)
+
 		if itm.Height == uint64(i)+lastHeight+1 {
 			*finalityPoints = append(*finalityPoints, itm.Hash)
 		}

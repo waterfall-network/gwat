@@ -17,17 +17,20 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/consensus/misc"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // BlockGen creates blocks for testing.
@@ -169,6 +172,59 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	}
 }
 
+func AddBlocksToFinalized(chain *BlockChain, blocks []*types.Block) error {
+	for i := range blocks {
+		nr := blocks[i].Height()
+		blocks[i].SetNumber(&nr)
+	}
+	if _, err := chain.SyncInsertChain(blocks); err != nil {
+		return errors.New(fmt.Sprintf("failed to insert initial blocks: %v", err))
+	}
+	return nil
+}
+
+func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
+	if len(blocks) == 0 || bc == nil {
+		return
+	}
+	LFB := bc.GetLastFinalizedBlock()
+	bc.AddTips(&types.BlockDAG{
+		Hash:                LFB.Hash(),
+		Height:              LFB.Height(),
+		LastFinalizedHash:   LFB.Hash(),
+		LastFinalizedHeight: LFB.Nr(),
+		DagChainHashes:      common.HashArray{},
+		FinalityPoints:      common.HashArray{},
+	})
+	tips := bc.GetTips()
+
+	for _, block := range blocks {
+		//update state of tips
+		//1. remove stale tips
+		bc.RemoveTips(block.ParentHashes())
+		//2. create for new blockDag
+		finDag := tips.GetFinalizingDag()
+		tmpFinalityPoints := finDag.FinalityPoints
+		tmpDagChainHashes := tips.GetOrderedDagChainHashes()
+		if finDag.Hash != bc.Genesis().Hash() {
+			tmpFinalityPoints = append(tmpFinalityPoints, finDag.Hash)
+		} else {
+			tmpDagChainHashes = tmpFinalityPoints.Difference(common.HashArray{bc.Genesis().Hash()})
+		}
+		blockDag := &types.BlockDAG{
+			Hash:                block.Hash(),
+			Height:              block.Height(),
+			LastFinalizedHash:   LFB.Hash(),
+			LastFinalizedHeight: LFB.Nr(),
+			DagChainHashes:      tmpDagChainHashes,
+			FinalityPoints:      tmpFinalityPoints,
+		}
+		rawdb.WriteBlockDag(bc.db, blockDag)
+		bc.AddTips(blockDag)
+		bc.ReviseTips()
+	}
+}
+
 // GenerateChain creates a chain of n blocks. The first block's
 // parent will be the provided parent. db is used to store
 // intermediate states and should contain the parent's state trie.
@@ -207,6 +263,34 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
+
+			//save block
+			blockBatch := db.NewBatch()
+			rawdb.WriteBlock(blockBatch, block)
+			rawdb.WriteReceipts(blockBatch, block.Hash(), b.receipts)
+			rawdb.WritePreimages(blockBatch, statedb.Preimages())
+			// create transaction lookup for applied txs.
+			for i, tx := range block.Transactions() {
+				if b.receipts[i] != nil {
+					// create transaction lookup
+					rawdb.WriteTxLookupEntry(db, tx.Hash(), block.Hash())
+				}
+			}
+			if err := blockBatch.Write(); err != nil {
+				log.Crit("Failed to write block into disk", "err", err)
+			}
+			parents := block.ParentHashes()
+			child := block.Hash()
+			batch := db.NewBatch()
+			for _, parHash := range parents {
+				children := rawdb.ReadChildren(db, parHash)
+				children = append(children, child)
+				rawdb.WriteChildren(batch, parHash, children)
+			}
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to write block children", "err", err)
+			}
+
 			return block, b.receipts
 		}
 		return nil, nil

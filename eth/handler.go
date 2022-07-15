@@ -23,20 +23,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/fetcher"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/eth/fetcher"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/eth/protocols/snap"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 const (
@@ -169,7 +169,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// If we have trusted checkpoints, enforce them on the chain
 	if config.Checkpoint != nil {
-		h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+		//h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+		h.checkpointNumber = (config.Checkpoint.SectionIndex) * params.CHTFrequency
 		h.checkpointHash = config.Checkpoint.SectionHead
 	}
 	// Construct the downloader (long sync) and its backing state bloom if fast
@@ -199,7 +200,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// case when starting new networks, where the genesis might be ancient (0 unix)
 		// which would prevent full nodes from accepting it.
 		if h.chain.GetLastFinalizedNumber() < h.checkpointNumber {
-			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash())
 			return 0, nil, nil
 		}
 		// If fast sync is running, deny importing weird blocks. This is a problematic

@@ -26,23 +26,23 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/syncx"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/mclock"
+	"github.com/waterfall-foundation/gwat/common/prque"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/state/snapshot"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/internal/syncx"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/metrics"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 var (
@@ -1445,7 +1445,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	bc.futureBlocks.Remove(block.Hash())
 
-	if status == CanonStatTy {
+	if status == CanonStatTy || kind == "syncInsertChain" {
 		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
@@ -1916,13 +1916,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		//retrieve state data
 		statedb, stateBlock, recommitBlocks, cachedHashes, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
-		if stateErr != nil {
-			if stateBlock != nil {
-				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.TxHash().Hex(), "err", stateErr)
-			} else {
-				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
-			}
-
+		if stateErr != nil && stateBlock == nil {
+			log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
 			return it.index, stateErr
 		}
 
@@ -1936,14 +1931,21 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 				LastFinalizedHeight: 0,
 				DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
 			})
-			//if block is red - skip processing
-			upTips, _ := bc.ReviseTips()
-			finDag := upTips.GetFinalizingDag()
-			if finDag.Hash != block.Hash() {
-				log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
-				continue
-			}
+			// TODO RED BLOCKS
+			////if block is red - skip processing
+			//upTips, _ := bc.ReviseTips()
+			//finDag := upTips.GetFinalizingDag()
+			//if finDag.Hash != block.Hash() {
+			//	log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
+			//	continue
+			//}
 			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
+
+			if stateErr != nil || statedb == nil {
+				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.Hash().Hex(), "err", stateErr)
+				continue
+				//return it.index, stateErr
+			}
 		}
 
 		start := time.Now()
@@ -2196,6 +2198,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 
 	statedb, err = bc.StateAt(stateBlock.Root())
 	if err != nil {
+		log.Error("Bad state", "stateHash", stateHash.Hex(), "stateHeight", stateBlock.Height(), "finPoints", finPoints, "error", err)
 		return statedb, stateBlock, recommitBlocks, cachedHashes, err
 	}
 

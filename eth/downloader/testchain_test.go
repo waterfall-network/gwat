@@ -21,13 +21,13 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // Test chain parameters.
@@ -135,14 +135,12 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	})
 
 	// Convert the block-chain into a hash-chain and header/block maps
-	td := new(big.Int).Set(tc.td(parent.Hash()))
 	for i, b := range blocks {
 		hash := b.Hash()
 		tc.chain = append(tc.chain, hash)
 		tc.blockm[hash] = b
 		tc.headerm[hash] = b.Header()
 		tc.receiptm[hash] = receipts[i]
-		tc.tdm[hash] = new(big.Int).Set(td)
 	}
 }
 
@@ -199,15 +197,14 @@ func (tc *testChain) receipts(hashes []common.Hash) [][]*types.Receipt {
 }
 
 // bodies returns the block bodies of the given block hashes.
-func (tc *testChain) bodies(hashes []common.Hash) ([][]*types.Transaction, [][]*types.Header) {
+func (tc *testChain) bodies(hashes []common.Hash) [][]*types.Transaction {
 	transactions := make([][]*types.Transaction, 0, len(hashes))
-	uncles := make([][]*types.Header, 0, len(hashes))
 	for _, hash := range hashes {
 		if block, ok := tc.blockm[hash]; ok {
 			transactions = append(transactions, block.Transactions())
 		}
 	}
-	return transactions, uncles
+	return transactions
 }
 
 func (tc *testChain) hashToNumber(target common.Hash) (uint64, bool) {
