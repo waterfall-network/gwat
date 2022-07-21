@@ -40,7 +40,6 @@ type assembleBlockParamsMarshaling struct {
 type executableData struct {
 	BlockHash    common.Hash    `json:"blockHash"     gencodec:"required"`
 	ParentHashes []common.Hash  `json:"parentHashes"  gencodec:"required"`
-	Epoch        uint64         `json:"epoch"         gencodec:"required"`
 	Slot         uint64         `json:"slot"          gencodec:"required"`
 	Height       uint64         `json:"height"        gencodec:"required"`
 	Miner        common.Address `json:"miner"         gencodec:"required"`

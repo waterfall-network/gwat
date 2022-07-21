@@ -142,7 +142,6 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 	header := &types.Header{
 		ParentHashes: []common.Hash{parent.Hash()},
-		Epoch:        0,
 		Slot:         0,
 		Height:       0,
 		Coinbase:     coinbase,
@@ -222,7 +221,6 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	return &executableData{
 		BlockHash:    block.Hash(),
 		ParentHashes: block.ParentHashes(),
-		Epoch:        block.Epoch(),
 		Slot:         block.Slot(),
 		Height:       block.Height(),
 		Miner:        block.Coinbase(),
@@ -266,7 +264,6 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 	number.SetUint64(params.Number)
 	header := &types.Header{
 		ParentHashes: params.ParentHashes,
-		Epoch:        params.Epoch,
 		Slot:         params.Slot,
 		Height:       params.Height,
 		Coinbase:     params.Miner,
