@@ -345,7 +345,6 @@ func NewFieldProperties(fieldName string, v ValueProperties) FieldProperties {
 
 type SignatureV1 struct {
 	version     SignatureVersion
-	fieldsCount uint8
 	fieldsProps []FieldProperties
 
 	fields []Field
@@ -364,7 +363,6 @@ func NewSignatureV1(fd []FieldDescriptor) (*SignatureV1, error) {
 
 	return &SignatureV1{
 		version:     signatureV1,
-		fieldsCount: uint8(len(fd)),
 		fieldsProps: fieldProps,
 		fields:      make([]Field, len(fieldProps)),
 	}, nil
@@ -377,62 +375,62 @@ func (s SignatureV1) Fields() []FieldProperties {
 func (s SignatureV1) ReadFromStream(stream *StorageStream) error {
 	off := big.NewInt(0)
 
-	// read count of fieldProps
-	countBuf := make([]byte, uint8Size)
-	n, err := stream.ReadAt(countBuf, off)
+	// read signature size
+	signSizeBuf := make([]byte, uint64Size)
+	n, err := stream.ReadAt(signSizeBuf, off)
 	if err != nil {
 		return err
 	}
 
+	signBuf := make([]byte, binary.BigEndian.Uint64(signSizeBuf))
+
 	off.Add(off, big.NewInt(int64(n)))
 
-	s.fieldsCount = countBuf[0]
-	s.fieldsProps = make([]FieldProperties, s.fieldsCount)
+	// read the full signature
+	n, err = stream.ReadAt(signBuf, off)
+	if err != nil {
+		return err
+	}
 
-	for i := 0; i < int(s.fieldsCount); i++ {
+	totalFieldSize := int64(0)
+	fieldsProps := make([]FieldProperties, 0)
+	fields := make([]Field, 0)
+	for len(signBuf) > 0 {
 		// read the size of the fieldProps
-		sizeBuf := make([]byte, uint16Size)
-		n, err := stream.ReadAt(sizeBuf, off)
-		if err != nil {
-			return err
-		}
-
-		off.Add(off, big.NewInt(int64(n)))
-
-		// read the fieldProps
-		buf := make([]byte, binary.BigEndian.Uint16(sizeBuf))
-		n, err = stream.ReadAt(buf, off)
-		if err != nil {
-			return err
-		}
-
-		off.Add(off, big.NewInt(int64(n)))
+		fieldSize := binary.BigEndian.Uint16(signBuf[:uint16Size])
 
 		// unmarshal the fieldProps
-		err = s.fieldsProps[i].UnmarshalBinary(buf)
+		fieldProps := FieldProperties{}
+		err = fieldProps.UnmarshalBinary(signBuf[uint16Size:fieldSize])
 		if err != nil {
 			return err
 		}
 
-		s.fields[i] = Field{
-			offset: *(&off),
+		fieldsProps = append(fieldsProps, fieldProps)
+
+		totalFieldSize = int64(uint16Size + int(fieldSize))
+
+		// fill the field info
+		fields = append(fields, Field{
+			offset: off.Add(off, big.NewInt(totalFieldSize)),
 			length: n,
-		}
+		})
+
+		signBuf = signBuf[totalFieldSize:]
 	}
+
+	s.fields = fields
+	s.fieldsProps = fieldsProps
+
 	return nil
 }
 
 func (s SignatureV1) WriteToStream(stream *StorageStream) error {
 	off := big.NewInt(0)
+	buf := make([]byte, uint64Size)
 
-	// write count of fieldProps
-	n, err := stream.WriteAt([]byte{s.fieldsCount}, off)
-	if err != nil {
-		return err
-	}
-
-	off.Add(off, big.NewInt(int64(n)))
-
+	signSize := uint64(0)
+	sizeBuf := make([]byte, uint16Size)
 	for i, field := range s.fieldsProps {
 		// marshal the fieldProps
 		b, err := field.MarshalBinary()
@@ -441,30 +439,27 @@ func (s SignatureV1) WriteToStream(stream *StorageStream) error {
 		}
 
 		// write size of the fieldProps
-		sizeBuf := make([]byte, uint16Size)
 		binary.BigEndian.PutUint16(sizeBuf, uint16(len(b)))
-
-		n, err := stream.WriteAt(sizeBuf, off)
-		if err != nil {
-			return err
-		}
-
-		off.Add(off, big.NewInt(int64(n)))
+		buf = append(buf, sizeBuf...)
 
 		// write the fieldProps
-		n, err = stream.WriteAt(b, off)
-		if err != nil {
-			return err
-		}
+		buf = append(buf, b...)
 
 		s.fields[i] = Field{
 			offset: *(&off),
-			length: n,
+			length: uint16Size + len(b),
 		}
-		off.Add(off, big.NewInt(int64(n)))
+
+		off.Add(off, big.NewInt(int64(s.fields[i].length)))
+		signSize += uint64(s.fields[i].length)
+		sizeBuf = []byte{0x00, 0x00}
 	}
 
-	return nil
+	// write signature size
+	binary.BigEndian.PutUint64(buf[:uint64Size], signSize)
+
+	_, err := stream.WriteAt(buf, big.NewInt(0))
+	return err
 }
 
 func (s SignatureV1) Version() SignatureVersion {
