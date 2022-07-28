@@ -76,7 +76,7 @@ func (t Type) MarshalBinary() ([]byte, error) {
 	return t[:], nil
 }
 
-func (t Type) UnmarshalBinary(data []byte) error {
+func (t *Type) UnmarshalBinary(data []byte) error {
 	copy(t[:], data[:2])
 	return nil
 }
@@ -273,7 +273,7 @@ func (m *MapProperties) UnmarshalBinary(data []byte) error {
 	// unmarshal key properties
 	data = data[uint8Size:]
 	kp := newProperties(data[0])
-	err := kp.UnmarshalBinary(data[:])
+	err := kp.UnmarshalBinary(data)
 	if err != nil {
 		return err
 	}
@@ -570,8 +570,18 @@ func calculatePropertiesSize(vp ValueProperties) (int64, error) {
 		// type
 		return int64(uint16Size), nil
 	case isArray(vp.Type().InnerType()):
-		// type + length
-		return int64(uint16Size + uint64Size), nil
+		value, err := vp.ValueProperties()
+		if err != nil {
+			return 0, err
+		}
+
+		vpSize, err := calculatePropertiesSize(value)
+		if err != nil {
+			return 0, err
+		}
+
+		// type + length + element size
+		return int64(uint8Size+uint64Size) + vpSize, nil
 	case isMap(vp.Type().InnerType()):
 
 		key, err := vp.KeyProperties()
