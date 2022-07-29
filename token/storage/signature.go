@@ -406,12 +406,16 @@ func NewSignatureV1(fd []FieldDescriptor) (*SignatureV1, error) {
 	totalSize := uint64(uint16Size + uint8Size)
 	fields := make([]Field, len(fd))
 	for i, descriptor := range fd {
+		l, err := calculateFieldLength(descriptor.vp)
+		if err != nil {
+			return nil, err
+		}
+		fields[i].length = l
+
 		s, err := calculatePropertiesSize(descriptor.vp)
 		if err != nil {
 			return nil, err
 		}
-
-		fields[i].length = s
 		totalSize += s + uint64(uint8Size+len(descriptor.name))
 	}
 
@@ -489,7 +493,7 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 		}
 
 		// save length of the field
-		fields[i].length, err = calculatePropertiesSize(fieldsDescriptors[i].vp)
+		fields[i].length, err = calculateFieldLength(fieldsDescriptors[i].vp)
 		if err != nil {
 			return 0, err
 		}
@@ -614,7 +618,6 @@ func calculatePropertiesSize(vp ValueProperties) (uint64, error) {
 		// type + length + element size
 		return uint64(uint8Size+uint64Size) + vpSize, nil
 	case isMap(vp.Type().Id()):
-
 		key, err := vp.KeyProperties()
 		if err != nil {
 			return 0, err
@@ -636,6 +639,35 @@ func calculatePropertiesSize(vp ValueProperties) (uint64, error) {
 		}
 
 		return uint64(uint8Size) + kSize + vSize, nil
+	default:
+		return 0, ErrWrongType
+	}
+}
+
+func calculateFieldLength(vp ValueProperties) (uint64, error) {
+	switch {
+	case isScalar(vp.Type().Id()):
+		return uint64(vp.Type().Size()), nil
+	case isArray(vp.Type().Id()):
+		value, err := vp.ValueProperties()
+		if err != nil {
+			return 0, err
+		}
+
+		vpSize, err := calculateFieldLength(value)
+		if err != nil {
+			return 0, err
+		}
+
+		l, err := vp.Length()
+		if err != nil {
+			return 0, err
+		}
+
+		// length * element size
+		return l * vpSize, nil
+	case isMap(vp.Type().Id()):
+		return 0, nil
 	default:
 		return 0, ErrWrongType
 	}
