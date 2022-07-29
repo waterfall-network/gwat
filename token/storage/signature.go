@@ -16,18 +16,20 @@ var (
 	ErrNoLength          = errors.New("no length for this type")
 	ErrWrongType         = errors.New("wrong type")
 	ErrWrongKeyType      = errors.New("wrong key type")
+	ErrNameTooBig        = errors.New("name too big")
+	ErrTooManyFields     = errors.New("too many fields")
 )
 
 var (
-	uint8Type   = Type{0x01, 0x01}
-	uint16Type  = Type{0x01, 0x02}
-	uint32Type  = Type{0x01, 0x04}
-	uint64Type  = Type{0x01, 0x08}
-	uint256Type = Type{0x01, 0x20}
-	int32Type   = Type{0x02, 0x04}
-	int64Type   = Type{0x02, 0x08}
-	arrayType   = Type{0x03, 0x00}
-	mapType     = Type{0x04, 0x00}
+	Uint8Type   = Type{0x01, 0x01}
+	Uint16Type  = Type{0x01, 0x02}
+	Uint32Type  = Type{0x01, 0x04}
+	Uint64Type  = Type{0x01, 0x08}
+	Uint256Type = Type{0x01, 0x20}
+	Int32Type   = Type{0x02, 0x04}
+	Int64Type   = Type{0x02, 0x08}
+	ArrayType   = Type{0x03, 0x00}
+	MapType     = Type{0x04, 0x00}
 
 	uint8Size   = 1
 	uint16Size  = 2
@@ -41,30 +43,30 @@ type Type [2]byte
 func (t Type) String() string {
 	s := "Unknown"
 	switch t {
-	case uint8Type:
+	case Uint8Type:
 		s = "Uint8"
-	case uint16Type:
+	case Uint16Type:
 		s = "Uint16"
-	case uint32Type:
+	case Uint32Type:
 		s = "Uint32"
-	case uint64Type:
+	case Uint64Type:
 		s = "Uint64"
-	case uint256Type:
+	case Uint256Type:
 		s = "Uint256"
-	case int32Type:
+	case Int32Type:
 		s = "Int32"
-	case int64Type:
+	case Int64Type:
 		s = "Int64"
-	case arrayType:
+	case ArrayType:
 		s = "Array"
-	case mapType:
+	case MapType:
 		s = "Map"
 	}
 
 	return s
 }
 
-func (t Type) InnerType() uint8 {
+func (t Type) Id() uint8 {
 	return t[0]
 }
 
@@ -83,7 +85,7 @@ func (t *Type) UnmarshalBinary(data []byte) error {
 
 type ValueProperties interface {
 	Type() Type
-	Length() (int64, error)
+	Length() (uint64, error)
 	KeyProperties() (ValueProperties, error)
 	ValueProperties() (ValueProperties, error)
 
@@ -103,7 +105,7 @@ func (s ScalarProperties) Type() Type {
 	return s.internalType
 }
 
-func (s ScalarProperties) Length() (int64, error) {
+func (s ScalarProperties) Length() (uint64, error) {
 	return 0, ErrNoLength
 }
 
@@ -125,10 +127,10 @@ func (s *ScalarProperties) UnmarshalBinary(data []byte) error {
 
 type ArrayProperties struct {
 	valueProperties ValueProperties
-	len             int64
+	len             uint64
 }
 
-func NewArrayProperties(t *ScalarProperties, l int64) *ArrayProperties {
+func NewArrayProperties(t *ScalarProperties, l uint64) *ArrayProperties {
 	return &ArrayProperties{
 		valueProperties: t,
 		len:             l,
@@ -136,10 +138,10 @@ func NewArrayProperties(t *ScalarProperties, l int64) *ArrayProperties {
 }
 
 func (a *ArrayProperties) Type() Type {
-	return arrayType
+	return ArrayType
 }
 
-func (a *ArrayProperties) Length() (int64, error) {
+func (a *ArrayProperties) Length() (uint64, error) {
 	return a.len, nil
 }
 
@@ -153,7 +155,7 @@ func (a *ArrayProperties) ValueProperties() (ValueProperties, error) {
 
 func (a *ArrayProperties) MarshalBinary() ([]byte, error) {
 	// marshal type
-	typeB := a.Type().InnerType()
+	typeB := a.Type().Id()
 
 	// marshal valueProperties
 	valueB, err := a.valueProperties.MarshalBinary()
@@ -167,7 +169,7 @@ func (a *ArrayProperties) MarshalBinary() ([]byte, error) {
 	buf[0] = typeB
 
 	// length
-	binary.BigEndian.PutUint64(buf[uint8Size:uint8Size+uint64Size], uint64(a.len))
+	binary.BigEndian.PutUint64(buf[uint8Size:uint8Size+uint64Size], a.len)
 
 	// valueProperties
 	copy(buf[uint8Size+uint64Size:], valueB)
@@ -178,13 +180,13 @@ func (a *ArrayProperties) MarshalBinary() ([]byte, error) {
 func (a *ArrayProperties) UnmarshalBinary(data []byte) error {
 	// type
 	tp := data[0]
-	if tp != arrayType.InnerType() {
+	if tp != ArrayType.Id() {
 		return ErrWrongType
 	}
 
 	// length
 	data = data[uint8Size:]
-	l := int64(binary.BigEndian.Uint64(data[:uint64Size]))
+	l := binary.BigEndian.Uint64(data[:uint64Size])
 
 	// valueProperties
 	data = data[uint64Size:]
@@ -205,7 +207,7 @@ type MapProperties struct {
 }
 
 func NewMapProperties(key, value ValueProperties) (*MapProperties, error) {
-	if key.Type() == mapType {
+	if key.Type() == MapType {
 		return nil, ErrWrongKeyType
 	}
 
@@ -216,10 +218,10 @@ func NewMapProperties(key, value ValueProperties) (*MapProperties, error) {
 }
 
 func (m *MapProperties) Type() Type {
-	return mapType
+	return MapType
 }
 
-func (m *MapProperties) Length() (int64, error) {
+func (m *MapProperties) Length() (uint64, error) {
 	return 0, ErrNoLength
 }
 
@@ -233,7 +235,7 @@ func (m *MapProperties) ValueProperties() (ValueProperties, error) {
 
 func (m *MapProperties) MarshalBinary() (data []byte, err error) {
 	// marshal type
-	typeB := m.Type().InnerType()
+	typeB := m.Type().Id()
 
 	// marshal keyProperties
 	keyB, err := m.keyProperties.MarshalBinary()
@@ -266,12 +268,17 @@ func (m *MapProperties) MarshalBinary() (data []byte, err error) {
 func (m *MapProperties) UnmarshalBinary(data []byte) error {
 	// type
 	tp := data[0]
-	if tp != mapType.InnerType() {
+	if tp != MapType.Id() {
+		return ErrWrongType
+	}
+
+	// check that key is not map
+	data = data[uint8Size:]
+	if data[0] == MapType.Id() {
 		return ErrWrongType
 	}
 
 	// unmarshal key properties
-	data = data[uint8Size:]
 	kp := newProperties(data[0])
 	err := kp.UnmarshalBinary(data)
 	if err != nil {
@@ -304,7 +311,7 @@ func (sv SignatureVersion) String() string {
 }
 
 type Signature interface {
-	Fields() []FieldDescriptor
+	Fields() []Field
 	ReadFromStream(*StorageStream) (int, error)
 	WriteToStream(*StorageStream) (int, error)
 	Version() SignatureVersion
@@ -312,22 +319,31 @@ type Signature interface {
 
 type Field struct {
 	offset *big.Int
-	length int64
+	length uint64
 }
 
 func (f *Field) Offset() *big.Int {
 	return f.offset
 }
 
-func (f *Field) Length() int64 {
+func (f *Field) Length() uint64 {
 	return f.length
 }
 
 type FieldDescriptor struct {
 	name []byte
 	vp   ValueProperties
+}
 
-	field Field
+func NewFieldDescriptor(fieldName []byte, v ValueProperties) (*FieldDescriptor, error) {
+	if len(fieldName) > int(^uint8(0)) {
+		return nil, ErrNameTooBig
+	}
+
+	return &FieldDescriptor{
+		name: fieldName,
+		vp:   v,
+	}, nil
 }
 
 func (fp FieldDescriptor) MarshalBinary() (data []byte, err error) {
@@ -375,42 +391,41 @@ func (fp *FieldDescriptor) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-func NewFieldDescriptor(fieldName []byte, v ValueProperties) FieldDescriptor {
-	return FieldDescriptor{
-		name: fieldName,
-		vp:   v,
-	}
-}
-
 type SignatureV1 struct {
 	version           SignatureVersion
 	fieldsDescriptors []FieldDescriptor
+	fields            []Field
 }
 
 func NewSignatureV1(fd []FieldDescriptor) (*SignatureV1, error) {
+	if len(fd) > int(^uint8(0)) {
+		return nil, ErrTooManyFields
+	}
+
 	// version + fields count
-	off := big.NewInt(int64(uint16Size + uint8Size))
-	for _, descriptor := range fd {
+	totalSize := uint64(uint16Size + uint8Size)
+	fields := make([]Field, len(fd))
+	for i, descriptor := range fd {
 		s, err := calculatePropertiesSize(descriptor.vp)
 		if err != nil {
 			return nil, err
 		}
 
-		descriptor.field = Field{
-			offset: off,
-			length: s,
-		}
-		off.Add(off, big.NewInt(s))
+		fields[i].length = s
+		totalSize += s + uint64(uint8Size+len(descriptor.name))
 	}
+
+	calculateFieldsOffset(totalSize, fields)
 
 	return &SignatureV1{
 		version:           signatureV1,
 		fieldsDescriptors: fd,
+		fields:            fields,
 	}, nil
 }
 
-func (s SignatureV1) Fields() []FieldDescriptor {
-	return s.fieldsDescriptors
+func (s SignatureV1) Fields() []Field {
+	return s.fields
 }
 
 func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
@@ -432,33 +447,37 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 	}
 	pos.Add(pos, big.NewInt(int64(n)))
 
-	fieldsDescriptors := make([]FieldDescriptor, countBuf[0])
 	uint8Buf := make([]byte, uint8Size)
-	for i, _ := range fieldsDescriptors {
-		currPos := new(big.Int).Set(pos)
-
-		// read length of filed name
-		n, err = stream.ReadAt(uint8Buf, currPos)
+	fields := make([]Field, countBuf[0])
+	fieldsDescriptors := make([]FieldDescriptor, countBuf[0])
+	for i := range fieldsDescriptors {
+		// read length of field name
+		n, err = stream.ReadAt(uint8Buf, pos)
 		if err != nil {
 			return 0, err
 		}
-		currPos.Add(currPos, big.NewInt(int64(n)))
+		pos.Add(pos, big.NewInt(int64(n)))
 
 		// read name of filed
 		nameBuf := make([]byte, uint8Buf[0])
-		n, err = stream.ReadAt(nameBuf, currPos)
+		n, err = stream.ReadAt(nameBuf, pos)
 		if err != nil {
 			return 0, err
 		}
-		currPos.Add(currPos, big.NewInt(int64(n)))
+		pos.Add(pos, big.NewInt(int64(n)))
 
-		err := calculatePropsEnd(stream, currPos)
+		end, err := calculatePropsEnd(stream, pos)
 		if err != nil {
 			return 0, err
 		}
 
-		fieldBuf := make([]byte, currPos.Sub(currPos, pos).Uint64())
-		n, err = stream.ReadAt(fieldBuf, pos)
+		fieldBuf := make([]byte, uint64(uint8Size+len(nameBuf))+end.Sub(end, pos).Uint64())
+		// copy name length
+		fieldBuf[0] = uint8Buf[0]
+		// copy name
+		copy(fieldBuf[uint8Size:uint8Size+len(nameBuf)], nameBuf[:])
+		// read fields
+		n, err = stream.ReadAt(fieldBuf[uint8Size+len(nameBuf):], pos)
 		if err != nil {
 			return 0, err
 		}
@@ -469,11 +488,21 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 			return 0, err
 		}
 
+		// save length of the field
+		fields[i].length, err = calculatePropertiesSize(fieldsDescriptors[i].vp)
+		if err != nil {
+			return 0, err
+		}
+
 		uint8Buf = []byte{0x00}
 	}
 
+	// save offset of fields
+	calculateFieldsOffset(pos.Uint64(), fields)
+
 	s.version = SignatureVersion(binary.BigEndian.Uint16(sigVersionBuf))
 	s.fieldsDescriptors = fieldsDescriptors
+	s.fields = fields
 
 	return int(pos.Uint64()), nil
 }
@@ -509,11 +538,11 @@ func (s SignatureV1) Version() SignatureVersion {
 
 func newProperties(tp uint8) ValueProperties {
 	switch {
-	case tp < arrayType.InnerType():
+	case isScalar(tp):
 		return &ScalarProperties{}
-	case tp == arrayType.InnerType():
+	case isArray(tp):
 		return &ArrayProperties{}
-	case tp == mapType.InnerType():
+	case isMap(tp):
 		return &MapProperties{}
 	default:
 		return nil
@@ -521,55 +550,57 @@ func newProperties(tp uint8) ValueProperties {
 }
 
 func isScalar(tp uint8) bool {
-	return tp < arrayType.InnerType()
+	return tp < ArrayType.Id()
 }
 
 func isArray(tp uint8) bool {
-	return tp == arrayType.InnerType()
+	return tp == ArrayType.Id()
 }
 
 func isMap(tp uint8) bool {
-	return tp == mapType.InnerType()
+	return tp == MapType.Id()
 }
 
-func calculatePropsEnd(stream *StorageStream, currPos *big.Int) error {
+func calculatePropsEnd(stream *StorageStream, currPos *big.Int) (*big.Int, error) {
+	end := new(big.Int).Set(currPos)
+
 	uint8Buf := make([]byte, uint8Size)
 	// read Type
 	n, err := stream.ReadAt(uint8Buf, currPos)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	currPos.Add(currPos, big.NewInt(int64(n)))
+	end.Add(end, big.NewInt(int64(n)))
 
 	switch {
 	case isScalar(uint8Buf[0]):
 		// add size of Type
-		currPos.Add(currPos, big.NewInt(int64(uint8Size)))
-		return nil
+		end.Add(end, big.NewInt(int64(uint8Size)))
+		return end, nil
 	case isArray(uint8Buf[0]):
 		// add array length
-		currPos.Add(currPos, big.NewInt(int64(uint64Size)))
-		return calculatePropsEnd(stream, currPos)
+		end.Add(end, big.NewInt(int64(uint64Size)))
+		return calculatePropsEnd(stream, end)
 	case isMap(uint8Buf[0]):
 		// get end of map key
-		err := calculatePropsEnd(stream, currPos)
+		end, err := calculatePropsEnd(stream, end)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// get end of map value
-		return calculatePropsEnd(stream, currPos)
+		return calculatePropsEnd(stream, end)
 	default:
-		return ErrWrongType
+		return nil, ErrWrongType
 	}
 }
 
-func calculatePropertiesSize(vp ValueProperties) (int64, error) {
+func calculatePropertiesSize(vp ValueProperties) (uint64, error) {
 	switch {
-	case isScalar(vp.Type().InnerType()):
+	case isScalar(vp.Type().Id()):
 		// type
-		return int64(uint16Size), nil
-	case isArray(vp.Type().InnerType()):
+		return uint64(uint16Size), nil
+	case isArray(vp.Type().Id()):
 		value, err := vp.ValueProperties()
 		if err != nil {
 			return 0, err
@@ -581,8 +612,8 @@ func calculatePropertiesSize(vp ValueProperties) (int64, error) {
 		}
 
 		// type + length + element size
-		return int64(uint8Size+uint64Size) + vpSize, nil
-	case isMap(vp.Type().InnerType()):
+		return uint64(uint8Size+uint64Size) + vpSize, nil
+	case isMap(vp.Type().Id()):
 
 		key, err := vp.KeyProperties()
 		if err != nil {
@@ -604,8 +635,15 @@ func calculatePropertiesSize(vp ValueProperties) (int64, error) {
 			return 0, err
 		}
 
-		return kSize + vSize, nil
+		return uint64(uint8Size) + kSize + vSize, nil
 	default:
 		return 0, ErrWrongType
+	}
+}
+
+func calculateFieldsOffset(start uint64, fields []Field) {
+	for i := range fields {
+		fields[i].offset = big.NewInt(int64(start))
+		start += fields[i].length
 	}
 }
