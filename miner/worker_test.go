@@ -80,7 +80,6 @@ func init() {
 	*cliqueChainConfig = *params.TestChainConfig
 	cliqueChainConfig.Clique = &params.CliqueConfig{
 		Period: 10,
-		Epoch:  30000,
 	}
 
 	signer := types.LatestSigner(params.TestChainConfig)
@@ -218,7 +217,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	)
 	if isClique {
 		chainConfig = params.AllCliqueProtocolChanges
-		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+		chainConfig.Clique = &params.CliqueConfig{Period: 1}
 		engine = clique.New(chainConfig.Clique, db)
 	} else {
 		chainConfig = params.AllEthashProtocolChanges

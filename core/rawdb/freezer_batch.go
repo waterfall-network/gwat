@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/golang/snappy"
 	"github.com/waterfall-foundation/gwat/common/math"
 	"github.com/waterfall-foundation/gwat/rlp"
-	"github.com/golang/snappy"
 )
 
 // This is the maximum amount of data that will be buffered in memory

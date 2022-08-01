@@ -297,18 +297,7 @@ func (c *Creator) isSlotLocked(info *Assignment) bool {
 	// check epoch/slot info of tips and lastFinalized block
 	// if epoch/slot >= in chain
 	// - rewind to correct position
-
-	var (
-		lastEpoch = c.getAssignment().Epoch
-		lastSlot  = c.getAssignment().Slot
-	)
-	if lastEpoch > info.Epoch {
-		return true
-	}
-	if lastEpoch == info.Epoch && lastSlot >= info.Slot {
-		return true
-	}
-	return false
+	return c.getAssignment().Slot >= info.Slot
 }
 
 // CreateBlock starts process of block creation
@@ -322,7 +311,7 @@ func (c *Creator) CreateBlock(assigned *Assignment, tips *types.Tips) (*types.Bl
 	}
 
 	if c.isSlotLocked(assigned) {
-		log.Warn("Creator skipping due to slot locked", "Epoch", assigned.Epoch, "Slot", assigned.Slot, "lastEpoch", c.getAssignment().Epoch, "lastSlot", c.getAssignment().Slot)
+		log.Warn("Creator skipping due to slot locked", "Slot", assigned.Slot, "lastSlot", c.getAssignment().Slot)
 		return nil, ErrSlotLocked
 	}
 
@@ -718,7 +707,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	tipsBlocks := c.chain.GetBlocksByHashes(tips.GetHashes())
 	blocks := c.eth.BlockChain().GetBlocksByHashes(tipsBlocks.Hashes())
 	for _, bl := range blocks {
-		if bl.Epoch() > slotInfo.Epoch || (bl.Epoch() == slotInfo.Epoch && bl.Slot() >= slotInfo.Slot) {
+		if bl.Slot() >= slotInfo.Slot {
 			tip := tips.Get(bl.Hash())
 			for _, ph := range bl.ParentHashes() {
 				_, _, _, graph, _, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash())
@@ -744,8 +733,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 			}
 			delete(tips, bl.Hash())
 			log.Info("Creator reorg tips", "blHeight", bl.Height(), "blHash", bl.Hash().Hex(), "tips", tips.Print())
-		} else {
-
 		}
 	}
 	tipsBlocks = c.chain.GetBlocksByHashes(tips.GetHashes())
@@ -823,7 +810,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	header := &types.Header{
 		ParentHashes: tipsBlocks.Hashes(),
-		Epoch:        slotInfo.Epoch,
 		Slot:         slotInfo.Slot,
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
@@ -1023,9 +1009,8 @@ func (c *Creator) getAssignment() Assignment {
 		return *c.cacheAssignment
 	}
 	var (
-		lfb      = c.eth.BlockChain().GetLastFinalizedBlock()
-		maxEpoch = lfb.Epoch()
-		maxSlot  = lfb.Slot()
+		lfb     = c.eth.BlockChain().GetLastFinalizedBlock()
+		maxSlot = lfb.Slot()
 	)
 	tips := c.eth.BlockChain().GetTips()
 	if len(tips) > 0 {
@@ -1034,13 +1019,7 @@ func (c *Creator) getAssignment() Assignment {
 			if bl.Coinbase() != c.coinbase {
 				continue
 			}
-			if maxEpoch == 0 || bl.Epoch() > maxEpoch {
-				maxEpoch = bl.Epoch()
-				maxSlot = bl.Slot()
-				continue
-			}
-			if bl.Epoch() == maxEpoch && maxSlot > bl.Slot() {
-				maxEpoch = bl.Epoch()
+			if maxSlot > bl.Slot() {
 				maxSlot = bl.Slot()
 				continue
 			}
@@ -1048,7 +1027,6 @@ func (c *Creator) getAssignment() Assignment {
 	}
 	c.setAssignment(&Assignment{
 		Slot:     maxSlot,
-		Epoch:    maxEpoch,
 		Creators: nil,
 	})
 	return *c.cacheAssignment

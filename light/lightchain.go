@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/consensus"
 	"github.com/waterfall-foundation/gwat/core"
@@ -35,7 +36,6 @@ import (
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/rlp"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -513,7 +513,7 @@ func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.Tru
 
 	latest := (checkpoint.SectionIndex+1)*lc.indexerConfig.ChtSize - 1
 	if clique := lc.hc.Config().Clique; clique != nil {
-		latest -= latest % clique.Epoch // epoch snapshot for clique
+		//latest -= latest % clique.Epoch // epoch snapshot for clique
 	}
 	if head >= latest {
 		return true

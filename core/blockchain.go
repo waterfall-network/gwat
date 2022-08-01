@@ -3092,7 +3092,7 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		if block.Hash() == bc.genesisBlock.Hash() {
 			return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
 		}
-		log.Warn("Detect block without parents", "hash", block.Hash(), "height", block.Height(), "epoch", block.Epoch(), "slot", block.Slot())
+		log.Warn("Detect block without parents", "hash", block.Hash(), "height", block.Height(), "slot", block.Slot())
 		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
 		return unloaded, loaded, finalized, graph, memo[0], err
 	}
