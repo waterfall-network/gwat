@@ -4,385 +4,678 @@ import (
 	"encoding"
 	"encoding/binary"
 	"errors"
-	"github.com/ethereum/go-ethereum/token/operation"
+	"fmt"
 	"math/big"
-	"reflect"
 )
 
-type fieldSize int
+const signatureV1 SignatureVersion = 0x0001
 
-const (
-	nameField fieldSize = iota
-	symbolField
-	decimalsField
-	totalSupplyField
-	balancesField
-	allowancesField
-	baseUriField           fieldSize = 2
-	ownersField            fieldSize = 3
-	tokenApprovalsField    fieldSize = 5
-	operatorApprovalsField fieldSize = 6
-	decimalsSize                     = 1
-	totalSupplySize                  = 32
-	mapSize                          = 1
+var (
+	ErrNoKeyProperties   = errors.New("no key properties for this type")
+	ErrNoValueProperties = errors.New("no value properties for this type")
+	ErrNoLength          = errors.New("no length for this type")
+	ErrWrongType         = errors.New("wrong type")
+	ErrWrongKeyType      = errors.New("wrong key type")
+	ErrNameTooBig        = errors.New("name too big")
+	ErrTooManyFields     = errors.New("too many fields")
 )
 
 var (
-	stdSize                        = int(reflect.TypeOf(operation.Std(0)).Size())
-	versionSize                    = int(reflect.TypeOf(uint16(0)).Size())
-	ErrUnsupportedSignatureVersion = errors.New("unsupported version of signature")
-	ErrWrongBuf                    = errors.New("wrong buffer size")
-	initialOffset                  = big.NewInt(0)
+	Uint8Type   = Type{0x01, 0x01}
+	Uint16Type  = Type{0x01, 0x02}
+	Uint32Type  = Type{0x01, 0x04}
+	Uint64Type  = Type{0x01, 0x08}
+	Uint256Type = Type{0x01, 0x20}
+	Int32Type   = Type{0x02, 0x04}
+	Int64Type   = Type{0x02, 0x08}
+	ArrayType   = Type{0x03, 0x00}
+	MapType     = Type{0x04, 0x00}
+
+	uint8Size   = 1
+	uint16Size  = 2
+	uint32Size  = 4
+	uint64Size  = 8
+	uint256Size = 32
 )
+
+type Type [2]byte
+
+func (t Type) String() string {
+	s := "Unknown"
+	switch t {
+	case Uint8Type:
+		s = "Uint8"
+	case Uint16Type:
+		s = "Uint16"
+	case Uint32Type:
+		s = "Uint32"
+	case Uint64Type:
+		s = "Uint64"
+	case Uint256Type:
+		s = "Uint256"
+	case Int32Type:
+		s = "Int32"
+	case Int64Type:
+		s = "Int64"
+	case ArrayType:
+		s = "Array"
+	case MapType:
+		s = "Map"
+	}
+
+	return s
+}
+
+func (t Type) Id() uint8 {
+	return t[0]
+}
+
+func (t Type) Size() uint8 {
+	return t[1]
+}
+
+func (t Type) MarshalBinary() ([]byte, error) {
+	return t[:], nil
+}
+
+func (t *Type) UnmarshalBinary(data []byte) error {
+	copy(t[:], data[:2])
+	return nil
+}
+
+type ValueProperties interface {
+	Type() Type
+	Length() (uint64, error)
+	KeyProperties() (ValueProperties, error)
+	ValueProperties() (ValueProperties, error)
+
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+}
+
+type ScalarProperties struct {
+	internalType Type
+}
+
+func NewScalarProperties(internalType Type) *ScalarProperties {
+	return &ScalarProperties{internalType: internalType}
+}
+
+func (s ScalarProperties) Type() Type {
+	return s.internalType
+}
+
+func (s ScalarProperties) Length() (uint64, error) {
+	return 0, ErrNoLength
+}
+
+func (s ScalarProperties) KeyProperties() (ValueProperties, error) {
+	return nil, ErrNoKeyProperties
+}
+
+func (s ScalarProperties) ValueProperties() (ValueProperties, error) {
+	return nil, ErrNoValueProperties
+}
+
+func (s ScalarProperties) MarshalBinary() (data []byte, err error) {
+	return s.internalType.MarshalBinary()
+}
+
+func (s *ScalarProperties) UnmarshalBinary(data []byte) error {
+	return s.internalType.UnmarshalBinary(data)
+}
+
+type ArrayProperties struct {
+	valueProperties ValueProperties
+	len             uint64
+}
+
+func NewArrayProperties(t *ScalarProperties, l uint64) *ArrayProperties {
+	return &ArrayProperties{
+		valueProperties: t,
+		len:             l,
+	}
+}
+
+func (a *ArrayProperties) Type() Type {
+	return ArrayType
+}
+
+func (a *ArrayProperties) Length() (uint64, error) {
+	return a.len, nil
+}
+
+func (a *ArrayProperties) KeyProperties() (ValueProperties, error) {
+	return nil, ErrNoKeyProperties
+}
+
+func (a *ArrayProperties) ValueProperties() (ValueProperties, error) {
+	return a.valueProperties, nil
+}
+
+func (a *ArrayProperties) MarshalBinary() ([]byte, error) {
+	// marshal type
+	typeB := a.Type().Id()
+
+	// marshal valueProperties
+	valueB, err := a.valueProperties.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	buf := make([]byte, uint8Size+uint64Size+len(valueB))
+
+	// type
+	buf[0] = typeB
+
+	// length
+	binary.BigEndian.PutUint64(buf[uint8Size:uint8Size+uint64Size], a.len)
+
+	// valueProperties
+	copy(buf[uint8Size+uint64Size:], valueB)
+
+	return buf, nil
+}
+
+func (a *ArrayProperties) UnmarshalBinary(data []byte) error {
+	// type
+	tp := data[0]
+	if tp != ArrayType.Id() {
+		return ErrWrongType
+	}
+
+	// length
+	data = data[uint8Size:]
+	l := binary.BigEndian.Uint64(data[:uint64Size])
+
+	// valueProperties
+	data = data[uint64Size:]
+	vp := newProperties(data[0])
+	err := vp.UnmarshalBinary(data[:])
+	if err != nil {
+		return err
+	}
+
+	a.len = l
+	a.valueProperties = vp
+	return nil
+}
+
+type MapProperties struct {
+	keyProperties   ValueProperties
+	valueProperties ValueProperties
+}
+
+func NewMapProperties(key, value ValueProperties) (*MapProperties, error) {
+	if key.Type() == MapType {
+		return nil, ErrWrongKeyType
+	}
+
+	return &MapProperties{
+		keyProperties:   key,
+		valueProperties: value,
+	}, nil
+}
+
+func (m *MapProperties) Type() Type {
+	return MapType
+}
+
+func (m *MapProperties) Length() (uint64, error) {
+	return 0, ErrNoLength
+}
+
+func (m *MapProperties) KeyProperties() (ValueProperties, error) {
+	return m.keyProperties, nil
+}
+
+func (m *MapProperties) ValueProperties() (ValueProperties, error) {
+	return m.valueProperties, nil
+}
+
+func (m *MapProperties) MarshalBinary() (data []byte, err error) {
+	// marshal type
+	typeB := m.Type().Id()
+
+	// marshal keyProperties
+	keyB, err := m.keyProperties.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	// marshal valueProperties
+	valueB, err := m.valueProperties.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	buf := make([]byte, uint8Size+len(keyB)+len(valueB))
+
+	// put type
+	buf[0] = typeB
+
+	// put key
+	off := uint8Size
+	copy(buf[off:], keyB)
+
+	// put value
+	off += len(keyB)
+	copy(buf[off:], valueB)
+
+	return buf, nil
+}
+
+func (m *MapProperties) UnmarshalBinary(data []byte) error {
+	// type
+	tp := data[0]
+	if tp != MapType.Id() {
+		return ErrWrongType
+	}
+
+	// check that key is not map
+	data = data[uint8Size:]
+	if data[0] == MapType.Id() {
+		return ErrWrongType
+	}
+
+	// unmarshal key properties
+	kp := newProperties(data[0])
+	err := kp.UnmarshalBinary(data)
+	if err != nil {
+		return err
+	}
+
+	// add size of key type
+	off, err := calculatePropertiesSize(kp)
+	if err != nil {
+		return err
+	}
+	data = data[off:]
+
+	// unmarshal value properties
+	vp := newProperties(data[0])
+	err = vp.UnmarshalBinary(data)
+	if err != nil {
+		return err
+	}
+
+	m.keyProperties = kp
+	m.valueProperties = vp
+	return nil
+}
+
+type SignatureVersion uint16
+
+func (sv SignatureVersion) String() string {
+	return fmt.Sprintf("%d", sv)
+}
+
+type Signature interface {
+	Fields() []Field
+	ReadFromStream(*StorageStream) (int, error)
+	WriteToStream(*StorageStream) (int, error)
+	Version() SignatureVersion
+}
 
 type Field struct {
 	offset *big.Int
-	length int
+	length uint64
 }
 
 func (f *Field) Offset() *big.Int {
 	return f.offset
 }
 
-func (f *Field) Length() int {
+func (f *Field) Length() uint64 {
 	return f.length
 }
 
-type wrc20Signature interface {
-	Decimals() Field
-	TotalSupply() Field
-	Version() uint16
-	Name() Field
-	Symbol() Field
-	SignatureLength() int
-	FieldsLength() int
-	TotalLength() int
-	Balance() Field
-	Allowance() Field
-	ReadFromStream(stream *StorageStream) error
-	WriteToStream(stream *StorageStream) error
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
+type FieldDescriptor struct {
+	name []byte
+	vp   ValueProperties
 }
 
-type wrc721Signature interface {
-	BaseUri() Field
-	Version() uint16
-	Name() Field
-	Symbol() Field
-	SignatureLength() int
-	FieldsLength() int
-	TotalLength() int
-	Balance() Field
-	OperatorApprovals() Field
-	TokenApproval() Field
-	Owner() Field
-	ReadFromStream(stream *StorageStream) error
-	WriteToStream(stream *StorageStream) error
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-}
-
-type signatureV1 struct {
-	fields            []Field
-	std               operation.Std
-	fieldsTotalLength int
-}
-
-func newSignatureV1(fieldSizes []int, std operation.Std) *signatureV1 {
-	shift := stdSize + versionSize + len(fieldSizes)
-	sign := make([]Field, len(fieldSizes))
-
-	if len(fieldSizes) > 0 {
-		total := fieldSizes[0]
-		sign[0].offset = big.NewInt(int64(shift))
-		sign[0].length = fieldSizes[0]
-		for i := 0; i < len(fieldSizes)-1; i++ {
-			sign[i+1].offset = big.NewInt(0).Add(sign[i].offset, big.NewInt(int64(fieldSizes[i])))
-			sign[i+1].length = fieldSizes[i+1]
-			total += fieldSizes[i+1]
-		}
-
-		return &signatureV1{
-			fields:            sign,
-			std:               std,
-			fieldsTotalLength: total,
-		}
+func NewFieldDescriptor(fieldName []byte, v ValueProperties) (*FieldDescriptor, error) {
+	if len(fieldName) > int(^uint8(0)) {
+		return nil, ErrNameTooBig
 	}
 
-	return nil
+	return &FieldDescriptor{
+		name: fieldName,
+		vp:   v,
+	}, nil
 }
 
-// SignatureLength returns size of the signature in bytes.
-func (s *signatureV1) SignatureLength() int {
-	return len(s.fields) + stdSize + versionSize
-}
-
-// FieldsLength returns total size of all signature fields in bytes.
-func (s *signatureV1) FieldsLength() int {
-	return s.fieldsTotalLength
-}
-
-func (s *signatureV1) TotalLength() int {
-	return s.SignatureLength() + s.FieldsLength()
-}
-
-func (s *signatureV1) MarshalBinary() ([]byte, error) {
-	buf := make([]byte, len(s.fields)+stdSize+versionSize)
-	stdBuf, err := s.std.MarshalBinary()
+func (fp FieldDescriptor) MarshalBinary() (data []byte, err error) {
+	// marshal value properties
+	res, err := fp.vp.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	copy(buf[:stdSize], stdBuf)
-	binary.BigEndian.PutUint16(buf[stdSize:stdSize+versionSize], s.Version())
+	nameLen := len(fp.name)
+	buf := make([]byte, uint8Size+nameLen+len(res))
 
-	for i, f := range s.fields {
-		buf[stdSize+versionSize+i] = uint8(f.length)
-	}
+	// put length of name
+	buf[0] = byte(nameLen)
+
+	// put name
+	off := uint8Size
+	copy(buf[off:], fp.name)
+
+	// put value properties
+	off += len(fp.name)
+	copy(buf[off:], res)
 
 	return buf, nil
 }
 
-func (s *signatureV1) UnmarshalBinary(buf []byte) error {
-	if len(buf) < s.SignatureLength() {
-		return ErrWrongBuf
-	}
+func (fp *FieldDescriptor) UnmarshalBinary(data []byte) error {
+	// get len of name
+	nameLen := data[0]
+	data = data[uint8Size:]
 
-	var std operation.Std
-	err := std.UnmarshalBinary(buf[:stdSize])
+	// get name
+	name := data[:nameLen]
+
+	// get valueProperties
+	data = data[nameLen:]
+	vp := newProperties(data[0])
+	err := vp.UnmarshalBinary(data)
 	if err != nil {
 		return err
 	}
 
-	if std != s.std {
-		return operation.ErrStandardNotValid
-	}
-
-	ver := binary.BigEndian.Uint16(buf[stdSize : stdSize+versionSize])
-
-	if ver != s.Version() {
-		return ErrUnsupportedSignatureVersion
-	}
-
-	s.fields[0].length = int(buf[stdSize+versionSize])
-	s.fieldsTotalLength = s.fields[0].length
-	for i := 0; i < len(buf[stdSize+versionSize:s.SignatureLength()])-1; i++ {
-		s.fields[i+1].length = int(buf[stdSize+versionSize+i+1])
-		s.fields[i+1].offset.Add(s.fields[i].offset, big.NewInt(int64(s.fields[i].length)))
-		s.fieldsTotalLength += s.fields[i+1].length
-	}
-
+	fp.name = name
+	fp.vp = vp
 	return nil
 }
 
-func (s *signatureV1) Name() Field {
-	return s.fields[nameField]
+type SignatureV1 struct {
+	version           SignatureVersion
+	fieldsDescriptors []FieldDescriptor
+	fields            []Field
 }
 
-func (s *signatureV1) Symbol() Field {
-	return s.fields[symbolField]
-}
-
-func (s *signatureV1) Balance() Field {
-	return s.fields[balancesField]
-}
-
-func (s *signatureV1) Version() uint16 {
-	return 1
-}
-
-func (s *signatureV1) WriteToStream(stream *StorageStream) error {
-	err := writeToStream(stream, s)
-	if err != nil {
-		return err
+func NewSignatureV1(fd []FieldDescriptor) (*SignatureV1, error) {
+	if len(fd) > int(^uint8(0)) {
+		return nil, ErrTooManyFields
 	}
 
-	return nil
-}
-
-func (s *signatureV1) ReadFromStream(stream *StorageStream) error {
-	buf := make([]byte, s.SignatureLength())
-	_, err := stream.ReadAt(buf, initialOffset)
-	if err != nil {
-		return err
-	}
-
-	_ = s.UnmarshalBinary(buf)
-
-	return nil
-}
-
-type wrc20SignatureV1 struct {
-	*signatureV1
-}
-
-func readWrc20Signature(stream *StorageStream) (wrc20Signature, error) {
-	newSign := func(ver uint16) (streamReader, error) {
-		switch ver {
-		case 1:
-			return newWrc20SignatureV1(0, 0), nil
-
-		default:
-			return nil, ErrUnsupportedSignatureVersion
+	// version + fields count
+	totalSize := uint64(uint16Size + uint8Size)
+	fields := make([]Field, len(fd))
+	for i, descriptor := range fd {
+		l, err := calculateFieldLength(descriptor.vp)
+		if err != nil {
+			return nil, err
 		}
-	}
+		fields[i].length = l
 
-	reader, err := readSignature(stream, newSign, operation.StdWRC20)
-	if err != nil {
-		return nil, err
-	}
-
-	return reader.(wrc20Signature), nil
-}
-
-func newWrc20SignatureV1(name, symbol int) *wrc20SignatureV1 {
-
-	//wrc20 token signature has 2 maps: balances and allowances.
-	input := []int{
-		name, symbol, decimalsSize, totalSupplySize, mapSize, mapSize,
-	}
-
-	sign := newSignatureV1(input, operation.StdWRC20)
-
-	return &wrc20SignatureV1{sign}
-}
-
-func lastWrc20Signature(name, symbol int) wrc20Signature {
-	return newWrc20SignatureV1(name, symbol)
-
-}
-
-func (s *wrc20SignatureV1) Decimals() Field {
-	return s.fields[decimalsField]
-}
-
-func (s *wrc20SignatureV1) TotalSupply() Field {
-	return s.fields[totalSupplyField]
-}
-
-func (s *wrc20SignatureV1) Allowance() Field {
-	return s.fields[allowancesField]
-}
-
-type wrc721SignatureV1 struct {
-	*signatureV1
-}
-
-func readWrc721Signature(stream *StorageStream) (wrc721Signature, error) {
-	newSign := func(ver uint16) (streamReader, error) {
-		switch ver {
-		case 1:
-			return newWrc721SignatureV1(0, 0, 0), nil
-
-		default:
-			return nil, ErrUnsupportedSignatureVersion
+		s, err := calculatePropertiesSize(descriptor.vp)
+		if err != nil {
+			return nil, err
 		}
+		totalSize += s + uint64(uint8Size+len(descriptor.name))
 	}
 
-	reader, err := readSignature(stream, newSign, operation.StdWRC721)
-	if err != nil {
-		return nil, err
-	}
+	calculateFieldsOffset(totalSize, fields)
 
-	return reader.(wrc721Signature), nil
+	return &SignatureV1{
+		version:           signatureV1,
+		fieldsDescriptors: fd,
+		fields:            fields,
+	}, nil
 }
 
-func newWrc721SignatureV1(name, symbol, baseUri int) *wrc721SignatureV1 {
-
-	//wrc721 token signature has 4 maps: balances, owners, tokenApprovals, operatorApprovals.
-	input := []int{
-		name, symbol, baseUri, mapSize, mapSize, mapSize, mapSize,
-	}
-	sign := newSignatureV1(input, operation.StdWRC721)
-
-	return &wrc721SignatureV1{sign}
+func (s SignatureV1) Fields() []Field {
+	return s.fields
 }
 
-func lastWrc721Signature(name, symbol, baseUri int) wrc721Signature {
-	return newWrc721SignatureV1(name, symbol, baseUri)
-}
+func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
+	pos := big.NewInt(0)
 
-func (s *wrc721SignatureV1) BaseUri() Field {
-	return s.fields[baseUriField]
-}
-
-func (s *wrc721SignatureV1) Owner() Field {
-	return s.fields[ownersField]
-}
-
-func (s *wrc721SignatureV1) TokenApproval() Field {
-	return s.fields[tokenApprovalsField]
-}
-
-func (s *wrc721SignatureV1) OperatorApprovals() Field {
-	return s.fields[operatorApprovalsField]
-}
-
-type streamReader interface {
-	ReadFromStream(*StorageStream) error
-}
-
-func readSignature(stream *StorageStream, f func(ver uint16) (streamReader, error), std operation.Std) (streamReader, error) {
-	ver, err := readVersionAndCheckStd(stream, std)
-	if err != nil {
-		return nil, err
-	}
-
-	reader, err := f(ver)
-	if err != nil {
-		return nil, err
-	}
-
-	err = reader.ReadFromStream(stream)
-	if err != nil {
-		return nil, err
-	}
-
-	return reader, nil
-}
-
-func writeToStream(stream *StorageStream, sign encoding.BinaryMarshaler) error {
-	b, _ := sign.MarshalBinary()
-	_, err := stream.WriteAt(b, initialOffset)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func readVersion(stream *StorageStream) (uint16, error) {
-	b := make([]byte, versionSize)
-	_, err := stream.ReadAt(b, big.NewInt(int64(stdSize)))
+	// read the full signatureVersion
+	sigVersionBuf := make([]byte, uint16Size)
+	n, err := stream.ReadAt(sigVersionBuf, pos)
 	if err != nil {
 		return 0, err
 	}
+	pos.Add(pos, big.NewInt(int64(n)))
 
-	ver := binary.BigEndian.Uint16(b)
+	// read the count of fields
+	countBuf := make([]byte, uint8Size)
+	n, err = stream.ReadAt(countBuf, pos)
+	if err != nil {
+		return 0, err
+	}
+	pos.Add(pos, big.NewInt(int64(n)))
 
-	return ver, nil
+	uint8Buf := make([]byte, uint8Size)
+	fields := make([]Field, countBuf[0])
+	fieldsDescriptors := make([]FieldDescriptor, countBuf[0])
+	for i := range fieldsDescriptors {
+		// read length of field name
+		n, err = stream.ReadAt(uint8Buf, pos)
+		if err != nil {
+			return 0, err
+		}
+		pos.Add(pos, big.NewInt(int64(n)))
+
+		// read name of field
+		nameBuf := make([]byte, uint8Buf[0])
+		n, err = stream.ReadAt(nameBuf, pos)
+		if err != nil {
+			return 0, err
+		}
+		pos.Add(pos, big.NewInt(int64(n)))
+
+		end, err := calculatePropsEnd(stream, pos)
+		if err != nil {
+			return 0, err
+		}
+
+		fieldBuf := make([]byte, uint64(uint8Size+len(nameBuf))+end.Sub(end, pos).Uint64())
+		// copy name length
+		fieldBuf[0] = uint8Buf[0]
+		// copy name
+		copy(fieldBuf[uint8Size:uint8Size+len(nameBuf)], nameBuf[:])
+		// read fields
+		n, err = stream.ReadAt(fieldBuf[uint8Size+len(nameBuf):], pos)
+		if err != nil {
+			return 0, err
+		}
+		pos.Add(pos, big.NewInt(int64(n)))
+
+		err = fieldsDescriptors[i].UnmarshalBinary(fieldBuf)
+		if err != nil {
+			return 0, err
+		}
+
+		// save length of the field
+		fields[i].length, err = calculateFieldLength(fieldsDescriptors[i].vp)
+		if err != nil {
+			return 0, err
+		}
+
+		uint8Buf = []byte{0x00}
+	}
+
+	// save offset of fields
+	calculateFieldsOffset(pos.Uint64(), fields)
+
+	s.version = SignatureVersion(binary.BigEndian.Uint16(sigVersionBuf))
+	s.fieldsDescriptors = fieldsDescriptors
+	s.fields = fields
+
+	return int(pos.Uint64()), nil
 }
 
-func readVersionAndCheckStd(stream *StorageStream, std operation.Std) (uint16, error) {
-	var s operation.Std
-	b := make([]byte, stdSize)
+func (s SignatureV1) WriteToStream(stream *StorageStream) (int, error) {
+	// SignatureVersion size + fields count
+	buf := make([]byte, uint16Size+uint8Size)
 
-	_, err := stream.ReadAt(b, initialOffset)
+	// write SignatureVersion
+	binary.BigEndian.PutUint16(buf[:uint16Size], uint16(s.version))
+
+	// write count of fieldsDescriptors
+	buf[uint16Size] = uint8(len(s.fieldsDescriptors))
+
+	// write fieldsDescriptors
+	for _, field := range s.fieldsDescriptors {
+		// marshal the fieldDescriptor
+		b, err := field.MarshalBinary()
+		if err != nil {
+			return 0, err
+		}
+
+		// write the fieldDescriptor
+		buf = append(buf, b...)
+	}
+
+	return stream.WriteAt(buf, big.NewInt(0))
+}
+
+func (s SignatureV1) Version() SignatureVersion {
+	return s.version
+}
+
+func newProperties(tp uint8) ValueProperties {
+	switch {
+	case isScalar(tp):
+		return &ScalarProperties{}
+	case isArray(tp):
+		return &ArrayProperties{}
+	case isMap(tp):
+		return &MapProperties{}
+	default:
+		return nil
+	}
+}
+
+func isScalar(tp uint8) bool {
+	return tp < ArrayType.Id()
+}
+
+func isArray(tp uint8) bool {
+	return tp == ArrayType.Id()
+}
+
+func isMap(tp uint8) bool {
+	return tp == MapType.Id()
+}
+
+func calculatePropsEnd(stream *StorageStream, currPos *big.Int) (*big.Int, error) {
+	end := new(big.Int).Set(currPos)
+
+	uint8Buf := make([]byte, uint8Size)
+	// read Type
+	n, err := stream.ReadAt(uint8Buf, currPos)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
+	end.Add(end, big.NewInt(int64(n)))
 
-	_ = s.UnmarshalBinary(b)
+	switch {
+	case isScalar(uint8Buf[0]):
+		// add size of Type
+		end.Add(end, big.NewInt(int64(uint8Size)))
+		return end, nil
+	case isArray(uint8Buf[0]):
+		// add array length
+		end.Add(end, big.NewInt(int64(uint64Size)))
+		return calculatePropsEnd(stream, end)
+	case isMap(uint8Buf[0]):
+		// get end of map key
+		end, err := calculatePropsEnd(stream, end)
+		if err != nil {
+			return nil, err
+		}
 
-	if s != std {
-		return 0, operation.ErrStandardNotValid
+		// get end of map value
+		return calculatePropsEnd(stream, end)
+	default:
+		return nil, ErrWrongType
 	}
+}
 
-	ver, err := readVersion(stream)
-	if err != nil {
-		return 0, err
+func calculatePropertiesSize(vp ValueProperties) (uint64, error) {
+	switch {
+	case isScalar(vp.Type().Id()):
+		// type
+		return uint64(uint16Size), nil
+	case isArray(vp.Type().Id()):
+		value, err := vp.ValueProperties()
+		if err != nil {
+			return 0, err
+		}
+
+		vpSize, err := calculatePropertiesSize(value)
+		if err != nil {
+			return 0, err
+		}
+
+		// type + length + element size
+		return uint64(uint8Size+uint64Size) + vpSize, nil
+	case isMap(vp.Type().Id()):
+		key, err := vp.KeyProperties()
+		if err != nil {
+			return 0, err
+		}
+
+		kSize, err := calculatePropertiesSize(key)
+		if err != nil {
+			return 0, err
+		}
+
+		value, err := vp.ValueProperties()
+		if err != nil {
+			return 0, err
+		}
+
+		vSize, err := calculatePropertiesSize(value)
+		if err != nil {
+			return 0, err
+		}
+
+		return uint64(uint8Size) + kSize + vSize, nil
+	default:
+		return 0, ErrWrongType
 	}
+}
 
-	return ver, nil
+func calculateFieldLength(vp ValueProperties) (uint64, error) {
+	switch {
+	case isScalar(vp.Type().Id()):
+		return uint64(vp.Type().Size()), nil
+	case isArray(vp.Type().Id()):
+		value, err := vp.ValueProperties()
+		if err != nil {
+			return 0, err
+		}
+
+		vpSize, err := calculateFieldLength(value)
+		if err != nil {
+			return 0, err
+		}
+
+		l, err := vp.Length()
+		if err != nil {
+			return 0, err
+		}
+
+		// length * element size
+		return l * vpSize, nil
+	case isMap(vp.Type().Id()):
+		return 0, nil
+	default:
+		return 0, ErrWrongType
+	}
+}
+
+func calculateFieldsOffset(start uint64, fields []Field) {
+	for i := range fields {
+		fields[i].offset = big.NewInt(int64(start))
+		start += fields[i].length
+	}
 }
