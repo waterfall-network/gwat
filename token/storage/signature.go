@@ -462,7 +462,7 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 		}
 		pos.Add(pos, big.NewInt(int64(n)))
 
-		// read name of filed
+		// read name of field
 		nameBuf := make([]byte, uint8Buf[0])
 		n, err = stream.ReadAt(nameBuf, pos)
 		if err != nil {
