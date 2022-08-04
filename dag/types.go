@@ -2,18 +2,16 @@ package dag
 
 import (
 	"encoding/json"
-
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/dag/finalizer"
 )
 
 // ConsensusInfo represents data of consensus request
 type ConsensusInfo struct {
-	Epoch      uint64              `json:"epoch"`
-	Slot       uint64              `json:"slot"`
-	Creators   []common.Address    `json:"creators"`
-	Finalizing finalizer.NrHashMap `json:"finalizing"`
+	Epoch      uint64           `json:"epoch"`
+	Slot       uint64           `json:"slot"`
+	Creators   []common.Address `json:"creators"`
+	Finalizing common.HashArray `json:"finalizing"`
 }
 
 // Copy duplicates the current storage.
@@ -27,10 +25,10 @@ func (ci *ConsensusInfo) Copy() *ConsensusInfo {
 }
 
 type ConsensusInfoMarshaling struct {
-	Epoch      *hexutil.Uint64     `json:"epoch"`
-	Slot       *hexutil.Uint64     `json:"slot"`
-	Creators   []common.Address    `json:"creators"`
-	Finalizing finalizer.NrHashMap `json:"finalizing"`
+	Epoch      *hexutil.Uint64  `json:"epoch"`
+	Slot       *hexutil.Uint64  `json:"slot"`
+	Creators   []common.Address `json:"creators"`
+	Finalizing common.HashArray `json:"finalizing"`
 }
 
 func (ci *ConsensusInfo) MarshalJSON() ([]byte, error) {
@@ -67,9 +65,9 @@ func (ci *ConsensusInfo) UnmarshalJSON(input []byte) error {
 // ConsensusResult represents result of handling of consensus request
 // todo deprecated
 type ConsensusResult struct {
-	Error      *string              `json:"error"`
-	Info       *map[string]string   `json:"info"`
-	Candidates *finalizer.NrHashMap `json:"candidates"`
+	Error      *string            `json:"error"`
+	Info       *map[string]string `json:"info"`
+	Candidates common.HashArray   `json:"candidates"`
 }
 
 type FinalizationResult struct {
@@ -78,6 +76,6 @@ type FinalizationResult struct {
 }
 
 type CandidatesResult struct {
-	Error      *string              `json:"error"`
-	Candidates *finalizer.NrHashMap `json:"candidates"`
+	Error      *string          `json:"error"`
+	Candidates common.HashArray `json:"candidates"`
 }
