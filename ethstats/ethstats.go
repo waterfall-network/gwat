@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	ethereum "github.com/waterfall-foundation/gwat"
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/mclock"
@@ -43,7 +44,6 @@ import (
 	"github.com/waterfall-foundation/gwat/node"
 	"github.com/waterfall-foundation/gwat/p2p"
 	"github.com/waterfall-foundation/gwat/rpc"
-	"github.com/gorilla/websocket"
 )
 
 const (
@@ -568,7 +568,6 @@ type blockStats struct {
 	Number       *uint64        `json:"number"`
 	Hash         common.Hash    `json:"hash"`
 	ParentHashes []common.Hash  `json:"parentHashes"`
-	Epoch        uint64         `json:"epoch"`
 	Slot         uint64         `json:"slot"`
 	Height       uint64         `json:"height"`
 	Timestamp    *big.Int       `json:"timestamp"`

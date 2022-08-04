@@ -30,7 +30,6 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		//Number       math.HexOrDecimal64                         `json:"number"`
 		GasUsed      math.HexOrDecimal64   `json:"gasUsed"`
 		ParentHashes []common.Hash         `json:"ParentHashes"`
-		Epoch        math.HexOrDecimal64   `json:"epoch"`
 		Slot         math.HexOrDecimal64   `json:"slot"`
 		Height       math.HexOrDecimal64   `json:"height"`
 		BaseFee      *math.HexOrDecimal256 `json:"baseFeePerGas"`
@@ -52,7 +51,6 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	enc.Deposit = g.Deposit
 	enc.GasUsed = math.HexOrDecimal64(g.GasUsed)
 	enc.ParentHashes = g.ParentHashes
-	enc.Epoch = math.HexOrDecimal64(g.Epoch)
 	enc.Slot = math.HexOrDecimal64(g.Slot)
 	enc.Height = math.HexOrDecimal64(g.Height)
 	enc.BaseFee = (*math.HexOrDecimal256)(g.BaseFee)
@@ -73,7 +71,6 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		Deposit      *common.Address                             `json:"deposit"    gencodec:"required"`
 		GasUsed      *math.HexOrDecimal64                        `json:"gasUsed"`
 		ParentHashes *[]common.Hash                              `json:"parentHashes"`
-		Epoch        *math.HexOrDecimal64                        `json:"epoch"`
 		Slot         *math.HexOrDecimal64                        `json:"slot"`
 		Height       *math.HexOrDecimal64                        `json:"height"`
 		BaseFee      *math.HexOrDecimal256                       `json:"baseFeePerGas"`
@@ -120,9 +117,6 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ParentHashes != nil {
 		g.ParentHashes = *dec.ParentHashes
-	}
-	if dec.Epoch != nil {
-		g.Epoch = uint64(*dec.Epoch)
 	}
 	if dec.Slot != nil {
 		g.Slot = uint64(*dec.Slot)
