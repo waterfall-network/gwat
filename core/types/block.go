@@ -73,7 +73,6 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
 	ParentHashes common.HashArray `json:"parentHashes"     gencodec:"required"`
-	Epoch        uint64           `json:"epoch"            gencodec:"required"`
 	Slot         uint64           `json:"slot"             gencodec:"required"`
 	Height       uint64           `json:"height"           gencodec:"required"`
 	Coinbase     common.Address   `json:"miner"            gencodec:"required"`
@@ -120,7 +119,6 @@ func (h *Header) Copy() *Header {
 	if h != nil {
 		cpy = &Header{
 			ParentHashes: h.ParentHashes,
-			Epoch:        h.Epoch,
 			Slot:         h.Slot,
 			Height:       h.Height,
 			Coinbase:     h.Coinbase,
@@ -312,7 +310,6 @@ func (b *Block) Bloom() Bloom                   { return b.header.Bloom }
 func (b *Block) Coinbase() common.Address       { return b.header.Coinbase }
 func (b *Block) Root() common.Hash              { return b.header.Root }
 func (b *Block) ParentHashes() common.HashArray { return b.header.ParentHashes }
-func (b *Block) Epoch() uint64                  { return b.header.Epoch }
 func (b *Block) Slot() uint64                   { return b.header.Slot }
 func (b *Block) Height() uint64                 { return b.header.Height }
 func (b *Block) TxHash() common.Hash            { return b.header.TxHash }

@@ -63,7 +63,6 @@ type Genesis struct {
 	// in actual genesis blocks.
 	GasUsed      uint64        `json:"gasUsed"`
 	ParentHashes []common.Hash `json:"parentHashes"`
-	Epoch        uint64        `json:"epoch"`
 	Slot         uint64        `json:"slot"`
 	Height       uint64        `json:"height"`
 	BaseFee      *big.Int      `json:"baseFeePerGas"`
@@ -276,7 +275,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Nonce:        types.EncodeNonce(g.Nonce),
 		Time:         g.Timestamp,
 		ParentHashes: g.ParentHashes,
-		Epoch:        g.Epoch,
 		Slot:         g.Slot,
 		Height:       g.Height,
 		Extra:        g.ExtraData,
@@ -433,7 +431,6 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	config := *params.AllCliqueProtocolChanges
 	config.Clique = &params.CliqueConfig{
 		Period: period,
-		Epoch:  config.Clique.Epoch,
 	}
 
 	// Assemble and return the genesis with the precompiles and faucet pre-funded

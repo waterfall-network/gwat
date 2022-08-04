@@ -61,7 +61,6 @@ func init() {
 	cliqueChainConfig = params.TestChainConfig
 	cliqueChainConfig.Clique = &params.CliqueConfig{
 		Period: 5,
-		Epoch:  30000,
 	}
 
 	signer := types.LatestSigner(params.TestChainConfig)
@@ -230,7 +229,6 @@ func testGenerateBlockAndImport(t *testing.T) {
 		tips := b.chain.GetTips()
 		w.CreateBlock(&Assignment{
 			Slot:     uint64(i + 1),
-			Epoch:    0,
 			Creators: []common.Address{w.coinbase},
 		}, &tips)
 

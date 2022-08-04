@@ -233,7 +233,6 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 	for _, bl := range blocks {
 		nr := bl.Height()
 		bl.SetNumber(&nr)
-		bl.Header().Epoch = 0
 	}
 	return genesis, blocks
 }

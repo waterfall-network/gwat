@@ -138,8 +138,7 @@ func (b *SimulatedBackend) rollback(parent *types.Block) {
 	for _, bl := range blocks {
 		nr := bl.Height()
 		bl.SetNumber(&nr)
-		bl.Header().Slot = nr % 8
-		bl.Header().Epoch = nr / 8
+		bl.Header().Slot = nr
 	}
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)

@@ -124,7 +124,6 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
-			Epoch:    data.Epoch,
 			Creators: data.Creators,
 		}
 
@@ -194,7 +193,6 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo) *FinalizationResult {
 	if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
-			Epoch:    data.Epoch,
 			Creators: data.Creators,
 		}
 

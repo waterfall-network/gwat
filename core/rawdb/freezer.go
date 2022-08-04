@@ -26,12 +26,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/tsdb/fileutil"
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/waterfall-foundation/gwat/params"
-	"github.com/prometheus/tsdb/fileutil"
 )
 
 var (
