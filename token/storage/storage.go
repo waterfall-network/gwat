@@ -16,6 +16,7 @@ var (
 	ErrFieldNotFound       = errors.New("field not found")
 	ErrUnsupportedMapKey   = errors.New("unsupported map key type")
 	ErrUnsupportedMapValue = errors.New("unsupported map value type")
+	ErrValueTooLarge       = errors.New("value too large")
 )
 
 type Storage interface {
@@ -219,6 +220,10 @@ func (s *storage) WriteField(fieldName string, val interface{}, opts ...Option) 
 		buf, err := options.encoder(val)
 		if err != nil {
 			return err
+		}
+
+		if uint64(len(buf)) > field.length {
+			return ErrValueTooLarge
 		}
 
 		_, err = s.stream.WriteAt(buf, field.offset)

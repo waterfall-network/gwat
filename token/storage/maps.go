@@ -9,12 +9,12 @@ import (
 )
 
 var (
-	ErrNilKey              = errors.New("key is nil")
-	ErrBadMapId            = errors.New("bad map id")
-	ErrKeySizeIsZero       = errors.New("key size is 0")
-	ErrValueSizeIsZero     = errors.New("value size is 0")
-	ErrMismatchedKeySize   = errors.New("expected key size and real do not match")
-	ErrMismatchedValueSize = errors.New("expected value size and real do not match")
+	ErrNilKey          = errors.New("key is nil")
+	ErrBadMapId        = errors.New("bad map id")
+	ErrKeySizeIsZero   = errors.New("key size is 0")
+	ErrValueSizeIsZero = errors.New("value size is 0")
+	ErrBadKeySize      = errors.New("expected key size and real do not match")
+	ErrBadValueSize    = errors.New("expected value size and real do not match")
 )
 
 type ByteMap struct {
@@ -81,8 +81,8 @@ func (m *ByteMap) Put(key, value interface{}) error {
 		return err
 	}
 
-	if uint64(len(keyB)) < m.keySize {
-		return ErrMismatchedKeySize
+	if uint64(len(keyB)) != m.keySize {
+		return ErrBadKeySize
 	}
 
 	valueB, err := m.valueEncoder(value)
@@ -90,8 +90,8 @@ func (m *ByteMap) Put(key, value interface{}) error {
 		return err
 	}
 
-	if uint64(len(valueB)) < m.valueSize {
-		return ErrMismatchedValueSize
+	if uint64(len(valueB)) != m.valueSize {
+		return ErrBadValueSize
 	}
 
 	off := calculateOffset(m.uniqPrefix, keyB)
@@ -105,8 +105,8 @@ func (m *ByteMap) Load(key, to interface{}) error {
 		return err
 	}
 
-	if uint64(len(keyB)) < m.keySize {
-		return ErrMismatchedKeySize
+	if uint64(len(keyB)) != m.keySize {
+		return ErrBadKeySize
 	}
 
 	buf := make([]byte, m.valueSize)
