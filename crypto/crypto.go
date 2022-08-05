@@ -95,7 +95,7 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	return h
 }
 
-// Keccak256Hash calculates and returns the Keccak256 address of the input data,
+// Keccak256Address calculates and returns the Keccak256 address of the input data,
 // converting it to an internal Address data structure.
 func Keccak256Address(data ...[]byte) (address common.Address) {
 	d := NewKeccakState()
