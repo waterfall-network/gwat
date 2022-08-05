@@ -8,33 +8,68 @@ import (
 )
 
 var (
-	ErrBadType       = errors.New("bad type")
-	ErrFieldNotFound = errors.New("field not found")
-	ErrMapIsNil      = errors.New("map is nil")
+	ErrBadType             = errors.New("bad type")
+	ErrMapIsNil            = errors.New("map is nil")
+	ErrMapKeyIsNil         = errors.New("map key is nil")
+	ErrDecoderIsNil        = errors.New("decoder is nil")
+	ErrEncoderIsNil        = errors.New("encoder is nil")
+	ErrFieldNotFound       = errors.New("field not found")
+	ErrUnsupportedMapKey   = errors.New("unsupported map key type")
+	ErrUnsupportedMapValue = errors.New("unsupported map value type")
 )
 
 type Storage interface {
-	ReadScalar(string, interface{}) error
-	WriteScalar(string, interface{}) error
-
-	ReadArray(string, interface{}) error
-	WriteArray(string, interface{}) error
-
-	ReadFromMap(string, interface{}) (interface{}, error)
-	WriteToMap(string, interface{}, interface{}) error
+	ReadField(string, interface{}, ...Option) error
+	WriteField(string, interface{}, ...Option) error
 }
 
-type scalarFields map[string]Field
-type arrayFields map[string]Field
-type mapFields map[string]*ByteMap
+type Encoder func(interface{}) ([]byte, error)
+type Decoder func([]byte, interface{}) error
+
+var (
+	ScalarEncoder = encodeScalar
+	ScalarDecoder = decodeScalar
+
+	ArrayEncoder = encodeArray
+	ArrayDecoder = decodeArray
+)
+
+type options struct {
+	mapKey interface{}
+
+	decoder Decoder
+	encoder Encoder
+}
+
+type Option func(*options)
+
+func MapKey(key interface{}) func(opt *options) {
+	return func(opt *options) {
+		opt.mapKey = key
+	}
+}
+
+func WithDecoder(decoder Decoder) func(opt *options) {
+	return func(opt *options) {
+		opt.decoder = decoder
+	}
+}
+
+func WithEncoder(encoder Encoder) func(opt *options) {
+	return func(opt *options) {
+		opt.encoder = encoder
+	}
+}
+
+type fieldsHolder map[string]Field
+type mapsHolder map[string]*ByteMap
 
 type storage struct {
 	stream    *StorageStream
 	signature Signature
 
-	scalarFields scalarFields
-	arrayFields  arrayFields
-	mapFields    mapFields
+	fields fieldsHolder
+	maps   mapsHolder
 }
 
 func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage, error) {
@@ -48,17 +83,14 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 		return nil, err
 	}
 
-	scalarFields := scalarFields{}
-	arrayFields := arrayFields{}
-	mapFields := mapFields{}
+	fieldsHolder := fieldsHolder{}
+	mapsHolder := mapsHolder{}
 
 	fields := sign.Fields()
 	for i, descriptor := range descriptors {
 		switch {
-		case isScalar(descriptor.vp.Type().Id()):
-			scalarFields[string(descriptor.name)] = fields[i]
-		case isArray(descriptor.vp.Type().Id()):
-			arrayFields[string(descriptor.name)] = fields[i]
+		case isScalar(descriptor.vp.Type().Id()) || isArray(descriptor.vp.Type().Id()):
+			fieldsHolder[string(descriptor.name)] = fields[i]
 		case isMap(descriptor.vp.Type().Id()):
 			kp, err := descriptor.vp.KeyProperties()
 			if err != nil {
@@ -79,11 +111,33 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 				return nil, err
 			}
 
-			mapFields[string(descriptor.name)], err = newByteMap(
+			var keyEncoder Encoder
+			if isScalar(kp.Type().Id()) {
+				keyEncoder = ScalarEncoder
+			} else if isArray(kp.Type().Id()) {
+				keyEncoder = ArrayEncoder
+			} else {
+				return nil, errors.New(fmt.Sprintf("%s: %s", ErrUnsupportedMapKey, kp.Type().String()))
+			}
+
+			var valEncoder Encoder
+			var valDecoder Decoder
+			if isScalar(vp.Type().Id()) {
+				valEncoder = ScalarEncoder
+				valDecoder = ScalarDecoder
+			} else if isArray(vp.Type().Id()) {
+				valEncoder = ArrayEncoder
+				valDecoder = ArrayDecoder
+			} else {
+				return nil, errors.New(fmt.Sprintf("%s: %s", ErrUnsupportedMapValue, kp.Type().String()))
+			}
+
+			mapsHolder[string(descriptor.name)], err = newByteMap(
 				descriptor.name,
 				stream,
-				DefaultEncoder,
-				DefaultEncoder,
+				keyEncoder,
+				valEncoder,
+				valDecoder,
 				keySize,
 				valueSize,
 			)
@@ -94,135 +148,100 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 	}
 
 	return &storage{
-		stream:       stream,
-		signature:    nil,
-		scalarFields: scalarFields,
-		arrayFields:  arrayFields,
-		mapFields:    mapFields,
+		stream:    stream,
+		signature: nil,
+		fields:    fieldsHolder,
+		maps:      mapsHolder,
 	}, nil
 }
 
-func (s *storage) ReadScalar(fieldName string, scalarPtr interface{}) error {
-	field, ok := s.scalarFields[fieldName]
-	if !ok {
-		return ErrFieldNotFound
+// ReadField reads a field from stream.
+// Note: Requires Decoder Option if it is not a map. If map then requires MapKey
+// Note: Support only one-dimensional arrays.
+func (s *storage) ReadField(fieldName string, toPtr interface{}, opts ...Option) error {
+	options := &options{}
+	for _, opt := range opts {
+		opt(options)
 	}
 
-	buf := make([]byte, field.length)
-	_, err := s.stream.ReadAt(buf, field.offset)
-	if err != nil {
-		return err
-	}
-
-	return bytesToScalar(buf, scalarPtr)
-}
-
-func (s *storage) WriteScalar(fieldName string, v interface{}) error {
-	field, ok := s.scalarFields[fieldName]
-	if !ok {
-		return ErrFieldNotFound
-	}
-
-	res, err := scalarToBytes(v)
-	if err != nil {
-		return err
-	}
-
-	_, err = s.stream.WriteAt(res, field.offset)
-	return err
-}
-
-// ReadArray read bytes to an array.
-// Note: support only one-dimensional arrays
-func (s *storage) ReadArray(fieldName string, arrPtr interface{}) error {
-	tp := reflect.TypeOf(arrPtr)
-	if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
-		return ErrBadType
-	}
-
-	field, ok := s.arrayFields[fieldName]
-	if !ok {
-		return ErrFieldNotFound
-	}
-
-	buf := make([]byte, field.length)
-	_, err := s.stream.ReadAt(buf, field.offset)
-	if err != nil {
-		return err
-	}
-
-	elemSize := tp.Elem().Size()
-	val := reflect.ValueOf(arrPtr).Elem()
-	for len(buf) > 0 {
-		newElem := reflect.New(val.Type())
-		err = bytesToScalar(buf[:elemSize], newElem.Interface())
-		if err != nil {
-			arrPtr = nil
-			return err
-		}
-		val = reflect.Append(val, reflect.ValueOf(newElem))
-
-		buf = buf[elemSize:]
-	}
-
-	return nil
-}
-
-func (s *storage) WriteArray(fieldName string, arr interface{}) error {
-	tp := reflect.TypeOf(arr)
-	if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
-		return ErrBadType
-	}
-
-	field, ok := s.arrayFields[fieldName]
-	if !ok {
-		return ErrFieldNotFound
-	}
-
-	val := reflect.ValueOf(arr)
-	buf := make([]byte, 0, int(tp.Elem().Size())*val.Len())
-
-	var res []byte
-	var err error
-	for i := 0; i < val.Len(); i++ {
-		res, err = scalarToBytes(val.Index(i))
+	var buf []byte
+	field, ok := s.fields[fieldName]
+	if ok {
+		buf = make([]byte, field.length)
+		_, err := s.stream.ReadAt(buf, field.offset)
 		if err != nil {
 			return err
 		}
-		buf = append(buf, res...)
+
+		if options.decoder == nil {
+			return ErrDecoderIsNil
+		}
+
+		return options.decoder(buf, toPtr)
 	}
 
-	_, err = s.stream.WriteAt(buf, field.offset)
-	return err
+	mapField, ok := s.maps[fieldName]
+	if ok {
+		if mapField == nil {
+			return ErrMapIsNil
+		}
+
+		if options.mapKey == nil {
+			return ErrMapKeyIsNil
+		}
+
+		err := mapField.Load(options.mapKey, toPtr)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return ErrFieldNotFound
 }
 
-func (s *storage) ReadFromMap(fieldName string, key interface{}) (interface{}, error) {
-	mapField, ok := s.mapFields[fieldName]
-	if !ok {
-		return nil, ErrFieldNotFound
+// WriteField writes a field to stream.
+// Note: Requires Encoder Option if it is not a map. If map then requires MapKey
+// Note: Support only one-dimensional arrays.
+func (s *storage) WriteField(fieldName string, val interface{}, opts ...Option) error {
+	options := &options{}
+	for _, opt := range opts {
+		opt(options)
 	}
 
-	if mapField == nil {
-		return nil, ErrMapIsNil
+	field, ok := s.fields[fieldName]
+	if ok {
+		if options.encoder == nil {
+			return ErrEncoderIsNil
+		}
+
+		buf, err := options.encoder(val)
+		if err != nil {
+			return err
+		}
+
+		_, err = s.stream.WriteAt(buf, field.offset)
+		return err
 	}
 
-	return mapField.Get(key)
+	mapField, ok := s.maps[fieldName]
+	if ok {
+		if mapField == nil {
+			return ErrMapIsNil
+		}
+
+		if options.mapKey == nil {
+			return ErrMapKeyIsNil
+		}
+
+		return mapField.Put(options.mapKey, val)
+	}
+
+	return ErrFieldNotFound
 }
 
-func (s *storage) WriteToMap(fieldName string, key, value interface{}) error {
-	mapField, ok := s.mapFields[fieldName]
-	if !ok {
-		return ErrFieldNotFound
-	}
-
-	if mapField == nil {
-		return ErrMapIsNil
-	}
-
-	return mapField.Put(key, value)
-}
-
-func scalarToBytes(v interface{}) ([]byte, error) {
+func encodeScalar(v interface{}) ([]byte, error) {
 	var buf []byte
 	switch v.(type) {
 	case uint8:
@@ -253,10 +272,10 @@ func scalarToBytes(v interface{}) ([]byte, error) {
 	return buf, nil
 }
 
-func bytesToScalar(buf []byte, vr interface{}) error {
+func decodeScalar(buf []byte, vr interface{}) error {
 	switch vr.(type) {
 	case *uint8:
-		*vr.(*uint8) = vr.(uint8)
+		*vr.(*uint8) = buf[0]
 	case *uint16:
 		*vr.(*uint16) = binary.BigEndian.Uint16(buf)
 	case *uint32:
@@ -268,12 +287,69 @@ func bytesToScalar(buf []byte, vr interface{}) error {
 	case *int64:
 		*vr.(*int64) = int64(binary.BigEndian.Uint64(buf))
 	case *string:
-		*vr.(*string) = vr.(string)
-	case []byte:
-		vr = buf
+		*vr.(*string) = string(buf)
+	case *[]byte:
+		*vr.(*[]byte) = buf
 	default:
 		return errors.New(fmt.Sprintf("%s: %s", ErrBadType, vr))
 	}
 
 	return nil
+}
+
+func encodeArray(arr interface{}) ([]byte, error) {
+	tp := reflect.TypeOf(arr)
+	if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
+		return nil, ErrBadType
+	}
+
+	switch arr.(type) {
+	case []byte:
+		return arr.([]byte), nil
+	default:
+		val := reflect.ValueOf(arr)
+		buf := make([]byte, 0, int(tp.Elem().Size())*val.Len())
+
+		var res []byte
+		var err error
+		for i := 0; i < val.Len(); i++ {
+			res, err = encodeScalar(val.Index(i))
+			if err != nil {
+				return nil, err
+			}
+			buf = append(buf, res...)
+		}
+
+		return buf, nil
+	}
+}
+
+func decodeArray(buf []byte, arrPtr interface{}) error {
+	tp := reflect.TypeOf(arrPtr)
+	if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
+		return ErrBadType
+	}
+
+	switch arrPtr.(type) {
+	case *[]byte:
+		*arrPtr.(*[]byte) = buf
+		return nil
+	default:
+		var err error
+		elemSize := tp.Elem().Size()
+		val := reflect.ValueOf(arrPtr).Elem()
+		for len(buf) > 0 {
+			newElem := reflect.New(val.Type())
+			err = decodeScalar(buf[:elemSize], newElem.Interface())
+			if err != nil {
+				arrPtr = nil
+				return err
+			}
+			val = reflect.Append(val, reflect.ValueOf(newElem))
+
+			buf = buf[elemSize:]
+		}
+
+		return nil
+	}
 }

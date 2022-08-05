@@ -10,17 +10,12 @@ import (
 
 var (
 	ErrNilKey              = errors.New("key is nil")
+	ErrBadMapId            = errors.New("bad map id")
 	ErrKeySizeIsZero       = errors.New("key size is 0")
 	ErrValueSizeIsZero     = errors.New("value size is 0")
 	ErrMismatchedKeySize   = errors.New("expected key size and real do not match")
 	ErrMismatchedValueSize = errors.New("expected value size and real do not match")
 )
-
-type Encoder func(interface{}) ([]byte, error)
-type Decoder func([]byte, interface{}) error
-
-var DefaultEncoder = scalarToBytes
-var DefaultDecoder = bytesToScalar
 
 type ByteMap struct {
 	uniqPrefix []byte
@@ -30,19 +25,34 @@ type ByteMap struct {
 	keySize, valueSize uint64
 
 	keyEncoder, valueEncoder Encoder
+	valueDecoder             Decoder
 }
 
 func newByteMap(
 	mapId []byte,
 	stream *StorageStream,
 	keyEncoder, valueEncoder Encoder,
+	valueDecoder Decoder,
 	keySize, valueSize uint64,
 ) (*ByteMap, error) {
+	if len(mapId) == 0 {
+		return nil, ErrBadMapId
+	}
+
 	if keySize == 0 {
 		return nil, ErrKeySizeIsZero
 	}
+
 	if valueSize == 0 {
 		return nil, ErrValueSizeIsZero
+	}
+
+	if keyEncoder == nil || valueEncoder == nil {
+		return nil, ErrEncoderIsNil
+	}
+
+	if valueDecoder == nil {
+		return nil, ErrDecoderIsNil
 	}
 
 	pref := make([]byte, uint64Size*2+len(mapId))
@@ -51,12 +61,13 @@ func newByteMap(
 	copy(pref[uint64Size*2:], mapId)
 
 	return &ByteMap{
+		uniqPrefix:   pref,
 		stream:       stream,
 		keySize:      keySize,
 		valueSize:    valueSize,
-		uniqPrefix:   pref,
 		keyEncoder:   keyEncoder,
 		valueEncoder: valueEncoder,
+		valueDecoder: valueDecoder,
 	}, nil
 }
 
@@ -85,21 +96,17 @@ func (m *ByteMap) Put(key, value interface{}) error {
 
 	off := calculateOffset(m.uniqPrefix, keyB)
 	_, err = m.stream.WriteAt(valueB, off)
+	return err
+}
+
+func (m *ByteMap) Load(key, to interface{}) error {
+	keyB, err := m.keyEncoder(key)
 	if err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (m *ByteMap) Get(key interface{}) (interface{}, error) {
-	keyB, err := m.keyEncoder(key)
-	if err != nil {
-		return nil, err
-	}
-
 	if uint64(len(keyB)) < m.keySize {
-		return nil, ErrMismatchedKeySize
+		return ErrMismatchedKeySize
 	}
 
 	buf := make([]byte, m.valueSize)
@@ -107,10 +114,10 @@ func (m *ByteMap) Get(key interface{}) (interface{}, error) {
 
 	_, err = m.stream.ReadAt(buf, off)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return buf, nil
+	return m.valueDecoder(buf, to)
 }
 
 func calculateOffset(uniqPrefix, key []byte) *big.Int {
