@@ -18,6 +18,7 @@ package eth
 
 import (
 	"fmt"
+	"github.com/waterfall-foundation/gwat/log"
 	"time"
 
 	"github.com/waterfall-foundation/gwat/common"
@@ -150,6 +151,8 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	)
 	if len(unsync) == 0 {
 		dagHashes = chain.GetDagHashes()
+	} else {
+		log.Warn("cannot calculate dag hashes", "unsynchronized tips", unsync)
 	}
 	return &NodeInfo{
 		Versions:  ProtocolVersions,
