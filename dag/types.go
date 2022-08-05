@@ -10,7 +10,6 @@ import (
 
 // ConsensusInfo represents data of consensus request
 type ConsensusInfo struct {
-	Epoch      uint64              `json:"epoch"`
 	Slot       uint64              `json:"slot"`
 	Creators   []common.Address    `json:"creators"`
 	Finalizing finalizer.NrHashMap `json:"finalizing"`
@@ -19,7 +18,6 @@ type ConsensusInfo struct {
 // Copy duplicates the current storage.
 func (ci *ConsensusInfo) Copy() *ConsensusInfo {
 	return &ConsensusInfo{
-		Epoch:      ci.Epoch,
 		Slot:       ci.Slot,
 		Creators:   ci.Creators,
 		Finalizing: ci.Finalizing,
@@ -27,7 +25,6 @@ func (ci *ConsensusInfo) Copy() *ConsensusInfo {
 }
 
 type ConsensusInfoMarshaling struct {
-	Epoch      *hexutil.Uint64     `json:"epoch"`
 	Slot       *hexutil.Uint64     `json:"slot"`
 	Creators   []common.Address    `json:"creators"`
 	Finalizing finalizer.NrHashMap `json:"finalizing"`
@@ -35,7 +32,6 @@ type ConsensusInfoMarshaling struct {
 
 func (ci *ConsensusInfo) MarshalJSON() ([]byte, error) {
 	out := ConsensusInfoMarshaling{
-		Epoch:      (*hexutil.Uint64)(&ci.Epoch),
 		Slot:       (*hexutil.Uint64)(&ci.Slot),
 		Creators:   ci.Creators,
 		Finalizing: ci.Finalizing,
@@ -48,9 +44,6 @@ func (ci *ConsensusInfo) UnmarshalJSON(input []byte) error {
 	var dec ConsensusInfoMarshaling
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
-	}
-	if dec.Epoch != nil {
-		ci.Epoch = uint64(*dec.Epoch)
 	}
 	if dec.Slot != nil {
 		ci.Slot = uint64(*dec.Slot)

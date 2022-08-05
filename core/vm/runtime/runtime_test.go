@@ -213,7 +213,6 @@ func fakeHeader(n uint64, parentHashes []common.Hash) *types.Header {
 		Coinbase:     common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
 		Number:       &n,
 		ParentHashes: parentHashes,
-		Epoch:        uint64(0),
 		Slot:         uint64(0),
 		Height:       uint64(0),
 		Time:         1000,
