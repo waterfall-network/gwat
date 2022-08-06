@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"encoding/binary"
 	"errors"
 	"math/big"
 
@@ -23,18 +22,9 @@ type ByteMap struct {
 
 	// bytes count
 	keySize, valueSize uint64
-
-	keyEncoder, valueEncoder Encoder
-	valueDecoder             Decoder
 }
 
-func newByteMap(
-	mapId []byte,
-	stream *StorageStream,
-	keyEncoder, valueEncoder Encoder,
-	valueDecoder Decoder,
-	keySize, valueSize uint64,
-) (*ByteMap, error) {
+func newByteMap(mapId []byte, stream *StorageStream, keySize, valueSize uint64) (*ByteMap, error) {
 	if len(mapId) == 0 {
 		return nil, ErrBadMapId
 	}
@@ -47,79 +37,49 @@ func newByteMap(
 		return nil, ErrValueSizeIsZero
 	}
 
-	if keyEncoder == nil || valueEncoder == nil {
-		return nil, ErrEncoderIsNil
-	}
-
-	if valueDecoder == nil {
-		return nil, ErrDecoderIsNil
-	}
-
-	pref := make([]byte, uint64Size*2+len(mapId))
-	binary.BigEndian.PutUint64(pref[:uint64Size], keySize)
-	binary.BigEndian.PutUint64(pref[uint64Size:uint64Size*2], valueSize)
-	copy(pref[uint64Size*2:], mapId)
-
 	return &ByteMap{
-		uniqPrefix:   pref,
-		stream:       stream,
-		keySize:      keySize,
-		valueSize:    valueSize,
-		keyEncoder:   keyEncoder,
-		valueEncoder: valueEncoder,
-		valueDecoder: valueDecoder,
+		uniqPrefix: mapId,
+		stream:     stream,
+		keySize:    keySize,
+		valueSize:  valueSize,
 	}, nil
 }
 
-func (m *ByteMap) Put(key, value interface{}) error {
+func (m *ByteMap) Put(key, value []byte) error {
 	if key == nil {
 		return ErrNilKey
 	}
 
-	keyB, err := m.keyEncoder(key)
-	if err != nil {
-		return err
-	}
-
-	if uint64(len(keyB)) != m.keySize {
+	if uint64(len(key)) != m.keySize {
 		return ErrBadKeySize
 	}
 
-	valueB, err := m.valueEncoder(value)
-	if err != nil {
-		return err
-	}
-
-	if uint64(len(valueB)) != m.valueSize {
+	if uint64(len(value)) > m.valueSize {
 		return ErrBadValueSize
 	}
 
-	off := calculateOffset(m.uniqPrefix, keyB)
-	_, err = m.stream.WriteAt(valueB, off)
+	off := calculateOffset(m.uniqPrefix, key)
+	_, err := m.stream.WriteAt(value, off)
 	return err
 }
 
-func (m *ByteMap) Load(key, to interface{}) error {
-	keyB, err := m.keyEncoder(key)
-	if err != nil {
-		return err
-	}
-
-	if uint64(len(keyB)) != m.keySize {
-		return ErrBadKeySize
+func (m *ByteMap) Get(key []byte) ([]byte, error) {
+	if uint64(len(key)) != m.keySize {
+		return nil, ErrBadKeySize
 	}
 
 	buf := make([]byte, m.valueSize)
-	off := calculateOffset(m.uniqPrefix, keyB)
+	off := calculateOffset(m.uniqPrefix, key)
 
-	_, err = m.stream.ReadAt(buf, off)
+	_, err := m.stream.ReadAt(buf, off)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return m.valueDecoder(buf, to)
+	return buf, nil
 }
 
 func calculateOffset(uniqPrefix, key []byte) *big.Int {
-	return new(big.Int).SetBytes(crypto.Keccak256(uniqPrefix, key))
+	h := new(big.Int).SetBytes(crypto.Keccak256(uniqPrefix, key))
+	return h.Mul(h, big.NewInt(int64(len(Slot{}))))
 }

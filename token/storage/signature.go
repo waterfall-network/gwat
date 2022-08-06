@@ -346,14 +346,18 @@ func NewFieldDescriptor(fieldName []byte, v ValueProperties) (*FieldDescriptor, 
 	}, nil
 }
 
-func (fp FieldDescriptor) MarshalBinary() (data []byte, err error) {
+func (fd *FieldDescriptor) Name() string {
+	return string(fd.name)
+}
+
+func (fd FieldDescriptor) MarshalBinary() (data []byte, err error) {
 	// marshal value properties
-	res, err := fp.vp.MarshalBinary()
+	res, err := fd.vp.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	nameLen := len(fp.name)
+	nameLen := len(fd.name)
 	buf := make([]byte, uint8Size+nameLen+len(res))
 
 	// put length of name
@@ -361,16 +365,16 @@ func (fp FieldDescriptor) MarshalBinary() (data []byte, err error) {
 
 	// put name
 	off := uint8Size
-	copy(buf[off:], fp.name)
+	copy(buf[off:], fd.name)
 
 	// put value properties
-	off += len(fp.name)
+	off += len(fd.name)
 	copy(buf[off:], res)
 
 	return buf, nil
 }
 
-func (fp *FieldDescriptor) UnmarshalBinary(data []byte) error {
+func (fd *FieldDescriptor) UnmarshalBinary(data []byte) error {
 	// get len of name
 	nameLen := data[0]
 	data = data[uint8Size:]
@@ -386,8 +390,8 @@ func (fp *FieldDescriptor) UnmarshalBinary(data []byte) error {
 		return err
 	}
 
-	fp.name = name
-	fp.vp = vp
+	fd.name = name
+	fd.vp = vp
 	return nil
 }
 
