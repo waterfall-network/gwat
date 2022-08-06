@@ -1924,13 +1924,18 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		if !stateOnly {
 			// update tips
 			bc.RemoveTips(block.ParentHashes())
-			bc.AddTips(&types.BlockDAG{
+			tipToAdd := &types.BlockDAG{
 				Hash:                block.Hash(),
 				Height:              block.Height(),
 				LastFinalizedHash:   common.Hash{},
 				LastFinalizedHeight: 0,
 				DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
-			})
+			}
+			if stateErr == nil {
+				tipToAdd.LastFinalizedHash = bc.GetLastFinalizedBlock().Hash()
+				tipToAdd.LastFinalizedHeight = bc.GetLastFinalizedBlock().Height()
+			}
+			bc.AddTips(tipToAdd)
 			// TODO RED BLOCKS
 			////if block is red - skip processing
 			//upTips, _ := bc.ReviseTips()
