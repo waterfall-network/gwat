@@ -18,12 +18,12 @@ package eth
 
 import (
 	"fmt"
-	"github.com/waterfall-foundation/gwat/log"
 	"time"
 
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/waterfall-foundation/gwat/p2p"
 	"github.com/waterfall-foundation/gwat/p2p/enode"
