@@ -292,12 +292,26 @@ func (c *Creator) isSyncing() bool {
 	return false
 }
 
-// isSlotLocked compare incoming epoch/slot with latest epoch/slot of chain.
+// isSlotLocked compare incoming epoch/slot with the latest epoch/slot of chain.
 func (c *Creator) isSlotLocked(info *Assignment) bool {
 	// check epoch/slot info of tips and lastFinalized block
 	// if epoch/slot >= in chain
 	// - rewind to correct position
-	return c.getAssignment().Slot >= info.Slot
+	assig := c.getAssignment()
+	if assig.Slot > info.Slot {
+		return true
+	}
+	if assig.Slot == info.Slot {
+		tips := c.chain.GetTips()
+		blTips := c.chain.GetBlocksByHashes(tips.GetHashes())
+		//  if current creator have created block in current slot
+		for _, bl := range blTips {
+			if bl.Slot() == assig.Slot && bl.Coinbase() == c.coinbase {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // CreateBlock starts process of block creation
