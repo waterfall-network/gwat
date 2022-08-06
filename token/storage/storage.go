@@ -78,6 +78,10 @@ func WithMapEncoders(keyEncoder, valueEncoder Encoder) Option {
 	}
 }
 
+type KeyValuePair struct {
+	key, value interface{}
+}
+
 type fieldWrapper struct {
 	Field
 	encoder Encoder
@@ -91,8 +95,6 @@ func (f *fieldWrapper) encode(v interface{}) ([]byte, error) {
 func (f *fieldWrapper) decode(buf []byte, ptr interface{}) error {
 	return decode(f.decoder, buf, ptr)
 }
-
-type fieldsHolder map[string]fieldWrapper
 
 type mapWrapper struct {
 	*ByteMap
@@ -116,11 +118,8 @@ func (m *mapWrapper) decodeValue(buf []byte, ptr interface{}) error {
 	return decode(m.valueDecoder, buf, ptr)
 }
 
+type fieldsHolder map[string]fieldWrapper
 type mapsHolder map[string]mapWrapper
-
-type KeyValuePair struct {
-	key, value interface{}
-}
 
 type storage struct {
 	stream    *StorageStream
@@ -136,16 +135,48 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 		return nil, err
 	}
 
-	_, err = sign.ReadFromStream(stream)
+	_, err = sign.WriteToStream(stream)
 	if err != nil {
 		return nil, err
 	}
 
+	s := &storage{
+		stream:    stream,
+		signature: sign,
+	}
+	err = s.fillFields(sign)
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func ReadStorage(stream *StorageStream) (*storage, error) {
+	sign := new(SignatureV1)
+	_, err := sign.ReadFromStream(stream)
+	if err != nil {
+		return nil, err
+	}
+
+	s := &storage{
+		stream:    stream,
+		signature: sign,
+	}
+	err = s.fillFields(sign)
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (s *storage) fillFields(sign Signature) error {
 	fieldsHolder := fieldsHolder{}
 	mapsHolder := mapsHolder{}
 
 	fields := sign.Fields()
-	for i, descriptor := range descriptors {
+	for i, descriptor := range sign.FieldsDescriptors() {
 		switch {
 		case isScalar(descriptor.vp.Type().Id()) || isArray(descriptor.vp.Type().Id()):
 			valEncoder, valDecoder := getDefaultEncoderAndDecoder(descriptor.vp.Type().Id())
@@ -157,21 +188,21 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 		case isMap(descriptor.vp.Type().Id()):
 			kp, err := descriptor.vp.KeyProperties()
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			keySize, err := calculateFieldLength(kp)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			vp, err := descriptor.vp.ValueProperties()
 			if err != nil {
-				return nil, err
+				return err
 			}
 			valueSize, err := calculateFieldLength(vp)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			keyEncoder, keyDecoder := getDefaultEncoderAndDecoder(kp.Type().Id())
@@ -179,12 +210,12 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 
 			byteMap, err := newByteMap(
 				[]byte(descriptor.Name()),
-				stream,
+				s.stream,
 				keySize,
 				valueSize,
 			)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			mapsHolder[descriptor.Name()] = mapWrapper{
@@ -197,12 +228,10 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 		}
 	}
 
-	return &storage{
-		stream:    stream,
-		signature: nil,
-		fields:    fieldsHolder,
-		maps:      mapsHolder,
-	}, nil
+	s.fields = fieldsHolder
+	s.maps = mapsHolder
+
+	return nil
 }
 
 func (s *storage) ApplyOptions(fieldName string, opts ...Option) error {

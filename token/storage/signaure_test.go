@@ -311,7 +311,7 @@ func TestSignatureV1(t *testing.T) {
 			assert.NoError(t, err, err)
 
 			assert.EqualValues(t, sign.Version(), newSign.Version())
-			signFields := sign.fields
+			signFields := sign.Fields()
 			for i, field := range newSign.Fields() {
 				assert.EqualValues(t, signFields[i].Length(), field.Length())
 				assert.EqualValues(t, signFields[i].Offset(), field.Offset())

@@ -312,6 +312,7 @@ func (sv SignatureVersion) String() string {
 
 type Signature interface {
 	Fields() []Field
+	FieldsDescriptors() []FieldDescriptor
 	ReadFromStream(*StorageStream) (int, error)
 	WriteToStream(*StorageStream) (int, error)
 	Version() SignatureVersion
@@ -401,7 +402,7 @@ type SignatureV1 struct {
 	fields            []Field
 }
 
-func NewSignatureV1(fd []FieldDescriptor) (*SignatureV1, error) {
+func NewSignatureV1(fd []FieldDescriptor) (Signature, error) {
 	if len(fd) > int(^uint8(0)) {
 		return nil, ErrTooManyFields
 	}
@@ -434,6 +435,10 @@ func NewSignatureV1(fd []FieldDescriptor) (*SignatureV1, error) {
 
 func (s SignatureV1) Fields() []Field {
 	return s.fields
+}
+
+func (s SignatureV1) FieldsDescriptors() []FieldDescriptor {
+	return s.fieldsDescriptors
 }
 
 func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
@@ -508,9 +513,11 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 	// save offset of fields
 	calculateFieldsOffset(pos.Uint64(), fields)
 
-	s.version = SignatureVersion(binary.BigEndian.Uint16(sigVersionBuf))
-	s.fieldsDescriptors = fieldsDescriptors
-	s.fields = fields
+	*s = SignatureV1{
+		version:           SignatureVersion(binary.BigEndian.Uint16(sigVersionBuf)),
+		fieldsDescriptors: fieldsDescriptors,
+		fields:            fields,
+	}
 
 	return int(pos.Uint64()), nil
 }
