@@ -1924,7 +1924,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		if !stateOnly {
 			// update tips
 			bc.RemoveTips(block.ParentHashes())
-			//lfb := bc.GetLastFinalizedBlock()
 			bc.AddTips(&types.BlockDAG{
 				Hash:                block.Hash(),
 				Height:              block.Height(),
