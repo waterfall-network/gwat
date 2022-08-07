@@ -604,7 +604,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 			curTips.Remove(hash)
 		}
 	}
-
+	expCache := ExploreResultMap{}
 	for hash, dag := range curTips {
 		// if has children - rm from curTips
 		if children := bc.ReadChildren(hash); len(children) > 0 {
@@ -628,12 +628,12 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 				continue
 			}
 			// if block exists - check all ancestors to finalized state
-			unloaded, loaded, finalized, graph, _, err := bc.ExploreChainRecursive(hash)
+			unloaded, loaded, finalized, graph, expCacheUp, err := bc.ExploreChainRecursive(hash, expCache)
 			if err != nil {
 				hc.RemoveTips(common.HashArray{hash}, true)
 				continue
 			}
-
+			expCache = expCacheUp
 			if dag.Height == 0 {
 				header := hc.GetHeader(hash)
 				dag.Height = header.Height

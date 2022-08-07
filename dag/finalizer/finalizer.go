@@ -103,8 +103,8 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 		}
 		minNr = *minNrPtr
 	}
-	if lastFinNr+1 != minNr {
-		log.Info("Finalization: reconstructing finalising chain")
+	if minNr > lastFinNr+1 {
+		log.Info("Finalization: reconstructing finalising chain", "lastFinNr+1", lastFinNr+1, "minNr", minNr, "chain", chain, "lastFinBlock", lastFinBlock.Hash().Hex())
 		candidates, err := f.GetFinalizingCandidates()
 		if err != nil {
 			return err

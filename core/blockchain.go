@@ -1924,12 +1924,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		if !stateOnly {
 			// update tips
 			bc.RemoveTips(block.ParentHashes())
-			lfb := bc.GetLastFinalizedBlock()
+			//lfb := bc.GetLastFinalizedBlock()
 			bc.AddTips(&types.BlockDAG{
 				Hash:                block.Hash(),
 				Height:              block.Height(),
-				LastFinalizedHash:   lfb.Hash(),
-				LastFinalizedHeight: lfb.Nr(),
+				LastFinalizedHash:   common.Hash{},
+				LastFinalizedHeight: 0,
 				DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
 			})
 			// TODO RED BLOCKS
@@ -2063,6 +2063,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		dirty, _ := bc.stateCache.TrieDB().Size()
 		stats.report(chain, it.index, dirty)
 	}
+	bc.ReviseTips()
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
