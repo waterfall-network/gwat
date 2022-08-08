@@ -32,11 +32,11 @@ type Encoder func(interface{}) ([]byte, error)
 type Decoder func([]byte, interface{}) error
 
 var (
-	ScalarEncoder = encodeScalar
-	ScalarDecoder = decodeScalar
+	DefaultScalarEncoder = encodeScalar
+	DefaultScalarDecoder = decodeScalar
 
-	ArrayEncoder = encodeArray
-	ArrayDecoder = decodeArray
+	DefaultArrayEncoder = encodeArray
+	DefaultArrayDecoder = decodeArray
 
 	BigIntEncoder = encodeBigInt
 	BigIntDecoder = decodeBigInt
@@ -178,6 +178,12 @@ func (s *storage) fillFields(sign Signature) error {
 	fields := sign.Fields()
 	for i, descriptor := range sign.FieldsDescriptors() {
 		switch {
+		case descriptor.vp.Type().Id() == Uint256Type.Id():
+			fieldsHolder[descriptor.Name()] = fieldWrapper{
+				Field:   fields[i],
+				encoder: Uint256Encoder,
+				decoder: Uint256Decoder,
+			}
 		case isScalar(descriptor.vp.Type().Id()) || isArray(descriptor.vp.Type().Id()):
 			valEncoder, valDecoder := getDefaultEncoderAndDecoder(descriptor.vp.Type().Id())
 			fieldsHolder[descriptor.Name()] = fieldWrapper{
@@ -276,7 +282,7 @@ func (s *storage) ReadField(fieldName string, toPtr interface{}) error {
 	var buf []byte
 	field, ok := s.fields[fieldName]
 	if ok {
-		buf = make([]byte, field.length)
+		buf = make([]byte, field.Length())
 		_, err := s.stream.ReadAt(buf, field.offset)
 		if err != nil {
 			return err
@@ -302,7 +308,7 @@ func (s *storage) ReadField(fieldName string, toPtr interface{}) error {
 			return err
 		}
 
-		return mapField.decodeValue(res, toPtr)
+		return mapField.decodeValue(res, kvPair.value)
 	}
 
 	return ErrFieldNotFound
@@ -319,7 +325,7 @@ func (s *storage) WriteField(fieldName string, val interface{}) error {
 			return err
 		}
 
-		if uint64(len(buf)) > field.length {
+		if uint64(len(buf)) > field.Length() {
 			return ErrValueTooLarge
 		}
 
@@ -372,35 +378,36 @@ func encodeScalar(v interface{}) ([]byte, error) {
 		binary.BigEndian.PutUint64(buf, uint64(v.(int64)))
 	case string:
 		buf = []byte(v.(string))
-	case []byte:
-		buf = v.([]byte)
 	default:
-		return nil, errors.New(fmt.Sprintf("%s: %s", ErrBadType, v))
+		return nil, fmt.Errorf("%s: %T", ErrBadType, v)
 	}
 
 	return buf, nil
 }
 
-func decodeScalar(buf []byte, vr interface{}) error {
-	switch vr.(type) {
+func decodeScalar(buf []byte, vPtr interface{}) error {
+	tp := reflect.TypeOf(vPtr)
+	if tp.Kind() != reflect.Ptr {
+		return ErrBadType
+	}
+
+	switch vPtr.(type) {
 	case *uint8:
-		*vr.(*uint8) = buf[0]
+		*vPtr.(*uint8) = buf[0]
 	case *uint16:
-		*vr.(*uint16) = binary.BigEndian.Uint16(buf)
+		*vPtr.(*uint16) = binary.BigEndian.Uint16(buf)
 	case *uint32:
-		*vr.(*uint32) = binary.BigEndian.Uint32(buf)
+		*vPtr.(*uint32) = binary.BigEndian.Uint32(buf)
 	case *uint64:
-		*vr.(*uint64) = binary.BigEndian.Uint64(buf)
+		*vPtr.(*uint64) = binary.BigEndian.Uint64(buf)
 	case *int32:
-		*vr.(*int32) = int32(binary.BigEndian.Uint32(buf))
+		*vPtr.(*int32) = int32(binary.BigEndian.Uint32(buf))
 	case *int64:
-		*vr.(*int64) = int64(binary.BigEndian.Uint64(buf))
+		*vPtr.(*int64) = int64(binary.BigEndian.Uint64(buf))
 	case *string:
-		*vr.(*string) = string(buf)
-	case *[]byte:
-		*vr.(*[]byte) = buf
+		*vPtr.(*string) = string(buf)
 	default:
-		return errors.New(fmt.Sprintf("%s: %s", ErrBadType, vr))
+		return fmt.Errorf("%s: %T", ErrBadType, vPtr)
 	}
 
 	return nil
@@ -422,10 +429,11 @@ func encodeArray(arr interface{}) ([]byte, error) {
 		var res []byte
 		var err error
 		for i := 0; i < val.Len(); i++ {
-			res, err = encodeScalar(val.Index(i))
+			res, err = encodeScalar(val.Index(i).Interface())
 			if err != nil {
 				return nil, err
 			}
+
 			buf = append(buf, res...)
 		}
 
@@ -435,27 +443,40 @@ func encodeArray(arr interface{}) ([]byte, error) {
 
 func decodeArray(buf []byte, arrPtr interface{}) error {
 	tp := reflect.TypeOf(arrPtr)
-	if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
+	if tp.Kind() != reflect.Ptr {
 		return ErrBadType
 	}
+
+	valuePtr := reflect.ValueOf(arrPtr)
+	value := valuePtr.Elem()
 
 	switch arrPtr.(type) {
 	case *[]byte:
 		*arrPtr.(*[]byte) = buf
 		return nil
 	default:
+		tp := reflect.TypeOf(value.Interface())
+		if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
+			return ErrBadType
+		}
+
+		elemType := tp.Elem()
+		elemSize := elemType.Size()
+
+		if len(buf)%int(elemSize) != 0 {
+			return ErrBadType
+		}
+
 		var err error
-		elemSize := tp.Elem().Size()
-		val := reflect.ValueOf(arrPtr).Elem()
+		newElem := reflect.New(elemType)
 		for len(buf) > 0 {
-			newElem := reflect.New(val.Type())
 			err = decodeScalar(buf[:elemSize], newElem.Interface())
 			if err != nil {
 				arrPtr = nil
 				return err
 			}
-			val = reflect.Append(val, reflect.ValueOf(newElem))
 
+			value.Set(reflect.Append(value, newElem.Elem()))
 			buf = buf[elemSize:]
 		}
 
@@ -466,7 +487,11 @@ func decodeArray(buf []byte, arrPtr interface{}) error {
 func encodeUint256(val interface{}) ([]byte, error) {
 	v, ok := val.(uint256.Int)
 	if !ok {
-		return nil, ErrBadType
+		vr, ok := val.(*uint256.Int)
+		v = *vr
+		if !ok {
+			return nil, ErrBadType
+		}
 	}
 
 	return v.Bytes(), nil
@@ -507,11 +532,11 @@ func decodeBigInt(buf []byte, toPtr interface{}) error {
 
 func getDefaultEncoderAndDecoder(tp uint8) (Encoder, Decoder) {
 	if isScalar(tp) {
-		return ScalarEncoder, ScalarDecoder
+		return DefaultScalarEncoder, DefaultScalarDecoder
 	}
 
 	if isArray(tp) {
-		return ArrayEncoder, ArrayDecoder
+		return DefaultArrayEncoder, DefaultArrayDecoder
 	}
 
 	log.Warn("Cannot set default encoder and decoder")
