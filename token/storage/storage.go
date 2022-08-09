@@ -18,7 +18,6 @@ var (
 	ErrEncoderIsNotSet      = errors.New("encoder is not set")
 	ErrFieldNotFound        = errors.New("field not found")
 	ErrValueTooLarge        = errors.New("value too large")
-	ErrBadFieldDescriptor   = errors.New("cannot create field from field descriptor")
 	ErrUnknownType          = errors.New("unknown type")
 )
 
@@ -60,7 +59,8 @@ type storage struct {
 	fields fieldsHolder
 }
 
-func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage, error) {
+// NewStorage creates a new storage
+func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (Storage, error) {
 	sign, err := NewSignatureV1(descriptors)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,8 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 	}, nil
 }
 
-func ReadStorage(stream *StorageStream) (*storage, error) {
+// ReadStorage reads already exist storage from stream
+func ReadStorage(stream *StorageStream) (Storage, error) {
 	sign := new(SignatureV1)
 	_, err := sign.ReadFromStream(stream)
 	if err != nil {
@@ -115,8 +116,8 @@ func fillFields(sign Signature) (fieldsHolder, error) {
 	return fields, nil
 }
 
-// ReadField reads a field from stream.
-// Note: Support only one-dimensional arrays.
+// ReadField reads a value by a field name from stream.
+// Note: Support only one-dimensional arrays of scalar types.
 // Note: for maps expects pointer to KeyValuePair struct
 func (s *storage) ReadField(fieldName string, toPtr interface{}) error {
 	field, ok := s.fields[fieldName]
@@ -127,8 +128,8 @@ func (s *storage) ReadField(fieldName string, toPtr interface{}) error {
 	return field.Read(s.stream, toPtr)
 }
 
-// WriteField writes a field to stream.
-// Note: Support only one-dimensional arrays.
+// WriteField writes a value by a field name to stream.
+// Note: Support only one-dimensional arrays of scalar types.
 // Note: for maps expects pointer to KeyValuePair struct
 func (s *storage) WriteField(fieldName string, val interface{}) error {
 	field, ok := s.fields[fieldName]
@@ -139,6 +140,7 @@ func (s *storage) WriteField(fieldName string, val interface{}) error {
 	return field.Write(s.stream, val)
 }
 
+//NewFieldEntry creates new FieldEntry from FieldInfo
 func NewFieldEntry(fieldInfo FieldInfo) (FieldEntry, error) {
 	descriptor := fieldInfo.Descriptor()
 	tp := descriptor.vp.Type()
@@ -207,6 +209,7 @@ type fieldEntry struct {
 	decoder Decoder
 }
 
+//Read reads field value to a pointer
 func (f *fieldEntry) Read(stream *StorageStream, toPtr interface{}) error {
 	buf := make([]byte, f.Length())
 	_, err := stream.ReadAt(buf, f.offset)
@@ -217,6 +220,7 @@ func (f *fieldEntry) Read(stream *StorageStream, toPtr interface{}) error {
 	return f.decode(buf, toPtr)
 }
 
+//Write writes field value to stream
 func (f *fieldEntry) Write(stream *StorageStream, val interface{}) error {
 	buf, err := f.encode(val)
 	if err != nil {
@@ -301,6 +305,7 @@ func (m *mapEntry) decodeValue(buf []byte, ptr interface{}) error {
 	return decode(m.valueDecoder, buf, ptr)
 }
 
+// supports: uint8, uint16, unit32, uint64, uin256, int32, int64
 func encodeScalar(v interface{}) ([]byte, error) {
 	var err error
 	var buf []byte
@@ -336,6 +341,7 @@ func encodeScalar(v interface{}) ([]byte, error) {
 	return buf, nil
 }
 
+// supports: uint8, uint16, unit32, uint64, uin256, int32, int64
 func decodeScalar(buf []byte, vPtr interface{}) error {
 	tp := reflect.TypeOf(vPtr)
 	if tp.Kind() != reflect.Ptr {
@@ -369,6 +375,7 @@ func decodeScalar(buf []byte, vPtr interface{}) error {
 	return nil
 }
 
+// supports scalar types
 func encodeArray(arr interface{}) ([]byte, error) {
 	tp := reflect.TypeOf(arr)
 	if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
@@ -397,6 +404,7 @@ func encodeArray(arr interface{}) ([]byte, error) {
 	}
 }
 
+// supports scalar types
 func decodeArray(buf []byte, arrPtr interface{}) error {
 	tp := reflect.TypeOf(arrPtr)
 	if tp.Kind() != reflect.Ptr {
