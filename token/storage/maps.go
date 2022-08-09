@@ -18,13 +18,12 @@ var (
 
 type ByteMap struct {
 	uniqPrefix []byte
-	stream     *StorageStream
 
 	// bytes count
 	keySize, valueSize uint64
 }
 
-func newByteMap(mapId []byte, stream *StorageStream, keySize, valueSize uint64) (*ByteMap, error) {
+func newByteMap(mapId []byte, keySize, valueSize uint64) (*ByteMap, error) {
 	if len(mapId) == 0 {
 		return nil, ErrBadMapId
 	}
@@ -39,18 +38,17 @@ func newByteMap(mapId []byte, stream *StorageStream, keySize, valueSize uint64) 
 
 	return &ByteMap{
 		uniqPrefix: mapId,
-		stream:     stream,
 		keySize:    keySize,
 		valueSize:  valueSize,
 	}, nil
 }
 
-func (m *ByteMap) Put(key, value []byte) error {
+func (m *ByteMap) Put(stream *StorageStream, key, value []byte) error {
 	if key == nil {
 		return ErrNilKey
 	}
 
-	if uint64(len(key)) != m.keySize {
+	if uint64(len(key)) > m.keySize {
 		return ErrBadKeySize
 	}
 
@@ -59,19 +57,19 @@ func (m *ByteMap) Put(key, value []byte) error {
 	}
 
 	off := calculateOffset(m.uniqPrefix, key)
-	_, err := m.stream.WriteAt(value, off)
+	_, err := stream.WriteAt(value, off)
 	return err
 }
 
-func (m *ByteMap) Get(key []byte) ([]byte, error) {
-	if uint64(len(key)) != m.keySize {
+func (m *ByteMap) Get(stream *StorageStream, key []byte) ([]byte, error) {
+	if uint64(len(key)) > m.keySize {
 		return nil, ErrBadKeySize
 	}
 
 	buf := make([]byte, m.valueSize)
 	off := calculateOffset(m.uniqPrefix, key)
 
-	_, err := m.stream.ReadAt(buf, off)
+	_, err := stream.ReadAt(buf, off)
 	if err != nil {
 		return nil, err
 	}
