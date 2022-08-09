@@ -409,10 +409,6 @@ var (
 		Usage: "Enable recording the SHA3/keccak preimages of trie keys",
 	}
 	// Miner settings
-	MiningEnabledFlag = cli.BoolFlag{
-		Name:  "create",
-		Usage: "Enable creating",
-	}
 	MinerThreadsFlag = cli.IntFlag{
 		Name:  "creator.threads",
 		Usage: "Number of CPU threads to use for mining",
@@ -435,11 +431,6 @@ var (
 		Name:  "creator.gasprice",
 		Usage: "Minimum gas price for mining a transaction",
 		Value: ethconfig.Defaults.Creator.GasPrice,
-	}
-	MinerEtherbaseFlag = cli.StringFlag{
-		Name:  "creator.etherbase",
-		Usage: "Public address for block mining rewards (default = first account)",
-		Value: "0",
 	}
 	MinerExtraDataFlag = cli.StringFlag{
 		Name:  "creator.extradata",
@@ -1062,9 +1053,6 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config) {
 	// Extract the current etherbase
 	var etherbase string
-	if ctx.GlobalIsSet(MinerEtherbaseFlag.Name) {
-		etherbase = ctx.GlobalString(MinerEtherbaseFlag.Name)
-	}
 	// Convert the etherbase into an address and configure it
 	if etherbase != "" {
 		if ks != nil {
