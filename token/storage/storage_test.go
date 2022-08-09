@@ -15,7 +15,7 @@ import (
 )
 
 func TestCreateStorage(t *testing.T) {
-	var descriptors = []FieldDescriptor{
+	descriptors := []FieldDescriptor{
 		{
 			[]byte("scalar"),
 			NewScalarProperties(Uint8Type),
@@ -35,9 +35,17 @@ func TestCreateStorage(t *testing.T) {
 		addr := common.BytesToAddress(testutils.RandomData(20))
 		stream := NewStorageStream(addr, db)
 
+		expectedSign, err := NewSignatureV1(descriptors)
+		require.NoError(t, err, err)
+
 		storage, err := NewStorage(stream, descriptors)
 		assert.NoError(t, err, err)
-		assert.NotNil(t, storage)
+		require.NotNil(t, storage)
+
+		readSign := new(SignatureV1)
+		_, err = readSign.ReadFromStream(stream)
+		assert.NoError(t, err, err)
+		assert.EqualValues(t, expectedSign, readSign)
 	})
 
 	t.Run("ReadStorage", func(t *testing.T) {
@@ -60,7 +68,7 @@ func TestCreateStorage(t *testing.T) {
 func TestStorage_WriteReadField(t *testing.T) {
 	tests := []struct {
 		descriptor FieldDescriptor
-		value      interface{}
+		expValue   interface{}
 		readTo     func() interface{}
 		isEqual    func(interface{}, interface{}) bool
 	}{
@@ -69,7 +77,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				name: []byte("Scalar_Uint8"),
 				vp:   NewScalarProperties(Uint8Type),
 			},
-			value: uint8(10),
+			expValue: uint8(10),
 			readTo: func() interface{} {
 				v := uint8(0)
 				return &v
@@ -83,7 +91,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				name: []byte("Uint256"),
 				vp:   NewScalarProperties(Uint256Type),
 			},
-			value: new(uint256.Int).SetBytes([]byte{
+			expValue: new(uint256.Int).SetBytes([]byte{
 				0x01, 0x02, 0x03, 0x04,
 				0x05, 0x06, 0x07, 0x08,
 				0x09, 0x0a, 0x0b, 0x0c,
@@ -107,7 +115,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 					exp = *expR
 				}
 
-				got, ok := v.(*uint256.Int)
+				got, ok := ptr.(*uint256.Int)
 				if !ok {
 					return ok
 				}
@@ -120,7 +128,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				name: []byte("Array_Uint16"),
 				vp:   NewArrayProperties(NewScalarProperties(Uint16Type), 10),
 			},
-			value: []uint16{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			expValue: []uint16{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			readTo: func() interface{} {
 				var v []uint16
 				return &v
@@ -146,16 +154,10 @@ func TestStorage_WriteReadField(t *testing.T) {
 				name: []byte("Map_Uint16_Uint16"),
 				vp:   newMapPropertiesPanic(NewScalarProperties(Uint16Type), NewScalarProperties(Uint16Type)),
 			},
-			value: &KeyValuePair{
-				key:   uint16(111),
-				value: uint16(222),
-			},
+			expValue: NewKeyValuePair(uint16(111), uint16(222)),
 			readTo: func() interface{} {
 				v := uint16(0)
-				return &KeyValuePair{
-					key:   uint16(111),
-					value: &v,
-				}
+				return NewKeyValuePair(uint16(111), &v)
 			},
 			isEqual: func(v interface{}, ptr interface{}) bool {
 				exp, ok := v.(*KeyValuePair)
@@ -163,12 +165,12 @@ func TestStorage_WriteReadField(t *testing.T) {
 					return ok
 				}
 
-				got, ok := v.(*KeyValuePair)
+				got, ok := ptr.(*KeyValuePair)
 				if !ok {
 					return ok
 				}
 
-				return exp.key == got.key && exp.value == got.value
+				return exp.Value().(uint16) == *got.Value().(*uint16)
 			},
 		},
 		{
@@ -176,16 +178,10 @@ func TestStorage_WriteReadField(t *testing.T) {
 				name: []byte("Map_ArrayUint16_Uint16"),
 				vp:   newMapPropertiesPanic(NewArrayProperties(NewScalarProperties(Uint16Type), 3), NewScalarProperties(Uint16Type)),
 			},
-			value: &KeyValuePair{
-				key:   []uint16{1, 2, 3},
-				value: uint16(222),
-			},
+			expValue: NewKeyValuePair([]uint16{1, 2, 3}, uint16(222)),
 			readTo: func() interface{} {
 				v := uint16(0)
-				return &KeyValuePair{
-					key:   []uint16{1, 2, 3},
-					value: &v,
-				}
+				return NewKeyValuePair([]uint16{1, 2, 3}, &v)
 			},
 			isEqual: func(v interface{}, ptr interface{}) bool {
 				exp, ok := v.(*KeyValuePair)
@@ -193,12 +189,12 @@ func TestStorage_WriteReadField(t *testing.T) {
 					return ok
 				}
 
-				got, ok := v.(*KeyValuePair)
+				got, ok := ptr.(*KeyValuePair)
 				if !ok {
 					return ok
 				}
 
-				return exp.value == got.value
+				return exp.Value().(uint16) == *got.Value().(*uint16)
 			},
 		},
 		{
@@ -206,16 +202,10 @@ func TestStorage_WriteReadField(t *testing.T) {
 				name: []byte("Map_Uint16_ArrayUint16"),
 				vp:   newMapPropertiesPanic(NewScalarProperties(Uint16Type), NewArrayProperties(NewScalarProperties(Uint16Type), 3)),
 			},
-			value: &KeyValuePair{
-				key:   uint16(222),
-				value: []uint16{1, 2, 3},
-			},
+			expValue: NewKeyValuePair(uint16(222), []uint16{1, 2, 3}),
 			readTo: func() interface{} {
 				var v []uint16
-				return &KeyValuePair{
-					key:   uint16(222),
-					value: &v,
-				}
+				return NewKeyValuePair(uint16(222), &v)
 			},
 			isEqual: func(v interface{}, ptr interface{}) bool {
 				exp, ok := v.(*KeyValuePair)
@@ -223,13 +213,13 @@ func TestStorage_WriteReadField(t *testing.T) {
 					return ok
 				}
 
-				got, ok := v.(*KeyValuePair)
+				got, ok := ptr.(*KeyValuePair)
 				if !ok {
 					return ok
 				}
 
-				expVal := exp.value.([]uint16)
-				gotVal := got.value.([]uint16)
+				expVal := exp.Value().([]uint16)
+				gotVal := *got.Value().(*[]uint16)
 				if len(expVal) != len(gotVal) {
 					return false
 				}
@@ -251,28 +241,25 @@ func TestStorage_WriteReadField(t *testing.T) {
 					NewArrayProperties(NewScalarProperties(Uint256Type), 3),
 				),
 			},
-			value: &KeyValuePair{
-				key: []*uint256.Int{
+			expValue: NewKeyValuePair(
+				[]*uint256.Int{
 					new(uint256.Int).SetBytes([]byte{0x01, 0x02, 0x03, 0x04}),
 					new(uint256.Int).SetBytes([]byte{0x05, 0x06, 0x07, 0x08}),
 					new(uint256.Int).SetBytes([]byte{0x09, 0x0a, 0x0b, 0x0c}),
 				},
-				value: []*uint256.Int{
+				[]*uint256.Int{
 					new(uint256.Int).SetBytes([]byte{0x0d, 0x0e, 0x0f, 0x00}),
 					new(uint256.Int).SetBytes([]byte{0x11, 0x12, 0x13, 0x14}),
 					new(uint256.Int).SetBytes([]byte{0x15, 0x16, 0x17, 0x18}),
 				},
-			},
+			),
 			readTo: func() interface{} {
 				var v []*uint256.Int
-				return &KeyValuePair{
-					key: []*uint256.Int{
-						new(uint256.Int).SetBytes([]byte{0x01, 0x02, 0x03, 0x04}),
-						new(uint256.Int).SetBytes([]byte{0x05, 0x06, 0x07, 0x08}),
-						new(uint256.Int).SetBytes([]byte{0x09, 0x0a, 0x0b, 0x0c}),
-					},
-					value: &v,
-				}
+				return NewKeyValuePair([]*uint256.Int{
+					new(uint256.Int).SetBytes([]byte{0x01, 0x02, 0x03, 0x04}),
+					new(uint256.Int).SetBytes([]byte{0x05, 0x06, 0x07, 0x08}),
+					new(uint256.Int).SetBytes([]byte{0x09, 0x0a, 0x0b, 0x0c}),
+				}, &v)
 			},
 			isEqual: func(v interface{}, ptr interface{}) bool {
 				exp, ok := v.(*KeyValuePair)
@@ -280,19 +267,19 @@ func TestStorage_WriteReadField(t *testing.T) {
 					return ok
 				}
 
-				got, ok := v.(*KeyValuePair)
+				got, ok := ptr.(*KeyValuePair)
 				if !ok {
 					return ok
 				}
 
-				expVal := exp.value.([]*uint256.Int)
-				gotVal := got.value.([]*uint256.Int)
+				expVal := exp.Value().([]*uint256.Int)
+				gotVal := *got.Value().(*[]*uint256.Int)
 				if len(expVal) != len(gotVal) {
 					return false
 				}
 
 				for i, u := range expVal {
-					if u != gotVal[i] {
+					if !u.Eq(gotVal[i]) {
 						return false
 					}
 				}
@@ -312,13 +299,14 @@ func TestStorage_WriteReadField(t *testing.T) {
 	for _, test := range tests {
 		name := test.descriptor.Name()
 		t.Run(name, func(t *testing.T) {
-			err := storage.WriteField(name, test.value)
+			err := storage.WriteField(name, test.expValue)
 			assert.NoError(t, err, err)
 
 			to := test.readTo()
 			err = storage.ReadField(name, to)
 			assert.NoError(t, err, err)
-			assert.True(t, test.isEqual(test.value, to))
+			assert.True(t, test.isEqual(test.expValue, to))
+			assert.ObjectsAreEqualValues(test.expValue, to)
 		})
 	}
 }
