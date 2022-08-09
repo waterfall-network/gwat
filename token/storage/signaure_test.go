@@ -115,7 +115,7 @@ func TestSignatureV1(t *testing.T) {
 			},
 			&SignatureV1{
 				version: signatureV1,
-				fields: []Field{
+				fields: []FieldInfo{
 					{
 						offset: big.NewInt(12),
 						length: uint64(Uint8Type.Size()),
@@ -133,7 +133,7 @@ func TestSignatureV1(t *testing.T) {
 			},
 			&SignatureV1{
 				version: signatureV1,
-				fields: []Field{
+				fields: []FieldInfo{
 					{
 						offset: big.NewInt(20),
 						length: uint64(Uint16Type.Size()) * 10,
@@ -151,7 +151,7 @@ func TestSignatureV1(t *testing.T) {
 			},
 			&SignatureV1{
 				version: signatureV1,
-				fields: []Field{
+				fields: []FieldInfo{
 					{
 						offset: big.NewInt(24),
 						length: 0,
@@ -172,7 +172,7 @@ func TestSignatureV1(t *testing.T) {
 			},
 			&SignatureV1{
 				version: signatureV1,
-				fields: []Field{
+				fields: []FieldInfo{
 					{
 						offset: big.NewInt(32),
 						length: 0,
@@ -193,7 +193,7 @@ func TestSignatureV1(t *testing.T) {
 			},
 			&SignatureV1{
 				version: signatureV1,
-				fields: []Field{
+				fields: []FieldInfo{
 					{
 						offset: big.NewInt(32),
 						length: 0,
@@ -214,7 +214,7 @@ func TestSignatureV1(t *testing.T) {
 			},
 			&SignatureV1{
 				version: signatureV1,
-				fields: []Field{
+				fields: []FieldInfo{
 					{
 						offset: big.NewInt(40),
 						length: 0,
@@ -255,7 +255,7 @@ func TestSignatureV1(t *testing.T) {
 			},
 			&SignatureV1{
 				version: signatureV1,
-				fields: []Field{
+				fields: []FieldInfo{
 					{
 						offset: big.NewInt(145),
 						length: 1,

@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/log"
-
 	"github.com/holiman/uint256"
 )
 
@@ -20,10 +18,16 @@ var (
 	ErrEncoderIsNotSet      = errors.New("encoder is not set")
 	ErrFieldNotFound        = errors.New("field not found")
 	ErrValueTooLarge        = errors.New("value too large")
+	ErrBadFieldDescriptor   = errors.New("cannot create field from field descriptor")
+	ErrUnknownType          = errors.New("unknown type")
 )
 
+type FieldEntry interface {
+	Read(*StorageStream, interface{}) error
+	Write(*StorageStream, interface{}) error
+}
+
 type Storage interface {
-	ApplyOptions(string, ...Option) error
 	ReadField(string, interface{}) error
 	WriteField(string, interface{}) error
 }
@@ -45,88 +49,15 @@ var (
 	Uint256Decoder = decodeUint256
 )
 
-type options struct {
-	keyEncoder, valueEncoder Encoder
-	keyDecoder, valueDecoder Decoder
-}
-
-type Option func(*options)
-
-func WithDecoder(decoder Decoder) Option {
-	return func(opt *options) {
-		opt.valueDecoder = decoder
-	}
-}
-
-func WithEncoder(encoder Encoder) Option {
-	return func(opt *options) {
-		opt.valueEncoder = encoder
-	}
-}
-
-func WithMapDecoders(keyDecoder, valueDecoder Decoder) Option {
-	return func(opt *options) {
-		opt.keyDecoder = keyDecoder
-		opt.valueDecoder = valueDecoder
-	}
-}
-
-func WithMapEncoders(keyEncoder, valueEncoder Encoder) Option {
-	return func(opt *options) {
-		opt.keyEncoder = keyEncoder
-		opt.valueEncoder = valueEncoder
-	}
-}
-
 type KeyValuePair struct {
 	key, value interface{}
 }
-
-type fieldWrapper struct {
-	Field
-	encoder Encoder
-	decoder Decoder
-}
-
-func (f *fieldWrapper) encode(v interface{}) ([]byte, error) {
-	return encode(f.encoder, v)
-}
-
-func (f *fieldWrapper) decode(buf []byte, ptr interface{}) error {
-	return decode(f.decoder, buf, ptr)
-}
-
-type mapWrapper struct {
-	*ByteMap
-	keyEncoder, valueEncoder Encoder
-	keyDecoder, valueDecoder Decoder
-}
-
-func (m *mapWrapper) encodeKey(v interface{}) ([]byte, error) {
-	return encode(m.keyEncoder, v)
-}
-
-func (m *mapWrapper) decodeKey(buf []byte, ptr interface{}) error {
-	return decode(m.keyDecoder, buf, ptr)
-}
-
-func (m *mapWrapper) encodeValue(v interface{}) ([]byte, error) {
-	return encode(m.valueEncoder, v)
-}
-
-func (m *mapWrapper) decodeValue(buf []byte, ptr interface{}) error {
-	return decode(m.valueDecoder, buf, ptr)
-}
-
-type fieldsHolder map[string]fieldWrapper
-type mapsHolder map[string]mapWrapper
 
 type storage struct {
 	stream    *StorageStream
 	signature Signature
 
 	fields fieldsHolder
-	maps   mapsHolder
 }
 
 func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage, error) {
@@ -140,16 +71,16 @@ func NewStorage(stream *StorageStream, descriptors []FieldDescriptor) (*storage,
 		return nil, err
 	}
 
-	s := &storage{
-		stream:    stream,
-		signature: sign,
-	}
-	err = s.fillFields(sign)
+	fields, err := fillFields(sign)
 	if err != nil {
 		return nil, err
 	}
 
-	return s, nil
+	return &storage{
+		stream:    stream,
+		signature: sign,
+		fields:    fields,
+	}, nil
 }
 
 func ReadStorage(stream *StorageStream) (*storage, error) {
@@ -159,159 +90,41 @@ func ReadStorage(stream *StorageStream) (*storage, error) {
 		return nil, err
 	}
 
-	s := &storage{
-		stream:    stream,
-		signature: sign,
-	}
-	err = s.fillFields(sign)
+	fields, err := fillFields(sign)
 	if err != nil {
 		return nil, err
 	}
 
-	return s, nil
+	return &storage{
+		stream:    stream,
+		signature: sign,
+		fields:    fields,
+	}, nil
 }
 
-func (s *storage) fillFields(sign Signature) error {
-	fieldsHolder := fieldsHolder{}
-	mapsHolder := mapsHolder{}
-
-	fields := sign.Fields()
-	for i, descriptor := range sign.FieldsDescriptors() {
-		switch {
-		case descriptor.vp.Type().Id() == Uint256Type.Id():
-			fieldsHolder[descriptor.Name()] = fieldWrapper{
-				Field:   fields[i],
-				encoder: Uint256Encoder,
-				decoder: Uint256Decoder,
-			}
-		case isScalar(descriptor.vp.Type().Id()) || isArray(descriptor.vp.Type().Id()):
-			valEncoder, valDecoder := getDefaultEncoderAndDecoder(descriptor.vp.Type().Id())
-			fieldsHolder[descriptor.Name()] = fieldWrapper{
-				Field:   fields[i],
-				encoder: valEncoder,
-				decoder: valDecoder,
-			}
-		case isMap(descriptor.vp.Type().Id()):
-			kp, err := descriptor.vp.KeyProperties()
-			if err != nil {
-				return err
-			}
-
-			keySize, err := calculateFieldLength(kp)
-			if err != nil {
-				return err
-			}
-
-			vp, err := descriptor.vp.ValueProperties()
-			if err != nil {
-				return err
-			}
-			valueSize, err := calculateFieldLength(vp)
-			if err != nil {
-				return err
-			}
-
-			keyEncoder, keyDecoder := getDefaultEncoderAndDecoder(kp.Type().Id())
-			valEncoder, valDecoder := getDefaultEncoderAndDecoder(vp.Type().Id())
-
-			byteMap, err := newByteMap(
-				[]byte(descriptor.Name()),
-				s.stream,
-				keySize,
-				valueSize,
-			)
-			if err != nil {
-				return err
-			}
-
-			mapsHolder[descriptor.Name()] = mapWrapper{
-				ByteMap:      byteMap,
-				keyEncoder:   keyEncoder,
-				valueEncoder: valEncoder,
-				keyDecoder:   keyDecoder,
-				valueDecoder: valDecoder,
-			}
+func fillFields(sign Signature) (fieldsHolder, error) {
+	var err error
+	fields := fieldsHolder{}
+	for _, info := range sign.Fields() {
+		fields[info.Descriptor().Name()], err = NewFieldEntry(info)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	s.fields = fieldsHolder
-	s.maps = mapsHolder
-
-	return nil
-}
-
-func (s *storage) ApplyOptions(fieldName string, opts ...Option) error {
-	options := &options{}
-	for _, opt := range opts {
-		opt(options)
-	}
-
-	field, ok := s.fields[fieldName]
-	if ok {
-		if options.valueEncoder != nil {
-			field.encoder = options.valueEncoder
-		}
-		if options.valueDecoder != nil {
-			field.decoder = options.valueDecoder
-		}
-	}
-
-	mapField, ok := s.maps[fieldName]
-	if ok {
-		if options.keyEncoder != nil {
-			mapField.keyEncoder = options.keyEncoder
-		}
-		if options.keyDecoder != nil {
-			mapField.keyDecoder = options.keyDecoder
-		}
-		if options.valueEncoder != nil {
-			mapField.valueEncoder = options.valueEncoder
-		}
-		if options.valueDecoder != nil {
-			mapField.valueDecoder = options.valueDecoder
-		}
-	}
-
-	return ErrFieldNotFound
+	return fields, nil
 }
 
 // ReadField reads a field from stream.
 // Note: Support only one-dimensional arrays.
 // Note: for maps expects pointer to KeyValuePair struct
 func (s *storage) ReadField(fieldName string, toPtr interface{}) error {
-	var buf []byte
 	field, ok := s.fields[fieldName]
-	if ok {
-		buf = make([]byte, field.Length())
-		_, err := s.stream.ReadAt(buf, field.offset)
-		if err != nil {
-			return err
-		}
-
-		return field.decode(buf, toPtr)
+	if !ok {
+		return ErrFieldNotFound
 	}
 
-	mapField, ok := s.maps[fieldName]
-	if ok {
-		kvPair, ok := toPtr.(*KeyValuePair)
-		if !ok {
-			return ErrBadType
-		}
-
-		keyB, err := mapField.encodeKey(kvPair.key)
-		if err != nil {
-			return err
-		}
-
-		res, err := mapField.Get(keyB)
-		if err != nil {
-			return err
-		}
-
-		return mapField.decodeValue(res, kvPair.value)
-	}
-
-	return ErrFieldNotFound
+	return field.Read(s.stream, toPtr)
 }
 
 // WriteField writes a field to stream.
@@ -319,44 +132,177 @@ func (s *storage) ReadField(fieldName string, toPtr interface{}) error {
 // Note: for maps expects pointer to KeyValuePair struct
 func (s *storage) WriteField(fieldName string, val interface{}) error {
 	field, ok := s.fields[fieldName]
-	if ok {
-		buf, err := field.encode(val)
+	if !ok {
+		return ErrFieldNotFound
+	}
+
+	return field.Write(s.stream, val)
+}
+
+func NewFieldEntry(fieldInfo FieldInfo) (FieldEntry, error) {
+	descriptor := fieldInfo.Descriptor()
+	tp := descriptor.vp.Type()
+	id := tp.Id()
+	switch {
+	case isMap(id):
+		kp, err := descriptor.vp.KeyProperties()
 		if err != nil {
-			return err
+			return nil, err
+		}
+		keySize, err := calculateFieldLength(kp)
+		if err != nil {
+			return nil, err
 		}
 
-		if uint64(len(buf)) > field.Length() {
-			return ErrValueTooLarge
+		vp, err := descriptor.vp.ValueProperties()
+		if err != nil {
+			return nil, err
+		}
+		valueSize, err := calculateFieldLength(vp)
+		if err != nil {
+			return nil, err
 		}
 
-		_, err = s.stream.WriteAt(buf, field.offset)
+		keyEncoder, keyDecoder, err := getDefaultEncoderAndDecoder(kp.Type())
+		if err != nil {
+			return nil, err
+		}
+
+		valEncoder, valDecoder, err := getDefaultEncoderAndDecoder(vp.Type())
+		if err != nil {
+			return nil, err
+		}
+
+		byteMap, err := newByteMap([]byte(descriptor.Name()), keySize, valueSize)
+		if err != nil {
+			return nil, err
+		}
+
+		return &mapEntry{
+			ByteMap:      byteMap,
+			keyEncoder:   keyEncoder,
+			valueEncoder: valEncoder,
+			keyDecoder:   keyDecoder,
+			valueDecoder: valDecoder,
+		}, nil
+	default:
+		encoder, decoder, err := getDefaultEncoderAndDecoder(tp)
+		if err != nil {
+			return nil, err
+		}
+
+		return &fieldEntry{
+			FieldInfo: fieldInfo,
+			encoder:   encoder,
+			decoder:   decoder,
+		}, nil
+	}
+}
+
+type fieldsHolder map[string]FieldEntry
+
+type fieldEntry struct {
+	FieldInfo
+	encoder Encoder
+	decoder Decoder
+}
+
+func (f *fieldEntry) Read(stream *StorageStream, toPtr interface{}) error {
+	buf := make([]byte, f.Length())
+	_, err := stream.ReadAt(buf, f.offset)
+	if err != nil {
 		return err
 	}
 
-	mapField, ok := s.maps[fieldName]
-	if ok {
-		kvPair, ok := val.(*KeyValuePair)
-		if !ok {
-			return ErrBadType
-		}
+	return f.decode(buf, toPtr)
+}
 
-		keyB, err := mapField.encodeKey(kvPair.key)
-		if err != nil {
-			return err
-		}
-
-		valueB, err := mapField.encodeValue(kvPair.value)
-		if err != nil {
-			return err
-		}
-
-		return mapField.Put(keyB, valueB)
+func (f *fieldEntry) Write(stream *StorageStream, val interface{}) error {
+	buf, err := f.encode(val)
+	if err != nil {
+		return err
 	}
 
-	return ErrFieldNotFound
+	if uint64(len(buf)) > f.Length() {
+		return ErrValueTooLarge
+	}
+
+	_, err = stream.WriteAt(buf, f.offset)
+	return err
+}
+
+func (f *fieldEntry) encode(v interface{}) ([]byte, error) {
+	return encode(f.encoder, v)
+}
+
+func (f *fieldEntry) decode(buf []byte, ptr interface{}) error {
+	return decode(f.decoder, buf, ptr)
+}
+
+type mapEntry struct {
+	*ByteMap
+	keyEncoder, valueEncoder Encoder
+	keyDecoder, valueDecoder Decoder
+}
+
+//Read expects pointer to KeyValuePair struct
+func (mw *mapEntry) Read(s *StorageStream, toPtr interface{}) error {
+	kvPair, ok := toPtr.(*KeyValuePair)
+	if !ok {
+		return ErrBadType
+	}
+
+	keyB, err := mw.encodeKey(kvPair.key)
+	if err != nil {
+		return err
+	}
+
+	res, err := mw.Get(s, keyB)
+	if err != nil {
+		return err
+	}
+
+	return mw.decodeValue(res, kvPair.value)
+}
+
+//Write expects pointer to KeyValuePair struct
+func (mw *mapEntry) Write(s *StorageStream, val interface{}) error {
+	kvPair, ok := val.(*KeyValuePair)
+	if !ok {
+		return ErrBadType
+	}
+
+	keyB, err := mw.encodeKey(kvPair.key)
+	if err != nil {
+		return err
+	}
+
+	valueB, err := mw.encodeValue(kvPair.value)
+	if err != nil {
+		return err
+	}
+
+	return mw.Put(s, keyB, valueB)
+}
+
+func (mw *mapEntry) encodeKey(v interface{}) ([]byte, error) {
+	return encode(mw.keyEncoder, v)
+}
+
+func (mw *mapEntry) decodeKey(buf []byte, ptr interface{}) error {
+	return decode(mw.keyDecoder, buf, ptr)
+}
+
+func (mw *mapEntry) encodeValue(v interface{}) ([]byte, error) {
+	return encode(mw.valueEncoder, v)
+}
+
+func (mw *mapEntry) decodeValue(buf []byte, ptr interface{}) error {
+	return decode(mw.valueDecoder, buf, ptr)
 }
 
 func encodeScalar(v interface{}) ([]byte, error) {
+	var err error
 	var buf []byte
 	switch v.(type) {
 	case uint8:
@@ -379,6 +325,11 @@ func encodeScalar(v interface{}) ([]byte, error) {
 	case string:
 		buf = []byte(v.(string))
 	default:
+		buf, err = encodeUint256(v)
+		if err == nil {
+			break
+		}
+
 		return nil, fmt.Errorf("%s: %T", ErrBadType, v)
 	}
 
@@ -407,6 +358,11 @@ func decodeScalar(buf []byte, vPtr interface{}) error {
 	case *string:
 		*vPtr.(*string) = string(buf)
 	default:
+		err := decodeUint256(buf, vPtr)
+		if err == nil {
+			break
+		}
+
 		return fmt.Errorf("%s: %T", ErrBadType, vPtr)
 	}
 
@@ -467,8 +423,14 @@ func decodeArray(buf []byte, arrPtr interface{}) error {
 			return ErrBadType
 		}
 
+		var newElem reflect.Value
+		if elemType.Kind() == reflect.Ptr {
+			newElem = reflect.New(elemType.Elem())
+		} else {
+			newElem = reflect.New(elemType)
+		}
+
 		var err error
-		newElem := reflect.New(elemType)
 		for len(buf) > 0 {
 			err = decodeScalar(buf[:elemSize], newElem.Interface())
 			if err != nil {
@@ -476,7 +438,11 @@ func decodeArray(buf []byte, arrPtr interface{}) error {
 				return err
 			}
 
-			value.Set(reflect.Append(value, newElem.Elem()))
+			if elemType.Kind() == reflect.Ptr {
+				value.Set(reflect.Append(value, newElem))
+			} else {
+				value.Set(reflect.Append(value, newElem.Elem()))
+			}
 			buf = buf[elemSize:]
 		}
 
@@ -488,24 +454,22 @@ func encodeUint256(val interface{}) ([]byte, error) {
 	v, ok := val.(uint256.Int)
 	if !ok {
 		vr, ok := val.(*uint256.Int)
-		v = *vr
 		if !ok {
 			return nil, ErrBadType
 		}
+		v = *vr
 	}
 
 	return v.Bytes(), nil
 }
 
 func decodeUint256(buf []byte, toPtr interface{}) error {
-	ptr, ok := toPtr.(*uint256.Int)
+	_, ok := toPtr.(*uint256.Int)
 	if !ok {
 		return ErrBadType
 	}
 
-	v := new(uint256.Int).SetBytes(buf)
-	*ptr = *v
-
+	toPtr = new(uint256.Int).SetBytes(buf)
 	return nil
 }
 
@@ -530,17 +494,20 @@ func decodeBigInt(buf []byte, toPtr interface{}) error {
 	return nil
 }
 
-func getDefaultEncoderAndDecoder(tp uint8) (Encoder, Decoder) {
-	if isScalar(tp) {
-		return DefaultScalarEncoder, DefaultScalarDecoder
+func getDefaultEncoderAndDecoder(tp Type) (Encoder, Decoder, error) {
+	if Uint256Type.Equal(tp) {
+		return Uint256Encoder, Uint256Decoder, nil
 	}
 
-	if isArray(tp) {
-		return DefaultArrayEncoder, DefaultArrayDecoder
+	if isScalar(tp.Id()) {
+		return DefaultScalarEncoder, DefaultScalarDecoder, nil
 	}
 
-	log.Warn("Cannot set default encoder and decoder")
-	return nil, nil
+	if isArray(tp.Id()) {
+		return DefaultArrayEncoder, DefaultArrayDecoder, nil
+	}
+
+	return nil, nil, ErrUnknownType
 }
 
 func encode(encoder Encoder, v interface{}) ([]byte, error) {
