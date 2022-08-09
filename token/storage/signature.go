@@ -406,9 +406,8 @@ func (fd *FieldDescriptor) UnmarshalBinary(data []byte) error {
 }
 
 type SignatureV1 struct {
-	version           SignatureVersion
-	fieldsDescriptors []FieldDescriptor
-	fields            []FieldInfo
+	version SignatureVersion
+	fields  []FieldInfo
 }
 
 func NewSignatureV1(fd []FieldDescriptor) (Signature, error) {
@@ -438,9 +437,8 @@ func NewSignatureV1(fd []FieldDescriptor) (Signature, error) {
 	calculateFieldsOffset(totalSize, fields)
 
 	return &SignatureV1{
-		version:           signatureV1,
-		fieldsDescriptors: fd,
-		fields:            fields,
+		version: signatureV1,
+		fields:  fields,
 	}, nil
 }
 
@@ -469,8 +467,7 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 
 	uint8Buf := make([]byte, uint8Size)
 	fields := make([]FieldInfo, countBuf[0])
-	fieldsDescriptors := make([]FieldDescriptor, countBuf[0])
-	for i := range fieldsDescriptors {
+	for i := range fields {
 		// read length of field name
 		n, err = stream.ReadAt(uint8Buf, pos)
 		if err != nil {
@@ -503,13 +500,13 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 		}
 		pos.Add(pos, big.NewInt(int64(n)))
 
-		err = fieldsDescriptors[i].UnmarshalBinary(fieldBuf)
+		err = fields[i].descriptor.UnmarshalBinary(fieldBuf)
 		if err != nil {
 			return 0, err
 		}
 
 		// save length of the field
-		fields[i].length, err = calculateFieldLength(fieldsDescriptors[i].vp)
+		fields[i].length, err = calculateFieldLength(fields[i].descriptor.vp)
 		if err != nil {
 			return 0, err
 		}
@@ -521,9 +518,8 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 	calculateFieldsOffset(pos.Uint64(), fields)
 
 	*s = SignatureV1{
-		version:           SignatureVersion(binary.BigEndian.Uint16(sigVersionBuf)),
-		fieldsDescriptors: fieldsDescriptors,
-		fields:            fields,
+		version: SignatureVersion(binary.BigEndian.Uint16(sigVersionBuf)),
+		fields:  fields,
 	}
 
 	return int(pos.Uint64()), nil
@@ -536,13 +532,13 @@ func (s SignatureV1) WriteToStream(stream *StorageStream) (int, error) {
 	// write SignatureVersion
 	binary.BigEndian.PutUint16(buf[:uint16Size], uint16(s.version))
 
-	// write count of fieldsDescriptors
-	buf[uint16Size] = uint8(len(s.fieldsDescriptors))
+	// write count of fields
+	buf[uint16Size] = uint8(len(s.fields))
 
 	// write fieldsDescriptors
-	for _, field := range s.fieldsDescriptors {
+	for _, field := range s.fields {
 		// marshal the fieldDescriptor
-		b, err := field.MarshalBinary()
+		b, err := field.descriptor.MarshalBinary()
 		if err != nil {
 			return 0, err
 		}

@@ -246,59 +246,59 @@ type mapEntry struct {
 }
 
 //Read expects pointer to KeyValuePair struct
-func (mw *mapEntry) Read(s *StorageStream, toPtr interface{}) error {
+func (m *mapEntry) Read(s *StorageStream, toPtr interface{}) error {
 	kvPair, ok := toPtr.(*KeyValuePair)
 	if !ok {
 		return ErrBadType
 	}
 
-	keyB, err := mw.encodeKey(kvPair.key)
+	keyB, err := m.encodeKey(kvPair.key)
 	if err != nil {
 		return err
 	}
 
-	res, err := mw.Get(s, keyB)
+	res, err := m.Get(s, keyB)
 	if err != nil {
 		return err
 	}
 
-	return mw.decodeValue(res, kvPair.value)
+	return m.decodeValue(res, kvPair.value)
 }
 
 //Write expects pointer to KeyValuePair struct
-func (mw *mapEntry) Write(s *StorageStream, val interface{}) error {
+func (m *mapEntry) Write(s *StorageStream, val interface{}) error {
 	kvPair, ok := val.(*KeyValuePair)
 	if !ok {
 		return ErrBadType
 	}
 
-	keyB, err := mw.encodeKey(kvPair.key)
+	keyB, err := m.encodeKey(kvPair.key)
 	if err != nil {
 		return err
 	}
 
-	valueB, err := mw.encodeValue(kvPair.value)
+	valueB, err := m.encodeValue(kvPair.value)
 	if err != nil {
 		return err
 	}
 
-	return mw.Put(s, keyB, valueB)
+	return m.Put(s, keyB, valueB)
 }
 
-func (mw *mapEntry) encodeKey(v interface{}) ([]byte, error) {
-	return encode(mw.keyEncoder, v)
+func (m *mapEntry) encodeKey(v interface{}) ([]byte, error) {
+	return encode(m.keyEncoder, v)
 }
 
-func (mw *mapEntry) decodeKey(buf []byte, ptr interface{}) error {
-	return decode(mw.keyDecoder, buf, ptr)
+func (m *mapEntry) decodeKey(buf []byte, ptr interface{}) error {
+	return decode(m.keyDecoder, buf, ptr)
 }
 
-func (mw *mapEntry) encodeValue(v interface{}) ([]byte, error) {
-	return encode(mw.valueEncoder, v)
+func (m *mapEntry) encodeValue(v interface{}) ([]byte, error) {
+	return encode(m.valueEncoder, v)
 }
 
-func (mw *mapEntry) decodeValue(buf []byte, ptr interface{}) error {
-	return decode(mw.valueDecoder, buf, ptr)
+func (m *mapEntry) decodeValue(buf []byte, ptr interface{}) error {
+	return decode(m.valueDecoder, buf, ptr)
 }
 
 func encodeScalar(v interface{}) ([]byte, error) {
