@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -82,9 +83,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				v := uint8(0)
 				return &v
 			},
-			isEqual: func(v interface{}, ptr interface{}) bool {
-				return v.(uint8) == *ptr.(*uint8)
-			},
+			isEqual: compareScalar,
 		},
 		{
 			descriptor: FieldDescriptor{
@@ -105,23 +104,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				v := uint256.Int{}
 				return &v
 			},
-			isEqual: func(v interface{}, ptr interface{}) bool {
-				exp, ok := v.(uint256.Int)
-				if !ok {
-					expR, ok := v.(*uint256.Int)
-					if !ok {
-						return ok
-					}
-					exp = *expR
-				}
-
-				got, ok := ptr.(*uint256.Int)
-				if !ok {
-					return ok
-				}
-
-				return exp.Eq(got)
-			},
+			isEqual: compareScalar,
 		},
 		{
 			descriptor: FieldDescriptor{
@@ -133,21 +116,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				var v []uint16
 				return &v
 			},
-			isEqual: func(v interface{}, ptr interface{}) bool {
-				exp := v.([]uint16)
-				got := *ptr.(*[]uint16)
-				if len(exp) != len(got) {
-					return false
-				}
-
-				for i, u := range exp {
-					if u != got[i] {
-						return false
-					}
-				}
-
-				return true
-			},
+			isEqual: compareArray,
 		},
 		{
 			descriptor: FieldDescriptor{
@@ -159,19 +128,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				v := uint16(0)
 				return NewKeyValuePair(uint16(111), &v)
 			},
-			isEqual: func(v interface{}, ptr interface{}) bool {
-				exp, ok := v.(*KeyValuePair)
-				if !ok {
-					return ok
-				}
-
-				got, ok := ptr.(*KeyValuePair)
-				if !ok {
-					return ok
-				}
-
-				return exp.Value().(uint16) == *got.Value().(*uint16)
-			},
+			isEqual: compareMap,
 		},
 		{
 			descriptor: FieldDescriptor{
@@ -183,19 +140,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				v := uint16(0)
 				return NewKeyValuePair([]uint16{1, 2, 3}, &v)
 			},
-			isEqual: func(v interface{}, ptr interface{}) bool {
-				exp, ok := v.(*KeyValuePair)
-				if !ok {
-					return ok
-				}
-
-				got, ok := ptr.(*KeyValuePair)
-				if !ok {
-					return ok
-				}
-
-				return exp.Value().(uint16) == *got.Value().(*uint16)
-			},
+			isEqual: compareMap,
 		},
 		{
 			descriptor: FieldDescriptor{
@@ -207,31 +152,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 				var v []uint16
 				return NewKeyValuePair(uint16(222), &v)
 			},
-			isEqual: func(v interface{}, ptr interface{}) bool {
-				exp, ok := v.(*KeyValuePair)
-				if !ok {
-					return ok
-				}
-
-				got, ok := ptr.(*KeyValuePair)
-				if !ok {
-					return ok
-				}
-
-				expVal := exp.Value().([]uint16)
-				gotVal := *got.Value().(*[]uint16)
-				if len(expVal) != len(gotVal) {
-					return false
-				}
-
-				for i, u := range expVal {
-					if u != gotVal[i] {
-						return false
-					}
-				}
-
-				return true
-			},
+			isEqual: compareMap,
 		},
 		{
 			descriptor: FieldDescriptor{
@@ -261,31 +182,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 					new(uint256.Int).SetBytes([]byte{0x09, 0x0a, 0x0b, 0x0c}),
 				}, &v)
 			},
-			isEqual: func(v interface{}, ptr interface{}) bool {
-				exp, ok := v.(*KeyValuePair)
-				if !ok {
-					return ok
-				}
-
-				got, ok := ptr.(*KeyValuePair)
-				if !ok {
-					return ok
-				}
-
-				expVal := exp.Value().([]*uint256.Int)
-				gotVal := *got.Value().(*[]*uint256.Int)
-				if len(expVal) != len(gotVal) {
-					return false
-				}
-
-				for i, u := range expVal {
-					if !u.Eq(gotVal[i]) {
-						return false
-					}
-				}
-
-				return true
-			},
+			isEqual: compareMap,
 		},
 	}
 
@@ -306,7 +203,6 @@ func TestStorage_WriteReadField(t *testing.T) {
 			err = storage.ReadField(name, to)
 			assert.NoError(t, err, err)
 			assert.True(t, test.isEqual(test.expValue, to))
-			assert.ObjectsAreEqualValues(test.expValue, to)
 		})
 	}
 }
@@ -325,4 +221,72 @@ func newStorage(t *testing.T, descriptors []FieldDescriptor) Storage {
 	require.NotNil(t, storage)
 
 	return storage
+}
+
+func compareScalar(exp, got interface{}) bool {
+	expV := reflect.ValueOf(exp)
+	if expV.Kind() == reflect.Ptr {
+		expV = expV.Elem()
+	}
+
+	gotV := reflect.ValueOf(got)
+	if gotV.Kind() == reflect.Ptr {
+		gotV = gotV.Elem()
+	}
+
+	return reflect.DeepEqual(expV.Interface(), gotV.Interface())
+}
+
+func compareArray(expArr, arrPtr interface{}) bool {
+	exp := reflect.ValueOf(expArr)
+	if exp.Kind() == reflect.Ptr {
+		exp = exp.Elem()
+	}
+
+	got := reflect.ValueOf(arrPtr)
+	if got.Kind() == reflect.Ptr {
+		got = got.Elem()
+	}
+
+	if exp.Len() != got.Len() {
+		return false
+	}
+
+	for i := 0; i < exp.Len(); i++ {
+		if !compareScalar(exp.Index(i).Interface(), got.Index(i).Interface()) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func compareMap(expVal, gotPtr interface{}) bool {
+	exp, ok := expVal.(*KeyValuePair)
+	if !ok {
+		return ok
+	}
+
+	got, ok := gotPtr.(*KeyValuePair)
+	if !ok {
+		return ok
+	}
+
+	keyEq := false
+	kk := reflect.ValueOf(exp.key).Kind()
+	if kk == reflect.Slice || kk == reflect.Array {
+		keyEq = compareArray(exp.Key(), got.Key())
+	} else {
+		keyEq = compareScalar(exp.Key(), got.Key())
+	}
+
+	valEq := false
+	vk := reflect.ValueOf(exp.value).Kind()
+	if vk == reflect.Slice || vk == reflect.Array {
+		valEq = compareArray(exp.Value(), got.Value())
+	} else {
+		valEq = compareScalar(exp.Value(), got.Value())
+	}
+
+	return keyEq && valEq
 }
