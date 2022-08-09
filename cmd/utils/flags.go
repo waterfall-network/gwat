@@ -410,8 +410,8 @@ var (
 	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
-		Name:  "mine",
-		Usage: "Enable mining",
+		Name:  "create",
+		Usage: "Enable creating",
 	}
 	MinerThreadsFlag = cli.IntFlag{
 		Name:  "creator.threads",
