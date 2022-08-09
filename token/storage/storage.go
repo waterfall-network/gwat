@@ -129,7 +129,7 @@ func fillFields(sign Signature) (fieldsHolder, error) {
 }
 
 // ReadField reads a value by a field name from stream.
-// Note: Support only one-dimensional arrays of scalar types: uint8, uint16, unit32, uint64, uin256, int32, int64.
+// Note: Support only one-dimensional arrays of scalar types: uint8, uint16, unit32, uint64, uint256, int32, int64.
 // Note: For maps expects pointer to KeyValuePair struct where Value is a pointer
 // Note: For arrays expects a pointer to an array or slice
 func (s *storage) ReadField(fieldName string, toPtr interface{}) error {
@@ -142,7 +142,7 @@ func (s *storage) ReadField(fieldName string, toPtr interface{}) error {
 }
 
 // WriteField writes a value by a field name to stream.
-// Note: Support only one-dimensional arrays of scalar types: uint8, uint16, unit32, uint64, uin256, int32, int64.
+// Note: Support only one-dimensional arrays of scalar types: uint8, uint16, unit32, uint64, uint256, int32, int64.
 // Note: For maps expects pointer to KeyValuePair struct
 func (s *storage) WriteField(fieldName string, val interface{}) error {
 	field, ok := s.fields[fieldName]
@@ -318,7 +318,7 @@ func (m *mapEntry) decodeValue(buf []byte, ptr interface{}) error {
 	return decode(m.valueDecoder, buf, ptr)
 }
 
-// supports: uint8, uint16, unit32, uint64, uin256, int32, int64
+// supports: uint8, uint16, unit32, uint64, uint256, int32, int64
 func encodeScalar(v interface{}) ([]byte, error) {
 	var err error
 	var buf []byte
@@ -354,7 +354,7 @@ func encodeScalar(v interface{}) ([]byte, error) {
 	return buf, nil
 }
 
-// supports: uint8, uint16, unit32, uint64, uin256, int32, int64
+// supports: uint8, uint16, unit32, uint64, uint256, int32, int64
 func decodeScalar(buf []byte, vPtr interface{}) error {
 	tp := reflect.TypeOf(vPtr)
 	if tp.Kind() != reflect.Ptr {
