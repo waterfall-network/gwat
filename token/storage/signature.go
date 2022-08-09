@@ -74,6 +74,10 @@ func (t Type) Size() uint8 {
 	return t[1]
 }
 
+func (t Type) Equal(gotT Type) bool {
+	return t[0] == gotT[0] && t[1] == gotT[1]
+}
+
 func (t Type) MarshalBinary() ([]byte, error) {
 	return t[:], nil
 }
@@ -311,22 +315,28 @@ func (sv SignatureVersion) String() string {
 }
 
 type Signature interface {
-	Fields() []Field
+	Fields() []FieldInfo
 	ReadFromStream(*StorageStream) (int, error)
 	WriteToStream(*StorageStream) (int, error)
 	Version() SignatureVersion
 }
 
-type Field struct {
+type FieldInfo struct {
+	descriptor FieldDescriptor
+
 	offset *big.Int
 	length uint64
 }
 
-func (f *Field) Offset() *big.Int {
+func (f *FieldInfo) Descriptor() FieldDescriptor {
+	return f.descriptor
+}
+
+func (f *FieldInfo) Offset() *big.Int {
 	return f.offset
 }
 
-func (f *Field) Length() uint64 {
+func (f *FieldInfo) Length() uint64 {
 	return f.length
 }
 
@@ -346,14 +356,18 @@ func NewFieldDescriptor(fieldName []byte, v ValueProperties) (*FieldDescriptor, 
 	}, nil
 }
 
-func (fp FieldDescriptor) MarshalBinary() (data []byte, err error) {
+func (fd FieldDescriptor) Name() string {
+	return string(fd.name)
+}
+
+func (fd FieldDescriptor) MarshalBinary() (data []byte, err error) {
 	// marshal value properties
-	res, err := fp.vp.MarshalBinary()
+	res, err := fd.vp.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	nameLen := len(fp.name)
+	nameLen := len(fd.name)
 	buf := make([]byte, uint8Size+nameLen+len(res))
 
 	// put length of name
@@ -361,16 +375,16 @@ func (fp FieldDescriptor) MarshalBinary() (data []byte, err error) {
 
 	// put name
 	off := uint8Size
-	copy(buf[off:], fp.name)
+	copy(buf[off:], fd.name)
 
 	// put value properties
-	off += len(fp.name)
+	off += len(fd.name)
 	copy(buf[off:], res)
 
 	return buf, nil
 }
 
-func (fp *FieldDescriptor) UnmarshalBinary(data []byte) error {
+func (fd *FieldDescriptor) UnmarshalBinary(data []byte) error {
 	// get len of name
 	nameLen := data[0]
 	data = data[uint8Size:]
@@ -386,26 +400,27 @@ func (fp *FieldDescriptor) UnmarshalBinary(data []byte) error {
 		return err
 	}
 
-	fp.name = name
-	fp.vp = vp
+	fd.name = name
+	fd.vp = vp
 	return nil
 }
 
 type SignatureV1 struct {
-	version           SignatureVersion
-	fieldsDescriptors []FieldDescriptor
-	fields            []Field
+	version SignatureVersion
+	fields  []FieldInfo
 }
 
-func NewSignatureV1(fd []FieldDescriptor) (*SignatureV1, error) {
+func NewSignatureV1(fd []FieldDescriptor) (Signature, error) {
 	if len(fd) > int(^uint8(0)) {
 		return nil, ErrTooManyFields
 	}
 
 	// version + fields count
 	totalSize := uint64(uint16Size + uint8Size)
-	fields := make([]Field, len(fd))
+	fields := make([]FieldInfo, len(fd))
 	for i, descriptor := range fd {
+		fields[i].descriptor = descriptor
+
 		l, err := calculateFieldLength(descriptor.vp)
 		if err != nil {
 			return nil, err
@@ -422,13 +437,12 @@ func NewSignatureV1(fd []FieldDescriptor) (*SignatureV1, error) {
 	calculateFieldsOffset(totalSize, fields)
 
 	return &SignatureV1{
-		version:           signatureV1,
-		fieldsDescriptors: fd,
-		fields:            fields,
+		version: signatureV1,
+		fields:  fields,
 	}, nil
 }
 
-func (s SignatureV1) Fields() []Field {
+func (s SignatureV1) Fields() []FieldInfo {
 	return s.fields
 }
 
@@ -452,9 +466,8 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 	pos.Add(pos, big.NewInt(int64(n)))
 
 	uint8Buf := make([]byte, uint8Size)
-	fields := make([]Field, countBuf[0])
-	fieldsDescriptors := make([]FieldDescriptor, countBuf[0])
-	for i := range fieldsDescriptors {
+	fields := make([]FieldInfo, countBuf[0])
+	for i := range fields {
 		// read length of field name
 		n, err = stream.ReadAt(uint8Buf, pos)
 		if err != nil {
@@ -487,13 +500,13 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 		}
 		pos.Add(pos, big.NewInt(int64(n)))
 
-		err = fieldsDescriptors[i].UnmarshalBinary(fieldBuf)
+		err = fields[i].descriptor.UnmarshalBinary(fieldBuf)
 		if err != nil {
 			return 0, err
 		}
 
 		// save length of the field
-		fields[i].length, err = calculateFieldLength(fieldsDescriptors[i].vp)
+		fields[i].length, err = calculateFieldLength(fields[i].descriptor.vp)
 		if err != nil {
 			return 0, err
 		}
@@ -504,9 +517,10 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 	// save offset of fields
 	calculateFieldsOffset(pos.Uint64(), fields)
 
-	s.version = SignatureVersion(binary.BigEndian.Uint16(sigVersionBuf))
-	s.fieldsDescriptors = fieldsDescriptors
-	s.fields = fields
+	*s = SignatureV1{
+		version: SignatureVersion(binary.BigEndian.Uint16(sigVersionBuf)),
+		fields:  fields,
+	}
 
 	return int(pos.Uint64()), nil
 }
@@ -518,13 +532,13 @@ func (s SignatureV1) WriteToStream(stream *StorageStream) (int, error) {
 	// write SignatureVersion
 	binary.BigEndian.PutUint16(buf[:uint16Size], uint16(s.version))
 
-	// write count of fieldsDescriptors
-	buf[uint16Size] = uint8(len(s.fieldsDescriptors))
+	// write count of fields
+	buf[uint16Size] = uint8(len(s.fields))
 
 	// write fieldsDescriptors
-	for _, field := range s.fieldsDescriptors {
+	for _, field := range s.fields {
 		// marshal the fieldDescriptor
-		b, err := field.MarshalBinary()
+		b, err := field.descriptor.MarshalBinary()
 		if err != nil {
 			return 0, err
 		}
@@ -673,7 +687,7 @@ func calculateFieldLength(vp ValueProperties) (uint64, error) {
 	}
 }
 
-func calculateFieldsOffset(start uint64, fields []Field) {
+func calculateFieldsOffset(start uint64, fields []FieldInfo) {
 	for i := range fields {
 		fields[i].offset = big.NewInt(int64(start))
 		start += fields[i].length
