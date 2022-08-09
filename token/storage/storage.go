@@ -52,6 +52,18 @@ type KeyValuePair struct {
 	key, value interface{}
 }
 
+func NewKeyValuePair(key, value interface{}) *KeyValuePair {
+	return &KeyValuePair{key: key, value: value}
+}
+
+func (kv *KeyValuePair) Key() interface{} {
+	return kv.key
+}
+
+func (kv *KeyValuePair) Value() interface{} {
+	return kv.value
+}
+
 type storage struct {
 	stream    *StorageStream
 	signature Signature
@@ -266,7 +278,7 @@ func (m *mapEntry) Read(s *StorageStream, toPtr interface{}) error {
 		return err
 	}
 
-	return m.decodeValue(res, kvPair.value)
+	return m.decodeValue(res, kvPair.Value())
 }
 
 //Write expects pointer to KeyValuePair struct
@@ -281,7 +293,7 @@ func (m *mapEntry) Write(s *StorageStream, val interface{}) error {
 		return err
 	}
 
-	valueB, err := m.encodeValue(kvPair.value)
+	valueB, err := m.encodeValue(kvPair.Value())
 	if err != nil {
 		return err
 	}
@@ -427,19 +439,23 @@ func decodeArray(buf []byte, arrPtr interface{}) error {
 		elemType := tp.Elem()
 		elemSize := elemType.Size()
 
+		if elemType.Kind() == reflect.Ptr {
+			elemSize = elemType.Elem().Size()
+		}
+
 		if len(buf)%int(elemSize) != 0 {
 			return ErrBadType
 		}
 
-		var newElem reflect.Value
-		if elemType.Kind() == reflect.Ptr {
-			newElem = reflect.New(elemType.Elem())
-		} else {
-			newElem = reflect.New(elemType)
-		}
-
 		var err error
+		var newElem reflect.Value
 		for len(buf) > 0 {
+			if elemType.Kind() == reflect.Ptr {
+				newElem = reflect.New(elemType.Elem())
+			} else {
+				newElem = reflect.New(elemType)
+			}
+
 			err = decodeScalar(buf[:elemSize], newElem.Interface())
 			if err != nil {
 				arrPtr = nil
@@ -468,16 +484,17 @@ func encodeUint256(val interface{}) ([]byte, error) {
 		v = *vr
 	}
 
-	return v.Bytes(), nil
+	buf := v.Bytes32()
+	return buf[:], nil
 }
 
 func decodeUint256(buf []byte, toPtr interface{}) error {
-	_, ok := toPtr.(*uint256.Int)
+	ptr, ok := toPtr.(*uint256.Int)
 	if !ok {
 		return ErrBadType
 	}
 
-	toPtr = new(uint256.Int).SetBytes(buf)
+	*ptr = *(new(uint256.Int).SetBytes(buf))
 	return nil
 }
 
