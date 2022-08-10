@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/waterfall-foundation/gwat/log"
 	"io"
 	"math"
 	"math/big"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/rlp"
 )
 
@@ -485,9 +485,8 @@ func (shm *SlotHashMap) GetMaxSlot() uint64 {
 }
 
 func (bs *Blocks) GetBlockByHash(hash common.Hash) *Block {
-	hashString := hash.String()
 	for _, block := range *bs {
-		if block.Hash().String() == hashString {
+		if block.Hash() == hash {
 			return block
 		}
 	}

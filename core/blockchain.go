@@ -20,8 +20,8 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/waterfall-foundation/gwat/dag/finalizer/interfaces"
 	"io"
+	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -37,6 +37,7 @@ import (
 	"github.com/waterfall-foundation/gwat/core/state/snapshot"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/dag/finalizer/interfaces"
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/internal/syncx"
@@ -3243,11 +3244,13 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	bc.txLookupCache.Add(txHash, lookup)
 }
 
+// GetOrderedParentHashes get parent hashes sorted by order of finalization
 func GetOrderedParentHashes(b *types.Block, bc interfaces.BlockChain) common.HashArray {
 	ph := b.ParentHashes()
 	return SortHashes(bc, ph)
 }
 
+// SortHashes sorts hashes by order of finalization
 func SortHashes(bc interfaces.BlockChain, hashes common.HashArray) common.HashArray {
 	blocks := bc.GetBlocksByHashes(hashes)
 	blocksArr := blocks.ToArray()
@@ -3262,12 +3265,15 @@ func SortHashes(bc interfaces.BlockChain, hashes common.HashArray) common.HashAr
 	return orderedHashes
 }
 
+// SortBlocks sorts hashes by order of finalization
 func SortBlocks(blocks []*types.Block) []*types.Block {
 	sort.Slice(blocks, func(i, j int) bool {
+		ibn := new(big.Int).SetBytes(blocks[i].Hash().Bytes())
+		jbn := new(big.Int).SetBytes(blocks[j].Hash().Bytes())
 		return (blocks[i].Height() > blocks[j].Height()) ||
 			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes())) ||
 			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) == len(blocks[j].ParentHashes()) &&
-				blocks[i].Hash().String() > blocks[j].Hash().String())
+				ibn.Cmp(jbn) < 0)
 	})
 	return blocks
 }

@@ -1,13 +1,14 @@
 package finalizer_test
 
 import (
+	"math"
+	"math/rand"
+	"testing"
+
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/dag/finalizer"
-	"math"
-	"math/rand"
-	"testing"
 )
 
 type testSpineCase struct {
@@ -230,7 +231,7 @@ func TestSortBlocks(t *testing.T) {
 		}
 		if block.Height() == orderedBlocks[i-1].Height() &&
 			len(block.ParentHashes()) == len(orderedBlocks[i-1].ParentHashes()) &&
-			block.Hash().String() > orderedBlocks[i-1].Hash().String() {
+			block.Hash().String() < orderedBlocks[i-1].Hash().String() {
 			t.Error("invalid sort by hash")
 		}
 	}

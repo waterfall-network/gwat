@@ -58,7 +58,6 @@ func (ci *ConsensusInfo) UnmarshalJSON(input []byte) error {
 }
 
 // ConsensusResult represents result of handling of consensus request
-// todo deprecated
 type ConsensusResult struct {
 	Error      *string            `json:"error"`
 	Info       *map[string]string `json:"info"`

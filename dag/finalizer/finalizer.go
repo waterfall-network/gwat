@@ -5,13 +5,13 @@
 package finalizer
 
 import (
-	"github.com/waterfall-foundation/gwat/dag/finalizer/interfaces"
 	"sync/atomic"
 
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/state"
 	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/dag/finalizer/interfaces"
 	"github.com/waterfall-foundation/gwat/eth/downloader"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/log"
