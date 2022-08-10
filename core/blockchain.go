@@ -20,6 +20,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"github.com/waterfall-foundation/gwat/dag/finalizer/interfaces"
 	"io"
 	"sort"
 	"sync"
@@ -1298,11 +1299,6 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 		return errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
-
-	if isHead && block.Height() != finNr {
-		log.Error("WriteFinalizedBlock: height!=finNr", "isHead", isHead, "finNr", finNr, "Height", block.Height(), "Hash", block.Hash().Hex())
-		isHead = false
-	}
 
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
@@ -3096,7 +3092,9 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
 		return unloaded, loaded, finalized, graph, memo[0], err
 	}
-	for _, ph := range block.ParentHashes() {
+
+	parentHashes := GetOrderedParentHashes(block, bc)
+	for _, ph := range parentHashes {
 		var (
 			_unloaded  common.HashArray
 			_loaded    common.HashArray
@@ -3243,4 +3241,33 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	//cash tx lookup
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: uint64(txIndex)}
 	bc.txLookupCache.Add(txHash, lookup)
+}
+
+func GetOrderedParentHashes(b *types.Block, bc interfaces.BlockChain) common.HashArray {
+	ph := b.ParentHashes()
+	return SortHashes(bc, ph)
+}
+
+func SortHashes(bc interfaces.BlockChain, hashes common.HashArray) common.HashArray {
+	blocks := bc.GetBlocksByHashes(hashes)
+	blocksArr := blocks.ToArray()
+
+	blocksArr = SortBlocks(blocksArr)
+
+	orderedHashes := make(common.HashArray, 0, len(blocksArr))
+	for _, block := range blocksArr {
+		orderedHashes = append(orderedHashes, block.Hash())
+	}
+
+	return orderedHashes
+}
+
+func SortBlocks(blocks []*types.Block) []*types.Block {
+	sort.Slice(blocks, func(i, j int) bool {
+		return (blocks[i].Height() > blocks[j].Height()) ||
+			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes())) ||
+			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) == len(blocks[j].ParentHashes()) &&
+				blocks[i].Hash().String() > blocks[j].Hash().String())
+	})
+	return blocks
 }

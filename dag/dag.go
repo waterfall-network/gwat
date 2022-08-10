@@ -90,7 +90,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 
 	// finalization
 	if len(data.Finalizing) > 0 {
-		if err := d.finalizer.Finalize(*data.Finalizing.Copy()); err != nil {
+		if err := d.finalizer.Finalize(&data.Finalizing); err != nil {
 			errs["finalization"] = err.Error()
 		}
 	}
@@ -145,7 +145,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	res := &ConsensusResult{
 		Error:      nil,
 		Info:       &info,
-		Candidates: candidates,
+		Candidates: *candidates,
 	}
 	if len(errs) > 0 {
 		strBuf, _ := json.Marshal(errs)
@@ -171,7 +171,7 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo) *FinalizationResult {
 
 	// finalization
 	if len(data.Finalizing) > 0 {
-		if err := d.finalizer.Finalize(*data.Finalizing.Copy()); err != nil {
+		if err := d.finalizer.Finalize(&data.Finalizing); err != nil {
 			errs["finalization"] = err.Error()
 		}
 	}
@@ -237,7 +237,7 @@ func (d *Dag) HandleGetCandidates() *CandidatesResult {
 	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
 	res := &CandidatesResult{
 		Error:      nil,
-		Candidates: candidates,
+		Candidates: *candidates,
 	}
 	if err != nil {
 		estr := err.Error()
