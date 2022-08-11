@@ -57,7 +57,6 @@ type Genesis struct {
 	Mixhash   common.Hash         `json:"mixHash"`
 	Coinbase  common.Address      `json:"coinbase"`
 	Alloc     GenesisAlloc        `json:"alloc"      gencodec:"required"`
-	Deposit   common.Address      `json:"deposit"    gencodec:"required"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -310,7 +309,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 func (g *Genesis) CreateDepositContract(statedb *state.StateDB, preHead *types.Header) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	context := NewEVMBlockContext(preHead, nil, &common.Address{})
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, g.configOrDefault(common.Hash{}), vm.Config{})
-	return vmenv.CreateGenesisContract(g.Deposit, common.FromHex(deposit.DepositContractBin))
+	//create deposit address from contract data
+	depositAddr := crypto.Keccak256Address(common.FromHex(deposit.DepositContractBin))
+	log.Info("Deposit contract address", "address", depositAddr)
+	return vmenv.CreateGenesisContract(depositAddr, common.FromHex(deposit.DepositContractBin))
 }
 
 // Commit writes the block and state of a genesis specification to the database.
@@ -377,7 +379,6 @@ func DefaultGenesisBlock() *Genesis {
 		ExtraData: hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:  5000,
 		Alloc:     decodePrealloc(mainnetAllocData),
-		Deposit:   common.HexToAddress("0xf30097f8c858c1f6b0c6efe72240319efa65b825"),
 	}
 }
 

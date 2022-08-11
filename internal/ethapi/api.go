@@ -2044,26 +2044,26 @@ func toHexSlice(b [][]byte) []string {
 // PublicDagAPI provides an API to access the gwat consensus functionality.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicDagAPI struct {
-	b Backend
+	b  Backend
+	am *accounts.Manager
 }
 
 // NewPublicDagAPI creates a new Ethereum blockchain API.
 func NewPublicDagAPI(b Backend) *PublicDagAPI {
-	return &PublicDagAPI{b}
+	return &PublicDagAPI{b: b, am: b.AccountManager()}
 }
 
 // Sync start consensus procedure.
-// deprecated
 func (api *PublicDagAPI) Sync(ctx context.Context, data *dag.ConsensusInfo) (*dag.ConsensusResult, error) {
-	return api.b.Dag().HandleConsensus(data), nil
+	return api.b.Dag().HandleConsensus(data, api.am.Accounts()), nil
 }
 
-// Finalize finalise blocks.
+// Finalize finalize blocks.
 func (api *PublicDagAPI) Finalize(ctx context.Context, data *dag.ConsensusInfo) (*dag.FinalizationResult, error) {
-	return api.b.Dag().HandleFinalize(data), nil
+	return api.b.Dag().HandleFinalize(data, api.am.Accounts()), nil
 }
 
-// HandleGetCandidates retrieves finalization candidates.
+// GetCandidates retrieves finalization candidates.
 func (api *PublicDagAPI) GetCandidates(ctx context.Context) (*dag.CandidatesResult, error) {
 	return api.b.Dag().HandleGetCandidates(), nil
 }

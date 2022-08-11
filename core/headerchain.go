@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/consensus"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
@@ -34,7 +35,6 @@ import (
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -593,7 +593,6 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 	defer hc.tipsMu.Unlock()
 
 	unloadedHashes = common.HashArray{}
-	saveTips := false
 	rmTips := common.HashArray{}
 
 	curTips := *hc.GetTips(true)
@@ -605,12 +604,11 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 			curTips.Remove(hash)
 		}
 	}
-
+	expCache := ExploreResultMap{}
 	for hash, dag := range curTips {
 		// if has children - rm from curTips
 		if children := bc.ReadChildren(hash); len(children) > 0 {
 			rmTips = append(rmTips, hash)
-			saveTips = true
 		}
 		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
 			block := bc.GetBlockByHash(hash)
@@ -627,17 +625,15 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 				dag.LastFinalizedHash = hash
 				dag.LastFinalizedHeight = *nr
 				hc.AddTips(dag, true)
-				saveTips = true
 				continue
 			}
 			// if block exists - check all ancestors to finalized state
-			unloaded, loaded, finalized, graph, _, err := bc.ExploreChainRecursive(hash)
+			unloaded, loaded, finalized, graph, expCacheUp, err := bc.ExploreChainRecursive(hash, expCache)
 			if err != nil {
 				hc.RemoveTips(common.HashArray{hash}, true)
-				saveTips = true
 				continue
 			}
-
+			expCache = expCacheUp
 			if dag.Height == 0 {
 				header := hc.GetHeader(hash)
 				dag.Height = header.Height
@@ -663,14 +659,12 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 			} else {
 				log.Warn("Unknown blocks detected", "hashes", unloaded)
 			}
-			saveTips = true
 		}
 	}
 	hc.RemoveTips(rmTips, true)
 
 	hc.writeCurrentTips(true)
-	if saveTips {
-	}
+
 	return hc.GetTips(true), unloadedHashes
 }
 

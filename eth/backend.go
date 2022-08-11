@@ -397,6 +397,12 @@ func (s *Ethereum) isLocalBlock(block *types.Block) bool {
 	if author == etherbase {
 		return true
 	}
+	// support multi creator mode
+	for _, acc := range s.accountManager.Accounts() {
+		if etherbase == acc {
+			return true
+		}
+	}
 	// Check whether the given address is specified by `txpool.local`
 	// CLI flag.
 	for _, account := range s.config.TxPool.Locals {

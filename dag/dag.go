@@ -27,6 +27,8 @@ type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 	Downloader() *downloader.Downloader
+	Etherbase() (eb common.Address, err error)
+	SetEtherbase(etherbase common.Address)
 }
 
 type Dag struct {
@@ -75,8 +77,7 @@ func (d *Dag) Creator() *creator.Creator {
 // 2. collect next finalization candidates
 // 3. new block creation
 // 4. return result
-// todo deprecated
-func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
+func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *ConsensusResult {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 
@@ -130,14 +131,35 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 		go func() {
 			crtStart := time.Now()
 			crtInfo := map[string]string{}
-			block, crtErr := d.creator.CreateBlock(assigned, tips)
-			if crtErr != nil {
-				crtInfo["error"] = crtErr.Error()
+			etherbase, _ := d.eth.Etherbase()
+			for _, creator := range assigned.Creators {
+				coinbase := common.Address{}
+				for _, acc := range accounts {
+					if creator == acc {
+						coinbase = creator
+						break
+					}
+				}
+				if coinbase == (common.Address{}) {
+					continue
+				}
+				// if received next slot
+				if d.consensusInfo.Slot > assigned.Slot {
+					break
+				}
+				d.eth.SetEtherbase(coinbase)
+
+				block, crtErr := d.creator.CreateBlock(assigned, tips)
+				if crtErr != nil {
+					crtInfo["error"] = crtErr.Error()
+				}
+				if block != nil {
+					crtInfo["newBlock"] = block.Hash().Hex()
+				}
+				log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 			}
-			if block != nil {
-				crtInfo["newBlock"] = block.Hash().Hex()
-			}
-			log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+			//set current etherbase
+			d.eth.SetEtherbase(etherbase)
 		}()
 	}
 
@@ -159,7 +181,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 // HandleFinalize handles consensus data
 // 1. blocks finalization
 // 2. new block creation
-func (d *Dag) HandleFinalize(data *ConsensusInfo) *FinalizationResult {
+func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *FinalizationResult {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 
@@ -199,14 +221,35 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo) *FinalizationResult {
 		go func() {
 			crtStart := time.Now()
 			crtInfo := map[string]string{}
-			block, crtErr := d.creator.CreateBlock(assigned, tips)
-			if crtErr != nil {
-				crtInfo["error"] = crtErr.Error()
+			etherbase, _ := d.eth.Etherbase()
+			for _, creator := range assigned.Creators {
+				coinbase := common.Address{}
+				for _, acc := range accounts {
+					if creator == acc {
+						coinbase = creator
+						break
+					}
+				}
+				if coinbase == (common.Address{}) {
+					continue
+				}
+				// if received next slot
+				if d.consensusInfo.Slot > assigned.Slot {
+					break
+				}
+				d.eth.SetEtherbase(coinbase)
+
+				block, crtErr := d.creator.CreateBlock(assigned, tips)
+				if crtErr != nil {
+					crtInfo["error"] = crtErr.Error()
+				}
+				if block != nil {
+					crtInfo["newBlock"] = block.Hash().Hex()
+				}
+				log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 			}
-			if block != nil {
-				crtInfo["newBlock"] = block.Hash().Hex()
-			}
-			log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+			//set current etherbase
+			d.eth.SetEtherbase(etherbase)
 		}()
 	}
 

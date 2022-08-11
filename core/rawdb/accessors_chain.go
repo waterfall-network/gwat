@@ -776,33 +776,40 @@ func DeleteBadBlocks(db ethdb.KeyValueWriter) {
 	}
 }
 
-// todo fix
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
-	panic("FindCommonAncestor: no implementation: fix it core/rawdb/accessors_chain.go:1001")
-	//for bn := b.Nr(); a.Nr() > bn; {
-	//	a = ReadHeader(db, a.ParentHashes[0])
-	//	if a == nil {
-	//		return nil
-	//	}
-	//}
-	//for an := a.Nr(); an < b.Nr(); {
-	//	b = ReadHeader(db, b.ParentHashes[0])
-	//	if b == nil {
-	//		return nil
-	//	}
-	//}
-	//for a.Hash() != b.Hash() {
-	//	a = ReadHeader(db, a.ParentHashes[0])
-	//	if a == nil {
-	//		return nil
-	//	}
-	//	b = ReadHeader(db, b.ParentHashes[0])
-	//	if b == nil {
-	//		return nil
-	//	}
-	//}
-	//return a
+	if (a.Nr() == 0 && a.Height > 0) || (b.Nr() == 0 && b.Height > 0) {
+		panic("FindCommonAncestor: no implementation for dag part: core/rawdb/accessors_chain.go:782")
+	}
+
+	for bn := b.Nr(); a.Nr() > bn; {
+		prevHash := ReadFinalizedHashByNumber(db, a.Nr()-1)
+		a = ReadHeader(db, prevHash)
+		if a == nil {
+			return nil
+		}
+	}
+	for an := a.Nr(); an < b.Nr(); {
+		prevHash := ReadFinalizedHashByNumber(db, b.Nr()-1)
+		b = ReadHeader(db, prevHash)
+		if b == nil {
+			return nil
+		}
+	}
+
+	for a.Hash() != b.Hash() {
+		prevHashA := ReadFinalizedHashByNumber(db, a.Nr()-1)
+		a = ReadHeader(db, prevHashA)
+		if a == nil {
+			return nil
+		}
+		prevHashB := ReadFinalizedHashByNumber(db, b.Nr()-1)
+		b = ReadHeader(db, prevHashB)
+		if b == nil {
+			return nil
+		}
+	}
+	return a
 }
 
 /**** FINALIZED BLOCK DATA ***/

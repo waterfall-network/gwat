@@ -23,6 +23,7 @@ import (
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/waterfall-foundation/gwat/p2p"
 	"github.com/waterfall-foundation/gwat/p2p/enode"
@@ -150,6 +151,8 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	)
 	if len(unsync) == 0 {
 		dagHashes = chain.GetDagHashes()
+	} else {
+		log.Warn("cannot calculate dag hashes", "unsynchronized tips", unsync)
 	}
 	return &NodeInfo{
 		Versions:  ProtocolVersions,

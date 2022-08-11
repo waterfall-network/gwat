@@ -115,13 +115,11 @@ var (
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.MiningEnabledFlag,
 		utils.MinerThreadsFlag,
 		utils.MinerNotifyFlag,
 		utils.LegacyMinerGasTargetFlag,
 		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
-		utils.MinerEtherbaseFlag,
 		utils.MinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerNoVerifyFlag,
@@ -390,23 +388,21 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	}
 
 	// Start auxiliary services if enabled
-	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
-		// Mining only makes sense if a full Ethereum node is running
-		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-			utils.Fatalf("Light clients do not support mining")
-		}
-		ethBackend, ok := backend.(*eth.EthAPIBackend)
-		if !ok {
-			utils.Fatalf("Ethereum service not running")
-		}
-		// Set the gas price to the limits from the CLI and start mining
-		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
-		ethBackend.TxPool().SetGasPrice(gasprice)
-		// start mining
-		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
-		if err := ethBackend.StartMining(threads); err != nil {
-			utils.Fatalf("Failed to start mining: %v", err)
-		}
+	// Mining only makes sense if a full Ethereum node is running
+	if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+		utils.Fatalf("Light clients do not support mining")
+	}
+	ethBackend, ok := backend.(*eth.EthAPIBackend)
+	if !ok {
+		utils.Fatalf("Ethereum service not running")
+	}
+	// Set the gas price to the limits from the CLI and start mining
+	gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+	ethBackend.TxPool().SetGasPrice(gasprice)
+	// start mining
+	threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
+	if err := ethBackend.StartMining(threads); err != nil {
+		utils.Fatalf("Failed to start mining: %v", err)
 	}
 }
 
