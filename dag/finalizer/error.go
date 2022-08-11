@@ -32,4 +32,7 @@ var (
 	// ErrBadFinalizedSequence  returned when finalizing numbers of candidates contain already finalized numbers
 	// but related hashes does not match.
 	ErrBadFinalizedSequence = errors.New("sequence of candidates does not match to the sequence of finalized blocks")
+
+	// if bc.getBlock(hash) == nil
+	ErrUnknownHash = errors.New("unknown spine hash")
 )

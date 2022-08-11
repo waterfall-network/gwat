@@ -513,6 +513,25 @@ func (shm *SlotSpineHashMap) GetMinSlot() uint64 {
 	return minClot
 }
 
+func (shm *SlotSpineHashMap) GetHashes() *common.HashArray {
+	if len(*shm) == 0 {
+		return nil
+	}
+
+	hashes := make(common.HashArray, 0, len(*shm))
+	minSlot := shm.GetMinSlot()
+	maxSlot := shm.GetMaxSlot()
+
+	for slot := minSlot; slot <= maxSlot; slot++ {
+		if _, exists := (*shm)[slot]; !exists {
+			continue
+		}
+		hashes = append(hashes, (*shm)[slot].Hash())
+	}
+
+	return &hashes
+}
+
 func (bs *Blocks) GetHashes() *common.HashArray {
 	hashes := make(common.HashArray, 0, len(*bs))
 	for _, block := range *bs {

@@ -89,8 +89,8 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo) *ConsensusResult {
 	log.Info("Handle Consensus: start", "data", data)
 
 	// finalization
-	if len(data.Finalizing) > 0 {
-		if err := d.finalizer.Finalize(&data.Finalizing); err != nil {
+	if len(data.FinalizingSpines) > 0 {
+		if err := d.finalizer.Finalize(&data.FinalizingSpines); err != nil {
 			errs["finalization"] = err.Error()
 		}
 	}
@@ -170,8 +170,8 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo) *FinalizationResult {
 	log.Info("Handle Consensus: start", "data", data)
 
 	// finalization
-	if len(data.Finalizing) > 0 {
-		if err := d.finalizer.Finalize(&data.Finalizing); err != nil {
+	if len(data.FinalizingSpines) > 0 {
+		if err := d.finalizer.Finalize(&data.FinalizingSpines); err != nil {
 			errs["finalization"] = err.Error()
 		}
 	}

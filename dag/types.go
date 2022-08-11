@@ -10,17 +10,17 @@ import (
 
 // ConsensusInfo represents data of consensus request
 type ConsensusInfo struct {
-	Slot       uint64           `json:"slot"`
-	Creators   []common.Address `json:"creators"`
-	Finalizing common.HashArray `json:"finalizing"`
+	Slot             uint64           `json:"slot"`
+	Creators         []common.Address `json:"creators"`
+	FinalizingSpines common.HashArray `json:"finalizing"`
 }
 
 // Copy duplicates the current storage.
 func (ci *ConsensusInfo) Copy() *ConsensusInfo {
 	return &ConsensusInfo{
-		Slot:       ci.Slot,
-		Creators:   ci.Creators,
-		Finalizing: ci.Finalizing,
+		Slot:             ci.Slot,
+		Creators:         ci.Creators,
+		FinalizingSpines: ci.FinalizingSpines,
 	}
 }
 
@@ -34,7 +34,7 @@ func (ci *ConsensusInfo) MarshalJSON() ([]byte, error) {
 	out := ConsensusInfoMarshaling{
 		Slot:       (*hexutil.Uint64)(&ci.Slot),
 		Creators:   ci.Creators,
-		Finalizing: ci.Finalizing,
+		Finalizing: ci.FinalizingSpines,
 	}
 	return json.Marshal(out)
 }
@@ -52,7 +52,7 @@ func (ci *ConsensusInfo) UnmarshalJSON(input []byte) error {
 		ci.Creators = dec.Creators
 	}
 	if dec.Finalizing != nil {
-		ci.Finalizing = dec.Finalizing
+		ci.FinalizingSpines = dec.Finalizing
 	}
 	return nil
 }

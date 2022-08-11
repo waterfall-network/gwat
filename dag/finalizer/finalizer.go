@@ -54,7 +54,7 @@ func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux) *Fina
 }
 
 // Finalize start finalization procedure
-func (f *Finalizer) Finalize(chain *common.HashArray) error {
+func (f *Finalizer) Finalize(spines *common.HashArray) error {
 
 	if f.isSyncing() {
 		return ErrSyncing
@@ -67,31 +67,36 @@ func (f *Finalizer) Finalize(chain *common.HashArray) error {
 	atomic.StoreInt32(&f.busy, 1)
 	defer atomic.StoreInt32(&f.busy, 0)
 
-	if len(*chain) == 0 {
-		log.Info("⌛ Finalization is skipped: received chain empty")
+	if len(*spines) == 0 {
+		log.Info("⌛ Finalization is skipped: received spines empty")
 		return nil
 	}
 
-	log.Info("Finalization chain received", "chain", chain)
+	log.Info("Finalization spines received", "spines", spines)
 
 	bc := f.eth.BlockChain()
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	lastFinNr := lastFinBlock.Nr()
 
 	//collect and check finalizing blocks
-	blocks := bc.GetBlocksByHashes(*chain)
-	for _, block := range blocks {
+	spinesMap := make(types.SlotSpineHashMap, len(*spines))
+	for _, spineHash := range *spines {
+		block := bc.GetBlockByHash(spineHash)
+		if block == nil {
+			log.Error("unknown spine hash", "spineHash", spineHash)
+			return ErrUnknownHash
+		}
+		spinesMap[block.Slot()] = block
+	}
+
+	orderedChain := spinesToChain(&spinesMap, f.eth.BlockChain())
+	blocks := bc.GetBlocksByHashes(*orderedChain.GetHashes())
+
+	for _, block := range orderedChain {
 		if block == nil || block.Header() == nil {
 			return ErrUnknownBlock
 		}
 	}
-
-	spines, err := CalculateSpines(blocks.ToArray())
-	if err != nil {
-		return err
-	}
-
-	orderedChain := spinesToChain(&spines, len(blocks), f.eth.BlockChain())
 
 	// blocks finalizing
 	for i, blck := range orderedChain {
@@ -107,8 +112,8 @@ func (f *Finalizer) Finalize(chain *common.HashArray) error {
 	}
 	lastBlock := blocks[orderedChain[len(blocks)-1].Hash()]
 
-	f.updateTips(*chain, *lastBlock)
-	log.Info("⛓ Finalization completed", "blocks", len(*chain), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+	f.updateTips(*orderedChain.GetHashes(), *lastBlock)
+	log.Info("⛓ Finalization completed", "blocks", len(*spines), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 	return nil
 }
 
@@ -256,24 +261,26 @@ func (f *Finalizer) GetFinalizingCandidates() (*common.HashArray, error) {
 		return &candidates, nil
 	}
 
-	finChain, err := OrderChain(finChain, bc)
+	spines, err := CalculateSpines(finChain)
 	if err != nil {
 		return nil, err
 	}
 
-	lastFinNr := finDag.LastFinalizedHeight
+	finChain = spinesToChain(&spines, bc)
+
+	lastFinNr := bc.GetBlockByHash(finDag.LastFinalizedHash).Number()
 	for i, block := range finChain {
 		if block.Number() != nil && len(finChain) > 0 {
-			bc.FinalizeTips(common.HashArray{block.Hash()}, common.Hash{}, lastFinNr)
+			bc.FinalizeTips(common.HashArray{block.Hash()}, common.Hash{}, *lastFinNr)
 			continue
 		}
 
-		nr := lastFinNr + uint64(i) + 1
+		nr := *lastFinNr + uint64(i) + 1
 		block.SetNumber(&nr)
 		candidates = append(candidates, block.Hash())
 	}
 
-	return &candidates, nil
+	return spines.GetHashes(), nil
 }
 
 func CalculateSpine(blocks types.Blocks) *types.Block {
@@ -324,40 +331,36 @@ func OrderChain(blocks types.Blocks, bc interfaces.BlockChain) (types.Blocks, er
 		return nil, err
 	}
 
-	orderedChain := spinesToChain(&spines, len(blocks), bc)
+	orderedChain := spinesToChain(&spines, bc)
 	return orderedChain, nil
 }
 
-func spinesToChain(spines *types.SlotSpineHashMap, candidatesLen int, bc interfaces.BlockChain) types.Blocks {
-	candidatesInChain := make(map[common.Hash]struct{}, candidatesLen)
+func spinesToChain(spines *types.SlotSpineHashMap, bc interfaces.BlockChain) types.Blocks {
+	candidatesInChain := make(map[common.Hash]struct{})
 	maxSlot := spines.GetMaxSlot()
 	minSlot := spines.GetMinSlot()
 
-	chain := make(types.Blocks, 0, candidatesLen)
-	for slot := int(maxSlot); slot >= int(minSlot); slot-- {
+	chain := make(types.Blocks, 0)
+	for slot := int(minSlot); slot <= int(maxSlot); slot++ {
 		if _, ok := (*spines)[uint64(slot)]; !ok {
 			continue
 		}
 		spine := (*spines)[uint64(slot)]
 
-		processBlock(spine, candidatesLen, candidatesInChain, bc, &chain)
-
-		if len(candidatesInChain) == candidatesLen {
-			break
-		}
+		processBlock(spine, candidatesInChain, bc, &chain)
 	}
 	return chain
 }
 
-func calculateChain(block *types.Block, candidatesLen int, candidatesInChain map[common.Hash]struct{}, bc interfaces.BlockChain) types.Blocks {
+func calculateChain(block *types.Block, candidatesInChain map[common.Hash]struct{}, bc interfaces.BlockChain) types.Blocks {
 	chain := make(types.Blocks, 0, len(block.ParentHashes()))
 
-	processBlock(block, candidatesLen, candidatesInChain, bc, &chain)
+	processBlock(block, candidatesInChain, bc, &chain)
 
 	return chain
 }
 
-func processBlock(block *types.Block, candidatesLen int, candidatesInChain map[common.Hash]struct{}, bc interfaces.BlockChain, chain *types.Blocks) {
+func processBlock(block *types.Block, candidatesInChain map[common.Hash]struct{}, bc interfaces.BlockChain, chain *types.Blocks) {
 	if _, wasProcessed := candidatesInChain[block.Hash()]; wasProcessed {
 		return
 	}
@@ -366,7 +369,7 @@ func processBlock(block *types.Block, candidatesLen int, candidatesInChain map[c
 		parent := bc.GetBlockByHash(ph)
 		if _, wasProcessed := candidatesInChain[ph]; !wasProcessed && parent.Number() == nil {
 			candidatesInChain[block.Hash()] = struct{}{}
-			if chainPart := calculateChain(parent, candidatesLen, candidatesInChain, bc); len(chainPart) != 0 {
+			if chainPart := calculateChain(parent, candidatesInChain, bc); len(chainPart) != 0 {
 				*chain = append(*chain, chainPart...)
 			}
 			candidatesInChain[ph] = struct{}{}
