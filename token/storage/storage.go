@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 
 var (
 	ErrBadType              = errors.New("bad type")
+	ErrArrayExpected        = errors.New("array or slice expected")
+	ErrKeyValuePairExpected = errors.New("KeyValuePair expected")
 	ErrCannotEncodeNilValue = errors.New("cannot encode nil value")
 	ErrCannotDecodeNilValue = errors.New("cannot decode nil value")
 	ErrDecoderIsNotSet      = errors.New("decoder is not set")
@@ -29,6 +32,7 @@ type FieldEntry interface {
 type Storage interface {
 	ReadField(string, interface{}) error
 	WriteField(string, interface{}) error
+	Flush()
 }
 
 type Encoder func(interface{}) ([]byte, error)
@@ -153,6 +157,11 @@ func (s *storage) WriteField(fieldName string, val interface{}) error {
 	return field.Write(s.stream, val)
 }
 
+// Flush saves changes to stateDb
+func (s *storage) Flush() {
+	s.stream.Flush()
+}
+
 //NewFieldEntry creates new FieldEntry from FieldInfo
 func NewFieldEntry(fieldInfo FieldInfo) (FieldEntry, error) {
 	descriptor := fieldInfo.Descriptor()
@@ -266,7 +275,7 @@ type mapEntry struct {
 func (m *mapEntry) Read(s *StorageStream, toPtr interface{}) error {
 	kvPair, ok := toPtr.(*KeyValuePair)
 	if !ok {
-		return ErrBadType
+		return ErrKeyValuePairExpected
 	}
 
 	keyB, err := m.encodeKey(kvPair.key)
@@ -286,7 +295,7 @@ func (m *mapEntry) Read(s *StorageStream, toPtr interface{}) error {
 func (m *mapEntry) Write(s *StorageStream, val interface{}) error {
 	kvPair, ok := val.(*KeyValuePair)
 	if !ok {
-		return ErrBadType
+		return ErrKeyValuePairExpected
 	}
 
 	keyB, err := m.encodeKey(kvPair.key)
@@ -323,6 +332,12 @@ func encodeScalar(v interface{}) ([]byte, error) {
 	var err error
 	var buf []byte
 	switch v.(type) {
+	case bool:
+		if v.(bool) {
+			buf = []byte{1}
+		} else {
+			buf = []byte{0}
+		}
 	case uint8:
 		buf = []byte{v.(uint8)}
 	case uint16:
@@ -348,7 +363,7 @@ func encodeScalar(v interface{}) ([]byte, error) {
 			break
 		}
 
-		return nil, fmt.Errorf("%s: %T", ErrBadType, v)
+		return nil, newBadTypeErr(v)
 	}
 
 	return buf, nil
@@ -358,10 +373,14 @@ func encodeScalar(v interface{}) ([]byte, error) {
 func decodeScalar(buf []byte, vPtr interface{}) error {
 	tp := reflect.TypeOf(vPtr)
 	if tp.Kind() != reflect.Ptr {
-		return ErrBadType
+		return newBadTypeErr(vPtr)
 	}
 
 	switch vPtr.(type) {
+	case *bool:
+		if bytes.Compare(buf, []byte{1}) == 0 {
+			*vPtr.(*bool) = true
+		}
 	case *uint8:
 		*vPtr.(*uint8) = buf[0]
 	case *uint16:
@@ -382,7 +401,7 @@ func decodeScalar(buf []byte, vPtr interface{}) error {
 			break
 		}
 
-		return fmt.Errorf("%s: %T", ErrBadType, vPtr)
+		return newBadTypeErr(vPtr)
 	}
 
 	return nil
@@ -392,7 +411,7 @@ func decodeScalar(buf []byte, vPtr interface{}) error {
 func encodeArray(arr interface{}) ([]byte, error) {
 	tp := reflect.TypeOf(arr)
 	if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
-		return nil, ErrBadType
+		return nil, ErrArrayExpected
 	}
 
 	switch arr.(type) {
@@ -421,7 +440,7 @@ func encodeArray(arr interface{}) ([]byte, error) {
 func decodeArray(buf []byte, arrPtr interface{}) error {
 	tp := reflect.TypeOf(arrPtr)
 	if tp.Kind() != reflect.Ptr {
-		return ErrBadType
+		return newBadTypeErr(arrPtr)
 	}
 
 	valuePtr := reflect.ValueOf(arrPtr)
@@ -434,7 +453,7 @@ func decodeArray(buf []byte, arrPtr interface{}) error {
 	default:
 		tp := reflect.TypeOf(value.Interface())
 		if !(tp.Kind() == reflect.Slice || tp.Kind() == reflect.Array) {
-			return ErrBadType
+			return ErrArrayExpected
 		}
 
 		elemType := tp.Elem()
@@ -480,7 +499,7 @@ func encodeUint256(val interface{}) ([]byte, error) {
 	if !ok {
 		vr, ok := val.(*uint256.Int)
 		if !ok {
-			return nil, ErrBadType
+			return nil, newBadTypeErr(val)
 		}
 		v = *vr
 	}
@@ -492,7 +511,7 @@ func encodeUint256(val interface{}) ([]byte, error) {
 func decodeUint256(buf []byte, toPtr interface{}) error {
 	ptr, ok := toPtr.(*uint256.Int)
 	if !ok {
-		return ErrBadType
+		return newBadTypeErr(toPtr)
 	}
 
 	*ptr = *(new(uint256.Int).SetBytes(buf))
@@ -502,7 +521,7 @@ func decodeUint256(buf []byte, toPtr interface{}) error {
 func encodeBigInt(val interface{}) ([]byte, error) {
 	v, ok := val.(big.Int)
 	if !ok {
-		return nil, ErrBadType
+		return nil, newBadTypeErr(val)
 	}
 
 	return v.Bytes(), nil
@@ -511,7 +530,7 @@ func encodeBigInt(val interface{}) ([]byte, error) {
 func decodeBigInt(buf []byte, toPtr interface{}) error {
 	ptr, ok := toPtr.(*big.Int)
 	if !ok {
-		return ErrBadType
+		return newBadTypeErr(toPtr)
 	}
 
 	v := new(big.Int).SetBytes(buf)
@@ -558,4 +577,8 @@ func decode(decoder Decoder, buf []byte, ptr interface{}) error {
 	}
 
 	return decoder(buf, ptr)
+}
+
+func newBadTypeErr(v interface{}) error {
+	return fmt.Errorf("%s: %T", ErrBadType, v)
 }
