@@ -361,7 +361,8 @@ func calculateChain(block *types.Block, candidatesInChain map[common.Hash]struct
 }
 
 func processBlock(block *types.Block, candidatesInChain map[common.Hash]struct{}, bc interfaces.BlockChain, chain *types.Blocks) {
-	if _, wasProcessed := candidatesInChain[block.Hash()]; wasProcessed {
+	bcBlock := bc.GetBlockByHash(block.Hash())
+	if _, wasProcessed := candidatesInChain[block.Hash()]; wasProcessed || bcBlock.Number() != nil {
 		return
 	}
 	orderedHashes := core.GetOrderedParentHashes(block, bc)
