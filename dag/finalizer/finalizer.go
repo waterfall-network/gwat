@@ -89,7 +89,12 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 		spinesMap[block.Slot()] = block
 	}
 
-	orderedChain := spinesToChain(&spinesMap, f.eth.BlockChain())
+	orderedChain := spinesToChain(f.eth.BlockChain(), &spinesMap)
+	if len(orderedChain) == 0 {
+		log.Info("⌛ Finalization is skipped: received spines finalized")
+		return nil
+	}
+
 	blocks := bc.GetBlocksByHashes(*orderedChain.GetHashes())
 
 	for _, block := range orderedChain {
@@ -266,7 +271,7 @@ func (f *Finalizer) GetFinalizingCandidates() (*common.HashArray, error) {
 		return nil, err
 	}
 
-	finChain = spinesToChain(&spines, bc)
+	finChain = spinesToChain(bc, &spines)
 
 	lastFinNr := bc.GetBlockByHash(finDag.LastFinalizedHash).Number()
 	for i, block := range finChain {
@@ -287,28 +292,23 @@ func CalculateSpine(blocks types.Blocks) *types.Block {
 	if len(blocks) == 0 {
 		return nil
 	}
-
 	if len(blocks) == 1 {
 		return blocks[0]
 	}
-
 	maxHeightBlocks := blocks.GetMaxHeightBlocks()
 	if len(maxHeightBlocks) == 1 {
 		return maxHeightBlocks[0]
 	}
-
 	maxParentHashesBlocks := maxHeightBlocks.GetMaxParentHashesLenBlocks()
 	if len(maxParentHashesBlocks) == 1 {
 		return maxParentHashesBlocks[0]
 	}
-
 	var maxHashIndex int
 	for i := range maxParentHashesBlocks {
 		if maxParentHashesBlocks[i].Hash().String() > maxParentHashesBlocks[maxHashIndex].Hash().String() {
 			maxHashIndex = i
 		}
 	}
-
 	return maxParentHashesBlocks[maxHashIndex]
 }
 
@@ -317,7 +317,6 @@ func CalculateSpines(blocks types.Blocks) (types.SlotSpineHashMap, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	spines := make(types.SlotSpineHashMap)
 	for slot, bs := range blocksBySlot {
 		spines[slot] = CalculateSpine(bs)
@@ -325,52 +324,46 @@ func CalculateSpines(blocks types.Blocks) (types.SlotSpineHashMap, error) {
 	return spines, nil
 }
 
-func OrderChain(blocks types.Blocks, bc interfaces.BlockChain) (types.Blocks, error) {
+func OrderChain(bc interfaces.BlockChain, blocks types.Blocks) (types.Blocks, error) {
 	spines, err := CalculateSpines(blocks)
 	if err != nil {
 		return nil, err
 	}
-
-	orderedChain := spinesToChain(&spines, bc)
+	orderedChain := spinesToChain(bc, &spines)
 	return orderedChain, nil
 }
 
-func spinesToChain(spines *types.SlotSpineHashMap, bc interfaces.BlockChain) types.Blocks {
+func spinesToChain(bc interfaces.BlockChain, spines *types.SlotSpineHashMap) types.Blocks {
 	candidatesInChain := make(map[common.Hash]struct{})
 	maxSlot := spines.GetMaxSlot()
 	minSlot := spines.GetMinSlot()
-
 	chain := make(types.Blocks, 0)
 	for slot := int(minSlot); slot <= int(maxSlot); slot++ {
 		if _, ok := (*spines)[uint64(slot)]; !ok {
 			continue
 		}
 		spine := (*spines)[uint64(slot)]
-
-		processBlock(spine, candidatesInChain, bc, &chain)
+		processBlock(bc, spine, candidatesInChain, &chain)
 	}
 	return chain
 }
 
-func calculateChain(block *types.Block, candidatesInChain map[common.Hash]struct{}, bc interfaces.BlockChain) types.Blocks {
+func calculateChain(bc interfaces.BlockChain, block *types.Block, candidatesInChain map[common.Hash]struct{}) types.Blocks {
 	chain := make(types.Blocks, 0, len(block.ParentHashes()))
-
-	processBlock(block, candidatesInChain, bc, &chain)
-
+	processBlock(bc, block, candidatesInChain, &chain)
 	return chain
 }
 
-func processBlock(block *types.Block, candidatesInChain map[common.Hash]struct{}, bc interfaces.BlockChain, chain *types.Blocks) {
-	bcBlock := bc.GetBlockByHash(block.Hash())
-	if _, wasProcessed := candidatesInChain[block.Hash()]; wasProcessed || bcBlock.Number() != nil {
+func processBlock(bc interfaces.BlockChain, block *types.Block, candidatesInChain map[common.Hash]struct{}, chain *types.Blocks) {
+	if _, wasProcessed := candidatesInChain[block.Hash()]; wasProcessed || block.Number() != nil {
 		return
 	}
-	orderedHashes := core.GetOrderedParentHashes(block, bc)
+	orderedHashes := core.GetOrderedParentHashes(bc, block)
 	for _, ph := range orderedHashes {
 		parent := bc.GetBlockByHash(ph)
 		if _, wasProcessed := candidatesInChain[ph]; !wasProcessed && parent.Number() == nil {
 			candidatesInChain[block.Hash()] = struct{}{}
-			if chainPart := calculateChain(parent, candidatesInChain, bc); len(chainPart) != 0 {
+			if chainPart := calculateChain(bc, parent, candidatesInChain); len(chainPart) != 0 {
 				*chain = append(*chain, chainPart...)
 			}
 			candidatesInChain[ph] = struct{}{}

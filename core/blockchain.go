@@ -3095,7 +3095,7 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		return unloaded, loaded, finalized, graph, memo[0], err
 	}
 
-	parentHashes := GetOrderedParentHashes(block, bc)
+	parentHashes := GetOrderedParentHashes(bc, block)
 	for _, ph := range parentHashes {
 		var (
 			_unloaded  common.HashArray
@@ -3246,7 +3246,7 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 }
 
 // GetOrderedParentHashes get parent hashes sorted by order of finalization
-func GetOrderedParentHashes(b *types.Block, bc interfaces.BlockChain) common.HashArray {
+func GetOrderedParentHashes(bc interfaces.BlockChain, b *types.Block) common.HashArray {
 	ph := b.ParentHashes()
 	return SortHashes(bc, ph)
 }

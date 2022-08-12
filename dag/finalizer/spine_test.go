@@ -291,7 +291,7 @@ func TestOrderChain(t *testing.T) {
 
 	addParents(spines, blocksInChain, &bc)
 
-	orderedChain, err := finalizer.OrderChain(blocks, &bc)
+	orderedChain, err := finalizer.OrderChain(&bc, blocks)
 	if err != nil {
 		t.Fatal(err)
 	}
