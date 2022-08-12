@@ -8,7 +8,15 @@ import (
 	"math/big"
 )
 
-const signatureV1 SignatureVersion = 0x0001
+const (
+	signatureV1 SignatureVersion = 0x0001
+
+	Uint8Size   = 1
+	Uint16Size  = 2
+	Uint32Size  = 4
+	Uint64Size  = 8
+	Uint256Size = 32
+)
 
 var (
 	ErrNoKeyProperties   = errors.New("no key properties for this type")
@@ -30,12 +38,6 @@ var (
 	Int64Type   = Type{0x02, 0x08}
 	ArrayType   = Type{0x03, 0x00}
 	MapType     = Type{0x04, 0x00}
-
-	uint8Size   = 1
-	uint16Size  = 2
-	uint32Size  = 4
-	uint64Size  = 8
-	uint256Size = 32
 )
 
 type Type [2]byte
@@ -167,16 +169,16 @@ func (a *ArrayProperties) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
-	buf := make([]byte, uint8Size+uint64Size+len(valueB))
+	buf := make([]byte, Uint8Size+Uint64Size+len(valueB))
 
 	// type
 	buf[0] = typeB
 
 	// length
-	binary.BigEndian.PutUint64(buf[uint8Size:uint8Size+uint64Size], a.len)
+	binary.BigEndian.PutUint64(buf[Uint8Size:Uint8Size+Uint64Size], a.len)
 
 	// valueProperties
-	copy(buf[uint8Size+uint64Size:], valueB)
+	copy(buf[Uint8Size+Uint64Size:], valueB)
 
 	return buf, nil
 }
@@ -189,11 +191,11 @@ func (a *ArrayProperties) UnmarshalBinary(data []byte) error {
 	}
 
 	// length
-	data = data[uint8Size:]
-	l := binary.BigEndian.Uint64(data[:uint64Size])
+	data = data[Uint8Size:]
+	l := binary.BigEndian.Uint64(data[:Uint64Size])
 
 	// valueProperties
-	data = data[uint64Size:]
+	data = data[Uint64Size:]
 	vp := newProperties(data[0])
 	err := vp.UnmarshalBinary(data[:])
 	if err != nil {
@@ -253,13 +255,13 @@ func (m *MapProperties) MarshalBinary() (data []byte, err error) {
 		return nil, err
 	}
 
-	buf := make([]byte, uint8Size+len(keyB)+len(valueB))
+	buf := make([]byte, Uint8Size+len(keyB)+len(valueB))
 
 	// put type
 	buf[0] = typeB
 
 	// put key
-	off := uint8Size
+	off := Uint8Size
 	copy(buf[off:], keyB)
 
 	// put value
@@ -277,7 +279,7 @@ func (m *MapProperties) UnmarshalBinary(data []byte) error {
 	}
 
 	// check that key is not map
-	data = data[uint8Size:]
+	data = data[Uint8Size:]
 	if data[0] == MapType.Id() {
 		return ErrWrongType
 	}
@@ -368,13 +370,13 @@ func (fd FieldDescriptor) MarshalBinary() (data []byte, err error) {
 	}
 
 	nameLen := len(fd.name)
-	buf := make([]byte, uint8Size+nameLen+len(res))
+	buf := make([]byte, Uint8Size+nameLen+len(res))
 
 	// put length of name
 	buf[0] = byte(nameLen)
 
 	// put name
-	off := uint8Size
+	off := Uint8Size
 	copy(buf[off:], fd.name)
 
 	// put value properties
@@ -387,7 +389,7 @@ func (fd FieldDescriptor) MarshalBinary() (data []byte, err error) {
 func (fd *FieldDescriptor) UnmarshalBinary(data []byte) error {
 	// get len of name
 	nameLen := data[0]
-	data = data[uint8Size:]
+	data = data[Uint8Size:]
 
 	// get name
 	name := data[:nameLen]
@@ -416,7 +418,7 @@ func NewSignatureV1(fd []FieldDescriptor) (Signature, error) {
 	}
 
 	// version + fields count
-	totalSize := uint64(uint16Size + uint8Size)
+	totalSize := uint64(Uint16Size + Uint8Size)
 	fields := make([]FieldInfo, len(fd))
 	for i, descriptor := range fd {
 		fields[i].descriptor = descriptor
@@ -431,7 +433,7 @@ func NewSignatureV1(fd []FieldDescriptor) (Signature, error) {
 		if err != nil {
 			return nil, err
 		}
-		totalSize += s + uint64(uint8Size+len(descriptor.name))
+		totalSize += s + uint64(Uint8Size+len(descriptor.name))
 	}
 
 	calculateFieldsOffset(totalSize, fields)
@@ -450,7 +452,7 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 	pos := big.NewInt(0)
 
 	// read the full signatureVersion
-	sigVersionBuf := make([]byte, uint16Size)
+	sigVersionBuf := make([]byte, Uint16Size)
 	n, err := stream.ReadAt(sigVersionBuf, pos)
 	if err != nil {
 		return 0, err
@@ -458,14 +460,14 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 	pos.Add(pos, big.NewInt(int64(n)))
 
 	// read the count of fields
-	countBuf := make([]byte, uint8Size)
+	countBuf := make([]byte, Uint8Size)
 	n, err = stream.ReadAt(countBuf, pos)
 	if err != nil {
 		return 0, err
 	}
 	pos.Add(pos, big.NewInt(int64(n)))
 
-	uint8Buf := make([]byte, uint8Size)
+	uint8Buf := make([]byte, Uint8Size)
 	fields := make([]FieldInfo, countBuf[0])
 	for i := range fields {
 		// read length of field name
@@ -488,13 +490,13 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 			return 0, err
 		}
 
-		fieldBuf := make([]byte, uint64(uint8Size+len(nameBuf))+end.Sub(end, pos).Uint64())
+		fieldBuf := make([]byte, uint64(Uint8Size+len(nameBuf))+end.Sub(end, pos).Uint64())
 		// copy name length
 		fieldBuf[0] = uint8Buf[0]
 		// copy name
-		copy(fieldBuf[uint8Size:uint8Size+len(nameBuf)], nameBuf[:])
+		copy(fieldBuf[Uint8Size:Uint8Size+len(nameBuf)], nameBuf[:])
 		// read fields
-		n, err = stream.ReadAt(fieldBuf[uint8Size+len(nameBuf):], pos)
+		n, err = stream.ReadAt(fieldBuf[Uint8Size+len(nameBuf):], pos)
 		if err != nil {
 			return 0, err
 		}
@@ -527,13 +529,13 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 
 func (s SignatureV1) WriteToStream(stream *StorageStream) (int, error) {
 	// SignatureVersion size + fields count
-	buf := make([]byte, uint16Size+uint8Size)
+	buf := make([]byte, Uint16Size+Uint8Size)
 
 	// write SignatureVersion
-	binary.BigEndian.PutUint16(buf[:uint16Size], uint16(s.version))
+	binary.BigEndian.PutUint16(buf[:Uint16Size], uint16(s.version))
 
 	// write count of fields
-	buf[uint16Size] = uint8(len(s.fields))
+	buf[Uint16Size] = uint8(len(s.fields))
 
 	// write fieldsDescriptors
 	for _, field := range s.fields {
@@ -582,7 +584,7 @@ func isMap(tp uint8) bool {
 func calculatePropsEnd(stream *StorageStream, currPos *big.Int) (*big.Int, error) {
 	end := new(big.Int).Set(currPos)
 
-	uint8Buf := make([]byte, uint8Size)
+	uint8Buf := make([]byte, Uint8Size)
 	// read Type
 	n, err := stream.ReadAt(uint8Buf, currPos)
 	if err != nil {
@@ -593,11 +595,11 @@ func calculatePropsEnd(stream *StorageStream, currPos *big.Int) (*big.Int, error
 	switch {
 	case isScalar(uint8Buf[0]):
 		// add size of Type
-		end.Add(end, big.NewInt(int64(uint8Size)))
+		end.Add(end, big.NewInt(int64(Uint8Size)))
 		return end, nil
 	case isArray(uint8Buf[0]):
 		// add array length
-		end.Add(end, big.NewInt(int64(uint64Size)))
+		end.Add(end, big.NewInt(int64(Uint64Size)))
 		return calculatePropsEnd(stream, end)
 	case isMap(uint8Buf[0]):
 		// get end of map key
@@ -617,7 +619,7 @@ func calculatePropertiesSize(vp ValueProperties) (uint64, error) {
 	switch {
 	case isScalar(vp.Type().Id()):
 		// type
-		return uint64(uint16Size), nil
+		return uint64(Uint16Size), nil
 	case isArray(vp.Type().Id()):
 		value, err := vp.ValueProperties()
 		if err != nil {
@@ -630,7 +632,7 @@ func calculatePropertiesSize(vp ValueProperties) (uint64, error) {
 		}
 
 		// type + length + element size
-		return uint64(uint8Size+uint64Size) + vpSize, nil
+		return uint64(Uint8Size+Uint64Size) + vpSize, nil
 	case isMap(vp.Type().Id()):
 		key, err := vp.KeyProperties()
 		if err != nil {
@@ -652,7 +654,7 @@ func calculatePropertiesSize(vp ValueProperties) (uint64, error) {
 			return 0, err
 		}
 
-		return uint64(uint8Size) + kSize + vSize, nil
+		return uint64(Uint8Size) + kSize + vSize, nil
 	default:
 		return 0, ErrWrongType
 	}

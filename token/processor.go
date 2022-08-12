@@ -154,7 +154,12 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 		return common.Address{}, err
 	}
 
-	err = storage.WriteField(StandardField, uint16(op.Standard()))
+	stdB, err := op.Standard().MarshalBinary()
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	err = storage.WriteField(StandardField, stdB)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -189,7 +194,6 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 			return common.Address{}, err
 		}
 	case operation.StdWRC721:
-		// minter
 		err = storage.WriteField(MinterField, caller.Address())
 		if err != nil {
 			return common.Address{}, err
@@ -773,18 +777,23 @@ func (p *Processor) newStorageWithoutStdCheck(token common.Address, op operation
 		return nil, operation.Std(0), err
 	}
 
-	var std uint16
-	err = storage.ReadField(StandardField, &std)
+	var stdB []byte
+	err = storage.ReadField(StandardField, &stdB)
 	if err != nil {
 		return nil, operation.Std(0), err
 	}
 
-	if std == 0 {
+	var std operation.Std
+	if err = std.UnmarshalBinary(stdB); err != nil {
+		return nil, operation.Std(0), err
+	}
+
+	if std == operation.Std(0) {
 		log.Error("Token doesn't exist", "address", token, "std", std)
 		return nil, operation.Std(0), ErrTokenNotExists
 	}
 
-	return storage, operation.Std(std), nil
+	return storage, std, nil
 }
 
 func (p *Processor) newStorage(token common.Address, op operation.Operation) (tokenStorage.Storage, error) {
@@ -805,10 +814,7 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 	fds := make([]tokenStorage.FieldDescriptor, 0, 10)
 
 	// Standard
-	stdFd, err := tokenStorage.NewFieldDescriptor(
-		[]byte(StandardField),
-		tokenStorage.NewScalarProperties(tokenStorage.Uint16Type),
-	)
+	stdFd, err := newByteArrayDescriptor(StandardField, tokenStorage.Uint16Size)
 	if err != nil {
 		return nil, err
 	}
