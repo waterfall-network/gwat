@@ -811,71 +811,70 @@ func (p *Processor) newStorage(token common.Address, op operation.Operation) (to
 }
 
 func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, error) {
-	fds := make([]tokenStorage.FieldDescriptor, 0, 10)
+	fieldDescriptors := make([]tokenStorage.FieldDescriptor, 0, 10)
 
 	// Standard
 	stdFd, err := newByteArrayDescriptor(StandardField, tokenStorage.Uint16Size)
 	if err != nil {
 		return nil, err
 	}
-	fds = append(fds, *stdFd)
+	fieldDescriptors = append(fieldDescriptors, stdFd)
 
 	// Name
 	nameFd, err := newByteArrayDescriptor(NameField, uint64(len(op.Name())))
 	if err != nil {
 		return nil, err
 	}
-	fds = append(fds, *nameFd)
+	fieldDescriptors = append(fieldDescriptors, nameFd)
 
 	// Symbol
 	symbolFd, err := newByteArrayDescriptor(SymbolField, uint64(len(op.Symbol())))
 	if err != nil {
 		return nil, err
 	}
-	fds = append(fds, *symbolFd)
+	fieldDescriptors = append(fieldDescriptors, symbolFd)
 
 	// Balances
-	balancesFd, err := newAddressUint256MapDescriptor(BalancesField)
+	balancesFd, err := newByteArrayScalarMapDescriptor(BalancesField, common.AddressLength, tokenStorage.Uint256Type)
 	if err != nil {
 		return nil, err
 	}
-	fds = append(fds, *balancesFd)
+	fieldDescriptors = append(fieldDescriptors, balancesFd)
 
 	switch op.Standard() {
 	case operation.StdWRC20:
 		// Decimals
-		decimalsFd, err := tokenStorage.NewFieldDescriptor(
-			[]byte(DecimalsField),
-			tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-		)
+		sc, _ := tokenStorage.NewScalarProperties(tokenStorage.Uint8Type)
+		decimalsFd, err := tokenStorage.NewFieldDescriptor([]byte(DecimalsField), sc)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *decimalsFd)
+		fieldDescriptors = append(fieldDescriptors, decimalsFd)
 
 		// TotalSupply
+		sc, _ = tokenStorage.NewScalarProperties(tokenStorage.Uint256Type)
 		totalSupplyFd, err := tokenStorage.NewFieldDescriptor(
 			[]byte(TotalSupplyField),
-			tokenStorage.NewScalarProperties(tokenStorage.Uint256Type),
+			sc,
 		)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *totalSupplyFd)
+		fieldDescriptors = append(fieldDescriptors, totalSupplyFd)
 
 		// Allowances
-		allowancesFd, err := newKeccakUint256MapDescriptor(AllowancesField)
+		allowancesFd, err := newByteArrayScalarMapDescriptor(AllowancesField, common.HashLength, tokenStorage.Uint256Type)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *allowancesFd)
+		fieldDescriptors = append(fieldDescriptors, allowancesFd)
 	case operation.StdWRC721:
 		// Minter
 		minterFd, err := newByteArrayDescriptor(MinterField, common.AddressLength)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *minterFd)
+		fieldDescriptors = append(fieldDescriptors, minterFd)
 
 		// BaseUri
 		baseURI, _ := op.BaseURI()
@@ -883,54 +882,63 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *baseUriFd)
+		fieldDescriptors = append(fieldDescriptors, baseUriFd)
 
 		// Owners
-		ownersFd, err := newAddressAddressMapDescriptor(OwnersField)
+		ownersFd, err := newByteArrayByteArrayMapDescriptor(OwnersField, common.AddressLength, common.AddressLength)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *ownersFd)
+		fieldDescriptors = append(fieldDescriptors, ownersFd)
 
 		// Metadata
-		metadataFd, err := newAddressByteArrayMapDescriptor(MetadataField)
+		metadataFd, err := newByteArrayByteSliceMapDescriptor(MetadataField, common.AddressLength)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *metadataFd)
+		fieldDescriptors = append(fieldDescriptors, metadataFd)
 
 		// TokenApprovals
-		tokenApprovalsFd, err := newAddressAddressMapDescriptor(TokenApprovalsField)
+		tokenApprovalsFd, err := newByteArrayByteArrayMapDescriptor(TokenApprovalsField, common.AddressLength, common.AddressLength)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *tokenApprovalsFd)
+		fieldDescriptors = append(fieldDescriptors, tokenApprovalsFd)
 
 		// OperatorApprovals
-		operatorApprovalsFd, err := newKeccakBoolMapDescriptor(OperatorApprovalsField)
+		operatorApprovalsFd, err := newByteArrayScalarMapDescriptor(OperatorApprovalsField, common.HashLength, tokenStorage.Uint8Type)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, *operatorApprovalsFd)
+		fieldDescriptors = append(fieldDescriptors, operatorApprovalsFd)
 	}
 
-	return fds, nil
+	return fieldDescriptors, nil
 }
 
-func newByteArrayDescriptor(name string, l uint64) (*tokenStorage.FieldDescriptor, error) {
-	return tokenStorage.NewFieldDescriptor(
-		[]byte(name),
-		tokenStorage.NewArrayProperties(tokenStorage.NewScalarProperties(tokenStorage.Uint8Type), l),
-	)
+func newByteArrayDescriptor(name string, l uint64) (tokenStorage.FieldDescriptor, error) {
+	sc, err := tokenStorage.NewScalarProperties(tokenStorage.Uint8Type)
+	if err != nil {
+		return nil, err
+	}
+
+	return tokenStorage.NewFieldDescriptor([]byte(name), tokenStorage.NewArrayProperties(sc, l))
 }
 
-func newAddressUint256MapDescriptor(name string) (*tokenStorage.FieldDescriptor, error) {
+func newByteArrayByteArrayMapDescriptor(name string, keySize, valueSize uint64) (tokenStorage.FieldDescriptor, error) {
+	keyScalar, err := tokenStorage.NewScalarProperties(tokenStorage.Uint8Type)
+	if err != nil {
+		return nil, err
+	}
+
+	valueScalar, err := tokenStorage.NewScalarProperties(tokenStorage.Uint8Type)
+	if err != nil {
+		return nil, err
+	}
+
 	mp, err := tokenStorage.NewMapProperties(
-		tokenStorage.NewArrayProperties(
-			tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-			common.AddressLength,
-		),
-		tokenStorage.NewScalarProperties(tokenStorage.Uint256Type),
+		tokenStorage.NewArrayProperties(keyScalar, keySize),
+		tokenStorage.NewArrayProperties(valueScalar, valueSize),
 	)
 	if err != nil {
 		return nil, err
@@ -939,13 +947,20 @@ func newAddressUint256MapDescriptor(name string) (*tokenStorage.FieldDescriptor,
 	return tokenStorage.NewFieldDescriptor([]byte(name), mp)
 }
 
-func newKeccakUint256MapDescriptor(name string) (*tokenStorage.FieldDescriptor, error) {
+func newByteArrayByteSliceMapDescriptor(name string, keySize uint64) (tokenStorage.FieldDescriptor, error) {
+	keyScalar, err := tokenStorage.NewScalarProperties(tokenStorage.Uint8Type)
+	if err != nil {
+		return nil, err
+	}
+
+	valueScalar, err := tokenStorage.NewScalarProperties(tokenStorage.Uint8Type)
+	if err != nil {
+		return nil, err
+	}
+
 	mp, err := tokenStorage.NewMapProperties(
-		tokenStorage.NewArrayProperties(
-			tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-			common.HashLength,
-		),
-		tokenStorage.NewScalarProperties(tokenStorage.Uint256Type),
+		tokenStorage.NewArrayProperties(keyScalar, keySize),
+		tokenStorage.NewSliceProperties(valueScalar),
 	)
 	if err != nil {
 		return nil, err
@@ -954,50 +969,18 @@ func newKeccakUint256MapDescriptor(name string) (*tokenStorage.FieldDescriptor, 
 	return tokenStorage.NewFieldDescriptor([]byte(name), mp)
 }
 
-func newKeccakBoolMapDescriptor(name string) (*tokenStorage.FieldDescriptor, error) {
-	mp, err := tokenStorage.NewMapProperties(
-		tokenStorage.NewArrayProperties(
-			tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-			common.HashLength,
-		),
-		tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-	)
+func newByteArrayScalarMapDescriptor(name string, keySize uint64, valType tokenStorage.Type) (tokenStorage.FieldDescriptor, error) {
+	keyScalar, err := tokenStorage.NewScalarProperties(tokenStorage.Uint8Type)
 	if err != nil {
 		return nil, err
 	}
 
-	return tokenStorage.NewFieldDescriptor([]byte(name), mp)
-}
-
-func newAddressAddressMapDescriptor(name string) (*tokenStorage.FieldDescriptor, error) {
-	mp, err := tokenStorage.NewMapProperties(
-		tokenStorage.NewArrayProperties(
-			tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-			common.AddressLength,
-		),
-		tokenStorage.NewArrayProperties(
-			tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-			common.AddressLength,
-		),
-	)
+	valueScalar, err := tokenStorage.NewScalarProperties(valType)
 	if err != nil {
 		return nil, err
 	}
 
-	return tokenStorage.NewFieldDescriptor([]byte(name), mp)
-}
-
-func newAddressByteArrayMapDescriptor(name string) (*tokenStorage.FieldDescriptor, error) {
-	mp, err := tokenStorage.NewMapProperties(
-		tokenStorage.NewArrayProperties(
-			tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-			common.AddressLength,
-		),
-		tokenStorage.NewArrayProperties(
-			tokenStorage.NewScalarProperties(tokenStorage.Uint8Type),
-			MetadataDefaultSize,
-		),
-	)
+	mp, err := tokenStorage.NewMapProperties(tokenStorage.NewArrayProperties(keyScalar, keySize), valueScalar)
 	if err != nil {
 		return nil, err
 	}

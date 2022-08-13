@@ -580,7 +580,7 @@ func TestProcessorPropertiesWRC721(t *testing.T) {
 
 	testutils.CompareBytes(t, prop.BaseURI, baseURI)
 
-	testutils.CompareBytes(t, prop.Metadata[:len(data)], data)
+	testutils.CompareBytes(t, prop.Metadata, data)
 
 	testutils.CompareBytes(t, prop.TokenURI, concatTokenURI(baseURI, id7))
 

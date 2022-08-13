@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/binary"
 	"errors"
 	"math/big"
 
@@ -20,10 +21,10 @@ type ByteMap struct {
 	uniqPrefix []byte
 
 	// bytes count
-	keySize, valueSize uint64
+	keySize uint64
 }
 
-func newByteMap(mapId []byte, keySize, valueSize uint64) (*ByteMap, error) {
+func newByteMap(mapId []byte, keySize uint64) (*ByteMap, error) {
 	if len(mapId) == 0 {
 		return nil, ErrBadMapId
 	}
@@ -32,14 +33,9 @@ func newByteMap(mapId []byte, keySize, valueSize uint64) (*ByteMap, error) {
 		return nil, ErrKeySizeIsZero
 	}
 
-	if valueSize == 0 {
-		return nil, ErrValueSizeIsZero
-	}
-
 	return &ByteMap{
 		uniqPrefix: mapId,
 		keySize:    keySize,
-		valueSize:  valueSize,
 	}, nil
 }
 
@@ -52,12 +48,13 @@ func (m *ByteMap) Put(stream *StorageStream, key, value []byte) error {
 		return ErrBadKeySize
 	}
 
-	if uint64(len(value)) > m.valueSize {
-		return ErrBadValueSize
-	}
+	valueSize := uint16(len(value))
+	valueWithSize := make([]byte, Uint16Size+valueSize)
+	binary.BigEndian.PutUint16(valueWithSize[:Uint16Size], valueSize)
+	copy(valueWithSize[Uint16Size:], value)
 
 	off := calculateOffset(m.uniqPrefix, key)
-	_, err := stream.WriteAt(value, off)
+	_, err := stream.WriteAt(valueWithSize, off)
 	return err
 }
 
@@ -66,10 +63,21 @@ func (m *ByteMap) Get(stream *StorageStream, key []byte) ([]byte, error) {
 		return nil, ErrBadKeySize
 	}
 
-	buf := make([]byte, m.valueSize)
+	buf := make([]byte, Uint16Size)
 	off := calculateOffset(m.uniqPrefix, key)
 
+	// read value size
 	_, err := stream.ReadAt(buf, off)
+	if err != nil {
+		return nil, err
+	}
+
+	valSize := binary.BigEndian.Uint16(buf)
+	off.Add(off, big.NewInt(Uint16Size))
+	buf = make([]byte, valSize)
+
+	// read value
+	_, err = stream.ReadAt(buf, off)
 	if err != nil {
 		return nil, err
 	}
