@@ -24,7 +24,10 @@ var (
 	ErrNoLength          = errors.New("no length for this type")
 	ErrWrongType         = errors.New("wrong type")
 	ErrWrongKeyType      = errors.New("wrong key type")
+	ErrWrongValueType    = errors.New("wrong value type")
+	ErrIsNotScalarType   = errors.New("type is not scalar")
 	ErrNameTooBig        = errors.New("name too big")
+	ErrSliceNotInMap     = errors.New("slice supported only as value in a map")
 	ErrTooManyFields     = errors.New("too many fields")
 )
 
@@ -37,7 +40,8 @@ var (
 	Int32Type   = Type{0x02, 0x04}
 	Int64Type   = Type{0x02, 0x08}
 	ArrayType   = Type{0x03, 0x00}
-	MapType     = Type{0x04, 0x00}
+	SliceType   = Type{0x04, 0x00}
+	MapType     = Type{0x05, 0x00}
 )
 
 type Type [2]byte
@@ -61,6 +65,8 @@ func (t Type) String() string {
 		s = "Int64"
 	case ArrayType:
 		s = "Array"
+	case SliceType:
+		s = "Slice"
 	case MapType:
 		s = "Map"
 	}
@@ -99,12 +105,23 @@ type ValueProperties interface {
 	encoding.BinaryUnmarshaler
 }
 
+type FieldDescriptor interface {
+	Name() []byte
+	ValueProperties() ValueProperties
+	MarshalBinary() ([]byte, error)
+	UnmarshalBinary([]byte) error
+}
+
 type ScalarProperties struct {
 	internalType Type
 }
 
-func NewScalarProperties(internalType Type) *ScalarProperties {
-	return &ScalarProperties{internalType: internalType}
+func NewScalarProperties(internalType Type) (*ScalarProperties, error) {
+	if !isScalar(internalType.Id()) {
+		return nil, ErrIsNotScalarType
+	}
+
+	return &ScalarProperties{internalType: internalType}, nil
 }
 
 func (s ScalarProperties) Type() Type {
@@ -207,13 +224,77 @@ func (a *ArrayProperties) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+type SliceProperties struct {
+	valueProperties ValueProperties
+}
+
+func NewSliceProperties(t *ScalarProperties) *SliceProperties {
+	return &SliceProperties{valueProperties: t}
+}
+
+func (s *SliceProperties) Type() Type {
+	return SliceType
+}
+
+func (s *SliceProperties) Length() (uint64, error) {
+	return 0, ErrNoLength
+}
+
+func (s *SliceProperties) KeyProperties() (ValueProperties, error) {
+	return nil, ErrNoKeyProperties
+}
+
+func (s *SliceProperties) ValueProperties() (ValueProperties, error) {
+	return s.valueProperties, nil
+}
+
+func (s *SliceProperties) MarshalBinary() ([]byte, error) {
+	// marshal type
+	typeB := s.Type().Id()
+
+	// marshal valueProperties
+	valueB, err := s.valueProperties.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	buf := make([]byte, Uint8Size+len(valueB))
+
+	// type
+	buf[0] = typeB
+
+	// valueProperties
+	copy(buf[Uint8Size:], valueB)
+
+	return buf, nil
+}
+
+func (s *SliceProperties) UnmarshalBinary(data []byte) error {
+	// type
+	tp := data[0]
+	if tp != SliceType.Id() {
+		return ErrWrongType
+	}
+
+	// valueProperties
+	data = data[Uint8Size:]
+	vp := newProperties(data[0])
+	err := vp.UnmarshalBinary(data[:])
+	if err != nil {
+		return err
+	}
+
+	s.valueProperties = vp
+	return nil
+}
+
 type MapProperties struct {
 	keyProperties   ValueProperties
 	valueProperties ValueProperties
 }
 
 func NewMapProperties(key, value ValueProperties) (*MapProperties, error) {
-	if key.Type() == MapType {
+	if key.Type() == MapType || key.Type() == SliceType {
 		return nil, ErrWrongKeyType
 	}
 
@@ -342,27 +423,35 @@ func (f *FieldInfo) Length() uint64 {
 	return f.length
 }
 
-type FieldDescriptor struct {
+type fieldDescriptor struct {
 	name []byte
 	vp   ValueProperties
 }
 
-func NewFieldDescriptor(fieldName []byte, v ValueProperties) (*FieldDescriptor, error) {
+func NewFieldDescriptor(fieldName []byte, v ValueProperties) (FieldDescriptor, error) {
+	if isSlice(v.Type().Id()) {
+		return nil, ErrSliceNotInMap
+	}
+
 	if len(fieldName) > int(^uint8(0)) {
 		return nil, ErrNameTooBig
 	}
 
-	return &FieldDescriptor{
+	return &fieldDescriptor{
 		name: fieldName,
 		vp:   v,
 	}, nil
 }
 
-func (fd FieldDescriptor) Name() string {
-	return string(fd.name)
+func (fd *fieldDescriptor) Name() []byte {
+	return fd.name
 }
 
-func (fd FieldDescriptor) MarshalBinary() (data []byte, err error) {
+func (fd *fieldDescriptor) ValueProperties() ValueProperties {
+	return fd.vp
+}
+
+func (fd *fieldDescriptor) MarshalBinary() (data []byte, err error) {
 	// marshal value properties
 	res, err := fd.vp.MarshalBinary()
 	if err != nil {
@@ -386,7 +475,7 @@ func (fd FieldDescriptor) MarshalBinary() (data []byte, err error) {
 	return buf, nil
 }
 
-func (fd *FieldDescriptor) UnmarshalBinary(data []byte) error {
+func (fd *fieldDescriptor) UnmarshalBinary(data []byte) error {
 	// get len of name
 	nameLen := data[0]
 	data = data[Uint8Size:]
@@ -423,17 +512,17 @@ func NewSignatureV1(fd []FieldDescriptor) (Signature, error) {
 	for i, descriptor := range fd {
 		fields[i].descriptor = descriptor
 
-		l, err := calculateFieldLength(descriptor.vp)
+		l, err := calculateFieldLength(descriptor.ValueProperties())
 		if err != nil {
 			return nil, err
 		}
 		fields[i].length = l
 
-		s, err := calculatePropertiesSize(descriptor.vp)
+		s, err := calculatePropertiesSize(descriptor.ValueProperties())
 		if err != nil {
 			return nil, err
 		}
-		totalSize += s + uint64(Uint8Size+len(descriptor.name))
+		totalSize += s + uint64(Uint8Size+len(descriptor.Name()))
 	}
 
 	calculateFieldsOffset(totalSize, fields)
@@ -502,13 +591,14 @@ func (s *SignatureV1) ReadFromStream(stream *StorageStream) (int, error) {
 		}
 		pos.Add(pos, big.NewInt(int64(n)))
 
+		fields[i].descriptor = &fieldDescriptor{}
 		err = fields[i].descriptor.UnmarshalBinary(fieldBuf)
 		if err != nil {
 			return 0, err
 		}
 
 		// save length of the field
-		fields[i].length, err = calculateFieldLength(fields[i].descriptor.vp)
+		fields[i].length, err = calculateFieldLength(fields[i].descriptor.ValueProperties())
 		if err != nil {
 			return 0, err
 		}
@@ -562,6 +652,8 @@ func newProperties(tp uint8) ValueProperties {
 		return &ScalarProperties{}
 	case isArray(tp):
 		return &ArrayProperties{}
+	case isSlice(tp):
+		return &SliceProperties{}
 	case isMap(tp):
 		return &MapProperties{}
 	default:
@@ -575,6 +667,10 @@ func isScalar(tp uint8) bool {
 
 func isArray(tp uint8) bool {
 	return tp == ArrayType.Id()
+}
+
+func isSlice(tp uint8) bool {
+	return tp == SliceType.Id()
 }
 
 func isMap(tp uint8) bool {
@@ -600,6 +696,8 @@ func calculatePropsEnd(stream *StorageStream, currPos *big.Int) (*big.Int, error
 	case isArray(uint8Buf[0]):
 		// add array length
 		end.Add(end, big.NewInt(int64(Uint64Size)))
+		return calculatePropsEnd(stream, end)
+	case isSlice(uint8Buf[0]):
 		return calculatePropsEnd(stream, end)
 	case isMap(uint8Buf[0]):
 		// get end of map key
@@ -633,6 +731,19 @@ func calculatePropertiesSize(vp ValueProperties) (uint64, error) {
 
 		// type + length + element size
 		return uint64(Uint8Size+Uint64Size) + vpSize, nil
+	case isSlice(vp.Type().Id()):
+		value, err := vp.ValueProperties()
+		if err != nil {
+			return 0, err
+		}
+
+		vpSize, err := calculatePropertiesSize(value)
+		if err != nil {
+			return 0, err
+		}
+
+		// type + element size
+		return uint64(Uint8Size) + vpSize, nil
 	case isMap(vp.Type().Id()):
 		key, err := vp.KeyProperties()
 		if err != nil {
@@ -682,7 +793,7 @@ func calculateFieldLength(vp ValueProperties) (uint64, error) {
 
 		// length * element size
 		return l * vpSize, nil
-	case isMap(vp.Type().Id()):
+	case isMap(vp.Type().Id()) || isSlice(vp.Type().Id()):
 		return 0, nil
 	default:
 		return 0, ErrWrongType

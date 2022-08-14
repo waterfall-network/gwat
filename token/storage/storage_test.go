@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"github.com/holiman/uint256"
 	"reflect"
 	"testing"
 
@@ -9,26 +10,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/internal/token/testutils"
 
-	"github.com/holiman/uint256"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCreateStorage(t *testing.T) {
 	descriptors := []FieldDescriptor{
-		{
-			[]byte("scalar"),
-			NewScalarProperties(Uint8Type),
-		},
-		{
-			[]byte("array"),
-			NewArrayProperties(NewScalarProperties(Uint16Type), 10),
-		},
-		{
-			[]byte("map"),
-			newMapPropertiesPanic(NewScalarProperties(Uint32Type), NewScalarProperties(Uint32Type)),
-		},
+		newPanicFieldDescriptor(t, []byte("scalar"), newScalarPanic(t, Uint8Type)),
+		newPanicFieldDescriptor(t, []byte("array"), NewArrayProperties(newScalarPanic(t, Uint16Type), 10)),
+		newPanicFieldDescriptor(t, []byte("map"), newMapPropertiesPanic(t, newScalarPanic(t, Uint32Type), newScalarPanic(t, Uint32Type))),
 	}
 
 	t.Run("NewStorage", func(t *testing.T) {
@@ -74,10 +64,10 @@ func TestStorage_WriteReadField(t *testing.T) {
 		isEqual    func(interface{}, interface{}) bool
 	}{
 		{
-			descriptor: FieldDescriptor{
-				name: []byte("Scalar_Uint8"),
-				vp:   NewScalarProperties(Uint8Type),
-			},
+			descriptor: newPanicFieldDescriptor(t,
+				[]byte("Scalar_Uint8"),
+				newScalarPanic(t, Uint8Type),
+			),
 			expValue: uint8(10),
 			readTo: func() interface{} {
 				v := uint8(0)
@@ -86,10 +76,10 @@ func TestStorage_WriteReadField(t *testing.T) {
 			isEqual: compareScalar,
 		},
 		{
-			descriptor: FieldDescriptor{
-				name: []byte("Uint256"),
-				vp:   NewScalarProperties(Uint256Type),
-			},
+			descriptor: newPanicFieldDescriptor(t,
+				[]byte("Uint256"),
+				newScalarPanic(t, Uint256Type),
+			),
 			expValue: new(uint256.Int).SetBytes([]byte{
 				0x01, 0x02, 0x03, 0x04,
 				0x05, 0x06, 0x07, 0x08,
@@ -107,10 +97,11 @@ func TestStorage_WriteReadField(t *testing.T) {
 			isEqual: compareScalar,
 		},
 		{
-			descriptor: FieldDescriptor{
-				name: []byte("Array_Uint16"),
-				vp:   NewArrayProperties(NewScalarProperties(Uint16Type), 10),
-			},
+			descriptor: newPanicFieldDescriptor(
+				t,
+				[]byte("Array_Uint16"),
+				NewArrayProperties(newScalarPanic(t, Uint16Type), 10),
+			),
 			expValue: []uint16{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			readTo: func() interface{} {
 				var v []uint16
@@ -119,10 +110,11 @@ func TestStorage_WriteReadField(t *testing.T) {
 			isEqual: compareArray,
 		},
 		{
-			descriptor: FieldDescriptor{
-				name: []byte("Map_Uint16_Uint16"),
-				vp:   newMapPropertiesPanic(NewScalarProperties(Uint16Type), NewScalarProperties(Uint16Type)),
-			},
+			descriptor: newPanicFieldDescriptor(
+				t,
+				[]byte("Map_Uint16_Uint16"),
+				newMapPropertiesPanic(t, newScalarPanic(t, Uint16Type), newScalarPanic(t, Uint16Type)),
+			),
 			expValue: NewKeyValuePair(uint16(111), uint16(222)),
 			readTo: func() interface{} {
 				v := uint16(0)
@@ -131,10 +123,11 @@ func TestStorage_WriteReadField(t *testing.T) {
 			isEqual: compareMap,
 		},
 		{
-			descriptor: FieldDescriptor{
-				name: []byte("Map_ArrayUint16_Uint16"),
-				vp:   newMapPropertiesPanic(NewArrayProperties(NewScalarProperties(Uint16Type), 3), NewScalarProperties(Uint16Type)),
-			},
+			descriptor: newPanicFieldDescriptor(
+				t,
+				[]byte("Map_ArrayUint16_Uint16"),
+				newMapPropertiesPanic(t, NewArrayProperties(newScalarPanic(t, Uint16Type), 3), newScalarPanic(t, Uint16Type)),
+			),
 			expValue: NewKeyValuePair([]uint16{1, 2, 3}, uint16(222)),
 			readTo: func() interface{} {
 				v := uint16(0)
@@ -143,10 +136,11 @@ func TestStorage_WriteReadField(t *testing.T) {
 			isEqual: compareMap,
 		},
 		{
-			descriptor: FieldDescriptor{
-				name: []byte("Map_Uint16_ArrayUint16"),
-				vp:   newMapPropertiesPanic(NewScalarProperties(Uint16Type), NewArrayProperties(NewScalarProperties(Uint16Type), 3)),
-			},
+			descriptor: newPanicFieldDescriptor(
+				t,
+				[]byte("Map_Uint16_ArrayUint16"),
+				newMapPropertiesPanic(t, newScalarPanic(t, Uint16Type), NewArrayProperties(newScalarPanic(t, Uint16Type), 3)),
+			),
 			expValue: NewKeyValuePair(uint16(222), []uint16{1, 2, 3}),
 			readTo: func() interface{} {
 				var v []uint16
@@ -155,13 +149,15 @@ func TestStorage_WriteReadField(t *testing.T) {
 			isEqual: compareMap,
 		},
 		{
-			descriptor: FieldDescriptor{
-				name: []byte("Map_ArrayUint256_ArrayUint256"),
-				vp: newMapPropertiesPanic(
-					NewArrayProperties(NewScalarProperties(Uint256Type), 3),
-					NewArrayProperties(NewScalarProperties(Uint256Type), 3),
+			descriptor: newPanicFieldDescriptor(
+				t,
+				[]byte("Map_ArrayUint256_ArrayUint256"),
+				newMapPropertiesPanic(
+					t,
+					NewArrayProperties(newScalarPanic(t, Uint256Type), 3),
+					NewArrayProperties(newScalarPanic(t, Uint256Type), 3),
 				),
-			},
+			),
 			expValue: NewKeyValuePair(
 				[]*uint256.Int{
 					new(uint256.Int).SetBytes([]byte{0x01, 0x02, 0x03, 0x04}),
@@ -184,6 +180,47 @@ func TestStorage_WriteReadField(t *testing.T) {
 			},
 			isEqual: compareMap,
 		},
+		{
+			descriptor: newPanicFieldDescriptor(
+				t,
+				[]byte("Map_Uint16_SliceUint16"),
+				newMapPropertiesPanic(t, newScalarPanic(t, Uint16Type), NewSliceProperties(newScalarPanic(t, Uint16Type))),
+			),
+			expValue: NewKeyValuePair(uint16(222), []uint16{1, 2, 3, 4}),
+			readTo: func() interface{} {
+				var v []uint16
+				return NewKeyValuePair(uint16(222), &v)
+			},
+			isEqual: compareMap,
+		},
+		{
+			descriptor: newPanicFieldDescriptor(
+				t,
+				[]byte("Map_ArrayUint256_SliceUint8"),
+				newMapPropertiesPanic(
+					t,
+					NewArrayProperties(newScalarPanic(t, Uint256Type), 3),
+					NewSliceProperties(newScalarPanic(t, Uint8Type)),
+				),
+			),
+			expValue: NewKeyValuePair(
+				[]*uint256.Int{
+					new(uint256.Int).SetBytes([]byte{0x01, 0x02, 0x03, 0x04}),
+					new(uint256.Int).SetBytes([]byte{0x05, 0x06, 0x07, 0x08}),
+					new(uint256.Int).SetBytes([]byte{0x09, 0x0a, 0x0b, 0x0c}),
+				},
+				[]uint8{1, 2, 3, 4},
+			),
+			readTo: func() interface{} {
+				var v []uint8
+				return NewKeyValuePair([]*uint256.Int{
+					new(uint256.Int).SetBytes([]byte{0x01, 0x02, 0x03, 0x04}),
+					new(uint256.Int).SetBytes([]byte{0x05, 0x06, 0x07, 0x08}),
+					new(uint256.Int).SetBytes([]byte{0x09, 0x0a, 0x0b, 0x0c}),
+				}, &v)
+			},
+			isEqual: compareMap,
+		},
 	}
 
 	descriptors := make([]FieldDescriptor, len(tests))
@@ -194,7 +231,7 @@ func TestStorage_WriteReadField(t *testing.T) {
 	storage := newStorage(t, descriptors)
 
 	for _, test := range tests {
-		name := test.descriptor.Name()
+		name := string(test.descriptor.Name())
 		t.Run(name, func(t *testing.T) {
 			err := storage.WriteField(name, test.expValue)
 			assert.NoError(t, err, err)

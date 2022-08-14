@@ -28,7 +28,7 @@ func TestNewValueProperties(t *testing.T) {
 		{
 			"NewScalar",
 			func() ValueProperties {
-				return NewScalarProperties(Uint8Type)
+				return newScalarPanic(t, Uint8Type)
 			},
 			Uint8Type,
 			nil,
@@ -38,7 +38,7 @@ func TestNewValueProperties(t *testing.T) {
 		{
 			"NewArray",
 			func() ValueProperties {
-				return NewArrayProperties(NewScalarProperties(Uint16Type), 10)
+				return NewArrayProperties(newScalarPanic(t, Uint16Type), 10)
 			},
 			ArrayType,
 			&expectedLength,
@@ -48,7 +48,7 @@ func TestNewValueProperties(t *testing.T) {
 		{
 			"NewMap",
 			func() ValueProperties {
-				m, err := NewMapProperties(NewScalarProperties(Uint32Type), NewScalarProperties(Uint64Type))
+				m, err := NewMapProperties(newScalarPanic(t, Uint32Type), newScalarPanic(t, Uint64Type))
 				require.NoError(t, err, err)
 
 				return m
@@ -108,10 +108,7 @@ func TestSignatureV1(t *testing.T) {
 		{
 			"ScalarField",
 			[]FieldDescriptor{
-				{
-					name: []byte("scalar"),
-					vp:   NewScalarProperties(Uint8Type),
-				},
+				newPanicFieldDescriptor(t, []byte("scalar"), newScalarPanic(t, Uint8Type)),
 			},
 			&SignatureV1{
 				version: signatureV1,
@@ -126,10 +123,7 @@ func TestSignatureV1(t *testing.T) {
 		{
 			"ArrayField",
 			[]FieldDescriptor{
-				{
-					name: []byte("array"),
-					vp:   NewArrayProperties(NewScalarProperties(Uint16Type), 10),
-				},
+				newPanicFieldDescriptor(t, []byte("array"), NewArrayProperties(newScalarPanic(t, Uint16Type), 10)),
 			},
 			&SignatureV1{
 				version: signatureV1,
@@ -144,10 +138,11 @@ func TestSignatureV1(t *testing.T) {
 		{
 			"MapScalarScalar",
 			[]FieldDescriptor{
-				{
-					name: []byte("MapScalarScalar"),
-					vp:   newMapPropertiesPanic(NewScalarProperties(Uint16Type), NewScalarProperties(Uint16Type)),
-				},
+				newPanicFieldDescriptor(
+					t,
+					[]byte("MapScalarScalar"),
+					newMapPropertiesPanic(t, newScalarPanic(t, Uint16Type), newScalarPanic(t, Uint16Type)),
+				),
 			},
 			&SignatureV1{
 				version: signatureV1,
@@ -162,13 +157,15 @@ func TestSignatureV1(t *testing.T) {
 		{
 			"MapScalarArray",
 			[]FieldDescriptor{
-				{
-					name: []byte("MapScalarArray"),
-					vp: newMapPropertiesPanic(
-						NewScalarProperties(Uint16Type),
-						NewArrayProperties(NewScalarProperties(Uint16Type), 10),
+				newPanicFieldDescriptor(
+					t,
+					[]byte("MapScalarArray"),
+					newMapPropertiesPanic(
+						t,
+						newScalarPanic(t, Uint16Type),
+						NewArrayProperties(newScalarPanic(t, Uint16Type), 10),
 					),
-				},
+				),
 			},
 			&SignatureV1{
 				version: signatureV1,
@@ -183,13 +180,15 @@ func TestSignatureV1(t *testing.T) {
 		{
 			"MapArrayScalarField",
 			[]FieldDescriptor{
-				{
-					name: []byte("MapArrayScalar"),
-					vp: newMapPropertiesPanic(
-						NewArrayProperties(NewScalarProperties(Uint16Type), 10),
-						NewScalarProperties(Uint16Type),
+				newPanicFieldDescriptor(
+					t,
+					[]byte("MapArrayScalar"),
+					newMapPropertiesPanic(
+						t,
+						NewArrayProperties(newScalarPanic(t, Uint16Type), 10),
+						newScalarPanic(t, Uint16Type),
 					),
-				},
+				),
 			},
 			&SignatureV1{
 				version: signatureV1,
@@ -204,13 +203,15 @@ func TestSignatureV1(t *testing.T) {
 		{
 			"MapArrayArrayField",
 			[]FieldDescriptor{
-				{
-					name: []byte("MapArrayArray"),
-					vp: newMapPropertiesPanic(
-						NewArrayProperties(NewScalarProperties(Uint16Type), 10),
-						NewArrayProperties(NewScalarProperties(Uint16Type), 10),
+				newPanicFieldDescriptor(
+					t,
+					[]byte("MapArrayArray"),
+					newMapPropertiesPanic(
+						t,
+						NewArrayProperties(newScalarPanic(t, Uint16Type), 10),
+						NewArrayProperties(newScalarPanic(t, Uint16Type), 10),
 					),
-				},
+				),
 			},
 			&SignatureV1{
 				version: signatureV1,
@@ -225,33 +226,31 @@ func TestSignatureV1(t *testing.T) {
 		{
 			"AllFields",
 			[]FieldDescriptor{
-				{
-					name: []byte("scalar"),
-					vp:   NewScalarProperties(Uint8Type),
-				},
-				{
-					name: []byte("array"),
-					vp:   NewArrayProperties(NewScalarProperties(Uint16Type), 10),
-				},
-				{
-					name: []byte("MapScalarScalar"),
-					vp:   newMapPropertiesPanic(NewScalarProperties(Uint16Type), NewScalarProperties(Uint16Type)),
-				},
-				{
-					name: []byte("MapScalarArray"),
-					vp:   newMapPropertiesPanic(NewScalarProperties(Uint16Type), NewArrayProperties(NewScalarProperties(Uint16Type), 10)),
-				},
-				{
-					name: []byte("MapArrayScalar"),
-					vp:   newMapPropertiesPanic(NewArrayProperties(NewScalarProperties(Uint16Type), 10), NewScalarProperties(Uint16Type)),
-				},
-				{
-					name: []byte("MapArrayArray"),
-					vp: newMapPropertiesPanic(
-						NewArrayProperties(NewScalarProperties(Uint16Type), 10),
-						NewArrayProperties(NewScalarProperties(Uint16Type), 10),
+				newPanicFieldDescriptor(t, []byte("scalar"), newScalarPanic(t, Uint8Type)),
+				newPanicFieldDescriptor(t, []byte("array"), NewArrayProperties(newScalarPanic(t, Uint16Type), 10)),
+				newPanicFieldDescriptor(
+					t,
+					[]byte("MapScalarScalar"),
+					newMapPropertiesPanic(t, newScalarPanic(t, Uint16Type), newScalarPanic(t, Uint16Type)),
+				),
+				newPanicFieldDescriptor(
+					t,
+					[]byte("MapScalarArray"),
+					newMapPropertiesPanic(t, newScalarPanic(t, Uint16Type), NewArrayProperties(newScalarPanic(t, Uint16Type), 10)),
+				),
+				newPanicFieldDescriptor(
+					t,
+					[]byte("MapArrayScalar"),
+					newMapPropertiesPanic(t, NewArrayProperties(newScalarPanic(t, Uint16Type), 10), newScalarPanic(t, Uint16Type)),
+				),
+				newPanicFieldDescriptor(
+					t,
+					[]byte("MapArrayArray"),
+					newMapPropertiesPanic(t,
+						NewArrayProperties(newScalarPanic(t, Uint16Type), 10),
+						NewArrayProperties(newScalarPanic(t, Uint16Type), 10),
 					),
-				},
+				),
 			},
 			&SignatureV1{
 				version: signatureV1,
@@ -328,12 +327,12 @@ func TestValueProperties_MarshalingAndUnmarshaling(t *testing.T) {
 	}{
 		{
 			"Scalar",
-			NewScalarProperties(Uint16Type),
+			newScalarPanic(t, Uint16Type),
 			[]byte{Uint16Type.Id(), Uint16Type.Size()},
 		},
 		{
 			"Array",
-			NewArrayProperties(NewScalarProperties(Uint32Type), 10),
+			NewArrayProperties(newScalarPanic(t, Uint32Type), 10),
 			[]byte{
 				ArrayType.Id(),                                // array type
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa, // array size
@@ -342,7 +341,7 @@ func TestValueProperties_MarshalingAndUnmarshaling(t *testing.T) {
 		},
 		{
 			"MapScalarScalar",
-			newMapPropertiesPanic(NewScalarProperties(Uint32Type), NewScalarProperties(Uint64Type)),
+			newMapPropertiesPanic(t, newScalarPanic(t, Uint32Type), newScalarPanic(t, Uint64Type)),
 			[]byte{
 				MapType.Id(),
 				Uint32Type.Id(), Uint32Type.Size(), // key type and size
@@ -351,7 +350,7 @@ func TestValueProperties_MarshalingAndUnmarshaling(t *testing.T) {
 		},
 		{
 			"MapScalarArray",
-			newMapPropertiesPanic(NewScalarProperties(Uint32Type), NewArrayProperties(NewScalarProperties(Uint32Type), 10)),
+			newMapPropertiesPanic(t, newScalarPanic(t, Uint32Type), NewArrayProperties(newScalarPanic(t, Uint32Type), 10)),
 			[]byte{
 				MapType.Id(),
 				Uint32Type.Id(), Uint32Type.Size(), // key type and size
@@ -362,7 +361,7 @@ func TestValueProperties_MarshalingAndUnmarshaling(t *testing.T) {
 		},
 		{
 			"MapArrayScalar",
-			newMapPropertiesPanic(NewArrayProperties(NewScalarProperties(Uint32Type), 10), NewScalarProperties(Uint32Type)),
+			newMapPropertiesPanic(t, NewArrayProperties(newScalarPanic(t, Uint32Type), 10), newScalarPanic(t, Uint32Type)),
 			[]byte{
 				MapType.Id(),
 				ArrayType.Id(),                                // key array type
@@ -373,9 +372,9 @@ func TestValueProperties_MarshalingAndUnmarshaling(t *testing.T) {
 		},
 		{
 			"MapArrayArray",
-			newMapPropertiesPanic(
-				NewArrayProperties(NewScalarProperties(Uint32Type), 10),
-				NewArrayProperties(NewScalarProperties(Uint64Type), 10),
+			newMapPropertiesPanic(t,
+				NewArrayProperties(newScalarPanic(t, Uint32Type), 10),
+				NewArrayProperties(newScalarPanic(t, Uint64Type), 10),
 			),
 			[]byte{
 				MapType.Id(),
@@ -385,6 +384,31 @@ func TestValueProperties_MarshalingAndUnmarshaling(t *testing.T) {
 				ArrayType.Id(),                                // value array type
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa, // value array size
 				Uint64Type.Id(), Uint64Type.Size(), // value array element type and size
+			},
+		},
+		{
+			"MapScalarSlice",
+			newMapPropertiesPanic(t, newScalarPanic(t, Uint32Type), NewSliceProperties(newScalarPanic(t, Uint32Type))),
+			[]byte{
+				MapType.Id(),
+				Uint32Type.Id(), Uint32Type.Size(), // key type and size
+				SliceType.Id(),                     // value slice type
+				Uint32Type.Id(), Uint32Type.Size(), // value slice element type and size
+			},
+		},
+		{
+			"MapArraySlice",
+			newMapPropertiesPanic(t,
+				NewArrayProperties(newScalarPanic(t, Uint32Type), 10),
+				NewSliceProperties(newScalarPanic(t, Uint64Type)),
+			),
+			[]byte{
+				MapType.Id(),
+				ArrayType.Id(),                                // key array type
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa, // key array size
+				Uint32Type.Id(), Uint32Type.Size(), // key array element type and size
+				SliceType.Id(),                     // value slice type
+				Uint64Type.Id(), Uint64Type.Size(), // value slice element type and size
 			},
 		},
 	}
@@ -407,11 +431,29 @@ func TestValueProperties_MarshalingAndUnmarshaling(t *testing.T) {
 	}
 }
 
-func newMapPropertiesPanic(key, value ValueProperties) ValueProperties {
+func newMapPropertiesPanic(t *testing.T, key, value ValueProperties) *MapProperties {
+	t.Helper()
+
 	vp, err := NewMapProperties(key, value)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	return vp
+}
+
+func newScalarPanic(t *testing.T, tp Type) *ScalarProperties {
+	t.Helper()
+
+	vp, err := NewScalarProperties(tp)
+	require.NoError(t, err)
+
+	return vp
+}
+
+func newPanicFieldDescriptor(t *testing.T, name []byte, properties ValueProperties) FieldDescriptor {
+	t.Helper()
+
+	fd, err := NewFieldDescriptor(name, properties)
+	require.NoError(t, err)
+
+	return fd
 }

@@ -123,7 +123,7 @@ func fillFields(sign Signature) (fieldsHolder, error) {
 	var err error
 	fields := fieldsHolder{}
 	for _, info := range sign.Fields() {
-		fields[info.Descriptor().Name()], err = NewFieldEntry(info)
+		fields[string(info.Descriptor().Name())], err = NewFieldEntry(info)
 		if err != nil {
 			return nil, err
 		}
@@ -165,23 +165,25 @@ func (s *storage) Flush() {
 //NewFieldEntry creates new FieldEntry from FieldInfo
 func NewFieldEntry(fieldInfo FieldInfo) (FieldEntry, error) {
 	descriptor := fieldInfo.Descriptor()
-	tp := descriptor.vp.Type()
+	tp := descriptor.ValueProperties().Type()
 	id := tp.Id()
 	switch {
 	case isMap(id):
-		kp, err := descriptor.vp.KeyProperties()
+		kp, err := descriptor.ValueProperties().KeyProperties()
 		if err != nil {
 			return nil, err
 		}
+
 		keySize, err := calculateFieldLength(kp)
 		if err != nil {
 			return nil, err
 		}
 
-		vp, err := descriptor.vp.ValueProperties()
+		vp, err := descriptor.ValueProperties().ValueProperties()
 		if err != nil {
 			return nil, err
 		}
+
 		valueSize, err := calculateFieldLength(vp)
 		if err != nil {
 			return nil, err
@@ -197,7 +199,7 @@ func NewFieldEntry(fieldInfo FieldInfo) (FieldEntry, error) {
 			return nil, err
 		}
 
-		byteMap, err := newByteMap([]byte(descriptor.Name()), keySize, valueSize)
+		byteMap, err := newByteMap(descriptor.Name(), keySize, valueSize)
 		if err != nil {
 			return nil, err
 		}
@@ -249,7 +251,7 @@ func (f *fieldEntry) Write(stream *StorageStream, val interface{}) error {
 		return err
 	}
 
-	if uint64(len(buf)) > f.Length() {
+	if !isSlice(f.descriptor.ValueProperties().Type().Id()) && uint64(len(buf)) > f.Length() {
 		return ErrValueTooLarge
 	}
 
@@ -548,7 +550,7 @@ func getDefaultEncoderAndDecoder(tp Type) (Encoder, Decoder, error) {
 		return DefaultScalarEncoder, DefaultScalarDecoder, nil
 	}
 
-	if isArray(tp.Id()) {
+	if isArray(tp.Id()) || isSlice(tp.Id()) {
 		return DefaultArrayEncoder, DefaultArrayDecoder, nil
 	}
 
