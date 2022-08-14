@@ -793,14 +793,7 @@ func calculateFieldLength(vp ValueProperties) (uint64, error) {
 
 		// length * element size
 		return l * vpSize, nil
-	case isSlice(vp.Type().Id()):
-		value, err := vp.ValueProperties()
-		if err != nil {
-			return 0, err
-		}
-
-		return calculateFieldLength(value)
-	case isMap(vp.Type().Id()):
+	case isMap(vp.Type().Id()) || isSlice(vp.Type().Id()):
 		return 0, nil
 	default:
 		return 0, ErrWrongType

@@ -9,22 +9,22 @@ import (
 )
 
 var (
-	ErrNilKey          = errors.New("key is nil")
-	ErrBadMapId        = errors.New("bad map id")
-	ErrKeySizeIsZero   = errors.New("key size is 0")
-	ErrValueSizeIsZero = errors.New("value size is 0")
-	ErrBadKeySize      = errors.New("expected key size and real do not match")
-	ErrBadValueSize    = errors.New("expected value size and real do not match")
+	ErrNilKey        = errors.New("key is nil")
+	ErrBadMapId      = errors.New("bad map id")
+	ErrKeySizeIsZero = errors.New("key size is 0")
+	ErrBadKeySize    = errors.New("expected key size and real do not match")
+	ErrBadValueSize  = errors.New("expected value size and real do not match")
 )
 
 type ByteMap struct {
 	uniqPrefix []byte
 
 	// bytes count
-	keySize uint64
+	keySize, valueSize uint64
 }
 
-func newByteMap(mapId []byte, keySize uint64) (*ByteMap, error) {
+// pass 0 as valueSize if a value is a slice
+func newByteMap(mapId []byte, keySize, valueSize uint64) (*ByteMap, error) {
 	if len(mapId) == 0 {
 		return nil, ErrBadMapId
 	}
@@ -36,6 +36,7 @@ func newByteMap(mapId []byte, keySize uint64) (*ByteMap, error) {
 	return &ByteMap{
 		uniqPrefix: mapId,
 		keySize:    keySize,
+		valueSize:  valueSize,
 	}, nil
 }
 
@@ -48,13 +49,21 @@ func (m *ByteMap) Put(stream *StorageStream, key, value []byte) error {
 		return ErrBadKeySize
 	}
 
-	valueSize := uint16(len(value))
-	valueWithSize := make([]byte, Uint16Size+valueSize)
-	binary.BigEndian.PutUint16(valueWithSize[:Uint16Size], valueSize)
-	copy(valueWithSize[Uint16Size:], value)
+	if m.valueSize != 0 && uint64(len(value)) > m.valueSize {
+		return ErrBadValueSize
+	}
+
+	if m.valueSize == 0 {
+		// write length of value slice
+		valueSize := uint64(len(value))
+		valueWithSize := make([]byte, Uint64Size+valueSize)
+		binary.BigEndian.PutUint64(valueWithSize[:Uint64Size], valueSize)
+		copy(valueWithSize[Uint64Size:], value)
+		value = valueWithSize
+	}
 
 	off := calculateOffset(m.uniqPrefix, key)
-	_, err := stream.WriteAt(valueWithSize, off)
+	_, err := stream.WriteAt(value, off)
 	return err
 }
 
@@ -63,21 +72,24 @@ func (m *ByteMap) Get(stream *StorageStream, key []byte) ([]byte, error) {
 		return nil, ErrBadKeySize
 	}
 
-	buf := make([]byte, Uint16Size)
+	size := m.valueSize
 	off := calculateOffset(m.uniqPrefix, key)
+	if size == 0 {
+		// read length of value slice
+		buf := make([]byte, Uint64Size)
+		_, err := stream.ReadAt(buf, off)
+		if err != nil {
+			return nil, err
+		}
 
-	// read value size
-	_, err := stream.ReadAt(buf, off)
-	if err != nil {
-		return nil, err
+		size = binary.BigEndian.Uint64(buf)
+		off.Add(off, big.NewInt(Uint64Size))
 	}
 
-	valSize := binary.BigEndian.Uint16(buf)
-	off.Add(off, big.NewInt(Uint16Size))
-	buf = make([]byte, valSize)
+	buf := make([]byte, size)
 
 	// read value
-	_, err = stream.ReadAt(buf, off)
+	_, err := stream.ReadAt(buf, off)
 	if err != nil {
 		return nil, err
 	}

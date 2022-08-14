@@ -184,6 +184,11 @@ func NewFieldEntry(fieldInfo FieldInfo) (FieldEntry, error) {
 			return nil, err
 		}
 
+		valueSize, err := calculateFieldLength(vp)
+		if err != nil {
+			return nil, err
+		}
+
 		keyEncoder, keyDecoder, err := getDefaultEncoderAndDecoder(kp.Type())
 		if err != nil {
 			return nil, err
@@ -194,7 +199,7 @@ func NewFieldEntry(fieldInfo FieldInfo) (FieldEntry, error) {
 			return nil, err
 		}
 
-		byteMap, err := newByteMap([]byte(descriptor.Name()), keySize)
+		byteMap, err := newByteMap(descriptor.Name(), keySize, valueSize)
 		if err != nil {
 			return nil, err
 		}
