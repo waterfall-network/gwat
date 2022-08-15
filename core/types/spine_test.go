@@ -1,4 +1,4 @@
-package finalizer_test
+package types
 
 import (
 	"math"
@@ -6,30 +6,27 @@ import (
 	"testing"
 
 	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/dag/finalizer"
 )
 
 type testSpineCase struct {
-	input          types.Blocks
-	expectedOutput *types.Block
+	input          Blocks
+	expectedOutput *Block
 	description    string
 }
 
 type BlockChainMock struct {
-	blocks map[common.Hash]*types.Block
+	blocks map[common.Hash]*Block
 }
 
-func (bc *BlockChainMock) GetBlockByHash(hash common.Hash) *types.Block {
+func (bc *BlockChainMock) GetBlockByHash(hash common.Hash) *Block {
 	if _, ok := bc.blocks[hash]; ok {
 		return bc.blocks[hash]
 	}
 	return nil
 }
 
-func (bc *BlockChainMock) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
-	res := make(types.BlockMap, len(hashes))
+func (bc *BlockChainMock) GetBlocksByHashes(hashes common.HashArray) BlockMap {
+	res := make(BlockMap, len(hashes))
 	for _, hash := range hashes {
 		if _, ok := bc.blocks[hash]; ok {
 			res[hash] = bc.blocks[hash]
@@ -40,20 +37,16 @@ func (bc *BlockChainMock) GetBlocksByHashes(hashes common.HashArray) types.Block
 	return res
 }
 
-func NewBlock(header *types.Header) *types.Block {
-	return types.NewBlock(header, nil, nil, nil)
-}
-
 func TestCalculateSpine(t *testing.T) {
-	maxHeightExpectedOutput := NewBlock(&types.Header{Height: 2})
-	maxParentHashesLenExpectedOutput := NewBlock(&types.Header{
+	maxHeightExpectedOutput := NewBlock(&Header{Height: 2}, nil, nil, nil)
+	maxParentHashesLenExpectedOutput := NewBlock(&Header{
 		Height:       1,
 		ParentHashes: make(common.HashArray, 2),
-	})
+	}, nil, nil, nil)
 
 	cases := []*testSpineCase{
 		{
-			input:          types.Blocks{},
+			input:          Blocks{},
 			expectedOutput: nil,
 			description:    "empty blocks slice",
 		},
@@ -63,21 +56,21 @@ func TestCalculateSpine(t *testing.T) {
 			description:    "nil blocks slice",
 		},
 		{
-			input: types.Blocks{
-				NewBlock(&types.Header{
+			input: Blocks{
+				NewBlock(&Header{
 					Height: 1,
-				}),
+				}, nil, nil, nil),
 				maxHeightExpectedOutput,
 			},
 			expectedOutput: maxHeightExpectedOutput,
 			description:    "maxHeight block",
 		},
 		{
-			input: types.Blocks{
-				NewBlock(&types.Header{
+			input: Blocks{
+				NewBlock(&Header{
 					Height:       1,
 					ParentHashes: make(common.HashArray, 1),
-				}),
+				}, nil, nil, nil),
 				maxParentHashesLenExpectedOutput,
 			},
 			expectedOutput: maxParentHashesLenExpectedOutput,
@@ -86,19 +79,19 @@ func TestCalculateSpine(t *testing.T) {
 	}
 
 	maxHashBlockCase := &testSpineCase{
-		input: types.Blocks{
-			NewBlock(&types.Header{
+		input: Blocks{
+			NewBlock(&Header{
 				Height: 1,
 				ParentHashes: common.HashArray{
 					common.Hash{1},
 				},
-			}),
-			NewBlock(&types.Header{
+			}, nil, nil, nil),
+			NewBlock(&Header{
 				Height: 1,
 				ParentHashes: common.HashArray{
 					common.Hash{2},
 				},
-			}),
+			}, nil, nil, nil),
 		},
 		description: "maxHash block",
 	}
@@ -110,23 +103,23 @@ func TestCalculateSpine(t *testing.T) {
 	cases = append(cases, maxHashBlockCase)
 
 	for _, testCase := range cases {
-		if output := finalizer.CalculateSpine(testCase.input); output != testCase.expectedOutput {
+		if output := CalculateSpine(testCase.input); output != testCase.expectedOutput {
 			t.Errorf("Failed \"%s\" \n", testCase.description)
 		}
 	}
 }
 
 func TestGroupBySlot(t *testing.T) {
-	blocks := types.Blocks{
-		NewBlock(&types.Header{
+	blocks := Blocks{
+		NewBlock(&Header{
 			Slot: 1,
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Slot: 2,
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Slot: 1,
-		}),
+		}, nil, nil, nil),
 	}
 	res, err := blocks.GroupBySlot()
 	if err != nil {
@@ -134,7 +127,7 @@ func TestGroupBySlot(t *testing.T) {
 	}
 
 	blocksCounter := 0
-	addedBlocks := make(map[*types.Block]struct{})
+	addedBlocks := make(map[*Block]struct{})
 	for k, v := range res {
 		for _, block := range v {
 			if block.Slot() != k {
@@ -155,70 +148,70 @@ func TestGroupBySlot(t *testing.T) {
 }
 
 func TestSortBlocks(t *testing.T) {
-	blocks := types.Blocks{
-		NewBlock(&types.Header{
+	blocks := Blocks{
+		NewBlock(&Header{
 			Height: 1,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 			},
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Height: 1,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 				common.Hash{1},
 			},
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Height: 1,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 				common.Hash{2},
 			},
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Height: 2,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 			},
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Height: 2,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 				common.Hash{1},
 			},
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Height: 2,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 				common.Hash{2},
 			},
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Height: 3,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 			},
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Height: 3,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 				common.Hash{1},
 			},
-		}),
-		NewBlock(&types.Header{
+		}, nil, nil, nil),
+		NewBlock(&Header{
 			Height: 3,
 			ParentHashes: common.HashArray{
 				common.Hash{},
 				common.Hash{2},
 			},
-		}),
+		}, nil, nil, nil),
 	}
 
-	orderedBlocks := core.SortBlocks(blocks)
+	orderedBlocks := SpineSortBlocks(blocks)
 	for i, block := range orderedBlocks {
 		if i == 0 {
 			continue
@@ -237,11 +230,11 @@ func TestSortBlocks(t *testing.T) {
 	}
 }
 
-func addParents(blocks types.SlotSpineHashMap, blocksInChain map[common.Hash]struct{}, bc *BlockChainMock) {
+func addParents(blocks SlotSpineHashMap, blocksInChain map[common.Hash]struct{}, bc *BlockChainMock) {
 	for _, block := range blocks {
 		blocksInChain[block.Hash()] = struct{}{}
 		for _, ph := range block.ParentHashes() {
-			addParents(types.SlotSpineHashMap{0: bc.GetBlockByHash(ph)}, blocksInChain, bc)
+			addParents(SlotSpineHashMap{0: bc.GetBlockByHash(ph)}, blocksInChain, bc)
 		}
 	}
 }
@@ -249,7 +242,7 @@ func addParents(blocks types.SlotSpineHashMap, blocksInChain map[common.Hash]str
 func TestOrderChain(t *testing.T) {
 
 	bc := BlockChainMock{
-		blocks: make(map[common.Hash]*types.Block),
+		blocks: make(map[common.Hash]*Block),
 	}
 
 	blocksPerSlot := 3
@@ -257,7 +250,7 @@ func TestOrderChain(t *testing.T) {
 
 	totalBlocksCount := blocksPerSlot * slots
 
-	blocks := make(types.Blocks, 0, totalBlocksCount)
+	blocks := make(Blocks, 0, totalBlocksCount)
 
 	for i := 0; i < totalBlocksCount; i++ {
 		parentHashes := int(math.Min(float64(blocksPerSlot-1), float64(len(blocks))))
@@ -271,12 +264,12 @@ func TestOrderChain(t *testing.T) {
 		}
 
 		newBlock := NewBlock(
-			&types.Header{
+			&Header{
 				Slot:         uint64(i / blocksPerSlot),
 				Height:       uint64(i),
 				ParentHashes: ph,
 				Number:       nil,
-			},
+			}, nil, nil, nil,
 		)
 
 		blocks = append(blocks, newBlock)
@@ -287,11 +280,11 @@ func TestOrderChain(t *testing.T) {
 	}
 
 	blocksInChain := make(map[common.Hash]struct{})
-	spines, _ := finalizer.CalculateSpines(blocks)
+	spines, _ := CalculateSpines(blocks)
 
 	addParents(spines, blocksInChain, &bc)
 
-	orderedChain, err := finalizer.OrderChain(&bc, blocks)
+	orderedChain, err := OrderChain(&bc, blocks)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -37,7 +36,6 @@ import (
 	"github.com/waterfall-foundation/gwat/core/state/snapshot"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/dag/finalizer/interfaces"
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/internal/syncx"
@@ -2173,10 +2171,14 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	finPoints = finPoints.Uniq()
 
 	var stateHash common.Hash
+	parentBlocks := bc.GetBlocksByHashes(parents)
+	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
 
-	if len(finPoints) > 0 {
-		stateHash = []common.Hash(finPoints)[len(finPoints)-1]
+	if len(sortedBlocks) > 0 {
+		stateBlock = sortedBlocks[0]
+		stateHash = stateBlock.Hash()
 	} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
+		//stateHash = bc.GetLastFinalizedBlock().Hash()
 		stateHash = lastFinAncestor.Hash
 		if len(ordHashes) == 0 {
 			lfn := bc.GetLastFinalizedBlock().Nr()
@@ -2188,6 +2190,21 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 			}
 		}
 	}
+
+	//if len(finPoints) > 0 {
+	//	stateHash = []common.Hash(finPoints)[len(finPoints)-1]
+	//} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
+	//	stateHash = lastFinAncestor.Hash
+	//	if len(ordHashes) == 0 {
+	//		lfn := bc.GetLastFinalizedBlock().Nr()
+	//		for i := lastFinAncestor.Number + 1; i <= lfn; i++ {
+	//			bl := bc.GetBlockByNumber(i)
+	//			if bl != nil && fnl.Has(bl.Hash()) {
+	//				ordHashes = append(ordHashes, bl.Hash())
+	//			}
+	//		}
+	//	}
+	//}
 	if stateHash == (common.Hash{}) {
 		log.Error("Error while collect state data by block (bad state hash)", "error", ErrStateBlockNotFound)
 		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrStateBlockNotFound
@@ -2247,10 +2264,16 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 			log.Error("Collect State Data By Finalized Block: bad finalized chain", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
 			return statedb, stateBlock, redBlocks, ErrInsertUncompletedDag
 		}
-		if prevBlock.Nr() == prevBlock.Height() {
+
+		statedb, err = bc.StateAt(prevBlock.Root())
+		if statedb != nil {
 			stateBlock = prevBlock
 			break
 		}
+		//if prevBlock.Nr() == prevBlock.Height() {
+		//	stateBlock = prevBlock
+		//	break
+		//}
 		redBlocks = append(redBlocks, prevBlock)
 	}
 	// reverse redBlocks
@@ -3095,8 +3118,9 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		return unloaded, loaded, finalized, graph, memo[0], err
 	}
 
-	parentHashes := GetOrderedParentHashes(bc, block)
-	for _, ph := range parentHashes {
+	//parentHashes := types.GetOrderedParentHashes(bc, block)
+	//for _, ph := range parentHashes {
+	for _, ph := range block.ParentHashes() {
 		var (
 			_unloaded  common.HashArray
 			_loaded    common.HashArray
@@ -3243,38 +3267,4 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	//cash tx lookup
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: uint64(txIndex)}
 	bc.txLookupCache.Add(txHash, lookup)
-}
-
-// GetOrderedParentHashes get parent hashes sorted by order of finalization
-func GetOrderedParentHashes(bc interfaces.BlockChain, b *types.Block) common.HashArray {
-	ph := b.ParentHashes()
-	return SortHashes(bc, ph)
-}
-
-// SortHashes sorts hashes by order of finalization
-func SortHashes(bc interfaces.BlockChain, hashes common.HashArray) common.HashArray {
-	blocks := bc.GetBlocksByHashes(hashes)
-	blocksArr := blocks.ToArray()
-
-	blocksArr = SortBlocks(blocksArr)
-
-	orderedHashes := make(common.HashArray, 0, len(blocksArr))
-	for _, block := range blocksArr {
-		orderedHashes = append(orderedHashes, block.Hash())
-	}
-
-	return orderedHashes
-}
-
-// SortBlocks sorts hashes by order of finalization
-func SortBlocks(blocks []*types.Block) []*types.Block {
-	sort.Slice(blocks, func(i, j int) bool {
-		ibn := new(big.Int).SetBytes(blocks[i].Hash().Bytes())
-		jbn := new(big.Int).SetBytes(blocks[j].Hash().Bytes())
-		return (blocks[i].Height() > blocks[j].Height()) ||
-			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes())) ||
-			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) == len(blocks[j].ParentHashes()) &&
-				ibn.Cmp(jbn) < 0)
-	})
-	return blocks
 }
