@@ -94,6 +94,8 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 		return nil
 	}
 
+	log.Info("Ordered chain calculated", "ordered chain", orderedChain.GetHashes())
+
 	blocks := bc.GetBlocksByHashes(*orderedChain.GetHashes())
 
 	for _, block := range orderedChain {

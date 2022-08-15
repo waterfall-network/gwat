@@ -117,10 +117,10 @@ func spineProcessBlock(bc BlockChain, block *Block, candidatesInChain map[common
 		return
 	}
 	orderedHashes := GetOrderedParentHashes(bc, block)
+	candidatesInChain[block.Hash()] = struct{}{}
 	for _, ph := range orderedHashes {
 		parent := bc.GetBlockByHash(ph)
 		if _, wasProcessed := candidatesInChain[ph]; !wasProcessed && parent.Number() == nil {
-			candidatesInChain[block.Hash()] = struct{}{}
 			if chainPart := spineCalculateChain(bc, parent, candidatesInChain); len(chainPart) != 0 {
 				*chain = append(*chain, chainPart...)
 			}
