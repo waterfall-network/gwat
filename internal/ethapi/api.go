@@ -2064,6 +2064,6 @@ func (api *PublicDagAPI) Finalize(ctx context.Context, data *dag.ConsensusInfo) 
 }
 
 // GetCandidates retrieves finalization candidates.
-func (api *PublicDagAPI) GetCandidates(ctx context.Context) (*dag.CandidatesResult, error) {
-	return api.b.Dag().HandleGetCandidates(), nil
+func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*dag.CandidatesResult, error) {
+	return api.b.Dag().HandleGetCandidates(slot), nil
 }

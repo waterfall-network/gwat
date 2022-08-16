@@ -99,12 +99,17 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 	log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// collect next finalization candidates
-	candidates, err := d.finalizer.GetFinalizingCandidates()
+	const slotsDelay = uint64(2) // number of slots of delay to retrieve candidates
+	candidatesSlot := data.Slot - slotsDelay
+	if candidatesSlot < 0 {
+		candidatesSlot = 0
+	}
+	candidates, err := d.finalizer.GetFinalizingCandidates(&candidatesSlot)
 	if err != nil {
 		errs["candidates"] = err.Error()
 	}
 
-	if candidates == nil || len(*candidates) == 0 {
+	if len(candidates) == 0 {
 		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
 	}
 
@@ -167,7 +172,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 	res := &ConsensusResult{
 		Error:      nil,
 		Info:       &info,
-		Candidates: *candidates,
+		Candidates: candidates,
 	}
 	if len(errs) > 0 {
 		strBuf, _ := json.Marshal(errs)
@@ -266,21 +271,21 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 }
 
 // HandleGetCandidates collect next finalization candidates
-func (d *Dag) HandleGetCandidates() *CandidatesResult {
+func (d *Dag) HandleGetCandidates(slot uint64) *CandidatesResult {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 
 	tstart := time.Now()
 
 	// collect next finalization candidates
-	candidates, err := d.finalizer.GetFinalizingCandidates()
-	if candidates == nil || len(*candidates) == 0 {
+	candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
+	if len(candidates) == 0 {
 		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
 	}
 	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
 	res := &CandidatesResult{
 		Error:      nil,
-		Candidates: *candidates,
+		Candidates: candidates,
 	}
 	if err != nil {
 		estr := err.Error()

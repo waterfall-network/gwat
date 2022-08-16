@@ -515,7 +515,7 @@ func (shm *SlotSpineHashMap) GetMinSlot() uint64 {
 
 func (shm *SlotSpineHashMap) GetHashes() *common.HashArray {
 	if len(*shm) == 0 {
-		return nil
+		return &common.HashArray{}
 	}
 
 	hashes := make(common.HashArray, 0, len(*shm))

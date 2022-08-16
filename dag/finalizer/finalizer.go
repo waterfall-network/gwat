@@ -96,19 +96,9 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 
 	log.Info("Ordered chain calculated", "ordered chain", orderedChain.GetHashes())
 
-	blocks := bc.GetBlocksByHashes(*orderedChain.GetHashes())
-
-	for _, block := range orderedChain {
-		if block == nil || block.Header() == nil {
-			return ErrUnknownBlock
-		}
-	}
-
 	// blocks finalizing
-	for i, blck := range orderedChain {
+	for i, block := range orderedChain {
 		nr := lastFinNr + uint64(i) + 1
-
-		block := blocks[blck.Hash()]
 		block.SetNumber(&nr)
 		isHead := i == len(orderedChain)-1
 		if err := f.finalizeBlock(nr, *block, isHead); err != nil {
@@ -116,7 +106,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 			return err
 		}
 	}
-	lastBlock := blocks[orderedChain[len(blocks)-1].Hash()]
+	lastBlock := orderedChain[len(orderedChain)-1]
 
 	f.updateTips(*orderedChain.GetHashes(), *lastBlock)
 	log.Info("⛓ Finalization completed", "blocks", len(*spines), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
@@ -155,7 +145,7 @@ func (f *Finalizer) isSyncing() bool {
 }
 
 // GetFinalizingCandidates returns the ordered dag block hashes for finalization
-func (f *Finalizer) GetFinalizingCandidates() (*common.HashArray, error) {
+func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, error) {
 	bc := f.eth.BlockChain()
 	candidates := common.HashArray{}
 	tips, unloaded := bc.ReviseTips()
@@ -165,12 +155,22 @@ func (f *Finalizer) GetFinalizingCandidates() (*common.HashArray, error) {
 		} else {
 			log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips.Print())
 		}
-		return nil, ErrBadDag
+		return common.HashArray{}, ErrBadDag
 	}
-	finChain := bc.GetBlocksByHashes(tips.GetOrderedDagChainHashes().Uniq()).ToArray()
+	finChain := []*types.Block{}
+	for _, block := range bc.GetBlocksByHashes(tips.GetOrderedDagChainHashes().Uniq()).ToArray() {
+		if block.Height() > 0 && block.Nr() == 0 {
+			finChain = append(finChain, block)
+		}
+	}
+
+	if len(finChain) == 0 {
+		return common.HashArray{}, nil
+	}
+
 	spines, err := types.CalculateSpines(finChain)
 	if err != nil {
-		return nil, err
+		return common.HashArray{}, err
 	}
 
 	finChain = types.SpinesToChain(bc, &spines)
@@ -190,5 +190,16 @@ func (f *Finalizer) GetFinalizingCandidates() (*common.HashArray, error) {
 		candidates = append(candidates, block.Hash())
 	}
 
-	return spines.GetHashes(), nil
+	if lteSlot != nil {
+		spinesOfSlot := types.SlotSpineHashMap{}
+		for slot, spine := range spines {
+			if *lteSlot >= slot {
+				spinesOfSlot[slot] = spine
+			}
+		}
+		spineHashes := spinesOfSlot.GetHashes()
+		return *spineHashes, nil
+	}
+	spineHashes := spines.GetHashes()
+	return *spineHashes, nil
 }
