@@ -13,9 +13,10 @@ type createOperation struct {
 	decimals    uint8
 	totalSupply *big.Int
 	baseURI     []byte
+	percentFee  uint8
 }
 
-func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals *uint8, totalSupply *big.Int, baseURI []byte) error {
+func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals, percentFee *uint8, totalSupply *big.Int, baseURI []byte) error {
 	if len(name) == 0 {
 		return ErrNoName
 	}
@@ -35,10 +36,13 @@ func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals *u
 		}
 		op.totalSupply = totalSupply
 	case StdWRC721:
-		if len(baseURI) == 0 {
-			return ErrNoBaseURI
+		if percentFee != nil {
+			op.percentFee = *percentFee
 		}
-		op.baseURI = baseURI
+
+		if len(baseURI) != 0 {
+			op.baseURI = baseURI
+		}
 	default:
 		return ErrStandardNotValid
 	}
@@ -54,7 +58,7 @@ func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals *u
 // It sets Standard of the operation to StdWRC20 and all other WRC-20 related fields
 func NewWrc20CreateOperation(name []byte, symbol []byte, decimals *uint8, totalSupply *big.Int) (Create, error) {
 	op := createOperation{}
-	if err := op.init(StdWRC20, name, symbol, decimals, totalSupply, nil); err != nil {
+	if err := op.init(StdWRC20, name, symbol, decimals, nil, totalSupply, nil); err != nil {
 		return nil, err
 	}
 	return &op, nil
@@ -62,9 +66,9 @@ func NewWrc20CreateOperation(name []byte, symbol []byte, decimals *uint8, totalS
 
 // NewWRC721CreateOperation creates an operation for creating WRC-721 token
 // It sets Standard of the operation to StdWRC721 and all other WRC-721 related fields
-func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte) (Create, error) {
+func NewWrc721CreateOperation(name []byte, symbol []byte, baseURI []byte, percentFee *uint8) (Create, error) {
 	op := createOperation{}
-	if err := op.init(StdWRC721, name, symbol, nil, nil, baseURI); err != nil {
+	if err := op.init(StdWRC721, name, symbol, nil, percentFee, nil, baseURI); err != nil {
 		return nil, err
 	}
 	return &op, nil
@@ -77,6 +81,7 @@ type createOpData struct {
 	TotalSupply *big.Int `rlp:"nil"`
 	Decimals    *uint8   `rlp:"nil"`
 	BaseURI     []byte   `rlp:"optional"`
+	PercentFee  *uint8   `rlp:"optional"`
 }
 
 // UnmarshalBinary unmarshals a create operation from byte encoding
@@ -85,8 +90,8 @@ func (op *createOperation) UnmarshalBinary(b []byte) error {
 	if err := rlp.DecodeBytes(b, &opData); err != nil {
 		return err
 	}
-	op.init(opData.Std, opData.Name, opData.Symbol, opData.Decimals, opData.TotalSupply, opData.BaseURI)
-	return nil
+
+	return op.init(opData.Std, opData.Name, opData.Symbol, opData.Decimals, opData.PercentFee, opData.TotalSupply, opData.BaseURI)
 }
 
 // MarshalBinary marshals a create operation to byte encoding
@@ -143,4 +148,9 @@ func (op *createOperation) BaseURI() ([]byte, bool) {
 		return nil, false
 	}
 	return makeCopy(op.baseURI), true
+}
+
+// PercentFee returns copy of the percentFee field
+func (op *createOperation) PercentFee() uint8 {
+	return op.percentFee
 }

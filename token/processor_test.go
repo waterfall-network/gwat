@@ -33,6 +33,7 @@ var (
 	id7            *big.Int
 	totalSupply    *big.Int
 	decimals       uint8
+	percentFee     uint8
 	name           []byte
 	symbol         []byte
 	baseURI        []byte
@@ -73,6 +74,7 @@ func init() {
 	totalSupply = big.NewInt(int64(testutils.RandomInt(100, 1000)))
 
 	decimals = uint8(testutils.RandomInt(0, 255))
+	percentFee = uint8(testutils.RandomInt(0, 255))
 
 	name = testutils.RandomStringInBytes(testutils.RandomInt(10, 20))
 	symbol = testutils.RandomStringInBytes(testutils.RandomInt(5, 8))
@@ -97,7 +99,7 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				adr := call(t, v.Caller, v.TokenAddress, createOpWrc20, c.Errs)
+				adr := call(t, v.Caller, v.TokenAddress, nil, createOpWrc20, c.Errs)
 				*a = common.BytesToAddress(adr)
 
 				balance := checkBalance(t, wrc20Address, owner)
@@ -115,7 +117,7 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 			Errs: []error{ErrNotNilTo},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				call(t, v.Caller, v.TokenAddress, createOpWrc20, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, createOpWrc20, c.Errs)
 			},
 		},
 	}
@@ -128,7 +130,7 @@ func TestProcessorCreateOperationWRC20Call(t *testing.T) {
 }
 
 func TestProcessorCreateOperationWRC721Call(t *testing.T) {
-	createOpWrc721, err := operation.NewWrc721CreateOperation(name, symbol, baseURI)
+	createOpWrc721, err := operation.NewWrc721CreateOperation(name, symbol, baseURI, &percentFee)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +144,7 @@ func TestProcessorCreateOperationWRC721Call(t *testing.T) {
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				adr := call(t, v.Caller, v.TokenAddress, createOpWrc721, c.Errs)
+				adr := call(t, v.Caller, v.TokenAddress, nil, createOpWrc721, c.Errs)
 				*a = common.BytesToAddress(adr)
 			},
 		},
@@ -155,7 +157,7 @@ func TestProcessorCreateOperationWRC721Call(t *testing.T) {
 			Errs: []error{ErrNotNilTo},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				call(t, v.Caller, v.TokenAddress, createOpWrc721, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, createOpWrc721, c.Errs)
 			},
 		},
 	}
@@ -190,7 +192,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 
 				callApprove(t, operation.StdWRC20, spender, v.TokenAddress, v.Caller, value, c.Errs)
 
-				call(t, vm.AccountRef(spender), v.TokenAddress, opWrc20, c.Errs)
+				call(t, vm.AccountRef(spender), v.TokenAddress, nil, opWrc20, c.Errs)
 
 				balance := checkBalance(t, wrc20Address, owner)
 
@@ -216,7 +218,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 
 				callApprove(t, operation.StdWRC721, spender, v.TokenAddress, v.Caller, id, c.Errs)
 
-				call(t, vm.AccountRef(spender), v.TokenAddress, opWrc721, c.Errs)
+				call(t, vm.AccountRef(spender), v.TokenAddress, nil, opWrc721, c.Errs)
 
 				balanceAfter := checkBalance(t, wrc721Address, owner)
 
@@ -239,7 +241,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 
 				callApprove(t, operation.StdWRC721, spender, v.TokenAddress, v.Caller, id, c.Errs)
 
-				call(t, vm.AccountRef(spender), v.TokenAddress, opWrc721, c.Errs)
+				call(t, vm.AccountRef(spender), v.TokenAddress, nil, opWrc721, c.Errs)
 			},
 		},
 		{
@@ -257,7 +259,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				call(t, v.Caller, v.TokenAddress, op, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, op, c.Errs)
 			},
 		},
 	}
@@ -285,7 +287,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				call(t, v.Caller, v.TokenAddress, mintOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, mintOp, c.Errs)
 
 				balance := checkBalance(t, wrc721Address, owner)
 
@@ -302,7 +304,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 			Errs: []error{ErrWrongMinter},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				call(t, v.Caller, v.TokenAddress, mintOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, mintOp, c.Errs)
 			},
 		},
 	}
@@ -332,7 +334,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 				v := c.TestData.(testutils.TestData)
 				balance := checkBalance(t, wrc20Address, owner)
 
-				call(t, v.Caller, v.TokenAddress, transferOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, transferOp, c.Errs)
 
 				balanceAfter := checkBalance(t, wrc20Address, owner)
 
@@ -350,7 +352,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 			Errs: []error{operation.ErrNoAddress},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				call(t, v.Caller, v.TokenAddress, transferOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, transferOp, c.Errs)
 			},
 		},
 		{
@@ -362,7 +364,7 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 			Errs: []error{ErrNotEnoughBalance},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				call(t, v.Caller, v.TokenAddress, transferOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, transferOp, c.Errs)
 			},
 		},
 	}
@@ -396,7 +398,7 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 
 				balance := checkBalance(t, wrc721Address, owner)
 
-				call(t, v.Caller, v.TokenAddress, burnOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, burnOp, c.Errs)
 
 				balanceAfter := checkBalance(t, wrc721Address, owner)
 
@@ -415,7 +417,7 @@ func TestProcessorBurnOperationCall(t *testing.T) {
 			Errs: []error{ErrWrongMinter},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				call(t, v.Caller, v.TokenAddress, burnOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, burnOp, c.Errs)
 			},
 		},
 	}
@@ -449,7 +451,7 @@ func TestProcessorApprovalForAllCall(t *testing.T) {
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
 
-				call(t, v.Caller, v.TokenAddress, op, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, op, c.Errs)
 
 				mintNewToken(t, owner, v.TokenAddress, id4, data, caller, c.Errs)
 
@@ -466,14 +468,14 @@ func TestProcessorApprovalForAllCall(t *testing.T) {
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
 
-				call(t, v.Caller, v.TokenAddress, op, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, op, c.Errs)
 
 				mintNewToken(t, owner, v.TokenAddress, id5, data, caller, c.Errs)
 				mintNewToken(t, owner, v.TokenAddress, id6, data, caller, c.Errs)
 
 				callTransferFrom(t, operation.StdWRC721, owner, to, v.TokenAddress, id5, vm.AccountRef(spender), c.Errs)
 
-				call(t, v.Caller, v.TokenAddress, unapproveOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, unapproveOp, c.Errs)
 
 				callTransferFrom(t, operation.StdWRC721, owner, to, v.TokenAddress, id6, vm.AccountRef(spender), c.Errs)
 			},
@@ -503,7 +505,7 @@ func TestProcessorIsApprovedForAll(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				call(t, v.Caller, v.TokenAddress, approvalOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, approvalOp, c.Errs)
 
 				ok := checkApprove(t, wrc721Address, owner, operator)
 
@@ -561,7 +563,7 @@ func TestProcessorPropertiesWRC20(t *testing.T) {
 func TestProcessorPropertiesWRC721(t *testing.T) {
 	mintNewToken(t, owner, wrc721Address, id7, data, caller, []error{nil})
 	approveOp, err := operation.NewApproveOperation(operation.StdWRC721, spender, id7)
-	call(t, vm.AccountRef(owner), wrc721Address, approveOp, []error{nil})
+	call(t, vm.AccountRef(owner), wrc721Address, nil, approveOp, []error{nil})
 
 	wrc721Op, err := operation.NewPropertiesOperation(wrc721Address, id7)
 	if err != nil {
@@ -610,7 +612,7 @@ func TestProcessorApproveCall(t *testing.T) {
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
 
-				call(t, v.Caller, v.TokenAddress, approveOp, c.Errs)
+				call(t, v.Caller, v.TokenAddress, nil, approveOp, c.Errs)
 
 				allowanceOp, err := operation.NewAllowanceOperation(wrc20Address, owner, approveAddress)
 
@@ -676,11 +678,11 @@ func mintNewToken(t *testing.T, owner, TokenAddress common.Address, id *big.Int,
 		t.Fatal(err)
 	}
 
-	call(t, Caller, TokenAddress, mintOp, Errs)
+	call(t, Caller, TokenAddress, nil, mintOp, Errs)
 }
 
-func call(t *testing.T, Caller Ref, TokenAddress common.Address, op operation.Operation, Errs []error) []byte {
-	res, err := p.Call(Caller, TokenAddress, op)
+func call(t *testing.T, Caller Ref, TokenAddress common.Address, value *big.Int, op operation.Operation, Errs []error) []byte {
+	res, err := p.Call(Caller, TokenAddress, value, op)
 	if !testutils.CheckError(err, Errs) {
 		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", Errs, err)
 	}
@@ -708,7 +710,7 @@ func callApprove(t *testing.T, std operation.Std, spender, TokenAddress common.A
 		t.Fatal(err)
 	}
 
-	call(t, Caller, TokenAddress, approveOp, Errs)
+	call(t, Caller, TokenAddress, nil, approveOp, Errs)
 }
 
 func callTransferFrom(
@@ -724,5 +726,5 @@ func callTransferFrom(
 		t.Fatal(err)
 	}
 
-	call(t, Caller, TokenAddress, transferOp, Errs)
+	call(t, Caller, TokenAddress, nil, transferOp, Errs)
 }

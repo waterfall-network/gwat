@@ -17,6 +17,7 @@ func TestCreateOperationOperation(t *testing.T) {
 		decimals    uint8
 		totalSupply *big.Int
 		baseURI     []byte
+		percentFee  uint8
 	}
 
 	cases := []operationTestCase{
@@ -102,6 +103,7 @@ func TestCreateOperationOperation(t *testing.T) {
 				o.name,
 				o.symbol,
 				o.baseURI,
+				&o.percentFee,
 			)
 			if err != nil {
 				return err

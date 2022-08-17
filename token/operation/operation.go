@@ -56,6 +56,9 @@ const (
 	BurnCode                = 0x27
 	TokenOfOwnerByIndexCode = 0x28
 	SafeTransferFromCode    = 0x29
+	SetPriceCode            = 0x2a
+	BuyCode                 = 0x2b
+	CostCode                = 0x2c
 )
 
 // Prefix for the encoded data field of a token operation
@@ -125,6 +128,12 @@ func DecodeBytes(b []byte) (Operation, error) {
 		op = &tokenOfOwnerByIndexOperation{}
 	case SafeTransferFromCode:
 		op = &safeTransferFromOperation{}
+	case SetPriceCode:
+		op = &setPriceOperation{}
+	case BuyCode:
+		op = &buyOperation{}
+	case CostCode:
+		op = &costOperation{}
 	default:
 		return nil, ErrOpNotValid
 	}
@@ -172,6 +181,12 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 		buf[1] = TokenOfOwnerByIndexCode
 	case *safeTransferFromOperation:
 		buf[1] = SafeTransferFromCode
+	case *setPriceOperation:
+		buf[1] = SetPriceCode
+	case *buyOperation:
+		buf[1] = BuyCode
+	case *costOperation:
+		buf[1] = CostCode
 	}
 
 	buf = append(buf, b...)

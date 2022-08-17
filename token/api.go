@@ -35,8 +35,10 @@ func NewPublicTokenAPI(b Backend) *PublicTokenAPI {
 }
 
 type wrc721Properties struct {
-	Name   *hexutil.Bytes `json:"name"`
-	Symbol *hexutil.Bytes `json:"symbol"`
+	Name       *hexutil.Bytes `json:"name"`
+	Symbol     *hexutil.Bytes `json:"symbol"`
+	PercentFee *hexutil.Uint8 `json:"percentFee,omitempty"`
+	Cost       *hexutil.Big   `json:"cost,omitempty"`
 }
 
 // wrc20Properties stores results of the following view functions of EIP-20: name, symbol, decimals, totalSupply.
@@ -89,16 +91,20 @@ func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexut
 		op  operation.Operation
 		err error
 	)
+
 	switch {
 	case args.TotalSupply != nil:
 		decimals := (*uint8)(args.Decimals)
 		totalSupply := args.TotalSupply.ToInt()
+
 		if op, err = operation.NewWrc20CreateOperation(name, symbol, decimals, totalSupply); err != nil {
 			return nil, err
 		}
 	case args.BaseURI != nil:
+		percentFee := (*uint8)(args.PercentFee)
 		baseURI := []byte(*args.BaseURI)
-		if op, err = operation.NewWrc721CreateOperation(name, symbol, baseURI); err != nil {
+
+		if op, err = operation.NewWrc721CreateOperation(name, symbol, baseURI, percentFee); err != nil {
 			return nil, err
 		}
 	default:
@@ -173,6 +179,7 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 		symbolBytes := hexutil.Bytes(v.Symbol)
 		decimals := hexutil.Uint8(v.Decimals)
 		totalSupply := (*hexutil.Big)(v.TotalSupply)
+
 		ret = &wrc20Properties{
 			wrc721Properties{
 				Name:   &nameBytes,
@@ -184,11 +191,15 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 	case *WRC721PropertiesResult:
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
+		percentFee := hexutil.Uint8(v.PercentFee)
+		cost := (*hexutil.Big)(v.Cost)
 
 		props := &wrc721TokenProperties{
 			wrc721Properties: wrc721Properties{
-				Name:   &nameBytes,
-				Symbol: &symbolBytes,
+				Name:       &nameBytes,
+				Symbol:     &symbolBytes,
+				PercentFee: &percentFee,
+				Cost:       cost,
 			},
 		}
 		if len(v.BaseURI) > 0 {
@@ -493,6 +504,75 @@ func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenId hexutil.Big) (h
 		log.Error("Failed to encode a token mint operation", "err", err)
 		return nil, err
 	}
+	return b, nil
+}
+
+// TokenCost returns the cost a WRC-20 token (not implemented).
+// For WRC-721 token returns cost of a token in a NFT collection.
+func (s *PublicTokenAPI) TokenCost(ctx context.Context, tokenAddr common.Address, tokenId hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	id := tokenId.ToInt()
+
+	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+
+	op, err := operation.NewCostOperation(tokenAddr, id)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := tp.Cost(op)
+	if err != nil {
+		return nil, err
+	}
+	if err := tpError(); err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Big)(res), nil
+}
+
+// SetPrice sets price for a token for WRC-20 (not implemented).
+// For WRC-721 set price for a token by tokenId in a NFT collection.
+func (s *PublicTokenAPI) SetPrice(ctx context.Context, tokenId, value hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	val := value.ToInt()
+
+	op, err := operation.NewSetPriceOperation(id, val)
+	if err != nil {
+		log.Error("Cannot create a token set price operation", "err", err)
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token set price operation", "err", err)
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// Buy buys price for a token for WRC-20 (not implemented).
+// For WRC-721 set price for a token by tokenId in a NFT collection.
+func (s *PublicTokenAPI) Buy(_ context.Context, tokenId, newValue hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	newVal := newValue.ToInt()
+
+	op, err := operation.NewBuyOperation(id, newVal)
+	if err != nil {
+		log.Error("Cannot create a token buy operation", "err", err)
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token buy operation", "err", err)
+		return nil, err
+	}
+
 	return b, nil
 }
 

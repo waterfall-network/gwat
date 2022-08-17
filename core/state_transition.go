@@ -334,7 +334,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			if err != nil {
 				return nil, err
 			}
-			ret, vmerr = st.tp.Call(sender, st.to(), op)
+			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

@@ -28,38 +28,48 @@ var (
 	ErrWrongCaller             = errors.New("caller is not owner nor approved")
 	ErrWrongMinter             = errors.New("caller can't mint or burn NFTs")
 	ErrNotNilTo                = errors.New("address to is not nil")
+	ErrTokenIsNotForSale       = errors.New("token is not for sale")
+	ErrToSmallValue            = errors.New("too small value")
 )
 
 const (
-	MetadataDefaultSize = 1024
-
+	// Common fields
 	// NameField is []byte
 	NameField = "Name"
 	// StandardField is []byte
 	StandardField = "Standard"
 	// SymbolField is []byte
 	SymbolField = "Symbol"
-	// TotalSupplyField is Uint256
-	TotalSupplyField = "TotalSupply"
-
-	// DecimalsField is Uint8
-	DecimalsField = "Decimals"
 	// BalancesField is AddressUint256Map
 	BalancesField = "Balances"
-	// OwnersField is ByteArrayAddressMap
-	OwnersField = "Owners"
+	// PercentFeeField is Uint8
+	PercentFeeField = "PercentFee"
+
+	// WRC20
+	// CreatorField is common.Address
+	CreatorField = "Creator"
+	// TotalSupplyField is Uint256
+	TotalSupplyField = "TotalSupply"
+	// DecimalsField is Uint8
+	DecimalsField = "Decimals"
 	// AllowancesField is AddressUint256Map
 	AllowancesField = "Allowances"
-	// OperatorApprovalsField is KeccakBoolMap
-	OperatorApprovalsField = "OperatorApprovals"
-	// TokenApprovalsField is KeccakAddressMap
-	TokenApprovalsField = "TokenApprovals"
-	// MetadataField is AddressByteArrayMap
-	MetadataField = "Metadata"
+
+	// WRC721
 	// MinterField is common.Address
 	MinterField = "Minter"
 	// BaseUriField is []byte
 	BaseUriField = "BaseUri"
+	// OwnersField is ByteArrayAddressMap
+	OwnersField = "Owners"
+	// MetadataField is AddressByteArrayMap
+	MetadataField = "Metadata"
+	// OperatorApprovalsField is KeccakBoolMap
+	OperatorApprovalsField = "OperatorApprovals"
+	// TokenApprovalsField is KeccakAddressMap
+	TokenApprovalsField = "TokenApprovals"
+	// CostMapField is AddressUint256Map
+	CostMapField = "Cost"
 )
 
 // Ref represents caller of the token processor
@@ -95,7 +105,7 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
 //  * set approval for all
 //
 // It returns byte representation of the return value of an operation.
-func (p *Processor) Call(caller Ref, token common.Address, op operation.Operation) (ret []byte, err error) {
+func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op operation.Operation) (ret []byte, err error) {
 	if _, ok := op.(operation.Create); !ok {
 		nonce := p.state.GetNonce(caller.Address())
 		p.state.SetNonce(caller.Address(), nonce+1)
@@ -120,6 +130,10 @@ func (p *Processor) Call(caller Ref, token common.Address, op operation.Operatio
 		ret, err = p.approve(caller, token, v)
 	case operation.Mint:
 		ret, err = p.mint(caller, token, v)
+	case operation.Buy:
+		ret, err = p.buy(caller, value, token, v)
+	case operation.SetPrice:
+		ret, err = p.setPrice(caller, token, v)
 	case operation.Burn:
 		ret, err = p.burn(caller, token, v)
 	case operation.SetApprovalForAll:
@@ -233,6 +247,8 @@ type WRC721PropertiesResult struct {
 	OwnerOf     common.Address
 	GetApproved common.Address
 	Metadata    []byte
+	PercentFee  uint8
+	Cost        *big.Int
 }
 
 // Properties performs the token properties operation
@@ -240,7 +256,7 @@ type WRC721PropertiesResult struct {
 func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
 	log.Info("Token properties", "address", op.Address())
 
-	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
+	storage, standard, err := p.newStorageWithoutStdCheck(op.Address())
 	if err != nil {
 		return nil, err
 	}
@@ -284,10 +300,17 @@ func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
 			return nil, err
 		}
 
+		var percentFee uint8
+		err = storage.ReadField(PercentFeeField, &percentFee)
+		if err != nil {
+			return nil, err
+		}
+
 		props := &WRC721PropertiesResult{
-			Name:    name,
-			Symbol:  symbol,
-			BaseURI: baseURI,
+			Name:       name,
+			Symbol:     symbol,
+			BaseURI:    baseURI,
+			PercentFee: percentFee,
 		}
 		if id, ok := op.TokenId(); ok {
 			props.TokenURI = concatTokenURI(baseURI, id)
@@ -340,7 +363,7 @@ func (p *Processor) transfer(caller Ref, token common.Address, op operation.Tran
 	value := op.Value()
 	switch op.Standard() {
 	case operation.StdWRC20:
-		err = p.wrc20Transfer(storage, caller.Address(), op.To(), op.Value())
+		err = transfer(storage, caller.Address(), op.To(), op.Value())
 		if err != nil {
 			return nil, err
 		}
@@ -350,34 +373,6 @@ func (p *Processor) transfer(caller Ref, token common.Address, op operation.Tran
 	storage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
-}
-
-func (p *Processor) wrc20Transfer(storage tokenStorage.Storage, from common.Address, to common.Address, value *big.Int) error {
-	var balance uint256.Int
-	err := readFromMap(storage, BalancesField, from[:], &balance)
-	if err != nil {
-		return err
-	}
-
-	fromBalance := balance.ToBig()
-	if fromBalance.Cmp(value) < 0 {
-		return ErrNotEnoughBalance
-	}
-
-	fromRes, _ := uint256.FromBig(new(big.Int).Sub(fromBalance, value))
-	err = writeToMap(storage, BalancesField, from[:], fromRes)
-	if err != nil {
-		return err
-	}
-
-	var toBalance uint256.Int
-	err = readFromMap(storage, BalancesField, to[:], &toBalance)
-	if err != nil {
-		return err
-	}
-
-	toRes, _ := uint256.FromBig(new(big.Int).Add(toBalance.ToBig(), value))
-	return writeToMap(storage, BalancesField, to[:], toRes)
 }
 
 func (p *Processor) wrc20SpendAllowance(storage tokenStorage.Storage, owner common.Address, spender common.Address, amount *big.Int) error {
@@ -415,7 +410,7 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op operation.
 			return nil, err
 		}
 
-		err := p.wrc20Transfer(storage, op.From(), op.To(), op.Value())
+		err := transfer(storage, op.From(), op.To(), op.Value())
 		if err != nil {
 			return nil, err
 		}
@@ -476,26 +471,7 @@ func (p *Processor) wrc721TransferFrom(storage tokenStorage.Storage, caller Ref,
 		return err
 	}
 
-	var fromBalance uint256.Int
-	err = readFromMap(storage, BalancesField, from[:], &fromBalance)
-	if err != nil {
-		return err
-	}
-
-	newFromBalance, _ := uint256.FromBig(new(big.Int).Sub(fromBalance.ToBig(), big.NewInt(1)))
-	err = writeToMap(storage, BalancesField, from[:], newFromBalance)
-	if err != nil {
-		return err
-	}
-
-	var toBalance uint256.Int
-	err = readFromMap(storage, BalancesField, to[:], &toBalance)
-	if err != nil {
-		return err
-	}
-
-	newToBalance, _ := uint256.FromBig(new(big.Int).Add(toBalance.ToBig(), big.NewInt(1)))
-	err = writeToMap(storage, BalancesField, to[:], newToBalance)
+	err = transfer(storage, from, to, big.NewInt(1))
 	if err != nil {
 		return err
 	}
@@ -566,7 +542,7 @@ func (p *Processor) wrc721Approve(storage tokenStorage.Storage, caller Ref, op o
 // BalanceOf performs the token balance of operations
 // It returns uint256 value with the token balance of number of NFTs.
 func (p *Processor) BalanceOf(op operation.BalanceOf) (*big.Int, error) {
-	storage, standard, err := p.newStorageWithoutStdCheck(op.Address(), op)
+	storage, standard, err := p.newStorageWithoutStdCheck(op.Address())
 	if err != nil {
 		return nil, err
 	}
@@ -615,19 +591,52 @@ func (p *Processor) Allowance(op operation.Allowance) (*big.Int, error) {
 	return nil, ErrTokenOpStandardNotValid
 }
 
+// Cost performs the token cost of operations
+// It returns uint256 value with the token cost in wei.
+func (p *Processor) Cost(op operation.Cost) (*big.Int, error) {
+	storage, standard, err := p.newStorageWithoutStdCheck(op.Address())
+	if err != nil {
+		return nil, err
+	}
+
+	tokenId := op.TokenId()
+	switch standard {
+	case operation.StdWRC721:
+		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		if owner == (common.Address{}) {
+			return nil, ErrNotMinted
+		}
+
+		var cost uint256.Int
+		err = readFromMap(storage, CostMapField, tokenId.Bytes(), &cost)
+		if err != nil {
+			return nil, err
+		}
+
+		if cost.Eq(uint256.NewInt(0)) {
+			return nil, ErrTokenIsNotForSale
+		}
+
+		return cost.ToBig(), nil
+	default:
+		return nil, ErrTokenOpStandardNotValid
+	}
+}
+
 func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([]byte, error) {
 	storage, err := p.newStorage(token, op)
 	if err != nil {
 		return nil, err
 	}
 
-	var minterB []byte
-	err = storage.ReadField(MinterField, &minterB)
+	minter, err := readMinter(storage)
 	if err != nil {
 		return nil, err
 	}
 
-	minter := common.BytesToAddress(minterB)
 	if caller.Address() != minter {
 		return nil, ErrWrongMinter
 	}
@@ -678,19 +687,17 @@ func (p *Processor) burn(caller Ref, token common.Address, op operation.Burn) ([
 		return nil, err
 	}
 
-	var minterB []byte
-	err = storage.ReadField(MinterField, &minterB)
+	address := caller.Address()
+	tokenId := op.TokenId()
+
+	minter, err := readMinter(storage)
 	if err != nil {
 		return nil, err
 	}
 
-	minter := common.BytesToAddress(minterB)
-	if caller.Address() != minter {
+	if address != minter {
 		return nil, ErrWrongMinter
 	}
-
-	address := caller.Address()
-	tokenId := op.TokenId()
 
 	owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
 	if err != nil {
@@ -737,6 +744,7 @@ func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op opera
 		return nil, err
 	}
 
+	// TODO Do we suppose caller is owner without checks?
 	owner := caller.Address()
 	operator := op.Operator()
 
@@ -749,6 +757,150 @@ func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op opera
 	storage.Flush()
 
 	return operator[:], nil
+}
+
+func (p *Processor) setPrice(caller Ref, token common.Address, op operation.SetPrice) ([]byte, error) {
+	storage, std, err := p.newStorageWithoutStdCheck(token)
+	if err != nil {
+		return nil, err
+	}
+
+	switch std {
+	//case operation.StdWRC20:
+	case operation.StdWRC721:
+		tokenId := op.TokenId()
+		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
+		if err != nil {
+			return nil, err
+		}
+
+		if owner == (common.Address{}) {
+			return nil, ErrNotMinted
+		}
+
+		if owner != caller.Address() {
+			return nil, ErrIncorrectOwner
+		}
+
+		newCost, _ := uint256.FromBig(op.Value())
+		err = writeToMap(storage, CostMapField, tokenId.Bytes(), newCost)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, ErrTokenOpStandardNotValid
+	}
+
+	storage.Flush()
+	return token.Bytes(), nil
+}
+
+func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op operation.Buy) ([]byte, error) {
+	storage, std, err := p.newStorageWithoutStdCheck(token)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenId := op.TokenId()
+	address := caller.Address()
+
+	switch std {
+	case operation.StdWRC721:
+		// check if token exist
+		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		if owner == (common.Address{}) {
+			return nil, ErrNotMinted
+		}
+
+		// check cost
+		var cost uint256.Int
+		err = readFromMap(storage, CostMapField, tokenId.Bytes(), &cost)
+		if err != nil {
+			return nil, err
+		}
+
+		if cost.Eq(uint256.NewInt(0)) {
+			return nil, ErrTokenIsNotForSale
+		}
+
+		if cost.ToBig().Cmp(value) == 1 {
+			return nil, ErrToSmallValue
+		}
+
+		err = writeToMap(storage, OwnersField, tokenId.Bytes(), address)
+		if err != nil {
+			return nil, err
+		}
+
+		// clear approvals from the previous owner
+		err = writeToMap(storage, TokenApprovalsField, tokenId.Bytes(), common.Address{})
+		if err != nil {
+			return nil, err
+		}
+
+		err = transfer(storage, owner, address, big.NewInt(1))
+		if err != nil {
+			return nil, err
+		}
+
+		// transfer wei
+		err = p.makePayment(storage, address, owner, cost.ToBig())
+		if err != nil {
+			return nil, err
+		}
+
+		// set new cost
+		newCost, _ := uint256.FromBig(op.NewValue())
+		err = writeToMap(storage, CostMapField, tokenId.Bytes(), newCost)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, ErrTokenOpStandardNotValid
+	}
+
+	storage.Flush()
+	return tokenId.FillBytes(make([]byte, 32)), nil
+}
+
+func (p *Processor) makePayment(storage tokenStorage.Storage, caller, owner common.Address, value *big.Int) error {
+	minter, err := readMinter(storage)
+	if err != nil {
+		return err
+	}
+
+	var percentFee uint8
+	err = storage.ReadField(PercentFeeField, &percentFee)
+	if err != nil {
+		return err
+	}
+
+	// check balance
+	callerBalance := p.state.GetBalance(caller)
+	if callerBalance.Cmp(value) < 0 {
+		return ErrNotEnoughBalance
+	}
+
+	// take fee
+	if value.Cmp(big.NewInt(0)) == 1 && owner != minter {
+		fee := big.NewInt(int64(percentFee))
+		fee = fee.Mul(fee, value)
+		fee = fee.Div(fee, big.NewInt(100))
+
+		p.state.SubBalance(caller, fee)
+		p.state.AddBalance(minter, fee)
+
+		value = value.Sub(value, fee)
+	}
+
+	// take payment
+	p.state.SubBalance(caller, value)
+	p.state.AddBalance(owner, value)
+
+	return nil
 }
 
 // IsApprovedForAll performs the is approved for all operation for WRC-721 tokens
@@ -766,7 +918,7 @@ func (p *Processor) IsApprovedForAll(op operation.IsApprovedForAll) (bool, error
 	return isApprovedForAll, readFromMap(storage, OperatorApprovalsField, crypto.Keccak256(owner[:], operator[:]), &isApprovedForAll)
 }
 
-func (p *Processor) newStorageWithoutStdCheck(token common.Address, op operation.Operation) (tokenStorage.Storage, operation.Std, error) {
+func (p *Processor) newStorageWithoutStdCheck(token common.Address) (tokenStorage.Storage, operation.Std, error) {
 	if !p.state.Exist(token) {
 		log.Error("Token doesn't exist", "address", token)
 		return nil, operation.Std(0), ErrTokenNotExists
@@ -797,7 +949,7 @@ func (p *Processor) newStorageWithoutStdCheck(token common.Address, op operation
 }
 
 func (p *Processor) newStorage(token common.Address, op operation.Operation) (tokenStorage.Storage, error) {
-	storage, standard, err := p.newStorageWithoutStdCheck(token, op)
+	storage, standard, err := p.newStorageWithoutStdCheck(token)
 	if err != nil {
 		return nil, err
 	}
@@ -841,22 +993,24 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 	}
 	fieldDescriptors = append(fieldDescriptors, balancesFd)
 
+	// PercentFee
+	percentFeeFd, err := newScalarField(PercentFeeField, tokenStorage.Uint8Type)
+	if err != nil {
+		return nil, err
+	}
+	fieldDescriptors = append(fieldDescriptors, percentFeeFd)
+
 	switch op.Standard() {
 	case operation.StdWRC20:
 		// Decimals
-		sc, _ := tokenStorage.NewScalarProperties(tokenStorage.Uint8Type)
-		decimalsFd, err := tokenStorage.NewFieldDescriptor([]byte(DecimalsField), sc)
+		decimalsFd, err := newScalarField(DecimalsField, tokenStorage.Uint8Type)
 		if err != nil {
 			return nil, err
 		}
 		fieldDescriptors = append(fieldDescriptors, decimalsFd)
 
 		// TotalSupply
-		sc, _ = tokenStorage.NewScalarProperties(tokenStorage.Uint256Type)
-		totalSupplyFd, err := tokenStorage.NewFieldDescriptor(
-			[]byte(TotalSupplyField),
-			sc,
-		)
+		totalSupplyFd, err := newScalarField(TotalSupplyField, tokenStorage.Uint256Type)
 		if err != nil {
 			return nil, err
 		}
@@ -911,6 +1065,13 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 			return nil, err
 		}
 		fieldDescriptors = append(fieldDescriptors, operatorApprovalsFd)
+
+		// CostMap
+		costFd, err := newByteArrayScalarMapDescriptor(CostMapField, common.AddressLength, tokenStorage.Uint256Type)
+		if err != nil {
+			return nil, err
+		}
+		fieldDescriptors = append(fieldDescriptors, costFd)
 	}
 
 	return fieldDescriptors, nil
@@ -1006,4 +1167,50 @@ func writeToMap(storage tokenStorage.Storage, name string, key, value interface{
 func readFromMap(storage tokenStorage.Storage, name string, key []byte, refToRes interface{}) error {
 	kv := tokenStorage.NewKeyValuePair(key, refToRes)
 	return storage.ReadField(name, kv)
+}
+
+func newScalarField(name string, tp tokenStorage.Type) (tokenStorage.FieldDescriptor, error) {
+	sc, err := tokenStorage.NewScalarProperties(tp)
+	if err != nil {
+		return nil, err
+	}
+
+	return tokenStorage.NewFieldDescriptor([]byte(name), sc)
+}
+
+func transfer(storage tokenStorage.Storage, from, to common.Address, swapValue *big.Int) error {
+	var fromBalance uint256.Int
+	err := readFromMap(storage, BalancesField, from.Bytes(), &fromBalance)
+	if err != nil {
+		return err
+	}
+
+	if fromBalance.ToBig().Cmp(swapValue) < 0 {
+		return ErrNotEnoughBalance
+	}
+
+	newFromBalance, _ := uint256.FromBig(new(big.Int).Sub(fromBalance.ToBig(), swapValue))
+	err = writeToMap(storage, BalancesField, from.Bytes(), newFromBalance)
+	if err != nil {
+		return err
+	}
+
+	var toBalance uint256.Int
+	err = readFromMap(storage, BalancesField, to.Bytes(), &toBalance)
+	if err != nil {
+		return err
+	}
+
+	newToBalance, _ := uint256.FromBig(new(big.Int).Add(toBalance.ToBig(), swapValue))
+	return writeToMap(storage, BalancesField, to.Bytes(), newToBalance)
+}
+
+func readMinter(storage tokenStorage.Storage) (common.Address, error) {
+	var minterB []byte
+	err := storage.ReadField(MinterField, &minterB)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	return common.BytesToAddress(minterB), nil
 }

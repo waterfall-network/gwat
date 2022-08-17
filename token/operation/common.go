@@ -183,3 +183,112 @@ func (op *transferFromOperation) UnmarshalBinary(b []byte) error {
 func (op *transferFromOperation) MarshalBinary() ([]byte, error) {
 	return rlpEncode(op)
 }
+
+type setPriceOperation struct {
+	valueOperation
+	tokenIdOperation
+}
+
+func NewSetPriceOperation(tokenId, value *big.Int) (SetPrice, error) {
+	if tokenId == nil {
+		return nil, ErrNoTokenId
+	}
+
+	if value == nil {
+		return nil, ErrNoValue
+	}
+
+	return &setPriceOperation{
+		valueOperation:   valueOperation{value},
+		tokenIdOperation: tokenIdOperation{tokenId},
+	}, nil
+}
+
+func (p *setPriceOperation) OpCode() Code {
+	return SetPriceCode
+}
+
+func (p *setPriceOperation) Standard() Std {
+	return 0
+}
+
+func (p *setPriceOperation) UnmarshalBinary(data []byte) error {
+	return rlpDecode(data, p)
+}
+
+func (p *setPriceOperation) MarshalBinary() (data []byte, err error) {
+	return rlpEncode(p)
+}
+
+type buyOperation struct {
+	tokenIdOperation
+	valueOperation
+}
+
+func NewBuyOperation(tokenId, newValue *big.Int) (Buy, error) {
+	if tokenId == nil {
+		return nil, ErrNoTokenId
+	}
+
+	if newValue == nil {
+		return nil, ErrNoValue
+	}
+
+	return &buyOperation{
+		tokenIdOperation: tokenIdOperation{tokenId},
+		valueOperation:   valueOperation{newValue},
+	}, nil
+}
+
+func (b *buyOperation) NewValue() *big.Int {
+	return b.Value()
+}
+
+func (b *buyOperation) OpCode() Code {
+	return BuyCode
+}
+
+func (b *buyOperation) Standard() Std {
+	return 0
+}
+
+func (b *buyOperation) UnmarshalBinary(data []byte) error {
+	return rlpDecode(data, b)
+}
+
+func (b *buyOperation) MarshalBinary() (data []byte, err error) {
+	return rlpEncode(b)
+}
+
+type costOperation struct {
+	addressOperation
+	tokenIdOperation
+}
+
+// NewCostOperation creates a cost operation
+func NewCostOperation(address common.Address, tokenId *big.Int) (Cost, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+
+	return &costOperation{
+		addressOperation: addressOperation{address},
+		tokenIdOperation: tokenIdOperation{tokenId},
+	}, nil
+}
+
+func (op *costOperation) OpCode() Code {
+	return CostCode
+}
+
+func (op *costOperation) Standard() Std {
+	return 0
+}
+
+func (op *costOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, op)
+}
+
+func (op *costOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(op)
+}
