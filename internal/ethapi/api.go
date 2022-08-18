@@ -153,9 +153,9 @@ func NewPublicTxPoolAPI(b Backend) *PublicTxPoolAPI {
 // Content returns the transactions contained within the transaction pool.
 func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
 	content := map[string]map[string]map[string]*RPCTransaction{
-		"pending":          make(map[string]map[string]*RPCTransaction),
-		"queued":           make(map[string]map[string]*RPCTransaction),
-		"pending finalize": make(map[string]map[string]*RPCTransaction),
+		"pending":         make(map[string]map[string]*RPCTransaction),
+		"queued":          make(map[string]map[string]*RPCTransaction),
+		"pendingFinalize": make(map[string]map[string]*RPCTransaction),
 	}
 	pending, queue, pendingFinalize := s.b.TxPoolContent()
 	curHeader := s.b.GetLastFinalizedHeader()
@@ -180,7 +180,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 		for _, tx := range txs {
 			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 		}
-		content["pending finalize"][account.Hex()] = dump
+		content["pendingFinalize"][account.Hex()] = dump
 	}
 	return content
 }
@@ -188,7 +188,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 // ContentFrom returns the transactions contained within the transaction pool.
 func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RPCTransaction {
 	content := make(map[string]map[string]*RPCTransaction, 2)
-	pending, queue := s.b.TxPoolContentFrom(addr)
+	pending, queue, pendingFinalize := s.b.TxPoolContentFrom(addr)
 	curHeader := s.b.GetLastFinalizedHeader()
 
 	// Build the pending transactions
@@ -204,6 +204,12 @@ func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string
 		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 	}
 	content["queued"] = dump
+
+	dump = make(map[string]*RPCTransaction, len(queue))
+	for _, tx := range pendingFinalize {
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+	}
+	content["pendingFinalize"] = dump
 
 	return content
 }
@@ -221,9 +227,9 @@ func (s *PublicTxPoolAPI) Status() map[string]hexutil.Uint {
 // easily inspectable list.
 func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	content := map[string]map[string]map[string]string{
-		"pending":          make(map[string]map[string]string),
-		"queued":           make(map[string]map[string]string),
-		"pending finalize": make(map[string]map[string]string),
+		"pending":         make(map[string]map[string]string),
+		"queued":          make(map[string]map[string]string),
+		"pendingFinalize": make(map[string]map[string]string),
 	}
 	pending, queue, pendingFinalize := s.b.TxPoolContent()
 
@@ -255,7 +261,7 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 		for _, tx := range txs {
 			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx)
 		}
-		content["pending finalize"][account.Hex()] = dump
+		content["pendingFinalize"][account.Hex()] = dump
 	}
 	return content
 }

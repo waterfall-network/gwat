@@ -536,6 +536,10 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.chain.AddTips(newBlockDag)
 	c.chain.ReviseTips()
 
+	for _, tx := range block.Transactions() {
+		c.chain.MoveTxToPendingFinalize(tx)
+	}
+
 	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 	// Broadcast the block and announce chain insertion event
@@ -548,7 +552,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
 	return c.current.txs
 }
-func (c *Creator) getUnhandledReceips() []*types.Receipt {
+func (c *Creator) getUnhandledReceipts() []*types.Receipt {
 	return c.current.receipts
 }
 
@@ -592,7 +596,7 @@ func (c *Creator) updateSnapshot() {
 	defer c.snapshotMu.Unlock()
 
 	txs := c.getUnhandledTxs()
-	receipts := c.getUnhandledReceips()
+	receipts := c.getUnhandledReceipts()
 
 	c.snapshotBlock = types.NewBlock(
 		c.current.header,
@@ -895,7 +899,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 // and commits new work if consensus engine is running.
 func (c *Creator) commit(tips types.Tips, interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
-	receipts := copyReceipts(c.getUnhandledReceips())
+	receipts := copyReceipts(c.getUnhandledReceipts())
 	s := c.current.state.Copy()
 	block, err := c.engine.FinalizeAndAssemble(c.chain, c.current.header, s, c.getUnhandledTxs(), receipts)
 	if err != nil {

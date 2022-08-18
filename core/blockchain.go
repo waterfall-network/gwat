@@ -173,15 +173,17 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	blockProcFeed event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc                  *HeaderChain
+	rmLogsFeed          event.Feed
+	chainFeed           event.Feed
+	chainSideFeed       event.Feed
+	chainHeadFeed       event.Feed
+	logsFeed            event.Feed
+	blockProcFeed       event.Feed
+	pendingFinalizeFeed event.Feed
+	rmTxFeed            event.Feed
+	scope               event.SubscriptionScope
+	genesisBlock        *types.Block
 
 	DagMu sync.RWMutex // finalizing lock
 
@@ -891,6 +893,11 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 
 		bc.chainHeadFeed.Send(ChainHeadEvent{Block: block, Type: ET_NETWORK})
 	}
+
+	for _, tx := range block.Transactions() {
+		bc.RemoveTx(tx)
+	}
+
 	return nil
 }
 
@@ -1578,8 +1585,14 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
 		seals[i] = verifySeals
-		if block.Number() != nil && block.Nr() > maxFinNr {
-			maxFinNr = block.Nr()
+		if block.Number() != nil {
+			if block.Nr() > maxFinNr {
+				maxFinNr = block.Nr()
+			}
+		} else {
+			for _, tx := range block.Transactions() {
+				bc.MoveTxToPendingFinalize(tx)
+			}
 		}
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
@@ -1834,6 +1847,9 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
 		seals[i] = verifySeals
+		for _, tx := range block.Transactions() {
+			bc.MoveTxToPendingFinalize(tx)
+		}
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
 	defer close(abort)
@@ -2063,6 +2079,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		stats.report(chain, it.index, dirty)
 	}
 	bc.ReviseTips()
+
+	for _, block := range chain {
+		for _, tx := range block.Transactions() {
+			bc.MoveTxToPendingFinalize(tx)
+		}
+	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
@@ -3244,4 +3266,12 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	//cash tx lookup
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: uint64(txIndex)}
 	bc.txLookupCache.Add(txHash, lookup)
+}
+
+func (bc *BlockChain) MoveTxToPendingFinalize(tx *types.Transaction) {
+	bc.pendingFinalizeFeed.Send(tx)
+}
+
+func (bc *BlockChain) RemoveTx(tx *types.Transaction) {
+	bc.rmTxFeed.Send(tx)
 }
