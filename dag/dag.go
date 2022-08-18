@@ -324,16 +324,11 @@ func (d *Dag) emitDagSyncInfo() bool {
 }
 
 // countDagSlots count number of slots in dag chain
-// if it has unknown blocks returns  -1
+// if error returns  -1
 func (d *Dag) countDagSlots(tips *types.Tips) int {
-	dag := tips.GetFinalizingDag()
-
-	// todo countDagSlots tmp ad hoc fix
-	if dag == nil {
+	candidates, err := d.finalizer.GetFinalizingCandidates(nil)
+	if err != nil {
 		return -1
 	}
-
-	finPoints := append(dag.FinalityPoints.Uniq(), dag.Hash)
-	finPoints = finPoints.Difference(common.HashArray{dag.LastFinalizedHash}).Uniq()
-	return len(finPoints)
+	return len(candidates)
 }
