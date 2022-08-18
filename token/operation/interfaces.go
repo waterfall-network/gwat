@@ -108,14 +108,14 @@ type Transfer interface {
 // SetPrice contains attributes for price token call
 type SetPrice interface {
 	Operation
-	TokenId() *big.Int
+	TokenId() (*big.Int, bool)
 	Value() *big.Int
 }
 
 // Buy contains attributes for buy token call
 type Buy interface {
 	Operation
-	TokenId() *big.Int
+	TokenId() (*big.Int, bool)
 	NewValue() *big.Int
 }
 
@@ -123,5 +123,5 @@ type Buy interface {
 type Cost interface {
 	Operation
 	addresser
-	TokenId() *big.Int
+	TokenId() (*big.Int, bool)
 }

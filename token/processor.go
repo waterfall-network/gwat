@@ -30,6 +30,7 @@ var (
 	ErrNotNilTo                = errors.New("address to is not nil")
 	ErrTokenIsNotForSale       = errors.New("token is not for sale")
 	ErrToSmallValue            = errors.New("too small value")
+	ErrNilTokenId              = errors.New("token id is nil")
 )
 
 const (
@@ -599,9 +600,13 @@ func (p *Processor) Cost(op operation.Cost) (*big.Int, error) {
 		return nil, err
 	}
 
-	tokenId := op.TokenId()
 	switch standard {
 	case operation.StdWRC721:
+		tokenId, ok := op.TokenId()
+		if !ok {
+			return nil, ErrNilTokenId
+		}
+
 		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
 		if err != nil {
 			return nil, err
@@ -768,7 +773,11 @@ func (p *Processor) setPrice(caller Ref, token common.Address, op operation.SetP
 	switch std {
 	//case operation.StdWRC20:
 	case operation.StdWRC721:
-		tokenId := op.TokenId()
+		tokenId, ok := op.TokenId()
+		if !ok {
+			return nil, ErrNilTokenId
+		}
+
 		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
 		if err != nil {
 			return nil, err
@@ -801,11 +810,14 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		return nil, err
 	}
 
-	tokenId := op.TokenId()
 	address := caller.Address()
-
 	switch std {
 	case operation.StdWRC721:
+		tokenId, ok := op.TokenId()
+		if !ok {
+			return nil, ErrNilTokenId
+		}
+
 		// check if token exist
 		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
 		if err != nil {
@@ -863,7 +875,7 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 	}
 
 	storage.Flush()
-	return tokenId.FillBytes(make([]byte, 32)), nil
+	return token.Bytes(), nil
 }
 
 func (p *Processor) makePayment(storage tokenStorage.Storage, caller, owner common.Address, value *big.Int) error {
