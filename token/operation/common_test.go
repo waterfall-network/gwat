@@ -500,7 +500,7 @@ func TestTokenSetPrice(t *testing.T) {
 			return err
 		}
 
-		tokenId := opDecoded.TokenId()
+		tokenId, _ := opDecoded.TokenId()
 		if !testutils.BigIntEquals(tokenId, o.tokenId) {
 			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.tokenId)
 		}
@@ -542,7 +542,7 @@ func TestBuy(t *testing.T) {
 			errs: []error{nil},
 		},
 		{
-			caseName: "EmptyId",
+			caseName: "EmptyTokenId",
 			decoded: decodedOp{
 				op:       0,
 				tokenId:  nil,
@@ -551,7 +551,7 @@ func TestBuy(t *testing.T) {
 			encoded: []byte{
 				243, 43, 248, 135, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
 			},
-			errs: []error{ErrNoTokenId},
+			errs: []error{},
 		},
 		{
 			caseName: "EmptyNewValue",
@@ -595,14 +595,9 @@ func TestBuy(t *testing.T) {
 			return err
 		}
 
-		tokenId := opDecoded.TokenId()
+		tokenId, _ := opDecoded.TokenId()
 		if !testutils.BigIntEquals(tokenId, o.tokenId) {
 			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.tokenId)
-		}
-
-		if len(tokenId.Bytes()) == 0 {
-			// just stub for encoding tests
-			return ErrNoTokenId
 		}
 
 		newValue := opDecoded.NewValue()
@@ -699,7 +694,7 @@ func TestCost(t *testing.T) {
 			t.Fatalf("addresses do not match:\nwant: %+v\nhave: %+v", opDecoded.Address(), o.address)
 		}
 
-		tokenId := opDecoded.TokenId()
+		tokenId, _ := opDecoded.TokenId()
 		if !testutils.BigIntEquals(tokenId, o.tokenId) {
 			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.tokenId)
 		}
