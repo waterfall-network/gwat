@@ -52,9 +52,7 @@ func TestBurnOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -169,9 +167,7 @@ func TestMintOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -290,9 +286,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -403,9 +397,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -527,9 +519,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -649,9 +639,7 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {

@@ -52,19 +52,17 @@ func checkOpCodeAndStandard(b []byte, op Operation, std Std) error {
 	return nil
 }
 
-func equalOpBytes(t *testing.T, op Operation, b []byte) {
-	t.Helper()
-
+func equalOpBytes(op Operation, b []byte) error {
 	have, err := EncodeToBytes(op)
 	if err != nil {
-		t.Errorf("can`t encode operation %+v\nerror: %+v", op, err)
+		return fmt.Errorf("can`t encode operation %+v\nerror: %+v", op, err)
 	}
-
-	fmt.Println(have)
 
 	if !bytes.Equal(b, have) {
-		t.Errorf("values do not match:\n want: %+v\nhave: %+v", b, have)
+		return fmt.Errorf("values do not match:\n want: %+v\nhave: %+v", b, have)
 	}
+
+	return nil
 }
 
 func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, operationDecode func([]byte, interface{}) error) {

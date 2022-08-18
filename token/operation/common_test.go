@@ -79,9 +79,7 @@ func TestApproveOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -191,9 +189,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -277,9 +273,7 @@ func TestPropertiesOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -394,9 +388,7 @@ func TestTransferFromOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -426,6 +418,290 @@ func TestTransferFromOperation(t *testing.T) {
 
 		if o.to != opDecoded.To() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.To(), o.to)
+		}
+
+		return nil
+	}
+
+	startSubTests(t, cases, operationEncode, operationDecode)
+}
+
+func TestTokenSetPrice(t *testing.T) {
+	type decodedOp struct {
+		op      Std
+		tokenId *big.Int
+		value   *big.Int
+	}
+
+	cases := []operationTestCase{
+		{
+			caseName: "Correct",
+			decoded: decodedOp{
+				op:      0,
+				tokenId: opId,
+				value:   opValue,
+			},
+			encoded: []byte{
+				243, 42, 248, 137, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
+			},
+			errs: []error{nil},
+		},
+		{
+			caseName: "EmptyValue",
+			decoded: decodedOp{
+				op:      0,
+				tokenId: opId,
+				value:   nil,
+			},
+			encoded: []byte{
+				243, 42, 248, 134, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{ErrNoValue},
+		},
+		{
+			caseName: "EmptyId",
+			decoded: decodedOp{
+				op:      0,
+				tokenId: nil,
+				value:   opValue,
+			},
+			encoded: []byte{
+				243, 42, 248, 135, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
+			},
+			errs: []error{},
+		},
+	}
+
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
+		op, err := NewSetPriceOperation(o.tokenId, o.value)
+		if err != nil {
+			return err
+		}
+
+		return equalOpBytes(op, b)
+	}
+
+	operationDecode := func(b []byte, i interface{}) error {
+		op, err := DecodeBytes(b)
+		if err != nil {
+			return err
+		}
+
+		o := i.(decodedOp)
+		opDecoded, ok := op.(SetPrice)
+		if !ok {
+			return errors.New("invalid operation type")
+		}
+
+		err = checkOpCodeAndStandard(b, opDecoded, 0)
+		if err != nil {
+			return err
+		}
+
+		tokenId := opDecoded.TokenId()
+		if !testutils.BigIntEquals(tokenId, o.tokenId) {
+			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.tokenId)
+		}
+
+		value := opDecoded.Value()
+		if !testutils.BigIntEquals(value, o.value) {
+			return fmt.Errorf("newValues do not match:\nwant: %+v\nhave: %+v", value, o.value)
+		}
+
+		if len(value.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoValue
+		}
+
+		return nil
+	}
+
+	startSubTests(t, cases, operationEncode, operationDecode)
+}
+
+func TestBuy(t *testing.T) {
+	type decodedOp struct {
+		op       Std
+		tokenId  *big.Int
+		newValue *big.Int
+	}
+
+	cases := []operationTestCase{
+		{
+			caseName: "Correct",
+			decoded: decodedOp{
+				op:       0,
+				tokenId:  opId,
+				newValue: opValue,
+			},
+			encoded: []byte{
+				243, 43, 248, 137, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
+			},
+			errs: []error{nil},
+		},
+		{
+			caseName: "EmptyId",
+			decoded: decodedOp{
+				op:       0,
+				tokenId:  nil,
+				newValue: opValue,
+			},
+			encoded: []byte{
+				243, 43, 248, 135, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128,
+			},
+			errs: []error{ErrNoTokenId},
+		},
+		{
+			caseName: "EmptyNewValue",
+			decoded: decodedOp{
+				op:       0,
+				tokenId:  opId,
+				newValue: nil,
+			},
+			encoded: []byte{
+				243, 43, 248, 134, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{ErrNoValue},
+		},
+	}
+
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
+		op, err := NewBuyOperation(o.tokenId, o.newValue)
+		if err != nil {
+			return err
+		}
+
+		return equalOpBytes(op, b)
+	}
+
+	operationDecode := func(b []byte, i interface{}) error {
+		op, err := DecodeBytes(b)
+		if err != nil {
+			return err
+		}
+
+		o := i.(decodedOp)
+		opDecoded, ok := op.(Buy)
+		if !ok {
+			return errors.New("invalid operation type")
+		}
+
+		err = checkOpCodeAndStandard(b, opDecoded, 0)
+		if err != nil {
+			return err
+		}
+
+		tokenId := opDecoded.TokenId()
+		if !testutils.BigIntEquals(tokenId, o.tokenId) {
+			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.tokenId)
+		}
+
+		if len(tokenId.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoTokenId
+		}
+
+		newValue := opDecoded.NewValue()
+		if !testutils.BigIntEquals(newValue, o.newValue) {
+			return fmt.Errorf("newValues do not match:\nwant: %+v\nhave: %+v", newValue, o.newValue)
+		}
+
+		if len(newValue.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoValue
+		}
+
+		return nil
+	}
+
+	startSubTests(t, cases, operationEncode, operationDecode)
+}
+
+func TestCost(t *testing.T) {
+	type decodedOp struct {
+		op      Std
+		address common.Address
+		tokenId *big.Int
+	}
+
+	cases := []operationTestCase{
+		{
+			caseName: "Correct",
+			decoded: decodedOp{
+				op:      0,
+				tokenId: opId,
+				address: opAddress,
+			},
+			encoded: []byte{
+				243, 44, 248, 134, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{nil},
+		},
+		{
+			caseName: "EmptyId",
+			decoded: decodedOp{
+				op:      0,
+				tokenId: nil,
+				address: opAddress,
+			},
+			encoded: []byte{
+				243, 44, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{},
+		},
+		{
+			caseName: "EmptyValue",
+			decoded: decodedOp{
+				op:      0,
+				tokenId: opId,
+				address: common.Address{},
+			},
+			encoded: []byte{
+				243, 44, 248, 134, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
+			},
+			errs: []error{ErrNoAddress},
+		},
+	}
+
+	operationEncode := func(b []byte, i interface{}) error {
+		o := i.(decodedOp)
+
+		op, err := NewCostOperation(o.address, o.tokenId)
+		if err != nil {
+			return err
+		}
+
+		return equalOpBytes(op, b)
+	}
+
+	operationDecode := func(b []byte, i interface{}) error {
+		op, err := DecodeBytes(b)
+		if err != nil {
+			return err
+		}
+
+		o := i.(decodedOp)
+		opDecoded, ok := op.(Cost)
+		if !ok {
+			return errors.New("invalid operation type")
+		}
+
+		err = checkOpCodeAndStandard(b, opDecoded, 0)
+		if err != nil {
+			return err
+		}
+
+		if o.address != opDecoded.Address() {
+			t.Fatalf("addresses do not match:\nwant: %+v\nhave: %+v", opDecoded.Address(), o.address)
+		}
+
+		tokenId := opDecoded.TokenId()
+		if !testutils.BigIntEquals(tokenId, o.tokenId) {
+			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.tokenId)
 		}
 
 		return nil

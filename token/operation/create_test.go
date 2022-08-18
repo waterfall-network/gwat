@@ -121,7 +121,7 @@ func TestCreateOperationOperation(t *testing.T) {
 				return err
 			}
 
-			equalOpBytes(t, createOp, b)
+			return equalOpBytes(createOp, b)
 		case StdWRC721:
 			createOp, err := NewWrc721CreateOperation(
 				o.name,
@@ -133,7 +133,7 @@ func TestCreateOperationOperation(t *testing.T) {
 				return err
 			}
 
-			equalOpBytes(t, createOp, b)
+			return equalOpBytes(createOp, b)
 		default:
 			return ErrStandardNotValid
 		}

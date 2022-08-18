@@ -64,9 +64,7 @@ func TestTransferOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {
@@ -181,9 +179,7 @@ func TestAllowanceOperation(t *testing.T) {
 			return err
 		}
 
-		equalOpBytes(t, op, b)
-
-		return nil
+		return equalOpBytes(op, b)
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {

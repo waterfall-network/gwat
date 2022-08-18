@@ -42,8 +42,6 @@ const (
 	SymbolField = "Symbol"
 	// BalancesField is AddressUint256Map
 	BalancesField = "Balances"
-	// PercentFeeField is Uint8
-	PercentFeeField = "PercentFee"
 
 	// WRC20
 	// CreatorField is common.Address
@@ -70,6 +68,8 @@ const (
 	TokenApprovalsField = "TokenApprovals"
 	// CostMapField is AddressUint256Map
 	CostMapField = "Cost"
+	// PercentFeeField is Uint8
+	PercentFeeField = "PercentFee"
 )
 
 // Ref represents caller of the token processor
@@ -993,13 +993,6 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 	}
 	fieldDescriptors = append(fieldDescriptors, balancesFd)
 
-	// PercentFee
-	percentFeeFd, err := newScalarField(PercentFeeField, tokenStorage.Uint8Type)
-	if err != nil {
-		return nil, err
-	}
-	fieldDescriptors = append(fieldDescriptors, percentFeeFd)
-
 	switch op.Standard() {
 	case operation.StdWRC20:
 		// Decimals
@@ -1065,6 +1058,13 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 			return nil, err
 		}
 		fieldDescriptors = append(fieldDescriptors, operatorApprovalsFd)
+
+		// PercentFee
+		percentFeeFd, err := newScalarField(PercentFeeField, tokenStorage.Uint8Type)
+		if err != nil {
+			return nil, err
+		}
+		fieldDescriptors = append(fieldDescriptors, percentFeeFd)
 
 		// CostMap
 		costFd, err := newByteArrayScalarMapDescriptor(CostMapField, common.AddressLength, tokenStorage.Uint256Type)

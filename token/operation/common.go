@@ -190,10 +190,6 @@ type setPriceOperation struct {
 }
 
 func NewSetPriceOperation(tokenId, value *big.Int) (SetPrice, error) {
-	if tokenId == nil {
-		return nil, ErrNoTokenId
-	}
-
 	if value == nil {
 		return nil, ErrNoValue
 	}
