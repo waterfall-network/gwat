@@ -25,6 +25,7 @@ var (
 	opSymbol      = []byte("TT")
 	opBaseURI     = []byte("test.token.com")
 	oData         = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
+	opPercentFee  = uint8(10)
 )
 
 type operationTestCase struct {
@@ -34,7 +35,7 @@ type operationTestCase struct {
 	errs     []error
 }
 
-func checkOpCodeAndStandart(b []byte, op Operation, std Std) error {
+func checkOpCodeAndStandard(b []byte, op Operation, std Std) error {
 	if op.Standard() != std {
 		return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", std, op.Standard())
 	}
@@ -52,33 +53,35 @@ func checkOpCodeAndStandart(b []byte, op Operation, std Std) error {
 }
 
 func equalOpBytes(t *testing.T, op Operation, b []byte) {
+	t.Helper()
+
 	have, err := EncodeToBytes(op)
 	if err != nil {
-		t.Fatalf("can`t encode operation %+v\nerror: %+v", op, err)
+		t.Errorf("can`t encode operation %+v\nerror: %+v", op, err)
 	}
 
+	fmt.Println(have)
+
 	if !bytes.Equal(b, have) {
-		t.Fatalf("values do not match:\n want: %+v\nhave: %+v", b, have)
+		t.Errorf("values do not match:\n want: %+v\nhave: %+v", b, have)
 	}
 }
 
 func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, operationDecode func([]byte, interface{}) error) {
+	t.Helper()
+
 	for _, c := range cases {
 		t.Run("encoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationEncode(c.encoded, c.decoded)
-			if err != nil {
-				if !testutils.CheckError(err, c.errs) {
-					t.Fatalf("operationEncode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
-				}
+			if !testutils.CheckError(err, c.errs) {
+				t.Errorf("operationEncode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 			}
 		})
 
 		t.Run("decoding"+" "+c.caseName, func(t *testing.T) {
 			err := operationDecode(c.encoded, c.decoded)
-			if err != nil {
-				if !testutils.CheckError(err, c.errs) {
-					t.Fatalf("operationDecode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
-				}
+			if !testutils.CheckError(err, c.errs) {
+				t.Errorf("operationDecode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 			}
 		})
 	}

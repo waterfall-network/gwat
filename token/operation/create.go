@@ -103,6 +103,7 @@ func (op *createOperation) MarshalBinary() ([]byte, error) {
 	opData.TotalSupply = op.totalSupply
 	opData.Decimals = &op.decimals
 	opData.BaseURI = op.baseURI
+	opData.PercentFee = &op.percentFee
 
 	return rlp.EncodeToBytes(&opData)
 }

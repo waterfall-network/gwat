@@ -62,8 +62,8 @@ type transferOperation struct {
 	toOperation
 }
 
-// NewTransferOperation creates a token trasnsfer operation
-// Only WRC-20 tokens support the operation so its Standard alwasys sets to StdWRC20.
+// NewTransferOperation creates a token transfer operation
+// Only WRC-20 tokens support the operation so its Standard always sets to StdWRC20.
 func NewTransferOperation(to common.Address, value *big.Int) (Transfer, error) {
 	return newTransferOperation(StdWRC20, to, value)
 }

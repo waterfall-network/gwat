@@ -59,10 +59,7 @@ func TestTransferOperation(t *testing.T) {
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
 
-		op, err := NewTransferOperation(
-			o.to,
-			o.value,
-		)
+		op, err := NewTransferOperation(o.to, o.value)
 		if err != nil {
 			return err
 		}
@@ -84,15 +81,23 @@ func TestTransferOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, o.op)
+		err = checkOpCodeAndStandard(b, opDecoded, o.op)
 		if err != nil {
 			return err
 		}
 
-		testutils.CompareBigInt(t, opDecoded.Value(), o.value)
+		value := opDecoded.Value()
+		if !testutils.BigIntEquals(value, o.value) {
+			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", value, o.value)
+		}
+
+		if len(value.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoValue
+		}
 
 		if o.to != opDecoded.To() {
-			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.To(), o.to)
+			t.Fatalf("to do not match:\nwant: %+v\nhave: %+v", opDecoded.To(), o.to)
 		}
 
 		return nil
@@ -193,7 +198,7 @@ func TestAllowanceOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, StdWRC20)
+		err = checkOpCodeAndStandard(b, opDecoded, StdWRC20)
 		if err != nil {
 			return err
 		}

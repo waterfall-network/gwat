@@ -137,9 +137,11 @@ func rlpDecode(b []byte, op interface{}) error {
 		return ErrNoAddress
 	}
 
-	setFieldValue("TokenValue", func() bool {
-		return true
-	}, data.Value)
+	if !setFieldValue("TokenValue", func() bool {
+		return data.Value != nil
+	}, data.Value) {
+		return ErrNoValue
+	}
 
 	if !setFieldValue("OwnerAddress", func() bool {
 		return data.Owner != (common.Address{})
@@ -172,9 +174,9 @@ func rlpDecode(b []byte, op interface{}) error {
 	}
 
 	if !setFieldValue("Id", func() bool {
-		return true
+		return data.TokenId != nil
 	}, data.TokenId) {
-		return nil
+		return ErrNoTokenId
 	}
 
 	switch v := op.(type) {
@@ -211,7 +213,7 @@ func rlpEncode(op interface{}) ([]byte, error) {
 				continue
 			}
 
-			var name string = ""
+			name := ""
 			switch f.Name {
 			case "Std":
 				name = f.Name

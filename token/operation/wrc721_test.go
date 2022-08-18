@@ -69,12 +69,24 @@ func TestBurnOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
+		err = checkOpCodeAndStandard(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
 
-		testutils.CompareBigInt(t, opDecoded.TokenId(), o.id)
+		if !testutils.BigIntEquals(opDecoded.TokenId(), o.id) {
+			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.TokenId(), o.id)
+		}
+
+		tokenId := opDecoded.TokenId()
+		if !testutils.BigIntEquals(tokenId, o.id) {
+			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.id)
+		}
+
+		if len(tokenId.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoTokenId
+		}
 
 		return nil
 	}
@@ -174,7 +186,7 @@ func TestMintOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
+		err = checkOpCodeAndStandard(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -192,7 +204,15 @@ func TestMintOperation(t *testing.T) {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.data, haveData)
 		}
 
-		testutils.CompareBigInt(t, opDecoded.TokenId(), o.id)
+		tokenId := opDecoded.TokenId()
+		if !testutils.BigIntEquals(tokenId, o.id) {
+			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.id)
+		}
+
+		if len(tokenId.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoTokenId
+		}
 
 		return nil
 	}
@@ -287,7 +307,7 @@ func TestSetApprovalForAllOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
+		err = checkOpCodeAndStandard(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -400,7 +420,7 @@ func TestIsApprovedForAllOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
+		err = checkOpCodeAndStandard(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -524,7 +544,7 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
+		err = checkOpCodeAndStandard(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
@@ -538,7 +558,15 @@ func TestSafeTransferFromOperation(t *testing.T) {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.data, data)
 		}
 
-		testutils.CompareBigInt(t, opDecoded.Value(), o.value)
+		value := opDecoded.Value()
+		if !testutils.BigIntEquals(value, o.value) {
+			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", value, o.value)
+		}
+
+		if len(value.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoValue
+		}
 
 		return nil
 	}
@@ -638,12 +666,14 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, StdWRC721)
+		err = checkOpCodeAndStandard(b, opDecoded, StdWRC721)
 		if err != nil {
 			return err
 		}
 
-		testutils.CompareBigInt(t, opDecoded.Index(), o.index)
+		if !testutils.BigIntEquals(opDecoded.Index(), o.index) {
+			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.Index(), o.index)
+		}
 
 		if o.owner != opDecoded.Owner() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.owner, opDecoded.Owner())
@@ -651,6 +681,16 @@ func TestTokenOfOwnerByIndexOperation(t *testing.T) {
 
 		if o.address != opDecoded.Address() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.address, opDecoded.Address())
+		}
+
+		gotIndex := opDecoded.Index()
+		if !testutils.BigIntEquals(gotIndex, o.index) {
+			return fmt.Errorf("indexes do not match:\nwant: %+v\nhave: %+v", gotIndex, o.index)
+		}
+
+		if len(gotIndex.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoIndex
 		}
 
 		return nil

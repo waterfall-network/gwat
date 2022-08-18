@@ -70,7 +70,6 @@ func TestApproveOperation(t *testing.T) {
 
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
-
 		op, err := NewApproveOperation(
 			o.op,
 			o.spender,
@@ -97,7 +96,7 @@ func TestApproveOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, o.op)
+		err = checkOpCodeAndStandard(b, opDecoded, o.op)
 		if err != nil {
 			return err
 		}
@@ -107,7 +106,15 @@ func TestApproveOperation(t *testing.T) {
 			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", o.spender, operator)
 		}
 
-		testutils.CompareBigInt(t, opDecoded.Value(), o.value)
+		value := opDecoded.Value()
+		if !testutils.BigIntEquals(value, o.value) {
+			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", value, o.value)
+		}
+
+		if len(value.Bytes()) == 0 {
+			// just stub for encoding tests
+			return ErrNoValue
+		}
 
 		return nil
 	}
@@ -201,7 +208,7 @@ func TestBalanceOfOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, 0)
+		err = checkOpCodeAndStandard(b, opDecoded, 0)
 		if err != nil {
 			return err
 		}
@@ -239,7 +246,7 @@ func TestPropertiesOperation(t *testing.T) {
 			errs: []error{nil},
 		},
 		{
-			caseName: "No empty token id",
+			caseName: "Empty token id",
 			decoded: decodedOp{
 				address: opAddress,
 				id:      nil,
@@ -247,7 +254,7 @@ func TestPropertiesOperation(t *testing.T) {
 			encoded: []byte{
 				243, 33, 248, 132, 128, 148, 208, 73, 191, 214, 103, 203, 70, 170, 62, 245, 223, 13, 163, 229, 125, 179, 190, 57, 229, 17, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128,
 			},
-			errs: []error{ErrNoTokenId},
+			errs: []error{},
 		},
 		{
 			caseName: "No empty token address",
@@ -265,10 +272,7 @@ func TestPropertiesOperation(t *testing.T) {
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
 
-		op, err := NewPropertiesOperation(
-			o.address,
-			o.id,
-		)
+		op, err := NewPropertiesOperation(o.address, o.id)
 		if err != nil {
 			return err
 		}
@@ -290,7 +294,7 @@ func TestPropertiesOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, 0)
+		err = checkOpCodeAndStandard(b, opDecoded, 0)
 		if err != nil {
 			return err
 		}
@@ -300,7 +304,9 @@ func TestPropertiesOperation(t *testing.T) {
 			return errors.New("invalid tokenId")
 		}
 
-		testutils.CompareBigInt(t, tokenId, o.id)
+		if !testutils.BigIntEquals(tokenId, o.id) {
+			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", tokenId, o.id)
+		}
 
 		if o.address != opDecoded.Address() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", o.address, opDecoded.Address())
@@ -405,12 +411,14 @@ func TestTransferFromOperation(t *testing.T) {
 			return errors.New("invalid operation type")
 		}
 
-		err = checkOpCodeAndStandart(b, opDecoded, o.op)
+		err = checkOpCodeAndStandard(b, opDecoded, o.op)
 		if err != nil {
 			return err
 		}
 
-		testutils.CompareBigInt(t, opDecoded.Value(), o.value)
+		if !testutils.BigIntEquals(opDecoded.Value(), o.value) {
+			return fmt.Errorf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.Value(), o.value)
+		}
 
 		if o.from != opDecoded.From() {
 			t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", opDecoded.From(), o.from)

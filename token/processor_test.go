@@ -553,10 +553,12 @@ func TestProcessorPropertiesWRC20(t *testing.T) {
 
 	testutils.CompareBytes(t, prop.Symbol, symbol)
 
-	testutils.CompareBigInt(t, prop.TotalSupply, totalSupply)
+	if !testutils.BigIntEquals(prop.TotalSupply, totalSupply) {
+		t.Errorf("values do not match:\nwant: %+v\nhave: %+v", prop.TotalSupply, totalSupply)
+	}
 
 	if prop.Decimals != decimals {
-		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", decimals, prop.Decimals)
+		t.Errorf("values do not match:\nwant: %+v\nhave: %+v", decimals, prop.Decimals)
 	}
 }
 
