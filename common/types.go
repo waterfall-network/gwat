@@ -272,6 +272,13 @@ func (ha HashArray) Uniq() HashArray {
 	return c
 }
 
+// IsUniq returns true if contains only unique values,
+// otherwise - false.
+func (ha HashArray) IsUniq() bool {
+	cpy := ha.Copy()
+	return len(ha) == len(cpy.Uniq())
+}
+
 // Concat concatenates current HashArray with passed in param.
 func (ha HashArray) Concat(hashes HashArray) HashArray {
 	ha = append(ha, hashes...)
