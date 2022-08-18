@@ -243,6 +243,26 @@ func (ha HashArray) Intersection(hashArray HashArray) HashArray {
 	return c
 }
 
+// SequenceIntersection calculates an intersection of the first occurrence of a sequence HashArray
+// with passed in param.
+func (ha HashArray) SequenceIntersection(hashArray HashArray) HashArray {
+	c := make(HashArray, 0)
+	index := -1
+	for _, item := range ha {
+		if i := hashArray.IndexOf(item); i >= 0 {
+			if index == -1 {
+				index = i
+			} else {
+				index++
+			}
+			if i == index {
+				c = append(c, item)
+			}
+		}
+	}
+	return c
+}
+
 // Difference calculates a difference of current HashArray
 // with passed in param.
 func (ha HashArray) Difference(hashArray HashArray) HashArray {
