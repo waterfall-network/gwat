@@ -222,6 +222,11 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 		if err != nil {
 			return common.Address{}, err
 		}
+
+		err = storage.WriteField(PercentFeeField, op.PercentFee())
+		if err != nil {
+			return common.Address{}, err
+		}
 	default:
 		return common.Address{}, operation.ErrStandardNotValid
 	}

@@ -21,6 +21,8 @@ var (
 	address        common.Address
 	spender        common.Address
 	owner          common.Address
+	seller         common.Address
+	buyer          common.Address
 	to             common.Address
 	approveAddress common.Address
 	value          *big.Int
@@ -58,6 +60,8 @@ func init() {
 	address = common.BytesToAddress(testutils.RandomData(20))
 	spender = common.BytesToAddress(testutils.RandomData(20))
 	owner = common.BytesToAddress(testutils.RandomData(20))
+	seller = common.BytesToAddress(testutils.RandomData(20))
+	buyer = common.BytesToAddress(testutils.RandomData(20))
 	to = common.BytesToAddress(testutils.RandomData(20))
 	approveAddress = common.BytesToAddress(testutils.RandomData(20))
 
@@ -74,7 +78,7 @@ func init() {
 	totalSupply = big.NewInt(int64(testutils.RandomInt(100, 1000)))
 
 	decimals = uint8(testutils.RandomInt(0, 255))
-	percentFee = uint8(testutils.RandomInt(0, 255))
+	percentFee = uint8(testutils.RandomInt(0, 100))
 
 	name = testutils.RandomStringInBytes(testutils.RandomInt(10, 20))
 	symbol = testutils.RandomStringInBytes(testutils.RandomInt(5, 8))
@@ -740,7 +744,7 @@ func TestProcessorSetPriceCall(t *testing.T) {
 func TestProcessorBuyCall(t *testing.T) {
 	cases := []testutils.TestCase{
 		{
-			CaseName: "WRC721_Correct",
+			CaseName: "WRC721_CorrectAndFee",
 			TestData: testutils.TestData{
 				Caller: vm.AccountRef(owner),
 			},
@@ -756,10 +760,13 @@ func TestProcessorBuyCall(t *testing.T) {
 				}
 
 				tokenId := big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
-				mintNewToken(t, owner, v.TokenAddress, tokenId, data, caller, c.Errs)
-				setPrice(t, caller, v.TokenAddress, tokenId, value)
+				mintNewToken(t, seller, v.TokenAddress, tokenId, data, v.Caller, c.Errs)
 
-				processor.state.AddBalance(v.Caller.Address(), value)
+				sellCaller := vm.AccountRef(seller)
+				setPrice(t, sellCaller, v.TokenAddress, tokenId, value)
+
+				buyCaller := vm.AccountRef(buyer)
+				processor.state.AddBalance(buyCaller.Address(), value)
 
 				newVal := big.NewInt(int64(testutils.RandomInt(10, 30)))
 				buyOp, err := operation.NewBuyOperation(tokenId, newVal)
@@ -767,7 +774,7 @@ func TestProcessorBuyCall(t *testing.T) {
 					t.Error(err)
 					t.Fail()
 				}
-				call(t, caller, v.TokenAddress, value, buyOp, c.Errs)
+				call(t, buyCaller, v.TokenAddress, value, buyOp, c.Errs)
 
 				cost, err := checkCost(v.TokenAddress, tokenId)
 				if err != nil {
@@ -777,6 +784,26 @@ func TestProcessorBuyCall(t *testing.T) {
 
 				if !(cost.Cmp(newVal) == 0) {
 					t.Errorf("Expected cost: %s\ngot: %s", newVal, cost)
+				}
+
+				callerBalance := processor.state.GetBalance(buyCaller.Address())
+				if callerBalance.Cmp(big.NewInt(0)) != 0 {
+					t.Errorf("Expected callerBalance balance: %d\nactual: %s", 0, callerBalance)
+				}
+
+				fee := big.NewInt(0).Set(value)
+				fee.Mul(fee, big.NewInt(int64(percentFee)))
+				fee.Div(fee, big.NewInt(100))
+				minterBalance := processor.state.GetBalance(v.Caller.Address())
+				if !(minterBalance.Cmp(fee) == 0) {
+					t.Errorf("Expected owner balance: %s\nactual: %s", fee, minterBalance)
+				}
+
+				expSellerBalance := big.NewInt(0).Set(value)
+				expSellerBalance.Sub(expSellerBalance, fee)
+				sellerBalance := processor.state.GetBalance(sellCaller.Address())
+				if !(sellerBalance.Cmp(expSellerBalance) == 0) {
+					t.Errorf("Expected owner balance: %s\nactual: %s", expSellerBalance, sellerBalance)
 				}
 			},
 		},
