@@ -30,7 +30,8 @@ var (
 	ErrNotNilTo                = errors.New("address to is not nil")
 	ErrTokenIsNotForSale       = errors.New("token is not for sale")
 	ErrToSmallValue            = errors.New("too small value")
-	ErrNilTokenId              = errors.New("token id is nil")
+	ErrTokenIdIsNotSet         = errors.New("token id is not set")
+	ErrNewValueIsNotSet        = errors.New("new value is not set")
 )
 
 const (
@@ -53,13 +54,15 @@ const (
 	DecimalsField = "Decimals"
 	// AllowancesField is AddressUint256Map
 	AllowancesField = "Allowances"
+	// CostField is Uint256
+	CostField = "Cost"
 
 	// WRC721
 	// MinterField is common.Address
 	MinterField = "Minter"
 	// BaseUriField is []byte
 	BaseUriField = "BaseUri"
-	// OwnersField is ByteArrayAddressMap
+	// OwnersField is AddressAddressMap
 	OwnersField = "Owners"
 	// MetadataField is AddressByteArrayMap
 	MetadataField = "Metadata"
@@ -67,8 +70,8 @@ const (
 	OperatorApprovalsField = "OperatorApprovals"
 	// TokenApprovalsField is KeccakAddressMap
 	TokenApprovalsField = "TokenApprovals"
-	// CostMapField is AddressUint256Map
-	CostMapField = "Cost"
+	// CostMapField is Uint256Uint256Map
+	CostMapField = "CostMap"
 	// PercentFeeField is Uint8
 	PercentFeeField = "PercentFee"
 )
@@ -191,6 +194,11 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 
 	switch op.Standard() {
 	case operation.StdWRC20:
+		err = storage.WriteField(CreatorField, caller.Address())
+		if err != nil {
+			return common.Address{}, err
+		}
+
 		err = storage.WriteField(DecimalsField, op.Decimals())
 		if err != nil {
 			return common.Address{}, err
@@ -605,11 +613,17 @@ func (p *Processor) Cost(op operation.Cost) (*big.Int, error) {
 		return nil, err
 	}
 
+	var cost uint256.Int
 	switch standard {
+	case operation.StdWRC20:
+		err = storage.ReadField(CostField, &cost)
+		if err != nil {
+			return nil, err
+		}
 	case operation.StdWRC721:
 		tokenId, ok := op.TokenId()
 		if !ok {
-			return nil, ErrNilTokenId
+			return nil, ErrTokenIdIsNotSet
 		}
 
 		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
@@ -620,20 +634,20 @@ func (p *Processor) Cost(op operation.Cost) (*big.Int, error) {
 			return nil, ErrNotMinted
 		}
 
-		var cost uint256.Int
-		err = readFromMap(storage, CostMapField, tokenId.Bytes(), &cost)
+		id, _ := uint256.FromBig(tokenId)
+		err = readFromMap(storage, CostMapField, id, &cost)
 		if err != nil {
 			return nil, err
 		}
-
-		if cost.Eq(uint256.NewInt(0)) {
-			return nil, ErrTokenIsNotForSale
-		}
-
-		return cost.ToBig(), nil
 	default:
 		return nil, ErrTokenOpStandardNotValid
 	}
+
+	if cost.Eq(uint256.NewInt(0)) {
+		return nil, ErrTokenIsNotForSale
+	}
+
+	return cost.ToBig(), nil
 }
 
 func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([]byte, error) {
@@ -775,12 +789,28 @@ func (p *Processor) setPrice(caller Ref, token common.Address, op operation.SetP
 		return nil, err
 	}
 
+	newCost, _ := uint256.FromBig(op.Value())
 	switch std {
-	//case operation.StdWRC20:
+	case operation.StdWRC20:
+		var creatorB []byte
+		err = storage.ReadField(CreatorField, &creatorB)
+		if err != nil {
+			return nil, err
+		}
+		creator := common.BytesToAddress(creatorB)
+
+		if caller.Address() != creator {
+			return nil, ErrIncorrectOwner
+		}
+
+		err = storage.WriteField(CostField, newCost)
+		if err != nil {
+			return nil, err
+		}
 	case operation.StdWRC721:
 		tokenId, ok := op.TokenId()
 		if !ok {
-			return nil, ErrNilTokenId
+			return nil, ErrTokenIdIsNotSet
 		}
 
 		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
@@ -796,8 +826,8 @@ func (p *Processor) setPrice(caller Ref, token common.Address, op operation.SetP
 			return nil, ErrIncorrectOwner
 		}
 
-		newCost, _ := uint256.FromBig(op.Value())
-		err = writeToMap(storage, CostMapField, tokenId.Bytes(), newCost)
+		id, _ := uint256.FromBig(tokenId)
+		err = writeToMap(storage, CostMapField, id, newCost)
 		if err != nil {
 			return nil, err
 		}
@@ -817,10 +847,40 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 
 	address := caller.Address()
 	switch std {
+	case operation.StdWRC20:
+		var creatorB []byte
+		err = storage.ReadField(CreatorField, &creatorB)
+		if err != nil {
+			return nil, err
+		}
+		creator := common.BytesToAddress(creatorB)
+
+		err = transfer(storage, creator, address, value)
+		if err != nil {
+			return nil, err
+		}
+
+		var cost uint256.Int
+		err = storage.ReadField(CostField, &cost)
+		if err != nil {
+			return nil, err
+		}
+
+		err = p.makePayment(storage, address, creator, cost.ToBig())
+		if err != nil {
+			return nil, err
+		}
 	case operation.StdWRC721:
 		tokenId, ok := op.TokenId()
 		if !ok {
-			return nil, ErrNilTokenId
+			return nil, ErrTokenIdIsNotSet
+		}
+
+		id, _ := uint256.FromBig(tokenId)
+
+		newValue, ok := op.NewValue()
+		if !ok {
+			return nil, ErrNewValueIsNotSet
 		}
 
 		// check if token exist
@@ -834,7 +894,7 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 
 		// check cost
 		var cost uint256.Int
-		err = readFromMap(storage, CostMapField, tokenId.Bytes(), &cost)
+		err = readFromMap(storage, CostMapField, id, &cost)
 		if err != nil {
 			return nil, err
 		}
@@ -863,15 +923,15 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 			return nil, err
 		}
 
-		// transfer wei
-		err = p.makePayment(storage, address, owner, cost.ToBig())
+		// set new cost
+		newCost, _ := uint256.FromBig(newValue)
+		err = writeToMap(storage, CostMapField, id, newCost)
 		if err != nil {
 			return nil, err
 		}
 
-		// set new cost
-		newCost, _ := uint256.FromBig(op.NewValue())
-		err = writeToMap(storage, CostMapField, tokenId.Bytes(), newCost)
+		// transfer wei
+		err = p.makePayment(storage, address, owner, cost.ToBig())
 		if err != nil {
 			return nil, err
 		}
@@ -1012,6 +1072,13 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 
 	switch op.Standard() {
 	case operation.StdWRC20:
+		// Creator
+		creatorFd, err := newByteArrayDescriptor(CreatorField, common.AddressLength)
+		if err != nil {
+			return nil, err
+		}
+		fieldDescriptors = append(fieldDescriptors, creatorFd)
+
 		// Decimals
 		decimalsFd, err := newScalarField(DecimalsField, tokenStorage.Uint8Type)
 		if err != nil {
@@ -1032,6 +1099,13 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 			return nil, err
 		}
 		fieldDescriptors = append(fieldDescriptors, allowancesFd)
+
+		// Cost
+		costFd, err := newScalarField(CostField, tokenStorage.Uint256Type)
+		if err != nil {
+			return nil, err
+		}
+		fieldDescriptors = append(fieldDescriptors, costFd)
 	case operation.StdWRC721:
 		// Minter
 		minterFd, err := newByteArrayDescriptor(MinterField, common.AddressLength)
@@ -1084,7 +1158,7 @@ func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, 
 		fieldDescriptors = append(fieldDescriptors, percentFeeFd)
 
 		// CostMap
-		costFd, err := newByteArrayScalarMapDescriptor(CostMapField, common.AddressLength, tokenStorage.Uint256Type)
+		costFd, err := newScalarScalarMapDescriptor(CostMapField, tokenStorage.Uint256Type, tokenStorage.Uint256Type)
 		if err != nil {
 			return nil, err
 		}
@@ -1166,7 +1240,26 @@ func newByteArrayScalarMapDescriptor(name string, keySize uint64, valType tokenS
 	return tokenStorage.NewFieldDescriptor([]byte(name), mp)
 }
 
-func readAddressFromMap(storage tokenStorage.Storage, name string, key []byte) (common.Address, error) {
+func newScalarScalarMapDescriptor(name string, keyType, valType tokenStorage.Type) (tokenStorage.FieldDescriptor, error) {
+	keyScalar, err := tokenStorage.NewScalarProperties(keyType)
+	if err != nil {
+		return nil, err
+	}
+
+	valueScalar, err := tokenStorage.NewScalarProperties(valType)
+	if err != nil {
+		return nil, err
+	}
+
+	mp, err := tokenStorage.NewMapProperties(keyScalar, valueScalar)
+	if err != nil {
+		return nil, err
+	}
+
+	return tokenStorage.NewFieldDescriptor([]byte(name), mp)
+}
+
+func readAddressFromMap(storage tokenStorage.Storage, name string, key interface{}) (common.Address, error) {
 	var addrB []byte
 	err := readFromMap(storage, name, key, &addrB)
 	if err != nil {
@@ -1181,7 +1274,7 @@ func writeToMap(storage tokenStorage.Storage, name string, key, value interface{
 	return storage.WriteField(name, kv)
 }
 
-func readFromMap(storage tokenStorage.Storage, name string, key []byte, refToRes interface{}) error {
+func readFromMap(storage tokenStorage.Storage, name string, key interface{}, refToRes interface{}) error {
 	kv := tokenStorage.NewKeyValuePair(key, refToRes)
 	return storage.ReadField(name, kv)
 }

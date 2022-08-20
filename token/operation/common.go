@@ -153,10 +153,12 @@ func NewTransferFromOperation(standard Std, from common.Address, to common.Addre
 	if from == (common.Address{}) {
 		return nil, ErrNoFrom
 	}
+
 	transferOp, err := newTransferOperation(standard, to, value)
 	if err != nil {
 		return nil, err
 	}
+
 	return &transferFromOperation{
 		transferOperation: *transferOp,
 		FromAddress:       from,
@@ -225,23 +227,23 @@ func (p *setPriceOperation) MarshalBinary() (data []byte, err error) {
 }
 
 type buyOperation struct {
-	Id *big.Int
-	valueOperation
+	Id     *big.Int
+	NewVal *big.Int
 }
 
 func NewBuyOperation(tokenId, newValue *big.Int) (Buy, error) {
-	if newValue == nil {
-		return nil, ErrNoValue
-	}
-
 	return &buyOperation{
-		Id:             tokenId,
-		valueOperation: valueOperation{newValue},
+		Id:     tokenId,
+		NewVal: newValue,
 	}, nil
 }
 
-func (b *buyOperation) NewValue() *big.Int {
-	return b.Value()
+func (b *buyOperation) NewValue() (*big.Int, bool) {
+	if b.NewVal == nil {
+		return nil, false
+	}
+
+	return new(big.Int).Set(b.NewVal), true
 }
 
 func (b *buyOperation) OpCode() Code {

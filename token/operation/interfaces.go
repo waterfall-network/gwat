@@ -116,7 +116,7 @@ type SetPrice interface {
 type Buy interface {
 	Operation
 	TokenId() (*big.Int, bool)
-	NewValue() *big.Int
+	NewValue() (*big.Int, bool)
 }
 
 // Cost contains attributes for cost token call
