@@ -67,12 +67,13 @@ func CheckError(e error, arr []error) bool {
 	return false
 }
 
-func BigIntEquals(a, b *big.Int) bool {
-	haveValue := a
-	wantValue := b
+func BigIntEquals(haveValue, wantValue *big.Int) bool {
+	if haveValue == nil && wantValue == nil {
+		return true
+	}
 
-	if wantValue == nil {
-		wantValue = big.NewInt(0)
+	if haveValue == nil || wantValue == nil {
+		return true
 	}
 
 	return haveValue.Cmp(wantValue) == 0
