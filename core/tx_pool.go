@@ -137,6 +137,7 @@ const (
 	TxStatusUnknown TxStatus = iota
 	TxStatusQueued
 	TxStatusPending
+	TxStatusPendingFinalize
 	TxStatusIncluded
 )
 
@@ -150,6 +151,8 @@ type blockChain interface {
 	GetBlockByNumber(number uint64) *types.Block
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	SubscribePendingFinalize(ch chan<- *types.Transaction) event.Subscription
+	SubscribeRemoveTx(ch chan<- *types.Transaction) event.Subscription
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -254,20 +257,25 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
 
-	pending map[common.Address]*txList   // All currently processable transactions
-	queue   map[common.Address]*txList   // Queued but non-processable transactions
-	beats   map[common.Address]time.Time // Last heartbeat from each known account
-	all     *txLookup                    // All transactions to allow lookups
-	priced  *txPricedList                // All transactions sorted by price
+	pending         map[common.Address]*txList // All currently processable transactions
+	queue           map[common.Address]*txList // Queued but non-processable transactions
+	pendingFinalize map[common.Address]*txList
+	beats           map[common.Address]time.Time // Last heartbeat from each known account
+	all             *txLookup                    // All transactions to allow lookups
+	priced          *txPricedList                // All transactions sorted by price
 
-	chainHeadCh     chan ChainHeadEvent
-	chainHeadSub    event.Subscription
-	reqResetCh      chan *txpoolResetRequest
-	reqPromoteCh    chan *accountSet
-	queueTxEventCh  chan *types.Transaction
-	reorgDoneCh     chan chan struct{}
-	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
-	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
+	chainHeadCh        chan ChainHeadEvent
+	chainHeadSub       event.Subscription
+	reqResetCh         chan *txpoolResetRequest
+	reqPromoteCh       chan *accountSet
+	queueTxEventCh     chan *types.Transaction
+	pendingFinalizeCh  chan *types.Transaction
+	pendingFinalizeSub event.Subscription
+	rmTxCh             chan *types.Transaction
+	rmTxSub            event.Subscription
+	reorgDoneCh        chan chan struct{}
+	reorgShutdownCh    chan struct{}  // requests shutdown of scheduleReorgLoop
+	wg                 sync.WaitGroup // tracks loop, scheduleReorgLoop
 	//initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 	//
 	//changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
@@ -285,20 +293,23 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:          config,
-		chainconfig:     chainconfig,
-		chain:           chain,
-		signer:          types.LatestSigner(chainconfig),
-		pending:         make(map[common.Address]*txList),
-		queue:           make(map[common.Address]*txList),
-		beats:           make(map[common.Address]time.Time),
-		all:             newTxLookup(),
-		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:      make(chan *txpoolResetRequest),
-		reqPromoteCh:    make(chan *accountSet),
-		queueTxEventCh:  make(chan *types.Transaction),
-		reorgDoneCh:     make(chan chan struct{}),
-		reorgShutdownCh: make(chan struct{}),
+		config:            config,
+		chainconfig:       chainconfig,
+		chain:             chain,
+		signer:            types.LatestSigner(chainconfig),
+		pending:           make(map[common.Address]*txList),
+		queue:             make(map[common.Address]*txList),
+		pendingFinalize:   make(map[common.Address]*txList),
+		beats:             make(map[common.Address]time.Time),
+		all:               newTxLookup(),
+		chainHeadCh:       make(chan ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:        make(chan *txpoolResetRequest),
+		reqPromoteCh:      make(chan *accountSet),
+		queueTxEventCh:    make(chan *types.Transaction),
+		pendingFinalizeCh: make(chan *types.Transaction, 1),
+		rmTxCh:            make(chan *types.Transaction, 1),
+		reorgDoneCh:       make(chan chan struct{}),
+		reorgShutdownCh:   make(chan struct{}),
 		//initDoneCh:      make(chan struct{}),
 		gasPrice: new(big.Int).SetUint64(config.PriceLimit),
 	}
@@ -329,6 +340,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Subscribe events from blockchain and start the main event loop.
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	pool.pendingFinalizeSub = pool.chain.SubscribePendingFinalize(pool.pendingFinalizeCh)
+	pool.rmTxSub = pool.chain.SubscribeRemoveTx(pool.rmTxCh)
+
 	pool.wg.Add(1)
 	go pool.loop()
 
@@ -409,6 +423,21 @@ func (pool *TxPool) loop() {
 					log.Warn("Failed to rotate local tx journal", "err", err)
 				}
 				pool.mu.Unlock()
+			}
+
+		case tx := <-pool.pendingFinalizeCh:
+			log.Info("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+			pool.moveToPendingFinalize(tx.Hash())
+
+		case tx := <-pool.rmTxCh:
+			sender, err := types.Sender(pool.signer, tx)
+			if err != nil {
+				continue
+			}
+
+			if list, ok := pool.pendingFinalize[sender]; ok && list.Overlaps(tx) {
+				log.Info("remove tx", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+				pool.removeTx(tx.Hash(), false)
 			}
 		}
 	}
@@ -498,7 +527,7 @@ func (pool *TxPool) stats() (int, int) {
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
-func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -510,12 +539,16 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	for addr, list := range pool.queue {
 		queued[addr] = list.Flatten()
 	}
-	return pending, queued
+	pendingFinalize := make(map[common.Address]types.Transactions)
+	for addr, list := range pool.pendingFinalize {
+		pendingFinalize[addr] = list.Flatten()
+	}
+	return pending, queued, pendingFinalize
 }
 
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
-func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions, types.Transactions) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
@@ -527,7 +560,11 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 	if list, ok := pool.queue[addr]; ok {
 		queued = list.Flatten()
 	}
-	return pending, queued
+	var pendingFin types.Transactions
+	if list, ok := pool.pendingFinalize[addr]; ok {
+		pendingFin = list.Flatten()
+	}
+	return pending, queued, pendingFin
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
@@ -984,6 +1021,8 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 		pool.mu.RLock()
 		if txList := pool.pending[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
 			status[i] = TxStatusPending
+		} else if txList := pool.pendingFinalize[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
+			status[i] = TxStatusPendingFinalize
 		} else if txList := pool.queue[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
 			status[i] = TxStatusQueued
 		}
@@ -1003,6 +1042,35 @@ func (pool *TxPool) Get(hash common.Hash) *types.Transaction {
 // given hash.
 func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
+}
+
+func (pool *TxPool) moveToPendingFinalize(hash common.Hash) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	tx := pool.all.Get(hash)
+	if tx == nil {
+		return
+	}
+	addr, _ := types.Sender(pool.signer, tx) // already validated during insertion
+
+	if pending := pool.pending[addr]; pending != nil {
+		if removed, invalids := pending.Remove(tx); removed {
+			for _, tx := range invalids {
+				pool.pending[addr].Add(tx, pool.config.PriceBump)
+			}
+
+			// If no more pending transactions are left, remove the list
+			if pending.Empty() {
+				delete(pool.pending, addr)
+			}
+
+			if pool.pendingFinalize[addr] == nil {
+				pool.pendingFinalize[addr] = newTxList(true)
+			}
+			pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
+		}
+	}
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent
@@ -1051,6 +1119,23 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 		if future.Empty() {
 			delete(pool.queue, addr)
 			delete(pool.beats, addr)
+		}
+		return
+	}
+
+	if fin := pool.pendingFinalize[addr]; fin != nil {
+		if removed, invalids := fin.Remove(tx); removed {
+
+			for _, tx := range invalids {
+				pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
+			}
+			if fin.Empty() {
+				delete(pool.pendingFinalize, addr)
+			}
+
+			// Reduce the pending counter
+			pendingGauge.Dec(int64(1 + len(invalids)))
+			return
 		}
 	}
 }
@@ -1538,7 +1623,10 @@ func (pool *TxPool) truncateQueue() {
 func (pool *TxPool) demoteUnexecutables() {
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
+		listPF := pool.pendingFinalize[addr]
+
 		nonce := pool.currentState.GetNonce(addr)
+		log.Info("current txpool nonce calculated", "nonce", nonce)
 
 		// Drop all transactions that are deemed too old (low nonce)
 		olds := list.Forward(nonce)
@@ -1570,21 +1658,26 @@ func (pool *TxPool) demoteUnexecutables() {
 
 		// If there's a gap in front, alert (should never happen) and postpone all transactions
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {
-			gapped := list.Cap(0)
-			for _, tx := range gapped {
-				hash := tx.Hash()
-				log.Error("Demoting invalidated transaction", "hash", hash)
+			if listPF != nil && listPF.Len() > 0 && listPF.txs.Get(nonce) == nil {
+				gapped := list.Cap(0)
+				for _, tx := range gapped {
+					hash := tx.Hash()
+					log.Error("Demoting invalidated transaction", "hash", hash)
 
-				// Internal shuffle shouldn't touch the lookup set.
-				pool.enqueueTx(hash, tx, false, false)
+					// Internal shuffle shouldn't touch the lookup set.
+					pool.enqueueTx(hash, tx, false, false)
+				}
+				pendingGauge.Dec(int64(len(gapped)))
+				// This might happen in a reorg, so log it to the metering
+				blockReorgInvalidatedTx.Mark(int64(len(gapped)))
 			}
-			pendingGauge.Dec(int64(len(gapped)))
-			// This might happen in a reorg, so log it to the metering
-			blockReorgInvalidatedTx.Mark(int64(len(gapped)))
 		}
 		// Delete the entire pending entry if it became empty.
 		if list.Empty() {
 			delete(pool.pending, addr)
+		}
+		if listPF != nil && listPF.Empty() {
+			delete(pool.pendingFinalize, addr)
 		}
 	}
 }

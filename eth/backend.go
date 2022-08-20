@@ -229,6 +229,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	eth.dag = dag.New(eth, chainConfig, eth.EventMux(), &config.Creator, eth.engine)
+	bc := eth.BlockChain()
+	for _, blockHash := range *bc.GetDagHashes() {
+		block := bc.GetBlockByHash(blockHash)
+		if block == nil {
+			log.Warn("nil block in dag", "block hash", blockHash)
+		}
+		for _, tx := range block.Transactions() {
+			bc.MoveTxToPendingFinalize(tx)
+		}
+	}
 	eth.dag.Creator().SetExtra(makeExtraData(config.Creator.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
