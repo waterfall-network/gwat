@@ -758,7 +758,7 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
 		if err == nil && number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
-			for _, field := range []string{"hash", "nonce", "miner"} {
+			for _, field := range []string{"hash", "miner"} {
 				response[field] = nil
 			}
 		}
@@ -1168,9 +1168,8 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"number":           head.Number,
 		"hash":             head.Hash(),
 		"parentHashes":     head.ParentHashes,
-		"slot":             hexutil.Uint64(head.Slot),
-		"height":           hexutil.Uint64(head.Height),
-		"nonce":            head.Nonce,
+		"slot":             head.Slot,
+		"height":           head.Height,
 		"mixHash":          head.MixDigest,
 		"logsBloom":        head.Bloom,
 		"stateRoot":        head.Root,
@@ -1276,7 +1275,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockFinNr 
 		GasPrice: (*hexutil.Big)(tx.GasPrice()),
 		Hash:     tx.Hash(),
 		Input:    hexutil.Bytes(tx.Data()),
-		Nonce:    hexutil.Uint64(tx.Nonce()),
 		To:       tx.To(),
 		Value:    (*hexutil.Big)(tx.Value()),
 		V:        (*hexutil.Big)(v),
