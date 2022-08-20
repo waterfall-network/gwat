@@ -1658,7 +1658,7 @@ func (pool *TxPool) demoteUnexecutables() {
 
 		// If there's a gap in front, alert (should never happen) and postpone all transactions
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {
-			if listPF.Len() > 0 && listPF.txs.Get(nonce) == nil {
+			if listPF != nil && listPF.Len() > 0 && listPF.txs.Get(nonce) == nil {
 				gapped := list.Cap(0)
 				for _, tx := range gapped {
 					hash := tx.Hash()
