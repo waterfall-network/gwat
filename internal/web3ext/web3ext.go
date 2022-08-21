@@ -868,6 +868,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'getCandidates',
 			call: 'dag_getCandidates',
+			params: 1
 		}),
 	]
 });

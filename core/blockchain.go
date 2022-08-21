@@ -1306,11 +1306,6 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 	}
 	defer bc.chainmu.Unlock()
 
-	if isHead && block.Height() != finNr {
-		log.Error("WriteFinalizedBlock: height!=finNr", "isHead", isHead, "finNr", finNr, "Height", block.Height(), "Hash", block.Hash().Hex())
-		isHead = false
-	}
-
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
 
@@ -2198,10 +2193,14 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	finPoints = finPoints.Uniq()
 
 	var stateHash common.Hash
+	parentBlocks := bc.GetBlocksByHashes(parents)
+	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
 
-	if len(finPoints) > 0 {
-		stateHash = []common.Hash(finPoints)[len(finPoints)-1]
+	if len(sortedBlocks) > 0 {
+		stateBlock = sortedBlocks[0]
+		stateHash = stateBlock.Hash()
 	} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
+		//stateHash = bc.GetLastFinalizedBlock().Hash()
 		stateHash = lastFinAncestor.Hash
 		if len(ordHashes) == 0 {
 			lfn := bc.GetLastFinalizedBlock().Nr()
@@ -2213,6 +2212,21 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 			}
 		}
 	}
+
+	//if len(finPoints) > 0 {
+	//	stateHash = []common.Hash(finPoints)[len(finPoints)-1]
+	//} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
+	//	stateHash = lastFinAncestor.Hash
+	//	if len(ordHashes) == 0 {
+	//		lfn := bc.GetLastFinalizedBlock().Nr()
+	//		for i := lastFinAncestor.Number + 1; i <= lfn; i++ {
+	//			bl := bc.GetBlockByNumber(i)
+	//			if bl != nil && fnl.Has(bl.Hash()) {
+	//				ordHashes = append(ordHashes, bl.Hash())
+	//			}
+	//		}
+	//	}
+	//}
 	if stateHash == (common.Hash{}) {
 		log.Error("Error while collect state data by block (bad state hash)", "error", ErrStateBlockNotFound)
 		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrStateBlockNotFound
@@ -2272,10 +2286,16 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 			log.Error("Collect State Data By Finalized Block: bad finalized chain", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
 			return statedb, stateBlock, redBlocks, ErrInsertUncompletedDag
 		}
-		if prevBlock.Nr() == prevBlock.Height() {
+
+		statedb, err = bc.StateAt(prevBlock.Root())
+		if statedb != nil {
 			stateBlock = prevBlock
 			break
 		}
+		//if prevBlock.Nr() == prevBlock.Height() {
+		//	stateBlock = prevBlock
+		//	break
+		//}
 		redBlocks = append(redBlocks, prevBlock)
 	}
 	// reverse redBlocks
@@ -3119,6 +3139,9 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
 		return unloaded, loaded, finalized, graph, memo[0], err
 	}
+
+	//parentHashes := types.GetOrderedParentHashes(bc, block)
+	//for _, ph := range parentHashes {
 	for _, ph := range block.ParentHashes() {
 		var (
 			_unloaded  common.HashArray

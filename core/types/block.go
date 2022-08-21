@@ -19,8 +19,10 @@ package types
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"reflect"
 	"sync/atomic"
@@ -28,6 +30,7 @@ import (
 
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/rlp"
 )
 
@@ -40,6 +43,8 @@ var (
 // mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
 type BlockNonce [8]byte
+type SlotHashMap map[uint64]Blocks      // slot: blocks
+type SlotSpineHashMap map[uint64]*Block // slot: block
 
 // EncodeNonce converts the given integer to a block nonce.
 func EncodeNonce(i uint64) BlockNonce {
@@ -243,10 +248,17 @@ func NewBlockWithHeader(header *Header) *Block {
 // CopyHeader creates a deep copy of a block header to prevent side effects from
 // modifying a header variable.
 func CopyHeader(h *Header) *Header {
-	nr := h.Nr()
+	if h == nil {
+		return nil
+	}
 	cpy := *h
-	if cpy.Number = new(uint64); h.Number != nil {
-		cpy.Number = &nr
+	if h.Number != nil {
+		nr := h.Nr()
+		if cpy.Number = new(uint64); h.Number != nil {
+			cpy.Number = &nr
+		}
+	} else {
+		cpy.Number = nil
 	}
 	if h.BaseFee != nil {
 		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
@@ -377,3 +389,153 @@ func (b *Block) Hash() common.Hash {
 }
 
 type Blocks []*Block
+
+func (bs *Blocks) GetMaxHeight() uint64 {
+	maxHeight := uint64(0)
+	for _, block := range *bs {
+		if height := block.Height(); height > maxHeight {
+			maxHeight = height
+		}
+	}
+	return maxHeight
+}
+
+func (bs *Blocks) GetMaxParentHashesLen() int {
+	maxLen := 0
+	for _, block := range *bs {
+		if phLen := len(block.ParentHashes()); phLen > maxLen {
+			maxLen = phLen
+		}
+	}
+	return maxLen
+}
+
+func (bs *Blocks) GetMaxHeightBlocks() Blocks {
+	if len(*bs) == 0 {
+		return nil
+	}
+
+	res := make(Blocks, 0, 1)
+	maxHeight := bs.GetMaxHeight()
+	for _, block := range *bs {
+		if block.Height() == maxHeight {
+			res = append(res, block)
+		}
+	}
+	return res
+}
+
+func (bs *Blocks) GetMaxParentHashesLenBlocks() Blocks {
+	if len(*bs) == 0 {
+		return nil
+	}
+
+	res := make(Blocks, 0, 1)
+	maxParentHashesLen := bs.GetMaxParentHashesLen()
+	for _, block := range *bs {
+		if len(block.ParentHashes()) == maxParentHashesLen {
+			res = append(res, block)
+		}
+	}
+	return res
+}
+
+func (bs *Blocks) GroupBySlot() (SlotHashMap, error) {
+	if len(*bs) == 0 {
+		return nil, errors.New("empty blocks slice")
+	}
+	for _, block := range *bs {
+		if block == nil {
+			return nil, errors.New("nil block found")
+		}
+		if block.header == nil {
+			log.Error("nil header found", "block", block)
+			return nil, errors.New("nil header found")
+		}
+	}
+	res := make(SlotHashMap)
+	for _, block := range *bs {
+		blockSlot := block.Slot()
+		if _, exists := res[blockSlot]; !exists {
+			res[blockSlot] = make(Blocks, 0, 1)
+		}
+		res[blockSlot] = append(res[blockSlot], block)
+	}
+	return res, nil
+}
+
+func (shm *SlotHashMap) GetMinSlot() uint64 {
+	minSlot := uint64(math.MaxUint64)
+	for k := range *shm {
+		if k < minSlot {
+			minSlot = k
+		}
+	}
+	return minSlot
+}
+
+func (shm *SlotHashMap) GetMaxSlot() uint64 {
+	minSlot := uint64(0)
+	for k := range *shm {
+		if k > minSlot {
+			minSlot = k
+		}
+	}
+	return minSlot
+}
+
+func (bs *Blocks) GetBlockByHash(hash common.Hash) *Block {
+	for _, block := range *bs {
+		if block.Hash() == hash {
+			return block
+		}
+	}
+	return nil
+}
+
+func (shm *SlotSpineHashMap) GetMaxSlot() uint64 {
+	maxSlot := uint64(0)
+	for slot := range *shm {
+		if slot > maxSlot {
+			maxSlot = slot
+		}
+	}
+	return maxSlot
+}
+
+func (shm *SlotSpineHashMap) GetMinSlot() uint64 {
+	minClot := uint64(math.MaxUint64)
+	for slot := range *shm {
+		if slot < minClot {
+			minClot = slot
+		}
+	}
+	return minClot
+}
+
+func (shm *SlotSpineHashMap) GetHashes() *common.HashArray {
+	if len(*shm) == 0 {
+		return &common.HashArray{}
+	}
+
+	hashes := make(common.HashArray, 0, len(*shm))
+	minSlot := shm.GetMinSlot()
+	maxSlot := shm.GetMaxSlot()
+
+	for slot := minSlot; slot <= maxSlot; slot++ {
+		if _, exists := (*shm)[slot]; !exists {
+			continue
+		}
+		hashes = append(hashes, (*shm)[slot].Hash())
+	}
+
+	return &hashes
+}
+
+func (bs *Blocks) GetHashes() *common.HashArray {
+	hashes := make(common.HashArray, 0, len(*bs))
+	for _, block := range *bs {
+		hashes = append(hashes, block.Hash())
+	}
+	return &hashes
+}

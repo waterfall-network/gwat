@@ -654,7 +654,11 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 				dag.LastFinalizedHeight = bc.GetLastFinalizedNumber()
 				dag.DagChainHashes = *graph.GetDagChainHashes()
 				//dag.FinalityPoints = *graph.GetFinalityPointsByLastFinNr(dag.LastFinalizedHeight)
-				dag.FinalityPoints = *graph.GetFinalityPoints()
+				if fp := graph.GetFinalityPoints(); fp != nil {
+					dag.FinalityPoints = *fp
+				} else {
+					dag.FinalityPoints = common.HashArray{}
+				}
 				hc.AddTips(dag, true)
 			} else {
 				log.Warn("Unknown blocks detected", "hashes", unloaded)

@@ -53,7 +53,7 @@ func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux) *Fina
 }
 
 // Finalize start finalization procedure
-func (f *Finalizer) Finalize(chain NrHashMap) error {
+func (f *Finalizer) Finalize(spines *common.HashArray) error {
 
 	if f.isSyncing() {
 		return ErrSyncing
@@ -66,96 +66,50 @@ func (f *Finalizer) Finalize(chain NrHashMap) error {
 	atomic.StoreInt32(&f.busy, 1)
 	defer atomic.StoreInt32(&f.busy, 0)
 
-	if len(chain) == 0 {
-		log.Info("⌛ Finalization is skipped: received chain empty")
+	if len(*spines) == 0 {
+		log.Info("⌛ Finalization is skipped: received spines empty")
 		return nil
 	}
 
-	log.Info("Finalization chain received", "chain", chain)
-
-	if chain.HasGap() {
-		return ErrChainGap
-	}
+	log.Info("Finalization spines received", "spines", spines)
 
 	bc := f.eth.BlockChain()
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	lastFinNr := lastFinBlock.Nr()
 
-	mnr := chain.GetMinNr()
-	if mnr == nil {
-		log.Info("⌛ Finalization is skipped: no candidates")
+	//collect and check finalizing blocks
+	spinesMap := make(types.SlotSpineHashMap, len(*spines))
+	for _, spineHash := range *spines {
+		block := bc.GetBlockByHash(spineHash)
+		if block == nil {
+			log.Error("unknown spine hash", "spineHash", spineHash)
+			return ErrUnknownHash
+		}
+		spinesMap[block.Slot()] = block
+	}
+
+	orderedChain := types.SpinesToChain(f.eth.BlockChain(), &spinesMap)
+	if len(orderedChain) == 0 {
+		log.Info("⌛ Finalization is skipped: received spines finalized")
 		return nil
 	}
-	minNr := *chain.GetMinNr()
-	maxNr := *chain.GetMaxNr()
-	// check start from current head number
-	for minNr <= lastFinNr {
-		block := bc.GetBlock(*chain[minNr])
-		if block == nil || block.Nr() != minNr {
-			log.Error("Sequence of candidates does not match to the sequence of finalized blocks", "minNr", minNr, "minNrHash", *chain[minNr], "lastFinNr", lastFinNr)
-			return ErrBadFinalizedSequence
-		}
-		delete(chain, minNr)
-		minNrPtr := chain.GetMinNr()
-		if minNrPtr == nil {
-			log.Info("⌛ Finalization is skipped: received chain empty")
-			return nil
-		}
-		minNr = *minNrPtr
-	}
-	if minNr > lastFinNr+1 {
-		log.Info("Finalization: reconstructing finalising chain", "lastFinNr+1", lastFinNr+1, "minNr", minNr, "chain", chain, "lastFinBlock", lastFinBlock.Hash().Hex())
-		candidates, err := f.GetFinalizingCandidates()
-		if err != nil {
-			return err
-		}
-		// try to reconstruct full finalizing chain
-		for nr, h := range *candidates {
-			if nr < minNr {
-				chain[nr] = h
-			}
-		}
-		minNr = *chain.GetMinNr()
-		maxNr = *chain.GetMaxNr()
-		// check finalizing chain again
-		if chain.HasGap() || lastFinNr+1 != minNr {
-			return ErrChainGap
-		}
-	}
 
-	//collect and check finalizing blocks
-	hashes := chain.GetHashes()
-	blocks := bc.GetBlocksByHashes(*hashes)
-	for _, block := range blocks {
-		if block == nil {
-			return ErrUnknownBlock
-		}
-		if block.Number() != nil {
-			if chain[block.Nr()] != nil && block.Hash() == *chain[block.Nr()] {
-				delete(chain, block.Nr())
-			} else if block.Nr() <= lastFinNr {
-				lastFinNr = block.Nr() - 1
-			}
-		}
-	}
+	log.Info("Ordered chain calculated", "ordered chain", orderedChain.GetHashes())
 
 	// blocks finalizing
-	for i := minNr; i <= maxNr; i++ {
-		hash := chain[i]
-		block := blocks[*hash]
-		isHead := maxNr == i
-		if isHead && block.Height() != i {
-			log.Error("Block height mismatch finalizing number", "nr", i, "height", block.Height(), "hash", block.Hash().Hex())
-		}
-		if err := f.finalizeBlock(i, *block, isHead); err != nil {
+	for i, block := range orderedChain {
+		nr := lastFinNr + uint64(i) + 1
+		block.SetNumber(&nr)
+		isHead := i == len(orderedChain)-1
+		if err := f.finalizeBlock(nr, *block, isHead); err != nil {
 			log.Error("block finalization failed", "nr", i, "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 			return err
 		}
 	}
-	lastBlock := blocks[*chain[maxNr]]
+	lastBlock := orderedChain[len(orderedChain)-1]
 
-	f.updateTips(*chain.GetHashes(), *lastBlock)
-	log.Info("⛓ Finalization completed", "blocks", len(chain), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+	f.updateTips(*orderedChain.GetHashes(), *lastBlock)
+	log.Info("⛓ Finalization completed", "blocks", len(*spines), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 	return nil
 }
 
@@ -190,67 +144,10 @@ func (f *Finalizer) isSyncing() bool {
 	return f.eth.Downloader().Synchronising()
 }
 
-// RetrieveFinalizingChain retrieves dag blocks in order of finalization
-func (f *Finalizer) RetrieveFinalizingChain(tips types.Tips) (*[]types.Block, *types.BlockDAG) {
-	bc := f.eth.BlockChain()
-	dag := tips.GetFinalizingDag()
-	fpts := append(dag.FinalityPoints.Uniq(), dag.Hash)
-	fpts = fpts.Difference(common.HashArray{dag.LastFinalizedHash}).Uniq()
-	if len(fpts) < FinalisationDelaySlots {
-		return nil, dag
-	}
-
-	unl, _, _, _, _, _err := bc.ExploreChainRecursive(dag.Hash)
-	if _err != nil {
-		log.Error("Finalizer failed while retrieving finalizing chain", "err", _err)
-		return nil, dag
-	}
-	if len(unl) > 0 {
-		log.Error("Finalizer failed due to unknown blocks detected", "hashes", unl)
-		return nil, dag
-	}
-	finPoints := dag.FinalityPoints.Uniq()
-
-	log.Info("Finalizer collect finalisation points", "finPoints", finPoints)
-
-	fpIndex := len(finPoints) - FinalisationDelaySlots
-	if fpIndex < 0 {
-		fpIndex = 0
-	}
-	finPoint := finPoints[fpIndex]
-	finOrd := dag.DagChainHashes.Uniq()
-
-	log.Info("Finalizer select candidates", "candidates", finOrd)
-
-	blocks := bc.GetBlocksByHashes(finOrd)
-	finBlock := blocks[finPoint]
-	if finBlock == nil {
-		log.Error("Finalizer failed due to block of finality point not found", "hash", finPoint.Hex())
-		return nil, dag
-	}
-	finChain := []types.Block{}
-	for _, h := range finOrd {
-		bl := blocks[h]
-		if bl == nil {
-			return &finChain, dag
-		}
-		if bl.Hash() == finBlock.Hash() {
-			finChain = append(finChain, *bl)
-			break
-		}
-		if bl.Height() >= finBlock.Height() {
-			log.Error("Finalizer failed due to unacceptable block height", "bl.Height", bl.Height(), "finBlock.Height", finBlock.Height(), "bl.Hash", bl.Hash(), "finBlock.Hash()", finBlock.Hash())
-			return nil, dag
-		}
-		finChain = append(finChain, *bl)
-	}
-	return &finChain, dag
-}
-
 // GetFinalizingCandidates returns the ordered dag block hashes for finalization
-func (f *Finalizer) GetFinalizingCandidates() (*NrHashMap, error) {
+func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, error) {
 	bc := f.eth.BlockChain()
-	candidates := NrHashMap{}
+	candidates := common.HashArray{}
 	tips, unloaded := bc.ReviseTips()
 	if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
 		if tips == nil {
@@ -258,40 +155,51 @@ func (f *Finalizer) GetFinalizingCandidates() (*NrHashMap, error) {
 		} else {
 			log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips.Print())
 		}
-		return nil, ErrBadDag
+		return common.HashArray{}, ErrBadDag
 	}
-	finChain, finDag := f.RetrieveFinalizingChain(*tips)
-	if finChain == nil || len(*finChain) == 0 {
-		return &candidates, nil
+	finChain := []*types.Block{}
+	for _, block := range bc.GetBlocksByHashes(tips.GetOrderedDagChainHashes().Uniq()).ToArray() {
+		if block.Height() > 0 && block.Nr() == 0 {
+			finChain = append(finChain, block)
+		}
 	}
 
-	lastFinNr := finDag.LastFinalizedHeight
-	count := 0
-	var lastBlock = (*finChain)[len(*finChain)-1]
-	nextFinNr := lastFinNr + 1
-	for _, block := range *finChain {
-		if block.Number() != nil && block.Nr() < nextFinNr && len(*finChain) > 0 {
-			bc.FinalizeTips(common.HashArray{block.Hash()}, common.Hash{}, lastFinNr)
+	if len(finChain) == 0 {
+		return common.HashArray{}, nil
+	}
+
+	spines, err := types.CalculateSpines(finChain)
+	if err != nil {
+		return common.HashArray{}, err
+	}
+
+	finChain = types.SpinesToChain(bc, &spines)
+
+	topSpine := spines[spines.GetMaxSlot()]
+	finDag := tips.Get(topSpine.Hash())
+
+	lastFinNr := bc.GetBlockByHash(finDag.LastFinalizedHash).Number()
+	for i, block := range finChain {
+		if block.Number() != nil && len(finChain) > 0 {
+			bc.FinalizeTips(common.HashArray{block.Hash()}, common.Hash{}, *lastFinNr)
 			continue
 		}
-		if block.Number() == nil {
-			hash := block.Hash()
-			candidates[nextFinNr] = &hash
+
+		nr := *lastFinNr + uint64(i) + 1
+		block.SetNumber(&nr)
+		candidates = append(candidates, block.Hash())
+	}
+
+	if lteSlot != nil {
+		spinesOfSlot := types.SlotSpineHashMap{}
+		for slot, spine := range spines {
+			if *lteSlot >= slot {
+				spinesOfSlot[slot] = spine
+			}
 		}
-		nextFinNr++
-		count++
+		spineHashes := spinesOfSlot.GetHashes()
+		return *spineHashes, nil
 	}
-	if lastBlock.Height() != nextFinNr-1 {
-		log.Error("Get finalized candidates",
-			"lastFinNr", lastFinNr,
-			"expHeight", nextFinNr-1,
-			"blHeight", lastBlock.Height(),
-			"blHash", lastBlock.Hash().Hex(),
-			"err", ErrMismatchFinalisingPosition,
-			"count", count,
-			"finDag", finDag.Print(),
-		)
-		return nil, ErrMismatchFinalisingPosition
-	}
-	return &candidates, nil
+	spineHashes := spines.GetHashes()
+	return *spineHashes, nil
 }
