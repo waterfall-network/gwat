@@ -1,6 +1,7 @@
 package token
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -40,6 +41,7 @@ var (
 	symbol         []byte
 	baseURI        []byte
 	data           []byte
+	zeroBig        = big.NewInt(0)
 )
 
 func init() {
@@ -201,7 +203,7 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				balance := checkBalance(t, wrc20Address, owner)
 
 				var z, res big.Int
-				if res.Sub(balance, z.Sub(totalSupply, value)).Cmp(big.NewInt(0)) != 0 {
+				if res.Sub(balance, z.Sub(totalSupply, value)).Cmp(zeroBig) != 0 {
 					t.Fatal()
 				}
 			},
@@ -650,7 +652,7 @@ func TestProcessorApproveCall(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if total.Cmp(big.NewInt(0)) != 0 {
+				if total.Cmp(zeroBig) != 0 {
 					t.Fatal()
 				}
 			},
@@ -675,32 +677,28 @@ func TestProcessorSetPriceCall(t *testing.T) {
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
 
-				var err error
-				v.TokenAddress, err = createToken(t, operation.StdWRC721, v.Caller)
-				if err != nil {
-					t.Error(err)
-					t.Fail()
-				}
+				v.TokenAddress = createToken(t, operation.StdWRC721, v.Caller)
 
 				tokenId := big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
 				mintNewToken(t, owner, v.TokenAddress, tokenId, data, caller, c.Errs)
 
-				_, err = checkCost(v.TokenAddress, tokenId)
+				_, err := checkCost(v.TokenAddress, tokenId)
 				if err != ErrTokenIsNotForSale {
 					t.Errorf("Expected: %s\nGot: %s", ErrTokenIsNotForSale, err)
+					t.FailNow()
 				}
 
 				setPriceOp, err := operation.NewSetPriceOperation(tokenId, value)
 				if err != nil {
 					t.Error(err)
-					t.Fail()
+					t.FailNow()
 				}
 				call(t, v.Caller, v.TokenAddress, nil, setPriceOp, c.Errs)
 
 				newCost, err := checkCost(v.TokenAddress, tokenId)
 				if err != nil {
 					t.Error(err)
-					t.Fail()
+					t.FailNow()
 				}
 
 				if !(newCost.Cmp(value) == 0) {
@@ -713,23 +711,108 @@ func TestProcessorSetPriceCall(t *testing.T) {
 			TestData: testutils.TestData{
 				Caller: vm.AccountRef(owner),
 			},
-			Errs: []error{ErrNilTokenId},
+			Errs: []error{ErrTokenIdIsNotSet},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
 
-				var err error
-				v.TokenAddress, err = createToken(t, operation.StdWRC721, v.Caller)
+				v.TokenAddress = createToken(t, operation.StdWRC721, v.Caller)
+
+				setPriceOp, err := operation.NewSetPriceOperation(nil, value)
 				if err != nil {
 					t.Error(err)
-					t.Fail()
+					t.FailNow()
+				}
+				call(t, v.Caller, v.TokenAddress, nil, setPriceOp, c.Errs)
+			},
+		},
+		{
+			CaseName: "WRC721_NoValue",
+			TestData: testutils.TestData{
+				Caller: vm.AccountRef(owner),
+			},
+			Errs: []error{operation.ErrNoValue},
+			Fn: func(c *testutils.TestCase, a *common.Address) {
+				v := c.TestData.(testutils.TestData)
+
+				v.TokenAddress = createToken(t, operation.StdWRC721, v.Caller)
+
+				tokenId := big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
+				_, err := operation.NewSetPriceOperation(tokenId, nil)
+				if !testutils.CheckError(err, []error{operation.ErrNoValue}) {
+					t.Errorf("Expected: %s\ngot: %s", operation.ErrNoValue, err)
+				}
+			},
+		},
+		{
+			CaseName: "WRC20_Correct",
+			TestData: testutils.TestData{
+				Caller: vm.AccountRef(owner),
+			},
+			Errs: []error{},
+			Fn: func(c *testutils.TestCase, a *common.Address) {
+				v := c.TestData.(testutils.TestData)
+
+				v.TokenAddress = createToken(t, operation.StdWRC20, v.Caller)
+
+				_, err := checkCost(v.TokenAddress, nil)
+				if err != ErrTokenIsNotForSale {
+					t.Errorf("Expected: %s\nGot: %s", ErrTokenIsNotForSale, err)
+					t.FailNow()
 				}
 
 				setPriceOp, err := operation.NewSetPriceOperation(nil, value)
 				if err != nil {
 					t.Error(err)
-					t.Fail()
+					t.FailNow()
 				}
 				call(t, v.Caller, v.TokenAddress, nil, setPriceOp, c.Errs)
+
+				newCost, err := checkCost(v.TokenAddress, nil)
+				if err != nil {
+					t.Error(err)
+					t.FailNow()
+				}
+
+				if !(newCost.Cmp(value) == 0) {
+					t.Errorf("cost was not changed")
+				}
+			},
+		},
+		{
+			CaseName: "WRC20_NoTokenId",
+			TestData: testutils.TestData{
+				Caller: vm.AccountRef(owner),
+			},
+			Errs: []error{},
+			Fn: func(c *testutils.TestCase, a *common.Address) {
+				v := c.TestData.(testutils.TestData)
+
+				v.TokenAddress = createToken(t, operation.StdWRC20, v.Caller)
+
+				setPriceOp, err := operation.NewSetPriceOperation(nil, value)
+				if err != nil {
+					t.Error(err)
+					t.FailNow()
+				}
+				call(t, v.Caller, v.TokenAddress, nil, setPriceOp, c.Errs)
+			},
+		},
+		{
+			CaseName: "WRC20_NoTokenId",
+			TestData: testutils.TestData{
+				Caller: vm.AccountRef(owner),
+			},
+			Errs: []error{operation.ErrNoValue},
+			Fn: func(c *testutils.TestCase, a *common.Address) {
+				v := c.TestData.(testutils.TestData)
+
+				v.TokenAddress = createToken(t, operation.StdWRC20, v.Caller)
+
+				_, err := operation.NewSetPriceOperation(nil, nil)
+				if err != operation.ErrNoValue {
+					t.Errorf("Expected: %s\nGot: %s", operation.ErrNoValue, err)
+					t.FailNow()
+				}
 			},
 		},
 	}
@@ -752,18 +835,17 @@ func TestProcessorBuyCall(t *testing.T) {
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
 
-				var err error
-				v.TokenAddress, err = createToken(t, operation.StdWRC721, v.Caller)
-				if err != nil {
-					t.Error(err)
-					t.Fail()
-				}
+				v.TokenAddress = createToken(t, operation.StdWRC721, v.Caller)
 
 				tokenId := big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
-				mintNewToken(t, seller, v.TokenAddress, tokenId, data, v.Caller, c.Errs)
+				mintNewToken(t, seller, v.TokenAddress, tokenId, data, v.Caller, nil)
 
 				sellCaller := vm.AccountRef(seller)
-				setPrice(t, sellCaller, v.TokenAddress, tokenId, value)
+				price := big.NewInt(0).Set(value)
+				setPrice(t, sellCaller, v.TokenAddress, tokenId, price)
+
+				reminder := big.NewInt(111)
+				value.Add(value, reminder)
 
 				buyCaller := vm.AccountRef(buyer)
 				processor.state.AddBalance(buyCaller.Address(), value)
@@ -772,38 +854,48 @@ func TestProcessorBuyCall(t *testing.T) {
 				buyOp, err := operation.NewBuyOperation(tokenId, newVal)
 				if err != nil {
 					t.Error(err)
-					t.Fail()
+					t.FailNow()
 				}
 				call(t, buyCaller, v.TokenAddress, value, buyOp, c.Errs)
 
 				cost, err := checkCost(v.TokenAddress, tokenId)
 				if err != nil {
 					t.Error(err)
-					t.Fail()
+					t.FailNow()
 				}
 
 				if !(cost.Cmp(newVal) == 0) {
 					t.Errorf("Expected cost: %s\ngot: %s", newVal, cost)
 				}
 
-				callerBalance := processor.state.GetBalance(buyCaller.Address())
-				if callerBalance.Cmp(big.NewInt(0)) != 0 {
-					t.Errorf("Expected callerBalance balance: %d\nactual: %s", 0, callerBalance)
+				buyerWeiBalance := processor.state.GetBalance(buyCaller.Address())
+				if buyerWeiBalance.Cmp(reminder) != 0 {
+					t.Errorf("Expected buyerWeiBalance balance: %d\nactual: %s", reminder, buyerWeiBalance)
 				}
 
-				fee := big.NewInt(0).Set(value)
+				fee := big.NewInt(0).Set(price)
 				fee.Mul(fee, big.NewInt(int64(percentFee)))
 				fee.Div(fee, big.NewInt(100))
-				minterBalance := processor.state.GetBalance(v.Caller.Address())
-				if !(minterBalance.Cmp(fee) == 0) {
-					t.Errorf("Expected owner balance: %s\nactual: %s", fee, minterBalance)
+				minterWeiBalance := processor.state.GetBalance(v.Caller.Address())
+				if !(minterWeiBalance.Cmp(fee) == 0) {
+					t.Errorf("Expected minterWeiBalance balance: %s\nactual: %s", fee, minterWeiBalance)
 				}
 
-				expSellerBalance := big.NewInt(0).Set(value)
-				expSellerBalance.Sub(expSellerBalance, fee)
-				sellerBalance := processor.state.GetBalance(sellCaller.Address())
-				if !(sellerBalance.Cmp(expSellerBalance) == 0) {
-					t.Errorf("Expected owner balance: %s\nactual: %s", expSellerBalance, sellerBalance)
+				expSellerWeiBalance := big.NewInt(0).Set(price)
+				expSellerWeiBalance.Sub(expSellerWeiBalance, fee)
+				sellerWeiBalance := processor.state.GetBalance(sellCaller.Address())
+				if !(sellerWeiBalance.Cmp(expSellerWeiBalance) == 0) {
+					t.Errorf("Expected sellerWeiBalance balance: %s\nactual: %s", expSellerWeiBalance, sellerWeiBalance)
+				}
+
+				sellerBalance := checkBalance(t, v.TokenAddress, seller)
+				if sellerBalance.Cmp(zeroBig) != 0 {
+					t.Errorf("Expected sellerBalance balance: %s\nactual: %s", zeroBig, sellerBalance)
+				}
+
+				buyerBalance := checkBalance(t, v.TokenAddress, buyer)
+				if buyerBalance.Cmp(big.NewInt(1)) != 0 {
+					t.Errorf("Expected buyerBalance balance: %d\nactual: %s", 1, buyerBalance)
 				}
 			},
 		},
@@ -812,25 +904,125 @@ func TestProcessorBuyCall(t *testing.T) {
 			TestData: testutils.TestData{
 				Caller: vm.AccountRef(owner),
 			},
-			Errs: []error{ErrNilTokenId},
+			Errs: []error{ErrTokenIdIsNotSet},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
 
-				var err error
-				v.TokenAddress, err = createToken(t, operation.StdWRC721, v.Caller)
-				if err != nil {
-					t.Error(err)
-					t.Fail()
-				}
+				v.TokenAddress = createToken(t, operation.StdWRC721, v.Caller)
 
 				newVal := big.NewInt(int64(testutils.RandomInt(10, 30)))
 				buyOp, err := operation.NewBuyOperation(nil, newVal)
 				if err != nil {
 					t.Error(err)
-					t.Fail()
+					t.FailNow()
 				}
 
 				call(t, caller, v.TokenAddress, value, buyOp, c.Errs)
+			},
+		},
+		{
+			CaseName: "WRC721_NoNewValue",
+			TestData: testutils.TestData{
+				Caller: vm.AccountRef(owner),
+			},
+			Errs: []error{ErrNewValueIsNotSet},
+			Fn: func(c *testutils.TestCase, a *common.Address) {
+				v := c.TestData.(testutils.TestData)
+
+				v.TokenAddress = createToken(t, operation.StdWRC721, v.Caller)
+
+				tokenId := big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
+				mintNewToken(t, seller, v.TokenAddress, tokenId, data, v.Caller, nil)
+
+				buyOp, err := operation.NewBuyOperation(tokenId, nil)
+				if err != nil {
+					t.Error(err)
+					t.FailNow()
+				}
+				call(t, caller, v.TokenAddress, value, buyOp, c.Errs)
+			},
+		},
+		{
+			CaseName: "WRC721_SmallValue",
+			TestData: testutils.TestData{
+				Caller: vm.AccountRef(owner),
+			},
+			Errs: []error{ErrTooSmallTxValue},
+			Fn: func(c *testutils.TestCase, a *common.Address) {
+				v := c.TestData.(testutils.TestData)
+
+				v.TokenAddress = createToken(t, operation.StdWRC721, v.Caller)
+
+				tokenId := big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
+				mintNewToken(t, seller, v.TokenAddress, tokenId, data, v.Caller, nil)
+
+				sellCaller := vm.AccountRef(seller)
+				setPrice(t, sellCaller, v.TokenAddress, tokenId, value)
+
+				newVal := big.NewInt(int64(testutils.RandomInt(10, 30)))
+				buyOp, err := operation.NewBuyOperation(tokenId, newVal)
+				if err != nil {
+					t.Error(err)
+					t.FailNow()
+				}
+
+				badVal := big.NewInt(-1)
+				badVal.Add(badVal, value)
+				call(t, caller, v.TokenAddress, badVal, buyOp, c.Errs)
+			},
+		},
+		{
+			CaseName: "WRC20_Correct",
+			TestData: testutils.TestData{
+				Caller: vm.AccountRef(owner),
+			},
+			Errs: []error{},
+			Fn: func(c *testutils.TestCase, a *common.Address) {
+				v := c.TestData.(testutils.TestData)
+				v.TokenAddress = createToken(t, operation.StdWRC20, v.Caller)
+
+				pricePerToken := big.NewInt(1000)
+				setPrice(t, v.Caller, v.TokenAddress, nil, pricePerToken)
+
+				reminder := big.NewInt(111)
+				expTokenCount := big.NewInt(10)
+				expTotalPrice := big.NewInt(0).Mul(pricePerToken, expTokenCount)
+				value.Set(expTotalPrice).Add(value, reminder)
+
+				buyer = common.BytesToAddress(testutils.RandomData(20))
+				buyCaller := vm.AccountRef(buyer)
+				processor.state.AddBalance(buyCaller.Address(), value)
+
+				creatorBalanceBefore := checkBalance(t, v.TokenAddress, owner)
+				creatorWeiBalanceBefore := processor.state.GetBalance(owner)
+				buyOp, err := operation.NewBuyOperation(nil, nil)
+				if err != nil {
+					t.Error(err)
+					t.FailNow()
+				}
+				call(t, buyCaller, v.TokenAddress, value, buyOp, c.Errs)
+
+				buyerWeiBalance := processor.state.GetBalance(buyCaller.Address())
+				if buyerWeiBalance.Cmp(reminder) != 0 {
+					t.Errorf("Expected buyerWeiBalance balance: %d\nactual: %s", reminder, buyerWeiBalance)
+				}
+
+				expCreatorWeiBalance := big.NewInt(0).Add(creatorWeiBalanceBefore, expTotalPrice)
+				creatorWeiBalance := processor.state.GetBalance(v.Caller.Address())
+				if !(creatorWeiBalance.Cmp(expCreatorWeiBalance) == 0) {
+					t.Errorf("Expected creatorWeiBalance balance: %s\nactual: %s", expCreatorWeiBalance, creatorWeiBalance)
+				}
+
+				expCreatorBalance := creatorBalanceBefore.Sub(creatorBalanceBefore, expTokenCount)
+				gotCreatorBalance := checkBalance(t, v.TokenAddress, owner)
+				if gotCreatorBalance.Cmp(expCreatorBalance) != 0 {
+					t.Errorf("Expected creatorBalanceBefore balance: %s\nactual: %s", zeroBig, creatorBalanceBefore)
+				}
+
+				buyerBalance := checkBalance(t, v.TokenAddress, buyer)
+				if buyerBalance.Cmp(expTokenCount) != 0 {
+					t.Errorf("Expected buyerBalance balance: %d\nactual: %s", 1, buyerBalance)
+				}
 			},
 		},
 	}
@@ -926,27 +1118,31 @@ func setPrice(t *testing.T, caller Ref, tokenAddress common.Address, tokenId, va
 	setPriceOp, err := operation.NewSetPriceOperation(tokenId, value)
 	if err != nil {
 		t.Error(err)
-		t.Fail()
+		t.FailNow()
 	}
 
 	call(t, caller, tokenAddress, nil, setPriceOp, nil)
 }
 
-func createToken(t *testing.T, std operation.Std, caller Ref) (common.Address, error) {
+func createToken(t *testing.T, std operation.Std, caller Ref) common.Address {
 	t.Helper()
 
 	var err error
 	var createOp operation.Operation
 	switch std {
+	case operation.StdWRC20:
+		createOp, err = operation.NewWrc20CreateOperation(name, symbol, &decimals, totalSupply)
 	case operation.StdWRC721:
 		createOp, err = operation.NewWrc721CreateOperation(name, symbol, baseURI, &percentFee)
-		if err != nil {
-			return common.Address{}, err
-		}
 	default:
-		return [20]byte{}, ErrTokenOpStandardNotValid
+		err = fmt.Errorf("cannot create token")
+	}
+
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
 	}
 
 	adr := call(t, caller, common.Address{}, nil, createOp, nil)
-	return common.BytesToAddress(adr), nil
+	return common.BytesToAddress(adr)
 }
