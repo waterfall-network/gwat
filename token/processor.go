@@ -29,7 +29,7 @@ var (
 	ErrWrongMinter             = errors.New("caller can't mint or burn NFTs")
 	ErrNotNilTo                = errors.New("address to is not nil")
 	ErrTokenIsNotForSale       = errors.New("token is not for sale")
-	ErrToSmallValue            = errors.New("too small value")
+	ErrTooSmallTxValue         = errors.New("too small transaction's value")
 	ErrTokenIdIsNotSet         = errors.New("token id is not set")
 	ErrNewValueIsNotSet        = errors.New("new value is not set")
 )
@@ -845,7 +845,10 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		return nil, err
 	}
 
-	address := caller.Address()
+	withFee := false
+	transferFrom := common.Address{}
+	transferTo := caller.Address()
+	transferValue, paymentValue := big.NewInt(0), big.NewInt(0)
 	switch std {
 	case operation.StdWRC20:
 		var creatorB []byte
@@ -853,12 +856,8 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		if err != nil {
 			return nil, err
 		}
-		creator := common.BytesToAddress(creatorB)
 
-		err = transfer(storage, creator, address, value)
-		if err != nil {
-			return nil, err
-		}
+		transferFrom = common.BytesToAddress(creatorB)
 
 		var cost uint256.Int
 		err = storage.ReadField(CostField, &cost)
@@ -866,10 +865,13 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 			return nil, err
 		}
 
-		err = p.makePayment(storage, address, creator, cost.ToBig())
-		if err != nil {
-			return nil, err
+		if cost.ToBig().Cmp(value) == 1 {
+			return nil, ErrTooSmallTxValue
 		}
+
+		reminder := big.NewInt(0).Mod(value, cost.ToBig())
+		paymentValue.Sub(value, reminder)
+		transferValue.Div(paymentValue, cost.ToBig())
 	case operation.StdWRC721:
 		tokenId, ok := op.TokenId()
 		if !ok {
@@ -884,11 +886,12 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		}
 
 		// check if token exist
-		owner, err := readAddressFromMap(storage, OwnersField, tokenId.Bytes())
+		var err error
+		transferFrom, err = readAddressFromMap(storage, OwnersField, tokenId.Bytes())
 		if err != nil {
 			return nil, err
 		}
-		if owner == (common.Address{}) {
+		if transferFrom == (common.Address{}) {
 			return nil, ErrNotMinted
 		}
 
@@ -904,21 +907,16 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		}
 
 		if cost.ToBig().Cmp(value) == 1 {
-			return nil, ErrToSmallValue
+			return nil, ErrTooSmallTxValue
 		}
 
-		err = writeToMap(storage, OwnersField, tokenId.Bytes(), address)
+		err = writeToMap(storage, OwnersField, tokenId.Bytes(), transferTo)
 		if err != nil {
 			return nil, err
 		}
 
 		// clear approvals from the previous owner
 		err = writeToMap(storage, TokenApprovalsField, tokenId.Bytes(), common.Address{})
-		if err != nil {
-			return nil, err
-		}
-
-		err = transfer(storage, owner, address, big.NewInt(1))
 		if err != nil {
 			return nil, err
 		}
@@ -930,47 +928,62 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 			return nil, err
 		}
 
-		// transfer wei
-		err = p.makePayment(storage, address, owner, cost.ToBig())
-		if err != nil {
-			return nil, err
-		}
+		transferValue.SetInt64(1)
+		paymentValue.Set(cost.ToBig())
+		withFee = true
 	default:
 		return nil, ErrTokenOpStandardNotValid
+	}
+
+	err = transfer(storage, transferFrom, transferTo, transferValue)
+	if err != nil {
+		return nil, err
+	}
+
+	err = p.makePayment(storage, transferTo, transferFrom, paymentValue, withFee)
+	if err != nil {
+		return nil, err
 	}
 
 	storage.Flush()
 	return token.Bytes(), nil
 }
 
-func (p *Processor) makePayment(storage tokenStorage.Storage, caller, owner common.Address, value *big.Int) error {
-	minter, err := readMinter(storage)
-	if err != nil {
-		return err
-	}
-
-	var percentFee uint8
-	err = storage.ReadField(PercentFeeField, &percentFee)
-	if err != nil {
-		return err
-	}
-
+func (p *Processor) makePayment(storage tokenStorage.Storage, caller, owner common.Address, value *big.Int, withFee bool) error {
 	// check balance
 	callerBalance := p.state.GetBalance(caller)
 	if callerBalance.Cmp(value) < 0 {
 		return ErrNotEnoughBalance
 	}
 
-	// take fee
-	if value.Cmp(big.NewInt(0)) == 1 && owner != minter {
-		fee := big.NewInt(int64(percentFee))
-		fee = fee.Mul(fee, value)
-		fee = fee.Div(fee, big.NewInt(100))
+	if value.Cmp(big.NewInt(0)) == 0 {
+		return nil
+	}
 
-		p.state.SubBalance(caller, fee)
-		p.state.AddBalance(minter, fee)
+	// only for WRC-721
+	if withFee {
+		minter, err := readMinter(storage)
+		if err != nil {
+			return err
+		}
 
-		value = value.Sub(value, fee)
+		if owner != minter {
+			var percentFee uint8
+			err = storage.ReadField(PercentFeeField, &percentFee)
+			if err != nil {
+				return err
+			}
+
+			fee := big.NewInt(int64(percentFee))
+			fee = fee.Mul(fee, value)
+			fee = fee.Div(fee, big.NewInt(100))
+
+			// take fee
+			p.state.SubBalance(caller, fee)
+			p.state.AddBalance(minter, fee)
+
+			value = value.Sub(value, fee)
+		}
 	}
 
 	// take payment

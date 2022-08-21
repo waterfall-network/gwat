@@ -507,8 +507,9 @@ func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenId hexutil.Big) (h
 	return b, nil
 }
 
-// TokenCost returns the cost a WRC-20 token (not implemented).
-// For WRC-721 token returns cost of a token in a NFT collection.
+// TokenCost returns the cost a token. `tokeAddr` is required.
+// For WRC-20 the `tokenId` is NOT required.
+// For WRC-721 the `tokenId` is not required.
 func (s *PublicTokenAPI) TokenCost(ctx context.Context, tokenAddr common.Address, tokenId hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
 	id := tokenId.ToInt()
 
@@ -534,8 +535,9 @@ func (s *PublicTokenAPI) TokenCost(ctx context.Context, tokenAddr common.Address
 	return (*hexutil.Big)(res), nil
 }
 
-// SetPrice sets price for a token for WRC-20 (not implemented).
-// For WRC-721 set price for a token by tokenId in a NFT collection.
+// SetPrice sets a price for a token. 'value' is required
+// For WRC-20 the `tokenId` is NOT required.
+// For WRC-721 sets price for a token by `tokenId`.
 func (s *PublicTokenAPI) SetPrice(ctx context.Context, tokenId, value hexutil.Big) (hexutil.Bytes, error) {
 	id := tokenId.ToInt()
 	val := value.ToInt()
@@ -555,8 +557,10 @@ func (s *PublicTokenAPI) SetPrice(ctx context.Context, tokenId, value hexutil.Bi
 	return b, nil
 }
 
-// Buy buys price for a token for WRC-20 (not implemented).
-// For WRC-721 set price for a token by tokenId in a NFT collection.
+// Buy buys a token.
+// Tx's `value` is total spent count of wei, the rest will be returned.
+// For WRC-20 `tokenId` and `newValue` NOT required.
+// For WRC-721 `tokenId` and `newValue` are required.
 func (s *PublicTokenAPI) Buy(_ context.Context, tokenId, newValue hexutil.Big) (hexutil.Bytes, error) {
 	id := tokenId.ToInt()
 	newVal := newValue.ToInt()
