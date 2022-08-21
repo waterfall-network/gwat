@@ -538,7 +538,7 @@ func (s *PublicTokenAPI) TokenCost(ctx context.Context, tokenAddr common.Address
 // SetPrice sets a price for a token. 'value' is required
 // For WRC-20 the `tokenId` is NOT required.
 // For WRC-721 sets price for a token by `tokenId`.
-func (s *PublicTokenAPI) SetPrice(ctx context.Context, tokenId, value hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) SetPrice(ctx context.Context, value, tokenId hexutil.Big) (hexutil.Bytes, error) {
 	id := tokenId.ToInt()
 	val := value.ToInt()
 
