@@ -895,7 +895,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	}
 
 	for _, tx := range block.Transactions() {
-		bc.RemoveTx(tx)
+		bc.RemoveTxFromPool(tx)
 	}
 
 	return nil
@@ -3295,6 +3295,6 @@ func (bc *BlockChain) MoveTxToPendingFinalize(tx *types.Transaction) {
 	bc.pendingFinalizeFeed.Send(tx)
 }
 
-func (bc *BlockChain) RemoveTx(tx *types.Transaction) {
+func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
 	bc.rmTxFeed.Send(tx)
 }

@@ -152,7 +152,7 @@ type blockChain interface {
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	SubscribePendingFinalize(ch chan<- *types.Transaction) event.Subscription
-	SubscribeRemoveTx(ch chan<- *types.Transaction) event.Subscription
+	SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -306,8 +306,8 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reqResetCh:        make(chan *txpoolResetRequest),
 		reqPromoteCh:      make(chan *accountSet),
 		queueTxEventCh:    make(chan *types.Transaction),
-		pendingFinalizeCh: make(chan *types.Transaction, 1),
-		rmTxCh:            make(chan *types.Transaction, 1),
+		pendingFinalizeCh: make(chan *types.Transaction),
+		rmTxCh:            make(chan *types.Transaction),
 		reorgDoneCh:       make(chan chan struct{}),
 		reorgShutdownCh:   make(chan struct{}),
 		//initDoneCh:      make(chan struct{}),
@@ -341,7 +341,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	// Subscribe events from blockchain and start the main event loop.
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 	pool.pendingFinalizeSub = pool.chain.SubscribePendingFinalize(pool.pendingFinalizeCh)
-	pool.rmTxSub = pool.chain.SubscribeRemoveTx(pool.rmTxCh)
+	pool.rmTxSub = pool.chain.SubscribeRemoveTxFromPool(pool.rmTxCh)
 
 	pool.wg.Add(1)
 	go pool.loop()
