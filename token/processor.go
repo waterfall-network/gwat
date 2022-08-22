@@ -845,7 +845,7 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		return nil, err
 	}
 
-	withFee := false
+	percentFee := uint8(0)
 	transferFrom := common.Address{}
 	transferTo := caller.Address()
 	transferValue, paymentValue := big.NewInt(0), big.NewInt(0)
@@ -928,9 +928,14 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 			return nil, err
 		}
 
+		// get percentFee
+		err = storage.ReadField(PercentFeeField, &percentFee)
+		if err != nil {
+			return nil, err
+		}
+
 		transferValue.SetInt64(1)
 		paymentValue.Set(cost.ToBig())
-		withFee = true
 	default:
 		return nil, ErrTokenOpStandardNotValid
 	}
@@ -940,7 +945,7 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		return nil, err
 	}
 
-	err = p.makePayment(storage, transferTo, transferFrom, paymentValue, withFee)
+	err = p.makePayment(storage, transferTo, transferFrom, paymentValue, percentFee)
 	if err != nil {
 		return nil, err
 	}
@@ -949,7 +954,7 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 	return token.Bytes(), nil
 }
 
-func (p *Processor) makePayment(storage tokenStorage.Storage, caller, owner common.Address, value *big.Int, withFee bool) error {
+func (p *Processor) makePayment(storage tokenStorage.Storage, caller, owner common.Address, value *big.Int, percentFee uint8) error {
 	// check balance
 	callerBalance := p.state.GetBalance(caller)
 	if callerBalance.Cmp(value) < 0 {
@@ -961,19 +966,13 @@ func (p *Processor) makePayment(storage tokenStorage.Storage, caller, owner comm
 	}
 
 	// only for WRC-721
-	if withFee {
+	if percentFee > 0 {
 		minter, err := readMinter(storage)
 		if err != nil {
 			return err
 		}
 
 		if owner != minter {
-			var percentFee uint8
-			err = storage.ReadField(PercentFeeField, &percentFee)
-			if err != nil {
-				return err
-			}
-
 			fee := big.NewInt(int64(percentFee))
 			fee = fee.Mul(fee, value)
 			fee = fee.Div(fee, big.NewInt(100))
