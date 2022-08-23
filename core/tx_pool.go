@@ -306,8 +306,8 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reqResetCh:        make(chan *txpoolResetRequest),
 		reqPromoteCh:      make(chan *accountSet),
 		queueTxEventCh:    make(chan *types.Transaction),
-		pendingFinalizeCh: make(chan *types.Transaction),
-		rmTxCh:            make(chan *types.Transaction),
+		pendingFinalizeCh: make(chan *types.Transaction, 1),
+		rmTxCh:            make(chan *types.Transaction, 1),
 		reorgDoneCh:       make(chan chan struct{}),
 		reorgShutdownCh:   make(chan struct{}),
 		//initDoneCh:      make(chan struct{}),
@@ -436,7 +436,7 @@ func (pool *TxPool) loop() {
 			}
 
 			if list, ok := pool.pendingFinalize[sender]; ok && list.Overlaps(tx) {
-				log.Info("remove tx", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+				log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
 				pool.removeTx(tx.Hash(), false)
 			}
 		}
@@ -1076,6 +1076,9 @@ func (pool *TxPool) moveToPendingFinalize(hash common.Hash) {
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
 	if tx == nil {
@@ -1138,6 +1141,8 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			return
 		}
 	}
+
+	log.Warn("No TXs to remove", "hash", tx.Hash().Hex(), "nonce", tx.Nonce())
 }
 
 // requestReset requests a pool reset to the new head block.
@@ -1626,7 +1631,7 @@ func (pool *TxPool) demoteUnexecutables() {
 		listPF := pool.pendingFinalize[addr]
 
 		nonce := pool.currentState.GetNonce(addr)
-		log.Info("current txpool nonce calculated", "nonce", nonce)
+		log.Info("current txpool nonce calculated", "nonce", nonce, "addr", addr.Hex())
 
 		// Drop all transactions that are deemed too old (low nonce)
 		olds := list.Forward(nonce)
