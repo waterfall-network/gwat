@@ -426,8 +426,12 @@ func (pool *TxPool) loop() {
 			}
 
 		case tx := <-pool.pendingFinalizeCh:
-			log.Info("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-			pool.moveToPendingFinalize(tx.Hash())
+			func() {
+				pool.mu.Lock()
+				defer pool.mu.Unlock()
+				log.Info("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+				pool.moveToPendingFinalize(tx.Hash())
+			}()
 
 		case tx := <-pool.rmTxCh:
 			func() {
@@ -1050,9 +1054,6 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 }
 
 func (pool *TxPool) moveToPendingFinalize(hash common.Hash) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
 	tx := pool.all.Get(hash)
 	if tx == nil {
 		return
