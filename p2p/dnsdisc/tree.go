@@ -26,10 +26,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/p2p/enr"
+	"github.com/waterfall-foundation/gwat/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

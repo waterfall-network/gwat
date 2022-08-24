@@ -20,12 +20,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -40,7 +40,7 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.CurrentHeader()
+		header = api.chain.GetLastFinalizedHeader()
 	} else {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
@@ -48,7 +48,7 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.clique.snapshot(api.chain, header.Nr(), header.Hash(), nil)
 }
 
 // GetSnapshotAtHash retrieves the state snapshot at a given block.
@@ -57,7 +57,7 @@ func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.clique.snapshot(api.chain, header.Nr(), header.Hash(), nil)
 }
 
 // GetSigners retrieves the list of authorized signers at the specified block.
@@ -65,7 +65,7 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.CurrentHeader()
+		header = api.chain.GetLastFinalizedHeader()
 	} else {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
@@ -73,7 +73,7 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.clique.snapshot(api.chain, header.Nr(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.clique.snapshot(api.chain, header.Nr(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -136,17 +136,16 @@ type status struct {
 func (api *API) Status() (*status, error) {
 	var (
 		numBlocks = uint64(64)
-		header    = api.chain.CurrentHeader()
-		diff      = uint64(0)
+		header    = api.chain.GetLastFinalizedHeader()
 		optimals  = 0
 	)
-	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.clique.snapshot(api.chain, header.Nr(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
 	var (
 		signers = snap.signers()
-		end     = header.Number.Uint64()
+		end     = header.Nr()
 		start   = end - numBlocks
 	)
 	if numBlocks > end {
@@ -162,10 +161,6 @@ func (api *API) Status() (*status, error) {
 		if h == nil {
 			return nil, fmt.Errorf("missing block %d", n)
 		}
-		if h.Difficulty.Cmp(diffInTurn) == 0 {
-			optimals++
-		}
-		diff += h.Difficulty.Uint64()
 		sealer, err := api.clique.Author(h)
 		if err != nil {
 			return nil, err
@@ -208,7 +203,7 @@ func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address,
 		blockNrOrHash := rlpOrBlockNr.BlockNumberOrHash
 		var header *types.Header
 		if blockNrOrHash == nil {
-			header = api.chain.CurrentHeader()
+			header = api.chain.GetLastFinalizedHeader()
 		} else if hash, ok := blockNrOrHash.Hash(); ok {
 			header = api.chain.GetHeaderByHash(hash)
 		} else if number, ok := blockNrOrHash.Number(); ok {

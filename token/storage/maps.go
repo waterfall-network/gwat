@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/waterfall-foundation/gwat/crypto"
 )
 
 var (

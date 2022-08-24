@@ -23,13 +23,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {
@@ -79,9 +79,9 @@ func BenchmarkFilters(b *testing.B) {
 	})
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
-		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+		rawdb.WriteFinalizedHashNumber(db, block.Hash(), block.Nr())
+		rawdb.WriteLastCanonicalHash(db, block.Hash())
+		rawdb.WriteReceipts(db, block.Hash(), receipts[i])
 	}
 	b.ResetTimer()
 
@@ -163,9 +163,9 @@ func TestFilters(t *testing.T) {
 	})
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
-		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+		rawdb.WriteFinalizedHashNumber(db, block.Hash(), block.Nr())
+		rawdb.WriteLastCanonicalHash(db, block.Hash())
+		rawdb.WriteReceipts(db, block.Hash(), receipts[i])
 	}
 
 	filter := NewRangeFilter(backend, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})

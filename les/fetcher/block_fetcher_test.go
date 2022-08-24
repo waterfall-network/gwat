@@ -24,14 +24,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 var (
@@ -39,7 +39,7 @@ var (
 	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
 	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
-	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
+	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, trie.NewStackTrie(nil))
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
@@ -52,16 +52,12 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 
 		// If the block number is multiple of 3, send a bonus transaction to the miner
 		if parent == genesis && i%3 == 0 {
-			signer := types.MakeSigner(params.TestChainConfig, block.Number())
+			signer := types.MakeSigner(params.TestChainConfig)
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
 			block.AddTx(tx)
-		}
-		// If the block number is a multiple of 5, add a bonus uncle to the block
-		if i%5 == 0 {
-			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
 		}
 	})
 	hashes := make([]common.Hash, n+1)
@@ -132,9 +128,9 @@ func (f *fetcherTester) chainHeight() uint64 {
 	defer f.lock.RUnlock()
 
 	if f.fetcher.light {
-		return f.headers[f.hashes[len(f.hashes)-1]].Number.Uint64()
+		return f.headers[f.hashes[len(f.hashes)-1]].Nr()
 	}
-	return f.blocks[f.hashes[len(f.hashes)-1]].NumberU64()
+	return f.blocks[f.hashes[len(f.hashes)-1]].Nr()
 }
 
 // insertChain injects a new headers into the simulated chain.
@@ -144,11 +140,11 @@ func (f *fetcherTester) insertHeaders(headers []*types.Header) (int, error) {
 
 	for i, header := range headers {
 		// Make sure the parent in known
-		if _, ok := f.headers[header.ParentHash]; !ok {
+		if _, ok := f.headers[header.ParentHashes[0]]; !ok {
 			return i, errors.New("unknown parent")
 		}
 		// Discard any new blocks if the same height already exists
-		if header.Number.Uint64() <= f.headers[f.hashes[len(f.hashes)-1]].Number.Uint64() {
+		if header.Nr() <= f.headers[f.hashes[len(f.hashes)-1]].Nr() {
 			return i, nil
 		}
 		// Otherwise build our current chain
@@ -159,17 +155,17 @@ func (f *fetcherTester) insertHeaders(headers []*types.Header) (int, error) {
 }
 
 // insertChain injects a new blocks into the simulated chain.
-func (f *fetcherTester) insertChain(blocks types.Blocks) (int, error) {
+func (f *fetcherTester) insertChain(str string, blocks types.Blocks) (int, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	for i, block := range blocks {
 		// Make sure the parent in known
-		if _, ok := f.blocks[block.ParentHash()]; !ok {
+		if _, ok := f.blocks[block.ParentHashes()[0]]; !ok {
 			return i, errors.New("unknown parent")
 		}
 		// Discard any new blocks if the same height already exists
-		if block.NumberU64() <= f.blocks[f.hashes[len(f.hashes)-1]].NumberU64() {
+		if block.Nr() <= f.blocks[f.hashes[len(f.hashes)-1]].Nr() {
 			return i, nil
 		}
 		// Otherwise build our current chain
@@ -218,16 +214,14 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 	return func(hashes []common.Hash) error {
 		// Gather the block bodies to return
 		transactions := make([][]*types.Transaction, 0, len(hashes))
-		uncles := make([][]*types.Header, 0, len(hashes))
 
 		for _, hash := range hashes {
 			if block, ok := closure[hash]; ok {
 				transactions = append(transactions, block.Transactions())
-				uncles = append(uncles, block.Uncles())
 			}
 		}
 		// Return on a new thread
-		go f.fetcher.FilterBodies(peer, transactions, uncles, time.Now().Add(drift))
+		go f.fetcher.FilterBodies(peer, transactions, time.Now().Add(drift))
 
 		return nil
 	}
@@ -582,9 +576,9 @@ func TestImportDeduplication(t *testing.T) {
 	bodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
 	counter := uint32(0)
-	tester.fetcher.insertChain = func(blocks types.Blocks) (int, error) {
+	tester.fetcher.insertChain = func(str string, blocks types.Blocks) (int, error) {
 		atomic.AddUint32(&counter, uint32(len(blocks)))
-		return tester.insertChain(blocks)
+		return tester.insertChain("", blocks)
 	}
 	// Instrument the fetching and imported events
 	fetching := make(chan []common.Hash)
@@ -669,14 +663,14 @@ func testDistantAnnouncementDiscarding(t *testing.T, light bool) {
 	tester.fetcher.fetchingHook = func(hashes []common.Hash) { fetching <- struct{}{} }
 
 	// Ensure that a block with a lower number than the threshold is discarded
-	tester.fetcher.Notify("lower", hashes[low], blocks[hashes[low]].NumberU64(), time.Now().Add(-arriveTimeout), headerFetcher, bodyFetcher)
+	tester.fetcher.Notify("lower", hashes[low], blocks[hashes[low]].Nr(), time.Now().Add(-arriveTimeout), headerFetcher, bodyFetcher)
 	select {
 	case <-time.After(50 * time.Millisecond):
 	case <-fetching:
 		t.Fatalf("fetcher requested stale header")
 	}
 	// Ensure that a block with a higher number than the threshold is discarded
-	tester.fetcher.Notify("higher", hashes[high], blocks[hashes[high]].NumberU64(), time.Now().Add(-arriveTimeout), headerFetcher, bodyFetcher)
+	tester.fetcher.Notify("higher", hashes[high], blocks[hashes[high]].Nr(), time.Now().Add(-arriveTimeout), headerFetcher, bodyFetcher)
 	select {
 	case <-time.After(50 * time.Millisecond):
 	case <-fetching:
@@ -786,7 +780,7 @@ func TestEmptyBlockShortCircuit(t *testing.T) {
 		verifyFetchingEvent(t, fetching, true)
 
 		// Only blocks with data contents should request bodies
-		verifyCompletingEvent(t, completing, len(blocks[hashes[i]].Transactions()) > 0 || len(blocks[hashes[i]].Uncles()) > 0)
+		verifyCompletingEvent(t, completing, len(blocks[hashes[i]].Transactions()) > 0)
 
 		// Irrelevant of the construct, import should succeed
 		verifyImportEvent(t, imported, true)

@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/internal/token/testutils"
+	"github.com/waterfall-foundation/gwat/internal/token/testutils"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/waterfall-foundation/gwat/common"
 )
 
 func TestBurnOperation(t *testing.T) {

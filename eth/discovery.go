@@ -17,10 +17,10 @@
 package eth
 
 import (
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/rlp"
 )
 
 // ethEntry is the "eth" ENR entry which advertises eth protocol
@@ -59,5 +59,5 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
 	return &ethEntry{ForkID: forkid.NewID(eth.blockchain.Config(), eth.blockchain.Genesis().Hash(),
-		eth.blockchain.CurrentHeader().Number.Uint64())}
+		eth.blockchain.GetLastFinalizedHeader().Nr())}
 }

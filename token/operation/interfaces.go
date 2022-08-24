@@ -1,8 +1,9 @@
 package operation
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
+
+	"github.com/waterfall-foundation/gwat/common"
 )
 
 // Allowance contains attributes for an allowance operation

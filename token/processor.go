@@ -4,12 +4,12 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/token/operation"
-	tokenStorage "github.com/ethereum/go-ethereum/token/storage"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/token/operation"
+	tokenStorage "github.com/waterfall-foundation/gwat/token/storage"
 
 	"github.com/holiman/uint256"
 )
@@ -239,6 +239,7 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 		return common.Address{}, operation.ErrStandardNotValid
 	}
 
+	log.Info("Create token", "address", tokenAddr)
 	storage.Flush()
 
 	return tokenAddr, nil

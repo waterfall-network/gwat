@@ -20,15 +20,15 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/eth"
+	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"github.com/waterfall-foundation/gwat/node"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var (
@@ -122,8 +122,8 @@ func TestEth2AssembleBlock(t *testing.T) {
 	}
 	ethservice.TxPool().AddLocal(tx)
 	blockParams := assembleBlockParams{
-		ParentHash: blocks[8].ParentHash(),
-		Timestamp:  blocks[8].Time(),
+		ParentHashes: blocks[8].ParentHashes(),
+		Timestamp:    blocks[8].Time(),
 	}
 	execData, err := api.AssembleBlock(blockParams)
 
@@ -146,8 +146,8 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	// Put the 10th block's tx in the pool and produce a new block
 	api.addBlockTxs(blocks[9])
 	blockParams := assembleBlockParams{
-		ParentHash: blocks[9].ParentHash(),
-		Timestamp:  blocks[9].Time(),
+		ParentHashes: blocks[9].ParentHashes(),
+		Timestamp:    blocks[9].Time(),
 	}
 	execData, err := api.AssembleBlock(blockParams)
 	if err != nil {
@@ -169,7 +169,10 @@ func TestEth2NewBlock(t *testing.T) {
 	api := newConsensusAPI(ethservice)
 	for i := 5; i < 10; i++ {
 		p := executableData{
-			ParentHash:   ethservice.BlockChain().CurrentBlock().Hash(),
+			ParentHashes: []common.Hash{ethservice.BlockChain().GetLastFinalizedBlock().Hash()},
+			Epoch:        blocks[i].Epoch(),
+			Slot:         blocks[i].Slot(),
+			Height:       blocks[i].Height(),
 			Miner:        blocks[i].Coinbase(),
 			StateRoot:    blocks[i].Root(),
 			GasLimit:     blocks[i].GasLimit(),
@@ -187,7 +190,7 @@ func TestEth2NewBlock(t *testing.T) {
 		}
 	}
 
-	exp := ethservice.BlockChain().CurrentBlock().Hash()
+	exp := ethservice.BlockChain().GetLastFinalizedBlock().Hash()
 
 	// Introduce the fork point.
 	lastBlockNum := blocks[4].Number()
@@ -195,7 +198,10 @@ func TestEth2NewBlock(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		lastBlockNum.Add(lastBlockNum, big.NewInt(1))
 		p := executableData{
-			ParentHash:   lastBlock.Hash(),
+			ParentHashes: []common.Hash{lastBlock.Hash()},
+			Epoch:        forkedBlocks[i].Epoch(),
+			Slot:         forkedBlocks[i].Slot(),
+			Height:       forkedBlocks[i].Height(),
 			Miner:        forkedBlocks[i].Coinbase(),
 			StateRoot:    forkedBlocks[i].Root(),
 			Number:       lastBlockNum.Uint64(),
@@ -217,8 +223,8 @@ func TestEth2NewBlock(t *testing.T) {
 		}
 	}
 
-	if ethservice.BlockChain().CurrentBlock().Hash() != exp {
-		t.Fatalf("Wrong head after inserting fork %x != %x", exp, ethservice.BlockChain().CurrentBlock().Hash())
+	if ethservice.BlockChain().GetLastFinalizedBlock().Hash() != exp {
+		t.Fatalf("Wrong head after inserting fork %x != %x", exp, ethservice.BlockChain().GetLastFinalizedBlock().Hash())
 	}
 }
 */

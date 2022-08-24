@@ -29,20 +29,19 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // makeGenesis creates a new genesis struct based on some user input.
 func (w *wizard) makeGenesis() {
 	// Construct a default genesis block
 	genesis := &core.Genesis{
-		Timestamp:  uint64(time.Now().Unix()),
-		GasLimit:   4700000,
-		Difficulty: big.NewInt(524288),
-		Alloc:      make(core.GenesisAlloc),
+		Timestamp: uint64(time.Now().Unix()),
+		GasLimit:  4700000,
+		Alloc:     make(core.GenesisAlloc),
 		Config: &params.ChainConfig{
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -69,10 +68,8 @@ func (w *wizard) makeGenesis() {
 
 	case choice == "" || choice == "2":
 		// In the case of clique, configure the consensus parameters
-		genesis.Difficulty = big.NewInt(1)
 		genesis.Config.Clique = &params.CliqueConfig{
 			Period: 15,
-			Epoch:  30000,
 		}
 		fmt.Println()
 		fmt.Println("How many seconds should blocks take? (default = 15)")

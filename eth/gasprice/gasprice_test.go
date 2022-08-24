@@ -22,16 +22,16 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 const testHead = 32
@@ -116,7 +116,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		b.SetCoinbase(common.Address{1})
 
 		var txdata types.TxData
-		if londonBlock != nil && b.Number().Cmp(londonBlock) >= 0 {
+		if londonBlock != nil && *b.Number() >= londonBlock.Uint64() {
 			txdata = &types.DynamicFeeTx{
 				ChainID:   gspec.Config.ChainID,
 				Nonce:     b.TxNonce(addr),
@@ -141,7 +141,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.Commit(diskdb)
-	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, &config, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, &config, engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
@@ -150,7 +150,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 }
 
 func (b *testBackend) CurrentHeader() *types.Header {
-	return b.chain.CurrentHeader()
+	return b.chain.GetLastFinalizedHeader()
 }
 
 func (b *testBackend) GetBlockByNumber(number uint64) *types.Block {

@@ -20,12 +20,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/bitutil"
+	"github.com/waterfall-foundation/gwat/core/bloombits"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
 )
 
 const (
@@ -67,7 +67,7 @@ func (b *BloomIndexer) Reset(ctx context.Context, section uint64, lastSectionHea
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
 // the index.
 func (b *BloomIndexer) Process(ctx context.Context, header *types.Header) error {
-	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), header.Bloom)
+	b.gen.AddBloom(uint(header.Height-b.section*b.size), header.Bloom)
 	b.head = header.Hash()
 	return nil
 }

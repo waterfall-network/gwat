@@ -21,17 +21,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/clique"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/ethdb/memorydb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 type mockBackend struct {
@@ -60,14 +60,27 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
+func (bc *testBlockChain) GetLastFinalizedBlock() *types.Block {
+	return bc.GetLastFinalizedBlock()
+}
+
+func (bc *testBlockChain) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
+	return bc.ReadFinalizedNumberByHash(hash)
+}
+
+func (bc *testBlockChain) GetBlockByNumber(number uint64) *types.Block {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (bc *testBlockChain) CurrentBlock() *types.Block {
 	return types.NewBlock(&types.Header{
 		GasLimit: bc.gasLimit,
-	}, nil, nil, nil, trie.NewStackTrie(nil))
+	}, nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return bc.CurrentBlock()
+func (bc *testBlockChain) GetBlock(hash common.Hash) *types.Block {
+	return bc.GetBlock(hash)
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
@@ -245,7 +258,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	// Create consensus engine
 	engine := clique.New(chainConfig.Clique, chainDB)
 	// Create Ethereum backend
-	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil)
+	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}

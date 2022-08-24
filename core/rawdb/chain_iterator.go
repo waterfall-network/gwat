@@ -21,12 +21,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/prque"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/rlp"
 )
 
 // InitDatabaseFromFreezer reinitializes an empty database from a previous batch
@@ -54,7 +54,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		} else {
 			hash = common.BytesToHash(h)
 		}
-		WriteHeaderNumber(batch, hash, i)
+		WriteFinalizedHashNumber(batch, hash, i)
 		// If enough data was accumulated in memory or we're at the last block, dump to disk
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
@@ -73,14 +73,15 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 	}
 	batch.Reset()
 
-	WriteHeadHeaderHash(db, hash)
+	WriteLastFinalizedHash(db, hash)
 	WriteHeadFastBlockHash(db, hash)
 	log.Info("Initialized database from freezer", "blocks", frozen, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 type blockTxHashes struct {
-	number uint64
-	hashes []common.Hash
+	blockHash common.Hash
+	number    uint64
+	hashes    []common.Hash
 }
 
 // iterateTransactions iterates over all transactions in the (canon) block
@@ -141,13 +142,15 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 				log.Warn("Failed to decode block body", "block", data.number, "error", err)
 				return
 			}
+			blHash := ReadFinalizedHashByNumber(db, data.number)
 			var hashes []common.Hash
 			for _, tx := range body.Transactions {
 				hashes = append(hashes, tx.Hash())
 			}
 			result := &blockTxHashes{
-				hashes: hashes,
-				number: data.number,
+				blockHash: blHash,
+				hashes:    hashes,
+				number:    data.number,
 			}
 			// Feed the block to the aggregator, or abort on interrupt
 			select {
@@ -207,7 +210,12 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			// Next block available, pop it off and index it
 			delivery := queue.PopItem().(*blockTxHashes)
 			lastNum = delivery.number
-			WriteTxLookupEntries(batch, delivery.number, delivery.hashes)
+			blHash := ReadFinalizedHashByNumber(db, delivery.number)
+			for _, txHash := range delivery.hashes {
+				if existed := ReadTxLookupEntry(db, txHash); existed == (common.Hash{}) {
+					WriteTxLookupEntry(batch, blHash, txHash)
+				}
+			}
 			blocks++
 			txs += len(delivery.hashes)
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
@@ -295,7 +303,12 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			}
 			delivery := queue.PopItem().(*blockTxHashes)
 			nextNum = delivery.number + 1
-			DeleteTxLookupEntries(batch, delivery.hashes)
+			blHash := delivery.blockHash
+			for _, txHash := range delivery.hashes {
+				if existed := ReadTxLookupEntry(db, txHash); existed == blHash {
+					DeleteTxLookupEntry(batch, txHash)
+				}
+			}
 			txs += len(delivery.hashes)
 			blocks++
 

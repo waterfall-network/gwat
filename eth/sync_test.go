@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
 )
 
 // Tests that fast sync is disabled after a successful sync cycle.
@@ -69,7 +69,7 @@ func testFastSyncDisabling(t *testing.T, protocol uint) {
 	time.Sleep(250 * time.Millisecond)
 
 	// Check that fast sync was disabled
-	op := peerToSyncOp(downloader.FastSync, empty.handler.peers.peerWithHighestTD())
+	op := peerToSyncOp(downloader.FastSync, empty.handler.peers.getHighestPeer())
 	if err := empty.handler.doSync(op); err != nil {
 		t.Fatal("sync failed:", err)
 	}

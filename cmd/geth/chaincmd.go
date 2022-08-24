@@ -26,18 +26,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/waterfall-foundation/gwat/cmd/utils"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/metrics"
+	"github.com/waterfall-foundation/gwat/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -65,9 +65,7 @@ It expects the genesis file as argument.`,
 		ArgsUsage: "",
 		Flags: []cli.Flag{
 			utils.MainnetFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
+			utils.DevNetFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -210,7 +208,7 @@ func initGenesis(ctx *cli.Context) error {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
 		chaindb.Close()
-		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
+		log.Info("Successfully wrote genesis state", "database", name, "hash", hash.Hex())
 	}
 	return nil
 }
@@ -331,8 +329,8 @@ func exportChain(ctx *cli.Context) error {
 		if first < 0 || last < 0 {
 			utils.Fatalf("Export error: block number must be greater than 0\n")
 		}
-		if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
-			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
+		if head := chain.GetLastFinalizedFastBlock(); uint64(last) > head.Nr() {
+			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Nr())
 		}
 		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
@@ -392,8 +390,8 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		arg := ctx.Args().First()
 		if hashish(arg) {
 			hash := common.HexToHash(arg)
-			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
-				header = rawdb.ReadHeader(db, hash, *number)
+			if number := rawdb.ReadFinalizedNumberByHash(db, hash); number != nil {
+				header = rawdb.ReadHeader(db, hash)
 			} else {
 				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
 			}
@@ -402,15 +400,18 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 			if err != nil {
 				return nil, nil, common.Hash{}, err
 			}
-			if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
-				header = rawdb.ReadHeader(db, hash, uint64(number))
+			//if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
+			if hash := rawdb.ReadFinalizedHashByNumber(db, uint64(number)); hash != (common.Hash{}) {
+				header = rawdb.ReadHeader(db, hash)
 			} else {
 				return nil, nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)
 			}
 		}
 	} else {
 		// Use latest
-		header = rawdb.ReadHeadHeader(db)
+		if headHash := rawdb.ReadLastFinalizedHash(db); headHash != (common.Hash{}) {
+			header = rawdb.ReadHeader(db, headHash)
+		}
 	}
 	if header == nil {
 		return nil, nil, common.Hash{}, errors.New("no head block found")
@@ -434,7 +435,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		Start:             start.Bytes(),
 		Max:               ctx.Uint64(utils.DumpLimitFlag.Name),
 	}
-	log.Info("State dump configured", "block", header.Number, "hash", header.Hash().Hex(),
+	log.Info("State dump configured", "block", header.Nr(), "hash", header.Hash().Hex(),
 		"skipcode", conf.SkipCode, "skipstorage", conf.SkipStorage,
 		"start", hexutil.Encode(conf.Start), "limit", conf.Max)
 	return conf, db, header.Root, nil

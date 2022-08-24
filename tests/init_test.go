@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var (
@@ -40,7 +40,6 @@ var (
 	legacyStateTestDir = filepath.Join(baseDir, "LegacyTests", "Constantinople", "GeneralStateTests")
 	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
 	rlpTestDir         = filepath.Join(baseDir, "RLPTests")
-	difficultyTestDir  = filepath.Join(baseDir, "BasicTests")
 )
 
 func readJSON(reader io.Reader, value interface{}) error {

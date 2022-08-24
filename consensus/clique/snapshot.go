@@ -22,11 +22,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -189,11 +189,11 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	}
 	// Sanity check that the headers can be applied
 	for i := 0; i < len(headers)-1; i++ {
-		if headers[i+1].Number.Uint64() != headers[i].Number.Uint64()+1 {
+		if headers[i+1].Nr() != headers[i].Nr()+1 {
 			return nil, errInvalidVotingChain
 		}
 	}
-	if headers[0].Number.Uint64() != s.Number+1 {
+	if headers[0].Nr() != s.Number+1 {
 		return nil, errInvalidVotingChain
 	}
 	// Iterate through the headers and create a new snapshot
@@ -205,7 +205,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	)
 	for i, header := range headers {
 		// Remove any votes on checkpoint blocks
-		number := header.Number.Uint64()
+		number := header.Nr()
 		if number%s.config.Epoch == 0 {
 			snap.Votes = nil
 			snap.Tally = make(map[common.Address]Tally)

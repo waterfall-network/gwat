@@ -26,18 +26,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	ethereum "github.com/waterfall-foundation/gwat"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	ethash "github.com/waterfall-foundation/gwat/dag/sealer"
+	"github.com/waterfall-foundation/gwat/eth"
+	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"github.com/waterfall-foundation/gwat/node"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 // Verify that Client implements the ethereum interfaces.
@@ -197,7 +197,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	// Create Ethereum Service
 	config := &ethconfig.Config{Genesis: genesis}
-	config.Ethash.PowMode = ethash.ModeFake
 	ethservice, err := eth.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
@@ -206,7 +205,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
-	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
+	if _, err := ethservice.BlockChain().SyncInsertChain(blocks[1:]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
 	return n, blocks
@@ -216,20 +215,25 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 	db := rawdb.NewMemoryDatabase()
 	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
-		Config:    config,
-		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
-		ExtraData: []byte("test genesis"),
-		Timestamp: 9000,
-		BaseFee:   big.NewInt(params.InitialBaseFee),
+		Config:       config,
+		Alloc:        core.GenesisAlloc{testAddr: {Balance: testBalance}},
+		ExtraData:    []byte("test genesis"),
+		Timestamp:    9000,
+		BaseFee:      big.NewInt(params.InitialBaseFee),
+		ParentHashes: []common.Hash{},
 	}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
 	}
 	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
+	engine := ethash.New(db)
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, 1, generate)
 	blocks = append([]*types.Block{gblock}, blocks...)
+	for _, bl := range blocks {
+		nr := bl.Height()
+		bl.SetNumber(&nr)
+	}
 	return genesis, blocks
 }
 
@@ -303,9 +307,6 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			got, err := ec.HeaderByNumber(ctx, tt.block)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
-			}
-			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
-				got.Number = big.NewInt(0) // hack to make DeepEqual work
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.block, got, tt.want)
@@ -405,8 +406,8 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if block.NumberU64() != blockNumber {
-		t.Fatalf("BlockByNumber returned wrong block: want %d got %d", blockNumber, block.NumberU64())
+	if block.Nr() != blockNumber {
+		t.Fatalf("BlockByNumber returned wrong block: want %d got %d", blockNumber, block.Nr())
 	}
 	// Get current block by hash
 	blockH, err := ec.BlockByHash(context.Background(), block.Hash())

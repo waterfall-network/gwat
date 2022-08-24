@@ -18,14 +18,13 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/waterfall-foundation/gwat/cmd/utils"
+	"github.com/waterfall-foundation/gwat/console"
+	"github.com/waterfall-foundation/gwat/node"
+	"github.com/waterfall-foundation/gwat/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -121,19 +120,8 @@ func remoteConsole(ctx *cli.Context) error {
 			path = ctx.GlobalString(utils.DataDirFlag.Name)
 		}
 		if path != "" {
-			if ctx.GlobalBool(utils.RopstenFlag.Name) {
-				// Maintain compatibility with older Geth configurations storing the
-				// Ropsten database in `testnet` instead of `ropsten`.
-				legacyPath := filepath.Join(path, "testnet")
-				if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
-					path = legacyPath
-				} else {
-					path = filepath.Join(path, "ropsten")
-				}
-			} else if ctx.GlobalBool(utils.RinkebyFlag.Name) {
-				path = filepath.Join(path, "rinkeby")
-			} else if ctx.GlobalBool(utils.GoerliFlag.Name) {
-				path = filepath.Join(path, "goerli")
+			if ctx.GlobalBool(utils.DevNetFlag.Name) {
+				path = filepath.Join(path, "devnet")
 			}
 		}
 		endpoint = fmt.Sprintf("%s/geth.ipc", path)

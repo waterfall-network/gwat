@@ -17,8 +17,8 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
 )
 
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
@@ -40,4 +40,18 @@ type ChainSideEvent struct {
 	Block *types.Block
 }
 
-type ChainHeadEvent struct{ Block *types.Block }
+type NewBlockEvtType int8
+
+var (
+	ET_SKIP     NewBlockEvtType = -1
+	ET_OTHER    NewBlockEvtType = 0
+	ET_NETWORK  NewBlockEvtType = 1
+	ET_SYNC_FIN NewBlockEvtType = 2
+	ET_SYNC_DAG NewBlockEvtType = 3
+	ET_MINING   NewBlockEvtType = 4
+)
+
+type ChainHeadEvent struct {
+	Block *types.Block
+	Type  NewBlockEvtType
+}

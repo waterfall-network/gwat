@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
@@ -37,21 +37,8 @@ type sigCache struct {
 }
 
 // MakeSigner returns a Signer based on the given chain config and block number.
-func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
-	var signer Signer
-	switch {
-	case config.IsLondon(blockNumber):
-		signer = NewLondonSigner(config.ChainID)
-	case config.IsBerlin(blockNumber):
-		signer = NewEIP2930Signer(config.ChainID)
-	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainID)
-	case config.IsHomestead(blockNumber):
-		signer = HomesteadSigner{}
-	default:
-		signer = FrontierSigner{}
-	}
-	return signer
+func MakeSigner(config *params.ChainConfig) Signer {
+	return NewLondonSigner(config.ChainID)
 }
 
 // LatestSigner returns the 'most permissive' Signer available for the given chain
@@ -62,18 +49,8 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 // Use this in transaction-handling code where the current block number is unknown. If you
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
-	if config.ChainID != nil {
-		if config.LondonBlock != nil {
-			return NewLondonSigner(config.ChainID)
-		}
-		if config.BerlinBlock != nil {
-			return NewEIP2930Signer(config.ChainID)
-		}
-		if config.EIP155Block != nil {
-			return NewEIP155Signer(config.ChainID)
-		}
-	}
-	return HomesteadSigner{}
+	//IsLondon is always true
+	return NewLondonSigner(config.ChainID)
 }
 
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,

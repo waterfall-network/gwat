@@ -22,20 +22,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/mclock"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/les/flowcontrol"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/metrics"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 const (
@@ -112,13 +112,12 @@ func (h *serverHandler) handle(p *clientPeer) error {
 
 	// Execute the LES handshake
 	var (
-		head   = h.blockchain.CurrentHeader()
+		head   = h.blockchain.GetLastFinalizedHeader()
 		hash   = head.Hash()
-		number = head.Number.Uint64()
-		td     = h.blockchain.GetTd(hash, number)
-		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.CurrentBlock().NumberU64())
+		number = head.Nr()
+		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.GetLastFinalizedHeader().Nr())
 	)
-	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
+	if err := p.Handshake(hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -382,10 +381,10 @@ func (h *serverHandler) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 	)
 	switch typ {
 	case htCanonical:
-		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.ChtSize-1)
+		sectionHead := rawdb.ReadFinalizedHashByNumber(h.chainDb, (index+1)*h.server.iConfig.ChtSize-1)
 		root, prefix = light.GetChtRoot(h.chainDb, index, sectionHead), light.ChtTablePrefix
 	case htBloomBits:
-		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.BloomTrieSize-1)
+		sectionHead := rawdb.ReadFinalizedHashByNumber(h.chainDb, (index+1)*h.server.iConfig.BloomTrieSize-1)
 		root, prefix = light.GetBloomTrieRoot(h.chainDb, index, sectionHead), light.BloomTrieTablePrefix
 	}
 	if root == (common.Hash{}) {
@@ -407,25 +406,20 @@ func (h *serverHandler) broadcastLoop() {
 	defer headSub.Unsubscribe()
 
 	var (
-		lastHead = h.blockchain.CurrentHeader()
-		lastTd   = common.Big0
+		lastHead = h.blockchain.GetLastFinalizedHeader()
 	)
 	for {
 		select {
 		case ev := <-headCh:
 			header := ev.Block.Header()
-			hash, number := header.Hash(), header.Number.Uint64()
-			td := h.blockchain.GetTd(hash, number)
-			if td == nil || td.Cmp(lastTd) <= 0 {
-				continue
-			}
+			hash, number := header.Hash(), header.Nr()
 			var reorg uint64
 			if lastHead != nil {
-				reorg = lastHead.Number.Uint64() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Number.Uint64()
+				reorg = lastHead.Nr() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Nr()
 			}
-			lastHead, lastTd = header, td
-			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
-			h.server.peers.broadcast(announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg})
+			lastHead = header
+			log.Debug("Announcing block to peers", "number", number, "hash", hash, "reorg", reorg)
+			h.server.peers.broadcast(announceData{Hash: hash, Number: number, ReorgDepth: reorg})
 		case <-h.closeCh:
 			return
 		}

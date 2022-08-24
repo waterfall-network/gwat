@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // VerifyEip1559Header verifies some header attributes which were changed in EIP-1559,
@@ -32,9 +32,6 @@ import (
 func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
-	if !config.IsLondon(parent.Number) {
-		parentGasLimit = parent.GasLimit * params.ElasticityMultiplier
-	}
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
 		return err
 	}
@@ -53,11 +50,6 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 
 // CalcBaseFee calculates the basefee of the header.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
-	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
-	if !config.IsLondon(parent.Number) {
-		return new(big.Int).SetUint64(params.InitialBaseFee)
-	}
-
 	var (
 		parentGasTarget          = parent.GasLimit / params.ElasticityMultiplier
 		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)

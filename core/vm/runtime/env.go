@@ -17,8 +17,8 @@
 package runtime
 
 import (
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
@@ -31,9 +31,9 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Transfer:    core.Transfer,
 		GetHash:     cfg.GetHashFn,
 		Coinbase:    cfg.Coinbase,
+		BlockHeight: cfg.BlockHeight,
 		BlockNumber: cfg.BlockNumber,
 		Time:        cfg.Time,
-		Difficulty:  cfg.Difficulty,
 		GasLimit:    cfg.GasLimit,
 		BaseFee:     cfg.BaseFee,
 	}

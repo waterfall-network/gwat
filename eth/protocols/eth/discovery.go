@@ -17,10 +17,10 @@
 package eth
 
 import (
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/rlp"
 )
 
 // enrEntry is the ENR entry which advertises `eth` protocol on the discovery.
@@ -60,6 +60,6 @@ func StartENRUpdater(chain *core.BlockChain, ln *enode.LocalNode) {
 // currentENREntry constructs an `eth` ENR entry based on the current state of the chain.
 func currentENREntry(chain *core.BlockChain) *enrEntry {
 	return &enrEntry{
-		ForkID: forkid.NewID(chain.Config(), chain.Genesis().Hash(), chain.CurrentHeader().Number.Uint64()),
+		ForkID: forkid.NewID(chain.Config(), chain.Genesis().Hash(), chain.GetLastFinalizedBlock().Nr()),
 	}
 }

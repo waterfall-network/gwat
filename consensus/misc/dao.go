@@ -21,9 +21,9 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var (
@@ -47,11 +47,6 @@ var (
 func VerifyDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) error {
 	// Short circuit validation if the node doesn't care about the DAO fork
 	if config.DAOForkBlock == nil {
-		return nil
-	}
-	// Make sure the block is within the fork's modified extra-data range
-	limit := new(big.Int).Add(config.DAOForkBlock, params.DAOForkExtraRange)
-	if header.Number.Cmp(config.DAOForkBlock) < 0 || header.Number.Cmp(limit) >= 0 {
 		return nil
 	}
 	// Depending on whether we support or oppose the fork, validate the extra-data contents

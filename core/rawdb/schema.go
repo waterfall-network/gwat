@@ -21,8 +21,8 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/metrics"
 )
 
 // The fields below define the low level database schema prefixing.
@@ -30,11 +30,14 @@ var (
 	// databaseVersionKey tracks the current database version.
 	databaseVersionKey = []byte("DatabaseVersion")
 
-	// headHeaderKey tracks the latest known header's hash.
-	headHeaderKey = []byte("LastHeader")
+	// lastFinalizedHashKey tracks the latest known finalized block hash.
+	lastFinalizedHashKey = []byte("LFHash")
 
-	// headBlockKey tracks the latest known full block's hash.
-	headBlockKey = []byte("LastBlock")
+	// lastCanonicalHashKey tracks the latest known canonical full block's hash.
+	lastCanonicalHashKey = []byte("LCHash")
+
+	// tipsHashesKey tracks the latest known tips hashes.
+	tipsHashesKey = []byte("TipsHashes")
 
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
 	headFastBlockKey = []byte("LastFast")
@@ -76,10 +79,13 @@ var (
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
-	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
-	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
-	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
-	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
+	headerPrefix     = []byte("h") // headerPrefix + hash -> header
+	headerHashSuffix = []byte("n") // headerPrefix + headerHashSuffix -> hash
+
+	childrenPrefix              = []byte("C")   // childrenPrefix + parentHash -> children (HashArray)
+	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
+	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
+	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -112,27 +118,22 @@ const (
 
 	// freezerReceiptTable indicates the name of the freezer receipts table.
 	freezerReceiptTable = "receipts"
-
-	// freezerDifficultyTable indicates the name of the freezer total difficulty table.
-	freezerDifficultyTable = "diffs"
 )
 
 // FreezerNoSnappy configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
 var FreezerNoSnappy = map[string]bool{
-	freezerHeaderTable:     false,
-	freezerHashTable:       true,
-	freezerBodiesTable:     false,
-	freezerReceiptTable:    false,
-	freezerDifficultyTable: true,
+	freezerHeaderTable:  false,
+	freezerHashTable:    true,
+	freezerBodiesTable:  false,
+	freezerReceiptTable: false,
 }
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
 // fields.
 type LegacyTxLookupEntry struct {
-	BlockHash  common.Hash
-	BlockIndex uint64
-	Index      uint64
+	BlockHash common.Hash
+	Index     uint64
 }
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -142,39 +143,19 @@ func encodeBlockNumber(number uint64) []byte {
 	return enc
 }
 
-// headerKeyPrefix = headerPrefix + num (uint64 big endian)
-func headerKeyPrefix(number uint64) []byte {
-	return append(headerPrefix, encodeBlockNumber(number)...)
-}
-
-// headerKey = headerPrefix + num (uint64 big endian) + hash
-func headerKey(number uint64, hash common.Hash) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
-}
-
-// headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
-func headerTDKey(number uint64, hash common.Hash) []byte {
-	return append(headerKey(number, hash), headerTDSuffix...)
-}
-
-// headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
-func headerHashKey(number uint64) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
-}
-
-// headerNumberKey = headerNumberPrefix + hash
-func headerNumberKey(hash common.Hash) []byte {
-	return append(headerNumberPrefix, hash.Bytes()...)
+// headerKey = headerPrefix + hash
+func headerKey(hash common.Hash) []byte {
+	return append(headerPrefix, hash.Bytes()...)
 }
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
-func blockBodyKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+func blockBodyKey(hash common.Hash) []byte {
+	return append(blockBodyPrefix, hash.Bytes()...)
 }
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
-func blockReceiptsKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+func blockReceiptsKey(hash common.Hash) []byte {
+	return append(blockReceiptsPrefix, hash.Bytes()...)
 }
 
 // txLookupKey = txLookupPrefix + hash
@@ -229,4 +210,24 @@ func IsCodeKey(key []byte) (bool, []byte) {
 // configKey = configPrefix + hash
 func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
+}
+
+// finNumberByHashKey = finalizedNumberByHashPrefix + hash
+func finNumberByHashKey(hash common.Hash) []byte {
+	return append(finalizedNumberByHashPrefix, hash.Bytes()...)
+}
+
+// finHashByNumberKey = finalizedHashByNumberPrefix + height
+func finHashByNumberKey(height uint64) []byte {
+	return append(finalizedHashByNumberPrefix, encodeBlockNumber(height)...)
+}
+
+// blockDagKey = blockDagPrefix + hash
+func blockDagKey(hash common.Hash) []byte {
+	return append(blockDagPrefix, hash.Bytes()...)
+}
+
+// childrenKey = childrenPrefix + hash
+func childrenKey(hash common.Hash) []byte {
+	return append(childrenPrefix, hash.Bytes()...)
 }

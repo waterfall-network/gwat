@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -79,12 +79,12 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// After london, default to 1559 unless gasPrice is set
-	head := b.CurrentHeader()
+	head := b.GetLastFinalizedHeader()
 	// If user specifies both maxPriorityfee and maxFee, then we do not
 	// need to consult the chain for defaults. It's definitely a London tx.
 	if args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil {
 		// In this clause, user left some fields unspecified.
-		if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
+		if args.GasPrice == nil {
 			if args.MaxPriorityFeePerGas == nil {
 				tip, err := b.SuggestGasTipCap(ctx)
 				if err != nil {
@@ -111,12 +111,10 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 				if err != nil {
 					return err
 				}
-				if b.ChainConfig().IsLondon(head.Number) {
-					// The legacy tx gas price suggestion should not add 2x base fee
-					// because all fees are consumed, so it would result in a spiral
-					// upwards.
-					price.Add(price, head.BaseFee)
-				}
+				// The legacy tx gas price suggestion should not add 2x base fee
+				// because all fees are consumed, so it would result in a spiral
+				// upwards.
+				price.Add(price, head.BaseFee)
 				args.GasPrice = (*hexutil.Big)(price)
 			}
 		}

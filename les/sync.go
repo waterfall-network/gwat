@@ -21,12 +21,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/les/downloader"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/les/downloader"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var errInvalidCheckpoint = errors.New("invalid advertised checkpoint")
@@ -94,11 +93,7 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 		return
 	}
 	// Make sure the peer's TD is higher than our own.
-	latest := h.backend.blockchain.CurrentHeader()
-	currentTd := rawdb.ReadTd(h.backend.chainDb, latest.Hash(), latest.Number.Uint64())
-	if currentTd != nil && peer.Td().Cmp(currentTd) < 0 {
-		return
-	}
+	latest := h.backend.blockchain.GetLastFinalizedHeader()
 	// Recap the checkpoint. The light client may be connected to several different
 	// versions of the server.
 	// (1) Old version server which can not provide stable checkpoint in the
@@ -140,7 +135,7 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	case checkpoint.Empty():
 		mode = lightSync
 		log.Debug("Disable checkpoint syncing", "reason", "empty checkpoint")
-	case latest.Number.Uint64() >= (checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1:
+	case latest.Nr() >= (checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1:
 		mode = lightSync
 		log.Debug("Disable checkpoint syncing", "reason", "local chain beyond the checkpoint")
 	case local:
@@ -159,7 +154,7 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	// Notify testing framework if syncing has completed(for testing purpose).
 	defer func() {
 		if h.syncEnd != nil {
-			h.syncEnd(h.backend.blockchain.CurrentHeader())
+			h.syncEnd(h.backend.blockchain.GetLastFinalizedHeader())
 		}
 	}()
 
@@ -193,10 +188,10 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	}
 
 	if h.syncStart != nil {
-		h.syncStart(h.backend.blockchain.CurrentHeader())
+		h.syncStart(h.backend.blockchain.GetLastFinalizedHeader())
 	}
 	// Fetch the remaining block headers based on the current chain header.
-	if err := h.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync); err != nil {
+	if err := h.downloader.Synchronise(peer.id, peer.Head(), downloader.LightSync); err != nil {
 		log.Debug("Synchronise failed", "reason", err)
 		return
 	}

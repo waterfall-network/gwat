@@ -24,26 +24,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/asm"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/accounts/abi"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/asm"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/eth/tracers"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 func TestDefaults(t *testing.T) {
 	cfg := new(Config)
 	setDefaults(cfg)
-
-	if cfg.Difficulty == nil {
-		t.Error("expected difficulty to be non nil")
-	}
 
 	if cfg.Time == nil {
 		t.Error("expected time to be non nil")
@@ -170,9 +166,9 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		Origin:      sender,
 		State:       statedb,
 		GasLimit:    10000000,
-		Difficulty:  big.NewInt(0x200000),
 		Time:        new(big.Int).SetUint64(0),
 		Coinbase:    common.Address{},
+		BlockHeight: new(big.Int).SetUint64(1),
 		BlockNumber: new(big.Int).SetUint64(1),
 		ChainConfig: &params.ChainConfig{
 			ChainID:             big.NewInt(1),
@@ -212,16 +208,17 @@ func BenchmarkEVM_CREATE2_1200(bench *testing.B) {
 	benchmarkEVM_Create(bench, "5b5862124f80600080f5600152600056")
 }
 
-func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
+func fakeHeader(n uint64, parentHashes []common.Hash) *types.Header {
 	header := types.Header{
-		Coinbase:   common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
-		Number:     big.NewInt(int64(n)),
-		ParentHash: parentHash,
-		Time:       1000,
-		Nonce:      types.BlockNonce{0x1},
-		Extra:      []byte{},
-		Difficulty: big.NewInt(0),
-		GasLimit:   100000,
+		Coinbase:     common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
+		Number:       &n,
+		ParentHashes: parentHashes,
+		Slot:         uint64(0),
+		Height:       uint64(0),
+		Time:         1000,
+		Nonce:        types.BlockNonce{0x1},
+		Extra:        []byte{},
+		GasLimit:     100000,
 	}
 	return &header
 }
@@ -236,15 +233,18 @@ func (d *dummyChain) Engine() consensus.Engine {
 }
 
 // GetHeader returns the hash corresponding to their hash.
-func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
+func (d *dummyChain) GetHeader(h common.Hash) *types.Header {
 	d.counter++
 	parentHash := common.Hash{}
+	var n uint64 = 1000
 	s := common.LeftPadBytes(big.NewInt(int64(n-1)).Bytes(), 32)
 	copy(parentHash[:], s)
 
+	parentHashes := []common.Hash{parentHash}
+
 	//parentHash := common.Hash{byte(n - 1)}
 	//fmt.Printf("GetHeader(%x, %d) => header with parent %x\n", h, n, parentHash)
-	return fakeHeader(n, parentHash)
+	return fakeHeader(n, parentHashes)
 }
 
 // TestBlockhash tests the blockhash operation. It's a bit special, since it internally
@@ -255,7 +255,10 @@ func TestBlockhash(t *testing.T) {
 	parentHash := common.Hash{}
 	s := common.LeftPadBytes(big.NewInt(int64(n-1)).Bytes(), 32)
 	copy(parentHash[:], s)
-	header := fakeHeader(n, parentHash)
+
+	parentHashes := []common.Hash{parentHash}
+
+	header := fakeHeader(n, parentHashes)
 
 	// This is the contract we're using. It requests the blockhash for current num (should be all zeroes),
 	// then iteratively fetches all blockhashes back to n-260.
@@ -296,7 +299,8 @@ func TestBlockhash(t *testing.T) {
 	chain := &dummyChain{}
 	ret, _, err := Execute(data, input, &Config{
 		GetHashFn:   core.GetHashFn(header, chain),
-		BlockNumber: new(big.Int).Set(header.Number),
+		BlockHeight: new(big.Int).SetUint64(header.Height),
+		BlockNumber: new(big.Int).SetUint64(header.Nr()),
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

@@ -17,16 +17,16 @@
 package catalyst
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
 )
 
 //go:generate go run github.com/fjl/gencodec -type assembleBlockParams -field-override assembleBlockParamsMarshaling -out gen_blockparams.go
 
 // Structure described at https://hackmd.io/T9x2mMA4S7us8tJwEB3FDQ
 type assembleBlockParams struct {
-	ParentHash common.Hash `json:"parentHash"    gencodec:"required"`
-	Timestamp  uint64      `json:"timestamp"     gencodec:"required"`
+	ParentHashes []common.Hash `json:"parentHashes"    gencodec:"required"`
+	Timestamp    uint64        `json:"timestamp"     gencodec:"required"`
 }
 
 // JSON type overrides for assembleBlockParams.
@@ -39,7 +39,9 @@ type assembleBlockParamsMarshaling struct {
 // Structure described at https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec#Parameters1
 type executableData struct {
 	BlockHash    common.Hash    `json:"blockHash"     gencodec:"required"`
-	ParentHash   common.Hash    `json:"parentHash"    gencodec:"required"`
+	ParentHashes []common.Hash  `json:"parentHashes"  gencodec:"required"`
+	Slot         uint64         `json:"slot"          gencodec:"required"`
+	Height       uint64         `json:"height"        gencodec:"required"`
 	Miner        common.Address `json:"miner"         gencodec:"required"`
 	StateRoot    common.Hash    `json:"stateRoot"     gencodec:"required"`
 	Number       uint64         `json:"number"        gencodec:"required"`

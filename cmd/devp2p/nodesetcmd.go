@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/p2p/enr"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -229,12 +229,8 @@ func ethFilter(args []string) (nodeFilter, error) {
 	switch args[0] {
 	case "mainnet":
 		filter = forkid.NewStaticFilter(params.MainnetChainConfig, params.MainnetGenesisHash)
-	case "rinkeby":
-		filter = forkid.NewStaticFilter(params.RinkebyChainConfig, params.RinkebyGenesisHash)
-	case "goerli":
-		filter = forkid.NewStaticFilter(params.GoerliChainConfig, params.GoerliGenesisHash)
-	case "ropsten":
-		filter = forkid.NewStaticFilter(params.RopstenChainConfig, params.RopstenGenesisHash)
+	case "devnet":
+		filter = forkid.NewStaticFilter(params.DevNetChainConfig, params.DevNetGenesisHash)
 	default:
 		return nil, fmt.Errorf("unknown network %q", args[0])
 	}

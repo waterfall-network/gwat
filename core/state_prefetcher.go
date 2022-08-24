@@ -17,14 +17,15 @@
 package core
 
 import (
+	"math/big"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/token"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/token"
 )
 
 // statePrefetcher is a basic Prefetcher, which blindly executes a block on top
@@ -55,10 +56,10 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		blockContext   = NewEVMBlockContext(header, p.bc, nil)
 		evm            = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 		tokenProcessor = token.NewProcessor(blockContext, statedb)
-		signer         = types.MakeSigner(p.config, header.Number)
+		signer         = types.MakeSigner(p.config)
 	)
 	// Iterate over and process the individual transactions
-	byzantium := p.config.IsByzantium(block.Number())
+	byzantium := p.config.IsByzantium(new(big.Int).SetUint64(block.Height()))
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
 		if interrupt != nil && atomic.LoadUint32(interrupt) == 1 {

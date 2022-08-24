@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/p2p"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -144,7 +144,7 @@ func TestChain_GetHeaders(t *testing.T) {
 	}{
 		{
 			req: GetBlockHeaders{
-				Origin: eth.HashOrNumber{
+				Origin: &eth.HashOrNumber{
 					Number: uint64(2),
 				},
 				Amount:  uint64(5),
@@ -161,7 +161,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				Origin: eth.HashOrNumber{
+				Origin: &eth.HashOrNumber{
 					Number: uint64(chain.Len() - 1),
 				},
 				Amount:  uint64(3),
@@ -176,7 +176,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				Origin: eth.HashOrNumber{
+				Origin: &eth.HashOrNumber{
 					Hash: chain.Head().Hash(),
 				},
 				Amount:  uint64(1),

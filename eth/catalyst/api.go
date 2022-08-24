@@ -23,17 +23,17 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	chainParams "github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/misc"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/node"
+	chainParams "github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rpc"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 // Register adds catalyst APIs to the node.
@@ -106,13 +106,21 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 // AssembleBlock creates a new block, inserts it into the chain, and returns the "execution
 // data" required for eth2 clients to process the new block.
 func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableData, error) {
-	log.Info("Producing block", "parentHash", params.ParentHash)
+	log.Info("Producing block", "parentHashes", params.ParentHashes)
 
 	bc := api.eth.BlockChain()
-	parent := bc.GetBlockByHash(params.ParentHash)
+	var parent *types.Block
+	for _, h := range params.ParentHashes {
+		ph := bc.GetBlockByHash(h)
+		if ph != nil && ph.Nr() == ph.Height() {
+			parent = ph
+			break
+		}
+	}
+
 	if parent == nil {
-		log.Warn("Cannot assemble block with parent hash to unknown block", "parentHash", params.ParentHash)
-		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHash)
+		log.Warn("Cannot assemble block with parent hash to unknown block", "parentHashes", params.ParentHashes)
+		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHashes)
 	}
 
 	pool := api.eth.TxPool()
@@ -132,18 +140,18 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	if err != nil {
 		return nil, err
 	}
-	num := parent.Number()
 	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		Coinbase:   coinbase,
-		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
-		Extra:      []byte{},
-		Time:       params.Timestamp,
+		ParentHashes: []common.Hash{parent.Hash()},
+		Slot:         0,
+		Height:       0,
+		Coinbase:     coinbase,
+		GasLimit:     parent.GasLimit(), // Keep the gas limit constant in this prototype
+		Extra:        []byte{},
+		Time:         params.Timestamp,
 	}
-	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
-	}
+	config := api.eth.BlockChain().Config()
+	header.BaseFee = misc.CalcBaseFee(config, parent.Header())
+
 	err = api.eth.Engine().Prepare(bc, header)
 	if err != nil {
 		return nil, err
@@ -155,7 +163,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 
 	var (
-		signer       = types.MakeSigner(bc.Config(), header.Number)
+		signer       = types.MakeSigner(bc.Config())
 		txHeap       = types.NewTransactionsByPriceAndNonce(signer, pending, nil)
 		transactions []*types.Transaction
 	)
@@ -183,12 +191,12 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 
 		case core.ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
 			txHeap.Shift()
 
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
+			log.Error("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
 			txHeap.Pop()
 
 		case nil:
@@ -200,22 +208,23 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Error("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txHeap.Shift()
 		}
 	}
 
 	// Create the block.
-	block, err := api.eth.Engine().FinalizeAndAssemble(bc, header, env.state, transactions, nil /* uncles */, env.receipts)
+	block, err := api.eth.Engine().FinalizeAndAssemble(bc, header, env.state, transactions, env.receipts)
 	if err != nil {
 		return nil, err
 	}
 	return &executableData{
 		BlockHash:    block.Hash(),
-		ParentHash:   block.ParentHash(),
+		ParentHashes: block.ParentHashes(),
+		Slot:         block.Slot(),
+		Height:       block.Height(),
 		Miner:        block.Coinbase(),
 		StateRoot:    block.Root(),
-		Number:       block.NumberU64(),
 		GasLimit:     block.GasLimit(),
 		GasUsed:      block.GasUsed(),
 		Timestamp:    block.Time(),
@@ -254,23 +263,22 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 	number := big.NewInt(0)
 	number.SetUint64(params.Number)
 	header := &types.Header{
-		ParentHash:  params.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.Miner,
-		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptRoot,
-		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  big.NewInt(1),
-		Number:      number,
-		GasLimit:    params.GasLimit,
-		GasUsed:     params.GasUsed,
-		Time:        params.Timestamp,
+		ParentHashes: params.ParentHashes,
+		Slot:         params.Slot,
+		Height:       params.Height,
+		Coinbase:     params.Miner,
+		Root:         params.StateRoot,
+		TxHash:       types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:  params.ReceiptRoot,
+		Bloom:        types.BytesToBloom(params.LogsBloom),
+		GasLimit:     params.GasLimit,
+		GasUsed:      params.GasUsed,
+		Time:         params.Timestamp,
 	}
 	if config.IsLondon(number) {
 		header.BaseFee = misc.CalcBaseFee(config, parent)
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	block := types.NewBlockWithHeader(header).WithBody(txs)
 	return block, nil
 }
 
@@ -278,9 +286,16 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
 func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, error) {
-	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
+	var parent *types.Block
+	for _, h := range params.ParentHashes {
+		ph := api.eth.BlockChain().GetBlockByHash(h)
+		if ph != nil && ph.Nr() == ph.Height() {
+			parent = ph
+			break
+		}
+	}
 	if parent == nil {
-		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
+		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHashes)
 	}
 	block, err := insertBlockParamsToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
 	if err != nil {

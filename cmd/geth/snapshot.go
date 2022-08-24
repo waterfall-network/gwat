@@ -23,17 +23,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/pruner"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/cmd/utils"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/state/pruner"
+	"github.com/waterfall-foundation/gwat/core/state/snapshot"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -61,9 +61,7 @@ var (
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.DevNetFlag,
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				},
@@ -91,9 +89,7 @@ the trie clean cache with default directory will be deleted.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.DevNetFlag,
 				},
 				Description: `
 geth snapshot verify-state <state-root>
@@ -111,9 +107,7 @@ In other words, this command does the snapshot to trie conversion.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.DevNetFlag,
 				},
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -133,9 +127,7 @@ It's also usable without snapshot enabled.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.DevNetFlag,
 				},
 				Description: `
 geth snapshot traverse-rawstate <state-root>
@@ -156,9 +148,7 @@ It's also usable without snapshot enabled.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					utils.DevNetFlag,
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,
@@ -210,12 +200,13 @@ func verifyState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-	headBlock := rawdb.ReadHeadBlock(chaindb)
-	if headBlock == nil {
+	lastFinHash := rawdb.ReadLastFinalizedHash(chaindb)
+	lastFinBlock := rawdb.ReadBlock(chaindb, lastFinHash)
+	if lastFinBlock == nil {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, headBlock.Root(), false, false, false)
+	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, lastFinBlock.Root(), false, false, false)
 	if err != nil {
 		log.Error("Failed to open snapshot tree", "err", err)
 		return err
@@ -224,7 +215,7 @@ func verifyState(ctx *cli.Context) error {
 		log.Error("Too many arguments given")
 		return errors.New("too many arguments")
 	}
-	var root = headBlock.Root()
+	var root = lastFinBlock.Root()
 	if ctx.NArg() == 1 {
 		root, err = parseRoot(ctx.Args()[0])
 		if err != nil {
@@ -248,8 +239,9 @@ func traverseState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-	headBlock := rawdb.ReadHeadBlock(chaindb)
-	if headBlock == nil {
+	lastFinHash := rawdb.ReadLastFinalizedHash(chaindb)
+	lastFinBlock := rawdb.ReadBlock(chaindb, lastFinHash)
+	if lastFinBlock == nil {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
@@ -269,8 +261,8 @@ func traverseState(ctx *cli.Context) error {
 		}
 		log.Info("Start traversing the state", "root", root)
 	} else {
-		root = headBlock.Root()
-		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
+		root = lastFinBlock.Root()
+		log.Info("Start traversing the state", "root", root, "Hash", lastFinBlock.Hash())
 	}
 	triedb := trie.NewDatabase(chaindb)
 	t, err := trie.NewSecure(root, triedb)
@@ -338,8 +330,9 @@ func traverseRawState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-	headBlock := rawdb.ReadHeadBlock(chaindb)
-	if headBlock == nil {
+	lastFinHash := rawdb.ReadLastFinalizedHash(chaindb)
+	lastFinBlock := rawdb.ReadBlock(chaindb, lastFinHash)
+	if lastFinBlock == nil {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
@@ -359,8 +352,8 @@ func traverseRawState(ctx *cli.Context) error {
 		}
 		log.Info("Start traversing the state", "root", root)
 	} else {
-		root = headBlock.Root()
-		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
+		root = lastFinBlock.Root()
+		log.Info("Start traversing the state", "root", root, "number", lastFinBlock.Nr(), "hash", lastFinBlock.Hash().Hex())
 	}
 	triedb := trie.NewDatabase(chaindb)
 	t, err := trie.NewSecure(root, triedb)

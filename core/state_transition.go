@@ -18,17 +18,17 @@ package core
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/token/operation"
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/token"
+	"github.com/waterfall-foundation/gwat/common"
+	cmath "github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/token"
+	"github.com/waterfall-foundation/gwat/token/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -215,6 +215,11 @@ func (st *StateTransition) buyGas() error {
 	return nil
 }
 
+// PreCheck make sure this transaction's data is correct.
+func (st *StateTransition) PreCheck() error {
+	return st.preCheck()
+}
+
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	if !st.msg.IsFake() {
@@ -234,7 +239,7 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
-	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
+	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockHeight) {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
 		if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
 			if l := st.gasFeeCap.BitLen(); l > 256 {
@@ -290,9 +295,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
-	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
-	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
-	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
+
+	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockHeight)
+	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockHeight)
+	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockHeight)
 
 	// Check if token prefix and opcode are valid in raw data
 	isTokenOp := false
@@ -318,7 +324,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	// Set up the initial access list.
-	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber); rules.IsBerlin {
+	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockHeight); rules.IsBerlin {
 		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	}
 	var (

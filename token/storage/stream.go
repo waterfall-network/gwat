@@ -2,9 +2,10 @@ package storage
 
 import (
 	"errors"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
+
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/vm"
 )
 
 var ErrInvalidOff = errors.New("negative offset")

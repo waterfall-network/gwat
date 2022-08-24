@@ -5,10 +5,9 @@ package types
 import (
 	"encoding/json"
 	"errors"
-	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
 )
 
 var _ = (*receiptMarshaling)(nil)
@@ -40,7 +39,6 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.ContractAddress = r.ContractAddress
 	enc.GasUsed = hexutil.Uint64(r.GasUsed)
 	enc.BlockHash = r.BlockHash
-	enc.BlockNumber = (*hexutil.Big)(r.BlockNumber)
 	enc.TransactionIndex = hexutil.Uint(r.TransactionIndex)
 	return json.Marshal(&enc)
 }
@@ -99,9 +97,6 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	r.GasUsed = uint64(*dec.GasUsed)
 	if dec.BlockHash != nil {
 		r.BlockHash = *dec.BlockHash
-	}
-	if dec.BlockNumber != nil {
-		r.BlockNumber = (*big.Int)(dec.BlockNumber)
 	}
 	if dec.TransactionIndex != nil {
 		r.TransactionIndex = uint(*dec.TransactionIndex)

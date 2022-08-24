@@ -23,13 +23,13 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // testerAccountPool is a pool to maintain currently active tester accounts,
@@ -428,14 +428,13 @@ func TestClique(t *testing.T) {
 			// Get the header and prepare it for signing
 			header := block.Header()
 			if j > 0 {
-				header.ParentHash = blocks[j-1].Hash()
+				header.ParentHashes = common.HashArray{blocks[j-1].Hash()}
 			}
 			header.Extra = make([]byte, extraVanity+extraSeal)
 			if auths := tt.votes[j].checkpoint; auths != nil {
 				header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
 				accounts.checkpoint(header, auths)
 			}
-			header.Difficulty = diffInTurn // Ignored, we just need a valid number
 
 			// Generate the signature, embed it into the header and the block
 			accounts.sign(header, tt.votes[j].signer)
@@ -450,7 +449,7 @@ func TestClique(t *testing.T) {
 			batches[len(batches)-1] = append(batches[len(batches)-1], block)
 		}
 		// Pass all the headers through clique and ensure tallying succeeds
-		chain, err := core.NewBlockChain(db, nil, &config, engine, vm.Config{}, nil, nil)
+		chain, err := core.NewBlockChain(db, nil, &config, engine, vm.Config{}, nil)
 		if err != nil {
 			t.Errorf("test %d: failed to create test chain: %v", i, err)
 			continue
@@ -475,7 +474,7 @@ func TestClique(t *testing.T) {
 		// No failure was produced or requested, generate the final voting snapshot
 		head := blocks[len(blocks)-1]
 
-		snap, err := engine.snapshot(chain, head.NumberU64(), head.Hash(), nil)
+		snap, err := engine.snapshot(chain, head.Nr(), head.Hash(), nil)
 		if err != nil {
 			t.Errorf("test %d: failed to retrieve voting snapshot: %v", i, err)
 			continue

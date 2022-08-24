@@ -23,10 +23,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rlp"
 )
 
 var (
@@ -286,7 +286,7 @@ func TestDeriveFields(t *testing.T) {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}
 	// Iterate over all the computed fields and check that they're correct
-	signer := MakeSigner(params.TestChainConfig, number)
+	signer := MakeSigner(params.TestChainConfig)
 
 	logIndex := uint(0)
 	for i := range receipts {
@@ -477,7 +477,6 @@ func clearComputedFieldsOnReceipt(t *testing.T, receipt *Receipt) {
 
 	receipt.TxHash = common.Hash{}
 	receipt.BlockHash = common.Hash{}
-	receipt.BlockNumber = big.NewInt(math.MaxUint32)
 	receipt.TransactionIndex = math.MaxUint32
 	receipt.ContractAddress = common.Address{}
 	receipt.GasUsed = 0

@@ -20,10 +20,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
 )
 
 // Tests that handshake failures are detected and reported correctly.
@@ -38,9 +38,9 @@ func testHandshake(t *testing.T, protocol uint) {
 
 	var (
 		genesis = backend.chain.Genesis()
-		head    = backend.chain.CurrentBlock()
-		td      = backend.chain.GetTd(head.Hash(), head.NumberU64())
-		forkID  = forkid.NewID(backend.chain.Config(), backend.chain.Genesis().Hash(), backend.chain.CurrentHeader().Number.Uint64())
+		lfnr    = backend.chain.GetLastFinalizedNumber()
+		dag     = backend.chain.GetDagHashes()
+		forkID  = forkid.NewID(backend.chain.Config(), backend.chain.Genesis().Hash(), backend.chain.GetLastFinalizedHeader().Nr())
 	)
 	tests := []struct {
 		code uint64
@@ -52,19 +52,19 @@ func testHandshake(t *testing.T, protocol uint) {
 			want: errNoStatusMsg,
 		},
 		{
-			code: StatusMsg, data: StatusPacket{10, 1, td, head.Hash(), genesis.Hash(), forkID},
+			code: StatusMsg, data: StatusPacket{10, 1, lfnr, dag, genesis.Hash(), forkID},
 			want: errProtocolVersionMismatch,
 		},
 		{
-			code: StatusMsg, data: StatusPacket{uint32(protocol), 999, td, head.Hash(), genesis.Hash(), forkID},
+			code: StatusMsg, data: StatusPacket{uint32(protocol), 999, lfnr, dag, genesis.Hash(), forkID},
 			want: errNetworkIDMismatch,
 		},
 		{
-			code: StatusMsg, data: StatusPacket{uint32(protocol), 1, td, head.Hash(), common.Hash{3}, forkID},
+			code: StatusMsg, data: StatusPacket{uint32(protocol), 1, lfnr, dag, common.Hash{3}, forkID},
 			want: errGenesisMismatch,
 		},
 		{
-			code: StatusMsg, data: StatusPacket{uint32(protocol), 1, td, head.Hash(), genesis.Hash(), forkid.ID{Hash: [4]byte{0x00, 0x01, 0x02, 0x03}}},
+			code: StatusMsg, data: StatusPacket{uint32(protocol), 1, lfnr, dag, genesis.Hash(), forkid.ID{Hash: [4]byte{0x00, 0x01, 0x02, 0x03}}},
 			want: errForkIDRejected,
 		},
 	}
@@ -80,7 +80,7 @@ func testHandshake(t *testing.T, protocol uint) {
 		// Send the junk test with one peer, check the handshake failure
 		go p2p.Send(app, test.code, test.data)
 
-		err := peer.Handshake(1, td, head.Hash(), genesis.Hash(), forkID, forkid.NewFilter(backend.chain))
+		err := peer.Handshake(1, lfnr, dag, genesis.Hash(), forkID, forkid.NewFilter(backend.chain))
 		if err == nil {
 			t.Errorf("test %d: protocol returned nil error, want %q", i, test.want)
 		} else if !errors.Is(err, test.want) {

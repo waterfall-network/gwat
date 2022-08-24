@@ -31,15 +31,15 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/waterfall-foundation/gwat/accounts"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/signer/core/apitypes"
 )
 
 type SigFormat struct {
@@ -239,7 +239,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
 			return nil, useEthereumV, err
 		}
-		// The incoming clique header is already truncated, sent to us with a extradata already shortened
+		// The incoming sealer header is already truncated, sent to us with a extradata already shortened
 		if len(header.Extra) < 65 {
 			// Need to add it back, to get a suitable length for hashing
 			newExtra := make([]byte, len(header.Extra)+65)
@@ -301,15 +301,15 @@ func SignTextValidator(validatorData ValidatorData) (hexutil.Bytes, string) {
 // contained at the end of the extra data.
 //
 // The method requires the extra data to be at least 65 bytes -- the original implementation
-// in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
+// in sealer.go panics if this is the case, thus it's been reimplemented here to avoid the panic
 // and simply return an error instead
 func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
 	if len(header.Extra) < 65 {
-		err = fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
+		err = fmt.Errorf("sealer header extradata too short, %d < 65", len(header.Extra))
 		return
 	}
-	rlp = clique.CliqueRLP(header)
-	hash = clique.SealHash(header).Bytes()
+	rlp = sealer.CliqueRLP(header)
+	hash = sealer.SealHash(header).Bytes()
 	return hash, rlp, err
 }
 

@@ -22,23 +22,24 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/token"
+	ethereum "github.com/waterfall-foundation/gwat"
+	"github.com/waterfall-foundation/gwat/accounts"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/bloombits"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/dag"
+	"github.com/waterfall-foundation/gwat/eth/gasprice"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rpc"
+	"github.com/waterfall-foundation/gwat/token"
 )
 
 type LesApiBackend struct {
@@ -48,17 +49,51 @@ type LesApiBackend struct {
 	gpo                 *gasprice.Oracle
 }
 
+func (b *LesApiBackend) GetLastFinalizedNumber() uint64 {
+	lfHeader := b.eth.blockchain.GetLastFinalizedHeader()
+	if lfHeader == nil {
+		return 0
+	}
+	return lfHeader.Nr()
+}
+
+func (b *LesApiBackend) GetLastFinalizedHeader() *types.Header {
+	return b.eth.blockchain.GetLastFinalizedHeader()
+}
+
+func (b *LesApiBackend) GetLastFinalizedBlock() *types.Block {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *LesApiBackend) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *LesApiBackend) Dag() *dag.Dag {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.chainConfig
 }
 
 func (b *LesApiBackend) CurrentBlock() *types.Block {
-	return types.NewBlockWithHeader(b.eth.BlockChain().CurrentHeader())
+	return types.NewBlockWithHeader(b.eth.BlockChain().GetLastFinalizedHeader())
 }
 
-func (b *LesApiBackend) SetHead(number uint64) {
+func (b *LesApiBackend) SetHead(hash common.Hash) {
 	b.eth.handler.downloader.Cancel()
-	b.eth.blockchain.SetHead(number)
+	header := b.eth.blockchain.GetHeaderByHash(hash)
+	if header == nil {
+		panic("head not found")
+	}
+	if header.Number == nil {
+		panic("head not finalized")
+	}
+	b.eth.blockchain.SetHead(header.Hash())
 }
 
 func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
@@ -66,10 +101,10 @@ func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	// is no pending notion in the light client. TODO(rjl493456442)
 	// unify the behavior of `HeaderByNumber` and `PendingBlockAndReceipts`.
 	if number == rpc.PendingBlockNumber {
-		return b.eth.blockchain.CurrentHeader(), nil
+		return b.eth.blockchain.GetLastFinalizedHeader(), nil
 	}
 	if number == rpc.LatestBlockNumber {
-		return b.eth.blockchain.CurrentHeader(), nil
+		return b.eth.blockchain.GetLastFinalizedHeader(), nil
 	}
 	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(number))
 }
@@ -86,7 +121,7 @@ func (b *LesApiBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Nr()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
 		return header, nil
@@ -122,7 +157,7 @@ func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(block.NumberU64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(block.Nr()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
 		return block, nil
@@ -154,7 +189,7 @@ func (b *LesApiBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		if header == nil {
 			return nil, nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Nr()) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
 		return light.NewState(ctx, header, b.eth.odr), header, nil
@@ -163,23 +198,20 @@ func (b *LesApiBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 }
 
 func (b *LesApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockReceipts(ctx, b.eth.odr, hash, *number)
+	if number := rawdb.ReadFinalizedNumberByHash(b.eth.chainDb, hash); number != nil {
+		return light.GetBlockReceipts(ctx, b.eth.odr, hash)
 	}
 	return nil, nil
 }
 
 func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockLogs(ctx, b.eth.odr, hash, *number)
+	if number := rawdb.ReadFinalizedNumberByHash(b.eth.chainDb, hash); number != nil {
+		return light.GetBlockLogs(ctx, b.eth.odr, hash)
 	}
 	return nil, nil
 }
 
 func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return b.eth.blockchain.GetTdOdr(ctx, hash, *number)
-	}
 	return nil
 }
 
@@ -213,7 +245,7 @@ func (b *LesApiBackend) GetPoolTransaction(txHash common.Hash) *types.Transactio
 	return b.eth.txPool.GetTransaction(txHash)
 }
 
-func (b *LesApiBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+func (b *LesApiBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, error) {
 	return light.GetTransaction(ctx, b.eth.odr, txHash)
 }
 
@@ -327,7 +359,7 @@ func (b *LesApiBackend) Engine() consensus.Engine {
 }
 
 func (b *LesApiBackend) CurrentHeader() *types.Header {
-	return b.eth.blockchain.CurrentHeader()
+	return b.eth.blockchain.GetLastFinalizedHeader()
 }
 
 func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
