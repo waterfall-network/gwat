@@ -430,15 +430,20 @@ func (pool *TxPool) loop() {
 			pool.moveToPendingFinalize(tx.Hash())
 
 		case tx := <-pool.rmTxCh:
-			sender, err := types.Sender(pool.signer, tx)
-			if err != nil {
-				continue
-			}
+			func() {
+				pool.mu.Lock()
+				defer pool.mu.Unlock()
 
-			if list, ok := pool.pendingFinalize[sender]; ok && list.Overlaps(tx) {
-				log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
-				pool.removeTx(tx.Hash(), false)
-			}
+				sender, err := types.Sender(pool.signer, tx)
+				if err != nil {
+					return
+				}
+
+				if list, ok := pool.pendingFinalize[sender]; ok && list.Overlaps(tx) {
+					log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
+					pool.removeTx(tx.Hash(), false)
+				}
+			}()
 		}
 	}
 }
@@ -1076,9 +1081,6 @@ func (pool *TxPool) moveToPendingFinalize(hash common.Hash) {
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
 	if tx == nil {
@@ -1424,8 +1426,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
 func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Transaction {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
 	// Track the promoted transactions to broadcast them at once
 	var promoted []*types.Transaction
 
