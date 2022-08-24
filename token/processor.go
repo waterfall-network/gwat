@@ -9,7 +9,7 @@ import (
 	"github.com/waterfall-foundation/gwat/crypto"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/token/operation"
-	tokenStorage "github.com/ethereum/go-ethereum/token/storage"
+	tokenStorage "github.com/waterfall-foundation/gwat/token/storage"
 
 	"github.com/holiman/uint256"
 )

@@ -1,14 +1,15 @@
 package token
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/internal/token/testutils"
-	"github.com/ethereum/go-ethereum/token/operation"
 	"math/big"
 	"testing"
+
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/internal/token/testutils"
+	"github.com/waterfall-foundation/gwat/token/operation"
 )
 
 var (

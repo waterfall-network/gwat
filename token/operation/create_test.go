@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/internal/token/testutils"
+	"github.com/waterfall-foundation/gwat/internal/token/testutils"
 	"math/big"
 	"testing"
 )

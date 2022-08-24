@@ -18,7 +18,6 @@ package core
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/token/operation"
 	"math"
 	"math/big"
 
@@ -29,6 +28,7 @@ import (
 	"github.com/waterfall-foundation/gwat/crypto"
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/token"
+	"github.com/waterfall-foundation/gwat/token/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)

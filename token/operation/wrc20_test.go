@@ -3,11 +3,11 @@ package operation
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/internal/token/testutils"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/internal/token/testutils"
 )
 
 func TestTransferOperation(t *testing.T) {

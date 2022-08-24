@@ -2,12 +2,13 @@ package testutils
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/vm"
 )
 
 type TestCase struct {

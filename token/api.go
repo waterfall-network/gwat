@@ -3,7 +3,6 @@ package token
 import (
 	"context"
 	"errors"
-	"github.com/ethereum/go-ethereum/token/operation"
 	"time"
 
 	"github.com/waterfall-foundation/gwat/common"
@@ -12,6 +11,7 @@ import (
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/rpc"
+	"github.com/waterfall-foundation/gwat/token/operation"
 )
 
 var (

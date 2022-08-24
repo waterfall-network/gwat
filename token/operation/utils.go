@@ -1,11 +1,12 @@
 package operation
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"reflect"
 	"regexp"
+
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/rlp"
 )
 
 type opData struct {
