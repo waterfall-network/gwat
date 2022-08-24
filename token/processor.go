@@ -97,25 +97,18 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
 //
 // It returns byte representation of the return value of an operation.
 func (p *Processor) Call(caller Ref, token common.Address, op operation.Operation) (ret []byte, err error) {
-	if _, ok := op.(operation.Create); !ok {
-		nonce := p.state.GetNonce(caller.Address())
-		p.state.SetNonce(caller.Address(), nonce+1)
-
-		snapshot := p.state.Snapshot()
-		defer func() {
-			if err != nil {
-				p.state.RevertToSnapshot(snapshot)
-			}
-		}()
+	if _, ok := op.(operation.Create); ok && token != (common.Address{}) {
+		return nil, ErrNotNilTo
 	}
+
+	nonce := p.state.GetNonce(caller.Address())
+	p.state.SetNonce(caller.Address(), nonce+1)
+
+	snapshot := p.state.Snapshot()
 
 	ret = nil
 	switch v := op.(type) {
 	case operation.Create:
-		if token != (common.Address{}) {
-			return nil, ErrNotNilTo
-		}
-
 		var addr common.Address
 		addr, err = p.tokenCreate(caller, v)
 		if err == nil {
@@ -135,6 +128,10 @@ func (p *Processor) Call(caller Ref, token common.Address, op operation.Operatio
 		ret, err = p.setApprovalForAll(caller, token, v)
 	}
 
+	if err != nil {
+		p.state.RevertToSnapshot(snapshot)
+	}
+
 	return ret, err
 }
 
@@ -144,20 +141,9 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 		return common.Address{}, ErrTokenAlreadyExists
 	}
 
-	nonce := p.state.GetNonce(caller.Address())
-	p.state.SetNonce(caller.Address(), nonce+1)
-
 	if p.state.GetNonce(tokenAddr) != 0 {
 		return common.Address{}, ErrTokenAddressCollision
 	}
-
-	snapshot := p.state.Snapshot()
-	defer func() {
-		if err != nil {
-			tokenAddr = common.Address{}
-			p.state.RevertToSnapshot(snapshot)
-		}
-	}()
 
 	p.state.CreateAccount(tokenAddr)
 	p.state.SetNonce(tokenAddr, 1)
