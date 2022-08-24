@@ -316,9 +316,6 @@ func (c *Creator) isSlotLocked(info *Assignment) bool {
 
 // CreateBlock starts process of block creation
 func (c *Creator) CreateBlock(assigned *Assignment, tips *types.Tips) (*types.Block, error) {
-	c.eth.BlockChain().DagMu.Lock()
-	defer c.eth.BlockChain().DagMu.Unlock()
-
 	if !c.IsRunning() {
 		log.Warn("Creator stopped")
 		return nil, ErrCreatorStopped
@@ -440,7 +437,7 @@ func (c *Creator) taskLoop() {
 			c.pendingMu.Lock()
 			c.pendingTasks[sealHash] = task
 			c.pendingMu.Unlock()
-			if err := c.engine.Seal(c.chain, task.block, task.tips, c.resultCh, stopCh); err != nil {
+			if err := c.engine.Seal(c.chain, task.block, c.resultCh, stopCh); err != nil {
 				log.Warn("Block sealing failed", "err", err)
 				c.errWorkCh <- &err
 			}
@@ -815,7 +812,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	redCount := len(tmpDagChainHashes) - lastBlueIx
 	newHeight := lastBlueHeight + uint64(redCount)
 
-	log.Warn("Creator calculate block height", "newHeight", newHeight,
+	log.Info("Creator calculate block height", "newHeight", newHeight,
 		"lastBlueHeight", lastBlueHeight,
 		"lastBlueIx", lastBlueIx,
 		"len(tmpDagChainHashes)", len(tmpDagChainHashes),

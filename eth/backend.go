@@ -478,6 +478,19 @@ func (s *Ethereum) StartMining(threads int) error {
 	return nil
 }
 
+func (s *Ethereum) CreatorAuthorize(creator common.Address) error {
+	// Configure the local mining address
+	if clique, ok := s.engine.(*sealer.Sealer); ok {
+		wallet, err := s.accountManager.Find(accounts.Account{Address: creator})
+		if wallet == nil || err != nil {
+			log.Error("Etherbase account unavailable locally", "err", err)
+			return fmt.Errorf("signer missing: %v", err)
+		}
+		clique.Authorize(creator, wallet.SignData)
+	}
+	return nil
+}
+
 // StopMining terminates the miner, both at the consensus engine level as well as
 // at the block creation level.
 func (s *Ethereum) StopMining() {

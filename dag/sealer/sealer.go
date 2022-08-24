@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/waterfall-foundation/gwat/accounts"
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
@@ -22,7 +23,6 @@ import (
 	"github.com/waterfall-foundation/gwat/rlp"
 	"github.com/waterfall-foundation/gwat/rpc"
 	"github.com/waterfall-foundation/gwat/trie"
-	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -563,28 +563,13 @@ func (c *Sealer) Authorize(signer common.Address, signFn SignerFn) {
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, tips *types.Tips, results chan<- *types.Block, stop <-chan struct{}) error {
+func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
-	stateHash := tips.GetStableStateHash()
-	stateHeader := chain.GetHeader(stateHash)
-
-	if stateHeader == nil {
-		log.Crit("Sealer failed due to empty state header", "hash", stateHash)
-	}
-
-	//stateHeight := stateHeader.Height
 
 	// Sealing the genesis block is not supported
 	if block.Height() == 0 {
 		return errUnknownBlock
 	}
-
-	//// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
-	//if len(block.Transactions()) == 0 {
-	//	//if c.config.Period == 0 && len(block.Transactions()) == 0 {
-	//	log.Info("Sealing paused, waiting for transactions", "txLen", len(block.Transactions()), "block", block.Hash())
-	//	return nil
-	//}
 
 	// Don't hold the signer fields for the entire sealing procedure
 	c.lock.RLock()
@@ -598,31 +583,6 @@ func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, tip
 	//	return err
 	//}
 
-	//if _, authorized := snap.Signers[signer]; !authorized {
-	//	return errUnauthorizedSigner
-	//}
-
-	//// If we're amongst the recent signers, wait for the next block
-	//for seen, recent := range snap.Recents {
-	//	if recent == signer {
-	//		// Signer is among recents, only wait if the current block doesn't shift it out
-	//		if limit := uint64(len(snap.Signers)/2 + 1); block.Height() < limit || seen > block.Height()-limit {
-	//			log.Info("Signed recently, must wait for others")
-	//			return nil
-	//		}
-	//	}
-	//}
-
-	//// Sweet, the protocol permits us to sign the block, wait for our time
-	//delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	//if header.Difficulty.Cmp(diffNoTurn) == 0 {
-	//	// It's not our turn explicitly to sign, delay it a bit
-	//	wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
-	//	delay += time.Duration(rand.Int63n(int64(wiggle)))
-	//
-	//	log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	//}
-
 	// Sign all the things!
 	//sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, CliqueRLP(header))
 	_, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, CliqueRLP(header))
@@ -633,19 +593,20 @@ func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, tip
 
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(0))
-	go func() {
-		select {
-		case <-stop:
-			return
-		case <-time.After(0):
-		}
+	//go func() {
+	select {
+	case <-stop:
+		return nil
+	case <-time.After(0):
+	}
 
-		select {
-		case results <- block.WithSeal(header):
-		default:
-			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
-		}
-	}()
+	select {
+	case results <- block.WithSeal(header):
+	default:
+		log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
+		return errors.New("Sealing result is not read by miner")
+	}
+	//}()
 
 	return nil
 }

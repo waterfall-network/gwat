@@ -29,6 +29,7 @@ type Backend interface {
 	Downloader() *downloader.Downloader
 	Etherbase() (eb common.Address, err error)
 	SetEtherbase(etherbase common.Address)
+	CreatorAuthorize(creator common.Address) error
 }
 
 type Dag struct {
@@ -138,33 +139,48 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 			crtInfo := map[string]string{}
 			etherbase, _ := d.eth.Etherbase()
 			for _, creator := range assigned.Creators {
-				coinbase := common.Address{}
-				for _, acc := range accounts {
-					if creator == acc {
-						coinbase = creator
-						break
-					}
-				}
-				if coinbase == (common.Address{}) {
-					continue
-				}
 				// if received next slot
 				if d.consensusInfo.Slot > assigned.Slot {
 					break
 				}
-				d.eth.SetEtherbase(coinbase)
 
-				block, crtErr := d.creator.CreateBlock(assigned, tips)
-				if crtErr != nil {
-					crtInfo["error"] = crtErr.Error()
-				}
-				if block != nil {
-					crtInfo["newBlock"] = block.Hash().Hex()
-				}
-				log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+				func() {
+					d.eth.BlockChain().DagMu.Lock()
+					defer d.eth.BlockChain().DagMu.Unlock()
+
+					coinbase := common.Address{}
+					for _, acc := range accounts {
+						if creator == acc {
+							coinbase = creator
+							break
+						}
+					}
+					if coinbase == (common.Address{}) {
+						return
+					}
+
+					d.eth.SetEtherbase(coinbase)
+					if err = d.eth.CreatorAuthorize(coinbase); err != nil {
+						log.Error("Creator authorize err", "err", err)
+						return
+					}
+
+					block, crtErr := d.creator.CreateBlock(assigned, tips)
+					if crtErr != nil {
+						crtInfo["error"] = crtErr.Error()
+					}
+					if block != nil {
+						crtInfo["newBlock"] = block.Hash().Hex()
+					}
+					log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+				}()
 			}
 			//set current etherbase
 			d.eth.SetEtherbase(etherbase)
+			if err = d.eth.CreatorAuthorize(etherbase); err != nil {
+				log.Error("Creator authorize err", "err", err)
+			}
+
 		}()
 	}
 
@@ -228,33 +244,45 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 			crtInfo := map[string]string{}
 			etherbase, _ := d.eth.Etherbase()
 			for _, creator := range assigned.Creators {
-				coinbase := common.Address{}
-				for _, acc := range accounts {
-					if creator == acc {
-						coinbase = creator
-						break
-					}
-				}
-				if coinbase == (common.Address{}) {
-					continue
-				}
 				// if received next slot
 				if d.consensusInfo.Slot > assigned.Slot {
 					break
 				}
-				d.eth.SetEtherbase(coinbase)
 
-				block, crtErr := d.creator.CreateBlock(assigned, tips)
-				if crtErr != nil {
-					crtInfo["error"] = crtErr.Error()
-				}
-				if block != nil {
-					crtInfo["newBlock"] = block.Hash().Hex()
-				}
-				log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+				func() {
+					coinbase := common.Address{}
+					for _, acc := range accounts {
+						if creator == acc {
+							coinbase = creator
+							break
+						}
+					}
+					if coinbase == (common.Address{}) {
+						return
+					}
+
+					d.eth.SetEtherbase(coinbase)
+					if err := d.eth.CreatorAuthorize(coinbase); err != nil {
+						log.Error("Creator authorize err", "err", err)
+						return
+					}
+
+					block, crtErr := d.creator.CreateBlock(assigned, tips)
+					if crtErr != nil {
+						crtInfo["error"] = crtErr.Error()
+					}
+					if block != nil {
+						crtInfo["newBlock"] = block.Hash().Hex()
+					}
+					log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+
+				}()
 			}
 			//set current etherbase
 			d.eth.SetEtherbase(etherbase)
+			if err := d.eth.CreatorAuthorize(etherbase); err != nil {
+				log.Error("Creator authorize err", "err", err)
+			}
 		}()
 	}
 
