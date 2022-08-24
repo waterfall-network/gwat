@@ -152,7 +152,7 @@ type blockChain interface {
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	SubscribePendingFinalize(ch chan<- *types.Transaction) event.Subscription
-	SubscribeRemoveTx(ch chan<- *types.Transaction) event.Subscription
+	SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -341,7 +341,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	// Subscribe events from blockchain and start the main event loop.
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 	pool.pendingFinalizeSub = pool.chain.SubscribePendingFinalize(pool.pendingFinalizeCh)
-	pool.rmTxSub = pool.chain.SubscribeRemoveTx(pool.rmTxCh)
+	pool.rmTxSub = pool.chain.SubscribeRemoveTxFromPool(pool.rmTxCh)
 
 	pool.wg.Add(1)
 	go pool.loop()
@@ -426,19 +426,28 @@ func (pool *TxPool) loop() {
 			}
 
 		case tx := <-pool.pendingFinalizeCh:
-			log.Info("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-			pool.moveToPendingFinalize(tx.Hash())
+			func() {
+				pool.mu.Lock()
+				defer pool.mu.Unlock()
+				log.Info("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+				pool.moveToPendingFinalize(tx.Hash())
+			}()
 
 		case tx := <-pool.rmTxCh:
-			sender, err := types.Sender(pool.signer, tx)
-			if err != nil {
-				continue
-			}
+			func() {
+				pool.mu.Lock()
+				defer pool.mu.Unlock()
 
-			if list, ok := pool.pendingFinalize[sender]; ok && list.Overlaps(tx) {
-				log.Info("remove tx", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-				pool.removeTx(tx.Hash(), false)
-			}
+				sender, err := types.Sender(pool.signer, tx)
+				if err != nil {
+					return
+				}
+
+				if list, ok := pool.pendingFinalize[sender]; ok && list.Overlaps(tx) {
+					log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
+					pool.removeTx(tx.Hash(), false)
+				}
+			}()
 		}
 	}
 }
@@ -1045,9 +1054,6 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 }
 
 func (pool *TxPool) moveToPendingFinalize(hash common.Hash) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
 	tx := pool.all.Get(hash)
 	if tx == nil {
 		return
@@ -1138,6 +1144,8 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			return
 		}
 	}
+
+	log.Warn("No TXs to remove", "hash", tx.Hash().Hex(), "nonce", tx.Nonce())
 }
 
 // requestReset requests a pool reset to the new head block.
@@ -1626,7 +1634,7 @@ func (pool *TxPool) demoteUnexecutables() {
 		listPF := pool.pendingFinalize[addr]
 
 		nonce := pool.currentState.GetNonce(addr)
-		log.Info("current txpool nonce calculated", "nonce", nonce)
+		log.Info("current txpool nonce calculated", "nonce", nonce, "addr", addr.Hex())
 
 		// Drop all transactions that are deemed too old (low nonce)
 		olds := list.Forward(nonce)
