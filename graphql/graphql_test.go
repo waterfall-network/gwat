@@ -25,16 +25,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/eth"
+	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"github.com/waterfall-foundation/gwat/node"
+	"github.com/waterfall-foundation/gwat/params"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -238,9 +238,8 @@ func createGQLService(t *testing.T, stack *node.Node) {
 	// create backend
 	ethConf := &ethconfig.Config{
 		Genesis: &core.Genesis{
-			Config:     params.AllEthashProtocolChanges,
-			GasLimit:   11500000,
-			Difficulty: big.NewInt(1048576),
+			Config:   params.AllEthashProtocolChanges,
+			GasLimit: 11500000,
 		},
 		Ethash: ethash.Config{
 			PowMode: ethash.ModeFake,
@@ -280,9 +279,8 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 
 	ethConf := &ethconfig.Config{
 		Genesis: &core.Genesis{
-			Config:     params.AllEthashProtocolChanges,
-			GasLimit:   11500000,
-			Difficulty: big.NewInt(1048576),
+			Config:   params.AllEthashProtocolChanges,
+			GasLimit: 11500000,
 			Alloc: core.GenesisAlloc{
 				address: {Balance: funds},
 				// The address 0xdad sloads 0x00 and 0x01

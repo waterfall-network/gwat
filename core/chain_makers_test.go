@@ -1,100 +1,100 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package core
 
 import (
-	"fmt"
+	"errors"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
+	"github.com/waterfall-foundation/gwat/params"
 	"math/big"
-
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"testing"
 )
 
-func ExampleGenerateChain() {
-	var (
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-		key3, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
-		db      = rawdb.NewMemoryDatabase()
-	)
-
-	// Ensure that key1 has some funds in the genesis block.
-	gspec := &Genesis{
-		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+func TestAddBlocksToChain(t *testing.T) {
+	bc, blocks := getTestBlockchainAndBlocks()
+	if err := addBlocksToChainTest(bc, blocks); err != nil {
+		t.Fatal(err)
 	}
-	genesis := gspec.MustCommit(db)
+}
 
-	// This call generates a chain of 5 blocks. The function runs for
-	// each block and adds different features to gen based on the
-	// block index.
-	signer := types.HomesteadSigner{}
-	chain, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 5, func(i int, gen *BlockGen) {
-		switch i {
-		case 0:
-			// In block 1, addr1 sends addr2 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
-			gen.AddTx(tx)
-		case 1:
-			// In block 2, addr1 sends some more ether to addr2.
-			// addr2 passes it on to addr3.
-			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, nil, nil), signer, key1)
-			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil), signer, key2)
-			gen.AddTx(tx1)
-			gen.AddTx(tx2)
-		case 2:
-			// Block 3 is empty but was mined by addr3.
-			gen.SetCoinbase(addr3)
-			gen.SetExtra([]byte("yeehaw"))
-		case 3:
-			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
-			b2 := gen.PrevBlock(1).Header()
-			b2.Extra = []byte("foo")
-			gen.AddUncle(b2)
-			b3 := gen.PrevBlock(2).Header()
-			b3.Extra = []byte("foo")
-			gen.AddUncle(b3)
+func TestAddFinalizationBlocks(t *testing.T) {
+	bc, blocks := getTestBlockchainAndBlocks()
+	if err := addBlocksToDag(bc, blocks); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func addBlocksToChainTest(bc *BlockChain, blocks []*types.Block) error {
+	if len(blocks) == 0 {
+		return errors.New("blocks slice is empty")
+	}
+	err := AddBlocksToFinalized(bc, blocks)
+	if err != nil {
+		return err
+	}
+	for i, block := range blocks {
+		bc := bc.GetBlockByNumber(uint64(i + 1))
+		if bc.Hash() != block.Hash() {
+			return errors.New("blocks aren't added")
 		}
-	})
-
-	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
-	defer blockchain.Stop()
-
-	if i, err := blockchain.InsertChain(chain); err != nil {
-		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
-		return
 	}
 
-	state, _ := blockchain.State()
-	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number())
-	fmt.Println("balance of addr1:", state.GetBalance(addr1))
-	fmt.Println("balance of addr2:", state.GetBalance(addr2))
-	fmt.Println("balance of addr3:", state.GetBalance(addr3))
-	// Output:
-	// last block: #5
-	// balance of addr1: 989000
-	// balance of addr2: 10000
-	// balance of addr3: 19687500000000001000
+	return nil
+}
+
+func addBlocksToDag(bc *BlockChain, blocks []*types.Block) error {
+	if len(blocks) == 0 {
+		return errors.New("blocks slice is empty")
+	}
+	AddBlocksToDag(bc, blocks)
+	tips := bc.GetTips()
+	if len(tips.GetHashes()) != 1 {
+		return errors.New("wrong tips struct")
+	}
+	tipDag := tips.Get(tips.GetHashes()[0])
+	tipBlk := blocks[len(blocks)-1]
+	if tipDag.Hash != tipBlk.Hash() {
+		return errors.New("Tips BlockDag: bad hash")
+	}
+	if tipDag.Height != tipBlk.Height() {
+		return errors.New("Tips BlockDag: bad height")
+	}
+
+	for _, block := range blocks {
+		blc := bc.GetBlock(block.Hash())
+		if blc == nil {
+			return errors.New("block is not saved")
+		}
+		if blc.Number() != nil {
+			return errors.New("block is finalised")
+		}
+		bd := bc.ReadBockDag(block.Hash())
+		if bd == nil || bd.Hash != block.Hash() || bd.Height != block.Height() {
+			return errors.New("BlockDag does not response block")
+		}
+	}
+	return nil
+}
+
+func getTestBlockchainAndBlocks() (*BlockChain, []*types.Block) {
+	db := rawdb.NewMemoryDatabase()
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	genspec := &Genesis{
+		ExtraData: make([]byte, 96),
+		Alloc: map[common.Address]GenesisAccount{
+			addr: {Balance: big.NewInt(10000000000000000)},
+		},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	genspec.MustCommit(db)
+	engine := sealer.New(db)
+
+	bc, _ := NewBlockChain(db, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	blocks, _ := GenerateChain(params.AllCliqueProtocolChanges, bc.genesisBlock, engine, bc.db, 3, nil)
+
+	return bc, blocks
 }

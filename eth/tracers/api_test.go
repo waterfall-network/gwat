@@ -29,21 +29,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/token"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/internal/ethapi"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rpc"
+	"github.com/waterfall-foundation/gwat/token"
 )
 
 var (
@@ -82,7 +82,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:     0,
 		TrieDirtyDisabled: true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, backend.chainConfig, backend.engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, backend.chainConfig, backend.engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -99,7 +99,7 @@ func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number == rpc.PendingBlockNumber || number == rpc.LatestBlockNumber {
-		return b.chain.CurrentHeader(), nil
+		return b.chain.GetLastFinalizedHeader(), nil
 	}
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
@@ -110,17 +110,17 @@ func (b *testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types
 
 func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.PendingBlockNumber || number == rpc.LatestBlockNumber {
-		return b.chain.CurrentBlock(), nil
+		return b.chain.GetLastFinalizedBlock(), nil
 	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
 
-func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	tx, hash, blockNumber, index := rawdb.ReadTransaction(b.chaindb, txHash)
+func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, error) {
+	tx, hash, index := rawdb.ReadTransaction(b.chaindb, txHash)
 	if tx == nil {
-		return nil, common.Hash{}, 0, 0, errTransactionNotFound
+		return nil, common.Hash{}, 0, errTransactionNotFound
 	}
-	return tx, hash, blockNumber, index, nil
+	return tx, hash, index, nil
 }
 
 func (b *testBackend) RPCGasCap() uint64 {
@@ -148,7 +148,7 @@ func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, reex
 }
 
 func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	parent := b.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	parent := b.chain.GetBlock(block.ParentHashes()[0])
 	if parent == nil {
 		return nil, vm.BlockContext{}, nil, errBlockNotFound
 	}
@@ -160,7 +160,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		return nil, vm.BlockContext{}, statedb, nil
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(b.chainConfig, block.Number())
+	signer := types.MakeSigner(b.chainConfig)
 	for idx, tx := range block.Transactions() {
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
@@ -173,7 +173,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(vmenv.ChainConfig().IsEIP158(new(big.Int).SetUint64(block.Nr())))
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

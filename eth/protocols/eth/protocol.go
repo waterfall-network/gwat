@@ -20,30 +20,29 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/rlp"
 )
 
 // Constants to match up protocol versions and messages
 const (
-	ETH66 = 66
+	ETH66 = 1
 )
 
-// ProtocolName is the official short name of the `eth` protocol used during
+// ProtocolName is the official short name of the `wfdag` protocol used during
 // devp2p capability negotiation.
-const ProtocolName = "eth"
+const ProtocolName = "wfdag"
 
-// ProtocolVersions are the supported versions of the `eth` protocol (first
+// ProtocolVersions are the supported versions of the `wfdag` protocol (first
 // is primary).
 var ProtocolVersions = []uint{ETH66}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 17}
+var protocolLengths = map[uint]uint64{ETH66: 19}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -64,6 +63,8 @@ const (
 	NewPooledTransactionHashesMsg = 0x08
 	GetPooledTransactionsMsg      = 0x09
 	PooledTransactionsMsg         = 0x0a
+	GetDagMsg                     = 0x11
+	DagMsg                        = 0x12
 )
 
 var (
@@ -75,20 +76,21 @@ var (
 	errNetworkIDMismatch       = errors.New("network ID mismatch")
 	errGenesisMismatch         = errors.New("genesis mismatch")
 	errForkIDRejected          = errors.New("fork ID rejected")
+	errInvalidDag              = errors.New("invalid dag")
 )
 
-// Packet represents a p2p message in the `eth` protocol.
+// Packet represents a p2p message in the `wfdag` protocol.
 type Packet interface {
 	Name() string // Name returns a string corresponding to the message type.
 	Kind() byte   // Kind returns the message type.
 }
 
-// StatusPacket is the network packet for the status message for eth/64 and later.
+// StatusPacket is the network packet for the status message for wfdag/64 and later.
 type StatusPacket struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
-	TD              *big.Int
-	Head            common.Hash
+	LastFinNr       uint64
+	Dag             *common.HashArray
 	Genesis         common.Hash
 	ForkID          forkid.ID
 }
@@ -118,13 +120,14 @@ type TransactionsPacket []*types.Transaction
 
 // GetBlockHeadersPacket represents a block header query.
 type GetBlockHeadersPacket struct {
-	Origin  HashOrNumber // Block from which to retrieve headers
-	Amount  uint64       // Maximum number of headers to retrieve
-	Skip    uint64       // Blocks to skip between consecutive headers
-	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
+	Hashes  *common.HashArray // хеши блоков по которым запрашиваются заголовки
+	Origin  *HashOrNumber     // Block from which to retrieve headers
+	Amount  uint64            // Maximum number of headers to retrieve
+	Skip    uint64            // Blocks to skip between consecutive headers
+	Reverse bool              // Query direction (false = rising towards latest, true = falling towards genesis)
 }
 
-// GetBlockHeadersPacket66 represents a block header query over eth/66
+// GetBlockHeadersPacket66 represents a block header query over wfdag/66
 type GetBlockHeadersPacket66 struct {
 	RequestId uint64
 	*GetBlockHeadersPacket
@@ -169,7 +172,7 @@ func (hn *HashOrNumber) DecodeRLP(s *rlp.Stream) error {
 // BlockHeadersPacket represents a block header response.
 type BlockHeadersPacket []*types.Header
 
-// BlockHeadersPacket represents a block header response over eth/66.
+// BlockHeadersPacket represents a block header response over wfdag/66.
 type BlockHeadersPacket66 struct {
 	RequestId uint64
 	BlockHeadersPacket
@@ -178,7 +181,6 @@ type BlockHeadersPacket66 struct {
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
 	Block *types.Block
-	TD    *big.Int
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
@@ -186,18 +188,13 @@ func (request *NewBlockPacket) sanityCheck() error {
 	if err := request.Block.SanityCheck(); err != nil {
 		return err
 	}
-	//TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
-	// larger, it will still fit within 100 bits
-	if tdlen := request.TD.BitLen(); tdlen > 100 {
-		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
-	}
 	return nil
 }
 
 // GetBlockBodiesPacket represents a block body query.
 type GetBlockBodiesPacket []common.Hash
 
-// GetBlockBodiesPacket represents a block body query over eth/66.
+// GetBlockBodiesPacket represents a block body query over wfdag/66.
 type GetBlockBodiesPacket66 struct {
 	RequestId uint64
 	GetBlockBodiesPacket
@@ -206,7 +203,7 @@ type GetBlockBodiesPacket66 struct {
 // BlockBodiesPacket is the network packet for block content distribution.
 type BlockBodiesPacket []*BlockBody
 
-// BlockBodiesPacket is the network packet for block content distribution over eth/66.
+// BlockBodiesPacket is the network packet for block content distribution over wfdag/66.
 type BlockBodiesPacket66 struct {
 	RequestId uint64
 	BlockBodiesPacket
@@ -217,7 +214,7 @@ type BlockBodiesPacket66 struct {
 // roundtrip.
 type BlockBodiesRLPPacket []rlp.RawValue
 
-// BlockBodiesRLPPacket66 is the BlockBodiesRLPPacket over eth/66
+// BlockBodiesRLPPacket66 is the BlockBodiesRLPPacket over wfdag/66
 type BlockBodiesRLPPacket66 struct {
 	RequestId uint64
 	BlockBodiesRLPPacket
@@ -226,26 +223,24 @@ type BlockBodiesRLPPacket66 struct {
 // BlockBody represents the data content of a single block.
 type BlockBody struct {
 	Transactions []*types.Transaction // Transactions contained within a block
-	Uncles       []*types.Header      // Uncles contained within a block
 }
 
-// Unpack retrieves the transactions and uncles from the range packet and returns
+// Unpack retrieves the transactions from the range packet and returns
 // them in a split flat format that's more consistent with the internal data structures.
-func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header) {
+func (p *BlockBodiesPacket) Unpack() [][]*types.Transaction {
 	var (
-		txset    = make([][]*types.Transaction, len(*p))
-		uncleset = make([][]*types.Header, len(*p))
+		txset = make([][]*types.Transaction, len(*p))
 	)
 	for i, body := range *p {
-		txset[i], uncleset[i] = body.Transactions, body.Uncles
+		txset[i] = body.Transactions
 	}
-	return txset, uncleset
+	return txset
 }
 
 // GetNodeDataPacket represents a trie node data query.
 type GetNodeDataPacket []common.Hash
 
-// GetNodeDataPacket represents a trie node data query over eth/66.
+// GetNodeDataPacket represents a trie node data query over wfdag/66.
 type GetNodeDataPacket66 struct {
 	RequestId uint64
 	GetNodeDataPacket
@@ -254,7 +249,7 @@ type GetNodeDataPacket66 struct {
 // NodeDataPacket is the network packet for trie node data distribution.
 type NodeDataPacket [][]byte
 
-// NodeDataPacket is the network packet for trie node data distribution over eth/66.
+// NodeDataPacket is the network packet for trie node data distribution over wfdag/66.
 type NodeDataPacket66 struct {
 	RequestId uint64
 	NodeDataPacket
@@ -263,7 +258,7 @@ type NodeDataPacket66 struct {
 // GetReceiptsPacket represents a block receipts query.
 type GetReceiptsPacket []common.Hash
 
-// GetReceiptsPacket represents a block receipts query over eth/66.
+// GetReceiptsPacket represents a block receipts query over wfdag/66.
 type GetReceiptsPacket66 struct {
 	RequestId uint64
 	GetReceiptsPacket
@@ -272,7 +267,7 @@ type GetReceiptsPacket66 struct {
 // ReceiptsPacket is the network packet for block receipts distribution.
 type ReceiptsPacket [][]*types.Receipt
 
-// ReceiptsPacket is the network packet for block receipts distribution over eth/66.
+// ReceiptsPacket is the network packet for block receipts distribution over wfdag/66.
 type ReceiptsPacket66 struct {
 	RequestId uint64
 	ReceiptsPacket
@@ -281,7 +276,7 @@ type ReceiptsPacket66 struct {
 // ReceiptsRLPPacket is used for receipts, when we already have it encoded
 type ReceiptsRLPPacket []rlp.RawValue
 
-// ReceiptsPacket66 is the eth-66 version of ReceiptsRLPPacket
+// ReceiptsPacket66 is the wfdag-66 version of ReceiptsRLPPacket
 type ReceiptsRLPPacket66 struct {
 	RequestId uint64
 	ReceiptsRLPPacket
@@ -301,7 +296,7 @@ type GetPooledTransactionsPacket66 struct {
 // PooledTransactionsPacket is the network packet for transaction distribution.
 type PooledTransactionsPacket []*types.Transaction
 
-// PooledTransactionsPacket is the network packet for transaction distribution over eth/66.
+// PooledTransactionsPacket is the network packet for transaction distribution over wfdag/66.
 type PooledTransactionsPacket66 struct {
 	RequestId uint64
 	PooledTransactionsPacket
@@ -311,10 +306,28 @@ type PooledTransactionsPacket66 struct {
 // in the cases we already have them in rlp-encoded form
 type PooledTransactionsRLPPacket []rlp.RawValue
 
-// PooledTransactionsRLPPacket66 is the eth/66 form of PooledTransactionsRLPPacket
+// PooledTransactionsRLPPacket66 is the wfdag/66 form of PooledTransactionsRLPPacket
 type PooledTransactionsRLPPacket66 struct {
 	RequestId uint64
 	PooledTransactionsRLPPacket
+}
+
+// GetDagPacket represents a dag query.
+type GetDagPacket uint64
+
+// GetDagPacket represents a dag query over wfdag/66.
+type GetDagPacket66 struct {
+	RequestId uint64
+	GetDagPacket
+}
+
+// DagPacket is the network packet for dag hashes.
+type DagPacket common.HashArray
+
+// DagPacket is the network packet for dag hashes over wfdag/66.
+type DagPacket66 struct {
+	RequestId uint64
+	DagPacket
 }
 
 func (*StatusPacket) Name() string { return "Status" }
@@ -361,3 +374,9 @@ func (*GetPooledTransactionsPacket) Kind() byte   { return GetPooledTransactions
 
 func (*PooledTransactionsPacket) Name() string { return "PooledTransactions" }
 func (*PooledTransactionsPacket) Kind() byte   { return PooledTransactionsMsg }
+
+func (*GetDagPacket) Name() string { return "GetDag" }
+func (*GetDagPacket) Kind() byte   { return GetDagMsg }
+
+func (*DagPacket) Name() string { return "Dag" }
+func (*DagPacket) Kind() byte   { return DagMsg }

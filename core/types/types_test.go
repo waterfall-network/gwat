@@ -20,9 +20,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/rlp"
 )
 
 type devnull struct{ len int }
@@ -51,24 +51,22 @@ func benchRLP(b *testing.B, encode bool) {
 		{
 			"legacy-header",
 			&Header{
-				Difficulty: big.NewInt(10000000000),
-				Number:     big.NewInt(1000),
-				GasLimit:   8_000_000,
-				GasUsed:    8_000_000,
-				Time:       555,
-				Extra:      make([]byte, 32),
+				Height:   1000,
+				GasLimit: 8_000_000,
+				GasUsed:  8_000_000,
+				Time:     555,
+				Extra:    make([]byte, 32),
 			},
 		},
 		{
 			"london-header",
 			&Header{
-				Difficulty: big.NewInt(10000000000),
-				Number:     big.NewInt(1000),
-				GasLimit:   8_000_000,
-				GasUsed:    8_000_000,
-				Time:       555,
-				Extra:      make([]byte, 32),
-				BaseFee:    big.NewInt(10000000000),
+				Height:   1000,
+				GasLimit: 8_000_000,
+				GasUsed:  8_000_000,
+				Time:     555,
+				Extra:    make([]byte, 32),
+				BaseFee:  big.NewInt(10000000000),
 			},
 		},
 		{

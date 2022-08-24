@@ -17,14 +17,13 @@
 package eth
 
 import (
-	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 // handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
@@ -34,7 +33,12 @@ func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	response := answerGetBlockHeadersQuery(backend, query.GetBlockHeadersPacket, peer)
+	var response []*types.Header
+	if len(*query.Hashes) > 0 {
+		response = backend.Chain().GetHeadersByHashes(*query.Hashes).RmEmpty().ToArray()
+	} else {
+		response = answerGetBlockHeadersQuery(backend, query.GetBlockHeadersPacket, peer)
+	}
 	return peer.ReplyBlockHeaders(query.RequestId, response)
 }
 
@@ -59,11 +63,12 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 			if first {
 				first = false
 				origin = backend.Chain().GetHeaderByHash(query.Origin.Hash)
-				if origin != nil {
-					query.Origin.Number = origin.Number.Uint64()
-				}
+				//if origin != nil {
+				//	query.Origin.Number = origin.Number.Uint64()
+				//}
 			} else {
-				origin = backend.Chain().GetHeader(query.Origin.Hash, query.Origin.Number)
+				//origin = backend.Chain().GetHeader(query.Origin.Hash, query.Origin.Number)
+				origin = backend.Chain().GetHeader(query.Origin.Hash)
 			}
 		} else {
 			origin = backend.Chain().GetHeaderByNumber(query.Origin.Number)
@@ -88,26 +93,32 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		case hashMode && !query.Reverse:
 			// Hash based traversal towards the leaf block
 			var (
-				current = origin.Number.Uint64()
-				next    = current + query.Skip + 1
+				//current = origin.Number.Uint64()
+				nr             = backend.Chain().ReadFinalizedNumberByHash(origin.Hash())
+				current uint64 = 0
+				next    uint64 = 0
 			)
+			if nr != nil {
+				current = *nr
+				next = current + query.Skip + 1
+			}
 			if next <= current {
-				infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
-				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
+				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", peer.Peer.Info())
 				unknown = true
-			} else {
-				if header := backend.Chain().GetHeaderByNumber(next); header != nil {
-					nextHash := header.Hash()
-					expOldHash, _ := backend.Chain().GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
-					if expOldHash == query.Origin.Hash {
-						query.Origin.Hash, query.Origin.Number = nextHash, next
-					} else {
-						unknown = true
-					}
+			}
+			//} else {
+			if header := backend.Chain().GetHeaderByNumber(next); header != nil {
+				nextHash := header.Hash()
+				expOldHash, _ := backend.Chain().GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
+				if expOldHash == query.Origin.Hash {
+					query.Origin.Hash, query.Origin.Number = nextHash, next
 				} else {
 					unknown = true
 				}
+			} else {
+				unknown = true
 			}
+			//}
 		case query.Reverse:
 			// Number based traversal towards the genesis block
 			if query.Origin.Number >= query.Skip+1 {
@@ -253,10 +264,6 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	if err := ann.sanityCheck(); err != nil {
 		return err
-	}
-	if hash := types.CalcUncleHash(ann.Block.Uncles()); hash != ann.Block.UncleHash() {
-		log.Warn("Propagated block has invalid uncles", "have", hash, "exp", ann.Block.UncleHash())
-		return nil // TODO(karalabe): return error eventually, but wait a few releases
 	}
 	if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
 		log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
@@ -410,4 +417,66 @@ func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error 
 	requestTracker.Fulfil(peer.id, peer.version, PooledTransactionsMsg, txs.RequestId)
 
 	return backend.Handle(peer, &txs.PooledTransactionsPacket)
+}
+
+func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode retrieval message
+	var query GetDagPacket66
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	dag, _, err := answerGetDagQuery(backend, query.GetDagPacket, peer)
+	if err != nil {
+		return err
+	}
+	dag = dag.Uniq()
+	return peer.ReplyDagData(query.RequestId, dag)
+}
+
+func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.HashArray, uint64, error) {
+	// Gather dag data
+	dag := common.HashArray{}
+	finalized := common.HashArray{}
+	fromFinNr := uint64(query)
+
+	for _, h := range backend.Chain().GetTips().GetHashes() {
+		unloaded, loaded, _, _, _, err := backend.Chain().ExploreChainRecursive(h)
+		if err != nil {
+			return dag, 0, err
+		}
+		if len(unloaded) > 0 {
+			return dag, 0, fmt.Errorf("%w", errInvalidDag)
+		}
+		dag = dag.Concat(loaded)
+
+		// if tips set to last finalized block - add it
+		if len(loaded) == 0 {
+			lfBlock := backend.Chain().GetLastFinalizedBlock()
+			if lfBlock.Hash() == h {
+				dag = append(dag, h)
+			}
+		}
+	}
+	lastFinNr := backend.Chain().GetLastFinalizedNumber()
+	if fromFinNr > lastFinNr {
+		return dag, 0, fmt.Errorf("%w", errInvalidDag)
+	}
+	for i := uint64(1); fromFinNr+i <= lastFinNr; i++ {
+		finHash := backend.Chain().ReadFinalizedHashByNumber(fromFinNr + i)
+		if finHash != (common.Hash{}) {
+			finalized = append(finalized, finHash)
+		}
+	}
+	dag = finalized.Concat(dag)
+	return dag, fromFinNr, nil
+}
+
+func handleDag66(backend Backend, msg Decoder, peer *Peer) error {
+	// A gag hashes arrived to one of our previous requests
+	res := new(DagPacket66)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	requestTracker.Fulfil(peer.id, peer.version, DagMsg, res.RequestId)
+	return backend.Handle(peer, &res.DagPacket)
 }

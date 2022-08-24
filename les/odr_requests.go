@@ -21,15 +21,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 var (
@@ -37,7 +37,6 @@ var (
 	errInvalidEntryCount   = errors.New("invalid number of response entries")
 	errHeaderUnavailable   = errors.New("header unavailable")
 	errTxHashMismatch      = errors.New("transaction hash mismatch")
-	errUncleHashMismatch   = errors.New("uncle hash mismatch")
 	errReceiptHashMismatch = errors.New("receipt hash mismatch")
 	errDataHashMismatch    = errors.New("data hash mismatch")
 	errCHTHashMismatch     = errors.New("cht hash mismatch")
@@ -111,16 +110,13 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	// Retrieve our stored header and validate block content against it
 	if r.Header == nil {
-		r.Header = rawdb.ReadHeader(db, r.Hash, r.Number)
+		r.Header = rawdb.ReadHeader(db, r.Hash)
 	}
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
 	if r.Header.TxHash != types.DeriveSha(types.Transactions(body.Transactions), trie.NewStackTrie(nil)) {
 		return errTxHashMismatch
-	}
-	if r.Header.UncleHash != types.CalcUncleHash(body.Uncles) {
-		return errUncleHashMismatch
 	}
 	// Validations passed, encode and store RLP
 	data, err := rlp.EncodeToBytes(body)
@@ -169,7 +165,7 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	// Retrieve our stored header and validate receipt content against it
 	if r.Header == nil {
-		r.Header = rawdb.ReadHeader(db, r.Hash, r.Number)
+		r.Header = rawdb.ReadHeader(db, r.Hash)
 	}
 	if r.Header == nil {
 		return errHeaderUnavailable
@@ -386,13 +382,12 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if node.Hash != header.Hash() {
 		return errCHTHashMismatch
 	}
-	if r.BlockNum != header.Number.Uint64() {
+	if r.BlockNum != header.Nr() {
 		return errCHTNumberMismatch
 	}
 	// Verifications passed, store and return
 	r.Header = header
 	r.Proof = nodeSet
-	r.Td = node.Td
 	return nil
 }
 

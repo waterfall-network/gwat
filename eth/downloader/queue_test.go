@@ -24,13 +24,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var (
@@ -47,7 +47,7 @@ func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Bloc
 		block.SetCoinbase(common.Address{seed})
 		// Add one tx to every secondblock
 		if !empty && i%2 == 0 {
-			signer := types.MakeSigner(params.TestChainConfig, block.Number())
+			signer := types.MakeSigner(params.TestChainConfig)
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
@@ -134,7 +134,7 @@ func TestBasics(t *testing.T) {
 		if got, exp := len(fetchReq.Headers), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
-		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
+		if got, exp := fetchReq.Headers[0].Nr(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
 	}
@@ -176,7 +176,7 @@ func TestBasics(t *testing.T) {
 		if got, exp := len(fetchReq.Headers), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
-		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
+		if got, exp := fetchReq.Headers[0].Nr(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
 
@@ -282,8 +282,7 @@ func XTestDelivery(t *testing.T) {
 			//fmt.Printf("getting headers from %d\n", c)
 			hdrs := world.headers(c)
 			l := len(hdrs)
-			//fmt.Printf("scheduling %d headers, first %d last %d\n",
-			//	l, hdrs[0].Number.Uint64(), hdrs[len(hdrs)-1].Number.Uint64())
+			fmt.Printf("scheduling %d headers, first %d last %d\n", l, hdrs[0].Nr(), hdrs[len(hdrs)-1].Nr())
 			q.Schedule(hdrs, uint64(c))
 			c += l
 		}
@@ -298,7 +297,7 @@ func XTestDelivery(t *testing.T) {
 			tot += len(res)
 			fmt.Printf("got %d results, %d tot\n", len(res), tot)
 			// Now we can forget about these
-			world.forget(res[len(res)-1].Header.Number.Uint64())
+			world.forget(res[len(res)-1].Header.Nr())
 
 		}
 	}()
@@ -316,11 +315,11 @@ func XTestDelivery(t *testing.T) {
 				var uncles [][]*types.Header
 				numToSkip := rand.Intn(len(f.Headers))
 				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
-					txs = append(txs, world.getTransactions(hdr.Number.Uint64()))
+					txs = append(txs, world.getTransactions(hdr.Nr()))
 					uncles = append(uncles, emptyList)
 				}
 				time.Sleep(100 * time.Millisecond)
-				_, err := q.DeliverBodies(peer.id, txs, uncles)
+				_, err := q.DeliverBodies(peer.id, txs)
 				if err != nil {
 					fmt.Printf("delivered %d bodies %v\n", len(txs), err)
 				}
@@ -339,7 +338,7 @@ func XTestDelivery(t *testing.T) {
 			if f != nil {
 				var rcs [][]*types.Receipt
 				for _, hdr := range f.Headers {
-					rcs = append(rcs, world.getReceipts(hdr.Number.Uint64()))
+					rcs = append(rcs, world.getReceipts(hdr.Nr()))
 				}
 				_, err := q.DeliverReceipts(peer.id, rcs)
 				if err != nil {
@@ -371,7 +370,7 @@ func XTestDelivery(t *testing.T) {
 		for {
 			time.Sleep(990 * time.Millisecond)
 			fmt.Printf("world block tip is %d\n",
-				world.chain[len(world.chain)-1].Header().Number.Uint64())
+				world.chain[len(world.chain)-1].Header().Nr())
 			fmt.Println(q.Stats())
 		}
 	}()
@@ -401,7 +400,7 @@ func (n *network) getTransactions(blocknum uint64) types.Transactions {
 }
 func (n *network) getReceipts(blocknum uint64) types.Receipts {
 	index := blocknum - uint64(n.offset)
-	if got := n.chain[index].Header().Number.Uint64(); got != blocknum {
+	if got := n.chain[index].Header().Nr(); got != blocknum {
 		fmt.Printf("Err, got %d exp %d\n", got, blocknum)
 		panic("sd")
 	}

@@ -19,25 +19,24 @@ package eth
 import (
 	"errors"
 	"math"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/fetcher"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/eth/fetcher"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/eth/protocols/snap"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 const (
@@ -150,13 +149,14 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// * the last fast sync is not finished while user specifies a full sync this
 		//   time. But we don't have any recent state for full sync.
 		// In these cases however it's safe to reenable fast sync.
-		fullBlock, fastBlock := h.chain.CurrentBlock(), h.chain.CurrentFastBlock()
-		if fullBlock.NumberU64() == 0 && fastBlock.NumberU64() > 0 {
+		fullBlock, fastBlock := h.chain.GetLastFinalizedBlock(), h.chain.GetLastFinalizedFastBlock()
+		if fullBlock.Height() == 0 && fastBlock.Height() > 0 {
 			h.fastSync = uint32(1)
 			log.Warn("Switch sync mode from full sync to fast sync")
 		}
 	} else {
-		if h.chain.CurrentBlock().NumberU64() > 0 {
+		fullBlock := h.chain.GetLastFinalizedBlock()
+		if fullBlock.Height() > 0 {
 			// Print warning log if database is not empty to run fast sync.
 			log.Warn("Switch sync mode from fast sync to full sync")
 		} else {
@@ -169,7 +169,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// If we have trusted checkpoints, enforce them on the chain
 	if config.Checkpoint != nil {
-		h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+		//h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+		h.checkpointNumber = (config.Checkpoint.SectionIndex) * params.CHTFrequency
 		h.checkpointHash = config.Checkpoint.SectionHead
 	}
 	// Construct the downloader (long sync) and its backing state bloom if fast
@@ -189,18 +190,18 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.chain.Engine().VerifyHeader(h.chain, header, true)
 	}
 	heighter := func() uint64 {
-		return h.chain.CurrentBlock().NumberU64()
+		return h.chain.GetLastFinalizedNumber()
 	}
-	inserter := func(blocks types.Blocks) (int, error) {
+	inserter := func(peerId string, blocks types.Blocks) (int, error, *common.HashArray) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
 		//
 		// Ideally we would also compare the head block's timestamp and similarly reject
 		// the propagated block if the head is too old. Unfortunately there is a corner
 		// case when starting new networks, where the genesis might be ancient (0 unix)
 		// which would prevent full nodes from accepting it.
-		if h.chain.CurrentBlock().NumberU64() < h.checkpointNumber {
-			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-			return 0, nil
+		if h.chain.GetLastFinalizedNumber() < h.checkpointNumber {
+			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash())
+			return 0, nil, nil
 		}
 		// If fast sync is running, deny importing weird blocks. This is a problematic
 		// clause when starting up a new network, because fast-syncing miners might not
@@ -208,14 +209,27 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// out a way yet where nodes can decide unilaterally whether the network is new
 		// or not. This should be fixed if we figure out a solution.
 		if atomic.LoadUint32(&h.fastSync) == 1 {
-			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-			return 0, nil
+			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash().Hex())
+			return 0, nil, nil
 		}
-		n, err := h.chain.InsertChain(blocks)
+		n, err := h.chain.InsertPropagatedBlocks(blocks)
+		if err == core.ErrInsertUncompletedDag {
+			unloaded := common.HashArray{}
+			for _, block := range blocks {
+				unl, _, _, _, _, _ := h.chain.ExploreChainRecursive(block.Hash())
+				unloaded = unloaded.Concat(unl)
+			}
+			log.Warn("Insert propagated blocks: unknown ancestors detected. start sync", "err", err, "unknown", unloaded)
+			lastFinNr := h.chain.GetLastFinalizedNumber()
+			//h.downloader.Synchronise(peerId, unloaded, lastFinNr, downloader.FullSync, false)
+			h.downloader.Synchronise(peerId, unloaded, lastFinNr, downloader.FullSync, true)
+
+			return n, err, &unloaded
+		}
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}
-		return n, err
+		return n, err, nil
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
 
@@ -250,14 +264,16 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 	// Execute the Ethereum handshake
 	var (
-		genesis = h.chain.Genesis()
-		head    = h.chain.CurrentHeader()
-		hash    = head.Hash()
-		number  = head.Number.Uint64()
-		td      = h.chain.GetTd(hash, number)
+		genesis                     = h.chain.Genesis()
+		lastFinNr                   = h.chain.GetLastFinalizedNumber()
+		dag       *common.HashArray = nil
+		unsync                      = h.chain.GetUnsynchronizedTipsHashes()
 	)
-	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.CurrentHeader().Number.Uint64())
-	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if len(unsync) == 0 {
+		dag = h.chain.GetDagHashes()
+	}
+	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.GetLastFinalizedBlock().Nr())
+	if err := peer.Handshake(h.networkID, lastFinNr, dag, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -346,7 +362,7 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 	defer h.peerWG.Done()
 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
-		peer.Log().Error("Snapshot extension registration failed", "err", err)
+		peer.Log().Trace("Snapshot extension registration failed", "err", err)
 		return err
 	}
 	return handler(peer)
@@ -437,28 +453,22 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
-		var td *big.Int
-		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-			td = new(big.Int).Add(block.Difficulty(), h.chain.GetTd(block.ParentHash(), block.NumberU64()-1))
-		} else {
-			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
-			return
-		}
-		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		//// Send the block to a subset of our peers
+		//transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		// temp sent to all peers
+		transfer := peers[:]
 		for _, peer := range transfer {
-			peer.AsyncSendNewBlock(block, td)
+			peer.AsyncSendNewBlock(block)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
-	if h.chain.HasBlock(hash, block.NumberU64()) {
+	if h.chain.HasBlock(hash) {
 		for _, peer := range peers {
 			peer.AsyncSendNewBlockHash(block)
 		}
-		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Info("Announced block", "hash", hash.Hex(), "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 

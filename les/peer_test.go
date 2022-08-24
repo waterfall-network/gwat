@@ -19,20 +19,19 @@ package les
 import (
 	"crypto/rand"
 	"errors"
-	"math/big"
 	"reflect"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 type testServerPeerSub struct {
@@ -98,11 +97,19 @@ func TestPeerSubscription(t *testing.T) {
 
 type fakeChain struct{}
 
+func (f *fakeChain) GetLastFinalizedHeader() *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (f *fakeChain) Config() *params.ChainConfig { return params.MainnetChainConfig }
 func (f *fakeChain) Genesis() *types.Block {
 	return core.DefaultGenesisBlock().ToBlock(rawdb.NewMemoryDatabase())
 }
-func (f *fakeChain) CurrentHeader() *types.Header { return &types.Header{Number: big.NewInt(10000000)} }
+func (f *fakeChain) CurrentHeader() *types.Header {
+	nr := uint64(10000000)
+	return &types.Header{Number: &nr}
+}
 
 func TestHandshake(t *testing.T) {
 	// Create a message pipe to communicate through
@@ -119,25 +126,24 @@ func TestHandshake(t *testing.T) {
 		errCh1 = make(chan error, 1)
 		errCh2 = make(chan error, 1)
 
-		td      = big.NewInt(100)
 		head    = common.HexToHash("deadbeef")
 		headNum = uint64(10)
 		genesis = common.HexToHash("cafebabe")
 
 		chain1, chain2   = &fakeChain{}, &fakeChain{}
-		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Number.Uint64())
-		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Number.Uint64())
+		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Nr())
+		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Nr())
 		filter1, filter2 = forkid.NewFilter(chain1), forkid.NewFilter(chain2)
 	)
 
 	go func() {
-		errCh1 <- peer1.handshake(td, head, headNum, genesis, forkID1, filter1, func(list *keyValueList) {
+		errCh1 <- peer1.handshake(head, headNum, genesis, forkID1, filter1, func(list *keyValueList) {
 			var announceType uint64 = announceTypeSigned
 			*list = (*list).add("announceType", announceType)
 		}, nil)
 	}()
 	go func() {
-		errCh2 <- peer2.handshake(td, head, headNum, genesis, forkID2, filter2, nil, func(recv keyValueMap) error {
+		errCh2 <- peer2.handshake(head, headNum, genesis, forkID2, filter2, nil, func(recv keyValueMap) error {
 			var reqType uint64
 			err := recv.get("announceType", &reqType)
 			if err != nil {

@@ -19,8 +19,8 @@ package eth
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/waterfall-foundation/gwat/common/bitutil"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
 )
 
 const (
@@ -55,7 +55,7 @@ func (eth *Ethereum) startBloomHandlers(sectionSize uint64) {
 					task := <-request
 					task.Bitsets = make([][]byte, len(task.Sections))
 					for i, section := range task.Sections {
-						head := rawdb.ReadCanonicalHash(eth.chainDb, (section+1)*sectionSize-1)
+						head := rawdb.ReadFinalizedHashByNumber(eth.chainDb, (section+1)*sectionSize-1)
 						if compVector, err := rawdb.ReadBloomBits(eth.chainDb, task.Bit, section, head); err == nil {
 							if blob, err := bitutil.DecompressBytes(compVector, int(sectionSize/8)); err == nil {
 								task.Bitsets[i] = blob

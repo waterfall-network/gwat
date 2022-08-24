@@ -22,13 +22,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/bitutil"
+	"github.com/waterfall-foundation/gwat/core/bloombits"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/node"
 )
 
 func BenchmarkBloomBits512(b *testing.B) {
@@ -69,14 +69,14 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}
-	head := rawdb.ReadHeadBlockHash(db)
+	head := rawdb.ReadLastCanonicalHash(db)
 	if head == (common.Hash{}) {
 		b.Fatalf("chain data not found at %v", benchDataDir)
 	}
 
 	clearBloomBits(db)
 	b.Log("Generating bloombits data...")
-	headNum := rawdb.ReadHeaderNumber(db, head)
+	headNum := rawdb.ReadFinalizedNumberByHash(db, head)
 	if headNum == nil || *headNum < sectionSize+512 {
 		b.Fatalf("not enough blocks for running a benchmark")
 	}
@@ -91,14 +91,14 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		}
 		var header *types.Header
 		for i := sectionIdx * sectionSize; i < (sectionIdx+1)*sectionSize; i++ {
-			hash := rawdb.ReadCanonicalHash(db, i)
-			header = rawdb.ReadHeader(db, hash, i)
+			hash := rawdb.ReadFinalizedHashByNumber(db, i)
+			header = rawdb.ReadHeader(db, hash)
 			if header == nil {
 				b.Fatalf("Error creating bloomBits data")
 			}
 			bc.AddBloom(uint(i-sectionIdx*sectionSize), header.Bloom)
 		}
-		sectionHead := rawdb.ReadCanonicalHash(db, (sectionIdx+1)*sectionSize-1)
+		sectionHead := rawdb.ReadFinalizedHashByNumber(db, (sectionIdx+1)*sectionSize-1)
 		for i := 0; i < types.BloomBitLength; i++ {
 			data, err := bc.Bitset(uint(i))
 			if err != nil {
@@ -109,9 +109,6 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 			compSize += uint64(len(comp))
 			rawdb.WriteBloomBits(db, uint(i), sectionIdx, sectionHead, comp)
 		}
-		//if sectionIdx%50 == 0 {
-		//	b.Log(" section", sectionIdx, "/", cnt)
-		//}
 	}
 
 	d := time.Since(start)
@@ -161,11 +158,11 @@ func BenchmarkNoBloomBits(b *testing.B) {
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}
-	head := rawdb.ReadHeadBlockHash(db)
+	head := rawdb.ReadLastCanonicalHash(db)
 	if head == (common.Hash{}) {
 		b.Fatalf("chain data not found at %v", benchDataDir)
 	}
-	headNum := rawdb.ReadHeaderNumber(db, head)
+	headNum := rawdb.ReadFinalizedNumberByHash(db, head)
 
 	clearBloomBits(db)
 

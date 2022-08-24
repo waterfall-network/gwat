@@ -19,19 +19,18 @@ package light
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 const (
@@ -67,6 +66,7 @@ type TxPool struct {
 	mined        map[common.Hash][]*types.Transaction // mined transactions by block hash
 	clearIdx     uint64                               // earliest block nr that can contain mined tx info
 
+	// always true
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
 }
@@ -100,8 +100,8 @@ func NewTxPool(config *params.ChainConfig, chain *LightChain, relay TxRelayBacke
 		relay:       relay,
 		odr:         chain.Odr(),
 		chainDb:     chain.Odr().Database(),
-		head:        chain.CurrentHeader().Hash(),
-		clearIdx:    chain.CurrentHeader().Number.Uint64(),
+		head:        chain.GetLastFinalizedHeader().Hash(),
+		clearIdx:    chain.GetLastFinalizedHeader().Nr(),
 	}
 	// Subscribe events from blockchain
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
@@ -112,7 +112,7 @@ func NewTxPool(config *params.ChainConfig, chain *LightChain, relay TxRelayBacke
 
 // currentState returns the light state of the current head header
 func (pool *TxPool) currentState(ctx context.Context) *state.StateDB {
-	return NewState(ctx, pool.chain.CurrentHeader(), pool.odr)
+	return NewState(ctx, pool.chain.GetLastFinalizedHeader(), pool.odr)
 }
 
 // GetNonce returns the "pending" nonce of a given address. It always queries
@@ -163,12 +163,12 @@ func (txc txStateChanges) getLists() (mined []common.Hash, rollback []common.Has
 // checkMinedTxs checks newly added blocks for the currently pending transactions
 // and marks them as mined if necessary. It also stores block position in the db
 // and adds them to the received txStateChanges map.
-func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number uint64, txc txStateChanges) error {
+func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, txc txStateChanges) error {
 	// If no transactions are pending, we don't care about anything
 	if len(pool.pending) == 0 {
 		return nil
 	}
-	block, err := GetBlock(ctx, pool.odr, hash, number)
+	block, err := GetBlock(ctx, pool.odr, hash)
 	if err != nil {
 		return err
 	}
@@ -182,10 +182,16 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number 
 	// If some transactions have been mined, write the needed data to disk and update
 	if list != nil {
 		// Retrieve all the receipts belonging to this block and write the loopup table
-		if _, err := GetBlockReceipts(ctx, pool.odr, hash, number); err != nil { // ODR caches, ignore results
+		receipts, err := GetBlockReceipts(ctx, pool.odr, hash)
+		if err != nil { // ODR caches, ignore results
 			return err
 		}
-		rawdb.WriteTxLookupEntriesByBlock(pool.chainDb, block)
+		for i, tx := range block.Transactions() {
+			if receipts[i].Status == types.ReceiptStatusFailed {
+				continue
+			}
+			rawdb.WriteTxLookupEntry(pool.chainDb, tx.Hash(), block.Hash())
+		}
 
 		// Update the transaction pool's state
 		for _, tx := range list {
@@ -204,7 +210,9 @@ func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
 	if list, ok := pool.mined[hash]; ok {
 		for _, tx := range list {
 			txHash := tx.Hash()
-			rawdb.DeleteTxLookupEntry(batch, txHash)
+			if checkHash := rawdb.ReadTxLookupEntry(pool.chainDb, txHash); checkHash == hash {
+				rawdb.DeleteTxLookupEntry(batch, txHash)
+			}
 			pool.pending[txHash] = tx
 			txc.setState(txHash, false)
 		}
@@ -225,22 +233,30 @@ func (pool *TxPool) reorgOnNewHead(ctx context.Context, newHeader *types.Header)
 	newh := newHeader
 	// find common ancestor, create list of rolled back and new block hashes
 	var oldHashes, newHashes []common.Hash
-	for oldh.Hash() != newh.Hash() {
-		if oldh.Number.Uint64() >= newh.Number.Uint64() {
-			oldHashes = append(oldHashes, oldh.Hash())
-			oldh = pool.chain.GetHeader(oldh.ParentHash, oldh.Number.Uint64()-1)
-		}
-		if oldh.Number.Uint64() < newh.Number.Uint64() {
-			newHashes = append(newHashes, newh.Hash())
-			newh = pool.chain.GetHeader(newh.ParentHash, newh.Number.Uint64()-1)
-			if newh == nil {
-				// happens when CHT syncing, nothing to do
-				newh = oldh
+
+	if oldh.Number != nil && newh.Number != nil {
+		for oldh.Hash() != newh.Hash() {
+			for _, oldParentHash := range oldh.ParentHashes {
+				if oldh.Nr() >= newh.Nr() {
+					oldHashes = append(oldHashes, oldh.Hash())
+					oldh = pool.chain.GetHeader(oldParentHash)
+				}
+			}
+
+			for _, newParentHash := range newh.ParentHashes {
+				if oldh.Nr() < newh.Nr() {
+					newHashes = append(newHashes, newh.Hash())
+					newh = pool.chain.GetHeader(newParentHash)
+					if newh == nil {
+						// happens when CHT syncing, nothing to do
+						newh = oldh
+					}
+				}
 			}
 		}
-	}
-	if oldh.Number.Uint64() < pool.clearIdx {
-		pool.clearIdx = oldh.Number.Uint64()
+		if oldh.Nr() < pool.clearIdx {
+			pool.clearIdx = oldh.Nr()
+		}
 	}
 	// roll back old blocks
 	for _, hash := range oldHashes {
@@ -250,18 +266,18 @@ func (pool *TxPool) reorgOnNewHead(ctx context.Context, newHeader *types.Header)
 	// check mined txs of new blocks (array is in reversed order)
 	for i := len(newHashes) - 1; i >= 0; i-- {
 		hash := newHashes[i]
-		if err := pool.checkMinedTxs(ctx, hash, newHeader.Number.Uint64()-uint64(i), txc); err != nil {
+		if err := pool.checkMinedTxs(ctx, hash, txc); err != nil {
 			return txc, err
 		}
 		pool.head = hash
 	}
 
 	// clear old mined tx entries of old blocks
-	if idx := newHeader.Number.Uint64(); idx > pool.clearIdx+txPermanent {
+	if idx := newHeader.Nr(); idx > pool.clearIdx+txPermanent {
 		idx2 := idx - txPermanent
 		if len(pool.mined) > 0 {
 			for i := pool.clearIdx; i < idx2; i++ {
-				hash := rawdb.ReadCanonicalHash(pool.chainDb, i)
+				hash := rawdb.ReadFinalizedHashByNumber(pool.chainDb, i)
 				if list, ok := pool.mined[hash]; ok {
 					hashes := make([]common.Hash, len(list))
 					for i, tx := range list {
@@ -312,9 +328,8 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	pool.relay.NewHead(pool.head, m, r)
 
 	// Update fork indicator by next pending block number
-	next := new(big.Int).Add(head.Number, big.NewInt(1))
-	pool.istanbul = pool.config.IsIstanbul(next)
-	pool.eip2718 = pool.config.IsBerlin(next)
+	pool.istanbul = true
+	pool.eip2718 = true
 }
 
 // Stop stops the light transaction pool

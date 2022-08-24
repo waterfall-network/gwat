@@ -26,15 +26,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/trie"
+	ethereum "github.com/waterfall-foundation/gwat"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/state/snapshot"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 // Reduce some of the parameters to make the tester faster.
@@ -68,6 +68,61 @@ type downloadTester struct {
 	lock sync.RWMutex
 }
 
+// SetHead rewinds the local chain to a new head.
+func (dl *downloadTester) SetHead(hash common.Hash) error {
+	//func (dl *downloadTester) SetHead() error {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+	var head *uint64
+	// Find the hash of the head to reset to
+	//var hash common.Hash
+	for h, header := range dl.ownHeaders {
+		if h == hash {
+			head = header.Number
+		}
+	}
+	for h, header := range dl.ancientHeaders {
+		if h == hash {
+			head = header.Number
+		}
+	}
+	if head == nil {
+		return fmt.Errorf("unknown finalized hash to set: %x", hash)
+	}
+	// Find the offset in the header chain
+	var offset int
+	for o, h := range dl.ownHashes {
+		if h == hash {
+			offset = o
+			break
+		}
+	}
+	// Remove all the hashes and associated data afterwards
+	for i := offset + 1; i < len(dl.ownHashes); i++ {
+		delete(dl.ownChainTd, dl.ownHashes[i])
+		delete(dl.ownHeaders, dl.ownHashes[i])
+		delete(dl.ownReceipts, dl.ownHashes[i])
+		delete(dl.ownBlocks, dl.ownHashes[i])
+
+		delete(dl.ancientChainTd, dl.ownHashes[i])
+		delete(dl.ancientHeaders, dl.ownHashes[i])
+		delete(dl.ancientReceipts, dl.ownHashes[i])
+		delete(dl.ancientBlocks, dl.ownHashes[i])
+	}
+	dl.ownHashes = dl.ownHashes[:offset+1]
+	return nil
+}
+
+func (dl *downloadTester) ReadFinalizedHashByNumber(number uint64) common.Hash {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dl *downloadTester) ReadFinalizedNumberByHash(hash common.Hash) *uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
 // newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
 	tester := &downloadTester{
@@ -78,13 +133,11 @@ func newTester() *downloadTester {
 		ownHeaders:  map[common.Hash]*types.Header{testGenesis.Hash(): testGenesis.Header()},
 		ownBlocks:   map[common.Hash]*types.Block{testGenesis.Hash(): testGenesis},
 		ownReceipts: map[common.Hash]types.Receipts{testGenesis.Hash(): nil},
-		ownChainTd:  map[common.Hash]*big.Int{testGenesis.Hash(): testGenesis.Difficulty()},
 
 		// Initialize ancient store with test genesis block
 		ancientHeaders:  map[common.Hash]*types.Header{testGenesis.Hash(): testGenesis.Header()},
 		ancientBlocks:   map[common.Hash]*types.Block{testGenesis.Hash(): testGenesis},
 		ancientReceipts: map[common.Hash]types.Receipts{testGenesis.Hash(): nil},
-		ancientChainTd:  map[common.Hash]*big.Int{testGenesis.Hash(): testGenesis.Difficulty()},
 	}
 	tester.stateDb = rawdb.NewMemoryDatabase()
 	tester.stateDb.Put(testGenesis.Root().Bytes(), []byte{0x00})
@@ -103,14 +156,10 @@ func (dl *downloadTester) terminate() {
 func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 	dl.lock.RLock()
 	hash := dl.peers[id].chain.headBlock().Hash()
-	// If no particular TD was requested, load from the peer's blockchain
-	if td == nil {
-		td = dl.peers[id].chain.td(hash)
-	}
 	dl.lock.RUnlock()
 
 	// Synchronise with the chosen peer and ensure proper cleanup afterwards
-	err := dl.downloader.synchronise(id, hash, td, mode)
+	err := dl.downloader.synchronise(id, hash, mode)
 	select {
 	case <-dl.downloader.cancelCh:
 		// Ok, downloader fully cancelled after sync cycle
@@ -122,17 +171,17 @@ func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 }
 
 // HasHeader checks if a header is present in the testers canonical chain.
-func (dl *downloadTester) HasHeader(hash common.Hash, number uint64) bool {
+func (dl *downloadTester) HasHeader(hash common.Hash) bool {
 	return dl.GetHeaderByHash(hash) != nil
 }
 
 // HasBlock checks if a block is present in the testers canonical chain.
-func (dl *downloadTester) HasBlock(hash common.Hash, number uint64) bool {
+func (dl *downloadTester) HasBlock(hash common.Hash) bool {
 	return dl.GetBlockByHash(hash) != nil
 }
 
 // HasFastBlock checks if a block is present in the testers canonical chain.
-func (dl *downloadTester) HasFastBlock(hash common.Hash, number uint64) bool {
+func (dl *downloadTester) HasFastBlock(hash common.Hash) bool {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -258,13 +307,13 @@ func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq i
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 	// Do a quick check, as the blockchain.InsertHeaderChain doesn't insert anything in case of errors
-	if dl.getHeaderByHash(headers[0].ParentHash) == nil {
+	if dl.getHeaderByHash(headers[0].ParentHashes[0]) == nil {
 		return 0, fmt.Errorf("InsertHeaderChain: unknown parent at first position, parent of number %d", headers[0].Number)
 	}
 	var hashes []common.Hash
 	for i := 1; i < len(headers); i++ {
 		hash := headers[i-1].Hash()
-		if headers[i].ParentHash != headers[i-1].Hash() {
+		if headers[i].ParentHashes[0] != headers[i-1].Hash() {
 			return i, fmt.Errorf("non-contiguous import at position %d", i)
 		}
 		hashes = append(hashes, hash)
@@ -276,15 +325,12 @@ func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq i
 		if dl.getHeaderByHash(hash) != nil {
 			continue
 		}
-		if dl.getHeaderByHash(header.ParentHash) == nil {
+		if dl.getHeaderByHash(header.ParentHashes[0]) == nil {
 			// This _should_ be impossible, due to precheck and induction
 			return i, fmt.Errorf("InsertHeaderChain: unknown parent at position %d", i)
 		}
 		dl.ownHashes = append(dl.ownHashes, hash)
 		dl.ownHeaders[hash] = header
-
-		td := dl.getTd(header.ParentHash)
-		dl.ownChainTd[hash] = new(big.Int).Add(td, header.Difficulty)
 	}
 	return len(headers), nil
 }
@@ -294,7 +340,7 @@ func (dl *downloadTester) InsertChain(blocks types.Blocks) (i int, err error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 	for i, block := range blocks {
-		if parent, ok := dl.ownBlocks[block.ParentHash()]; !ok {
+		if parent, ok := dl.ownBlocks[block.ParentHashes()[0]]; !ok {
 			return i, fmt.Errorf("InsertChain: unknown parent at position %d / %d", i, len(blocks))
 		} else if _, err := dl.stateDb.Get(parent.Root().Bytes()); err != nil {
 			return i, fmt.Errorf("InsertChain: unknown parent state %x: %v", parent.Root(), err)
@@ -306,8 +352,6 @@ func (dl *downloadTester) InsertChain(blocks types.Blocks) (i int, err error) {
 		dl.ownBlocks[block.Hash()] = block
 		dl.ownReceipts[block.Hash()] = make(types.Receipts, 0)
 		dl.stateDb.Put(block.Root().Bytes(), []byte{0x00})
-		td := dl.getTd(block.ParentHash())
-		dl.ownChainTd[block.Hash()] = new(big.Int).Add(td, block.Difficulty())
 	}
 	return len(blocks), nil
 }
@@ -321,18 +365,17 @@ func (dl *downloadTester) InsertReceiptChain(blocks types.Blocks, receipts []typ
 		if _, ok := dl.ownHeaders[blocks[i].Hash()]; !ok {
 			return i, errors.New("unknown owner")
 		}
-		if _, ok := dl.ancientBlocks[blocks[i].ParentHash()]; !ok {
-			if _, ok := dl.ownBlocks[blocks[i].ParentHash()]; !ok {
+		if _, ok := dl.ancientBlocks[blocks[i].ParentHashes()[0]]; !ok {
+			if _, ok := dl.ownBlocks[blocks[i].ParentHashes()[0]]; !ok {
 				return i, errors.New("InsertReceiptChain: unknown parent")
 			}
 		}
-		if blocks[i].NumberU64() <= ancientLimit {
+		if blocks[i].Nr() <= ancientLimit {
 			dl.ancientBlocks[blocks[i].Hash()] = blocks[i]
 			dl.ancientReceipts[blocks[i].Hash()] = receipts[i]
 
 			// Migrate from active db to ancient db
 			dl.ancientHeaders[blocks[i].Hash()] = blocks[i].Header()
-			dl.ancientChainTd[blocks[i].Hash()] = new(big.Int).Add(dl.ancientChainTd[blocks[i].ParentHash()], blocks[i].Difficulty())
 			delete(dl.ownHeaders, blocks[i].Hash())
 			delete(dl.ownChainTd, blocks[i].Hash())
 		} else {
@@ -341,50 +384,6 @@ func (dl *downloadTester) InsertReceiptChain(blocks types.Blocks, receipts []typ
 		}
 	}
 	return len(blocks), nil
-}
-
-// SetHead rewinds the local chain to a new head.
-func (dl *downloadTester) SetHead(head uint64) error {
-	dl.lock.Lock()
-	defer dl.lock.Unlock()
-
-	// Find the hash of the head to reset to
-	var hash common.Hash
-	for h, header := range dl.ownHeaders {
-		if header.Number.Uint64() == head {
-			hash = h
-		}
-	}
-	for h, header := range dl.ancientHeaders {
-		if header.Number.Uint64() == head {
-			hash = h
-		}
-	}
-	if hash == (common.Hash{}) {
-		return fmt.Errorf("unknown head to set: %d", head)
-	}
-	// Find the offset in the header chain
-	var offset int
-	for o, h := range dl.ownHashes {
-		if h == hash {
-			offset = o
-			break
-		}
-	}
-	// Remove all the hashes and associated data afterwards
-	for i := offset + 1; i < len(dl.ownHashes); i++ {
-		delete(dl.ownChainTd, dl.ownHashes[i])
-		delete(dl.ownHeaders, dl.ownHashes[i])
-		delete(dl.ownReceipts, dl.ownHashes[i])
-		delete(dl.ownBlocks, dl.ownHashes[i])
-
-		delete(dl.ancientChainTd, dl.ownHashes[i])
-		delete(dl.ancientHeaders, dl.ownHashes[i])
-		delete(dl.ancientReceipts, dl.ownHashes[i])
-		delete(dl.ancientBlocks, dl.ownHashes[i])
-	}
-	dl.ownHashes = dl.ownHashes[:offset+1]
-	return nil
 }
 
 // Rollback removes some recently added elements from the chain.
@@ -424,9 +423,9 @@ type downloadTesterPeer struct {
 
 // Head constructs a function to retrieve a peer's current head hash
 // and total difficulty.
-func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
+func (dlp *downloadTesterPeer) Head() common.Hash {
 	b := dlp.chain.headBlock()
-	return b.Hash(), dlp.chain.td(b.Hash())
+	return b.Hash()
 }
 
 // RequestHeadersByHash constructs a GetBlockHeaders function based on a hashed
@@ -891,7 +890,7 @@ func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 	// Validate the number of block bodies that should have been requested
 	bodiesNeeded, receiptsNeeded := 0, 0
 	for _, block := range chain.blockm {
-		if mode != LightSync && block != tester.genesis && (len(block.Transactions()) > 0 || len(block.Uncles()) > 0) {
+		if mode != LightSync && block != tester.genesis && (len(block.Transactions()) > 0) {
 			bodiesNeeded++
 		}
 	}
@@ -992,7 +991,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	if err := tester.sync("fast-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded fast attacker synchronisation")
 	}
-	if head := tester.CurrentHeader().Number.Int64(); int(head) > MaxHeaderFetch {
+	if head := tester.CurrentHeader().Nr(); int(head) > MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, MaxHeaderFetch)
 	}
 
@@ -1008,11 +1007,11 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	if err := tester.sync("block-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded block attacker synchronisation")
 	}
-	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+	if head := tester.CurrentHeader().Nr(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == FastSync {
-		if head := tester.CurrentBlock().NumberU64(); head != 0 {
+		if head := tester.CurrentBlock().Nr(); head != 0 {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}
@@ -1031,11 +1030,11 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	if err := tester.sync("withhold-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded withholding attacker synchronisation")
 	}
-	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+	if head := tester.CurrentHeader().Nr(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == FastSync {
-		if head := tester.CurrentBlock().NumberU64(); head != 0 {
+		if head := tester.CurrentBlock().Nr(); head != 0 {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}
@@ -1128,7 +1127,7 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol uint) {
 		// Simulate a synchronisation and check the required result
 		tester.downloader.synchroniseMock = func(string, common.Hash) error { return tt.result }
 
-		tester.downloader.Synchronise(id, tester.genesis.Hash(), big.NewInt(1000), FullSync)
+		tester.downloader.Synchronise(id, tester.genesis.Hash(), FullSync)
 		if _, ok := tester.peers[id]; !ok != tt.drop {
 			t.Errorf("test %d: peer drop mismatch for %v: have %v, want %v", i, tt.result, !ok, tt.drop)
 		}
@@ -1465,7 +1464,7 @@ type floodingTestPeer struct {
 	tester *downloadTester
 }
 
-func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
+func (ftp *floodingTestPeer) Head() common.Hash { return ftp.peer.Head() }
 func (ftp *floodingTestPeer) RequestHeadersByHash(hash common.Hash, count int, skip int, reverse bool) error {
 	return ftp.peer.RequestHeadersByHash(hash, count, skip, reverse)
 }

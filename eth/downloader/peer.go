@@ -21,17 +21,16 @@ package downloader
 
 import (
 	"errors"
-	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/msgrate"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/p2p/msgrate"
 )
 
 const (
@@ -48,11 +47,13 @@ var (
 type peerConnection struct {
 	id string // Unique identifier of the peer
 
+	dagIdle     int32 // Current header activity state of the peer (idle = 0, active = 1)
 	headerIdle  int32 // Current header activity state of the peer (idle = 0, active = 1)
 	blockIdle   int32 // Current block activity state of the peer (idle = 0, active = 1)
 	receiptIdle int32 // Current receipt activity state of the peer (idle = 0, active = 1)
 	stateIdle   int32 // Current node data activity state of the peer (idle = 0, active = 1)
 
+	dagStarted     time.Time // Time instance when the last header fetch was started
 	headerStarted  time.Time // Time instance when the last header fetch was started
 	blockStarted   time.Time // Time instance when the last block (body) fetch was started
 	receiptStarted time.Time // Time instance when the last receipt fetch was started
@@ -70,7 +71,8 @@ type peerConnection struct {
 
 // LightPeer encapsulates the methods required to synchronise with a remote light peer.
 type LightPeer interface {
-	Head() (common.Hash, *big.Int)
+	GetDagInfo() (uint64, *common.HashArray)
+	RequestHeadersByHashes(common.HashArray) error
 	RequestHeadersByHash(common.Hash, int, int, bool) error
 	RequestHeadersByNumber(uint64, int, int, bool) error
 }
@@ -81,6 +83,7 @@ type Peer interface {
 	RequestBodies([]common.Hash) error
 	RequestReceipts([]common.Hash) error
 	RequestNodeData([]common.Hash) error
+	RequestDag(uint64) error
 }
 
 // lightPeerWrapper wraps a LightPeer struct, stubbing out the Peer-only methods.
@@ -88,9 +91,15 @@ type lightPeerWrapper struct {
 	peer LightPeer
 }
 
-func (w *lightPeerWrapper) Head() (common.Hash, *big.Int) { return w.peer.Head() }
+func (w *lightPeerWrapper) RequestDag(fromFinNr uint64) error {
+	panic("RequestReceipts not supported in light client mode sync")
+}
+func (w *lightPeerWrapper) GetDagInfo() (uint64, *common.HashArray) { return w.peer.GetDagInfo() }
 func (w *lightPeerWrapper) RequestHeadersByHash(h common.Hash, amount int, skip int, reverse bool) error {
 	return w.peer.RequestHeadersByHash(h, amount, skip, reverse)
+}
+func (w *lightPeerWrapper) RequestHeadersByHashes(h common.HashArray) error {
+	return w.peer.RequestHeadersByHashes(h)
 }
 func (w *lightPeerWrapper) RequestHeadersByNumber(i uint64, amount int, skip int, reverse bool) error {
 	return w.peer.RequestHeadersByNumber(i, amount, skip, reverse)
@@ -121,6 +130,7 @@ func (p *peerConnection) Reset() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
+	atomic.StoreInt32(&p.dagIdle, 0)
 	atomic.StoreInt32(&p.headerIdle, 0)
 	atomic.StoreInt32(&p.blockIdle, 0)
 	atomic.StoreInt32(&p.receiptIdle, 0)
@@ -196,6 +206,18 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 	return nil
 }
 
+// FetchDag sends a dag hashes retrieval request to the remote peer.
+func (p *peerConnection) FetchDag(fromFinNr uint64) error {
+	// Short circuit if the peer is already fetching
+	if !atomic.CompareAndSwapInt32(&p.dagIdle, 0, 1) {
+		return errAlreadyFetching
+	}
+	p.dagStarted = time.Now()
+	// Issue the header retrieval request (absolute upwards without gaps)
+	go p.peer.RequestDag(fromFinNr)
+	return nil
+}
+
 // SetHeadersIdle sets the peer to idle, allowing it to execute new header retrieval
 // requests. Its estimated header retrieval throughput is updated with that measured
 // just now.
@@ -226,6 +248,14 @@ func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) 
 func (p *peerConnection) SetNodeDataIdle(delivered int, deliveryTime time.Time) {
 	p.rates.Update(eth.NodeDataMsg, deliveryTime.Sub(p.stateStarted), delivered)
 	atomic.StoreInt32(&p.stateIdle, 0)
+}
+
+// SetDagIdle sets the peer to idle, allowing it to execute new dag
+// data retrieval requests. Its estimated state retrieval throughput is updated
+// with that measured just now.
+func (p *peerConnection) SetDagIdle(delivered int, deliveryTime time.Time) {
+	p.rates.Update(eth.DagMsg, deliveryTime.Sub(p.dagStarted), delivered)
+	atomic.StoreInt32(&p.dagIdle, 0)
 }
 
 // HeaderCapacity retrieves the peers header download allowance based on its
@@ -448,6 +478,18 @@ func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
 	}
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.NodeDataMsg, time.Second)
+	}
+	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
+}
+
+// DagIdlePeers retrieves a flat list of all the currently dag-idle
+// peers within the active peer set, ordered by their reputation.
+func (ps *peerSet) DagIdlePeers() ([]*peerConnection, int) {
+	idle := func(p *peerConnection) bool {
+		return atomic.LoadInt32(&p.dagIdle) == 0
+	}
+	throughput := func(p *peerConnection) int {
+		return p.rates.Capacity(eth.DagMsg, time.Second)
 	}
 	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
 }

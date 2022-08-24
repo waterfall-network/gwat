@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
 )
 
 func TestULCAnnounceThresholdLes2(t *testing.T) { testULCAnnounceThreshold(t, 2) }
@@ -74,7 +74,7 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 			}
 		}
 		time.Sleep(1500 * time.Millisecond) // Ensure the fetcher has done its work.
-		head := c.handler.backend.blockchain.CurrentHeader().Number.Uint64()
+		head := c.handler.backend.blockchain.GetLastFinalizedHeader().Nr()
 		if head != testcase.expect {
 			t.Fatalf("chain height mismatch, want %d, got %d", testcase.expect, head)
 		}

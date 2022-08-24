@@ -26,11 +26,11 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus/misc"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 var (
@@ -146,7 +146,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 	// query either pending block or head header and set headBlock
 	if lastBlock == rpc.PendingBlockNumber {
 		if pendingBlock, pendingReceipts = oracle.backend.PendingBlockAndReceipts(); pendingBlock != nil {
-			lastBlock = rpc.BlockNumber(pendingBlock.NumberU64())
+			lastBlock = rpc.BlockNumber(pendingBlock.Nr())
 			headBlock = lastBlock - 1
 		} else {
 			// pending block not supported by backend, process until latest block
@@ -160,7 +160,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 	if pendingBlock == nil {
 		// if pending block is not fetched then we retrieve the head header to get the head block number
 		if latestHeader, err := oracle.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber); err == nil {
-			headBlock = rpc.BlockNumber(latestHeader.Number.Uint64())
+			headBlock = rpc.BlockNumber(latestHeader.Nr())
 		} else {
 			return nil, nil, 0, 0, err
 		}
@@ -239,7 +239,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 				}
 
 				fees := &blockFees{blockNumber: blockNumber}
-				if pendingBlock != nil && blockNumber >= pendingBlock.NumberU64() {
+				if pendingBlock != nil && blockNumber >= pendingBlock.Nr() {
 					fees.block, fees.receipts = pendingBlock, pendingReceipts
 					fees.header = fees.block.Header()
 					oracle.processBlock(fees, rewardPercentiles)

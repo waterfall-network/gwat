@@ -26,9 +26,10 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"sort"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -195,7 +196,186 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 	return []byte(hex.EncodeToString(h[:])), nil
 }
 
-/////////// Address
+// HashArray represents the 32 hash array.
+type HashArray []Hash
+
+// HashArrayFromBytes decodes the HashArray from byte representation.
+func HashArrayFromBytes(data []byte) HashArray {
+	count := len(data) / HashLength
+	ha := make(HashArray, count)
+	for i := 0; i < count; i++ {
+		ha[i] = Hash{}
+		ha[i].SetBytes(data[i*HashLength : (i+1)*HashLength])
+	}
+	return ha
+}
+
+// ToBytes encodes the HashArray structure
+// to byte representation.
+func (ha HashArray) ToBytes() []byte {
+	res := []byte{}
+	for i := 0; i < len(ha); i++ {
+		res = append(res, ha[i].Bytes()...)
+	}
+	return res
+}
+
+// Copy creates a copy of HashArray.
+func (ha HashArray) Copy() HashArray {
+	c := make(HashArray, len(ha))
+	copy(c, ha)
+	return c
+}
+
+// Intersection calculates an intersection of current HashArray
+// with passed in param.
+func (ha HashArray) Intersection(hashArray HashArray) HashArray {
+	c := make(HashArray, 0)
+	m := make(map[Hash]bool)
+	for _, item := range ha {
+		m[item] = true
+	}
+	for _, item := range hashArray {
+		if _, ok := m[item]; ok {
+			c = append(c, item)
+		}
+	}
+	return c
+}
+
+// SequenceIntersection calculates an intersection of the first occurrence of a sequence HashArray
+// with passed in param.
+func (ha HashArray) SequenceIntersection(hashArray HashArray) HashArray {
+	c := make(HashArray, 0)
+	index := -1
+	for _, item := range ha {
+		if i := hashArray.IndexOf(item); i >= 0 {
+			if index == -1 {
+				index = i
+			} else {
+				index++
+			}
+			if i == index {
+				c = append(c, item)
+			}
+		}
+	}
+	return c
+}
+
+// Difference calculates a difference of current HashArray
+// with passed in param.
+func (ha HashArray) Difference(hashArray HashArray) HashArray {
+	mb := make(map[Hash]struct{})
+	for _, x := range hashArray {
+		mb[x] = struct{}{}
+	}
+	diff := []Hash{}
+	for _, x := range ha {
+		if _, found := mb[x]; !found {
+			diff = append(diff, x)
+		}
+	}
+	return diff
+}
+
+// Uniq returns a new HashArray with unique values.
+func (ha HashArray) Uniq() HashArray {
+	c := make(HashArray, 0)
+	m := make(map[Hash]bool)
+	for _, item := range ha {
+		if !m[item] {
+			c = append(c, item)
+		}
+		m[item] = true
+	}
+	return c
+}
+
+// IsUniq returns true if contains only unique values,
+// otherwise - false.
+func (ha HashArray) IsUniq() bool {
+	cpy := ha.Copy()
+	return len(ha) == len(cpy.Uniq())
+}
+
+// Concat concatenates current HashArray with passed in param.
+func (ha HashArray) Concat(hashes HashArray) HashArray {
+	ha = append(ha, hashes...)
+	return ha
+}
+
+// IsEqualTo returns true if values of two HashArrays are same
+// otherwise - false
+func (ha HashArray) IsEqualTo(hashArray HashArray) bool {
+	if len(ha) != len(hashArray) {
+		return false
+	}
+	for i, v := range ha {
+		if v != hashArray[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// Sort sorts lexicographically hashes.
+func (ha HashArray) Sort() HashArray {
+	strs := make([]string, len(ha))
+	for i, hash := range ha {
+		strs[i] = hash.String()
+	}
+	sort.Strings(strs)
+	for i, str := range strs {
+		ha[i] = HexToHash(str)
+	}
+	return ha
+}
+
+// Has returns true if current HashArray contains passed hash
+// otherwise - false.
+func (ha HashArray) Has(hash Hash) bool {
+	for _, h := range ha {
+		if h == hash {
+			return true
+		}
+	}
+	return false
+}
+
+// IndexOf returns index of passed hash in current HashArray
+// otherwise -1.
+func (ha HashArray) IndexOf(hash Hash) int {
+	for i, h := range ha {
+		if h == hash {
+			return i
+		}
+	}
+	return -1
+}
+
+// Reverse returns reversed copy of HashArray.
+func (ha HashArray) Reverse() HashArray {
+	cpy := ha.Copy()
+	i := 0
+	j := len(ha) - 1
+	for i < j {
+		cpy[i], cpy[j] = cpy[j], cpy[i]
+		i++
+		j--
+	}
+	return cpy
+}
+
+// Key converts HashArray to a hash key.
+func (ha HashArray) Key() Hash {
+	c := ha.Copy()
+	buf := c.Uniq().Sort().ToBytes()
+	sha := sha3.NewLegacyKeccak256()
+	sha.Write(buf[:])
+	key := sha.Sum(nil)
+	return BytesToHash(key)
+}
 
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte

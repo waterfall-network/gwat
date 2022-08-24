@@ -29,27 +29,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/les/checkpointoracle"
-	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/accounts/abi/bind"
+	"github.com/waterfall-foundation/gwat/accounts/abi/bind/backends"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/mclock"
+	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	"github.com/waterfall-foundation/gwat/contracts/checkpointoracle/contract"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/les/checkpointoracle"
+	"github.com/waterfall-foundation/gwat/les/flowcontrol"
+	vfs "github.com/waterfall-foundation/gwat/les/vflux/server"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var (
@@ -336,7 +336,7 @@ type testPeer struct {
 }
 
 // handshakeWithServer executes the handshake with the remote server peer.
-func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID) {
+func (p *testPeer) handshakeWithServer(t *testing.T, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID) {
 	// It only works for the simulated client peer
 	if p.cpeer == nil {
 		t.Fatal("handshake for client peer only")
@@ -344,7 +344,6 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 	var sendList keyValueList
 	sendList = sendList.add("protocolVersion", uint64(p.cpeer.version))
 	sendList = sendList.add("networkId", uint64(NetworkId))
-	sendList = sendList.add("headTd", td)
 	sendList = sendList.add("headHash", head)
 	sendList = sendList.add("headNum", headNum)
 	sendList = sendList.add("genesisHash", genesis)
@@ -360,7 +359,7 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 }
 
 // handshakeWithClient executes the handshake with the remote client peer.
-func (p *testPeer) handshakeWithClient(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, costList RequestCostList, recentTxLookup uint64) {
+func (p *testPeer) handshakeWithClient(t *testing.T, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, costList RequestCostList, recentTxLookup uint64) {
 	// It only works for the simulated client peer
 	if p.speer == nil {
 		t.Fatal("handshake for server peer only")
@@ -368,7 +367,6 @@ func (p *testPeer) handshakeWithClient(t *testing.T, td *big.Int, head common.Ha
 	var sendList keyValueList
 	sendList = sendList.add("protocolVersion", uint64(p.speer.version))
 	sendList = sendList.add("networkId", uint64(NetworkId))
-	sendList = sendList.add("headTd", td)
 	sendList = sendList.add("headHash", head)
 	sendList = sendList.add("headNum", headNum)
 	sendList = sendList.add("genesisHash", genesis)
@@ -483,11 +481,10 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 	}
 	var (
 		genesis = client.handler.backend.blockchain.Genesis()
-		head    = client.handler.backend.blockchain.CurrentHeader()
-		td      = client.handler.backend.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		head    = client.handler.backend.blockchain.GetLastFinalizedHeader()
 	)
-	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
-	tp.handshakeWithClient(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
+	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Nr())
+	tp.handshakeWithClient(t, head.Hash(), head.Nr(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
 
 	// Ensure the connection is established or exits when any error occurs
 	for {
@@ -547,11 +544,10 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 	}
 	var (
 		genesis = server.handler.blockchain.Genesis()
-		head    = server.handler.blockchain.CurrentHeader()
-		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		head    = server.handler.blockchain.GetLastFinalizedHeader()
 	)
-	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
-	tp.handshakeWithServer(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID)
+	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Nr())
+	tp.handshakeWithServer(t, head.Hash(), head.Nr(), genesis.Hash(), forkID)
 
 	// Ensure the connection is established or exits when any error occurs
 	for {

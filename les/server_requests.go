@@ -20,15 +20,15 @@ import (
 	"encoding/binary"
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/metrics"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 // serverBackend defines the backend functions needed for serving LES requests
@@ -174,10 +174,10 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 				if first {
 					origin = bc.GetHeaderByHash(r.Query.Origin.Hash)
 					if origin != nil {
-						r.Query.Origin.Number = origin.Number.Uint64()
+						r.Query.Origin.Number = origin.Nr()
 					}
 				} else {
-					origin = bc.GetHeader(r.Query.Origin.Hash, r.Query.Origin.Number)
+					origin = bc.GetHeader(r.Query.Origin.Hash)
 				}
 			} else {
 				origin = bc.GetHeaderByNumber(r.Query.Origin.Number)
@@ -202,12 +202,12 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 			case hashMode && !r.Query.Reverse:
 				// Hash based traversal towards the leaf block
 				var (
-					current = origin.Number.Uint64()
+					current = origin.Nr()
 					next    = current + r.Query.Skip + 1
 				)
 				if next <= current {
 					infos, _ := json.Marshal(p.Peer.Info())
-					p.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", r.Query.Skip, "next", next, "attacker", string(infos))
+					p.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", r.Query.Skip, "next", next, "attacker", infos)
 					unknown = true
 				} else {
 					if header := bc.GetHeaderByNumber(next); header != nil {
@@ -296,9 +296,9 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			}
 			// Refuse to search stale state data in the database since looking for
 			// a non-exist key is kind of expensive.
-			local := bc.CurrentHeader().Number.Uint64()
-			if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
-				p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
+			local := bc.GetLastFinalizedHeader().Nr()
+			if !backend.ArchiveMode() && header.Nr()+core.TriesInMemory <= local {
+				p.Log().Debug("Reject stale code request", "number", header.Nr(), "head", local)
 				p.bumpInvalid()
 				continue
 			}
@@ -395,9 +395,9 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				}
 				// Refuse to search stale state data in the database since looking for
 				// a non-exist key is kind of expensive.
-				local := bc.CurrentHeader().Number.Uint64()
-				if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
-					p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
+				local := bc.GetLastFinalizedHeader().Nr()
+				if !backend.ArchiveMode() && header.Nr()+core.TriesInMemory <= local {
+					p.Log().Debug("Reject stale trie request", "number", header.Nr(), "head", local)
 					p.bumpInvalid()
 					continue
 				}

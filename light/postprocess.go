@@ -22,20 +22,19 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/bitutil"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 // IndexerConfig includes a set of configs for chain indexers.
@@ -110,7 +109,6 @@ var (
 // ChtNode structures are stored in the Canonical Hash Trie in an RLP encoded format
 type ChtNode struct {
 	Hash common.Hash
-	Td   *big.Int
 }
 
 // GetChtRoot reads the CHT root associated to the given section from the database
@@ -201,16 +199,12 @@ func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSecti
 
 // Process implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Process(ctx context.Context, header *types.Header) error {
-	hash, num := header.Hash(), header.Number.Uint64()
+	hash, num := header.Hash(), header.Nr()
 	c.lastHash = hash
 
-	td := rawdb.ReadTd(c.diskdb, hash, num)
-	if td == nil {
-		panic(nil)
-	}
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], num)
-	data, _ := rlp.EncodeToBytes(ChtNode{hash, td})
+	data, _ := rlp.EncodeToBytes(ChtNode{hash})
 	c.trie.Update(encNumber[:], data)
 	return nil
 }
@@ -280,8 +274,7 @@ func (c *ChtIndexerBackend) Prune(threshold uint64) error {
 			//
 			// In order to totally get rid of this index, we need an additional
 			// flag to specify how many historical data light client can serve.
-			rawdb.DeleteCanonicalHash(batch, numbers[i])
-			rawdb.DeleteBlockWithoutNumber(batch, hashes[i], numbers[i])
+			rawdb.DeleteBlockWithoutNumber(batch, hashes[i])
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
@@ -417,7 +410,7 @@ func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, las
 
 // Process implements core.ChainIndexerBackend
 func (b *BloomTrieIndexerBackend) Process(ctx context.Context, header *types.Header) error {
-	num := header.Number.Uint64() - b.section*b.size
+	num := header.Nr() - b.section*b.size
 	if (num+1)%b.parentSize == 0 {
 		b.sectionHeads[num/b.parentSize] = header.Hash()
 	}

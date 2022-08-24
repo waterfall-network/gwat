@@ -23,9 +23,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/rlp"
 )
 
 type jsonEncoder interface {
@@ -126,22 +126,20 @@ func (h *Header) String() string {
 	return encodeOrError(h)
 }
 
-func (h *Header) GetParentHash() *Hash   { return &Hash{h.header.ParentHash} }
-func (h *Header) GetUncleHash() *Hash    { return &Hash{h.header.UncleHash} }
-func (h *Header) GetCoinbase() *Address  { return &Address{h.header.Coinbase} }
-func (h *Header) GetRoot() *Hash         { return &Hash{h.header.Root} }
-func (h *Header) GetTxHash() *Hash       { return &Hash{h.header.TxHash} }
-func (h *Header) GetReceiptHash() *Hash  { return &Hash{h.header.ReceiptHash} }
-func (h *Header) GetBloom() *Bloom       { return &Bloom{h.header.Bloom} }
-func (h *Header) GetDifficulty() *BigInt { return &BigInt{h.header.Difficulty} }
-func (h *Header) GetNumber() int64       { return h.header.Number.Int64() }
-func (h *Header) GetGasLimit() int64     { return int64(h.header.GasLimit) }
-func (h *Header) GetGasUsed() int64      { return int64(h.header.GasUsed) }
-func (h *Header) GetTime() int64         { return int64(h.header.Time) }
-func (h *Header) GetExtra() []byte       { return h.header.Extra }
-func (h *Header) GetMixDigest() *Hash    { return &Hash{h.header.MixDigest} }
-func (h *Header) GetNonce() *Nonce       { return &Nonce{h.header.Nonce} }
-func (h *Header) GetHash() *Hash         { return &Hash{h.header.Hash()} }
+func (h *Header) GetParentHashes() *common.HashArray { return &h.header.ParentHashes }
+func (h *Header) GetCoinbase() *Address              { return &Address{h.header.Coinbase} }
+func (h *Header) GetRoot() *Hash                     { return &Hash{h.header.Root} }
+func (h *Header) GetTxHash() *Hash                   { return &Hash{h.header.TxHash} }
+func (h *Header) GetReceiptHash() *Hash              { return &Hash{h.header.ReceiptHash} }
+func (h *Header) GetBloom() *Bloom                   { return &Bloom{h.header.Bloom} }
+func (h *Header) GetNumber() int64                   { return int64(h.header.Nr()) }
+func (h *Header) GetGasLimit() int64                 { return int64(h.header.GasLimit) }
+func (h *Header) GetGasUsed() int64                  { return int64(h.header.GasUsed) }
+func (h *Header) GetTime() int64                     { return int64(h.header.Time) }
+func (h *Header) GetExtra() []byte                   { return h.header.Extra }
+func (h *Header) GetMixDigest() *Hash                { return &Hash{h.header.MixDigest} }
+func (h *Header) GetNonce() *Nonce                   { return &Nonce{h.header.Nonce} }
+func (h *Header) GetHash() *Hash                     { return &Hash{h.header.Hash()} }
 
 // Headers represents a slice of headers.
 type Headers struct{ headers []*types.Header }
@@ -202,25 +200,22 @@ func (b *Block) String() string {
 	return encodeOrError(b)
 }
 
-func (b *Block) GetParentHash() *Hash           { return &Hash{b.block.ParentHash()} }
-func (b *Block) GetUncleHash() *Hash            { return &Hash{b.block.UncleHash()} }
-func (b *Block) GetCoinbase() *Address          { return &Address{b.block.Coinbase()} }
-func (b *Block) GetRoot() *Hash                 { return &Hash{b.block.Root()} }
-func (b *Block) GetTxHash() *Hash               { return &Hash{b.block.TxHash()} }
-func (b *Block) GetReceiptHash() *Hash          { return &Hash{b.block.ReceiptHash()} }
-func (b *Block) GetBloom() *Bloom               { return &Bloom{b.block.Bloom()} }
-func (b *Block) GetDifficulty() *BigInt         { return &BigInt{b.block.Difficulty()} }
-func (b *Block) GetNumber() int64               { return b.block.Number().Int64() }
-func (b *Block) GetGasLimit() int64             { return int64(b.block.GasLimit()) }
-func (b *Block) GetGasUsed() int64              { return int64(b.block.GasUsed()) }
-func (b *Block) GetTime() int64                 { return int64(b.block.Time()) }
-func (b *Block) GetExtra() []byte               { return b.block.Extra() }
-func (b *Block) GetMixDigest() *Hash            { return &Hash{b.block.MixDigest()} }
-func (b *Block) GetNonce() int64                { return int64(b.block.Nonce()) }
-func (b *Block) GetHash() *Hash                 { return &Hash{b.block.Hash()} }
-func (b *Block) GetHeader() *Header             { return &Header{b.block.Header()} }
-func (b *Block) GetUncles() *Headers            { return &Headers{b.block.Uncles()} }
-func (b *Block) GetTransactions() *Transactions { return &Transactions{b.block.Transactions()} }
+func (b *Block) GetParentHashes() common.HashArray { return b.block.ParentHashes() }
+func (b *Block) GetCoinbase() *Address             { return &Address{b.block.Coinbase()} }
+func (b *Block) GetRoot() *Hash                    { return &Hash{b.block.Root()} }
+func (b *Block) GetTxHash() *Hash                  { return &Hash{b.block.TxHash()} }
+func (b *Block) GetReceiptHash() *Hash             { return &Hash{b.block.ReceiptHash()} }
+func (b *Block) GetBloom() *Bloom                  { return &Bloom{b.block.Bloom()} }
+func (b *Block) GetNumber() int64                  { return int64(b.block.Nr()) }
+func (b *Block) GetGasLimit() int64                { return int64(b.block.GasLimit()) }
+func (b *Block) GetGasUsed() int64                 { return int64(b.block.GasUsed()) }
+func (b *Block) GetTime() int64                    { return int64(b.block.Time()) }
+func (b *Block) GetExtra() []byte                  { return b.block.Extra() }
+func (b *Block) GetMixDigest() *Hash               { return &Hash{b.block.MixDigest()} }
+func (b *Block) GetNonce() int64                   { return int64(b.block.Nonce()) }
+func (b *Block) GetHash() *Hash                    { return &Hash{b.block.Hash()} }
+func (b *Block) GetHeader() *Header                { return &Header{b.block.Header()} }
+func (b *Block) GetTransactions() *Transactions    { return &Transactions{b.block.Transactions()} }
 func (b *Block) GetTransaction(hash *Hash) *Transaction {
 	return &Transaction{b.block.Transaction(hash.hash)}
 }

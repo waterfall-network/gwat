@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
+	"dag":      DagJs,
 	"wat":      WatJs,
 }
 
@@ -845,6 +846,29 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'requestStats',
 			getter: 'vflux_requestStats'
+		}),
+	]
+});
+`
+const DagJs = `
+web3._extend({
+	property: 'dag',
+	methods: [],
+	properties: [
+		new web3._extend.Method({
+			name: 'sync',
+			call: 'dag_sync',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'finalize',
+			call: 'dag_finalize',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getCandidates',
+			call: 'dag_getCandidates',
+			params: 1
 		}),
 	]
 });

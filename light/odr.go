@@ -21,11 +21,11 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -63,7 +63,7 @@ type TrieID struct {
 func StateTrieID(header *types.Header) *TrieID {
 	return &TrieID{
 		BlockHash:   header.Hash(),
-		BlockNumber: header.Number.Uint64(),
+		BlockNumber: header.Nr(),
 		AccKey:      nil,
 		Root:        header.Root,
 	}
@@ -115,7 +115,7 @@ type BlockRequest struct {
 
 // StoreResult stores the retrieved data in local database
 func (req *BlockRequest) StoreResult(db ethdb.Database) {
-	rawdb.WriteBodyRLP(db, req.Hash, req.Number, req.Rlp)
+	rawdb.WriteBodyRLP(db, req.Hash, req.Rlp)
 }
 
 // ReceiptsRequest is the ODR request type for retrieving receipts.
@@ -130,7 +130,7 @@ type ReceiptsRequest struct {
 // StoreResult stores the retrieved data in local database
 func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
 	if !req.Untrusted {
-		rawdb.WriteReceipts(db, req.Hash, req.Number, req.Receipts)
+		rawdb.WriteReceipts(db, req.Hash, req.Receipts)
 	}
 }
 
@@ -146,10 +146,9 @@ type ChtRequest struct {
 
 // StoreResult stores the retrieved data in local database
 func (req *ChtRequest) StoreResult(db ethdb.Database) {
-	hash, num := req.Header.Hash(), req.Header.Number.Uint64()
+	hash, num := req.Header.Hash(), req.Header.Nr()
 	rawdb.WriteHeader(db, req.Header)
-	rawdb.WriteTd(db, hash, num, req.Td)
-	rawdb.WriteCanonicalHash(db, hash, num)
+	rawdb.WriteFinalizedHashNumber(db, hash, num)
 }
 
 // BloomRequest is the ODR request type for retrieving bloom filters from a CHT structure
@@ -167,7 +166,7 @@ type BloomRequest struct {
 // StoreResult stores the retrieved data in local database
 func (req *BloomRequest) StoreResult(db ethdb.Database) {
 	for i, sectionIdx := range req.SectionIndexList {
-		sectionHead := rawdb.ReadCanonicalHash(db, (sectionIdx+1)*req.Config.BloomTrieSize-1)
+		sectionHead := rawdb.ReadFinalizedHashByNumber(db, (sectionIdx+1)*req.Config.BloomTrieSize-1)
 		// if we don't have the canonical hash stored for this section head number, we'll still store it under
 		// a key with a zero sectionHead. GetBloomBits will look there too if we still don't have the canonical
 		// hash. In the unlikely case we've retrieved the section head hash since then, we'll just retrieve the

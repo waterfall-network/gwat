@@ -19,13 +19,10 @@ package core
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/core/types"
 )
 
 var (
-	// ErrKnownBlock is returned when a block to import is already known locally.
-	ErrKnownBlock = errors.New("block already known")
-
 	// ErrBannedHash is returned if a block to import is on the banned list.
 	ErrBannedHash = errors.New("banned hash")
 
@@ -33,6 +30,12 @@ var (
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
 	errSideChainReceipts = errors.New("side blocks can't be accepted as ancient chain data")
+
+	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.
+	ErrInsertUncompletedDag = errors.New("insert uncompleted dag chain")
+
+	// ErrStateBlockNotFound is returned if previous or next blue block not found in chain for requested block
+	ErrStateBlockNotFound = errors.New("state block not found")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

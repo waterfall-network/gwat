@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/light"
 )
 
 var testBankSecureTrieKey = secAddr(bankAddr)
@@ -57,8 +57,8 @@ func TestTrieEntryAccessLes3(t *testing.T) { testAccess(t, 3, tfTrieEntryAccess)
 func TestTrieEntryAccessLes4(t *testing.T) { testAccess(t, 4, tfTrieEntryAccess) }
 
 func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
-	if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
-		return &light.TrieRequest{Id: light.StateTrieID(rawdb.ReadHeader(db, bhash, *number)), Key: testBankSecureTrieKey}
+	if number := rawdb.ReadFinalizedNumberByHash(db, bhash); number != nil {
+		return &light.TrieRequest{Id: light.StateTrieID(rawdb.ReadHeader(db, bhash)), Key: testBankSecureTrieKey}
 	}
 	return nil
 }
@@ -68,12 +68,12 @@ func TestCodeAccessLes3(t *testing.T) { testAccess(t, 3, tfCodeAccess) }
 func TestCodeAccessLes4(t *testing.T) { testAccess(t, 4, tfCodeAccess) }
 
 func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrRequest {
-	number := rawdb.ReadHeaderNumber(db, bhash)
+	number := rawdb.ReadFinalizedNumberByHash(db, bhash)
 	if number != nil {
 		return nil
 	}
-	header := rawdb.ReadHeader(db, bhash, *number)
-	if header.Number.Uint64() < testContractDeployed {
+	header := rawdb.ReadHeader(db, bhash)
+	if header.Nr() < testContractDeployed {
 		return nil
 	}
 	sti := light.StateTrieID(header)
@@ -94,14 +94,14 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	defer tearDown()
 
 	// Ensure the client has synced all necessary data.
-	clientHead := client.handler.backend.blockchain.CurrentHeader()
-	if clientHead.Number.Uint64() != 4 {
-		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
+	clientHead := client.handler.backend.blockchain.GetLastFinalizedHeader()
+	if clientHead.Nr() != 4 {
+		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Nr())
 	}
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
-			bhash := rawdb.ReadCanonicalHash(server.db, i)
+		for i := uint64(0); i <= server.handler.blockchain.GetLastFinalizedHeader().Nr(); i++ {
+			bhash := rawdb.ReadFinalizedHashByNumber(server.db, i)
 			if req := fn(client.db, bhash, i); req != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 				err := client.handler.backend.odr.Retrieve(ctx, req)

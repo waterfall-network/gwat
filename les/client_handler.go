@@ -18,22 +18,21 @@ package les
 
 import (
 	"context"
-	"math/big"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/les/downloader"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/mclock"
+	"github.com/waterfall-foundation/gwat/core/forkid"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/les/downloader"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // clientHandler is responsible for receiving and processing all incoming server
@@ -111,7 +110,7 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
-	forkid := forkid.NewID(h.backend.blockchain.Config(), h.backend.genesis, h.backend.blockchain.CurrentHeader().Number.Uint64())
+	forkid := forkid.NewID(h.backend.blockchain.Config(), h.backend.genesis, h.backend.blockchain.GetLastFinalizedHeader().Nr())
 	if err := p.Handshake(h.backend.blockchain.Genesis().Hash(), forkid, h.forkFilter); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
@@ -146,7 +145,7 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 	// It's mainly used in testing which requires discarding initial
 	// signal to prevent syncing.
 	if !noInitAnnounce {
-		h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
+		h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number})
 	}
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)
@@ -208,10 +207,10 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 				}
 				p.Log().Trace("Valid announcement signature")
 			}
-			p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
+			p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "reorg", req.ReorgDepth)
 
 			// Update peer head information first and then notify the announcement
-			p.updateHead(req.Hash, req.Number, req.Td)
+			p.updateHead(req.Hash, req.Number)
 			h.fetcher.announce(p, &req)
 		}
 	case msg.Code == BlockHeadersMsg:
@@ -378,7 +377,7 @@ type peerConnection struct {
 	peer    *serverPeer
 }
 
-func (pc *peerConnection) Head() (common.Hash, *big.Int) {
+func (pc *peerConnection) Head() common.Hash {
 	return pc.peer.HeadAndTd()
 }
 
