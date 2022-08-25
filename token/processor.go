@@ -252,6 +252,7 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 
 // WRC20PropertiesResult stores result of the properties operation for WRC-20 tokens
 type WRC20PropertiesResult struct {
+	Std         operation.Std
 	Name        []byte
 	Symbol      []byte
 	Decimals    uint8
@@ -260,6 +261,7 @@ type WRC20PropertiesResult struct {
 
 // WRC721PropertiesResult stores result of the properties operation for WRC-721 tokens
 type WRC721PropertiesResult struct {
+	Std         operation.Std
 	Name        []byte
 	Symbol      []byte
 	BaseURI     []byte
@@ -308,6 +310,7 @@ func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
 		}
 
 		r = &WRC20PropertiesResult{
+			Std:         operation.StdWRC20,
 			Name:        name,
 			Symbol:      symbol,
 			Decimals:    decimals,
@@ -327,6 +330,7 @@ func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
 		}
 
 		props := &WRC721PropertiesResult{
+			Std:        operation.StdWRC721,
 			Name:       name,
 			Symbol:     symbol,
 			BaseURI:    baseURI,

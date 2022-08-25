@@ -35,6 +35,7 @@ func NewPublicTokenAPI(b Backend) *PublicTokenAPI {
 }
 
 type wrc721Properties struct {
+	Std        *hexutil.Uint  `json:"std"`
 	Name       *hexutil.Bytes `json:"name"`
 	Symbol     *hexutil.Bytes `json:"symbol"`
 	PercentFee *hexutil.Uint8 `json:"percentFee,omitempty"`
@@ -175,6 +176,7 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 
 	switch v := res.(type) {
 	case *WRC20PropertiesResult:
+		std := hexutil.Uint(v.Std)
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
 		decimals := hexutil.Uint8(v.Decimals)
@@ -182,6 +184,7 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 
 		ret = &wrc20Properties{
 			wrc721Properties{
+				Std:    &std,
 				Name:   &nameBytes,
 				Symbol: &symbolBytes,
 			},
@@ -189,6 +192,7 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 			totalSupply,
 		}
 	case *WRC721PropertiesResult:
+		std := hexutil.Uint(v.Std)
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
 		percentFee := hexutil.Uint8(v.PercentFee)
@@ -196,6 +200,7 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 
 		props := &wrc721TokenProperties{
 			wrc721Properties: wrc721Properties{
+				Std:        &std,
 				Name:       &nameBytes,
 				Symbol:     &symbolBytes,
 				PercentFee: &percentFee,
