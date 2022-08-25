@@ -387,12 +387,12 @@ func (pool *TxPool) loop() {
 		// Handle stats reporting ticks
 		case <-report.C:
 			pool.mu.RLock()
-			pending, queued := pool.stats()
+			pending, queued, pendingFinalize := pool.stats()
 			stales := int(atomic.LoadInt64(&pool.priced.stales))
 			pool.mu.RUnlock()
 
 			if pending != prevPending || queued != prevQueued || stales != prevStales {
-				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
+				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "pendingFinalize", pendingFinalize, "stales", stales)
 				prevPending, prevQueued, prevStales = pending, queued, stales
 			}
 
@@ -513,7 +513,7 @@ func (pool *TxPool) Nonce(addr common.Address) uint64 {
 
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
-func (pool *TxPool) Stats() (int, int) {
+func (pool *TxPool) Stats() (int, int, int) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
@@ -522,7 +522,7 @@ func (pool *TxPool) Stats() (int, int) {
 
 // stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
-func (pool *TxPool) stats() (int, int) {
+func (pool *TxPool) stats() (int, int, int) {
 	pending := 0
 	for _, list := range pool.pending {
 		pending += list.Len()
@@ -531,7 +531,11 @@ func (pool *TxPool) stats() (int, int) {
 	for _, list := range pool.queue {
 		queued += list.Len()
 	}
-	return pending, queued
+	pendingFinalize := 0
+	for _, list := range pool.pendingFinalize {
+		pendingFinalize += list.Len()
+	}
+	return pending, queued, pendingFinalize
 }
 
 // Content retrieves the data content of the transaction pool, returning all the
@@ -1643,6 +1647,13 @@ func (pool *TxPool) demoteUnexecutables() {
 			pool.all.Remove(hash)
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
+		oldsPF := listPF.Forward(nonce)
+		for _, tx := range oldsPF {
+			hash := tx.Hash()
+			pool.all.Remove(hash)
+			log.Trace("Removed old pendingFinalize transaction", "hash", hash)
+		}
+
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 		for _, tx := range drops {
