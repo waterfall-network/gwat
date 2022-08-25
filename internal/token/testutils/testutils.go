@@ -55,6 +55,10 @@ func RandomData(n int) []byte {
 }
 
 func CheckError(e error, arr []error) bool {
+	if e == nil && len(arr) == 0 {
+		return true
+	}
+
 	for _, err := range arr {
 		if e == err {
 			return true
@@ -64,15 +68,14 @@ func CheckError(e error, arr []error) bool {
 	return false
 }
 
-func CompareBigInt(t *testing.T, a, b *big.Int) {
-	haveValue := a
-	wantValue := b
+func BigIntEquals(haveValue, wantValue *big.Int) bool {
+	if haveValue == nil && wantValue == nil {
+		return true
+	}
 
 	if wantValue == nil {
 		wantValue = big.NewInt(0)
 	}
 
-	if haveValue.Cmp(wantValue) != 0 {
-		t.Fatalf("values do not match:\nwant: %+v\nhave: %+v", wantValue, haveValue)
-	}
+	return haveValue.Cmp(wantValue) == 0
 }

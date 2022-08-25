@@ -16,7 +16,6 @@ type allowanceOperation struct {
 // NewAllowanceOperation creates a token allowance operation.
 // The operation only supports WRC-20 tokens so its Standard field sets to StdWRC20.
 func NewAllowanceOperation(address common.Address, owner common.Address, spender common.Address) (Allowance, error) {
-
 	if address == (common.Address{}) {
 		return nil, ErrNoAddress
 	}
@@ -26,6 +25,7 @@ func NewAllowanceOperation(address common.Address, owner common.Address, spender
 	if owner == (common.Address{}) {
 		return nil, ErrNoOwner
 	}
+
 	return &allowanceOperation{
 		operation: operation{
 			Std: StdWRC20,
@@ -63,8 +63,8 @@ type transferOperation struct {
 	toOperation
 }
 
-// NewTransferOperation creates a token trasnsfer operation
-// Only WRC-20 tokens support the operation so its Standard alwasys sets to StdWRC20.
+// NewTransferOperation creates a token transfer operation
+// Only WRC-20 tokens support the operation so its Standard always sets to StdWRC20.
 func NewTransferOperation(to common.Address, value *big.Int) (Transfer, error) {
 	return newTransferOperation(StdWRC20, to, value)
 }
@@ -76,6 +76,7 @@ func newTransferOperation(standard Std, to common.Address, value *big.Int) (*tra
 	if value == nil {
 		return nil, ErrNoValue
 	}
+
 	return &transferOperation{
 		operation: operation{
 			Std: standard,

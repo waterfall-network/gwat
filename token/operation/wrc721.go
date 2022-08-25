@@ -22,6 +22,7 @@ func NewMintOperation(to common.Address, tokenId *big.Int, metadata []byte) (Min
 	if tokenId == nil {
 		return nil, ErrNoTokenId
 	}
+
 	return &mintOperation{
 		operation: operation{
 			Std: StdWRC721,
@@ -71,6 +72,7 @@ func NewBurnOperation(tokenId *big.Int) (Burn, error) {
 	if tokenId == nil {
 		return nil, ErrNoTokenId
 	}
+
 	return &burnOperation{
 		operation: operation{
 			Std: StdWRC721,
@@ -108,6 +110,7 @@ func NewSetApprovalForAllOperation(operator common.Address, isApproved bool) (Se
 	if operator == (common.Address{}) {
 		return nil, ErrNoOperator
 	}
+
 	return &setApprovalForAllOperation{
 		operation: operation{
 			Std: StdWRC721,
@@ -158,6 +161,7 @@ func NewIsApprovedForAllOperation(address common.Address, owner common.Address, 
 	if operator == (common.Address{}) {
 		return nil, ErrNoOperator
 	}
+
 	return &isApprovedForAllOperation{
 		operation: operation{
 			Std: StdWRC721,
@@ -201,6 +205,7 @@ func NewSafeTransferFromOperation(from common.Address, to common.Address, value 
 	if err != nil {
 		return nil, err
 	}
+
 	return &safeTransferFromOperation{
 		transferFromOperation: *transferOp.(*transferFromOperation),
 		OperationData:         data,
@@ -250,6 +255,7 @@ func NewTokenOfOwnerByIndexOperation(address common.Address, owner common.Addres
 	if index == nil {
 		return nil, ErrNoIndex
 	}
+
 	return &tokenOfOwnerByIndexOperation{
 		operation: operation{
 			Std: StdWRC721,

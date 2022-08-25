@@ -18,6 +18,7 @@ type opData struct {
 	Operator   common.Address
 	From       common.Address
 	To         common.Address
+	NewCost    *big.Int
 	Value      *big.Int
 	Index      *big.Int
 	IsApproved bool
@@ -138,9 +139,17 @@ func rlpDecode(b []byte, op interface{}) error {
 		return ErrNoAddress
 	}
 
-	setFieldValue("TokenValue", func() bool {
-		return true
-	}, data.Value)
+	if !setFieldValue("NewCostVal", func() bool {
+		return data.NewCost != nil
+	}, data.NewCost) {
+		return ErrNoValue
+	}
+
+	if !setFieldValue("TokenValue", func() bool {
+		return data.Value != nil
+	}, data.Value) {
+		return ErrNoValue
+	}
 
 	if !setFieldValue("OwnerAddress", func() bool {
 		return data.Owner != (common.Address{})
@@ -173,9 +182,9 @@ func rlpDecode(b []byte, op interface{}) error {
 	}
 
 	if !setFieldValue("Id", func() bool {
-		return true
+		return data.TokenId != nil
 	}, data.TokenId) {
-		return nil
+		return ErrNoTokenId
 	}
 
 	switch v := op.(type) {
@@ -212,12 +221,14 @@ func rlpEncode(op interface{}) ([]byte, error) {
 				continue
 			}
 
-			var name string = ""
+			name := ""
 			switch f.Name {
 			case "Std":
 				name = f.Name
 			case "Id":
 				name = "TokenId"
+			case "NewCostVal":
+				name = "NewCost"
 			case "TokenValue":
 				name = "Value"
 			case "TokenAddress":

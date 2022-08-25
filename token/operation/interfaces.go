@@ -34,7 +34,7 @@ type Burn interface {
 	TokenId() *big.Int
 }
 
-// Create contatins all attributes for creating WRC-20 or WRC-721 token
+// Create contains all attributes for creating WRC-20 or WRC-721 token
 // Methods for getting optional attributes also return boolean values which indicates if the attribute was set
 type Create interface {
 	Operation
@@ -46,6 +46,7 @@ type Create interface {
 	TotalSupply() (*big.Int, bool)
 	// WRC-721 arguments
 	BaseURI() ([]byte, bool)
+	PercentFee() uint8
 }
 
 // IsApprovedForAll contains attributes for WRC-721 is approved for all operation
@@ -92,7 +93,7 @@ type TokenOfOwnerByIndex interface {
 	Index() *big.Int
 }
 
-// TransferFrom contains attrubute for WRC-20 or WRC-721 transfer from operation
+// TransferFrom contains attribute for WRC-20 or WRC-721 transfer from operation
 type TransferFrom interface {
 	Transfer
 	From() common.Address
@@ -103,4 +104,25 @@ type Transfer interface {
 	Operation
 	To() common.Address
 	Value() *big.Int
+}
+
+// SetPrice contains attributes for price token call
+type SetPrice interface {
+	Operation
+	TokenId() (*big.Int, bool)
+	Value() *big.Int
+}
+
+// Buy contains attributes for buy token call
+type Buy interface {
+	Operation
+	TokenId() (*big.Int, bool)
+	NewCost() (*big.Int, bool)
+}
+
+// Cost contains attributes for cost token call
+type Cost interface {
+	Operation
+	addresser
+	TokenId() (*big.Int, bool)
 }

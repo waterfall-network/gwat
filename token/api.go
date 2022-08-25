@@ -35,8 +35,11 @@ func NewPublicTokenAPI(b Backend) *PublicTokenAPI {
 }
 
 type wrc721Properties struct {
-	Name   *hexutil.Bytes `json:"name"`
-	Symbol *hexutil.Bytes `json:"symbol"`
+	Std        *hexutil.Uint  `json:"std"`
+	Name       *hexutil.Bytes `json:"name"`
+	Symbol     *hexutil.Bytes `json:"symbol"`
+	PercentFee *hexutil.Uint8 `json:"percentFee,omitempty"`
+	Cost       *hexutil.Big   `json:"cost,omitempty"`
 }
 
 // wrc20Properties stores results of the following view functions of EIP-20: name, symbol, decimals, totalSupply.
@@ -75,7 +78,7 @@ type TokenArgs struct {
 //
 // Will create a WRC-721 token if BaseURI field is given in the args. Returns a raw data with token attributes.
 // Use the raw data in the Data field when sending a transaction to create the token.
-func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) TokenCreate(_ context.Context, args TokenArgs) (hexutil.Bytes, error) {
 	if args.Name == nil {
 		return nil, operation.ErrNoName
 	}
@@ -89,16 +92,20 @@ func (s *PublicTokenAPI) TokenCreate(ctx context.Context, args TokenArgs) (hexut
 		op  operation.Operation
 		err error
 	)
+
 	switch {
 	case args.TotalSupply != nil:
 		decimals := (*uint8)(args.Decimals)
 		totalSupply := args.TotalSupply.ToInt()
+
 		if op, err = operation.NewWrc20CreateOperation(name, symbol, decimals, totalSupply); err != nil {
 			return nil, err
 		}
 	case args.BaseURI != nil:
+		percentFee := (*uint8)(args.PercentFee)
 		baseURI := []byte(*args.BaseURI)
-		if op, err = operation.NewWrc721CreateOperation(name, symbol, baseURI); err != nil {
+
+		if op, err = operation.NewWrc721CreateOperation(name, symbol, baseURI, percentFee); err != nil {
 			return nil, err
 		}
 	default:
@@ -169,12 +176,15 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 
 	switch v := res.(type) {
 	case *WRC20PropertiesResult:
+		std := hexutil.Uint(v.Std)
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
 		decimals := hexutil.Uint8(v.Decimals)
 		totalSupply := (*hexutil.Big)(v.TotalSupply)
+
 		ret = &wrc20Properties{
 			wrc721Properties{
+				Std:    &std,
 				Name:   &nameBytes,
 				Symbol: &symbolBytes,
 			},
@@ -182,13 +192,19 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 			totalSupply,
 		}
 	case *WRC721PropertiesResult:
+		std := hexutil.Uint(v.Std)
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
+		percentFee := hexutil.Uint8(v.PercentFee)
+		cost := (*hexutil.Big)(v.Cost)
 
 		props := &wrc721TokenProperties{
 			wrc721Properties: wrc721Properties{
-				Name:   &nameBytes,
-				Symbol: &symbolBytes,
+				Std:        &std,
+				Name:       &nameBytes,
+				Symbol:     &symbolBytes,
+				PercentFee: &percentFee,
+				Cost:       cost,
 			},
 		}
 		if len(v.BaseURI) > 0 {
@@ -245,7 +261,7 @@ func (s *PublicTokenAPI) TokenBalanceOf(ctx context.Context, tokenAddr common.Ad
 //
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer a token.
-func (s *PublicTokenAPI) Wrc20Transfer(ctx context.Context, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc20Transfer(_ context.Context, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
 	v := value.ToInt()
 	op, err := operation.NewTransferOperation(to, v)
 	if err != nil {
@@ -265,7 +281,7 @@ func (s *PublicTokenAPI) Wrc20Transfer(ctx context.Context, to common.Address, v
 //
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer a token.
-func (s *PublicTokenAPI) Wrc20TransferFrom(ctx context.Context, from common.Address, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc20TransferFrom(_ context.Context, from common.Address, to common.Address, value hexutil.Big) (hexutil.Bytes, error) {
 	v := value.ToInt()
 	op, err := operation.NewTransferFromOperation(operation.StdWRC20, from, to, v)
 	if err != nil {
@@ -286,7 +302,7 @@ func (s *PublicTokenAPI) Wrc20TransferFrom(ctx context.Context, from common.Addr
 //
 // Returns a raw data with approve operation attributes.
 // Use the raw data in the Data field when sending a transaction to allow spender to withdraw a token.
-func (s *PublicTokenAPI) Wrc20Approve(ctx context.Context, spenderAddr common.Address, value hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc20Approve(_ context.Context, spenderAddr common.Address, value hexutil.Big) (hexutil.Bytes, error) {
 	v := value.ToInt()
 	op, err := operation.NewApproveOperation(operation.StdWRC20, spenderAddr, v)
 	if err != nil {
@@ -402,7 +418,7 @@ func (s *PublicTokenAPI) Wrc721Approve(ctx context.Context, approved common.Addr
 //
 // Returns a raw data with transfer operation attributes.
 // Use the raw data in the Data field when sending a transaction to transfer an NFT.
-func (s *PublicTokenAPI) Wrc721TransferFrom(ctx context.Context, from common.Address, to common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc721TransferFrom(_ context.Context, from common.Address, to common.Address, tokenId hexutil.Big) (hexutil.Bytes, error) {
 	id := tokenId.ToInt()
 	op, err := operation.NewTransferFromOperation(operation.StdWRC721, from, to, id)
 	if err != nil {
@@ -422,7 +438,7 @@ func (s *PublicTokenAPI) Wrc721TransferFrom(ctx context.Context, from common.Add
 //
 // Returns a raw data with approval operation attributes.
 // Use the raw data in the Data field when sending a transaction to enable or disable approval to manage an NFT.
-func (s *PublicTokenAPI) Wrc721SetApprovalForAll(ctx context.Context, operatorAddr common.Address, isApproved bool) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc721SetApprovalForAll(_ context.Context, operatorAddr common.Address, isApproved bool) (hexutil.Bytes, error) {
 	op, err := operation.NewSetApprovalForAllOperation(operatorAddr, isApproved)
 	if err != nil {
 		log.Error("Can't create a set approval for all operation", "err", err)
@@ -442,7 +458,7 @@ func (s *PublicTokenAPI) Wrc721SetApprovalForAll(ctx context.Context, operatorAd
 //
 // Returns a raw data with mint operation attributes.
 // Use the raw data in the Data field when sending a transaction to mint an NFT.
-func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc721Mint(_ context.Context, to common.Address, tokenId hexutil.Big, metadata *hexutil.Bytes) (hexutil.Bytes, error) {
 	id := tokenId.ToInt()
 	var tokenMeta []byte = nil
 	if metadata != nil {
@@ -480,7 +496,7 @@ func (s *PublicTokenAPI) Wrc721Mint(ctx context.Context, to common.Address, toke
 //
 // Returns a raw data with mint operation attributes.
 // Use the raw data in the Data field when sending a transaction to burn an NFT.
-func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenId hexutil.Big) (hexutil.Bytes, error) {
+func (s *PublicTokenAPI) Wrc721Burn(_ context.Context, tokenId hexutil.Big) (hexutil.Bytes, error) {
 	id := tokenId.ToInt()
 	op, err := operation.NewBurnOperation(id)
 	if err != nil {
@@ -493,6 +509,79 @@ func (s *PublicTokenAPI) Wrc721Burn(ctx context.Context, tokenId hexutil.Big) (h
 		log.Error("Failed to encode a token mint operation", "err", err)
 		return nil, err
 	}
+	return b, nil
+}
+
+// TokenCost returns the cost a token. `tokeAddr` is required.
+// For WRC-20 the `tokenId` is NOT required.
+// For WRC-721 the `tokenId` is not required.
+func (s *PublicTokenAPI) TokenCost(ctx context.Context, tokenAddr common.Address, tokenId hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	id := tokenId.ToInt()
+
+	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+
+	op, err := operation.NewCostOperation(tokenAddr, id)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := tp.Cost(op)
+	if err != nil {
+		return nil, err
+	}
+	if err := tpError(); err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Big)(res), nil
+}
+
+// SetPrice sets a price for a token. 'value' is required
+// For WRC-20 the `tokenId` is NOT required.
+// For WRC-721 sets price for a token by `tokenId`.
+func (s *PublicTokenAPI) SetPrice(_ context.Context, value, tokenId hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	val := value.ToInt()
+
+	op, err := operation.NewSetPriceOperation(id, val)
+	if err != nil {
+		log.Error("Cannot create a token set price operation", "err", err)
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token set price operation", "err", err)
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// Buy buys a token.
+// Tx's `value` is total spent count of wei, the rest will be returned.
+// For WRC-20 `tokenId` and `newValue` NOT required.
+// For WRC-721 `tokenId` and `newValue` are required.
+func (s *PublicTokenAPI) Buy(_ context.Context, tokenId, newValue hexutil.Big) (hexutil.Bytes, error) {
+	id := tokenId.ToInt()
+	newVal := newValue.ToInt()
+
+	op, err := operation.NewBuyOperation(id, newVal)
+	if err != nil {
+		log.Error("Cannot create a token buy operation", "err", err)
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Error("Failed to encode a token buy operation", "err", err)
+		return nil, err
+	}
+
 	return b, nil
 }
 

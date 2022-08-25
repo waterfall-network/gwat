@@ -154,10 +154,12 @@ func NewTransferFromOperation(standard Std, from common.Address, to common.Addre
 	if from == (common.Address{}) {
 		return nil, ErrNoFrom
 	}
+
 	transferOp, err := newTransferOperation(standard, to, value)
 	if err != nil {
 		return nil, err
 	}
+
 	return &transferFromOperation{
 		transferOperation: *transferOp,
 		FromAddress:       from,
@@ -183,4 +185,141 @@ func (op *transferFromOperation) UnmarshalBinary(b []byte) error {
 // MarshalBinary marshals a token transfer from operation to byte encoding
 func (op *transferFromOperation) MarshalBinary() ([]byte, error) {
 	return rlpEncode(op)
+}
+
+type setPriceOperation struct {
+	valueOperation
+	Id *big.Int
+}
+
+func NewSetPriceOperation(tokenId, value *big.Int) (SetPrice, error) {
+	if value == nil {
+		return nil, ErrNoValue
+	}
+
+	if value.Sign() < 0 {
+		return nil, ErrNegativeCost
+	}
+
+	return &setPriceOperation{
+		valueOperation: valueOperation{
+			TokenValue: value,
+		},
+		Id: tokenId,
+	}, nil
+}
+
+func (p *setPriceOperation) OpCode() Code {
+	return SetPriceCode
+}
+
+func (p *setPriceOperation) Standard() Std {
+	return 0
+}
+
+func (p *setPriceOperation) TokenId() (*big.Int, bool) {
+	if p.Id == nil {
+		return nil, false
+	}
+
+	return new(big.Int).Set(p.Id), true
+}
+
+func (p *setPriceOperation) UnmarshalBinary(data []byte) error {
+	return rlpDecode(data, p)
+}
+
+func (p *setPriceOperation) MarshalBinary() (data []byte, err error) {
+	return rlpEncode(p)
+}
+
+type buyOperation struct {
+	Id         *big.Int
+	NewCostVal *big.Int
+}
+
+func NewBuyOperation(tokenId, newCost *big.Int) (Buy, error) {
+	if newCost != nil && newCost.Sign() < 0 {
+		return nil, ErrNegativeCost
+	}
+
+	return &buyOperation{
+		Id:         tokenId,
+		NewCostVal: newCost,
+	}, nil
+}
+
+func (b *buyOperation) NewCost() (*big.Int, bool) {
+	if b.NewCostVal == nil {
+		return nil, false
+	}
+
+	return new(big.Int).Set(b.NewCostVal), true
+}
+
+func (b *buyOperation) OpCode() Code {
+	return BuyCode
+}
+
+func (b *buyOperation) Standard() Std {
+	return 0
+}
+
+func (b *buyOperation) TokenId() (*big.Int, bool) {
+	if b.Id == nil {
+		return nil, false
+	}
+
+	return new(big.Int).Set(b.Id), true
+}
+
+func (b *buyOperation) UnmarshalBinary(data []byte) error {
+	return rlpDecode(data, b)
+}
+
+func (b *buyOperation) MarshalBinary() (data []byte, err error) {
+	return rlpEncode(b)
+}
+
+type costOperation struct {
+	addressOperation
+	Id *big.Int
+}
+
+// NewCostOperation creates a cost operation
+func NewCostOperation(address common.Address, tokenId *big.Int) (Cost, error) {
+	if address == (common.Address{}) {
+		return nil, ErrNoAddress
+	}
+
+	return &costOperation{
+		addressOperation: addressOperation{
+			TokenAddress: address,
+		},
+		Id: tokenId,
+	}, nil
+}
+
+func (co *costOperation) OpCode() Code {
+	return CostCode
+}
+
+func (co *costOperation) Standard() Std {
+	return 0
+}
+
+func (co *costOperation) TokenId() (*big.Int, bool) {
+	if co.Id == nil {
+		return nil, false
+	}
+
+	return new(big.Int).Set(co.Id), true
+}
+
+func (co *costOperation) UnmarshalBinary(b []byte) error {
+	return rlpDecode(b, co)
+}
+
+func (co *costOperation) MarshalBinary() ([]byte, error) {
+	return rlpEncode(co)
 }
