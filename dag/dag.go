@@ -137,7 +137,6 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 		go func() {
 			crtStart := time.Now()
 			crtInfo := map[string]string{}
-			etherbase, _ := d.eth.Etherbase()
 			for _, creator := range assigned.Creators {
 				// if received next slot
 				if d.consensusInfo.Slot > assigned.Slot {
@@ -161,9 +160,10 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 
 					d.eth.SetEtherbase(coinbase)
 					if err = d.eth.CreatorAuthorize(coinbase); err != nil {
-						log.Error("Creator authorize err", "err", err)
+						log.Error("Creator authorize err", "err", err, "creator", coinbase)
 						return
 					}
+					log.Info("Creator assigned", "creator", coinbase)
 
 					block, crtErr := d.creator.CreateBlock(assigned, tips)
 					if crtErr != nil {
@@ -175,12 +175,6 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 					log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 				}()
 			}
-			//set current etherbase
-			d.eth.SetEtherbase(etherbase)
-			if err = d.eth.CreatorAuthorize(etherbase); err != nil {
-				log.Error("Creator authorize err", "err", err)
-			}
-
 		}()
 	}
 
@@ -242,7 +236,6 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 		go func() {
 			crtStart := time.Now()
 			crtInfo := map[string]string{}
-			etherbase, _ := d.eth.Etherbase()
 			for _, creator := range assigned.Creators {
 				// if received next slot
 				if d.consensusInfo.Slot > assigned.Slot {
@@ -263,9 +256,10 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 
 					d.eth.SetEtherbase(coinbase)
 					if err := d.eth.CreatorAuthorize(coinbase); err != nil {
-						log.Error("Creator authorize err", "err", err)
+						log.Error("Creator authorize err", "err", err, "creator", coinbase)
 						return
 					}
+					log.Info("Creator assigned", "creator", coinbase)
 
 					block, crtErr := d.creator.CreateBlock(assigned, tips)
 					if crtErr != nil {
@@ -278,11 +272,6 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 
 				}()
 			}
-			//set current etherbase
-			d.eth.SetEtherbase(etherbase)
-			if err := d.eth.CreatorAuthorize(etherbase); err != nil {
-				log.Error("Creator authorize err", "err", err)
-			}
 		}()
 	}
 
@@ -294,7 +283,7 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 		estr := string(strBuf)
 		res.Error = &estr
 	}
-	log.Info("Handle Consensus: response", "result", res)
+	log.Info("Handle Finalize: response", "result", res)
 	return res
 }
 
@@ -319,7 +308,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *CandidatesResult {
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle Consensus: response", "result", res)
+	log.Info("Handle GetCandidates: response", "result", res)
 	return res
 }
 
