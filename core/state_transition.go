@@ -28,6 +28,7 @@ import (
 	"github.com/waterfall-foundation/gwat/crypto"
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/token"
+	"github.com/waterfall-foundation/gwat/token/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -301,7 +302,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Check if token prefix and opcode are valid in raw data
 	isTokenOp := false
-	if _, err := token.GetOpCode(msg.Data()); err == nil {
+	if _, err := operation.GetOpCode(msg.Data()); err == nil {
 		isTokenOp = true
 	}
 
@@ -335,11 +336,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 
 		if isTokenOp {
-			op, err := token.DecodeBytes(msg.Data())
+			op, err := operation.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
 			}
-			ret, vmerr = st.tp.Call(sender, st.to(), op)
+			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

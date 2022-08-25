@@ -34,7 +34,7 @@ import (
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/waterfall-foundation/gwat/params"
-	"github.com/waterfall-foundation/gwat/token"
+	"github.com/waterfall-foundation/gwat/token/operation"
 )
 
 const (
@@ -699,7 +699,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	// Check if token prefix and opcode are valid in raw data
 	isTokenOp := false
-	if _, err := token.GetOpCode(tx.Data()); err == nil {
+	if _, err := operation.GetOpCode(tx.Data()); err == nil {
 		isTokenOp = true
 	}
 	contractCreation := tx.To() == nil && !isTokenOp

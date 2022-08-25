@@ -1016,7 +1016,26 @@ web3._extend({
 			call: 'wat_wrc721TransferFrom',
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex]
-		})
+		}),
+		new web3._extend.Method({
+			name: 'tokenCost',
+			call: 'wat_tokenCost',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.utils.toHex, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: web3._extend.utils.toDecimal
+		}),
+		new web3._extend.Method({
+			name: 'setPrice',
+			call: 'wat_setPrice',
+			params: 2,
+			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
+		}),
+		new web3._extend.Method({
+			name: 'buy',
+			call: 'wat_buy',
+			params: 2,
+			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
+		}),
 	]
 });
 `
