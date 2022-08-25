@@ -197,9 +197,15 @@ func NewSetPriceOperation(tokenId, value *big.Int) (SetPrice, error) {
 		return nil, ErrNoValue
 	}
 
+	if value.Sign() < 0 {
+		return nil, ErrNegativeCost
+	}
+
 	return &setPriceOperation{
-		valueOperation: valueOperation{value},
-		Id:             tokenId,
+		valueOperation: valueOperation{
+			TokenValue: value,
+		},
+		Id: tokenId,
 	}, nil
 }
 
@@ -228,23 +234,27 @@ func (p *setPriceOperation) MarshalBinary() (data []byte, err error) {
 }
 
 type buyOperation struct {
-	Id     *big.Int
-	NewVal *big.Int
+	Id         *big.Int
+	NewCostVal *big.Int
 }
 
-func NewBuyOperation(tokenId, newValue *big.Int) (Buy, error) {
+func NewBuyOperation(tokenId, newCost *big.Int) (Buy, error) {
+	if newCost != nil && newCost.Sign() < 0 {
+		return nil, ErrNegativeCost
+	}
+
 	return &buyOperation{
-		Id:     tokenId,
-		NewVal: newValue,
+		Id:         tokenId,
+		NewCostVal: newCost,
 	}, nil
 }
 
-func (b *buyOperation) NewValue() (*big.Int, bool) {
-	if b.NewVal == nil {
+func (b *buyOperation) NewCost() (*big.Int, bool) {
+	if b.NewCostVal == nil {
 		return nil, false
 	}
 
-	return new(big.Int).Set(b.NewVal), true
+	return new(big.Int).Set(b.NewCostVal), true
 }
 
 func (b *buyOperation) OpCode() Code {
@@ -283,8 +293,10 @@ func NewCostOperation(address common.Address, tokenId *big.Int) (Cost, error) {
 	}
 
 	return &costOperation{
-		addressOperation: addressOperation{address},
-		Id:               tokenId,
+		addressOperation: addressOperation{
+			TokenAddress: address,
+		},
+		Id: tokenId,
 	}, nil
 }
 

@@ -32,6 +32,7 @@ var (
 	ErrTooSmallTxValue         = errors.New("too small transaction's value")
 	ErrTokenIdIsNotSet         = errors.New("token id is not set")
 	ErrNewValueIsNotSet        = errors.New("new value is not set")
+	ErrUint256Overflow         = errors.New("value overflow")
 )
 
 const (
@@ -205,7 +206,11 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 		}
 
 		v, _ := op.TotalSupply()
-		val, _ := uint256.FromBig(v)
+		val, ok := uint256.FromBig(v)
+		if ok {
+			return common.Address{}, ErrUint256Overflow
+		}
+
 		err = storage.WriteField(TotalSupplyField, val)
 		if err != nil {
 			return common.Address{}, err
@@ -510,7 +515,11 @@ func (p *Processor) approve(caller Ref, token common.Address, op operation.Appro
 	switch op.Standard() {
 	case operation.StdWRC20:
 		key := crypto.Keccak256(owner[:], spender[:])
-		v, _ := uint256.FromBig(op.Value())
+		v, ok := uint256.FromBig(op.Value())
+		if ok {
+			return nil, ErrUint256Overflow
+		}
+
 		err = writeToMap(storage, AllowancesField, key, v)
 		if err != nil {
 			return nil, err
@@ -614,10 +623,10 @@ func (p *Processor) Cost(op operation.Cost) (*big.Int, error) {
 		return nil, err
 	}
 
-	var cost uint256.Int
+	cost := new(uint256.Int)
 	switch standard {
 	case operation.StdWRC20:
-		err = storage.ReadField(CostField, &cost)
+		err = storage.ReadField(CostField, cost)
 		if err != nil {
 			return nil, err
 		}
@@ -635,8 +644,12 @@ func (p *Processor) Cost(op operation.Cost) (*big.Int, error) {
 			return nil, ErrNotMinted
 		}
 
-		id, _ := uint256.FromBig(tokenId)
-		err = readFromMap(storage, CostMapField, id, &cost)
+		id, ok := uint256.FromBig(tokenId)
+		if ok {
+			return nil, ErrUint256Overflow
+		}
+
+		err = readFromMap(storage, CostMapField, id, cost)
 		if err != nil {
 			return nil, err
 		}
@@ -657,7 +670,7 @@ func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([
 		return nil, err
 	}
 
-	minter, err := readMinter(storage)
+	minter, err := readAddress(storage, MinterField)
 	if err != nil {
 		return nil, err
 	}
@@ -682,7 +695,11 @@ func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([
 		return nil, err
 	}
 
-	newBalance, _ := uint256.FromBig(new(big.Int).Add(balance.ToBig(), big.NewInt(1)))
+	newBalance, ok := uint256.FromBig(new(big.Int).Add(balance.ToBig(), big.NewInt(1)))
+	if ok {
+		return nil, ErrUint256Overflow
+	}
+
 	err = writeToMap(storage, BalancesField, to[:], newBalance)
 	if err != nil {
 		return nil, err
@@ -715,7 +732,7 @@ func (p *Processor) burn(caller Ref, token common.Address, op operation.Burn) ([
 	address := caller.Address()
 	tokenId := op.TokenId()
 
-	minter, err := readMinter(storage)
+	minter, err := readAddress(storage, MinterField)
 	if err != nil {
 		return nil, err
 	}
@@ -739,7 +756,11 @@ func (p *Processor) burn(caller Ref, token common.Address, op operation.Burn) ([
 		return nil, err
 	}
 
-	newBalance, _ := uint256.FromBig(new(big.Int).Sub(balance.ToBig(), big.NewInt(1)))
+	newBalance, ok := uint256.FromBig(new(big.Int).Sub(balance.ToBig(), big.NewInt(1)))
+	if ok {
+		return nil, ErrUint256Overflow
+	}
+
 	err = writeToMap(storage, BalancesField, owner[:], newBalance)
 	if err != nil {
 		return nil, err
@@ -790,15 +811,17 @@ func (p *Processor) setPrice(caller Ref, token common.Address, op operation.SetP
 		return nil, err
 	}
 
-	newCost, _ := uint256.FromBig(op.Value())
+	newCost, ok := uint256.FromBig(op.Value())
+	if ok {
+		return nil, ErrUint256Overflow
+	}
+
 	switch std {
 	case operation.StdWRC20:
-		var creatorB []byte
-		err = storage.ReadField(CreatorField, &creatorB)
+		creator, err := readAddress(storage, CreatorField)
 		if err != nil {
 			return nil, err
 		}
-		creator := common.BytesToAddress(creatorB)
 
 		if caller.Address() != creator {
 			return nil, ErrIncorrectOwner
@@ -827,7 +850,11 @@ func (p *Processor) setPrice(caller Ref, token common.Address, op operation.SetP
 			return nil, ErrIncorrectOwner
 		}
 
-		id, _ := uint256.FromBig(tokenId)
+		id, ok := uint256.FromBig(tokenId)
+		if ok {
+			return nil, ErrUint256Overflow
+		}
+
 		err = writeToMap(storage, CostMapField, id, newCost)
 		if err != nil {
 			return nil, err
@@ -852,21 +879,22 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 	transferValue, paymentValue := big.NewInt(0), big.NewInt(0)
 	switch std {
 	case operation.StdWRC20:
-		var creatorB []byte
-		err = storage.ReadField(CreatorField, &creatorB)
+		transferFrom, err = readAddress(storage, CreatorField)
 		if err != nil {
 			return nil, err
 		}
 
-		transferFrom = common.BytesToAddress(creatorB)
-
-		var cost uint256.Int
-		err = storage.ReadField(CostField, &cost)
+		cost := new(uint256.Int)
+		err = storage.ReadField(CostField, cost)
 		if err != nil {
 			return nil, err
 		}
 
-		if cost.ToBig().Cmp(value) == 1 {
+		if cost.Eq(uint256.NewInt(0)) {
+			return nil, ErrTokenIsNotForSale
+		}
+
+		if cost.ToBig().Cmp(value) > 0 {
 			return nil, ErrTooSmallTxValue
 		}
 
@@ -879,9 +907,12 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 			return nil, ErrTokenIdIsNotSet
 		}
 
-		id, _ := uint256.FromBig(tokenId)
+		id, ok := uint256.FromBig(tokenId)
+		if ok {
+			return nil, ErrUint256Overflow
+		}
 
-		newValue, ok := op.NewValue()
+		newCost, ok := op.NewCost()
 		if !ok {
 			return nil, ErrNewValueIsNotSet
 		}
@@ -897,8 +928,8 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		}
 
 		// check cost
-		var cost uint256.Int
-		err = readFromMap(storage, CostMapField, id, &cost)
+		cost := new(uint256.Int)
+		err = readFromMap(storage, CostMapField, id, cost)
 		if err != nil {
 			return nil, err
 		}
@@ -923,8 +954,12 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		}
 
 		// set new cost
-		newCost, _ := uint256.FromBig(newValue)
-		err = writeToMap(storage, CostMapField, id, newCost)
+		newCostUint, ok := uint256.FromBig(newCost)
+		if ok {
+			return nil, ErrUint256Overflow
+		}
+
+		err = writeToMap(storage, CostMapField, id, newCostUint)
 		if err != nil {
 			return nil, err
 		}
@@ -968,7 +1003,7 @@ func (p *Processor) makePayment(storage tokenStorage.Storage, caller, owner comm
 
 	// only for WRC-721
 	if percentFee > 0 {
-		minter, err := readMinter(storage)
+		minter, err := readAddress(storage, MinterField)
 		if err != nil {
 			return err
 		}
@@ -1312,7 +1347,11 @@ func transfer(storage tokenStorage.Storage, from, to common.Address, swapValue *
 		return ErrNotEnoughBalance
 	}
 
-	newFromBalance, _ := uint256.FromBig(new(big.Int).Sub(fromBalance.ToBig(), swapValue))
+	newFromBalance, ok := uint256.FromBig(new(big.Int).Sub(fromBalance.ToBig(), swapValue))
+	if ok {
+		return ErrUint256Overflow
+	}
+
 	err = writeToMap(storage, BalancesField, from.Bytes(), newFromBalance)
 	if err != nil {
 		return err
@@ -1324,16 +1363,20 @@ func transfer(storage tokenStorage.Storage, from, to common.Address, swapValue *
 		return err
 	}
 
-	newToBalance, _ := uint256.FromBig(new(big.Int).Add(toBalance.ToBig(), swapValue))
+	newToBalance, ok := uint256.FromBig(new(big.Int).Add(toBalance.ToBig(), swapValue))
+	if ok {
+		return ErrUint256Overflow
+	}
+
 	return writeToMap(storage, BalancesField, to.Bytes(), newToBalance)
 }
 
-func readMinter(storage tokenStorage.Storage) (common.Address, error) {
-	var minterB []byte
-	err := storage.ReadField(MinterField, &minterB)
+func readAddress(storage tokenStorage.Storage, field string) (common.Address, error) {
+	var addr []byte
+	err := storage.ReadField(field, &addr)
 	if err != nil {
 		return common.Address{}, err
 	}
 
-	return common.BytesToAddress(minterB), nil
+	return common.BytesToAddress(addr), nil
 }

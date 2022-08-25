@@ -18,7 +18,7 @@ type opData struct {
 	Operator   common.Address
 	From       common.Address
 	To         common.Address
-	NewValue   *big.Int
+	NewCost    *big.Int
 	Value      *big.Int
 	Index      *big.Int
 	IsApproved bool
@@ -139,9 +139,9 @@ func rlpDecode(b []byte, op interface{}) error {
 		return ErrNoAddress
 	}
 
-	if !setFieldValue("NewVal", func() bool {
-		return data.NewValue != nil
-	}, data.NewValue) {
+	if !setFieldValue("NewCostVal", func() bool {
+		return data.NewCost != nil
+	}, data.NewCost) {
 		return ErrNoValue
 	}
 
@@ -227,8 +227,8 @@ func rlpEncode(op interface{}) ([]byte, error) {
 				name = f.Name
 			case "Id":
 				name = "TokenId"
-			case "NewVal":
-				name = "NewValue"
+			case "NewCostVal":
+				name = "NewCost"
 			case "TokenValue":
 				name = "Value"
 			case "TokenAddress":

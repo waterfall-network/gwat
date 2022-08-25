@@ -40,9 +40,10 @@ func (op *createOperation) init(std Std, name []byte, symbol []byte, decimals, p
 			op.percentFee = *percentFee
 		}
 
-		if len(baseURI) != 0 {
-			op.baseURI = baseURI
+		if len(baseURI) == 0 {
+			return ErrNoBaseURI
 		}
+		op.baseURI = baseURI
 	default:
 		return ErrStandardNotValid
 	}

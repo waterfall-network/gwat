@@ -727,24 +727,6 @@ func TestProcessorSetPriceCall(t *testing.T) {
 			},
 		},
 		{
-			CaseName: "WRC721_NoValue",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{operation.ErrNoValue},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				v := c.TestData.(testutils.TestData)
-
-				v.TokenAddress = createToken(t, operation.StdWRC721, v.Caller)
-
-				tokenId := big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
-				_, err := operation.NewSetPriceOperation(tokenId, nil)
-				if !testutils.CheckError(err, []error{operation.ErrNoValue}) {
-					t.Errorf("Expected: %s\ngot: %s", operation.ErrNoValue, err)
-				}
-			},
-		},
-		{
 			CaseName: "WRC20_Correct",
 			TestData: testutils.TestData{
 				Caller: vm.AccountRef(owner),
@@ -796,24 +778,6 @@ func TestProcessorSetPriceCall(t *testing.T) {
 					t.FailNow()
 				}
 				call(t, v.Caller, v.TokenAddress, nil, setPriceOp, c.Errs)
-			},
-		},
-		{
-			CaseName: "WRC20_NoTokenId",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{operation.ErrNoValue},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				v := c.TestData.(testutils.TestData)
-
-				v.TokenAddress = createToken(t, operation.StdWRC20, v.Caller)
-
-				_, err := operation.NewSetPriceOperation(nil, nil)
-				if err != operation.ErrNoValue {
-					t.Errorf("Expected: %s\nGot: %s", operation.ErrNoValue, err)
-					t.FailNow()
-				}
 			},
 		},
 	}

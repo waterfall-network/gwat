@@ -73,8 +73,8 @@ func BigIntEquals(haveValue, wantValue *big.Int) bool {
 		return true
 	}
 
-	if haveValue == nil || wantValue == nil {
-		return true
+	if wantValue == nil {
+		wantValue = big.NewInt(0)
 	}
 
 	return haveValue.Cmp(wantValue) == 0

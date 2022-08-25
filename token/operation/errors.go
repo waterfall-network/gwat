@@ -12,6 +12,7 @@ var (
 	ErrNoAddress        = errors.New("token address is required")
 	ErrNoOwner          = errors.New("token owner address is required")
 	ErrNoValue          = errors.New("value is required")
+	ErrNegativeCost     = errors.New("cost is negative")
 	ErrNoTo             = errors.New("to address is required")
 	ErrNoFrom           = errors.New("from address is required")
 	ErrNoSpender        = errors.New("spender address is required")

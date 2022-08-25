@@ -19,7 +19,7 @@ func TestApproveOperation(t *testing.T) {
 
 	cases := []operationTestCase{
 		{
-			caseName: "Correct WRC721 test",
+			caseName: "CorrectWRC721",
 			decoded: decodedOp{
 				op:      StdWRC721,
 				value:   opId,
@@ -31,7 +31,7 @@ func TestApproveOperation(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "Correct WRC20 test",
+			caseName: "CorrectWRC20",
 			decoded: decodedOp{
 				op:      StdWRC20,
 				value:   opValue,
@@ -43,7 +43,7 @@ func TestApproveOperation(t *testing.T) {
 			errs: []error{nil},
 		},
 		{
-			caseName: "No empty value",
+			caseName: "EmptyValue",
 			decoded: decodedOp{
 				op:      0,
 				value:   nil,
@@ -55,7 +55,7 @@ func TestApproveOperation(t *testing.T) {
 			errs: []error{ErrNoValue},
 		},
 		{
-			caseName: "No empty spender",
+			caseName: "EmptySpender",
 			decoded: decodedOp{
 				op:      StdWRC721,
 				value:   opId,
@@ -458,6 +458,18 @@ func TestTokenSetPrice(t *testing.T) {
 			},
 			errs: []error{},
 		},
+		{
+			caseName: "NegativeValue",
+			decoded: decodedOp{
+				op:      0,
+				tokenId: opId,
+				value:   big.NewInt(-10),
+			},
+			encoded: []byte{
+				243, 42, 248, 135, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 10, 128, 128, 128,
+			},
+			errs: []error{ErrNegativeCost},
+		},
 	}
 
 	operationEncode := func(b []byte, i interface{}) error {
@@ -493,9 +505,14 @@ func TestTokenSetPrice(t *testing.T) {
 			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.tokenId)
 		}
 
+		if o.value != nil && o.value.Sign() < 0 {
+			// Encoder cannot encode negative value, just stub
+			return ErrNegativeCost
+		}
+
 		value := opDecoded.Value()
 		if !testutils.BigIntEquals(value, o.value) {
-			return fmt.Errorf("newValues do not match:\nwant: %+v\nhave: %+v", value, o.value)
+			return fmt.Errorf("newValues do not match:\nhave: %+v\nwant: %+v", value, o.value)
 		}
 
 		if len(value.Bytes()) == 0 {
@@ -511,18 +528,18 @@ func TestTokenSetPrice(t *testing.T) {
 
 func TestBuy(t *testing.T) {
 	type decodedOp struct {
-		op       Std
-		tokenId  *big.Int
-		newValue *big.Int
+		op      Std
+		tokenId *big.Int
+		newCost *big.Int
 	}
 
 	cases := []operationTestCase{
 		{
 			caseName: "Correct",
 			decoded: decodedOp{
-				op:       0,
-				tokenId:  opId,
-				newValue: opValue,
+				op:      0,
+				tokenId: opId,
+				newCost: opValue,
 			},
 			encoded: []byte{
 				243, 43, 248, 138, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128, 128,
@@ -532,9 +549,9 @@ func TestBuy(t *testing.T) {
 		{
 			caseName: "EmptyTokenId",
 			decoded: decodedOp{
-				op:       0,
-				tokenId:  nil,
-				newValue: opValue,
+				op:      0,
+				tokenId: nil,
+				newCost: opValue,
 			},
 			encoded: []byte{
 				243, 43, 248, 136, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 131, 1, 182, 105, 128, 128, 128, 128,
@@ -542,23 +559,35 @@ func TestBuy(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "EmptyNewValue",
+			caseName: "EmptyNewCost",
 			decoded: decodedOp{
-				op:       0,
-				tokenId:  opId,
-				newValue: nil,
+				op:      0,
+				tokenId: opId,
+				newCost: nil,
 			},
 			encoded: []byte{
 				243, 43, 248, 135, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128, 128,
 			},
 			errs: []error{},
 		},
+		{
+			caseName: "NegativeNewCost",
+			decoded: decodedOp{
+				op:      0,
+				tokenId: opId,
+				newCost: big.NewInt(-10),
+			},
+			encoded: []byte{
+				243, 43, 248, 135, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 130, 48, 57, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 128, 128, 128, 128,
+			},
+			errs: []error{ErrNegativeCost},
+		},
 	}
 
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
 
-		op, err := NewBuyOperation(o.tokenId, o.newValue)
+		op, err := NewBuyOperation(o.tokenId, o.newCost)
 		if err != nil {
 			return err
 		}
@@ -588,9 +617,14 @@ func TestBuy(t *testing.T) {
 			return fmt.Errorf("id do not match:\nwant: %+v\nhave: %+v", tokenId, o.tokenId)
 		}
 
-		newValue, _ := opDecoded.NewValue()
-		if !testutils.BigIntEquals(newValue, o.newValue) {
-			return fmt.Errorf("newValues do not match:\nwant: %+v\nhave: %+v", newValue, o.newValue)
+		if o.newCost != nil && o.newCost.Sign() < 0 {
+			// Encoder cannot encode negative value, just stub
+			return ErrNegativeCost
+		}
+
+		newValue, _ := opDecoded.NewCost()
+		if !testutils.BigIntEquals(newValue, o.newCost) {
+			return fmt.Errorf("newValues do not match:\nwant: %+v\nhave: %+v", newValue, o.newCost)
 		}
 
 		return nil
@@ -632,7 +666,7 @@ func TestCost(t *testing.T) {
 			errs: []error{},
 		},
 		{
-			caseName: "EmptyValue",
+			caseName: "EmptyAddress",
 			decoded: decodedOp{
 				op:      0,
 				tokenId: opId,
