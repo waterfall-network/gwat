@@ -401,6 +401,7 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
+		log.Info("State: nonce update", "newNonce", nonce, "addr", addr.Hex())
 	}
 }
 
