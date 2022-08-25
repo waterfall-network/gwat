@@ -482,24 +482,25 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if block.Height() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	var parentBl *types.Block
+	var parent *types.Block
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+
 	for _, h := range block.ParentHashes() {
 		pb, err := api.blockByHash(ctx, h)
 		if err != nil {
 			return nil, err
 		}
-		if pb != nil && pb.Nr() == pb.Height() {
-			parentBl = pb
+		parent = pb
+		if pb != nil {
+			statedb, err := api.backend.StateAtBlock(ctx, pb, reexec, nil, true)
+			if err != nil || statedb == nil {
+				continue
+			}
 			break
 		}
-	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(parentBl.Nr()), parentBl.Hash())
-	if err != nil {
-		return nil, err
-	}
-	reexec := defaultTraceReexec
-	if config != nil && config.Reexec != nil {
-		reexec = *config.Reexec
 	}
 	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true)
 	if err != nil {
@@ -646,24 +647,24 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		return nil, errors.New("genesis is not traceable")
 	}
 
-	var parentBl *types.Block
+	var parent *types.Block
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
 	for _, h := range block.ParentHashes() {
 		pb, err := api.blockByHash(ctx, h)
 		if err != nil {
 			return nil, err
 		}
-		if pb != nil && pb.Nr() == pb.Height() {
-			parentBl = pb
+		parent = pb
+		if pb != nil {
+			statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true)
+			if err != nil || statedb == nil {
+				continue
+			}
 			break
 		}
-	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(parentBl.Nr()), block.Hash())
-	if err != nil {
-		return nil, err
-	}
-	reexec := defaultTraceReexec
-	if config != nil && config.Reexec != nil {
-		reexec = *config.Reexec
 	}
 	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true)
 	if err != nil {

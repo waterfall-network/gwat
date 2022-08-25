@@ -96,9 +96,6 @@ type testWorkerBackend struct {
 	uncleBlock *types.Block
 }
 
-func (t *testWorkerBackend) Downloader() *downloader.Downloader {
-	return nil
-}
 func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
 	var gspec = core.Genesis{
 		Config: chainConfig,
@@ -150,6 +147,9 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	}
 }
 
+func (t *testWorkerBackend) Downloader() *downloader.Downloader {
+	return &downloader.Downloader{}
+}
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
 func (b *testWorkerBackend) TxPool() *core.TxPool         { return b.txPool }
 

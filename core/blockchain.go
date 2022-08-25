@@ -1655,10 +1655,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		if err != nil {
 			return it.index, err
 		}
-		// insertion of red blocks
-		if block.Height() != block.Nr() {
-			continue
-		}
 
 		//insertion of blue blocks
 		start := time.Now()
@@ -1718,12 +1714,8 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-
-			log.Error("Error of block insertion to chain while sync (state validation)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
-
-			return it.index, err
+			log.Warn("Red block insertion to chain while sync", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+			continue
 		}
 		proctime := time.Since(start)
 
@@ -2014,9 +2006,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
+			log.Warn("Red block insertion to chain while propagate", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+			continue
 		}
 		proctime := time.Since(start)
 
@@ -2554,9 +2545,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
+			log.Warn("Red block insertion", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+			continue
 		}
 		proctime := time.Since(start)
 
