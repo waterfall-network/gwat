@@ -2176,12 +2176,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	}
 
 	ordHashes := *graph.GetDagChainHashes()
-	finPoints := common.HashArray{}
-	if fp := graph.GetFinalityPoints(); fp != nil {
-		finPoints = *fp
-	}
-
-	finPoints = finPoints.Uniq()
+	lastFinBlock := bc.GetLastFinalizedBlock()
 
 	var stateHash common.Hash
 	parentBlocks := bc.GetBlocksByHashes(parents)
@@ -2189,12 +2184,16 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 
 	if len(sortedBlocks) > 0 {
 		stateBlock = sortedBlocks[0]
+		// if block is red
+		if stateBlock.Slot() <= lastFinBlock.Slot() {
+			stateBlock = lastFinBlock
+		}
 		stateHash = stateBlock.Hash()
 	} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
 		//stateHash = bc.GetLastFinalizedBlock().Hash()
 		stateHash = lastFinAncestor.Hash
 		if len(ordHashes) == 0 {
-			lfn := bc.GetLastFinalizedBlock().Nr()
+			lfn := lastFinBlock.Nr()
 			for i := lastFinAncestor.Number + 1; i <= lfn; i++ {
 				bl := bc.GetBlockByNumber(i)
 				if bl != nil && fnl.Has(bl.Hash()) {
@@ -2204,20 +2203,6 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		}
 	}
 
-	//if len(finPoints) > 0 {
-	//	stateHash = []common.Hash(finPoints)[len(finPoints)-1]
-	//} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
-	//	stateHash = lastFinAncestor.Hash
-	//	if len(ordHashes) == 0 {
-	//		lfn := bc.GetLastFinalizedBlock().Nr()
-	//		for i := lastFinAncestor.Number + 1; i <= lfn; i++ {
-	//			bl := bc.GetBlockByNumber(i)
-	//			if bl != nil && fnl.Has(bl.Hash()) {
-	//				ordHashes = append(ordHashes, bl.Hash())
-	//			}
-	//		}
-	//	}
-	//}
 	if stateHash == (common.Hash{}) {
 		log.Error("Error while collect state data by block (bad state hash)", "error", ErrStateBlockNotFound)
 		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrStateBlockNotFound
@@ -2226,7 +2211,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 
 	statedb, err = bc.StateAt(stateBlock.Root())
 	if err != nil {
-		log.Error("Bad state", "stateHash", stateHash.Hex(), "stateHeight", stateBlock.Height(), "finPoints", finPoints, "error", err)
+		log.Error("Bad state", "stateHash", stateHash.Hex(), "stateHeight", stateBlock.Height(), "error", err)
 		return statedb, stateBlock, recommitBlocks, cachedHashes, err
 	}
 
