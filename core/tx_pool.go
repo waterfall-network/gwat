@@ -1068,7 +1068,7 @@ func (pool *TxPool) moveToPendingFinalize(tx *types.Transaction) {
 		return
 	}
 
-	if pending := pool.pending[addr]; pending != nil {
+	if pending := pool.pending[addr]; pending != nil && poolTx != nil {
 		if removed, invalids := pending.Remove(poolTx); removed {
 			for _, tx := range invalids {
 				pool.pending[addr].Add(tx, pool.config.PriceBump)
