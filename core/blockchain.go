@@ -1717,8 +1717,10 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			log.Warn("Red block insertion to chain while sync", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
-			continue
+			bc.reportBlock(block, receipts, err)
+			atomic.StoreUint32(&followupInterrupt, 1)
+			log.Error("Error of block insertion to chain while sync (state validation)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+			return it.index, err
 		}
 		proctime := time.Since(start)
 
@@ -2249,34 +2251,49 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 		}
 	}
 
-	// search previous blue block and collect red blocks
-	stateBlock = block
-	redBlocks := []*types.Block{}
-	for i := finNr - 1; i >= 0; i-- {
-		prevBlock := bc.GetBlockByNumber(i)
-		if prevBlock == nil {
-			log.Error("Collect State Data By Finalized Block: bad finalized chain", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
-			return statedb, stateBlock, redBlocks, ErrInsertUncompletedDag
-		}
-		statedb, err = bc.StateAt(prevBlock.Root())
-		if statedb != nil {
-			stateBlock = prevBlock
-			break
-		}
-		redBlocks = append(redBlocks, prevBlock)
-	}
-	// reverse redBlocks
-	for i := len(redBlocks) - 1; i >= 0; i-- {
-		recommitBlocks = append(recommitBlocks, redBlocks[i])
-	}
-
-	log.Info("Collect State Data By Finalized Block: bad block number", "isRed", block.Height() != block.Nr(), "Nr", block.Nr(), "Height", block.Height(), "Hash", block.Hash().Hex())
-
+	parentBlocks := bc.GetBlocksByHashes(block.ParentHashes())
+	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
+	stateBlock = sortedBlocks[0]
 	statedb, err = bc.StateAt(stateBlock.Root())
-	if err != nil {
-		return statedb, stateBlock, recommitBlocks, err
+	if err != nil || statedb == nil {
+		return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: state not found number: nr=%d (height=%d  hash=%v) err=%s", finNr, block.Height(), block.Hash().Hex(), err)
 	}
-	return statedb, stateBlock, recommitBlocks, err
+	recommitBlocks = sortedBlocks[1:]
+	return statedb, stateBlock, recommitBlocks, nil
+
+	//// search previous blue block and collect red blocks
+	//stateBlock = block
+	//redBlocks := []*types.Block{}
+	//for i := finNr - 1; i >= 0; i-- {
+	//	prevBlock := bc.GetBlockByNumber(i)
+	//	if prevBlock == nil {
+	//		log.Error("Collect State Data By Finalized Block: bad finalized chain", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
+	//		return statedb, stateBlock, redBlocks, ErrInsertUncompletedDag
+	//	}
+	//
+	//	//if !bc.IsAncestorRecursive(block, prevBlock.Hash()) {
+	//	//	continue
+	//	//}
+	//
+	//	statedb, err = bc.StateAt(prevBlock.Root())
+	//	if statedb != nil {
+	//		stateBlock = prevBlock
+	//		break
+	//	}
+	//	redBlocks = append(redBlocks, prevBlock)
+	//}
+	//// reverse redBlocks
+	//for i := len(redBlocks) - 1; i >= 0; i-- {
+	//	recommitBlocks = append(recommitBlocks, redBlocks[i])
+	//}
+	//
+	//log.Info("Collect State Data By Finalized Block: bad block number", "isRed", block.Height() != block.Nr(), "Nr", block.Nr(), "Height", block.Height(), "Hash", block.Hash().Hex())
+	//
+	//statedb, err = bc.StateAt(stateBlock.Root())
+	//if err != nil {
+	//	return statedb, stateBlock, recommitBlocks, err
+	//}
+	//return statedb, stateBlock, recommitBlocks, err
 }
 
 // RecommitBlockTransactions recommits transactions of red blocks.
