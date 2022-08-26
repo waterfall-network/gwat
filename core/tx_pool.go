@@ -1647,12 +1647,6 @@ func (pool *TxPool) demoteUnexecutables() {
 			pool.all.Remove(hash)
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
-		oldsPF := listPF.Forward(nonce)
-		for _, tx := range oldsPF {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
-			log.Trace("Removed old pendingFinalize transaction", "hash", hash)
-		}
 
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
@@ -1695,7 +1689,18 @@ func (pool *TxPool) demoteUnexecutables() {
 		if list.Empty() {
 			delete(pool.pending, addr)
 		}
-		if listPF != nil && listPF.Empty() {
+	}
+
+	for addr, list := range pool.pendingFinalize {
+		nonce := pool.currentState.GetNonce(addr)
+
+		oldsPF := list.Forward(nonce)
+		for _, tx := range oldsPF {
+			hash := tx.Hash()
+			pool.all.Remove(hash)
+			log.Trace("Removed old pendingFinalize transaction", "hash", hash)
+		}
+		if list.Empty() {
 			delete(pool.pendingFinalize, addr)
 		}
 	}
