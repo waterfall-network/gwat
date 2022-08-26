@@ -429,7 +429,7 @@ func (pool *TxPool) loop() {
 			func() {
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
-				log.Info("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+				log.Debug("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
 				pool.moveToPendingFinalize(tx)
 			}()
 
@@ -1088,14 +1088,18 @@ func (pool *TxPool) moveToPendingFinalize(tx *types.Transaction) {
 	}
 
 	if list := pool.pendingFinalize[addr]; list != nil {
-		poolNonce := list.LastElement().Nonce()
+		//skip if exists
+		if poolTx != nil {
+			log.Warn("Skip moving tx to pendingFinalize (already exists)", "tx.Hash", tx.Hash().Hex(), "tx.Nonce", tx.Nonce())
+			return
+		}
+		curNonce := list.LastElement().Nonce()
 		txNonce := tx.Nonce()
-
-		if poolNonce < txNonce {
+		if curNonce < txNonce {
 			pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
 			pool.all.Add(tx, false)
 		} else {
-			log.Error("Pending finalize: low nonce TX", "TX hash", tx.Hash(), "TX nonce", txNonce, "TxPool nonce", poolNonce)
+			log.Warn("Pending finalize: low nonce TX", "TX hash", tx.Hash().Hex(), "TX nonce", txNonce, "TxPool nonce", curNonce)
 		}
 		return
 	}
