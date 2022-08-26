@@ -1585,9 +1585,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 				maxFinNr = block.Nr()
 			}
 		} else {
-			for _, tx := range block.Transactions() {
-				bc.MoveTxToPendingFinalize(tx)
-			}
+			bc.MoveTxsToPendingFinalize(types.Blocks{block})
 		}
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
@@ -1830,13 +1828,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	headerMap := make(types.HeaderMap, len(chain))
 	seals := make([]bool, len(chain))
 
+	bc.MoveTxsToPendingFinalize(chain)
+
 	for i, block := range chain {
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
 		seals[i] = verifySeals
-		for _, tx := range block.Transactions() {
-			bc.MoveTxToPendingFinalize(tx)
-		}
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
 	defer close(abort)
@@ -2066,11 +2063,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	}
 	bc.ReviseTips()
 
-	for _, block := range chain {
-		for _, tx := range block.Transactions() {
-			bc.MoveTxToPendingFinalize(tx)
-		}
-	}
+	bc.MoveTxsToPendingFinalize(chain)
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
@@ -3266,8 +3259,27 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	bc.txLookupCache.Add(txHash, lookup)
 }
 
-func (bc *BlockChain) MoveTxToPendingFinalize(tx *types.Transaction) {
+func (bc *BlockChain) moveTxToPendingFinalize(tx *types.Transaction) {
 	bc.pendingFinalizeFeed.Send(tx)
+}
+
+func (bc *BlockChain) MoveTxsToPendingFinalize(blocks types.Blocks) {
+	txs := make(types.Transactions, 0, len(blocks))
+
+	for _, block := range blocks {
+		if block == nil {
+			continue
+		}
+		txs = append(txs, block.Transactions()...)
+	}
+
+	sort.Slice(txs, func(i, j int) bool {
+		return txs[i].Nonce() > txs[j].Nonce()
+	})
+
+	for _, tx := range txs {
+		bc.moveTxToPendingFinalize(tx)
+	}
 }
 
 func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {

@@ -430,7 +430,7 @@ func (pool *TxPool) loop() {
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
 				log.Info("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-				pool.moveToPendingFinalize(tx.Hash())
+				pool.moveToPendingFinalize(tx)
 			}()
 
 		case tx := <-pool.rmTxCh:
@@ -1057,15 +1057,19 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
-func (pool *TxPool) moveToPendingFinalize(hash common.Hash) {
-	tx := pool.all.Get(hash)
-	if tx == nil {
+func (pool *TxPool) moveToPendingFinalize(tx *types.Transaction) {
+	poolTx := pool.all.Get(tx.Hash())
+	if poolTx == nil {
+		log.Warn("cannot find TX in TxPool", "TX hash", tx.Hash())
+	}
+	addr, err := types.Sender(pool.signer, tx) // already validated during insertion
+	if err != nil {
+		log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())
 		return
 	}
-	addr, _ := types.Sender(pool.signer, tx) // already validated during insertion
 
-	if pending := pool.pending[addr]; pending != nil {
-		if removed, invalids := pending.Remove(tx); removed {
+	if pending := pool.pending[addr]; pending != nil && poolTx != nil {
+		if removed, invalids := pending.Remove(poolTx); removed {
 			for _, tx := range invalids {
 				pool.pending[addr].Add(tx, pool.config.PriceBump)
 			}
@@ -1078,9 +1082,27 @@ func (pool *TxPool) moveToPendingFinalize(hash common.Hash) {
 			if pool.pendingFinalize[addr] == nil {
 				pool.pendingFinalize[addr] = newTxList(true)
 			}
-			pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
+			pool.pendingFinalize[addr].Add(poolTx, pool.config.PriceBump)
+			return
 		}
 	}
+
+	if list := pool.pendingFinalize[addr]; list != nil {
+		poolNonce := list.LastElement().Nonce()
+		txNonce := tx.Nonce()
+
+		if poolNonce < txNonce {
+			pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
+			pool.all.Add(tx, false)
+		} else {
+			log.Error("Pending finalize: low nonce TX", "TX hash", tx.Hash(), "TX nonce", txNonce, "TxPool nonce", poolNonce)
+		}
+		return
+	}
+
+	pool.pendingFinalize[addr] = newTxList(true)
+	pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
+	pool.all.Add(tx, false)
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent

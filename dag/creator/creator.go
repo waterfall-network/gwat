@@ -533,9 +533,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.chain.AddTips(newBlockDag)
 	c.chain.ReviseTips()
 
-	for _, tx := range block.Transactions() {
-		c.chain.MoveTxToPendingFinalize(tx)
-	}
+	c.chain.MoveTxsToPendingFinalize(types.Blocks{block})
 
 	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
