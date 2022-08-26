@@ -229,10 +229,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	eth.dag = dag.New(eth, chainConfig, eth.EventMux(), &config.Creator, eth.engine)
-	bc := eth.BlockChain()
-	blocks := bc.GetBlocksByHashes(*bc.GetDagHashes()).ToArray()
 
-	bc.MoveTxsToPendingFinalize(blocks)
 	eth.dag.Creator().SetExtra(makeExtraData(config.Creator.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}

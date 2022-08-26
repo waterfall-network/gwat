@@ -424,6 +424,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+
+	// add txs to tx pool
+	blocks := bc.GetBlocksByHashes(*bc.GetDagHashes()).ToArray()
+	bc.MoveTxsToPendingFinalize(blocks)
+
 	return bc, nil
 }
 
@@ -2063,8 +2068,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	}
 	bc.ReviseTips()
 
-	bc.MoveTxsToPendingFinalize(chain)
-
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
 		if err := bc.addFutureBlock(block); err != nil {
@@ -2255,16 +2258,11 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 			log.Error("Collect State Data By Finalized Block: bad finalized chain", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
 			return statedb, stateBlock, redBlocks, ErrInsertUncompletedDag
 		}
-
 		statedb, err = bc.StateAt(prevBlock.Root())
 		if statedb != nil {
 			stateBlock = prevBlock
 			break
 		}
-		//if prevBlock.Nr() == prevBlock.Height() {
-		//	stateBlock = prevBlock
-		//	break
-		//}
 		redBlocks = append(redBlocks, prevBlock)
 	}
 	// reverse redBlocks
@@ -3274,7 +3272,7 @@ func (bc *BlockChain) MoveTxsToPendingFinalize(blocks types.Blocks) {
 	}
 
 	sort.Slice(txs, func(i, j int) bool {
-		return txs[i].Nonce() > txs[j].Nonce()
+		return txs[i].Nonce() < txs[j].Nonce()
 	})
 
 	for _, tx := range txs {
