@@ -1585,7 +1585,12 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 				maxFinNr = block.Nr()
 			}
 		} else {
-			for _, tx := range block.Transactions() {
+			txs := block.Transactions()
+
+			sort.Slice(txs, func(i, j int) bool {
+				return txs[i].Nonce() > txs[j].Nonce()
+			})
+			for _, tx := range txs {
 				bc.MoveTxToPendingFinalize(tx)
 			}
 		}
@@ -1842,7 +1847,14 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
 		seals[i] = verifySeals
-		for _, tx := range block.Transactions() {
+
+		txs := block.Transactions()
+
+		sort.Slice(txs, func(i, j int) bool {
+			return txs[i].Nonce() > txs[j].Nonce()
+		})
+
+		for _, tx := range txs {
 			bc.MoveTxToPendingFinalize(tx)
 		}
 	}
@@ -2076,7 +2088,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	bc.ReviseTips()
 
 	for _, block := range chain {
-		for _, tx := range block.Transactions() {
+		txs := block.Transactions()
+
+		sort.Slice(txs, func(i, j int) bool {
+			return txs[i].Nonce() > txs[j].Nonce()
+		})
+		for _, tx := range txs {
 			bc.MoveTxToPendingFinalize(tx)
 		}
 	}
