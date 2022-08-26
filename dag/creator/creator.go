@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -534,14 +533,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.chain.AddTips(newBlockDag)
 	c.chain.ReviseTips()
 
-	txs := block.Transactions()
-
-	sort.Slice(txs, func(i, j int) bool {
-		return txs[i].Nonce() > txs[j].Nonce()
-	})
-	for _, tx := range txs {
-		c.chain.MoveTxToPendingFinalize(tx)
-	}
+	c.chain.MoveTxsToPendingFinalize(types.Blocks{block})
 
 	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
