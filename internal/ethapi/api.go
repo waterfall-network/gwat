@@ -1281,6 +1281,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockFinNr 
 		V:        (*hexutil.Big)(v),
 		R:        (*hexutil.Big)(r),
 		S:        (*hexutil.Big)(s),
+		Nonce:    hexutil.Uint64(tx.Nonce()),
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
