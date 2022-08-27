@@ -316,7 +316,7 @@ func TestProcessorMintOperationCall(t *testing.T) {
 			},
 		},
 		{
-			CaseName: "BigMetadata",
+			CaseName: "MetadataExceedsMaxSize",
 			TestData: testutils.TestData{
 				Caller:       vm.AccountRef(owner),
 				TokenAddress: wrc721Address,
@@ -338,6 +338,33 @@ func TestProcessorMintOperationCall(t *testing.T) {
 				balance := checkBalance(t, wrc721Address, owner)
 				if balance.Cmp(balanceBefore) != 0 {
 					t.Errorf("Expected %d got %s", balanceBefore, balance)
+				}
+			},
+		},
+		{
+			CaseName: "MetadataMaxSize",
+			TestData: testutils.TestData{
+				Caller:       vm.AccountRef(owner),
+				TokenAddress: wrc721Address,
+			},
+			Errs: []error{},
+			Fn: func(c *testutils.TestCase, a *common.Address) {
+				data := make([]byte, MetadataMaxSize)
+				id := big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
+				mintOp, err := operation.NewMintOperation(owner, id, data)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				balanceBefore := checkBalance(t, wrc721Address, owner)
+
+				v := c.TestData.(testutils.TestData)
+				call(t, v.Caller, v.TokenAddress, nil, mintOp, c.Errs)
+
+				balance := checkBalance(t, wrc721Address, owner)
+				expBalance := balanceBefore.Add(balanceBefore, big.NewInt(1))
+				if balance.Cmp(expBalance) != 0 {
+					t.Errorf("Expected %d got %s", expBalance, balance)
 				}
 			},
 		},

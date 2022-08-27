@@ -726,7 +726,7 @@ func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([
 	}
 
 	if tokenMeta, ok := op.Metadata(); ok {
-		if len(tokenMeta) >= MetadataMaxSize {
+		if len(tokenMeta) > MetadataMaxSize {
 			return nil, ErrMetadataExceedsMaxSize
 		}
 
