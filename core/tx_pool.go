@@ -1089,11 +1089,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	}
 
 	if pending := pool.pending[addr]; pending != nil && poolTx != nil {
-		if removed, invalids := pending.Remove(poolTx); removed {
-			for _, txInv := range invalids {
-				pool.pending[addr].Add(txInv, pool.config.PriceBump)
-				log.Error("Add back to pending invalid tx", "nonce", txInv.Nonce(), "hash", txInv.Hash().Hex(), "procNonce", tx.Nonce(), "procHash", tx.Hash().Hex())
-			}
+		if removed := pending.Delete(poolTx); removed {
 			// If no more pending transactions are left, remove the list
 			if pending.Empty() {
 				delete(pool.pending, addr)
@@ -1101,11 +1097,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 		}
 	}
 	if queue := pool.queue[addr]; queue != nil && poolTx != nil {
-		if removed, invalids := queue.Remove(poolTx); removed {
-			for _, txInv := range invalids {
-				pool.queue[addr].Add(txInv, pool.config.PriceBump)
-				log.Error("Add back to queue invalid tx", "nonce", txInv.Nonce(), "hash", txInv.Hash().Hex(), "procNonce", tx.Nonce(), "procHash", tx.Hash().Hex())
-			}
+		if removed := queue.Delete(poolTx); removed {
 			// If no more queue transactions are left, remove the list
 			if queue.Empty() {
 				delete(pool.queue, addr)

@@ -382,6 +382,16 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 	return true, nil
 }
 
+// Delete deletes a transaction from the maintained list
+func (l *txList) Delete(tx *types.Transaction) bool {
+	// Remove the transaction from the set
+	nonce := tx.Nonce()
+	if removed := l.txs.Remove(nonce); !removed {
+		return false
+	}
+	return true
+}
+
 // Ready retrieves a sequentially increasing list of transactions starting at the
 // provided nonce that is ready for processing. The returned transactions will be
 // removed from the list.
