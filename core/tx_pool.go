@@ -137,7 +137,7 @@ const (
 	TxStatusUnknown TxStatus = iota
 	TxStatusQueued
 	TxStatusPending
-	TxStatusPendingFinalize
+	TxStatusProcessing
 	TxStatusIncluded
 )
 
@@ -149,9 +149,11 @@ type blockChain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 	ReadFinalizedNumberByHash(hash common.Hash) *uint64
 	GetBlockByNumber(number uint64) *types.Block
+	GetDagHashes() *common.HashArray
+	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
-	SubscribePendingFinalize(ch chan<- *types.Transaction) event.Subscription
+	SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription
 	SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription
 }
 
@@ -257,25 +259,25 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
 
-	pending         map[common.Address]*txList // All currently processable transactions
-	queue           map[common.Address]*txList // Queued but non-processable transactions
-	pendingFinalize map[common.Address]*txList
-	beats           map[common.Address]time.Time // Last heartbeat from each known account
-	all             *txLookup                    // All transactions to allow lookups
-	priced          *txPricedList                // All transactions sorted by price
+	pending    map[common.Address]*txList // All currently processable transactions
+	queue      map[common.Address]*txList // Queued but non-processable transactions
+	processing map[common.Address]*txList
+	beats      map[common.Address]time.Time // Last heartbeat from each known account
+	all        *txLookup                    // All transactions to allow lookups
+	priced     *txPricedList                // All transactions sorted by price
 
-	chainHeadCh        chan ChainHeadEvent
-	chainHeadSub       event.Subscription
-	reqResetCh         chan *txpoolResetRequest
-	reqPromoteCh       chan *accountSet
-	queueTxEventCh     chan *types.Transaction
-	pendingFinalizeCh  chan *types.Transaction
-	pendingFinalizeSub event.Subscription
-	rmTxCh             chan *types.Transaction
-	rmTxSub            event.Subscription
-	reorgDoneCh        chan chan struct{}
-	reorgShutdownCh    chan struct{}  // requests shutdown of scheduleReorgLoop
-	wg                 sync.WaitGroup // tracks loop, scheduleReorgLoop
+	chainHeadCh     chan ChainHeadEvent
+	chainHeadSub    event.Subscription
+	reqResetCh      chan *txpoolResetRequest
+	reqPromoteCh    chan *accountSet
+	queueTxEventCh  chan *types.Transaction
+	processingCh    chan *types.Transaction
+	processingSub   event.Subscription
+	rmTxCh          chan *types.Transaction
+	rmTxSub         event.Subscription
+	reorgDoneCh     chan chan struct{}
+	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
+	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 	//initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 	//
 	//changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
@@ -293,23 +295,23 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:            config,
-		chainconfig:       chainconfig,
-		chain:             chain,
-		signer:            types.LatestSigner(chainconfig),
-		pending:           make(map[common.Address]*txList),
-		queue:             make(map[common.Address]*txList),
-		pendingFinalize:   make(map[common.Address]*txList),
-		beats:             make(map[common.Address]time.Time),
-		all:               newTxLookup(),
-		chainHeadCh:       make(chan ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:        make(chan *txpoolResetRequest),
-		reqPromoteCh:      make(chan *accountSet),
-		queueTxEventCh:    make(chan *types.Transaction),
-		pendingFinalizeCh: make(chan *types.Transaction, 1),
-		rmTxCh:            make(chan *types.Transaction, 1),
-		reorgDoneCh:       make(chan chan struct{}),
-		reorgShutdownCh:   make(chan struct{}),
+		config:          config,
+		chainconfig:     chainconfig,
+		chain:           chain,
+		signer:          types.LatestSigner(chainconfig),
+		pending:         make(map[common.Address]*txList),
+		queue:           make(map[common.Address]*txList),
+		processing:      make(map[common.Address]*txList),
+		beats:           make(map[common.Address]time.Time),
+		all:             newTxLookup(),
+		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:      make(chan *txpoolResetRequest),
+		reqPromoteCh:    make(chan *accountSet),
+		queueTxEventCh:  make(chan *types.Transaction),
+		processingCh:    make(chan *types.Transaction, 1),
+		rmTxCh:          make(chan *types.Transaction, 1),
+		reorgDoneCh:     make(chan chan struct{}),
+		reorgShutdownCh: make(chan struct{}),
 		//initDoneCh:      make(chan struct{}),
 		gasPrice: new(big.Int).SetUint64(config.PriceLimit),
 	}
@@ -326,6 +328,22 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	pool.wg.Add(1)
 	go pool.scheduleReorgLoop()
 
+	//load processing txs from dag
+	blocks := pool.chain.GetBlocksByHashes(*pool.chain.GetDagHashes()).ToArray()
+	txs := make(types.Transactions, 0, len(blocks))
+	for _, block := range blocks {
+		if block == nil {
+			continue
+		}
+		txs = append(txs, block.Transactions()...)
+	}
+	sort.Slice(txs, func(i, j int) bool {
+		return txs[i].Nonce() < txs[j].Nonce()
+	})
+	for _, tx := range txs {
+		pool.moveToProcessing(tx)
+	}
+
 	// If local transactions and journaling is enabled, load from disk
 	if !config.NoLocals && config.Journal != "" {
 		pool.journal = newTxJournal(config.Journal)
@@ -340,7 +358,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Subscribe events from blockchain and start the main event loop.
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
-	pool.pendingFinalizeSub = pool.chain.SubscribePendingFinalize(pool.pendingFinalizeCh)
+	pool.processingSub = pool.chain.SubscribeProcessing(pool.processingCh)
 	pool.rmTxSub = pool.chain.SubscribeRemoveTxFromPool(pool.rmTxCh)
 
 	pool.wg.Add(1)
@@ -387,12 +405,12 @@ func (pool *TxPool) loop() {
 		// Handle stats reporting ticks
 		case <-report.C:
 			pool.mu.RLock()
-			pending, queued, pendingFinalize := pool.stats()
+			pending, queued, processing := pool.stats()
 			stales := int(atomic.LoadInt64(&pool.priced.stales))
 			pool.mu.RUnlock()
 
 			if pending != prevPending || queued != prevQueued || stales != prevStales {
-				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "pendingFinalize", pendingFinalize, "stales", stales)
+				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "processing", processing, "stales", stales)
 				prevPending, prevQueued, prevStales = pending, queued, stales
 			}
 
@@ -425,12 +443,12 @@ func (pool *TxPool) loop() {
 				pool.mu.Unlock()
 			}
 
-		case tx := <-pool.pendingFinalizeCh:
+		case tx := <-pool.processingCh:
 			func() {
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
-				log.Debug("moveToPendingFinalize", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-				pool.moveToPendingFinalize(tx)
+				log.Info("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+				pool.moveToProcessing(tx)
 			}()
 
 		case tx := <-pool.rmTxCh:
@@ -443,7 +461,7 @@ func (pool *TxPool) loop() {
 					return
 				}
 
-				if list, ok := pool.pendingFinalize[sender]; ok && list.Overlaps(tx) {
+				if list, ok := pool.processing[sender]; ok && list.Overlaps(tx) {
 					log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
 					pool.removeTx(tx.Hash(), false)
 				}
@@ -459,6 +477,8 @@ func (pool *TxPool) Stop() {
 
 	// Unsubscribe subscriptions registered from blockchain
 	pool.chainHeadSub.Unsubscribe()
+	pool.processingSub.Unsubscribe()
+	pool.rmTxSub.Unsubscribe()
 	pool.wg.Wait()
 
 	if pool.journal != nil {
@@ -531,11 +551,11 @@ func (pool *TxPool) stats() (int, int, int) {
 	for _, list := range pool.queue {
 		queued += list.Len()
 	}
-	pendingFinalize := 0
-	for _, list := range pool.pendingFinalize {
-		pendingFinalize += list.Len()
+	processing := 0
+	for _, list := range pool.processing {
+		processing += list.Len()
 	}
-	return pending, queued, pendingFinalize
+	return pending, queued, processing
 }
 
 // Content retrieves the data content of the transaction pool, returning all the
@@ -552,11 +572,11 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	for addr, list := range pool.queue {
 		queued[addr] = list.Flatten()
 	}
-	pendingFinalize := make(map[common.Address]types.Transactions)
-	for addr, list := range pool.pendingFinalize {
-		pendingFinalize[addr] = list.Flatten()
+	processing := make(map[common.Address]types.Transactions)
+	for addr, list := range pool.processing {
+		processing[addr] = list.Flatten()
 	}
-	return pending, queued, pendingFinalize
+	return pending, queued, processing
 }
 
 // ContentFrom retrieves the data content of the transaction pool, returning the
@@ -573,11 +593,11 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 	if list, ok := pool.queue[addr]; ok {
 		queued = list.Flatten()
 	}
-	var pendingFin types.Transactions
-	if list, ok := pool.pendingFinalize[addr]; ok {
-		pendingFin = list.Flatten()
+	var proc types.Transactions
+	if list, ok := pool.processing[addr]; ok {
+		proc = list.Flatten()
 	}
-	return pending, queued, pendingFin
+	return pending, queued, proc
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
@@ -1034,8 +1054,8 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 		pool.mu.RLock()
 		if txList := pool.pending[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
 			status[i] = TxStatusPending
-		} else if txList := pool.pendingFinalize[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
-			status[i] = TxStatusPendingFinalize
+		} else if txList := pool.processing[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
+			status[i] = TxStatusProcessing
 		} else if txList := pool.queue[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
 			status[i] = TxStatusQueued
 		}
@@ -1057,10 +1077,10 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
-func (pool *TxPool) moveToPendingFinalize(tx *types.Transaction) {
+func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	poolTx := pool.all.Get(tx.Hash())
 	if poolTx == nil {
-		log.Warn("cannot find TX in TxPool", "TX hash", tx.Hash())
+		log.Warn("cannot find TX in TxPool", "TX hash", tx.Hash().Hex())
 	}
 	addr, err := types.Sender(pool.signer, tx) // already validated during insertion
 	if err != nil {
@@ -1070,43 +1090,49 @@ func (pool *TxPool) moveToPendingFinalize(tx *types.Transaction) {
 
 	if pending := pool.pending[addr]; pending != nil && poolTx != nil {
 		if removed, invalids := pending.Remove(poolTx); removed {
-			for _, tx := range invalids {
-				pool.pending[addr].Add(tx, pool.config.PriceBump)
+			for _, txInv := range invalids {
+				pool.pending[addr].Add(txInv, pool.config.PriceBump)
+				log.Error("Add back to pending invalid tx", "nonce", txInv.Nonce(), "hash", txInv.Hash().Hex(), "procNonce", tx.Nonce(), "procHash", tx.Hash().Hex())
 			}
-
 			// If no more pending transactions are left, remove the list
 			if pending.Empty() {
 				delete(pool.pending, addr)
 			}
-
-			if pool.pendingFinalize[addr] == nil {
-				pool.pendingFinalize[addr] = newTxList(true)
+		}
+	}
+	if queue := pool.queue[addr]; queue != nil && poolTx != nil {
+		if removed, invalids := queue.Remove(poolTx); removed {
+			for _, txInv := range invalids {
+				pool.queue[addr].Add(txInv, pool.config.PriceBump)
+				log.Error("Add back to queue invalid tx", "nonce", txInv.Nonce(), "hash", txInv.Hash().Hex(), "procNonce", tx.Nonce(), "procHash", tx.Hash().Hex())
 			}
-			pool.pendingFinalize[addr].Add(poolTx, pool.config.PriceBump)
-			return
+			// If no more queue transactions are left, remove the list
+			if queue.Empty() {
+				delete(pool.queue, addr)
+			}
 		}
 	}
 
-	if list := pool.pendingFinalize[addr]; list != nil {
-		//skip if exists
-		if poolTx != nil {
-			log.Warn("Skip moving tx to pendingFinalize (already exists)", "tx.Hash", tx.Hash().Hex(), "tx.Nonce", tx.Nonce())
-			return
-		}
-		curNonce := list.LastElement().Nonce()
-		txNonce := tx.Nonce()
-		if curNonce < txNonce {
-			pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
-			pool.all.Add(tx, false)
-		} else {
-			log.Warn("Pending finalize: low nonce TX", "TX hash", tx.Hash().Hex(), "TX nonce", txNonce, "TxPool nonce", curNonce)
+	curNonce := pool.currentState.GetNonce(addr)
+	txNonce := tx.Nonce()
+	if curNonce > txNonce {
+		if pool.processing[addr] != nil {
+			pool.processing[addr].Forward(curNonce)
+			// If no more pending transactions are left, remove the list
+			if pool.processing[addr].Empty() {
+				delete(pool.pending, addr)
+			}
 		}
 		return
 	}
-
-	pool.pendingFinalize[addr] = newTxList(true)
-	pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
+	//check txList exists
+	if pool.processing[addr] == nil {
+		pool.processing[addr] = newTxList(true)
+	}
+	pool.processing[addr].Add(tx, pool.config.PriceBump)
 	pool.all.Add(tx, false)
+	// Update the account nonce if needed
+	pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent
@@ -1159,16 +1185,16 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 		return
 	}
 
-	if fin := pool.pendingFinalize[addr]; fin != nil {
+	if fin := pool.processing[addr]; fin != nil {
 		if removed, invalids := fin.Remove(tx); removed {
-
 			for _, tx := range invalids {
-				pool.pendingFinalize[addr].Add(tx, pool.config.PriceBump)
+				pool.processing[addr].Add(tx, pool.config.PriceBump)
 			}
 			if fin.Empty() {
-				delete(pool.pendingFinalize, addr)
+				delete(pool.processing, addr)
 			}
-
+			// Update the account nonce if needed
+			pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
 			// Reduce the pending counter
 			pendingGauge.Dec(int64(1 + len(invalids)))
 			return
@@ -1661,10 +1687,9 @@ func (pool *TxPool) truncateQueue() {
 func (pool *TxPool) demoteUnexecutables() {
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
-		listPF := pool.pendingFinalize[addr]
-
+		listProc := pool.processing[addr]
 		nonce := pool.currentState.GetNonce(addr)
-		log.Info("current txpool nonce calculated", "nonce", nonce, "addr", addr.Hex())
+		log.Info("Demote executables txs nonce", "nonce", nonce, "addr", addr.Hex())
 
 		// Drop all transactions that are deemed too old (low nonce)
 		olds := list.Forward(nonce)
@@ -1696,20 +1721,18 @@ func (pool *TxPool) demoteUnexecutables() {
 		}
 
 		// If there's a gap in front, alert (should never happen) and postpone all transactions
-		if list.Len() > 0 && list.txs.Get(nonce) == nil {
-			if listPF != nil && listPF.Len() > 0 && listPF.txs.Get(nonce) == nil {
-				gapped := list.Cap(0)
-				for _, tx := range gapped {
-					hash := tx.Hash()
-					log.Error("Demoting invalidated transaction", "hash", hash)
-
-					// Internal shuffle shouldn't touch the lookup set.
-					pool.enqueueTx(hash, tx, false, false)
-				}
-				pendingGauge.Dec(int64(len(gapped)))
-				// This might happen in a reorg, so log it to the metering
-				blockReorgInvalidatedTx.Mark(int64(len(gapped)))
+		if (list.Len() > 0 && list.txs.Get(nonce) == nil) &&
+			(listProc != nil && listProc.Len() > 0 && listProc.LastElement().Nonce() < nonce) {
+			gapped := list.Cap(0)
+			for _, tx := range gapped {
+				hash := tx.Hash()
+				log.Error("Demoting invalidated transaction", "hash", hash.Hex(), "nonce", tx.Nonce())
+				// Internal shuffle shouldn't touch the lookup set.
+				pool.enqueueTx(hash, tx, false, false)
 			}
+			pendingGauge.Dec(int64(len(gapped)))
+			// This might happen in a reorg, so log it to the metering
+			blockReorgInvalidatedTx.Mark(int64(len(gapped)))
 		}
 		// Delete the entire pending entry if it became empty.
 		if list.Empty() {
@@ -1717,17 +1740,17 @@ func (pool *TxPool) demoteUnexecutables() {
 		}
 	}
 
-	for addr, list := range pool.pendingFinalize {
+	for addr, list := range pool.processing {
 		nonce := pool.currentState.GetNonce(addr)
 
-		oldsPF := list.Forward(nonce)
-		for _, tx := range oldsPF {
+		oldsProc := list.Forward(nonce)
+		for _, tx := range oldsProc {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
-			log.Trace("Removed old pendingFinalize transaction", "hash", hash)
+			log.Trace("Removed old processing transaction", "hash", hash)
 		}
 		if list.Empty() {
-			delete(pool.pendingFinalize, addr)
+			delete(pool.processing, addr)
 		}
 	}
 }

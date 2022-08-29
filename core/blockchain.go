@@ -173,17 +173,17 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc                  *HeaderChain
-	rmLogsFeed          event.Feed
-	chainFeed           event.Feed
-	chainSideFeed       event.Feed
-	chainHeadFeed       event.Feed
-	logsFeed            event.Feed
-	blockProcFeed       event.Feed
-	pendingFinalizeFeed event.Feed
-	rmTxFeed            event.Feed
-	scope               event.SubscriptionScope
-	genesisBlock        *types.Block
+	hc             *HeaderChain
+	rmLogsFeed     event.Feed
+	chainFeed      event.Feed
+	chainSideFeed  event.Feed
+	chainHeadFeed  event.Feed
+	logsFeed       event.Feed
+	blockProcFeed  event.Feed
+	processingFeed event.Feed
+	rmTxFeed       event.Feed
+	scope          event.SubscriptionScope
+	genesisBlock   *types.Block
 
 	DagMu sync.RWMutex // finalizing lock
 
@@ -424,11 +424,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
-
-	// add txs to tx pool
-	blocks := bc.GetBlocksByHashes(*bc.GetDagHashes()).ToArray()
-	bc.MoveTxsToPendingFinalize(blocks)
-
 	return bc, nil
 }
 
@@ -1590,7 +1585,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 				maxFinNr = block.Nr()
 			}
 		} else {
-			bc.MoveTxsToPendingFinalize(types.Blocks{block})
+			bc.MoveTxsToProcessing(types.Blocks{block})
 		}
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
@@ -1662,7 +1657,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		//insertion of blue blocks
 		start := time.Now()
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlock(block)
+		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlockRecursive(block, nil)
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -1835,7 +1830,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	headerMap := make(types.HeaderMap, len(chain))
 	seals := make([]bool, len(chain))
 
-	bc.MoveTxsToPendingFinalize(chain)
+	bc.MoveTxsToProcessing(chain)
 
 	for i, block := range chain {
 		headers[i] = block.Header()
@@ -3274,11 +3269,11 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	bc.txLookupCache.Add(txHash, lookup)
 }
 
-func (bc *BlockChain) moveTxToPendingFinalize(tx *types.Transaction) {
-	bc.pendingFinalizeFeed.Send(tx)
+func (bc *BlockChain) moveTxToProcessing(tx *types.Transaction) {
+	bc.processingFeed.Send(tx)
 }
 
-func (bc *BlockChain) MoveTxsToPendingFinalize(blocks types.Blocks) {
+func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 	txs := make(types.Transactions, 0, len(blocks))
 
 	for _, block := range blocks {
@@ -3293,7 +3288,7 @@ func (bc *BlockChain) MoveTxsToPendingFinalize(blocks types.Blocks) {
 	})
 
 	for _, tx := range txs {
-		bc.moveTxToPendingFinalize(tx)
+		bc.moveTxToProcessing(tx)
 	}
 }
 

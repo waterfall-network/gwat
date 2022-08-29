@@ -533,7 +533,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.chain.AddTips(newBlockDag)
 	c.chain.ReviseTips()
 
-	c.chain.MoveTxsToPendingFinalize(types.Blocks{block})
+	c.chain.MoveTxsToProcessing(types.Blocks{block})
 
 	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
@@ -738,8 +738,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 				}
 				_dag.LastFinalizedHash = tip.LastFinalizedHash
 				_dag.LastFinalizedHeight = tip.LastFinalizedHeight
-				_dag.DagChainHashes = *graph.GetDagChainHashes()
-				_dag.FinalityPoints = *graph.GetFinalityPoints()
+				if dch := graph.GetDagChainHashes(); dch != nil {
+					_dag.DagChainHashes = *dch
+				}
+				if fp := graph.GetFinalityPoints(); fp != nil {
+					_dag.FinalityPoints = *fp
+				}
 				_dag.DagChainHashes = _dag.DagChainHashes.Difference(common.HashArray{genesis})
 				_dag.FinalityPoints = _dag.FinalityPoints.Difference(common.HashArray{genesis})
 				tips.Add(_dag)

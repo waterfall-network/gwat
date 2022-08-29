@@ -754,7 +754,7 @@ web3._extend({
 			outputFormatter: function(status) {
 				status.pending = web3._extend.utils.toDecimal(status.pending);
 				status.queued = web3._extend.utils.toDecimal(status.queued);
-				status.pendingFinalize = web3._extend.utils.toDecimal(status.pendingFinalize);
+				status.processing = web3._extend.utils.toDecimal(status.processing);
 				return status;
 			}
 		}),

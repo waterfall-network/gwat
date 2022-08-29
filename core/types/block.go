@@ -43,8 +43,8 @@ var (
 // mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
 type BlockNonce [8]byte
-type SlotHashMap map[uint64]Blocks      // slot: blocks
-type SlotSpineHashMap map[uint64]*Block // slot: block
+type SlotBlocksMap map[uint64]Blocks // slot: blocks
+type SlotSpineMap map[uint64]*Block  // slot: block
 
 // EncodeNonce converts the given integer to a block nonce.
 func EncodeNonce(i uint64) BlockNonce {
@@ -440,7 +440,7 @@ func (bs *Blocks) GetMaxParentHashesLenBlocks() Blocks {
 	return res
 }
 
-func (bs *Blocks) GroupBySlot() (SlotHashMap, error) {
+func (bs *Blocks) GroupBySlot() (SlotBlocksMap, error) {
 	if len(*bs) == 0 {
 		return nil, errors.New("empty blocks slice")
 	}
@@ -453,7 +453,7 @@ func (bs *Blocks) GroupBySlot() (SlotHashMap, error) {
 			return nil, errors.New("nil header found")
 		}
 	}
-	res := make(SlotHashMap)
+	res := make(SlotBlocksMap)
 	for _, block := range *bs {
 		blockSlot := block.Slot()
 		if _, exists := res[blockSlot]; !exists {
@@ -464,7 +464,7 @@ func (bs *Blocks) GroupBySlot() (SlotHashMap, error) {
 	return res, nil
 }
 
-func (shm *SlotHashMap) GetMinSlot() uint64 {
+func (shm *SlotBlocksMap) GetMinSlot() uint64 {
 	minSlot := uint64(math.MaxUint64)
 	for k := range *shm {
 		if k < minSlot {
@@ -474,7 +474,7 @@ func (shm *SlotHashMap) GetMinSlot() uint64 {
 	return minSlot
 }
 
-func (shm *SlotHashMap) GetMaxSlot() uint64 {
+func (shm *SlotBlocksMap) GetMaxSlot() uint64 {
 	minSlot := uint64(0)
 	for k := range *shm {
 		if k > minSlot {
@@ -493,7 +493,7 @@ func (bs *Blocks) GetBlockByHash(hash common.Hash) *Block {
 	return nil
 }
 
-func (shm *SlotSpineHashMap) GetMaxSlot() uint64 {
+func (shm *SlotSpineMap) GetMaxSlot() uint64 {
 	maxSlot := uint64(0)
 	for slot := range *shm {
 		if slot > maxSlot {
@@ -503,7 +503,7 @@ func (shm *SlotSpineHashMap) GetMaxSlot() uint64 {
 	return maxSlot
 }
 
-func (shm *SlotSpineHashMap) GetMinSlot() uint64 {
+func (shm *SlotSpineMap) GetMinSlot() uint64 {
 	minClot := uint64(math.MaxUint64)
 	for slot := range *shm {
 		if slot < minClot {
@@ -513,7 +513,7 @@ func (shm *SlotSpineHashMap) GetMinSlot() uint64 {
 	return minClot
 }
 
-func (shm *SlotSpineHashMap) GetHashes() *common.HashArray {
+func (shm *SlotSpineMap) GetHashes() *common.HashArray {
 	if len(*shm) == 0 {
 		return &common.HashArray{}
 	}
