@@ -306,10 +306,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		isTokenOp = true
 	}
 
+	var data []byte
+	if !isTokenOp {
+		data = st.data
+	}
+
 	contractCreation := msg.To() == nil && !isTokenOp
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
+	gas, err := IntrinsicGas(data, st.msg.AccessList(), contractCreation, homestead, istanbul)
 	if err != nil {
 		return nil, err
 	}

@@ -702,9 +702,15 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if _, err := operation.GetOpCode(tx.Data()); err == nil {
 		isTokenOp = true
 	}
+
+	var txData []byte
+	if !isTokenOp {
+		txData = tx.Data()
+	}
+
 	contractCreation := tx.To() == nil && !isTokenOp
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), contractCreation, true, pool.istanbul)
+	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, true, pool.istanbul)
 	if err != nil {
 		return err
 	}

@@ -34,9 +34,13 @@ var (
 	ErrNewValueIsNotSet        = errors.New("new value is not set")
 	ErrUint256Overflow         = errors.New("value overflow")
 	ErrTokenAddressCollision   = errors.New("token address collision")
+	ErrMetadataExceedsMaxSize  = errors.New("metadata exceeds max size")
 )
 
 const (
+	// 1024 bytes
+	MetadataMaxSize = 1 << 10
+
 	// Common fields
 	// NameField is []byte
 	NameField = "Name"
@@ -722,6 +726,10 @@ func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([
 	}
 
 	if tokenMeta, ok := op.Metadata(); ok {
+		if len(tokenMeta) > MetadataMaxSize {
+			return nil, ErrMetadataExceedsMaxSize
+		}
+
 		err = writeToMap(storage, MetadataField, tokenId.Bytes(), tokenMeta[:])
 		if err != nil {
 			return nil, err
