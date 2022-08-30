@@ -442,7 +442,7 @@ func (bs *Blocks) GetMaxParentHashesLenBlocks() Blocks {
 
 func (bs *Blocks) GroupBySlot() (SlotBlocksMap, error) {
 	if len(*bs) == 0 {
-		return nil, errors.New("empty blocks slice")
+		return SlotBlocksMap{}, nil
 	}
 	for _, block := range *bs {
 		if block == nil {

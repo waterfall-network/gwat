@@ -20,6 +20,7 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -188,6 +189,9 @@ type BlockChain interface {
 
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
+
+	// GetBlocksByHashes retrieves block by hash.
+	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 
 	// GetLastFinalizedNumber retrieves the last finalized block number.
 	GetLastFinalizedNumber() uint64
@@ -635,7 +639,8 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 		log.Debug("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 
-	lastFinNr := d.blockchain.GetLastFinalizedNumber()
+	lastFinBlock := d.blockchain.GetLastFinalizedBlock()
+	lastFinNr := lastFinBlock.Nr()
 	dag, finNr, err := d.fetchDagHashes(p, lastFinNr)
 	if len(dag) == 1 {
 		// if remote tips set to last finalized block - do same
@@ -659,150 +664,51 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	if err != nil {
 		return err
 	}
-
-	genesis := d.blockchain.GetHeaderByNumber(0)
-	lastFinHeader := d.blockchain.GetHeaderByNumber(lastFinNr)
 	// rm deprecated dag info
 	d.ClearBlockDag()
 	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
-	// create graph of block
-	headerMap := types.HeaderMap{}.FromArray(headers)
-	parentHashes := headerMap.ParentHashes()
-	for _, h := range parentHashes {
-		parent := d.blockchain.GetHeaderByHash(h)
-		if parent != nil {
-			headerMap.Add(parent)
-		}
+	blocks := make(types.Blocks, len(headers))
+	for i, header := range headers {
+		txs := txsMap[header.Hash()]
+		block := types.NewBlockWithHeader(header).WithBody(txs)
+		blocks[i] = block
 	}
-	genHash := genesis.Hash()
-	tipsGraph := headerMap.ToTipsGraphDag(&genHash)
-	for _, gd := range tipsGraph {
-		tmpTips := types.Tips{}
+	blocksBySlot, err := (&blocks).GroupBySlot()
+	if err != nil {
+		return err
+	}
+	//sort by slots
+	slots := common.SorterAskU64{}
+	for sl, _ := range blocksBySlot {
+		slots = append(slots, sl)
+	}
+	sort.Sort(slots)
 
-		dagChainHashes := gd.GetDagChainHashes()
-		if dagChainHashes == nil {
-			log.Error("Sync blocks of dag received empty dag hashes", "gd", gd)
+	for _, slot := range slots {
+		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
+		if len(slotBlocks) == 0 {
+			continue
 		}
-
-		for _, hash := range *dagChainHashes {
-			//create and save block and BlockDag for Ancestors in order from finalized block
-			header := headerMap[hash]
-			txs := txsMap[hash]
-			block := types.NewBlockWithHeader(header).WithBody(txs)
-			//create dag for parents
-			finDag := tmpTips.GetFinalizingDag()
-			if finDag == nil {
-				for _, ph := range header.ParentHashes {
-					parent := headerMap[ph]
-					dagChainHashes := common.HashArray{ph}
-					finalityPoints := common.HashArray{ph}
-					if parent.Number != nil {
-						dagChainHashes = common.HashArray{}
-						finalityPoints = common.HashArray{}
-					}
-					newBlockDag := &types.BlockDAG{
-						Hash:                parent.Hash(),
-						Height:              parent.Height,
-						LastFinalizedHash:   lastFinHeader.Hash(),
-						LastFinalizedHeight: lastFinNr,
-						DagChainHashes:      dagChainHashes,
-						FinalityPoints:      finalityPoints,
-					}
-					rawdb.WriteBlockDag(d.stateDB, newBlockDag)
-					tmpTips.Add(newBlockDag)
-				}
-				finDag = tmpTips.GetFinalizingDag()
+		spine := slotBlocks[0]
+		if spine.Slot() > lastFinBlock.Slot() {
+			_, err = d.blockchain.WriteSyncDagBlock(spine)
+			if err != nil {
+				log.Error("Failed writing block to chain", "err", err)
+				return err
 			}
-			tmpFinalityPoints := finDag.FinalityPoints
-			tmpDagChainHashes := tmpTips.GetOrderedDagChainHashes()
-			if finDag.Hash != genesis.Hash() {
-				tmpFinalityPoints = append(tmpFinalityPoints, finDag.Hash)
-			} else {
-				tmpDagChainHashes = tmpFinalityPoints.Difference(common.HashArray{genesis.Hash()})
-			}
+			slotBlocks = slotBlocks[1:]
+		}
+		//handle by reverse order
+		for _, block := range slotBlocks {
 			// Commit block and state to database.
 			_, err = d.blockchain.WriteSyncDagBlock(block)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				return err
 			}
-			//update state of tips
-			//1. remove stale tips
-			for _, h := range block.ParentHashes() {
-				tmpTips.Remove(h)
-			}
-			//2. create for new blockDag
-			newBlockDag := &types.BlockDAG{
-				Hash:                block.Hash(),
-				Height:              block.Height(),
-				LastFinalizedHash:   lastFinHeader.Hash(),
-				LastFinalizedHeight: lastFinNr,
-				DagChainHashes:      tmpDagChainHashes,
-				FinalityPoints:      tmpFinalityPoints,
-			}
-			rawdb.WriteBlockDag(d.stateDB, newBlockDag)
-			tmpTips.Add(newBlockDag)
-		}
 
-		//create and save block and BlockDag for Top Tips
-		header := headerMap[gd.Hash]
-		txs := txsMap[gd.Hash]
-		block := types.NewBlockWithHeader(header).WithBody(txs)
-		//create dag for parents
-		finDag := tmpTips.GetFinalizingDag()
-		if finDag == nil {
-			for _, ph := range header.ParentHashes {
-				parent := headerMap[ph]
-				dagChainHashes := common.HashArray{ph}
-				finalityPoints := common.HashArray{ph}
-				if parent.Number != nil {
-					dagChainHashes = common.HashArray{}
-					finalityPoints = common.HashArray{}
-				}
-				newBlockDag := &types.BlockDAG{
-					Hash:                parent.Hash(),
-					Height:              parent.Height,
-					LastFinalizedHash:   lastFinHeader.Hash(),
-					LastFinalizedHeight: lastFinNr,
-					DagChainHashes:      dagChainHashes,
-					FinalityPoints:      finalityPoints,
-				}
-				rawdb.WriteBlockDag(d.stateDB, newBlockDag)
-				tmpTips.Add(newBlockDag)
-			}
-			finDag = tmpTips.GetFinalizingDag()
 		}
-		tmpFinalityPoints := finDag.FinalityPoints
-		tmpDagChainHashes := tmpTips.GetOrderedDagChainHashes()
-		if finDag.Hash != genesis.Hash() {
-			tmpFinalityPoints = append(tmpFinalityPoints, finDag.Hash)
-		} else {
-			tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{genesis.Hash()})
-		}
-		// Commit block and state to database.
-		_, err = d.blockchain.WriteSyncDagBlock(block)
-		if err != nil {
-			log.Error("Failed writing block to chain", "err", err)
-			return err
-		}
-		//update state of tips
-		//1. remove stale tips
-		for _, h := range block.ParentHashes() {
-			tmpTips.Remove(h)
-		}
-		//2. create for new blockDag
-		newBlockDag := &types.BlockDAG{
-			Hash:                block.Hash(),
-			Height:              block.Height(),
-			LastFinalizedHash:   lastFinHeader.Hash(),
-			LastFinalizedHeight: lastFinNr,
-			DagChainHashes:      tmpDagChainHashes,
-			FinalityPoints:      tmpFinalityPoints,
-		}
-		rawdb.WriteBlockDag(d.stateDB, newBlockDag)
-		d.blockchain.AddTips(newBlockDag)
 	}
-	d.blockchain.ReviseTips()
 	return err
 }
 
