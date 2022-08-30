@@ -1078,30 +1078,34 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 }
 
 func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
-	poolTx := pool.all.Get(tx.Hash())
-	if poolTx == nil {
-		log.Warn("cannot find TX in TxPool", "TX hash", tx.Hash().Hex())
-	}
 	addr, err := types.Sender(pool.signer, tx) // already validated during insertion
 	if err != nil {
 		log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())
 		return
 	}
 
-	if pending := pool.pending[addr]; pending != nil && poolTx != nil {
-		if removed := pending.Delete(poolTx); removed {
-			// If no more pending transactions are left, remove the list
-			if pending.Empty() {
-				delete(pool.pending, addr)
-			}
+	//move to processing all txs with nonce <= nonce of current tx
+	pendingLteNonce := types.Transactions{}
+	if pending := pool.pending[addr]; pending != nil {
+		pendingLteNonce = pending.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() <= tx.Nonce() })
+		for _, t := range pendingLteNonce {
+			pending.Delete(t)
+		}
+		// If no more pending transactions are left, remove the list
+		if pending.Empty() {
+			delete(pool.pending, addr)
 		}
 	}
-	if queue := pool.queue[addr]; queue != nil && poolTx != nil {
-		if removed := queue.Delete(poolTx); removed {
-			// If no more queue transactions are left, remove the list
-			if queue.Empty() {
-				delete(pool.queue, addr)
-			}
+	//move to processing all txs with nonce <= nonce of current tx
+	queueLteNonce := types.Transactions{}
+	if queue := pool.queue[addr]; queue != nil {
+		queueLteNonce = queue.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() <= tx.Nonce() })
+		for _, t := range queueLteNonce {
+			queue.Delete(t)
+		}
+		// If no more queue transactions are left, remove the list
+		if queue.Empty() {
+			delete(pool.queue, addr)
 		}
 	}
 
@@ -1121,10 +1125,48 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	if pool.processing[addr] == nil {
 		pool.processing[addr] = newTxList(true)
 	}
-	pool.processing[addr].Add(tx, pool.config.PriceBump)
-	pool.all.Add(tx, false)
+	moveTxs := append(pendingLteNonce, queueLteNonce...)
+	moveTxs = append(moveTxs, tx)
+	for _, t := range moveTxs {
+		pool.processing[addr].Add(t, pool.config.PriceBump)
+		pool.all.Add(t, false)
+	}
 	// Update the account nonce if needed
 	pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
+
+	// check no gap with pending
+	if pending := pool.pending[addr]; pending != nil &&
+		pending.txs.FirstElement().Nonce() > pool.processing[addr].txs.LastElement().Nonce()+1 {
+		//if gap move all to queue
+		pendingGtNonce := pending.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > tx.Nonce() })
+		for _, t := range pendingGtNonce {
+			pool.enqueueTx(t.Hash(), tx, false, false)
+		}
+		// If no more pending transactions are left, remove the list
+		if pending.Empty() {
+			delete(pool.pending, addr)
+		}
+	}
+
+	// if no gap to queue - move to pending
+	if queue := pool.queue[addr]; queue != nil &&
+		queue.txs.FirstElement().Nonce() <= pool.processing[addr].txs.LastElement().Nonce()+1 {
+		lowestNonce := queue.txs.FirstElement().Nonce()
+		for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
+			t := queue.txs.Get(i)
+			pool.promoteTx(addr, t.Hash(), t)
+			queue.Delete(t)
+		}
+		// If no more queue transactions are left, remove the list
+		if queue.Empty() {
+			delete(pool.queue, addr)
+		}
+	}
+
+	// Update the account nonce if needed
+	if pool.pending[addr] != nil {
+		pool.pendingNonces.setIfGreater(addr, pool.pending[addr].LastElement().Nonce()+1)
+	}
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent

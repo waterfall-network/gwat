@@ -245,6 +245,13 @@ func (m *txSortedMap) LastElement() *types.Transaction {
 	return cache[len(cache)-1]
 }
 
+// FirstElement returns the first element of a flattened list, thus, the
+// transaction with the lowest nonce
+func (m *txSortedMap) FirstElement() *types.Transaction {
+	cache := m.flatten()
+	return cache[0]
+}
+
 // txList is a "list" of transactions belonging to an account, sorted by account
 // nonce. The same type can be used both for storing contiguous transactions for
 // the executable/pending queue; and for storing gapped transactions for the non-
