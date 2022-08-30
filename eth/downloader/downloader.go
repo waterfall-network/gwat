@@ -738,8 +738,10 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	// create graph of block
 	headerMap := types.HeaderMap{}.FromArray(headers)
 
+	expCache := core.ExploreResultMap{}
 	for _, header := range headers {
-		unloaded, loaded, finalized, _, _, expErr := d.blockchain.ExploreChainRecursive(header.Hash())
+		unloaded, loaded, finalized, _, exc, expErr := d.blockchain.ExploreChainRecursive(header.Hash(), expCache)
+		expCache = exc
 		if expErr != nil {
 			return expErr
 		}
@@ -757,10 +759,11 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	}
 
 	for _, tip := range tips {
-		unloaded, loaded, finalized, _, _, expErr := d.blockchain.ExploreChainRecursive(tip.Hash)
+		unloaded, loaded, finalized, _, exc, expErr := d.blockchain.ExploreChainRecursive(tip.Hash, expCache)
 		if expErr != nil {
 			return expErr
 		}
+		expCache = exc
 		if len(unloaded) > 0 {
 			log.Info("Synchronization of unknown dag blocks: find unloaded blocks", "count", len(unloaded), "unloaded", unloaded)
 		}

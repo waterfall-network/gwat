@@ -719,11 +719,13 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	slotInfo := c.getAssignment()
 	tipsBlocks := c.chain.GetBlocksByHashes(tips.GetHashes())
 	blocks := c.eth.BlockChain().GetBlocksByHashes(tipsBlocks.Hashes())
+	expCache := core.ExploreResultMap{}
 	for _, bl := range blocks {
 		if bl.Slot() >= slotInfo.Slot {
 			tip := tips.Get(bl.Hash())
 			for _, ph := range bl.ParentHashes() {
-				_, _, _, graph, _, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash())
+				_, _, _, graph, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
+				expCache = exc
 				_dag := c.eth.BlockChain().ReadBockDag(ph)
 				if _dag == nil {
 					parentBlock := c.eth.BlockChain().GetBlock(ph)

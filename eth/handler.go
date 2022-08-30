@@ -192,6 +192,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	heighter := func() uint64 {
 		return h.chain.GetLastFinalizedNumber()
 	}
+	expCache := core.ExploreResultMap{}
 	inserter := func(peerId string, blocks types.Blocks) (int, error, *common.HashArray) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
 		//
@@ -216,7 +217,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		if err == core.ErrInsertUncompletedDag {
 			unloaded := common.HashArray{}
 			for _, block := range blocks {
-				unl, _, _, _, _, _ := h.chain.ExploreChainRecursive(block.Hash())
+				unl, _, _, _, exc, _ := h.chain.ExploreChainRecursive(block.Hash(), expCache)
+				expCache = exc
 				unloaded = unloaded.Concat(unl)
 			}
 			log.Warn("Insert propagated blocks: unknown ancestors detected. start sync", "err", err, "unknown", unloaded)

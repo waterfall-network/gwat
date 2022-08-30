@@ -2139,12 +2139,12 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		State:  0,
 	}
 	var (
-		cache = ExploreResultMap{}
-		fnl   = common.HashArray{}
-		unl   = common.HashArray{}
+		expCache = ExploreResultMap{}
+		fnl      = common.HashArray{}
+		unl      = common.HashArray{}
 	)
 	for _, h := range parents {
-		u, _, f, gr, c, e := bc.ExploreChainRecursive(h, cache)
+		u, _, f, gr, c, e := bc.ExploreChainRecursive(h, expCache)
 		if e != nil {
 			log.Error("Error while collect state data by block", "hash", h.Hex(), "parents", parents, "err", e)
 			return statedb, stateBlock, recommitBlocks, cachedHashes, err
@@ -2152,7 +2152,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		if len(u) > 0 {
 			unl = unl.Concat(u)
 		}
-		cache = c
+		expCache = c
 		graph.Graph = append(graph.Graph, gr)
 		fnl = fnl.Concat(f).Uniq()
 	}
@@ -3075,12 +3075,14 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 func (bc *BlockChain) GetDagHashes() *common.HashArray {
 	dagHashes := common.HashArray{}
 	tips := *bc.hc.GetTips()
+	expCache := ExploreResultMap{}
 	for hash, tip := range tips {
 		if hash == tip.LastFinalizedHash {
 			dagHashes = append(dagHashes, hash)
 			continue
 		}
-		_, loaded, _, _, _, _ := bc.ExploreChainRecursive(hash)
+		_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
+		expCache = c
 		dagHashes = dagHashes.Concat(loaded)
 	}
 	dagHashes = dagHashes.Uniq().Sort()
