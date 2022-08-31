@@ -119,10 +119,10 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 		lastFinNr = lastBlock.Nr()
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		headBlock = lastBlock
-	}
 
-	if headBlock.Height() != headBlock.Nr() {
-		log.Error("☠ finalizing: mismatch nr and height", "slot", headBlock.Slot(), "nr", headBlock.Nr(), "height", headBlock.Height(), "hash", headBlock.Hash().Hex())
+		if headBlock.Height() != headBlock.Nr() {
+			log.Error("☠ finalizing: mismatch nr and height", "slot", headBlock.Slot(), "nr", headBlock.Nr(), "height", headBlock.Height(), "hash", headBlock.Hash().Hex())
+		}
 	}
 	return nil
 }
