@@ -456,15 +456,8 @@ func (pool *TxPool) loop() {
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
 
-				sender, err := types.Sender(pool.signer, tx)
-				if err != nil {
-					return
-				}
-
-				if list, ok := pool.processing[sender]; ok && list.Overlaps(tx) {
-					log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
-					pool.removeTx(tx.Hash(), false)
-				}
+				log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
+				pool.removeTx(tx.Hash(), true)
 			}()
 		}
 	}
@@ -629,13 +622,6 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 		}
 	}
 	return pending
-}
-
-// RemoveTx removes tx from pool.
-func (pool *TxPool) RemoveTx(hash common.Hash) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	pool.all.Remove(hash)
 }
 
 // Locals retrieves the accounts currently considered local by the pool.
@@ -1224,8 +1210,10 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 
 	if fin := pool.processing[addr]; fin != nil {
 		if removed, invalids := fin.Remove(tx); removed {
-			for _, tx := range invalids {
-				pool.processing[addr].Add(tx, pool.config.PriceBump)
+			// completely rm all txs with lower nonce
+			for _, rmtx := range invalids {
+				log.Warn("Recursive removing", "nonce", rmtx.Nonce(), "txHash", rmtx.Hash(), "addr", addr)
+				pool.removeTx(rmtx.Hash(), outofbound)
 			}
 			if fin.Empty() {
 				delete(pool.processing, addr)
@@ -1233,12 +1221,10 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			// Update the account nonce if needed
 			pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
 			// Reduce the pending counter
-			pendingGauge.Dec(int64(1 + len(invalids)))
+			pendingGauge.Dec(int64(1))
 			return
 		}
 	}
-
-	log.Warn("No TXs to remove", "hash", tx.Hash().Hex(), "nonce", tx.Nonce())
 }
 
 // requestReset requests a pool reset to the new head block.
