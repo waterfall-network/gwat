@@ -1073,7 +1073,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	//move to processing all txs with nonce <= nonce of current tx
 	pendingLteNonce := types.Transactions{}
 	if pending := pool.pending[addr]; pending != nil {
-		pendingLteNonce = pending.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() <= tx.Nonce() })
+		pendingLteNonce = pending.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
 		for _, t := range pendingLteNonce {
 			pending.Delete(t)
 		}
@@ -1085,7 +1085,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	//move to processing all txs with nonce <= nonce of current tx
 	queueLteNonce := types.Transactions{}
 	if queue := pool.queue[addr]; queue != nil {
-		queueLteNonce = queue.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() <= tx.Nonce() })
+		queueLteNonce = queue.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
 		for _, t := range queueLteNonce {
 			queue.Delete(t)
 		}
@@ -1120,11 +1120,12 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	// Update the account nonce if needed
 	pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
 
+	processingNonce := pool.processing[addr].txs.LastElement().Nonce()
 	// check no gap with pending
 	if pending := pool.pending[addr]; pending != nil &&
-		pending.txs.FirstElement().Nonce() > pool.processing[addr].txs.LastElement().Nonce()+1 {
+		pending.txs.FirstElement().Nonce() > processingNonce+1 {
 		//if gap move all to queue
-		pendingGtNonce := pending.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > tx.Nonce() })
+		pendingGtNonce := pending.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > processingNonce+1 })
 		for _, t := range pendingGtNonce {
 			pool.queue[addr].Delete(t)
 			pool.queue[addr].Add(t, pool.config.PriceBump)
@@ -1138,7 +1139,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 
 	// if no gap to queue - move to pending
 	if queue := pool.queue[addr]; queue != nil &&
-		queue.txs.FirstElement().Nonce() <= pool.processing[addr].txs.LastElement().Nonce()+1 {
+		queue.txs.FirstElement().Nonce() <= processingNonce+1 {
 		lowestNonce := queue.txs.FirstElement().Nonce()
 		for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
 			t := queue.txs.Get(i)

@@ -72,8 +72,6 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 		return nil
 	}
 
-	log.Info("Finalization spines received", "spines", spines)
-
 	bc := f.eth.BlockChain()
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	lastFinNr := lastFinBlock.Nr()
@@ -102,7 +100,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
 		if len(orderedChain) == 0 {
 			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
-			return nil
+			continue
 		}
 		log.Info("Finalization spine chain calculated", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
@@ -112,7 +110,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 			block.SetNumber(&nr)
 			isHead := i == len(orderedChain)-1
 			if err := f.finalizeBlock(nr, *block, isHead); err != nil {
-				log.Error("block finalization failed", "nr", i, "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+				log.Error("block finalization failed", "nr", i, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 				return err
 			}
 		}
@@ -151,7 +149,7 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 		return err
 	}
 
-	log.Info("🔗 block finalized", "Number", finNr, "Height", block.Height(), "hash", block.Hash().Hex())
+	log.Info("🔗 block finalized", "Number", finNr, "Slot", block.Slot(), "Height", block.Height(), "hash", block.Hash().Hex())
 	return nil
 }
 
@@ -183,7 +181,8 @@ func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, 
 		return common.HashArray{}, nil
 	}
 
-	spines, err := types.CalculateSpines(finChain)
+	lastFinSlot := bc.GetLastFinalizedBlock().Slot()
+	spines, err := types.CalculateSpines(finChain, lastFinSlot)
 	if err != nil {
 		return common.HashArray{}, err
 	}
@@ -195,9 +194,9 @@ func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, 
 				spinesOfSlot[slot] = spine
 			}
 		}
-		spineHashes := spinesOfSlot.GetHashes()
+		spineHashes := spinesOfSlot.GetOrderedHashes()
 		return *spineHashes, nil
 	}
-	spineHashes := spines.GetHashes()
+	spineHashes := spines.GetOrderedHashes()
 	return *spineHashes, nil
 }

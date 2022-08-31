@@ -25,6 +25,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -513,22 +514,20 @@ func (shm *SlotSpineMap) GetMinSlot() uint64 {
 	return minClot
 }
 
-func (shm *SlotSpineMap) GetHashes() *common.HashArray {
+func (shm *SlotSpineMap) GetOrderedHashes() *common.HashArray {
 	if len(*shm) == 0 {
 		return &common.HashArray{}
 	}
-
 	hashes := make(common.HashArray, 0, len(*shm))
-	minSlot := shm.GetMinSlot()
-	maxSlot := shm.GetMaxSlot()
-
-	for slot := minSlot; slot <= maxSlot; slot++ {
-		if _, exists := (*shm)[slot]; !exists {
-			continue
-		}
+	//sort by slots
+	slots := common.SorterAskU64{}
+	for sl, _ := range *shm {
+		slots = append(slots, sl)
+	}
+	sort.Sort(slots)
+	for _, slot := range slots {
 		hashes = append(hashes, (*shm)[slot].Hash())
 	}
-
 	return &hashes
 }
 
