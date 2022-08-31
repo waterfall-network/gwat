@@ -104,7 +104,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Hash(), "hash", spine.Hash().Hex())
 			return nil
 		}
-		log.Info("Finalization spine chain calculated", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Hash(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
+		log.Info("Finalization spine chain calculated", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
 		// blocks finalizing
 		for i, block := range orderedChain {

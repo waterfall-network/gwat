@@ -1140,7 +1140,9 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 		//if gap move all to queue
 		pendingGtNonce := pending.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > tx.Nonce() })
 		for _, t := range pendingGtNonce {
-			pool.enqueueTx(t.Hash(), tx, false, false)
+			pool.queue[addr].Delete(t)
+			pool.queue[addr].Add(t, pool.config.PriceBump)
+			//pool.enqueueTx(t.Hash(), tx, false, false)
 		}
 		// If no more pending transactions are left, remove the list
 		if pending.Empty() {
@@ -1154,8 +1156,9 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 		lowestNonce := queue.txs.FirstElement().Nonce()
 		for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
 			t := queue.txs.Get(i)
-			pool.promoteTx(addr, t.Hash(), t)
 			queue.Delete(t)
+			pool.pending[addr].Add(t, pool.config.PriceBump)
+			//pool.promoteTx(addr, t.Hash(), t)
 		}
 		// If no more queue transactions are left, remove the list
 		if queue.Empty() {
