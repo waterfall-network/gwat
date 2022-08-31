@@ -1127,7 +1127,10 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 		//if gap move all to queue
 		pendingGtNonce := pending.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > processingNonce+1 })
 		for _, t := range pendingGtNonce {
-			pool.queue[addr].Delete(t)
+			pool.pending[addr].Delete(t)
+			if pool.queue[addr] == nil {
+				pool.queue[addr] = newTxList(true)
+			}
 			pool.queue[addr].Add(t, pool.config.PriceBump)
 			//pool.enqueueTx(t.Hash(), tx, false, false)
 		}
@@ -1144,6 +1147,9 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 		for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
 			t := queue.txs.Get(i)
 			queue.Delete(t)
+			if pool.pending[addr] == nil {
+				pool.pending[addr] = newTxList(true)
+			}
 			pool.pending[addr].Add(t, pool.config.PriceBump)
 			//pool.promoteTx(addr, t.Hash(), t)
 		}
