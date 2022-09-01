@@ -27,7 +27,6 @@ import (
 	math2 "github.com/waterfall-foundation/gwat/common/math"
 	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/params"
 )
 
@@ -60,7 +59,6 @@ type alethGenesisSpec struct {
 	} `json:"params"`
 
 	Genesis struct {
-		Nonce        types.BlockNonce `json:"nonce"`
 		Difficulty   *hexutil.Big     `json:"difficulty"`
 		MixHash      common.Hash      `json:"mixHash"`
 		Author       common.Address   `json:"author"`
@@ -144,7 +142,6 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.DurationLimit = (*math2.HexOrDecimal256)(params.DurationLimit)
 	spec.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
 
-	spec.Genesis.Nonce = types.EncodeNonce(genesis.Nonce)
 	spec.Genesis.MixHash = genesis.Mixhash
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
@@ -273,8 +270,7 @@ type parityChainSpec struct {
 	Genesis struct {
 		Seal struct {
 			Ethereum struct {
-				Nonce   types.BlockNonce `json:"nonce"`
-				MixHash hexutil.Bytes    `json:"mixHash"`
+				MixHash hexutil.Bytes `json:"mixHash"`
 			} `json:"ethereum"`
 		} `json:"seal"`
 
@@ -418,7 +414,6 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	// Disable this one
 	spec.Params.EIP98Transition = math.MaxInt64
 
-	spec.Genesis.Seal.Ethereum.Nonce = types.EncodeNonce(genesis.Nonce)
 	spec.Genesis.Seal.Ethereum.MixHash = genesis.Mixhash[:]
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
@@ -586,11 +581,9 @@ func (spec *parityChainSpec) setIstanbul(num *big.Int) {
 // pyEthereumGenesisSpec represents the genesis specification format used by the
 // Python Ethereum implementation.
 type pyEthereumGenesisSpec struct {
-	Nonce        types.BlockNonce  `json:"nonce"`
 	Timestamp    hexutil.Uint64    `json:"timestamp"`
 	ExtraData    hexutil.Bytes     `json:"extraData"`
 	GasLimit     hexutil.Uint64    `json:"gasLimit"`
-	Difficulty   *hexutil.Big      `json:"difficulty"`
 	Mixhash      common.Hash       `json:"mixhash"`
 	Coinbase     common.Address    `json:"coinbase"`
 	Alloc        core.GenesisAlloc `json:"alloc"`
@@ -605,7 +598,6 @@ func newPyEthereumGenesisSpec(network string, genesis *core.Genesis) (*pyEthereu
 		return nil, errors.New("unsupported consensus engine")
 	}
 	spec := &pyEthereumGenesisSpec{
-		Nonce:        types.EncodeNonce(genesis.Nonce),
 		Timestamp:    (hexutil.Uint64)(genesis.Timestamp),
 		ExtraData:    genesis.ExtraData,
 		GasLimit:     (hexutil.Uint64)(genesis.GasLimit),

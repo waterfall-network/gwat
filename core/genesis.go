@@ -50,7 +50,6 @@ var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
 	Config    *params.ChainConfig `json:"config"`
-	Nonce     uint64              `json:"nonce"`
 	Timestamp uint64              `json:"timestamp"`
 	ExtraData []byte              `json:"extraData"`
 	GasLimit  uint64              `json:"gasLimit"   gencodec:"required"`
@@ -271,7 +270,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	head := &types.Header{
-		Nonce:        types.EncodeNonce(g.Nonce),
 		Time:         g.Timestamp,
 		ParentHashes: g.ParentHashes,
 		Slot:         g.Slot,
@@ -375,7 +373,6 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:    params.MainnetChainConfig,
-		Nonce:     66,
 		ExtraData: hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:  5000,
 		Alloc:     decodePrealloc(mainnetAllocData),
@@ -393,7 +390,6 @@ func DefaultDevNetGenesisBlock() *Genesis {
 
 	return &Genesis{
 		Config: params.DevNetChainConfig,
-		Nonce:  0,
 		ExtraData: hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000" +
 			"e43bb1b64fc7068d313d24d01d8ccca785b22c72" +
 			"6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d" +

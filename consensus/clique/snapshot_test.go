@@ -417,11 +417,6 @@ func TestClique(t *testing.T) {
 		blocks, _ := core.GenerateChain(&config, genesis.ToBlock(db), engine, db, len(tt.votes), func(j int, gen *core.BlockGen) {
 			// Cast the vote contained in this block
 			gen.SetCoinbase(accounts.address(tt.votes[j].voted))
-			if tt.votes[j].auth {
-				var nonce types.BlockNonce
-				copy(nonce[:], nonceAuthVote)
-				gen.SetNonce(nonce)
-			}
 		})
 		// Iterate through the blocks and seal them individually
 		for j, block := range blocks {
