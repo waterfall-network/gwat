@@ -1215,23 +1215,31 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 		return
 	}
 
-	if fin := pool.processing[addr]; fin != nil {
-		if removed, invalids := fin.Remove(tx); removed {
-			// completely rm all txs with lower nonce
-			for _, rmtx := range invalids {
-				log.Warn("Recursive removing", "nonce", rmtx.Nonce(), "txHash", rmtx.Hash(), "addr", addr)
-				pool.removeTx(rmtx.Hash(), outofbound)
-			}
-			if fin.Empty() {
-				delete(pool.processing, addr)
-			}
-			// Update the account nonce if needed
-			pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
-			// Reduce the pending counter
-			pendingGauge.Dec(int64(1))
-			return
+	if proc := pool.processing[addr]; proc != nil {
+		proc.Delete(tx)
+		if proc.Empty() {
+			delete(pool.processing, addr)
 		}
+		// Reduce the pending counter
+		pendingGauge.Dec(int64(1))
+		return
 	}
+	//	if removed, invalids := proc.Remove(tx); removed {
+	//		// completely rm all txs with lower nonce
+	//		for _, rmtx := range invalids {
+	//			log.Warn("Recursive removing", "nonce", rmtx.Nonce(), "txHash", rmtx.Hash(), "addr", addr)
+	//			pool.removeTx(rmtx.Hash(), outofbound)
+	//		}
+	//		if proc.Empty() {
+	//			delete(pool.processing, addr)
+	//		}
+	//		// Update the account nonce if needed
+	//		pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
+	//		// Reduce the pending counter
+	//		pendingGauge.Dec(int64(1))
+	//		return
+	//	}
+	//}
 }
 
 // requestReset requests a pool reset to the new head block.
