@@ -77,3 +77,15 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 	}
 	txn.nonces[addr] = nonce
 }
+
+func (txn *txNoncer) setIfGreater(addr common.Address, nonce uint64) {
+	txn.lock.Lock()
+	defer txn.lock.Unlock()
+	if _, ok := txn.nonces[addr]; !ok {
+		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+	}
+	if txn.nonces[addr] >= nonce {
+		return
+	}
+	txn.nonces[addr] = nonce
+}

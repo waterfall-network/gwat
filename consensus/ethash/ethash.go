@@ -34,11 +34,11 @@ import (
 	"unsafe"
 
 	"github.com/edsrzf/mmap-go"
+	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/waterfall-foundation/gwat/consensus"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/waterfall-foundation/gwat/rpc"
-	"github.com/hashicorp/golang-lru/simplelru"
 )
 
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
@@ -58,12 +58,13 @@ var (
 )
 
 func init() {
-	sharedConfig := Config{
-		PowMode:       ModeNormal,
-		CachesInMem:   3,
-		DatasetsInMem: 1,
-	}
-	sharedEthash = New(sharedConfig, nil, false)
+	// starts deprecated ethash
+	//sharedConfig := Config{
+	//	PowMode:       ModeNormal,
+	//	CachesInMem:   3,
+	//	DatasetsInMem: 1,
+	//}
+	//sharedEthash = New(sharedConfig, nil, false)
 }
 
 // isLittleEndian returns whether the local system is running in little or big

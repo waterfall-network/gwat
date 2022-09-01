@@ -230,11 +230,11 @@ func TestSortBlocks(t *testing.T) {
 	}
 }
 
-func addParents(blocks SlotSpineHashMap, blocksInChain map[common.Hash]struct{}, bc *BlockChainMock) {
+func addParents(blocks SlotSpineMap, blocksInChain map[common.Hash]struct{}, bc *BlockChainMock) {
 	for _, block := range blocks {
 		blocksInChain[block.Hash()] = struct{}{}
 		for _, ph := range block.ParentHashes() {
-			addParents(SlotSpineHashMap{0: bc.GetBlockByHash(ph)}, blocksInChain, bc)
+			addParents(SlotSpineMap{0: bc.GetBlockByHash(ph)}, blocksInChain, bc)
 		}
 	}
 }

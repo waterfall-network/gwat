@@ -64,7 +64,7 @@ type backend interface {
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	GetLastFinalizedHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
-	Stats() (pending, queued, pendingFinalize int)
+	Stats() (pending, queued, processing int)
 	SyncProgress() ethereum.SyncProgress
 }
 

@@ -5,11 +5,13 @@ import (
 	"sort"
 
 	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 type BlockChain interface {
 	GetBlockByHash(hash common.Hash) *Block
 	GetBlocksByHashes(hashes common.HashArray) BlockMap
+	GetLastFinalizedBlock() *Block
 }
 
 // SpineSortBlocks sorts hashes by order of finalization
@@ -17,7 +19,8 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 	sort.Slice(blocks, func(i, j int) bool {
 		ibn := new(big.Int).SetBytes(blocks[i].Hash().Bytes())
 		jbn := new(big.Int).SetBytes(blocks[j].Hash().Bytes())
-		return (blocks[i].Height() > blocks[j].Height()) ||
+		return (blocks[i].Slot() > blocks[j].Slot()) ||
+			(blocks[i].Height() > blocks[j].Height()) ||
 			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes())) ||
 			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) == len(blocks[j].ParentHashes()) &&
 				ibn.Cmp(jbn) < 0)
@@ -25,85 +28,66 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 	return blocks
 }
 
-// GetOrderedParentHashes get parent hashes sorted by order of finalization
-func GetOrderedParentHashes(bc BlockChain, b *Block) common.HashArray {
-	ph := b.ParentHashes()
-	return SpineSortHashes(bc, ph)
-}
-
-// SpineSortHashes sorts hashes by order of finalization
-func SpineSortHashes(bc BlockChain, hashes common.HashArray) common.HashArray {
-	blocks := bc.GetBlocksByHashes(hashes)
-	blocksArr := blocks.ToArray()
-
-	blocksArr = SpineSortBlocks(blocksArr)
-
-	orderedHashes := make(common.HashArray, 0, len(blocksArr))
-	for _, block := range blocksArr {
-		orderedHashes = append(orderedHashes, block.Hash())
-	}
-
-	return orderedHashes
-}
-
-func CalculateSpine(blocks Blocks) *Block {
-	if len(blocks) == 0 {
-		return nil
-	}
-	if len(blocks) == 1 {
-		return blocks[0]
-	}
-	maxHeightBlocks := blocks.GetMaxHeightBlocks()
-	if len(maxHeightBlocks) == 1 {
-		return maxHeightBlocks[0]
-	}
-	maxParentHashesBlocks := maxHeightBlocks.GetMaxParentHashesLenBlocks()
-	if len(maxParentHashesBlocks) == 1 {
-		return maxParentHashesBlocks[0]
-	}
-	var maxHashIndex int
-	for i := range maxParentHashesBlocks {
-		if maxParentHashesBlocks[i].Hash().String() > maxParentHashesBlocks[maxHashIndex].Hash().String() {
-			maxHashIndex = i
-		}
-	}
-	return maxParentHashesBlocks[maxHashIndex]
-}
-
-func CalculateSpines(blocks Blocks) (SlotSpineHashMap, error) {
+func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
 	blocksBySlot, err := blocks.GroupBySlot()
 	if err != nil {
 		return nil, err
 	}
-	spines := make(SlotSpineHashMap)
-	for slot, bs := range blocksBySlot {
-		spines[slot] = CalculateSpine(bs)
+	spines := make(SlotSpineMap)
+	//sort by slots
+	slots := common.SorterAskU64{}
+	for sl, _ := range blocksBySlot {
+		// exclude finalized slots
+		if sl > lastFinSlot {
+			slots = append(slots, sl)
+		}
+	}
+	sort.Sort(slots)
+	for _, slot := range slots {
+		slotBlocks := SpineSortBlocks(blocksBySlot[slot])
+		if len(slotBlocks) == 0 {
+			continue
+		}
+		spines[slot] = slotBlocks[0]
 	}
 	return spines, nil
 }
 
-func OrderChain(bc BlockChain, blocks Blocks) (Blocks, error) {
-	spines, err := CalculateSpines(blocks)
-	if err != nil {
-		return nil, err
-	}
-	orderedChain := SpinesToChain(bc, &spines)
-	return orderedChain, nil
-}
-
-func SpinesToChain(bc BlockChain, spines *SlotSpineHashMap) Blocks {
+func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
+	// collect all ancestors in dag (not finalized)
 	candidatesInChain := make(map[common.Hash]struct{})
-	maxSlot := spines.GetMaxSlot()
-	minSlot := spines.GetMinSlot()
-	chain := make(Blocks, 0)
-	for slot := int(minSlot); slot <= int(maxSlot); slot++ {
-		if _, ok := (*spines)[uint64(slot)]; !ok {
+	dagBlocks := make(Blocks, 0)
+	spineProcessBlock(bc, spine, candidatesInChain, &dagBlocks)
+	// sort by slot
+	blocksBySlot, err := dagBlocks.GroupBySlot()
+	if err != nil {
+		//todo
+		log.Error("☠ Ordering dag chain failed", "err", err)
+	}
+	//sort by slots
+	slots := common.SorterAskU64{}
+	for sl, _ := range blocksBySlot {
+		slots = append(slots, sl)
+	}
+	sort.Sort(slots)
+
+	orderedBlocks := Blocks{}
+	for _, slot := range slots {
+		// sort slot blocks
+		slotBlocks := SpineSortBlocks(blocksBySlot[slot])
+		if len(slotBlocks) == 0 {
 			continue
 		}
-		spine := (*spines)[uint64(slot)]
-		spineProcessBlock(bc, spine, candidatesInChain, &chain)
+		orderedBlocks = append(orderedBlocks, slotBlocks...)
 	}
-	return chain
+	// todo rm
+	// check that spine is the last in chain
+	if len(orderedBlocks) > 0 {
+		if orderedBlocks[len(orderedBlocks)-1].Hash() != spine.Hash() {
+			panic("☠ Ordering of spine finalization chain is bad")
+		}
+	}
+	return orderedBlocks
 }
 
 func spineCalculateChain(bc BlockChain, block *Block, candidatesInChain map[common.Hash]struct{}) Blocks {
@@ -116,15 +100,16 @@ func spineProcessBlock(bc BlockChain, block *Block, candidatesInChain map[common
 	if _, wasProcessed := candidatesInChain[block.Hash()]; wasProcessed || block.Number() != nil {
 		return
 	}
-	orderedHashes := GetOrderedParentHashes(bc, block)
+	parents := bc.GetBlocksByHashes(block.ParentHashes()).ToArray()
+	sortedParents := SpineSortBlocks(parents)
+
 	candidatesInChain[block.Hash()] = struct{}{}
-	for _, ph := range orderedHashes {
-		parent := bc.GetBlockByHash(ph)
-		if _, wasProcessed := candidatesInChain[ph]; !wasProcessed && parent.Number() == nil {
+	for _, parent := range sortedParents {
+		if _, wasProcessed := candidatesInChain[parent.Hash()]; !wasProcessed && parent.Number() == nil {
 			if chainPart := spineCalculateChain(bc, parent, candidatesInChain); len(chainPart) != 0 {
 				*chain = append(*chain, chainPart...)
 			}
-			candidatesInChain[ph] = struct{}{}
+			candidatesInChain[parent.Hash()] = struct{}{}
 		}
 	}
 	*chain = append(*chain, block)
