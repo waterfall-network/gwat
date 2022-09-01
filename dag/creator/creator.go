@@ -552,11 +552,11 @@ func (c *Creator) getUnhandledReceipts() []*types.Receipt {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (c *Creator) makeCurrent(tips types.Tips, header *types.Header) error {
+func (c *Creator) makeCurrent(header *types.Header) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 
-	state, _, recommitBlocks, _, stateErr := c.chain.CollectStateDataByParents(tips.GetHashes())
+	state, _, recommitBlocks, _, stateErr := c.chain.CollectStateDataByParents(header.ParentHashes)
 	if stateErr != nil {
 		return stateErr
 	}
@@ -827,6 +827,18 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	log.Info("Creator data", "tips", tips.Print())
 
+	// if max slot of parents is less or equal to last finalized block slot
+	// - add last finalized block to parents
+	lastFinBlock := c.chain.GetLastFinalizedBlock()
+	maxParentSlot := uint64(0)
+	for _, blk := range tipsBlocks {
+		if blk.Slot() > maxParentSlot {
+			maxParentSlot = blk.Slot()
+		}
+	}
+	if maxParentSlot <= lastFinBlock.Slot() {
+		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
+	}
 	header := &types.Header{
 		ParentHashes: tipsBlocks.Hashes(),
 		Slot:         slotInfo.Slot,
@@ -837,7 +849,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	// Set baseFee and GasLimit
-	lastFinBlock := c.chain.GetBlockByHash(finDag.LastFinalizedHash)
 	header.BaseFee = misc.CalcBaseFee(c.chainConfig, lastFinBlock.Header())
 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
@@ -859,7 +870,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	// Could potentially happen if starting to mine in an odd state.
-	err := c.makeCurrent(tips, header)
+	err := c.makeCurrent(header)
 	if err != nil {
 		log.Error("Failed to make block creation context", "err", err)
 		c.errWorkCh <- &err
@@ -1022,7 +1033,7 @@ func (c *Creator) isAddressAssigned(address common.Address) bool {
 	return pos == creatorNr
 }
 
-// getAssignment returns list of creators, slot and epoch
+// getAssignment returns list of creators and slot
 func (c *Creator) getAssignment() Assignment {
 	if c.cacheAssignment != nil {
 		return *c.cacheAssignment
