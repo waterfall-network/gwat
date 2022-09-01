@@ -1092,6 +1092,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 		// If no more queue transactions are left, remove the list
 		if queue.Empty() {
 			delete(pool.queue, addr)
+			delete(pool.beats, addr)
 		}
 	}
 
@@ -1156,6 +1157,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 		// If no more queue transactions are left, remove the list
 		if queue.Empty() {
 			delete(pool.queue, addr)
+			delete(pool.beats, addr)
 		}
 	}
 
@@ -1237,8 +1239,15 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 			if pendingTx.Nonce() <= txNonce {
 				pending.Delete(pendingTx)
 				pool.all.Remove(pendingTx.Hash())
+				// Reduce the pending counter
+				pendingGauge.Dec(int64(1))
 			}
 		}
+		if pending.Empty() {
+			delete(pool.pending, addr)
+		}
+		// Reduce the pending counter
+		pendingGauge.Dec(int64(1))
 	}
 
 	queue := pool.queue[addr]
@@ -1247,8 +1256,16 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 			if queueTx.Nonce() <= txNonce {
 				queue.Delete(queueTx)
 				pool.all.Remove(queueTx.Hash())
+				// Reduce the queued counter
+				queuedGauge.Dec(1)
 			}
 		}
+		if queue.Empty() {
+			delete(pool.queue, addr)
+			delete(pool.beats, addr)
+		}
+		// Reduce the queued counter
+		queuedGauge.Dec(1)
 	}
 
 	processing := pool.processing[addr]
@@ -1258,6 +1275,9 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 				processing.Delete(procTx)
 				pool.all.Remove(procTx.Hash())
 			}
+		}
+		if processing.Empty() {
+			delete(pool.processing, addr)
 		}
 	}
 
