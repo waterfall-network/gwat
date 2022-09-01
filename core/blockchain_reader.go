@@ -485,8 +485,8 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
 
-func (bc *BlockChain) SubscribePendingFinalize(ch chan<- *types.Transaction) event.Subscription {
-	return bc.scope.Track(bc.pendingFinalizeFeed.Subscribe(ch))
+func (bc *BlockChain) SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription {
+	return bc.scope.Track(bc.processingFeed.Subscribe(ch))
 }
 
 func (bc *BlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription {

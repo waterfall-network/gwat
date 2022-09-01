@@ -533,9 +533,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.chain.AddTips(newBlockDag)
 	c.chain.ReviseTips()
 
-	for _, tx := range block.Transactions() {
-		c.chain.MoveTxToPendingFinalize(tx)
-	}
+	c.chain.MoveTxsToProcessing(types.Blocks{block})
 
 	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
@@ -721,11 +719,13 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	slotInfo := c.getAssignment()
 	tipsBlocks := c.chain.GetBlocksByHashes(tips.GetHashes())
 	blocks := c.eth.BlockChain().GetBlocksByHashes(tipsBlocks.Hashes())
+	expCache := core.ExploreResultMap{}
 	for _, bl := range blocks {
 		if bl.Slot() >= slotInfo.Slot {
 			tip := tips.Get(bl.Hash())
 			for _, ph := range bl.ParentHashes() {
-				_, _, _, graph, _, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash())
+				_, _, _, graph, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
+				expCache = exc
 				_dag := c.eth.BlockChain().ReadBockDag(ph)
 				if _dag == nil {
 					parentBlock := c.eth.BlockChain().GetBlock(ph)
@@ -740,8 +740,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 				}
 				_dag.LastFinalizedHash = tip.LastFinalizedHash
 				_dag.LastFinalizedHeight = tip.LastFinalizedHeight
-				_dag.DagChainHashes = *graph.GetDagChainHashes()
-				_dag.FinalityPoints = *graph.GetFinalityPoints()
+				if dch := graph.GetDagChainHashes(); dch != nil {
+					_dag.DagChainHashes = *dch
+				}
+				if fp := graph.GetFinalityPoints(); fp != nil {
+					_dag.FinalityPoints = *fp
+				}
 				_dag.DagChainHashes = _dag.DagChainHashes.Difference(common.HashArray{genesis})
 				_dag.FinalityPoints = _dag.FinalityPoints.Difference(common.HashArray{genesis})
 				tips.Add(_dag)

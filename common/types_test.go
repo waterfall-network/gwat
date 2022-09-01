@@ -63,6 +63,37 @@ func TestIsHexAddress(t *testing.T) {
 	}
 }
 
+func Test(t *testing.T) {
+	tests := []struct {
+		srcAddrs []Address
+		expAddrs []Address
+	}{
+		{
+			srcAddrs: []Address{
+				HexToAddress("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+				HexToAddress("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+				HexToAddress("ccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+				HexToAddress("ffffAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+				HexToAddress("0000000000000000000000000000000000000000"),
+			},
+			expAddrs: []Address{
+				HexToAddress("0000000000000000000000000000000000000000"),
+				HexToAddress("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+				HexToAddress("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+				HexToAddress("ccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+				HexToAddress("ffffAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		if result := SortAddresses(test.srcAddrs); fmt.Sprintf("%x", result) != fmt.Sprintf("%x", test.expAddrs) {
+			t.Errorf("IsHexAddress(%s) == %v; expected %v",
+				test.srcAddrs, result, test.expAddrs)
+		}
+	}
+}
+
 func TestHashJsonValidation(t *testing.T) {
 	var tests = []struct {
 		Prefix string

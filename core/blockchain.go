@@ -173,17 +173,17 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc                  *HeaderChain
-	rmLogsFeed          event.Feed
-	chainFeed           event.Feed
-	chainSideFeed       event.Feed
-	chainHeadFeed       event.Feed
-	logsFeed            event.Feed
-	blockProcFeed       event.Feed
-	pendingFinalizeFeed event.Feed
-	rmTxFeed            event.Feed
-	scope               event.SubscriptionScope
-	genesisBlock        *types.Block
+	hc             *HeaderChain
+	rmLogsFeed     event.Feed
+	chainFeed      event.Feed
+	chainSideFeed  event.Feed
+	chainHeadFeed  event.Feed
+	logsFeed       event.Feed
+	blockProcFeed  event.Feed
+	processingFeed event.Feed
+	rmTxFeed       event.Feed
+	scope          event.SubscriptionScope
+	genesisBlock   *types.Block
 
 	DagMu sync.RWMutex // finalizing lock
 
@@ -461,14 +461,6 @@ func (bc *BlockChain) loadLastState() error {
 		return bc.Reset()
 	}
 
-	if lastFinalisedBlock.Nr() != lastFinalisedBlock.Height() {
-		log.Warn("Head block is red, search valid head", "hash", lastFinHash.Hex())
-		_, err := bc.SetHeadBeyondRoot(lastFinHash, common.Hash{})
-		if err != nil {
-			return bc.Reset()
-		}
-		return nil
-	}
 	//remove finalized numbers that more than last one
 	rmNr := bc.GetLastFinalizedNumber() + 1
 	for {
@@ -1319,7 +1311,8 @@ func (bc *BlockChain) WriteSyncDagBlock(block *types.Block) (status int, err err
 	if !bc.chainmu.TryLock() {
 		return 0, errInsertionInterrupted
 	}
-	n, err := bc.insertPropagatedBlocks(types.Blocks{block}, true, true)
+	//n, err := bc.insertPropagatedBlocks(types.Blocks{block}, true, true)
+	n, err := bc.insertPropagatedBlocks(types.Blocks{block}, true, false)
 	bc.chainmu.Unlock()
 
 	if len(bc.insBlockCache) > 0 {
@@ -1585,9 +1578,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 				maxFinNr = block.Nr()
 			}
 		} else {
-			for _, tx := range block.Transactions() {
-				bc.MoveTxToPendingFinalize(tx)
-			}
+			bc.MoveTxsToProcessing(types.Blocks{block})
 		}
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
@@ -1655,15 +1646,11 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		if err != nil {
 			return it.index, err
 		}
-		// insertion of red blocks
-		if block.Height() != block.Nr() {
-			continue
-		}
 
 		//insertion of blue blocks
 		start := time.Now()
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlock(block)
+		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlockRecursive(block, nil)
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -1720,9 +1707,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
-
 			log.Error("Error of block insertion to chain while sync (state validation)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
-
 			return it.index, err
 		}
 		proctime := time.Since(start)
@@ -1838,13 +1823,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	headerMap := make(types.HeaderMap, len(chain))
 	seals := make([]bool, len(chain))
 
+	bc.MoveTxsToProcessing(chain)
+
 	for i, block := range chain {
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
 		seals[i] = verifySeals
-		for _, tx := range block.Transactions() {
-			bc.MoveTxToPendingFinalize(tx)
-		}
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
 	defer close(abort)
@@ -2014,9 +1998,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
+			log.Warn("Red block insertion to chain while propagate", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+			continue
 		}
 		proctime := time.Since(start)
 
@@ -2074,12 +2057,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		stats.report(chain, it.index, dirty)
 	}
 	bc.ReviseTips()
-
-	for _, block := range chain {
-		for _, tx := range block.Transactions() {
-			bc.MoveTxToPendingFinalize(tx)
-		}
-	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
@@ -2162,12 +2139,12 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		State:  0,
 	}
 	var (
-		cache = ExploreResultMap{}
-		fnl   = common.HashArray{}
-		unl   = common.HashArray{}
+		expCache = ExploreResultMap{}
+		fnl      = common.HashArray{}
+		unl      = common.HashArray{}
 	)
 	for _, h := range parents {
-		u, _, f, gr, c, e := bc.ExploreChainRecursive(h, cache)
+		u, _, f, gr, c, e := bc.ExploreChainRecursive(h, expCache)
 		if e != nil {
 			log.Error("Error while collect state data by block", "hash", h.Hex(), "parents", parents, "err", e)
 			return statedb, stateBlock, recommitBlocks, cachedHashes, err
@@ -2175,7 +2152,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		if len(u) > 0 {
 			unl = unl.Concat(u)
 		}
-		cache = c
+		expCache = c
 		graph.Graph = append(graph.Graph, gr)
 		fnl = fnl.Concat(f).Uniq()
 	}
@@ -2184,87 +2161,114 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrInsertUncompletedDag
 	}
 
-	ordHashes := *graph.GetDagChainHashes()
-	finPoints := common.HashArray{}
-	if fp := graph.GetFinalityPoints(); fp != nil {
-		finPoints = *fp
-	}
-
-	finPoints = finPoints.Uniq()
-
-	var stateHash common.Hash
+	lastFinBlock := bc.GetLastFinalizedBlock()
 	parentBlocks := bc.GetBlocksByHashes(parents)
 	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
 
-	if len(sortedBlocks) > 0 {
+	//if state is last finalized block
+	if sortedBlocks[0].Nr() == lastFinBlock.Nr() ||
+		//if state is dag block
+		sortedBlocks[0].Slot() > lastFinBlock.Slot() && sortedBlocks[0].Nr() == 0 && sortedBlocks[0].Height() > 0 {
 		stateBlock = sortedBlocks[0]
-		stateHash = stateBlock.Hash()
-	} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
-		//stateHash = bc.GetLastFinalizedBlock().Hash()
-		stateHash = lastFinAncestor.Hash
-		if len(ordHashes) == 0 {
-			lfn := bc.GetLastFinalizedBlock().Nr()
-			for i := lastFinAncestor.Number + 1; i <= lfn; i++ {
-				bl := bc.GetBlockByNumber(i)
-				if bl != nil && fnl.Has(bl.Hash()) {
-					ordHashes = append(ordHashes, bl.Hash())
+		statedb, err = bc.StateAt(stateBlock.Root())
+		if err != nil {
+			log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
+		}
+		recommitBlocks = sortedBlocks[1:]
+		return statedb, stateBlock, recommitBlocks, cachedHashes, nil
+	} else {
+		//if state is finalized block - search first spine in ancestors
+		stateBlock = sortedBlocks[0]
+		statedb, err = bc.StateAt(stateBlock.Root())
+		if err != nil {
+			log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+		}
+		if statedb != nil {
+			recommitBlocks = sortedBlocks[1:]
+			return statedb, stateBlock, recommitBlocks, cachedHashes, nil
+		}
+	}
+
+	//if state is finalized block - search first spine in ancestors
+	lfAncestor := bc.GetBlockByHash(sortedBlocks[0].Hash())
+	var recomFinBlocks []*types.Block
+	statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlockRecursive(lfAncestor, nil)
+	recommitBlocks = append(recomFinBlocks, sortedBlocks[1:]...)
+	return statedb, stateBlock, recommitBlocks, cachedHashes, nil
+}
+
+// CollectStateDataByFinalizedBlockRecursive collects state data of current dag chain to insert new block.
+func (bc *BlockChain) CollectStateDataByFinalizedBlockRecursive(block *types.Block, _memo types.BlockMap) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
+	finNr := block.Nr()
+	if finNr == 0 {
+		if block.Hash() != bc.genesisBlock.Hash() {
+			log.Error("Collect State Data By Finalized Block: bad block number", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
+			return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: bad block number: nr=%d (height=%d  hash=%v)", finNr, block.Height(), block.Hash().Hex())
+		}
+		stdb, err := bc.StateAt(block.Root())
+		if err == nil || stdb != nil {
+			return stdb, block, recommitBlocks, nil
+		}
+	}
+
+	if _memo == nil {
+		_memo = types.BlockMap{}
+	}
+
+	parentBlocks := bc.GetBlocksByHashes(block.ParentHashes()).ToArray()
+	for _, b := range parentBlocks {
+		if b != nil {
+			_memo.Add(b)
+		}
+	}
+	parentBlocks = types.SpineSortBlocks(parentBlocks)
+	spineBlock := parentBlocks[0]
+	_stdb, err := bc.StateAt(spineBlock.Root())
+	if err != nil || _stdb == nil {
+		log.Warn("Collect State Data By Finalized Block: skip block", "nr", finNr, "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+	}
+	if stateBlock == nil || stateBlock.Nr() < spineBlock.Nr() {
+		statedb = _stdb
+		stateBlock = spineBlock
+	}
+	if statedb == nil {
+		_stdb, _stBlock, _recomBls, err := bc.CollectStateDataByFinalizedBlockRecursive(spineBlock, _memo)
+		if err != nil {
+			log.Warn("Collect State Data By Finalized Block: skip block", "nr", finNr, "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+		}
+		if stateBlock == nil || stateBlock.Nr() > stateBlock.Nr() {
+			statedb = _stdb
+			stateBlock = _stBlock
+			for _, b := range _recomBls {
+				if b != nil {
+					_memo.Add(b)
 				}
 			}
 		}
 	}
-
-	//if len(finPoints) > 0 {
-	//	stateHash = []common.Hash(finPoints)[len(finPoints)-1]
-	//} else if lastFinAncestor := graph.GetLastFinalizedAncestor(); lastFinAncestor != nil {
-	//	stateHash = lastFinAncestor.Hash
-	//	if len(ordHashes) == 0 {
-	//		lfn := bc.GetLastFinalizedBlock().Nr()
-	//		for i := lastFinAncestor.Number + 1; i <= lfn; i++ {
-	//			bl := bc.GetBlockByNumber(i)
-	//			if bl != nil && fnl.Has(bl.Hash()) {
-	//				ordHashes = append(ordHashes, bl.Hash())
-	//			}
-	//		}
-	//	}
-	//}
-	if stateHash == (common.Hash{}) {
-		log.Error("Error while collect state data by block (bad state hash)", "error", ErrStateBlockNotFound)
-		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrStateBlockNotFound
-	}
-	stateBlock = bc.GetBlockByHash(stateHash)
-
-	statedb, err = bc.StateAt(stateBlock.Root())
-	if err != nil {
-		log.Error("Bad state", "stateHash", stateHash.Hex(), "stateHeight", stateBlock.Height(), "finPoints", finPoints, "error", err)
-		return statedb, stateBlock, recommitBlocks, cachedHashes, err
-	}
-
-	// collect red blocks (not in finalization points)
-	stateIndex := ordHashes.IndexOf(stateHash)
-	var recalcHashes common.HashArray
-	if stateIndex > -1 {
-		recalcHashes = ordHashes[stateIndex+1:]
-	} else {
-		recalcHashes = ordHashes
-	}
-
-	//check cached recommited state
-	if st, noCached, cached := bc.GetCashedRecommit(recalcHashes); st != nil {
-		statedb = st
-		recalcHashes = noCached
-		cachedHashes = cached
-	}
-
-	recommitBlocks = []*types.Block{}
-	for _, h := range recalcHashes {
-		bl := bc.GetBlockByHash(h)
-		if bl == nil {
-			log.Warn("Insert block: red block not found", "block", h)
+	//rm stateBlock and blocks with lt nr
+	nrs := common.SorterAskU64{}
+	blockMap := types.BlockMap{}
+	for _, bl := range _memo {
+		if bl == nil || bl.Nr() <= stateBlock.Nr() {
 			continue
 		}
-		recommitBlocks = append(recommitBlocks, bl)
+		blockMap[bl.Hash()] = bl
+		nrs = append(nrs, bl.Nr())
 	}
-	return statedb, stateBlock, recommitBlocks, cachedHashes, err
+	//sort by number
+	recommitBlocks = make([]*types.Block, len(nrs))
+	sort.Sort(nrs)
+	for i, nr := range nrs {
+		for _, bl := range blockMap {
+			if nr == bl.Nr() {
+				recommitBlocks[i] = bl
+				break
+			}
+		}
+	}
+	//recommitBlocks = sortedRecomBls
+	return statedb, stateBlock, recommitBlocks, nil
 }
 
 // CollectStateDataByFinalizedBlock collects state data of current dag chain to insert new block.
@@ -2277,39 +2281,49 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 		}
 	}
 
-	// search previous blue block and collect red blocks
-	stateBlock = block
-	redBlocks := []*types.Block{}
-	for i := finNr - 1; i >= 0; i-- {
-		prevBlock := bc.GetBlockByNumber(i)
-		if prevBlock == nil {
-			log.Error("Collect State Data By Finalized Block: bad finalized chain", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
-			return statedb, stateBlock, redBlocks, ErrInsertUncompletedDag
-		}
-
-		statedb, err = bc.StateAt(prevBlock.Root())
-		if statedb != nil {
-			stateBlock = prevBlock
-			break
-		}
-		//if prevBlock.Nr() == prevBlock.Height() {
-		//	stateBlock = prevBlock
-		//	break
-		//}
-		redBlocks = append(redBlocks, prevBlock)
-	}
-	// reverse redBlocks
-	for i := len(redBlocks) - 1; i >= 0; i-- {
-		recommitBlocks = append(recommitBlocks, redBlocks[i])
-	}
-
-	log.Info("Collect State Data By Finalized Block: bad block number", "isRed", block.Height() != block.Nr(), "Nr", block.Nr(), "Height", block.Height(), "Hash", block.Hash().Hex())
-
+	parentBlocks := bc.GetBlocksByHashes(block.ParentHashes())
+	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
+	stateBlock = sortedBlocks[0]
 	statedb, err = bc.StateAt(stateBlock.Root())
-	if err != nil {
-		return statedb, stateBlock, recommitBlocks, err
+	if err != nil || statedb == nil {
+		return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: state not found number: nr=%d (height=%d  hash=%v) err=%s", finNr, block.Height(), block.Hash().Hex(), err)
 	}
-	return statedb, stateBlock, recommitBlocks, err
+	recommitBlocks = sortedBlocks[1:]
+	return statedb, stateBlock, recommitBlocks, nil
+
+	//// search previous blue block and collect red blocks
+	//stateBlock = block
+	//redBlocks := []*types.Block{}
+	//for i := finNr - 1; i >= 0; i-- {
+	//	prevBlock := bc.GetBlockByNumber(i)
+	//	if prevBlock == nil {
+	//		log.Error("Collect State Data By Finalized Block: bad finalized chain", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
+	//		return statedb, stateBlock, redBlocks, ErrInsertUncompletedDag
+	//	}
+	//
+	//	//if !bc.IsAncestorRecursive(block, prevBlock.Hash()) {
+	//	//	continue
+	//	//}
+	//
+	//	statedb, err = bc.StateAt(prevBlock.Root())
+	//	if statedb != nil {
+	//		stateBlock = prevBlock
+	//		break
+	//	}
+	//	redBlocks = append(redBlocks, prevBlock)
+	//}
+	//// reverse redBlocks
+	//for i := len(redBlocks) - 1; i >= 0; i-- {
+	//	recommitBlocks = append(recommitBlocks, redBlocks[i])
+	//}
+	//
+	//log.Info("Collect State Data By Finalized Block: bad block number", "isRed", block.Height() != block.Nr(), "Nr", block.Nr(), "Height", block.Height(), "Hash", block.Hash().Hex())
+	//
+	//statedb, err = bc.StateAt(stateBlock.Root())
+	//if err != nil {
+	//	return statedb, stateBlock, recommitBlocks, err
+	//}
+	//return statedb, stateBlock, recommitBlocks, err
 }
 
 // RecommitBlockTransactions recommits transactions of red blocks.
@@ -2554,9 +2568,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
+			log.Warn("Red block insertion", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+			continue
 		}
 		proctime := time.Since(start)
 
@@ -3062,12 +3075,14 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 func (bc *BlockChain) GetDagHashes() *common.HashArray {
 	dagHashes := common.HashArray{}
 	tips := *bc.hc.GetTips()
+	expCache := ExploreResultMap{}
 	for hash, tip := range tips {
 		if hash == tip.LastFinalizedHash {
 			dagHashes = append(dagHashes, hash)
 			continue
 		}
-		_, loaded, _, _, _, _ := bc.ExploreChainRecursive(hash)
+		_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
+		expCache = c
 		dagHashes = dagHashes.Concat(loaded)
 	}
 	dagHashes = dagHashes.Uniq().Sort()
@@ -3291,8 +3306,27 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	bc.txLookupCache.Add(txHash, lookup)
 }
 
-func (bc *BlockChain) MoveTxToPendingFinalize(tx *types.Transaction) {
-	bc.pendingFinalizeFeed.Send(tx)
+func (bc *BlockChain) moveTxToProcessing(tx *types.Transaction) {
+	bc.processingFeed.Send(tx)
+}
+
+func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
+	txs := make(types.Transactions, 0, len(blocks))
+
+	for _, block := range blocks {
+		if block == nil {
+			continue
+		}
+		txs = append(txs, block.Transactions()...)
+	}
+
+	sort.Slice(txs, func(i, j int) bool {
+		return txs[i].Nonce() < txs[j].Nonce()
+	})
+
+	for _, tx := range txs {
+		bc.moveTxToProcessing(tx)
+	}
 }
 
 func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
