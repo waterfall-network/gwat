@@ -457,7 +457,7 @@ func (pool *TxPool) loop() {
 				defer pool.mu.Unlock()
 
 				log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
-				pool.removeTx(tx.Hash(), true)
+				pool.removeProcessedTx(tx)
 			}()
 		}
 	}
@@ -1224,22 +1224,43 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 		pendingGauge.Dec(int64(1))
 		return
 	}
-	//	if removed, invalids := proc.Remove(tx); removed {
-	//		// completely rm all txs with lower nonce
-	//		for _, rmtx := range invalids {
-	//			log.Warn("Recursive removing", "nonce", rmtx.Nonce(), "txHash", rmtx.Hash(), "addr", addr)
-	//			pool.removeTx(rmtx.Hash(), outofbound)
-	//		}
-	//		if proc.Empty() {
-	//			delete(pool.processing, addr)
-	//		}
-	//		// Update the account nonce if needed
-	//		pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
-	//		// Reduce the pending counter
-	//		pendingGauge.Dec(int64(1))
-	//		return
-	//	}
-	//}
+}
+
+func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
+	txNonce := tx.Nonce()
+
+	addr, _ := types.Sender(pool.signer, tx)
+
+	pending := pool.pending[addr]
+	if pending != nil && pending.txs != nil {
+		for _, pendingTx := range pending.txs.items {
+			if pendingTx.Nonce() <= txNonce {
+				pending.Delete(pendingTx)
+				pool.all.Remove(pendingTx.Hash())
+			}
+		}
+	}
+
+	queue := pool.queue[addr]
+	if queue != nil && queue.txs != nil {
+		for _, queueTx := range queue.txs.items {
+			if queueTx.Nonce() <= txNonce {
+				queue.Delete(queueTx)
+				pool.all.Remove(queueTx.Hash())
+			}
+		}
+	}
+
+	processing := pool.processing[addr]
+	if processing != nil && processing.txs != nil {
+		for _, procTx := range processing.txs.items {
+			if procTx.Nonce() <= txNonce {
+				processing.Delete(procTx)
+				pool.all.Remove(procTx.Hash())
+			}
+		}
+	}
+
 }
 
 // requestReset requests a pool reset to the new head block.
