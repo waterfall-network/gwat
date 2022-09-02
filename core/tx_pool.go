@@ -455,8 +455,6 @@ func (pool *TxPool) loop() {
 			func() {
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
-
-				log.Info("trying to remove tx", "TX hash", tx.Hash().Hex(), "TX nonce", tx.Nonce())
 				pool.removeProcessedTx(tx)
 			}()
 		}
@@ -549,6 +547,25 @@ func (pool *TxPool) stats() (int, int, int) {
 		processing += list.Len()
 	}
 	return pending, queued, processing
+}
+
+func (pool *TxPool) StatsByAddrs() (map[common.Address]int, map[common.Address]int, map[common.Address]int) {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	pendAddr := make(map[common.Address]int)
+	for addr, list := range pool.pending {
+		pendAddr[addr] = list.Len()
+	}
+	queAddr := make(map[common.Address]int)
+	for addr, list := range pool.queue {
+		queAddr[addr] = list.Len()
+	}
+	procAddr := make(map[common.Address]int)
+	for addr, list := range pool.processing {
+		procAddr[addr] = list.Len()
+	}
+	return pendAddr, queAddr, procAddr
 }
 
 // Content retrieves the data content of the transaction pool, returning all the

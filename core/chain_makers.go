@@ -117,7 +117,7 @@ func (b *BlockGen) AddUncheckedTx(tx *types.Transaction) {
 
 // Number returns the block number of the block being generated.
 func (b *BlockGen) Number() *uint64 {
-	var nr uint64 = b.header.Nr()
+	var nr = b.header.Nr()
 	return &nr
 }
 
@@ -186,10 +186,10 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 	bc.AddTips(&types.BlockDAG{
 		Hash:                LFB.Hash(),
 		Height:              LFB.Height(),
+		Slot:                LFB.Slot(),
 		LastFinalizedHash:   LFB.Hash(),
 		LastFinalizedHeight: LFB.Nr(),
 		DagChainHashes:      common.HashArray{},
-		FinalityPoints:      common.HashArray{},
 	})
 	tips := bc.GetTips()
 
@@ -199,20 +199,17 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 		bc.RemoveTips(block.ParentHashes())
 		//2. create for new blockDag
 		finDag := tips.GetFinalizingDag()
-		tmpFinalityPoints := finDag.FinalityPoints
 		tmpDagChainHashes := tips.GetOrderedDagChainHashes()
-		if finDag.Hash != bc.Genesis().Hash() {
-			tmpFinalityPoints = append(tmpFinalityPoints, finDag.Hash)
-		} else {
-			tmpDagChainHashes = tmpFinalityPoints.Difference(common.HashArray{bc.Genesis().Hash()})
+		if finDag.Hash == bc.Genesis().Hash() {
+			tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{bc.Genesis().Hash()})
 		}
 		blockDag := &types.BlockDAG{
 			Hash:                block.Hash(),
 			Height:              block.Height(),
+			Slot:                block.Slot(),
 			LastFinalizedHash:   LFB.Hash(),
 			LastFinalizedHeight: LFB.Nr(),
 			DagChainHashes:      tmpDagChainHashes,
-			FinalityPoints:      tmpFinalityPoints,
 		}
 		rawdb.WriteBlockDag(bc.db, blockDag)
 		bc.AddTips(blockDag)
@@ -316,6 +313,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		Coinbase:     parent.Coinbase(),
 		GasLimit:     parent.GasLimit(),
 		Height:       parent.Height() + 1,
+		Slot:         parent.Slot() + 1,
 		//Number:   parent.Height() + 1,
 		Time: time,
 	}
