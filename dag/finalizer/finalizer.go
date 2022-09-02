@@ -12,6 +12,7 @@ import (
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/state"
 	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/dag/creator"
 	"github.com/waterfall-foundation/gwat/eth/downloader"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/log"
@@ -26,6 +27,7 @@ const (
 type Backend interface {
 	BlockChain() *core.BlockChain
 	Downloader() *downloader.Downloader
+	DagCreator() *creator.Creator
 }
 
 // Finalizer creates blocks and searches for proof-of-work values.
@@ -98,6 +100,13 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 	for _, slot := range slots {
 		spine := spinesMap[slot]
 		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
+		orderedChain, unassigned := f.eth.DagCreator().GetChainWithoutUnassignedCreators(orderedChain)
+
+		for _, unassignedBlock := range unassigned {
+			log.Warn("remove block with unassigned creator", "creator", unassignedBlock.Header().Coinbase.Hex(), "blockHash", unassignedBlock.Hash().Hex())
+			bc.DeleteBlockDag(unassignedBlock.Hash())
+		}
+
 		if len(orderedChain) == 0 {
 			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
 			continue
