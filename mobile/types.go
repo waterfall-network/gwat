@@ -138,7 +138,6 @@ func (h *Header) GetGasUsed() int64                  { return int64(h.header.Gas
 func (h *Header) GetTime() int64                     { return int64(h.header.Time) }
 func (h *Header) GetExtra() []byte                   { return h.header.Extra }
 func (h *Header) GetMixDigest() *Hash                { return &Hash{h.header.MixDigest} }
-func (h *Header) GetNonce() *Nonce                   { return &Nonce{h.header.Nonce} }
 func (h *Header) GetHash() *Hash                     { return &Hash{h.header.Hash()} }
 
 // Headers represents a slice of headers.
@@ -212,7 +211,6 @@ func (b *Block) GetGasUsed() int64                 { return int64(b.block.GasUse
 func (b *Block) GetTime() int64                    { return int64(b.block.Time()) }
 func (b *Block) GetExtra() []byte                  { return b.block.Extra() }
 func (b *Block) GetMixDigest() *Hash               { return &Hash{b.block.MixDigest()} }
-func (b *Block) GetNonce() int64                   { return int64(b.block.Nonce()) }
 func (b *Block) GetHash() *Hash                    { return &Hash{b.block.Hash()} }
 func (b *Block) GetHeader() *Header                { return &Header{b.block.Header()} }
 func (b *Block) GetTransactions() *Transactions    { return &Transactions{b.block.Transactions()} }

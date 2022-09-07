@@ -22,7 +22,6 @@ func (tips Tips) Add(blockDag *BlockDAG) Tips {
 	}
 
 	blockDag.DagChainHashes = blockDag.DagChainHashes.Uniq()
-	blockDag.FinalityPoints = blockDag.FinalityPoints.Uniq()
 
 	tips[blockDag.Hash] = blockDag
 	return tips
@@ -131,12 +130,11 @@ func (tips Tips) getOrderedHashes() common.HashArray {
 type BlockDAG struct {
 	Hash                common.Hash
 	Height              uint64
+	Slot                uint64
 	LastFinalizedHash   common.Hash
 	LastFinalizedHeight uint64
 	// ordered non-finalized ancestors hashes
 	DagChainHashes common.HashArray
-	// ordered points of future finalization
-	FinalityPoints common.HashArray
 }
 
 // ToBytes encodes the BlockDAG structure
@@ -149,6 +147,10 @@ func (b *BlockDAG) ToBytes() []byte {
 	binary.BigEndian.PutUint64(height, b.Height)
 	res = append(res, height...)
 
+	slot := make([]byte, 8)
+	binary.BigEndian.PutUint64(slot, b.Slot)
+	res = append(res, slot...)
+
 	res = append(res, b.LastFinalizedHash.Bytes()...)
 	lastFinHeight := make([]byte, 8)
 	binary.BigEndian.PutUint64(lastFinHeight, b.LastFinalizedHeight)
@@ -159,10 +161,6 @@ func (b *BlockDAG) ToBytes() []byte {
 	res = append(res, lenDC...)
 	res = append(res, b.DagChainHashes.ToBytes()...)
 
-	lenFP := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenFP, uint32(len(b.FinalityPoints)))
-	res = append(res, lenFP...)
-	res = append(res, b.FinalityPoints.ToBytes()...)
 	return res
 }
 
@@ -175,6 +173,10 @@ func (b *BlockDAG) SetBytes(data []byte) *BlockDAG {
 	start = end
 	end += 8
 	b.Height = binary.BigEndian.Uint64(data[start:end])
+
+	start = end
+	end += 8
+	b.Slot = binary.BigEndian.Uint64(data[start:end])
 
 	start = end
 	end += common.HashLength
@@ -191,12 +193,6 @@ func (b *BlockDAG) SetBytes(data []byte) *BlockDAG {
 	end += common.HashLength * int(lenDC)
 	b.DagChainHashes = common.HashArrayFromBytes(data[start:end])
 
-	start = end
-	end += 4
-	lenFP := binary.BigEndian.Uint32(data[start:end])
-	start = end
-	end += common.HashLength * int(lenFP)
-	b.FinalityPoints = common.HashArrayFromBytes(data[start:end])
 	return b
 }
 
@@ -224,38 +220,6 @@ type GraphDag struct {
 	Graph  []*GraphDag
 	State  BlockState
 	chLen  *uint64
-}
-
-//GetFinalityPoints retrieves ordered FinalityPoints' hashes for tips item
-func (gd *GraphDag) GetFinalityPoints() *common.HashArray {
-	var (
-		finalityPoints = &common.HashArray{}
-	)
-	ancestorsLoaded := gd.GetOrderedLoadedAncestors()
-	if ancestorsLoaded == nil {
-		return nil
-	}
-	lastFinGd := gd.GetLastFinalizedAncestor()
-	if lastFinGd == nil {
-		return nil
-	}
-	lastHeight := lastFinGd.Number
-	for i, itm := range ancestorsLoaded {
-		log.Info("Ordering",
-			"i", i,
-			"calcNr", uint64(i)+lastHeight+1,
-			"height", itm.Height,
-			"isBlue", itm.Height == uint64(i)+lastHeight+1,
-			"hash", itm.Hash.Hex(),
-			"lastHeight", lastHeight,
-		)
-
-		if itm.Height == uint64(i)+lastHeight+1 {
-			*finalityPoints = append(*finalityPoints, itm.Hash)
-		}
-	}
-	res := (*finalityPoints).Uniq()
-	return &res
 }
 
 // GetLastFinalizedAncestor searches the GraphDag of the last finalised ancestor
@@ -288,44 +252,6 @@ func (gd *GraphDag) GetDagChainHashes() *common.HashArray {
 	}
 	res := (*finalityPoints).Uniq()
 	return &res
-}
-
-//GetOrderedFinalizationPoints retrieves ordered FinalizationPoints
-func (gd *GraphDag) GetOrderedFinalizationPoints(lastHeight uint64) []*GraphDag {
-	ancestors := gd.GetOrderedLoadedAncestors()
-	if ancestors == nil {
-		return nil
-	}
-	heightMap := map[uint64]common.HashArray{}
-	fPoints := []*GraphDag{}
-	for _, itm := range ancestors {
-		if chLen := itm.chainLen(); chLen != nil && itm.Height == *chLen {
-			key := itm.Height
-			heightMap[key] = append(heightMap[key], itm.Hash)
-			fPoints = append(fPoints, itm)
-		}
-	}
-	// sort by height
-	keys := make(common.SorterDeskU64, 0, len(heightMap))
-	for k := range heightMap {
-		keys = append(keys, k)
-	}
-	sort.Sort(keys)
-	finHashes := common.HashArray{}
-	for _, k := range keys {
-		// sort by hash and select first
-		sorted := heightMap[k].Sort()
-		if len(sorted) > 0 {
-			finHashes = append(finHashes, sorted[0])
-		}
-	}
-	finalityPoints := []*GraphDag{}
-	for _, itm := range fPoints {
-		if finHashes.Has(itm.Hash) {
-			finalityPoints = append(finalityPoints, itm)
-		}
-	}
-	return fPoints
 }
 
 //GetOrderedLoadedAncestors retrieves ordered ancestors

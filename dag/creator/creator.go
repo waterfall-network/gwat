@@ -513,35 +513,28 @@ func (c *Creator) resultHandler(block *types.Block) {
 	//1. remove stale tips
 	c.chain.RemoveTips(block.ParentHashes())
 	//2. create for new blockDag
-	finDag := task.tips.GetFinalizingDag()
-	tmpFinalityPoints := finDag.FinalityPoints
 	tmpDagChainHashes := task.tips.GetOrderedDagChainHashes()
-	if finDag.Hash != c.chain.Genesis().Hash() {
-		tmpFinalityPoints = append(tmpFinalityPoints, finDag.Hash)
-	} else {
-		tmpDagChainHashes = tmpFinalityPoints.Difference(common.HashArray{c.chain.Genesis().Hash()})
-	}
 
 	newBlockDag := &types.BlockDAG{
 		Hash:                block.Hash(),
 		Height:              block.Height(),
+		Slot:                block.Slot(),
 		LastFinalizedHash:   c.chain.GetLastFinalizedBlock().Hash(),
 		LastFinalizedHeight: c.chain.GetLastFinalizedNumber(),
 		DagChainHashes:      tmpDagChainHashes,
-		FinalityPoints:      tmpFinalityPoints,
 	}
 	c.chain.AddTips(newBlockDag)
 	c.chain.ReviseTips()
 
 	c.chain.MoveTxsToProcessing(types.Blocks{block})
 
-	log.Info("Successfully sealed new block", "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
+	log.Info("Successfully sealed new block", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 	// Broadcast the block and announce chain insertion event
 	c.mux.Post(core.NewMinedBlockEvent{Block: block})
 
 	// Insert the block into the set of pending ones to resultLoop for confirmations
-	log.Info("🔨 created dag block", "height", block.Height(), "hash", hash.Hex(), "parents", block.ParentHashes())
+	log.Info("🔨 created dag block", "slot", block.Slot(), "height", block.Height(), "hash", hash.Hex(), "parents", block.ParentHashes())
 }
 
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
@@ -730,12 +723,13 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 				if _dag == nil {
 					parentBlock := c.eth.BlockChain().GetBlock(ph)
 					if parentBlock == nil {
-						log.Warn("Creator reorg tips failed: bad parent in dag", "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
+						log.Warn("Creator reorg tips failed: bad parent in dag", "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
 						continue
 					}
 					_dag = &types.BlockDAG{
 						Hash:   ph,
 						Height: parentBlock.Height(),
+						Slot:   parentBlock.Slot(),
 					}
 				}
 				_dag.LastFinalizedHash = tip.LastFinalizedHash
@@ -743,15 +737,11 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 				if dch := graph.GetDagChainHashes(); dch != nil {
 					_dag.DagChainHashes = *dch
 				}
-				if fp := graph.GetFinalityPoints(); fp != nil {
-					_dag.FinalityPoints = *fp
-				}
 				_dag.DagChainHashes = _dag.DagChainHashes.Difference(common.HashArray{genesis})
-				_dag.FinalityPoints = _dag.FinalityPoints.Difference(common.HashArray{genesis})
 				tips.Add(_dag)
 			}
 			delete(tips, bl.Hash())
-			log.Info("Creator reorg tips", "blHeight", bl.Height(), "blHash", bl.Hash().Hex(), "tips", tips.Print())
+			log.Info("Creator reorg tips", "blSlot", bl.Slot(), "blHeight", bl.Height(), "blHash", bl.Hash().Hex(), "tips", tips.Print())
 		}
 	}
 	tipsBlocks = c.chain.GetBlocksByHashes(tips.GetHashes())
@@ -785,51 +775,39 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		c.errWorkCh <- &err
 		return
 	}
-	tmpFinalityPoints := finDag.FinalityPoints.Uniq()
 	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
 
 	// after reorg tips can content hashes of finalized blocks
 	finHashes := common.HashArray{}
-	for i, h := range tmpDagChainHashes.Copy() {
+	for _, h := range tmpDagChainHashes.Copy() {
 		block := c.eth.BlockChain().GetBlock(h)
 		finNr := block.Number()
 		if finNr != nil {
 			finHashes = append(finHashes, h)
-			log.Info("Calc new block Height", "i", i, "Nr", block.Nr(), "Height", block.Height(), "Hash", block.Hash().Hex())
 		}
 	}
 	if len(finHashes) > 0 {
-		tmpFinalityPoints = tmpFinalityPoints.Difference(finHashes)
 		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
 	}
 
-	if finDag.Hash != c.chain.Genesis().Hash() {
-		tmpFinalityPoints = append(tmpFinalityPoints, finDag.Hash)
-	} else {
+	if finDag.Hash == c.chain.Genesis().Hash() {
 		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
 	}
 
-	lastBlueHash := finDag.Hash
-	lastBlueBlock := c.chain.GetBlockByHash(lastBlueHash)
-	lastBlueHeight := lastBlueBlock.Height()
-	lastBlueIx := tmpDagChainHashes.IndexOf(lastBlueHash)
-	redCount := len(tmpDagChainHashes) - lastBlueIx
-	newHeight := lastBlueHeight + uint64(redCount)
-
-	log.Info("Creator calculate block height", "newHeight", newHeight,
-		"lastBlueHeight", lastBlueHeight,
-		"lastBlueIx", lastBlueIx,
-		"len(tmpDagChainHashes)", len(tmpDagChainHashes),
-		"redCount", redCount,
-		"lastBlueHash", lastBlueHash.Hex(),
-		"tmpDagChainHashes", tmpDagChainHashes,
-	)
-
 	log.Info("Creator data", "tips", tips.Print())
+
+	//calc new block height
+	lastFinBlock := c.chain.GetLastFinalizedBlock()
+	lastFinHeight := lastFinBlock.Nr()
+	ancestorsCount := len(tmpDagChainHashes.Uniq())
+	newHeight := lastFinHeight + uint64(ancestorsCount) + 1
+	log.Info("Creator calculate block height", "newHeight", newHeight,
+		"ancestors", ancestorsCount,
+		"lastFinHeight", lastFinHeight,
+	)
 
 	// if max slot of parents is less or equal to last finalized block slot
 	// - add last finalized block to parents
-	lastFinBlock := c.chain.GetLastFinalizedBlock()
 	maxParentSlot := uint64(0)
 	for _, blk := range tipsBlocks {
 		if blk.Slot() > maxParentSlot {
@@ -891,7 +869,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	// Short circuit if no pending transactions
 	if len(pending) == 0 {
-		log.Warn("Skipping block creation: no assigned txs")
+		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		c.errWorkCh <- &ErrNoTxs
 		return
 	}
@@ -899,7 +878,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	if len(pending) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pending, header.BaseFee)
 		if c.commitTransactions(txs, c.coinbase) {
-			log.Warn("Skipping block creation: no assigned txs")
+			pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+			log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 			c.errWorkCh <- &ErrNoTxs
 			return
 		}

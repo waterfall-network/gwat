@@ -14,6 +14,7 @@ func TestBlockDAG(t *testing.T) {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x33,
 		},
 		Height: uint64(300),
+		Slot:   uint64(150),
 		LastFinalizedHash: common.Hash{
 			0x11, 0x11, 0x11, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11,
@@ -52,24 +53,6 @@ func TestBlockDAG(t *testing.T) {
 				0x22, 0x22, 0x22, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22,
 			},
-			common.Hash{
-				0x11, 0x11, 0x11, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11,
-			},
-			common.Hash{
-				0x22, 0x22, 0x22, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22,
-			},
-			common.Hash{
-				0x11, 0x11, 0x11, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11,
-			},
-			common.Hash{
-				0x22, 0x22, 0x22, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22,
-			},
-		},
-		FinalityPoints: common.HashArray{
 			common.Hash{
 				0x11, 0x11, 0x11, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11,
@@ -196,6 +179,7 @@ func TestTips(t *testing.T) {
 	blockDag0 := &BlockDAG{
 		Hash:                common.HexToHash("0xa659fcd4ed3f3ad9cd43ab36eb29080a4655328fe16f045962afab1d66a5da09"),
 		Height:              uint64(1807722),
+		Slot:                uint64(1800022),
 		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		LastFinalizedHeight: uint64(1807706),
 
@@ -211,6 +195,7 @@ func TestTips(t *testing.T) {
 	blockDag1 := &BlockDAG{
 		Hash:                common.HexToHash("0xd6a047d2fa3483d042741ef2cc0856d323f5d0432d48e48568d2de3c52310286"), //common.Hash{0x66, 0x66, 0x66, 0x66},
 		Height:              uint64(1807722),
+		Slot:                uint64(1800022),
 		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		LastFinalizedHeight: uint64(1807706),
 
@@ -238,6 +223,7 @@ func TestTips(t *testing.T) {
 	blockDag2 := &BlockDAG{
 		Hash:                common.HexToHash("0xddcc2c3e0530a6a3d8e60d35bd17c05b22a4826b78c44f55438cac6b47f4bfde"), //common.Hash{0x66, 0x66, 0x66, 0x66},
 		Height:              uint64(1807722),
+		Slot:                uint64(1800022),
 		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		LastFinalizedHeight: uint64(1807706),
 		DagChainHashes: common.HashArray{
@@ -264,6 +250,7 @@ func TestTips(t *testing.T) {
 	blockDag3 := &BlockDAG{
 		Hash:                common.HexToHash("0xe29272257bd82f1beb90ce048361e5063481830f16dacdb4a2781164ede114e1"), //common.Hash{0x66, 0x66, 0x66, 0x66},
 		Height:              uint64(1807722),
+		Slot:                uint64(1807722),
 		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		LastFinalizedHeight: uint64(1807706),
 		DagChainHashes: common.HashArray{
@@ -290,6 +277,7 @@ func TestTips(t *testing.T) {
 	blockDag4 := &BlockDAG{
 		Hash:                common.HexToHash("0xeb1a3ad9ad8136fc6290de8227dde86699f7e2d1944259783e4f1241c5eb1610"), //common.Hash{0x66, 0x66, 0x66, 0x66},
 		Height:              uint64(1807722),
+		Slot:                uint64(1807722),
 		LastFinalizedHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		LastFinalizedHeight: uint64(1807706),
 		DagChainHashes: common.HashArray{
@@ -369,6 +357,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 	blockDag0 := &BlockDAG{
 		Hash:                common.HexToHash("0x073e11c4fbb1c9e774cc54366af5a299f73aaf28fcbbe856fb18e158e2f5bc13"),
 		Height:              uint64(3190),
+		Slot:                uint64(1500),
 		LastFinalizedHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		LastFinalizedHeight: uint64(3170),
 		DagChainHashes: common.HashArray{
@@ -391,16 +380,13 @@ func TestTipsSkippedSlots(t *testing.T) {
 			common.HexToHash("0xe3a24badcb0229a3e34c69cf2ce0257accfd470ac7cd8185a34d582856335c0a"), //
 			common.HexToHash("0x79b751c964596724907788aabc3bf8fbc79f6d83d155f40f09975a1ae2a199cc"), //
 			common.HexToHash("0x16aaae1457bd5ead8b573f3d033b37d56f61eaf7da264ddcfdaf963d1ed6b834"), //
-		},
-		FinalityPoints: common.HashArray{
-			common.HexToHash("0x08d31423142e35cc78c4936ff519e787362c1d6ea52115f074dae836e2be92bb"), //
-			common.HexToHash("0x0535435a497014812e55b4c620eb204fa161db73883158b5223ef49e2795f966"), //
 		},
 	}
 	//
 	blockDag1 := &BlockDAG{
 		Hash:                common.HexToHash("0x08fd673456f56bf7f4370cc297c68e78dafe4ee0002b8b423c7f25b07a8b39ab"),
 		Height:              uint64(3190),
+		Slot:                uint64(3190),
 		LastFinalizedHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		LastFinalizedHeight: uint64(3170),
 		DagChainHashes: common.HashArray{
@@ -423,16 +409,13 @@ func TestTipsSkippedSlots(t *testing.T) {
 			common.HexToHash("0xe3a24badcb0229a3e34c69cf2ce0257accfd470ac7cd8185a34d582856335c0a"), //
 			common.HexToHash("0x79b751c964596724907788aabc3bf8fbc79f6d83d155f40f09975a1ae2a199cc"), //
 			common.HexToHash("0x16aaae1457bd5ead8b573f3d033b37d56f61eaf7da264ddcfdaf963d1ed6b834"), //
-		},
-		FinalityPoints: common.HashArray{
-			common.HexToHash("0x08d31423142e35cc78c4936ff519e787362c1d6ea52115f074dae836e2be92bb"), //
-			common.HexToHash("0x0535435a497014812e55b4c620eb204fa161db73883158b5223ef49e2795f966"), //
 		},
 	}
 	//
 	blockDag2 := &BlockDAG{
 		Hash:                common.HexToHash("0x2be07efb8721fc50e66ccd717300fdf2f89df92cb61027e7730c6f2bdf60b00d"),
 		Height:              uint64(3190),
+		Slot:                uint64(1500),
 		LastFinalizedHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		LastFinalizedHeight: uint64(3170),
 		DagChainHashes: common.HashArray{
@@ -455,16 +438,13 @@ func TestTipsSkippedSlots(t *testing.T) {
 			common.HexToHash("0xe3a24badcb0229a3e34c69cf2ce0257accfd470ac7cd8185a34d582856335c0a"), //
 			common.HexToHash("0x79b751c964596724907788aabc3bf8fbc79f6d83d155f40f09975a1ae2a199cc"), //
 			common.HexToHash("0x16aaae1457bd5ead8b573f3d033b37d56f61eaf7da264ddcfdaf963d1ed6b834"), //
-		},
-		FinalityPoints: common.HashArray{
-			common.HexToHash("0x08d31423142e35cc78c4936ff519e787362c1d6ea52115f074dae836e2be92bb"), //
-			common.HexToHash("0x0535435a497014812e55b4c620eb204fa161db73883158b5223ef49e2795f966"), //
 		},
 	}
 	//
 	blockDag3 := &BlockDAG{
 		Hash:                common.HexToHash("0x484a40592f60ebe1e26a8bcd6d9e33e706e1ac6dee0c608fb34cf7520083492e"),
 		Height:              uint64(3184),
+		Slot:                uint64(1500),
 		LastFinalizedHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		LastFinalizedHeight: uint64(3170),
 		DagChainHashes: common.HashArray{
@@ -481,15 +461,13 @@ func TestTipsSkippedSlots(t *testing.T) {
 			common.HexToHash("0x30dda434434828308c6764663d652809f3610ae7dd8249d726c4075955f81766"), //
 			common.HexToHash("0x4fc97dc76a92d730d1c75d4a393876e929e029af4e138bc7fbac6addd57d8114"), //
 			common.HexToHash("0x877f52c39eaab61b59ff8a490814c7e5dba5a227e74ff5740f6fa0f303386d16"), //
-		},
-		FinalityPoints: common.HashArray{
-			common.HexToHash("0x08d31423142e35cc78c4936ff519e787362c1d6ea52115f074dae836e2be92bb"), //
 		},
 	}
 	//
 	blockDag4 := &BlockDAG{
 		Hash:                common.HexToHash("0x4c5993fd09b323b67b0e8ab2ac734792b242870403a1721c19907e9434013639"),
 		Height:              uint64(3186),
+		Slot:                uint64(1500),
 		LastFinalizedHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		LastFinalizedHeight: uint64(3170),
 		DagChainHashes: common.HashArray{
@@ -508,16 +486,13 @@ func TestTipsSkippedSlots(t *testing.T) {
 			common.HexToHash("0x8b4b466ec19eb5712aad0415ae3bf803c9fedc764997b3ae9a23a372c9eb6a48"), //
 			common.HexToHash("0x79b751c964596724907788aabc3bf8fbc79f6d83d155f40f09975a1ae2a199cc"), //
 			common.HexToHash("0x16aaae1457bd5ead8b573f3d033b37d56f61eaf7da264ddcfdaf963d1ed6b834"), //
-		},
-		FinalityPoints: common.HashArray{
-			common.HexToHash("0x08d31423142e35cc78c4936ff519e787362c1d6ea52115f074dae836e2be92bb"), //
-			common.HexToHash("0x8b4b466ec19eb5712aad0415ae3bf803c9fedc764997b3ae9a23a372c9eb6a48"), //
 		},
 	}
 	//
 	blockDag5 := &BlockDAG{
 		Hash:                common.HexToHash("0x877afac335140d86bbbfc97b7e5f8a2156bc03862cc28e17afdb2187ec2df3ba"),
 		Height:              uint64(3190),
+		Slot:                uint64(1500),
 		LastFinalizedHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		LastFinalizedHeight: uint64(3170),
 		DagChainHashes: common.HashArray{
@@ -540,16 +515,13 @@ func TestTipsSkippedSlots(t *testing.T) {
 			common.HexToHash("0xe3a24badcb0229a3e34c69cf2ce0257accfd470ac7cd8185a34d582856335c0a"), //
 			common.HexToHash("0x79b751c964596724907788aabc3bf8fbc79f6d83d155f40f09975a1ae2a199cc"), //
 			common.HexToHash("0x16aaae1457bd5ead8b573f3d033b37d56f61eaf7da264ddcfdaf963d1ed6b834"), //
-		},
-		FinalityPoints: common.HashArray{
-			common.HexToHash("0x08d31423142e35cc78c4936ff519e787362c1d6ea52115f074dae836e2be92bb"), //
-			common.HexToHash("0x0535435a497014812e55b4c620eb204fa161db73883158b5223ef49e2795f966"), //
 		},
 	}
 	//
 	blockDag6 := &BlockDAG{
 		Hash:                common.HexToHash("0x8d90760ae9acce0ef73f74bb37c3913cbab7c439c3ea78f9e6b3e50e86d5abc7"),
 		Height:              uint64(3190),
+		Slot:                uint64(1500),
 		LastFinalizedHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		LastFinalizedHeight: uint64(3170),
 		DagChainHashes: common.HashArray{
@@ -572,16 +544,13 @@ func TestTipsSkippedSlots(t *testing.T) {
 			common.HexToHash("0xe3a24badcb0229a3e34c69cf2ce0257accfd470ac7cd8185a34d582856335c0a"), //
 			common.HexToHash("0x79b751c964596724907788aabc3bf8fbc79f6d83d155f40f09975a1ae2a199cc"), //
 			common.HexToHash("0x16aaae1457bd5ead8b573f3d033b37d56f61eaf7da264ddcfdaf963d1ed6b834"), //
-		},
-		FinalityPoints: common.HashArray{
-			common.HexToHash("0x08d31423142e35cc78c4936ff519e787362c1d6ea52115f074dae836e2be92bb"), //
-			common.HexToHash("0x0535435a497014812e55b4c620eb204fa161db73883158b5223ef49e2795f966"), //
 		},
 	}
 	//
 	blockDag7 := &BlockDAG{
 		Hash:                common.HexToHash("0xc9f3797c356525c8ceea13b205f65c30b082141b83520b05802df5ba2864c82f"),
 		Height:              uint64(3190),
+		Slot:                uint64(1500),
 		LastFinalizedHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		LastFinalizedHeight: uint64(3170),
 		DagChainHashes: common.HashArray{
@@ -604,10 +573,6 @@ func TestTipsSkippedSlots(t *testing.T) {
 			common.HexToHash("0xe3a24badcb0229a3e34c69cf2ce0257accfd470ac7cd8185a34d582856335c0a"), //
 			common.HexToHash("0x79b751c964596724907788aabc3bf8fbc79f6d83d155f40f09975a1ae2a199cc"), //
 			common.HexToHash("0x16aaae1457bd5ead8b573f3d033b37d56f61eaf7da264ddcfdaf963d1ed6b834"), //
-		},
-		FinalityPoints: common.HashArray{
-			common.HexToHash("0x08d31423142e35cc78c4936ff519e787362c1d6ea52115f074dae836e2be92bb"), //
-			common.HexToHash("0x0535435a497014812e55b4c620eb204fa161db73883158b5223ef49e2795f966"), //
 		},
 	}
 
