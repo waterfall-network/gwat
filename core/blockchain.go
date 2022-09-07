@@ -654,10 +654,10 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 			newBlockDag := &types.BlockDAG{
 				Hash:                newHeadBlock.Hash(),
 				Height:              newHeadBlock.Height(),
+				Slot:                newHeadBlock.Slot(),
 				LastFinalizedHash:   newHeadBlock.Hash(),
 				LastFinalizedHeight: newHeadBlock.Nr(),
 				DagChainHashes:      common.HashArray{},
-				FinalityPoints:      common.HashArray{},
 			}
 			bc.AddTips(newBlockDag)
 			bc.ReviseTips()
@@ -3075,17 +3075,29 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 func (bc *BlockChain) GetDagHashes() *common.HashArray {
 	dagHashes := common.HashArray{}
 	tips := *bc.hc.GetTips()
-	expCache := ExploreResultMap{}
-	for hash, tip := range tips {
-		if hash == tip.LastFinalizedHash {
+
+	tipsHashes := tips.GetOrderedDagChainHashes()
+	dagBlocks := bc.GetBlocksByHashes(tipsHashes)
+	for hash, bl := range dagBlocks {
+		if bl != nil && bl.Nr() == 0 && bl.Height() > 0 {
 			dagHashes = append(dagHashes, hash)
-			continue
 		}
-		_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
-		expCache = c
-		dagHashes = dagHashes.Concat(loaded)
 	}
-	dagHashes = dagHashes.Uniq().Sort()
+	if len(dagHashes) == 0 {
+		dagHashes = common.HashArray{bc.GetLastFinalizedBlock().Hash()}
+	}
+
+	//expCache := ExploreResultMap{}
+	//for hash, tip := range tips {
+	//	if hash == tip.LastFinalizedHash {
+	//		dagHashes = append(dagHashes, hash)
+	//		continue
+	//	}
+	//	_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
+	//	expCache = c
+	//	dagHashes = dagHashes.Concat(loaded)
+	//}
+	//dagHashes = dagHashes.Uniq().Sort()
 	return &dagHashes
 }
 

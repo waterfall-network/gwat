@@ -81,7 +81,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 	for _, spineHash := range *spines {
 		block := bc.GetBlockByHash(spineHash)
 		if block == nil {
-			log.Error("unknown spine hash", "spineHash", spineHash)
+			log.Error("unknown spine hash", "spineHash", spineHash.Hex())
 			return ErrUnknownHash
 		}
 		spinesMap[block.Slot()] = block
