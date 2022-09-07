@@ -2329,7 +2329,7 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 // RecommitBlockTransactions recommits transactions of red blocks.
 func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *state.StateDB) *state.StateDB {
 
-	log.Info("Recommit block transactions", "Nr", block.Nr(), "height", block.Height(), "hash", block.Hash().Hex())
+	log.Info("Recommit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
 	signer := types.MakeSigner(bc.chainConfig)
