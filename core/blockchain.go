@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -1459,6 +1460,14 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
+func (bc *BlockChain) WriteCreators(creators []common.Address, slot uint64) {
+	rawdb.WriteCreators(bc.db, slot, creators)
+}
+
+func (bc *BlockChain) ReadCreators(slot uint64) []common.Address {
+	return rawdb.ReadCreators(bc.db, slot)
+}
+
 // addFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
@@ -1542,6 +1551,20 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 		}
 	}
 	return n, err
+}
+
+func isAddressAssigned(address common.Address, creators []common.Address, creatorNr int64) bool {
+	var (
+		creatorCount = len(creators)
+		countVal     = big.NewInt(int64(creatorCount))
+		val          = address.Hash().Big()
+	)
+	if creatorCount == 0 {
+		return false
+	}
+
+	pos := new(big.Int).Mod(val, countVal).Int64()
+	return pos == creatorNr
 }
 
 // syncInsertChain is the internal implementation of SyncInsertChain, which assumes that
@@ -1799,6 +1822,34 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 
 // insertPropagatedBlocks inserts propagated block
 func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals bool, stateOnly bool) (int, error) {
+	slotCreators := make(map[uint64][]common.Address)
+
+	for _, block := range chain { // get creators list from DB
+		if _, exists := slotCreators[block.Slot()]; exists {
+			continue
+		}
+		slotCreators[block.Slot()] = bc.ReadCreators(block.Slot())
+	}
+
+	deletedBlocks := 0
+	for i := range chain {
+		blockIndex := i - deletedBlocks
+
+		block := chain[blockIndex]
+		creators := slotCreators[block.Slot()]
+
+		if len(creators) == 0 {
+			continue
+		}
+
+		blockCreator := block.Header().Coinbase
+		if contains, index := common.Contains(creators, blockCreator); !contains || !isAddressAssigned(block.Header().Coinbase, slotCreators[block.Slot()], int64(index)) {
+			log.Warn("deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "assigned creators", creators)
+			chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
+			deletedBlocks++
+		}
+	}
+
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil

@@ -95,6 +95,7 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
+	CreatorsPrefix        = []byte("m")
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
@@ -134,6 +135,12 @@ var FreezerNoSnappy = map[string]bool{
 type LegacyTxLookupEntry struct {
 	BlockHash common.Hash
 	Index     uint64
+}
+
+func Uint64ToByteSlice(u uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, u)
+	return b
 }
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -196,6 +203,21 @@ func preimageKey(hash common.Hash) []byte {
 // codeKey = CodePrefix + hash
 func codeKey(hash common.Hash) []byte {
 	return append(CodePrefix, hash.Bytes()...)
+}
+
+func creatorKey(slot uint64) []byte {
+	res := make([]byte, 0, len(CreatorsPrefix))
+	res = append(res, CreatorsPrefix...)
+	res = append(res, Uint64ToByteSlice(slot)...)
+
+	return res
+}
+
+func IsCreatorKey(key []byte) (bool, []byte) {
+	if bytes.HasPrefix(key, CreatorsPrefix) && len(key) == len(CreatorsPrefix)+8 { // uint64 = 8 bytes
+		return true, key[len(CreatorsPrefix):]
+	}
+	return false, nil
 }
 
 // IsCodeKey reports whether the given byte slice is the key of contract code,

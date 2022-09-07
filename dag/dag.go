@@ -30,7 +30,6 @@ type Backend interface {
 	Etherbase() (eb common.Address, err error)
 	SetEtherbase(etherbase common.Address)
 	CreatorAuthorize(creator common.Address) error
-	DagCreator() *creator.Creator
 }
 
 type Dag struct {
@@ -178,6 +177,8 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 			}
 		}()
 	}
+
+	d.bc.WriteCreators(data.Creators, data.Slot)
 
 	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
 	res := &ConsensusResult{

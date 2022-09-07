@@ -560,7 +560,3 @@ func (s *Ethereum) Stop() error {
 
 	return nil
 }
-
-func (s *Ethereum) DagCreator() *creator.Creator {
-	return s.dag.Creator()
-}

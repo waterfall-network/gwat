@@ -1046,12 +1046,3 @@ func (c *Creator) getAssignment() Assignment {
 func (c *Creator) setAssignment(assigned *Assignment) {
 	c.cacheAssignment = assigned
 }
-
-func (c *Creator) GetChainWithoutUnassignedCreators(chain types.Blocks) (newChain, unassigned types.Blocks) {
-	for i, block := range chain {
-		if !c.isAddressAssigned(block.Header().Coinbase) {
-			return chain[:i], chain[i:]
-		}
-	}
-	return chain, nil
-}

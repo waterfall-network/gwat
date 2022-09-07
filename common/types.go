@@ -388,6 +388,15 @@ func BytesToAddress(b []byte) Address {
 	return a
 }
 
+func Contains(addresses []Address, desired Address) (contains bool, index int) {
+	for i, a := range addresses {
+		if a == desired {
+			return true, i
+		}
+	}
+	return false, -1
+}
+
 // SortAddresses sorts lexicographically array of addresses.
 func SortAddresses(addresses []Address) []Address {
 	res := make([]Address, len(addresses))
