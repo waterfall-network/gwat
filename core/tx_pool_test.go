@@ -2683,7 +2683,7 @@ func TestRemoveHighNonceTx(t *testing.T) {
 	pool.mu.RUnlock()
 
 	pool.mu.Lock()
-	pool.removeTx(txs[4].Hash(), false)
+	pool.removeProcessedTx(txs[4])
 	pool.mu.Unlock()
 
 	pool.mu.RLock()
@@ -2742,7 +2742,7 @@ func TestRemoveTxFromQueue(t *testing.T) {
 
 	rmIndex := 2
 	pool.mu.Lock()
-	pool.moveToProcessing(queueTxs[rmIndex])
+	pool.removeProcessedTx(queueTxs[rmIndex])
 	pool.mu.Unlock()
 
 	pool.mu.RLock()
