@@ -121,11 +121,6 @@ func (s *PublicTokenAPI) TokenCreate(_ context.Context, args TokenArgs) (hexutil
 }
 
 func (s *PublicTokenAPI) newTokenProcessor(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (tp *Processor, cancel context.CancelFunc, tpError func() error, err error) {
-	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, nil, nil, err
-	}
-
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	timeout := s.b.RPCEVMTimeout()
@@ -135,9 +130,14 @@ func (s *PublicTokenAPI) newTokenProcessor(ctx context.Context, blockNrOrHash rp
 		ctx, cancel = context.WithCancel(ctx)
 	}
 
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, cancel, nil, err
+	}
+
 	tp, tpError, err = s.b.GetTP(ctx, state, header)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, cancel, nil, err
 	}
 
 	return
@@ -519,10 +519,10 @@ func (s *PublicTokenAPI) TokenCost(ctx context.Context, tokenAddr common.Address
 	id := tokenId.ToInt()
 
 	tp, cancel, tpError, err := s.newTokenProcessor(ctx, blockNrOrHash)
+	defer cancel()
 	if err != nil {
 		return nil, err
 	}
-	defer cancel()
 
 	op, err := operation.NewCostOperation(tokenAddr, id)
 	if err != nil {
