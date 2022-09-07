@@ -480,10 +480,10 @@ func (hc *HeaderChain) ResetTips() error {
 	dag := &types.BlockDAG{
 		Hash:                lastFinHeader.Hash(),
 		Height:              lastFinHeader.Height,
+		Slot:                lastFinHeader.Slot,
 		LastFinalizedHash:   lastFinHeader.Hash(),
 		LastFinalizedHeight: lastFinHeader.Nr(),
 		DagChainHashes:      common.HashArray{},
-		FinalityPoints:      common.HashArray{},
 	}
 	rawdb.WriteBlockDag(hc.chainDb, dag)
 	rawdb.WriteTipsHashes(hc.chainDb, common.HashArray{dag.Hash})
@@ -574,7 +574,6 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 	tips := hc.GetTips(true)
 	for _, t := range *tips {
 		t.DagChainHashes = t.DagChainHashes.Difference(finHashes)
-		t.FinalityPoints = t.FinalityPoints.Difference(finHashes)
 		// if tips is synced - update finalized data
 		if t.LastFinalizedHash != (common.Hash{}) {
 			t.LastFinalizedHash = lastFinHash
@@ -622,6 +621,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 				header := hc.GetHeader(hash)
 				dag.Hash = hash
 				dag.Height = header.Height
+				dag.Slot = header.Slot
 				dag.LastFinalizedHash = hash
 				dag.LastFinalizedHeight = *nr
 				hc.AddTips(dag, true)
@@ -637,6 +637,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 			if dag.Height == 0 {
 				header := hc.GetHeader(hash)
 				dag.Height = header.Height
+				dag.Slot = header.Slot
 			}
 
 			dag.Hash = hash
@@ -646,19 +647,11 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 			chain = chain.Difference(finalized)
 			// bad order of hashes
 			dag.DagChainHashes = chain.Difference(common.HashArray{hash})
-			dag.FinalityPoints = dag.FinalityPoints.Difference(finalized)
-			dag.FinalityPoints = dag.FinalityPoints.Difference(common.HashArray{hash}).Uniq()
 			// if curTips synchronized
 			if len(unloaded) == 0 {
 				dag.LastFinalizedHash = bc.GetLastFinalizedBlock().Hash()
 				dag.LastFinalizedHeight = bc.GetLastFinalizedNumber()
 				dag.DagChainHashes = *graph.GetDagChainHashes()
-				//dag.FinalityPoints = *graph.GetFinalityPointsByLastFinNr(dag.LastFinalizedHeight)
-				if fp := graph.GetFinalityPoints(); fp != nil {
-					dag.FinalityPoints = *fp
-				} else {
-					dag.FinalityPoints = common.HashArray{}
-				}
 				hc.AddTips(dag, true)
 			} else {
 				log.Warn("Unknown blocks detected", "hashes", unloaded)

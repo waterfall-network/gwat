@@ -60,10 +60,6 @@ var (
 	// allowed constants of 0x00..0 or 0xff..f.
 	errInvalidVote = errors.New("vote nonce not 0x00..0 or 0xff..f")
 
-	// errInvalidCheckpointVote is returned if a checkpoint/epoch transition block
-	// has a vote nonce set to non-zeroes.
-	errInvalidCheckpointVote = errors.New("vote nonce in checkpoint block non-zero")
-
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 
@@ -217,13 +213,13 @@ func (c *Sealer) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if checkpoint && header.Coinbase != (common.Address{}) {
 		return errInvalidCheckpointBeneficiary
 	}
-	// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
-	if !bytes.Equal(header.Nonce[:], nonceAuthVote) && !bytes.Equal(header.Nonce[:], nonceDropVote) {
-		return errInvalidVote
-	}
-	if checkpoint && !bytes.Equal(header.Nonce[:], nonceDropVote) {
-		return errInvalidCheckpointVote
-	}
+	//// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
+	//if !bytes.Equal(header.Nonce[:], nonceAuthVote) && !bytes.Equal(header.Nonce[:], nonceDropVote) {
+	//	return errInvalidVote
+	//}
+	//if checkpoint && !bytes.Equal(header.Nonce[:], nonceDropVote) {
+	//	return errInvalidCheckpointVote
+	//}
 
 	//// Check that the extra-data contains both the vanity and signature
 	//if len(header.Extra) < extraVanity {
@@ -668,7 +664,6 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		//header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
 		header.Extra[:], // Yes, this will panic if extra is too short
 		header.MixDigest,
-		header.Nonce,
 	}
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)

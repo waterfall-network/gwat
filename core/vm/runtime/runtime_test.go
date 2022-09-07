@@ -216,7 +216,6 @@ func fakeHeader(n uint64, parentHashes []common.Hash) *types.Header {
 		Slot:         uint64(0),
 		Height:       uint64(0),
 		Time:         1000,
-		Nonce:        types.BlockNonce{0x1},
 		Extra:        []byte{},
 		GasLimit:     100000,
 	}

@@ -20,7 +20,6 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 		Bloom            types.Bloom
 		Coinbase         common.Address
 		MixHash          common.Hash
-		Nonce            types.BlockNonce
 		Number           *math.HexOrDecimal256
 		Hash             common.Hash
 		ParentHashes     common.HashArray
@@ -29,7 +28,6 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 		TransactionsTrie common.Hash
 		UncleHash        common.Hash
 		ExtraData        hexutil.Bytes
-		Difficulty       *math.HexOrDecimal256
 		GasLimit         math.HexOrDecimal64
 		GasUsed          math.HexOrDecimal64
 		Timestamp        math.HexOrDecimal64
@@ -39,7 +37,6 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 	enc.Bloom = b.Bloom
 	enc.Coinbase = b.Coinbase
 	enc.MixHash = b.MixHash
-	enc.Nonce = b.Nonce
 	enc.Number = (*math.HexOrDecimal256)(b.Number)
 	enc.Hash = b.Hash
 	enc.ParentHashes = b.ParentHashes
@@ -60,7 +57,6 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 		Bloom            *types.Bloom
 		Coinbase         *common.Address
 		MixHash          *common.Hash
-		Nonce            *types.BlockNonce
 		Number           *math.HexOrDecimal256
 		Hash             *common.Hash
 		ParentHashes     *common.HashArray
@@ -69,7 +65,6 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 		TransactionsTrie *common.Hash
 		UncleHash        *common.Hash
 		ExtraData        *hexutil.Bytes
-		Difficulty       *math.HexOrDecimal256
 		GasLimit         *math.HexOrDecimal64
 		GasUsed          *math.HexOrDecimal64
 		Timestamp        *math.HexOrDecimal64
@@ -87,9 +82,6 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 	}
 	if dec.MixHash != nil {
 		b.MixHash = *dec.MixHash
-	}
-	if dec.Nonce != nil {
-		b.Nonce = *dec.Nonce
 	}
 	if dec.Number != nil {
 		b.Number = (*big.Int)(dec.Number)

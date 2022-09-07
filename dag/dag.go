@@ -97,7 +97,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 		}
 	}
 
-	log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
+	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// collect next finalization candidates
 	const slotsDelay = uint64(2) // number of slots of delay to retrieve candidates
@@ -213,7 +213,7 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 		}
 	}
 
-	log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
+	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// create block
 	tips, unloaded := d.bc.ReviseTips()

@@ -819,30 +819,25 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 				for _, ph := range header.ParentHashes {
 					parent := headerMap[ph]
 					dagChainHashes := common.HashArray{ph}
-					finalityPoints := common.HashArray{ph}
 					if parent.Number != nil {
 						dagChainHashes = common.HashArray{}
-						finalityPoints = common.HashArray{}
 					}
 					newBlockDag := &types.BlockDAG{
 						Hash:                parent.Hash(),
 						Height:              parent.Height,
+						Slot:                parent.Slot,
 						LastFinalizedHash:   lastFinHeader.Hash(),
 						LastFinalizedHeight: lastFinNr,
 						DagChainHashes:      dagChainHashes,
-						FinalityPoints:      finalityPoints,
 					}
 					rawdb.WriteBlockDag(d.stateDB, newBlockDag)
 					tmpTips.Add(newBlockDag)
 				}
 				finDag = tmpTips.GetFinalizingDag()
 			}
-			tmpFinalityPoints := finDag.FinalityPoints
 			tmpDagChainHashes := tmpTips.GetOrderedDagChainHashes()
-			if finDag.Hash != genesis.Hash() {
-				tmpFinalityPoints = append(tmpFinalityPoints, finDag.Hash)
-			} else {
-				tmpDagChainHashes = tmpFinalityPoints.Difference(common.HashArray{genesis.Hash()})
+			if finDag.Hash == genesis.Hash() {
+				tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{genesis.Hash()})
 			}
 			// Commit block and state to database.
 			_, err = d.blockchain.WriteSyncDagBlock(block)
@@ -859,10 +854,10 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 			newBlockDag := &types.BlockDAG{
 				Hash:                block.Hash(),
 				Height:              block.Height(),
+				Slot:                block.Slot(),
 				LastFinalizedHash:   lastFinHeader.Hash(),
 				LastFinalizedHeight: lastFinNr,
 				DagChainHashes:      tmpDagChainHashes,
-				FinalityPoints:      tmpFinalityPoints,
 			}
 			rawdb.WriteBlockDag(d.stateDB, newBlockDag)
 			tmpTips.Add(newBlockDag)
@@ -889,29 +884,24 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 					headerMap.Add(parent)
 				}
 				dagChainHashes := common.HashArray{ph}
-				finalityPoints := common.HashArray{ph}
 				if parent.Number != nil {
 					dagChainHashes = common.HashArray{}
-					finalityPoints = common.HashArray{}
 				}
 				newBlockDag := &types.BlockDAG{
 					Hash:                parent.Hash(),
 					Height:              parent.Height,
+					Slot:                parent.Slot,
 					LastFinalizedHash:   lastFinHeader.Hash(),
 					LastFinalizedHeight: lastFinNr,
 					DagChainHashes:      dagChainHashes,
-					FinalityPoints:      finalityPoints,
 				}
 				rawdb.WriteBlockDag(d.stateDB, newBlockDag)
 				tmpTips.Add(newBlockDag)
 			}
 			finDag = tmpTips.GetFinalizingDag()
 		}
-		tmpFinalityPoints := finDag.FinalityPoints
 		tmpDagChainHashes := tmpTips.GetOrderedDagChainHashes()
-		if finDag.Hash != genesis.Hash() {
-			tmpFinalityPoints = append(tmpFinalityPoints, finDag.Hash)
-		} else {
+		if finDag.Hash == genesis.Hash() {
 			tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{genesis.Hash()})
 		}
 		// Commit block and state to database.
@@ -929,10 +919,10 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		newBlockDag := &types.BlockDAG{
 			Hash:                block.Hash(),
 			Height:              block.Height(),
+			Slot:                block.Slot(),
 			LastFinalizedHash:   lastFinHeader.Hash(),
 			LastFinalizedHeight: lastFinNr,
 			DagChainHashes:      tmpDagChainHashes,
-			FinalityPoints:      tmpFinalityPoints,
 		}
 		rawdb.WriteBlockDag(d.stateDB, newBlockDag)
 		d.blockchain.AddTips(newBlockDag)
