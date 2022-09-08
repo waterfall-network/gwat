@@ -118,8 +118,15 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
 //
 // It returns byte representation of the return value of an operation.
 func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op operation.Operation) (ret []byte, err error) {
-	if _, ok := op.(operation.Create); ok && token != (common.Address{}) {
-		return nil, ErrNotNilTo
+	if _, isCreate := op.(operation.Create); isCreate {
+		if token != (common.Address{}) {
+			return nil, ErrNotNilTo
+		}
+
+		token = crypto.CreateAddress(caller.Address(), p.state.GetNonce(caller.Address()))
+		if p.state.Exist(token) {
+			return nil, ErrTokenAlreadyExists
+		}
 	}
 
 	nonce := p.state.GetNonce(caller.Address())
@@ -130,11 +137,7 @@ func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op op
 	ret = nil
 	switch v := op.(type) {
 	case operation.Create:
-		var addr common.Address
-		addr, err = p.tokenCreate(caller, v)
-		if err == nil {
-			ret = addr.Bytes()
-		}
+		ret, err = p.tokenCreate(caller, token, v)
 	case operation.TransferFrom:
 		ret, err = p.transferFrom(caller, token, v)
 	case operation.Transfer:
@@ -160,14 +163,9 @@ func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op op
 	return ret, err
 }
 
-func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr common.Address, err error) {
-	tokenAddr = crypto.CreateAddress(caller.Address(), p.state.GetNonce(caller.Address()))
-	if p.state.Exist(tokenAddr) {
-		return common.Address{}, ErrTokenAlreadyExists
-	}
-
+func (p *Processor) tokenCreate(caller Ref, tokenAddr common.Address, op operation.Create) (_ []byte, err error) {
 	if p.state.GetNonce(tokenAddr) != 0 {
-		return common.Address{}, ErrTokenAddressCollision
+		return nil, ErrTokenAddressCollision
 	}
 
 	p.state.CreateAccount(tokenAddr)
@@ -175,66 +173,66 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 
 	fieldsDescriptors, err := newFieldsDescriptors(op)
 	if err != nil {
-		return common.Address{}, err
+		return nil, err
 	}
 
 	storage, err := tokenStorage.NewStorage(tokenStorage.NewStorageStream(tokenAddr, p.state), fieldsDescriptors)
 	if err != nil {
-		return common.Address{}, err
+		return nil, err
 	}
 
 	stdB, err := op.Standard().MarshalBinary()
 	if err != nil {
-		return common.Address{}, err
+		return nil, err
 	}
 
 	err = storage.WriteField(StandardField, stdB)
 	if err != nil {
-		return common.Address{}, err
+		return nil, err
 	}
 
 	err = storage.WriteField(NameField, op.Name())
 	if err != nil {
-		return common.Address{}, err
+		return nil, err
 	}
 
 	err = storage.WriteField(SymbolField, op.Symbol())
 	if err != nil {
-		return common.Address{}, err
+		return nil, err
 	}
 
 	switch op.Standard() {
 	case operation.StdWRC20:
 		err = storage.WriteField(CreatorField, caller.Address())
 		if err != nil {
-			return common.Address{}, err
+			return nil, err
 		}
 
 		err = storage.WriteField(DecimalsField, op.Decimals())
 		if err != nil {
-			return common.Address{}, err
+			return nil, err
 		}
 
 		v, _ := op.TotalSupply()
 		val, ok := uint256.FromBig(v)
 		if ok {
-			return common.Address{}, ErrUint256Overflow
+			return nil, ErrUint256Overflow
 		}
 
 		err = storage.WriteField(TotalSupplyField, val)
 		if err != nil {
-			return common.Address{}, err
+			return nil, err
 		}
 
 		addr := caller.Address()
 		err = writeToMap(storage, BalancesField, addr[:], val)
 		if err != nil {
-			return common.Address{}, err
+			return nil, err
 		}
 	case operation.StdWRC721:
 		err = storage.WriteField(MinterField, caller.Address())
 		if err != nil {
-			return common.Address{}, err
+			return nil, err
 		}
 
 		v, ok := op.BaseURI()
@@ -244,21 +242,21 @@ func (p *Processor) tokenCreate(caller Ref, op operation.Create) (tokenAddr comm
 
 		err = storage.WriteField(BaseUriField, v)
 		if err != nil {
-			return common.Address{}, err
+			return nil, err
 		}
 
 		err = storage.WriteField(PercentFeeField, op.PercentFee())
 		if err != nil {
-			return common.Address{}, err
+			return nil, err
 		}
 	default:
-		return common.Address{}, operation.ErrStandardNotValid
+		return nil, operation.ErrStandardNotValid
 	}
 
 	log.Info("Create token", "address", tokenAddr)
 	storage.Flush()
 
-	return tokenAddr, nil
+	return tokenAddr.Bytes(), nil
 }
 
 // WRC20PropertiesResult stores result of the properties operation for WRC-20 tokens
@@ -268,6 +266,7 @@ type WRC20PropertiesResult struct {
 	Symbol      []byte
 	Decimals    uint8
 	TotalSupply *big.Int
+	Cost        *big.Int
 }
 
 // WRC721PropertiesResult stores result of the properties operation for WRC-721 tokens
@@ -320,12 +319,19 @@ func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
 			return nil, err
 		}
 
+		cost := new(uint256.Int)
+		err = storage.ReadField(CostField, cost)
+		if err != nil {
+			return nil, err
+		}
+
 		r = &WRC20PropertiesResult{
 			Std:         operation.StdWRC20,
 			Name:        name,
 			Symbol:      symbol,
 			Decimals:    decimals,
 			TotalSupply: totalSupply.ToBig(),
+			Cost:        cost.ToBig(),
 		}
 	case operation.StdWRC721:
 		var baseURI []byte
@@ -368,6 +374,19 @@ func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
+
+			cost := new(uint256.Int)
+			// TODO find a way to get rid of converting big.Int to uint256.Int and vice versa
+			uint256Id, ok := uint256.FromBig(id)
+			if ok {
+				return nil, ErrUint256Overflow
+			}
+			err = readFromMap(storage, CostMapField, uint256Id, cost)
+			if err != nil {
+				return nil, err
+			}
+
+			props.Cost = cost.ToBig()
 		}
 
 		r = props

@@ -39,7 +39,6 @@ type wrc721Properties struct {
 	Name       *hexutil.Bytes `json:"name"`
 	Symbol     *hexutil.Bytes `json:"symbol"`
 	PercentFee *hexutil.Uint8 `json:"percentFee,omitempty"`
-	Cost       *hexutil.Big   `json:"cost,omitempty"`
 }
 
 // wrc20Properties stores results of the following view functions of EIP-20: name, symbol, decimals, totalSupply.
@@ -47,6 +46,7 @@ type wrc20Properties struct {
 	wrc721Properties
 	Decimals    *hexutil.Uint8 `json:"decimals,omitempty"`
 	TotalSupply *hexutil.Big   `json:"totalSupply,omitempty"`
+	Cost        *hexutil.Big   `json:"cost,omitempty"`
 }
 
 // wrc721ByTokenIdProperties contains Metadata field which is custom field of WRC-721 token.
@@ -56,6 +56,7 @@ type wrc721ByTokenIdProperties struct {
 	GetApproved *common.Address `json:"getApproved"`
 	// Metadata contains JSON metadata for an NTF. The data will be stored in the blockchain natively.
 	Metadata *hexutil.Bytes `json:"metadata"`
+	Cost     *hexutil.Big   `json:"cost,omitempty"`
 }
 
 // wrc721Properties stores results of the following view functions of EIP-721: name, symbol, tokenURI, ownerOf, getApproved.
@@ -181,22 +182,23 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 		symbolBytes := hexutil.Bytes(v.Symbol)
 		decimals := hexutil.Uint8(v.Decimals)
 		totalSupply := (*hexutil.Big)(v.TotalSupply)
+		cost := (*hexutil.Big)(v.Cost)
 
 		ret = &wrc20Properties{
-			wrc721Properties{
+			wrc721Properties: wrc721Properties{
 				Std:    &std,
 				Name:   &nameBytes,
 				Symbol: &symbolBytes,
 			},
-			&decimals,
-			totalSupply,
+			Decimals:    &decimals,
+			TotalSupply: totalSupply,
+			Cost:        cost,
 		}
 	case *WRC721PropertiesResult:
 		std := hexutil.Uint(v.Std)
 		nameBytes := hexutil.Bytes(v.Name)
 		symbolBytes := hexutil.Bytes(v.Symbol)
 		percentFee := hexutil.Uint8(v.PercentFee)
-		cost := (*hexutil.Big)(v.Cost)
 
 		props := &wrc721TokenProperties{
 			wrc721Properties: wrc721Properties{
@@ -204,7 +206,6 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 				Name:       &nameBytes,
 				Symbol:     &symbolBytes,
 				PercentFee: &percentFee,
-				Cost:       cost,
 			},
 		}
 		if len(v.BaseURI) > 0 {
@@ -215,12 +216,14 @@ func (s *PublicTokenAPI) TokenProperties(ctx context.Context, tokenAddr common.A
 		if tokenId != nil {
 			tokenURIBytes := hexutil.Bytes(v.TokenURI)
 			metadataBytes := hexutil.Bytes(v.Metadata)
+			cost := (*hexutil.Big)(v.Cost)
 
 			props.ByTokenId = &wrc721ByTokenIdProperties{
 				TokenURI:    &tokenURIBytes,
 				OwnerOf:     &v.OwnerOf,
 				GetApproved: &v.GetApproved,
 				Metadata:    &metadataBytes,
+				Cost:        cost,
 			}
 		}
 
