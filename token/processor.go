@@ -2,16 +2,16 @@ package token
 
 import (
 	"errors"
+	"github.com/holiman/uint256"
 	"math/big"
 
 	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
 	"github.com/waterfall-foundation/gwat/crypto"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/token/operation"
 	tokenStorage "github.com/waterfall-foundation/gwat/token/storage"
-
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -80,6 +80,18 @@ const (
 	CostMapField = "CostMap"
 	// PercentFeeField is Uint8
 	PercentFeeField = "PercentFee"
+
+	addressLogType = "address"
+	uint256LogType = "uint256"
+	boolLogType    = "bool"
+)
+
+var (
+	//Events signatures. Copied from eip-20 and eip-721 for having the same topic 0 hash
+	//Same for the eip-20 and eip-721
+	transferEventSignature       = crypto.Keccak256Hash([]byte("Transfer(address,address,uint256)"))
+	approvalEventSignature       = crypto.Keccak256Hash([]byte("Approval(address,address,uint256)"))
+	approvalForAllEventSignature = crypto.Keccak256Hash([]byte("ApprovalForAll(address,address,bool)"))
 )
 
 // Ref represents caller of the token processor
@@ -91,15 +103,17 @@ type Ref interface {
 // All transaction related operations that mutates state of the token are called using Call method.
 // Methods of the operation name are used for getting state of the token.
 type Processor struct {
-	state vm.StateDB
-	ctx   vm.BlockContext
+	state        vm.StateDB
+	ctx          vm.BlockContext
+	eventEmmiter *EventEmmiter
 }
 
 // NewProcessor creates new token processor
 func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
 	return &Processor{
-		ctx:   blockCtx,
-		state: stateDb,
+		ctx:          blockCtx,
+		state:        stateDb,
+		eventEmmiter: NewEventEmmiter(stateDb),
 	}
 }
 
@@ -229,6 +243,8 @@ func (p *Processor) tokenCreate(caller Ref, tokenAddr common.Address, op operati
 		if err != nil {
 			return nil, err
 		}
+
+		defer p.eventEmmiter.TransferWrc20(tokenAddr, common.Address{}, addr, val.ToBig())
 	case operation.StdWRC721:
 		err = storage.WriteField(MinterField, caller.Address())
 		if err != nil {
@@ -416,11 +432,17 @@ func (p *Processor) transfer(caller Ref, token common.Address, op operation.Tran
 
 	value := op.Value()
 	switch op.Standard() {
+	// TODO no transfer for wrc721?
 	case operation.StdWRC20:
-		err = transfer(storage, caller.Address(), op.To(), op.Value())
+		from := caller.Address()
+		to := op.To()
+
+		err = transfer(storage, from, to, value)
 		if err != nil {
 			return nil, err
 		}
+
+		defer p.eventEmmiter.TransferWrc20(token, from, to, value)
 	}
 
 	log.Info("Transfer token", "address", token, "to", op.To(), "value", op.Value())
@@ -456,7 +478,10 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op operation.
 		return nil, err
 	}
 
+	from := op.From()
+	to := op.To()
 	value := op.Value()
+
 	switch op.Standard() {
 	case operation.StdWRC20:
 		err = p.wrc20SpendAllowance(storage, op.From(), caller.Address(), op.Value())
@@ -464,17 +489,23 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op operation.
 			return nil, err
 		}
 
-		err := transfer(storage, op.From(), op.To(), op.Value())
+		err := transfer(storage, from, to, value)
 		if err != nil {
 			return nil, err
 		}
 
 		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "value", value)
+
+		defer p.eventEmmiter.TransferWrc20(token, from, to, value)
+		defer p.eventEmmiter.ApprovalWrc20(token, from, common.Address{}, value)
 	case operation.StdWRC721:
 		if err := p.wrc721TransferFrom(storage, caller, op); err != nil {
 			return nil, err
 		}
 		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "tokenId", value)
+
+		defer p.eventEmmiter.TransferWrc721(token, from, to, value)
+		defer p.eventEmmiter.ApprovalWrc721(token, from, common.Address{}, value)
 	}
 
 	storage.Flush()
@@ -560,11 +591,15 @@ func (p *Processor) approve(caller Ref, token common.Address, op operation.Appro
 		}
 
 		log.Info("Approve to spend a token", "owner", owner, "spender", spender, "value", value)
+
+		defer p.eventEmmiter.ApprovalWrc20(token, owner, spender, value)
 	case operation.StdWRC721:
 		if err := p.wrc721Approve(storage, caller, op); err != nil {
 			return nil, err
 		}
 		log.Info("Approve to spend an NFT", "owner", owner, "spender", spender, "tokenId", value)
+
+		defer p.eventEmmiter.ApprovalWrc721(token, owner, spender, value)
 	}
 
 	storage.Flush()
@@ -758,6 +793,7 @@ func (p *Processor) mint(caller Ref, token common.Address, op operation.Mint) ([
 	log.Info("Token mint", "address", token, "to", to, "tokenId", tokenId)
 	storage.Flush()
 
+	p.eventEmmiter.TransferWrc721(token, common.Address{}, to, tokenId)
 	return tokenId.Bytes(), nil
 }
 
@@ -819,6 +855,7 @@ func (p *Processor) burn(caller Ref, token common.Address, op operation.Burn) ([
 	log.Info("Token burn", "address", token, "tokenId", tokenId)
 	storage.Flush()
 
+	p.eventEmmiter.TransferWrc721(token, owner, common.Address{}, tokenId)
 	return tokenId.Bytes(), nil
 }
 
@@ -830,14 +867,17 @@ func (p *Processor) setApprovalForAll(caller Ref, token common.Address, op opera
 
 	owner := caller.Address()
 	operator := op.Operator()
+	isApproved := op.IsApproved()
 
-	err = writeToMap(storage, OperatorApprovalsField, crypto.Keccak256(owner[:], operator[:]), op.IsApproved())
+	err = writeToMap(storage, OperatorApprovalsField, crypto.Keccak256(owner[:], operator[:]), isApproved)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Info("Set approval for all WRC-721 tokens", "address", token, "owner", owner, "operator", operator)
 	storage.Flush()
+
+	p.eventEmmiter.ApprovalForAllWrc721(token, owner, operator, isApproved)
 
 	return operator[:], nil
 }
@@ -1122,6 +1162,122 @@ func (p *Processor) newStorage(token common.Address, op operation.Operation) (to
 	}
 
 	return storage, nil
+}
+
+type logEntry struct {
+	name      string
+	entryType string
+	indexed   bool
+	data      []byte
+}
+
+func newIndexedAddressLogEntry(name string, data []byte) logEntry {
+	return logEntry{
+		name:      name,
+		entryType: addressLogType,
+		indexed:   true,
+		data:      data,
+	}
+}
+
+func newUint256LogEntry(name string, data []byte) logEntry {
+	return logEntry{
+		name:      name,
+		entryType: uint256LogType,
+		indexed:   false,
+		data:      data,
+	}
+}
+
+func newBoolLogEntry(name string, data []byte) logEntry {
+	return logEntry{
+		name:      name,
+		entryType: boolLogType,
+		indexed:   false,
+		data:      data,
+	}
+}
+
+type EventEmmiter struct {
+	state vm.StateDB
+}
+
+func NewEventEmmiter(state vm.StateDB) *EventEmmiter {
+	return &EventEmmiter{state: state}
+}
+
+func (e *EventEmmiter) TransferWrc20(tokenAddr common.Address, from, to common.Address, value *big.Int) {
+	e.addLog(
+		tokenAddr,
+		transferEventSignature,
+		newIndexedAddressLogEntry("from", from.Bytes()),
+		newIndexedAddressLogEntry("to", to.Bytes()),
+		newUint256LogEntry("value", value.FillBytes(make([]byte, 32))),
+	)
+}
+
+func (e *EventEmmiter) TransferWrc721(tokenAddr common.Address, from, to common.Address, tokenId *big.Int) {
+	e.addLog(
+		tokenAddr,
+		transferEventSignature,
+		newIndexedAddressLogEntry("from", from.Bytes()),
+		newIndexedAddressLogEntry("to", to.Bytes()),
+		newUint256LogEntry("tokenId", tokenId.FillBytes(make([]byte, 32))),
+	)
+}
+
+func (e *EventEmmiter) ApprovalWrc20(tokenAddr common.Address, owner, spender common.Address, value *big.Int) {
+	e.addLog(
+		tokenAddr,
+		approvalEventSignature,
+		newIndexedAddressLogEntry("owner", owner.Bytes()),
+		newIndexedAddressLogEntry("spender", spender.Bytes()),
+		newUint256LogEntry("value", value.FillBytes(make([]byte, 32))),
+	)
+}
+
+func (e *EventEmmiter) ApprovalWrc721(tokenAddr common.Address, owner, approved common.Address, tokenId *big.Int) {
+	e.addLog(
+		tokenAddr,
+		approvalEventSignature,
+		newIndexedAddressLogEntry("owner", owner.Bytes()),
+		newIndexedAddressLogEntry("approved", approved.Bytes()),
+		newUint256LogEntry("tokenId", tokenId.FillBytes(make([]byte, 32))),
+	)
+}
+
+func (e *EventEmmiter) ApprovalForAllWrc721(tokenAddr common.Address, owner, operator common.Address, approved bool) {
+	approvedB := []byte{0}
+	if approved {
+		approvedB[0] = 1
+	}
+
+	e.addLog(
+		tokenAddr,
+		approvalForAllEventSignature,
+		newIndexedAddressLogEntry("owner", owner.Bytes()),
+		newIndexedAddressLogEntry("operator", operator.Bytes()),
+		newBoolLogEntry("approved", approvedB),
+	)
+}
+
+func (e *EventEmmiter) addLog(tokenAddr common.Address, signature common.Hash, logsEntries ...logEntry) {
+	var data []byte
+	topics := []common.Hash{signature}
+
+	for _, entry := range logsEntries {
+		if entry.indexed {
+			topics = append(topics, common.BytesToHash(entry.data))
+		} else {
+			data = append(data, entry.data...)
+		}
+	}
+
+	e.state.AddLog(&types.Log{
+		Address: tokenAddr,
+		Topics:  topics,
+		Data:    data,
+	})
 }
 
 func newFieldsDescriptors(op operation.Create) ([]tokenStorage.FieldDescriptor, error) {
