@@ -621,14 +621,20 @@ func TestProcessorPropertiesWRC20(t *testing.T) {
 	if prop.Decimals != decimals {
 		t.Errorf("values do not match:\nwant: %+v\nhave: %+v", decimals, prop.Decimals)
 	}
+
+	if !testutils.BigIntEquals(prop.Cost, zeroBig) {
+		t.Errorf("values do not match:\nwant: %+v\nhave: %+v", prop.Cost, zeroBig)
+	}
 }
 
 func TestProcessorPropertiesWRC721(t *testing.T) {
-	mintNewToken(t, owner, wrc721Address, id7, data, caller, []error{nil})
-	approveOp, err := operation.NewApproveOperation(operation.StdWRC721, spender, id7)
-	call(t, vm.AccountRef(owner), wrc721Address, nil, approveOp, []error{nil})
+	tokenAddress := createToken(t, operation.StdWRC721, vm.AccountRef(owner))
 
-	wrc721Op, err := operation.NewPropertiesOperation(wrc721Address, id7)
+	mintNewToken(t, owner, tokenAddress, id7, data, caller, []error{nil})
+	approveOp, err := operation.NewApproveOperation(operation.StdWRC721, spender, id7)
+	call(t, vm.AccountRef(owner), tokenAddress, nil, approveOp, []error{nil})
+
+	wrc721Op, err := operation.NewPropertiesOperation(tokenAddress, id7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,6 +661,10 @@ func TestProcessorPropertiesWRC721(t *testing.T) {
 
 	if prop.GetApproved != spender {
 		t.Fatal()
+	}
+
+	if prop.PercentFee != percentFee {
+		t.Errorf("values do not match:\nwant: %+v\nhave: %+v", percentFee, prop.PercentFee)
 	}
 }
 
