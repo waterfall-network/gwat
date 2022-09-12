@@ -20,6 +20,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"github.com/waterfall-foundation/gwat/token/operation"
 	"io"
 	"sort"
 	"sync"
@@ -1853,6 +1854,33 @@ func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
 			return false, nil
 		}
 	}
+
+	intrGasSum := uint64(0)
+	for _, tx := range block.Transactions() {
+		isTokenOp := false
+		if _, err := operation.GetOpCode(tx.Data()); err == nil {
+			isTokenOp = true
+		}
+
+		var txData []byte
+		if !isTokenOp {
+			txData = tx.Data()
+		}
+
+		contractCreation := tx.To() == nil && !isTokenOp
+
+		intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
+		if err != nil {
+			log.Warn("verifyBlock: IntrinsicGas error", "err", err)
+			return false, nil
+		}
+		intrGasSum += intrGas
+	}
+	if intrGasSum > block.GasLimit() {
+		log.Warn("IntrinsicGas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
+		return false, nil
+	}
+
 	return bc.verifyBlockParents(block), nil
 }
 
