@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
+	//"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/dag/creator"
 	"github.com/waterfall-foundation/gwat/eth/downloader"
@@ -49,7 +49,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		SnapshotCache           int
 		Preimages               bool
 		Creator                 creator.Config
-		Ethash                  ethash.Config
+		//Ethash                  ethash.Config
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
@@ -93,7 +93,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.SnapshotCache = c.SnapshotCache
 	enc.Preimages = c.Preimages
 	enc.Creator = c.Creator
-	enc.Ethash = c.Ethash
+	//enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
@@ -141,7 +141,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		SnapshotCache           *int
 		Preimages               *bool
 		Creator                 *creator.Config
-		Ethash                  *ethash.Config
+		//Ethash                  *ethash.Config
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
@@ -250,9 +250,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.Creator != nil {
 		c.Creator = *dec.Creator
 	}
-	if dec.Ethash != nil {
-		c.Ethash = *dec.Ethash
-	}
+	//if dec.Ethash != nil {
+	//	c.Ethash = *dec.Ethash
+	//}
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool
 	}

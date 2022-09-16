@@ -241,9 +241,9 @@ func createGQLService(t *testing.T, stack *node.Node) {
 			Config:   params.AllEthashProtocolChanges,
 			GasLimit: 11500000,
 		},
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeFake,
-		},
+		//Ethash: ethash.Config{
+		//	PowMode: ethash.ModeFake,
+		//},
 		NetworkId:               1337,
 		TrieCleanCache:          5,
 		TrieCleanCacheJournal:   "triecache",
@@ -297,9 +297,9 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 			},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		},
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeFake,
-		},
+		//Ethash: ethash.Config{
+		//	PowMode: ethash.ModeFake,
+		//},
 		NetworkId:               1337,
 		TrieCleanCache:          5,
 		TrieCleanCacheJournal:   "triecache",
