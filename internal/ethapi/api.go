@@ -1166,22 +1166,23 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
-		"number":           head.Number,
 		"hash":             head.Hash(),
-		"parentHashes":     head.ParentHashes,
 		"slot":             hexutil.Uint64(head.Slot),
 		"height":           hexutil.Uint64(head.Height),
-		"mixHash":          head.MixDigest,
-		"logsBloom":        head.Bloom,
-		"stateRoot":        head.Root,
+		"number":           head.Number,
+		"parentHashes":     head.ParentHashes,
+		"lfHash":           head.LFHash,
+		"lfNumber":         hexutil.Uint64(head.LFNumber),
 		"miner":            head.Coinbase,
-		"extraData":        hexutil.Bytes(head.Extra),
-		"size":             hexutil.Uint64(head.Size()),
-		"gasLimit":         hexutil.Uint64(head.GasLimit),
-		"gasUsed":          hexutil.Uint64(head.GasUsed),
-		"timestamp":        hexutil.Uint64(head.Time),
 		"transactionsRoot": head.TxHash,
+		"gasLimit":         hexutil.Uint64(head.GasLimit),
+		"timestamp":        hexutil.Uint64(head.Time),
+		"extraData":        hexutil.Bytes(head.Extra),
+		"stateRoot":        head.Root,
 		"receiptsRoot":     head.ReceiptHash,
+		"gasUsed":          hexutil.Uint64(head.GasUsed),
+		"logsBloom":        head.Bloom,
+		"size":             hexutil.Uint64(head.Size()),
 	}
 
 	if head.BaseFee != nil {

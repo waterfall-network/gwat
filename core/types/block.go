@@ -36,8 +36,7 @@ import (
 )
 
 var (
-	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	EmptyUncleHash = rlpHash([]*Header(nil))
+	EmptyRootHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -66,33 +65,32 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	ParentHashes   common.HashArray `json:"parentHashes"     gencodec:"required"`
-	Slot           uint64           `json:"slot"             gencodec:"required"`
-	Height         uint64           `json:"height"           gencodec:"required"`
-	Coinbase       common.Address   `json:"miner"            gencodec:"required"`
-	TxHash         common.Hash      `json:"transactionsRoot" gencodec:"required"`
-	Bloom          Bloom            `json:"logsBloom"        gencodec:"required"`
-	GasLimit       uint64           `json:"gasLimit"         gencodec:"required"`
-	GasUsed        uint64           `json:"gasUsed"          gencodec:"required"`
-	Time           uint64           `json:"timestamp"        gencodec:"required"`
-	Extra          []byte           `json:"extraData"        gencodec:"required"`
-	MixDigest      common.Hash      `json:"mixHash"`
-	FinNumber      *uint64          `json:"finNumber"        gencodec:"required"`
-	FinRoot        common.Hash      `json:"finStateRoot"     gencodec:"required"`
-	FinReceiptHash common.Hash      `json:"finReceiptsRoot"  gencodec:"required"`
-
+	//Base fields (set while create)
+	ParentHashes common.HashArray `json:"parentHashes"     gencodec:"required"`
+	Slot         uint64           `json:"slot"             gencodec:"required"`
+	Height       uint64           `json:"height"           gencodec:"required"`
+	LFHash       common.Hash      `json:"lfHash"           gencodec:"required"`
+	LFNumber     uint64           `json:"lfNumber"         gencodec:"required"`
+	Coinbase     common.Address   `json:"miner"            gencodec:"required"`
+	TxHash       common.Hash      `json:"transactionsRoot" gencodec:"required"`
+	GasLimit     uint64           `json:"gasLimit"         gencodec:"required"`
+	Time         uint64           `json:"timestamp"        gencodec:"required"`
+	Extra        []byte           `json:"extraData"        gencodec:"required"`
+	//State fields (set while finalize)
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
-	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
-
-	//todo comment
+	BaseFee     *big.Int    `json:"baseFeePerGas" rlp:"optional"`
 	Number      *uint64     `json:"number"        rlp:"optional"`
 	Root        common.Hash `json:"stateRoot"     rlp:"optional"`
 	ReceiptHash common.Hash `json:"receiptsRoot"  rlp:"optional"`
+	GasUsed     uint64      `json:"gasUsed"       rlp:"optional"`
+	Bloom       Bloom       `json:"logsBloom"     rlp:"optional"`
 }
 
 // field type overrides for gencodec
 type headerMarshaling struct {
 	Height   *hexutil.Big
+	LFHash   common.Hash
+	LFNumber hexutil.Uint64
 	GasLimit hexutil.Uint64
 	GasUsed  hexutil.Uint64
 	Time     hexutil.Uint64
@@ -107,6 +105,12 @@ func (h *Header) Hash() common.Hash {
 	cpy := h.Copy()
 	if cpy != nil {
 		cpy.Number = nil
+		cpy.BaseFee = nil
+		cpy.GasUsed = 0
+		cpy.Bloom = Bloom{}
+		//todo use EmptyRootHash?
+		cpy.ReceiptHash = common.Hash{}
+		cpy.Root = common.Hash{}
 	}
 	return rlpHash(cpy)
 }
@@ -119,6 +123,8 @@ func (h *Header) Copy() *Header {
 			ParentHashes: h.ParentHashes,
 			Slot:         h.Slot,
 			Height:       h.Height,
+			LFHash:       h.LFHash,
+			LFNumber:     h.LFNumber,
 			Coinbase:     h.Coinbase,
 			Root:         h.Root,
 			TxHash:       h.TxHash,
@@ -128,7 +134,6 @@ func (h *Header) Copy() *Header {
 			GasUsed:      h.GasUsed,
 			Time:         h.Time,
 			Extra:        h.Extra,
-			MixDigest:    h.MixDigest,
 			BaseFee:      h.BaseFee,
 			Number:       h.Number,
 		}
@@ -298,10 +303,11 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 	return nil
 }
 
+func (b *Block) LFHash() common.Hash            { return b.header.LFHash }
+func (b *Block) LFNumber() uint64               { return b.header.LFNumber }
 func (b *Block) GasLimit() uint64               { return b.header.GasLimit }
 func (b *Block) GasUsed() uint64                { return b.header.GasUsed }
 func (b *Block) Time() uint64                   { return b.header.Time }
-func (b *Block) MixDigest() common.Hash         { return b.header.MixDigest }
 func (b *Block) Bloom() Bloom                   { return b.header.Bloom }
 func (b *Block) Coinbase() common.Address       { return b.header.Coinbase }
 func (b *Block) Root() common.Hash              { return b.header.Root }

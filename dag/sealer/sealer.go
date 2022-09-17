@@ -238,11 +238,6 @@ func (c *Sealer) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	//	return errInvalidCheckpointSigners
 	//}
 
-	// Ensure that the mix digest is zero as we don't have fork protection currently
-	if header.MixDigest != (common.Hash{}) {
-		return errInvalidMixDigest
-	}
-
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
 	if header.GasLimit > cap {
@@ -513,9 +508,6 @@ func (c *Sealer) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 
 	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
-	//// Mix digest is reserved for now, set to empty
-	//header.MixDigest = common.Hash{}
-	//
 	//// Ensure the timestamp has the correct delay
 	////todo
 	//parent := chain.GetHeader(header.ParentHash, number-1)
@@ -653,6 +645,8 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	enc := []interface{}{
 		header.ParentHashes,
 		header.Height,
+		header.LFHash,
+		header.LFNumber,
 		header.Coinbase,
 		header.Root,
 		header.TxHash,
@@ -663,7 +657,6 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.Time,
 		//header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
 		header.Extra[:], // Yes, this will panic if extra is too short
-		header.MixDigest,
 	}
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
