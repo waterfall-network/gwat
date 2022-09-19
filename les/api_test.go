@@ -30,7 +30,6 @@ import (
 
 	"github.com/mattn/go-colorable"
 	"github.com/waterfall-foundation/gwat/common"
-	//"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/eth"
 	ethdownloader "github.com/waterfall-foundation/gwat/eth/downloader"
 	"github.com/waterfall-foundation/gwat/eth/ethconfig"
@@ -495,7 +494,6 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
 	config.SyncMode = (ethdownloader.SyncMode)(downloader.LightSync)
-	//config.Ethash.PowMode = ethash.ModeFake
 	return New(stack, &config)
 }
 
