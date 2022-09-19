@@ -26,13 +26,12 @@ import (
 	"github.com/waterfall-foundation/gwat/accounts"
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/consensus"
-	"github.com/waterfall-foundation/gwat/consensus/clique"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
 	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/params"
@@ -218,10 +217,10 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	if isClique {
 		chainConfig = params.AllCliqueProtocolChanges
 		chainConfig.Clique = &params.CliqueConfig{Period: 1}
-		engine = clique.New(chainConfig.Clique, db)
+		engine = sealer.New(db)
 	} else {
 		chainConfig = params.AllEthashProtocolChanges
-		engine = ethash.NewFaker()
+		engine = sealer.New(db)
 	}
 
 	chainConfig.LondonBlock = big.NewInt(0)
@@ -265,7 +264,8 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 }
 
 func TestEmptyWorkEthash(t *testing.T) {
-	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
+	db := rawdb.NewMemoryDatabase()
+	testEmptyWork(t, ethashChainConfig, sealer.New(db))
 }
 func TestEmptyWorkClique(t *testing.T) {
 	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
@@ -317,7 +317,8 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 }
 
 func TestRegenerateMiningBlockEthash(t *testing.T) {
-	testRegenerateMiningBlock(t, ethashChainConfig, ethash.NewFaker())
+	db := rawdb.NewMemoryDatabase()
+	testRegenerateMiningBlock(t, ethashChainConfig, sealer.New(db))
 }
 
 func TestRegenerateMiningBlockClique(t *testing.T) {
@@ -377,7 +378,8 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 }
 
 func TestAdjustIntervalEthash(t *testing.T) {
-	testAdjustInterval(t, ethashChainConfig, ethash.NewFaker())
+	db := rawdb.NewMemoryDatabase()
+	testAdjustInterval(t, ethashChainConfig, sealer.New(db))
 }
 
 func TestAdjustIntervalClique(t *testing.T) {

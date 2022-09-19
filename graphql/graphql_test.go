@@ -25,18 +25,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
 	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
 	"github.com/waterfall-foundation/gwat/eth"
 	"github.com/waterfall-foundation/gwat/eth/ethconfig"
 	"github.com/waterfall-foundation/gwat/node"
 	"github.com/waterfall-foundation/gwat/params"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildSchema(t *testing.T) {
@@ -258,7 +257,7 @@ func createGQLService(t *testing.T, stack *node.Node) {
 	}
 	// Create some blocks and import them
 	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
-		ethash.NewFaker(), ethBackend.ChainDb(), 10, func(i int, gen *core.BlockGen) {})
+		sealer.New(ethBackend.ChainDb()), ethBackend.ChainDb(), 10, func(i int, gen *core.BlockGen) {})
 	_, err = ethBackend.BlockChain().InsertChain(chain)
 	if err != nil {
 		t.Fatalf("could not create import blocks: %v", err)
@@ -337,7 +336,7 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 
 	// Create some blocks and import them
 	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
-		ethash.NewFaker(), ethBackend.ChainDb(), 1, func(i int, b *core.BlockGen) {
+		sealer.New(ethBackend.ChainDb()), ethBackend.ChainDb(), 1, func(i int, b *core.BlockGen) {
 			b.SetCoinbase(common.Address{1})
 			b.AddTx(legacyTx)
 			b.AddTx(envelopTx)

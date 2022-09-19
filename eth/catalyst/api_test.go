@@ -20,11 +20,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
 	"github.com/waterfall-foundation/gwat/eth"
 	"github.com/waterfall-foundation/gwat/eth/ethconfig"
 	"github.com/waterfall-foundation/gwat/node"
@@ -56,7 +56,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		g.SetExtra([]byte("test"))
 	}
 	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
+	engine := sealer.New(db)
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, 10, generate)
 	blocks = append([]*types.Block{gblock}, blocks...)
 	return genesis, blocks
@@ -240,7 +240,6 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 
 	ethcfg := &ethconfig.Config{
 		Genesis: genesis,
-		//Ethash: ethash.Config{PowMode: ethash.ModeFake}
 	}
 	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {

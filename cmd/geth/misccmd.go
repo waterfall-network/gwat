@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/waterfall-foundation/gwat/cmd/utils"
-	//"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/params"
 	"gopkg.in/urfave/cli.v1"
 )

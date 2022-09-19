@@ -23,12 +23,12 @@ import (
 	"testing"
 
 	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
 	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/rpc"
@@ -107,8 +107,8 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		signer = types.LatestSigner(gspec.Config)
 	)
 	config.LondonBlock = londonBlock
-	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
+	engine := sealer.New(db)
 	genesis, _ := gspec.Commit(db)
 
 	// Generate testing blocks
