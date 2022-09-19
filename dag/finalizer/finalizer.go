@@ -161,15 +161,18 @@ func (f *Finalizer) isSyncing() bool {
 // GetFinalizingCandidates returns the ordered dag block hashes for finalization
 func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, error) {
 	bc := f.eth.BlockChain()
-	tips, unloaded := bc.ReviseTips()
-	if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
-		if tips == nil {
-			log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips)
-		} else {
-			log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips.Print())
-		}
-		return common.HashArray{}, ErrBadDag
-	}
+	//tips, unloaded := bc.ReviseTips()
+	//if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
+	//	if tips == nil {
+	//		log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips)
+	//	} else {
+	//		log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips.Print())
+	//	}
+	//	return common.HashArray{}, ErrBadDag
+	//}
+
+	tips := bc.GetTips()
+
 	finChain := []*types.Block{}
 	for _, block := range bc.GetBlocksByHashes(tips.GetOrderedDagChainHashes().Uniq()).ToArray() {
 		if block.Height() > 0 && block.Nr() == 0 {

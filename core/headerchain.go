@@ -481,8 +481,8 @@ func (hc *HeaderChain) ResetTips() error {
 		Hash:                lastFinHeader.Hash(),
 		Height:              lastFinHeader.Height,
 		Slot:                lastFinHeader.Slot,
-		LastFinalizedHash:   lastFinHeader.Hash(),
-		LastFinalizedHeight: lastFinHeader.Nr(),
+		LastFinalizedHash:   lastFinHeader.LFHash,
+		LastFinalizedHeight: lastFinHeader.LFNumber,
 		DagChainHashes:      common.HashArray{},
 	}
 	rawdb.WriteBlockDag(hc.chainDb, dag)

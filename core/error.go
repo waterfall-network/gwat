@@ -33,9 +33,6 @@ var (
 
 	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.
 	ErrInsertUncompletedDag = errors.New("insert uncompleted dag chain")
-
-	// ErrStateBlockNotFound is returned if previous or next blue block not found in chain for requested block
-	ErrStateBlockNotFound = errors.New("state block not found")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

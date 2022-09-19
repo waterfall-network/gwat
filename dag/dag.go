@@ -117,18 +117,19 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
 
 	// create block
-	tips, unloaded := d.bc.ReviseTips()
-	dagSlots := d.countDagSlots(tips)
-
+	tips := d.bc.GetTips()
+	//tips, unloaded := d.bc.ReviseTips()
+	dagSlots := d.countDagSlots(&tips)
 	log.Info("Handle Consensus: create condition",
 		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
-		"unloaded", unloaded,
+		//"unloaded", unloaded,
 		"dagSlots", dagSlots,
 	)
 
-	if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	//if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Creators: data.Creators,
@@ -165,7 +166,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 					}
 					log.Info("Creator assigned", "creator", coinbase)
 
-					block, crtErr := d.creator.CreateBlock(assigned, tips)
+					block, crtErr := d.creator.CreateBlock(assigned, &tips)
 					if crtErr != nil {
 						crtInfo["error"] = crtErr.Error()
 					}
@@ -216,18 +217,20 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// create block
-	tips, unloaded := d.bc.ReviseTips()
-	dagSlots := d.countDagSlots(tips)
+	tips := d.bc.GetTips()
+	//tips, unloaded := d.bc.ReviseTips()
+	dagSlots := d.countDagSlots(&tips)
 
 	log.Info("Handle Consensus: create condition",
 		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
-		"unloaded", unloaded,
+		//"unloaded", unloaded,
 		"dagSlots", dagSlots,
 	)
 
-	if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	//if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Creators: data.Creators,
@@ -261,7 +264,7 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 					}
 					log.Info("Creator assigned", "creator", coinbase)
 
-					block, crtErr := d.creator.CreateBlock(assigned, tips)
+					block, crtErr := d.creator.CreateBlock(assigned, &tips)
 					if crtErr != nil {
 						crtInfo["error"] = crtErr.Error()
 					}

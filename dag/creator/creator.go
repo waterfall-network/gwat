@@ -519,12 +519,15 @@ func (c *Creator) resultHandler(block *types.Block) {
 		Hash:                block.Hash(),
 		Height:              block.Height(),
 		Slot:                block.Slot(),
-		LastFinalizedHash:   c.chain.GetLastFinalizedBlock().Hash(),
-		LastFinalizedHeight: c.chain.GetLastFinalizedNumber(),
+		LastFinalizedHash:   block.LFHash(),
+		LastFinalizedHeight: block.LFNumber(),
 		DagChainHashes:      tmpDagChainHashes,
 	}
 	c.chain.AddTips(newBlockDag)
-	c.chain.ReviseTips()
+	c.chain.WriteCurrentTips()
+
+	// todo rm
+	log.Info("<<<<<< c.chain.AddTips(newBlockDag) >>>>>>", "tips", c.chain.GetTips().Print())
 
 	c.chain.MoveTxsToProcessing(types.Blocks{block})
 
@@ -715,10 +718,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	expCache := core.ExploreResultMap{}
 	for _, bl := range blocks {
 		if bl.Slot() >= slotInfo.Slot {
-			tip := tips.Get(bl.Hash())
 			for _, ph := range bl.ParentHashes() {
-				_, _, _, graph, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
-				expCache = exc
 				_dag := c.eth.BlockChain().ReadBockDag(ph)
 				if _dag == nil {
 					parentBlock := c.eth.BlockChain().GetBlock(ph)
@@ -726,16 +726,24 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 						log.Warn("Creator reorg tips failed: bad parent in dag", "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
 						continue
 					}
-					_dag = &types.BlockDAG{
-						Hash:   ph,
-						Height: parentBlock.Height(),
-						Slot:   parentBlock.Slot(),
+					dagChainHashes := common.HashArray{}
+					//if block not finalized
+					if parentBlock.Height() > 0 && parentBlock.Nr() == 0 {
+						log.Warn("Creator reorg tips: active BlockDag not found", "parent", ph.Hex(), "parent.slot", parentBlock.Slot(), "parent.height", parentBlock.Height(), "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex())
+						_, _, _, graph, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
+						expCache = exc
+						if dch := graph.GetDagChainHashes(); dch != nil {
+							dagChainHashes = *dch
+						}
 					}
-				}
-				_dag.LastFinalizedHash = tip.LastFinalizedHash
-				_dag.LastFinalizedHeight = tip.LastFinalizedHeight
-				if dch := graph.GetDagChainHashes(); dch != nil {
-					_dag.DagChainHashes = *dch
+					_dag = &types.BlockDAG{
+						Hash:                ph,
+						Height:              parentBlock.Height(),
+						Slot:                parentBlock.Slot(),
+						LastFinalizedHash:   parentBlock.LFHash(),
+						LastFinalizedHeight: parentBlock.LFNumber(),
+						DagChainHashes:      dagChainHashes,
+					}
 				}
 				_dag.DagChainHashes = _dag.DagChainHashes.Difference(common.HashArray{genesis})
 				tips.Add(_dag)
@@ -798,12 +806,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	//calc new block height
 	lastFinBlock := c.chain.GetLastFinalizedBlock()
-	lastFinHeight := lastFinBlock.Nr()
+	lastFinNr := lastFinBlock.Nr()
 	ancestorsCount := len(tmpDagChainHashes.Uniq())
-	newHeight := lastFinHeight + uint64(ancestorsCount) + 1
+	newHeight := lastFinNr + uint64(ancestorsCount) + 1
 	log.Info("Creator calculate block height", "newHeight", newHeight,
 		"ancestors", ancestorsCount,
-		"lastFinHeight", lastFinHeight,
+		"lastFinNr", lastFinNr,
 	)
 
 	// if max slot of parents is less or equal to last finalized block slot
@@ -818,12 +826,14 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
 	}
 	header := &types.Header{
-		ParentHashes: tipsBlocks.Hashes(),
+		ParentHashes: tipsBlocks.Hashes().Sort(),
 		Slot:         slotInfo.Slot,
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
 		Extra:        c.extra,
 		Time:         uint64(timestamp),
+		LFHash:       lastFinBlock.Hash(),
+		LFNumber:     lastFinBlock.Nr(),
 	}
 
 	// Set baseFee and GasLimit

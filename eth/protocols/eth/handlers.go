@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/rlp"
@@ -439,26 +438,29 @@ func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.
 	dag := common.HashArray{}
 	finalized := common.HashArray{}
 	fromFinNr := uint64(query)
-	expCache := core.ExploreResultMap{}
-	for _, h := range backend.Chain().GetTips().GetHashes() {
-		unloaded, loaded, _, _, exc, err := backend.Chain().ExploreChainRecursive(h, expCache)
-		if err != nil {
-			return dag, 0, err
-		}
-		expCache = exc
-		if len(unloaded) > 0 {
-			return dag, 0, fmt.Errorf("%w", errInvalidDag)
-		}
-		dag = dag.Concat(loaded)
 
-		// if tips set to last finalized block - add it
-		if len(loaded) == 0 {
-			lfBlock := backend.Chain().GetLastFinalizedBlock()
-			if lfBlock.Hash() == h {
-				dag = append(dag, h)
-			}
-		}
-	}
+	//expCache := core.ExploreResultMap{}
+	//for _, h := range backend.Chain().GetTips().GetHashes() {
+	//	unloaded, loaded, _, _, exc, err := backend.Chain().ExploreChainRecursive(h, expCache)
+	//	if err != nil {
+	//		return dag, 0, err
+	//	}
+	//	expCache = exc
+	//	if len(unloaded) > 0 {
+	//		return dag, 0, fmt.Errorf("%w", errInvalidDag)
+	//	}
+	//	dag = dag.Concat(loaded)
+	//
+	//	// if tips set to last finalized block - add it
+	//	if len(loaded) == 0 {
+	//		lfBlock := backend.Chain().GetLastFinalizedBlock()
+	//		if lfBlock.Hash() == h {
+	//			dag = append(dag, h)
+	//		}
+	//	}
+	//}
+
+	dag = backend.Chain().GetTips().GetOrderedDagChainHashes()
 	lastFinNr := backend.Chain().GetLastFinalizedNumber()
 	if fromFinNr > lastFinNr {
 		return dag, 0, fmt.Errorf("%w", errInvalidDag)
