@@ -700,6 +700,10 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 		}
 		//handle by reverse order
 		for _, block := range slotBlocks {
+			// if block is finalized
+			if block.Nr() != 0 && block.Height() > 0 && block.Nr() < lastFinNr || block.Height() == 0 {
+				continue
+			}
 			// Commit block and state to database.
 			_, err = d.blockchain.WriteSyncDagBlock(block)
 			if err != nil {

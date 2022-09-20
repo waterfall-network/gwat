@@ -573,13 +573,33 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 	defer hc.tipsMu.Unlock()
 	tips := hc.GetTips(true)
 	for _, t := range *tips {
-		t.DagChainHashes = t.DagChainHashes.Difference(finHashes)
-		//// if tips is synced - update finalized data
-		//if t.LastFinalizedHash != (common.Hash{}) {
-		//	t.LastFinalizedHash = lastFinHash
-		//	t.LastFinalizedHeight = lastFinNr
-		//}
-		tips.Add(t)
+		tHeader := hc.GetHeaderByHash(t.Hash)
+		// if tip isn't finalized - update it
+		if tHeader.Nr() == 0 && tHeader.Height > 0 {
+			t.DagChainHashes = t.DagChainHashes.Difference(finHashes)
+			tips.Add(t)
+			continue
+		}
+		// if tip isn't finalized - rm it
+		if tHeader.Nr() <= lastFinNr {
+			tips.Remove(t.Hash)
+		}
+	}
+	//if tips is empty - set last fin block
+	if len(*tips) == 0 {
+		bdag := rawdb.ReadBlockDag(hc.chainDb, lastFinHash)
+		if bdag == nil {
+			tHeader := hc.GetHeaderByHash(lastFinHash)
+			bdag = &types.BlockDAG{
+				Hash:                tHeader.Hash(),
+				Height:              tHeader.Height,
+				Slot:                tHeader.Slot,
+				LastFinalizedHash:   tHeader.LFHash,
+				LastFinalizedHeight: tHeader.LFNumber,
+				DagChainHashes:      common.HashArray{},
+			}
+		}
+		tips.Add(bdag)
 	}
 	hc.tips.Store(tips)
 	hc.writeCurrentTips(true)
