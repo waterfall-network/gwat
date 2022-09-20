@@ -574,11 +574,11 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 	tips := hc.GetTips(true)
 	for _, t := range *tips {
 		t.DagChainHashes = t.DagChainHashes.Difference(finHashes)
-		// if tips is synced - update finalized data
-		if t.LastFinalizedHash != (common.Hash{}) {
-			t.LastFinalizedHash = lastFinHash
-			t.LastFinalizedHeight = lastFinNr
-		}
+		//// if tips is synced - update finalized data
+		//if t.LastFinalizedHash != (common.Hash{}) {
+		//	t.LastFinalizedHash = lastFinHash
+		//	t.LastFinalizedHeight = lastFinNr
+		//}
 		tips.Add(t)
 	}
 	hc.tips.Store(tips)
@@ -608,55 +608,62 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 		// if has children - rm from curTips
 		if children := bc.ReadChildren(hash); len(children) > 0 {
 			rmTips = append(rmTips, hash)
+			continue
 		}
-		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
-			block := bc.GetBlockByHash(hash)
-			// if block not loaded
-			if block == nil {
-				unloadedHashes = append(unloadedHashes, hash)
-				continue
-			}
-			// if block is finalized - update curr curTips
-			if nr := rawdb.ReadFinalizedNumberByHash(bc.db, hash); nr != nil {
-				header := hc.GetHeader(hash)
-				dag.Hash = hash
-				dag.Height = header.Height
-				dag.Slot = header.Slot
-				dag.LastFinalizedHash = hash
-				dag.LastFinalizedHeight = *nr
-				hc.AddTips(dag, true)
-				continue
-			}
-			// if block exists - check all ancestors to finalized state
-			unloaded, loaded, finalized, graph, expCacheUp, err := bc.ExploreChainRecursive(hash, expCache)
-			if err != nil {
-				hc.RemoveTips(common.HashArray{hash}, true)
-				continue
-			}
-			expCache = expCacheUp
-			if dag.Height == 0 {
-				header := hc.GetHeader(hash)
-				dag.Height = header.Height
-				dag.Slot = header.Slot
-			}
-
+		//if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
+		block := bc.GetBlockByHash(hash)
+		// if block not loaded
+		if block == nil {
+			unloadedHashes = append(unloadedHashes, hash)
+			continue
+		}
+		header := hc.GetHeader(hash)
+		// if block is finalized - update curr curTips
+		if header.Nr() > 0 && header.Height != 0 && header.Hash() != hc.genesisHeader.Hash() {
 			dag.Hash = hash
-			chain := dag.DagChainHashes
-			chain = chain.Concat(unloaded)
-			chain = chain.Concat(loaded)
-			chain = chain.Difference(finalized)
-			// bad order of hashes
-			dag.DagChainHashes = chain.Difference(common.HashArray{hash})
-			// if curTips synchronized
-			if len(unloaded) == 0 {
-				dag.LastFinalizedHash = bc.GetLastFinalizedBlock().Hash()
-				dag.LastFinalizedHeight = bc.GetLastFinalizedNumber()
-				dag.DagChainHashes = *graph.GetDagChainHashes()
-				hc.AddTips(dag, true)
-			} else {
-				log.Warn("Unknown blocks detected", "hashes", unloaded)
-			}
+			dag.Height = header.Height
+			dag.Slot = header.Slot
+			dag.LastFinalizedHash = header.LFHash
+			dag.LastFinalizedHeight = header.LFNumber
+			//dag.LastFinalizedHash = hash
+			//dag.LastFinalizedHeight = *nr
+			hc.AddTips(dag, true)
+			continue
 		}
+		// if block exists - check all ancestors to finalized state
+		unloaded, loaded, finalized, graph, expCacheUp, err := bc.ExploreChainRecursive(hash, expCache)
+		if err != nil {
+			hc.RemoveTips(common.HashArray{hash}, true)
+			continue
+		}
+		expCache = expCacheUp
+		if dag.Height == 0 {
+			dag.Height = header.Height
+			dag.Slot = header.Slot
+		}
+
+		dag.Hash = hash
+		chain := dag.DagChainHashes
+		chain = chain.Concat(unloaded)
+		chain = chain.Concat(loaded)
+		chain = chain.Difference(finalized)
+
+		// bad order of hashes
+		dag.DagChainHashes = chain.Difference(common.HashArray{hash})
+		dag.LastFinalizedHash = header.LFHash
+		dag.LastFinalizedHeight = header.LFNumber
+		dag.DagChainHashes = *graph.GetDagChainHashes()
+		hc.AddTips(dag, true)
+		// if curTips synchronized
+		if len(unloaded) == 0 {
+			//dag.LastFinalizedHash = bc.GetLastFinalizedBlock().Hash()
+			//dag.LastFinalizedHeight = bc.GetLastFinalizedNumber()
+			//dag.DagChainHashes = *graph.GetDagChainHashes()
+			//hc.AddTips(dag, true)
+		} else {
+			log.Warn("Unknown blocks detected", "hashes", unloaded)
+		}
+		//}
 	}
 	hc.RemoveTips(rmTips, true)
 
