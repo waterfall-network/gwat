@@ -3116,7 +3116,7 @@ func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
 	tipsHashes := common.HashArray{}
 	tips := bc.hc.GetTips()
 	for hash, dag := range *tips {
-		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
+		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) && dag.Hash != bc.genesisBlock.Hash() {
 			tipsHashes = append(tipsHashes, hash)
 		}
 	}
@@ -3268,7 +3268,7 @@ func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash commo
 func (bc *BlockChain) GetTips() types.Tips {
 	tips := types.Tips{}
 	for hash, dag := range *bc.hc.GetTips() {
-		if dag != nil && dag.LastFinalizedHash != (common.Hash{}) {
+		if dag != nil && dag.LastFinalizedHash != (common.Hash{}) || dag.Hash == bc.genesisBlock.Hash() {
 			tips[hash] = dag
 		}
 	}
