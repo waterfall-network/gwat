@@ -98,6 +98,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 	for _, slot := range slots {
 		spine := spinesMap[slot]
 		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
+
 		if len(orderedChain) == 0 {
 			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
 			continue

@@ -187,6 +187,8 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 		}()
 	}
 
+	d.bc.WriteCreators(data.Creators, data.Slot)
+
 	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
 	res := &ConsensusResult{
 		Error:      nil,
