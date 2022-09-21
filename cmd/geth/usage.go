@@ -74,19 +74,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.DeveloperPeriodFlag,
 		},
 	},
-	//{
-	//	Name: "ETHASH",
-	//	Flags: []cli.Flag{
-	//		utils.EthashCacheDirFlag,
-	//		utils.EthashCachesInMemoryFlag,
-	//		utils.EthashCachesOnDiskFlag,
-	//		utils.EthashCachesLockMmapFlag,
-	//		utils.EthashDatasetDirFlag,
-	//		utils.EthashDatasetsInMemoryFlag,
-	//		utils.EthashDatasetsOnDiskFlag,
-	//		utils.EthashDatasetsLockMmapFlag,
-	//	},
-	//},
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{

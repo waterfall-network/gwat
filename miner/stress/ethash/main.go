@@ -50,8 +50,6 @@ func main() {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
-	//// Pre-generate the ethash mining DAG so we don't race
-	//ethash.MakeDataset(1, ethconfig.Defaults.Ethash.DatasetDir)
 
 	// Create an Ethash network based off of the Ropsten config
 	genesis := makeGenesis(faucets)
@@ -175,7 +173,6 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		DatabaseHandles: 256,
 		TxPool:          core.DefaultTxPoolConfig,
 		GPO:             ethconfig.Defaults.GPO,
-		//Ethash:          ethconfig.Defaults.Ethash,
 	})
 	if err != nil {
 		return nil, nil, err
