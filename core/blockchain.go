@@ -36,13 +36,13 @@ import (
 	"github.com/waterfall-foundation/gwat/core/state/snapshot"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/token/operation"
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/internal/syncx"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/token/operation"
 	"github.com/waterfall-foundation/gwat/trie"
 )
 
@@ -1811,7 +1811,7 @@ func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blo
 
 	for _, block := range chain {
 		if len(block.ParentHashes()) == 0 {
-			log.Warn("block without PHs", "hash", block.Hash().Hex())
+			log.Warn("Block without parents", "hash", block.Hash().Hex())
 			invalid = append(invalid, block)
 			continue
 		}
@@ -1825,7 +1825,7 @@ func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blo
 				}
 
 				if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
-					log.Warn("invalid parent found", "hash", block.Hash().Hex(), "parent hash", parent.Hash().Hex(), "height", block.Height(), "parent height", parent.Height(), "slot", block.Slot(), "parent slot", parent.Slot())
+					log.Warn("Invalid parent found", "hash", block.Hash().Hex(), "parent hash", parent.Hash().Hex(), "height", block.Height(), "parent height", parent.Height(), "slot", block.Slot(), "parent slot", parent.Slot())
 					invalid = append(invalid, block)
 					return
 				}
@@ -1844,19 +1844,19 @@ func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blo
 
 func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
 	if len(block.ParentHashes()) == 0 {
-		log.Warn("block without PHs", "hash", block.Hash().Hex())
+		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
 	}
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetBlockByHash(parentHash)
 
 		if parent == nil {
-			log.Warn("block with unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
+			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
 			return false, ErrInsertUncompletedDag
 		}
 
 		if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
-			log.Warn("invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
+			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
 			return false, nil
 		}
 	}
@@ -1877,13 +1877,13 @@ func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
 
 		intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
 		if err != nil {
-			log.Warn("verifyBlock: IntrinsicGas error", "err", err)
+			log.Warn("Block verification: intrinsic gas error", "err", err)
 			return false, nil
 		}
 		intrGasSum += intrGas
 	}
 	if intrGasSum > block.GasLimit() {
-		log.Warn("IntrinsicGas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
+		log.Warn("Block verification: intrinsic gas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
 		return false, nil
 	}
 
@@ -1898,7 +1898,7 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 				continue
 			}
 			if bc.IsAncestorRecursive(parent, pparent.Hash()) {
-				log.Warn("recursive parents", "hash1", parent.Hash().Hex(), "hash2", pparent.Hash().Hex())
+				log.Warn("Block verification: recursive parents", "hash1", parent.Hash().Hex(), "hash2", pparent.Hash().Hex())
 				return false
 			}
 		}
