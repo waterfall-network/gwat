@@ -79,6 +79,14 @@ func (d *Dag) Creator() *creator.Creator {
 // 3. new block creation
 // 4. return result
 func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *ConsensusResult {
+	//skip if synchronising
+	if d.eth.Downloader().Synchronising() {
+		errStr := creator.ErrSynchronization.Error()
+		return &ConsensusResult{
+			Error: &errStr,
+		}
+	}
+
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 
@@ -198,6 +206,14 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 // 1. blocks finalization
 // 2. new block creation
 func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *FinalizationResult {
+	//skip if synchronising
+	if d.eth.Downloader().Synchronising() {
+		errStr := creator.ErrSynchronization.Error()
+		return &FinalizationResult{
+			Error: &errStr,
+		}
+	}
+
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 
@@ -292,6 +308,14 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 
 // HandleGetCandidates collect next finalization candidates
 func (d *Dag) HandleGetCandidates(slot uint64) *CandidatesResult {
+	//skip if synchronising
+	if d.eth.Downloader().Synchronising() {
+		errStr := creator.ErrSynchronization.Error()
+		return &CandidatesResult{
+			Error: &errStr,
+		}
+	}
+
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 

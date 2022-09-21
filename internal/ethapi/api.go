@@ -126,8 +126,11 @@ func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.Decim
 func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 	progress := s.b.SyncProgress()
 
-	// Return not syncing if the synchronisation already completed
-	if progress.CurrentBlock >= progress.HighestBlock {
+	//// Return not syncing if the synchronisation already completed
+	//if progress.CurrentBlock >= progress.HighestBlock {
+	//	return false, nil
+	//}
+	if progress.Stage == "none" {
 		return false, nil
 	}
 	// Otherwise gather the block sync stats
@@ -137,6 +140,7 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 		"highestBlock":  hexutil.Uint64(progress.HighestBlock),
 		"pulledStates":  hexutil.Uint64(progress.PulledStates),
 		"knownStates":   hexutil.Uint64(progress.KnownStates),
+		"stage":         progress.Stage,
 	}, nil
 }
 

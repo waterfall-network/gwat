@@ -113,7 +113,9 @@ type Downloader struct {
 
 	// Status
 	synchroniseMock func(id string, hash common.HashArray) error // Replacement for synchronise during testing
-	synchronising   int32
+	finSyncing      int32
+	dagSyncing      int32
+	headSyncing     int32
 	notified        int32
 	committed       int32
 	ancientLimit    uint64 // The maximum block number which can be regarded as ancient data.
@@ -299,18 +301,45 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	default:
 		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.blockchain != nil, "mode", mode)
 	}
+
+	stage := "none"
+	switch {
+	case d.FinSynchronising():
+		stage = "finalized"
+	case d.DagSynchronising():
+		stage = "dag"
+	case d.HeadSynchronising():
+		stage = "head"
+	}
+
 	return ethereum.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
 		CurrentBlock:  current,
 		HighestBlock:  d.syncStatsChainHeight,
 		PulledStates:  d.syncStatsState.processed,
 		KnownStates:   d.syncStatsState.processed + d.syncStatsState.pending,
+		Stage:         stage,
 	}
 }
 
-// Synchronising returns whether the downloader is currently retrieving blocks.
+// Synchronising returns whether the downloader is currently synchronising.
 func (d *Downloader) Synchronising() bool {
-	return atomic.LoadInt32(&d.synchronising) > 0
+	return d.FinSynchronising() || d.DagSynchronising() || d.HeadSynchronising()
+}
+
+// FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
+func (d *Downloader) FinSynchronising() bool {
+	return atomic.LoadInt32(&d.finSyncing) > 0
+}
+
+// DagSynchronising returns whether the downloader is currently retrieving dag chain blocks.
+func (d *Downloader) DagSynchronising() bool {
+	return atomic.LoadInt32(&d.dagSyncing) > 0
+}
+
+// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
+func (d *Downloader) HeadSynchronising() bool {
+	return atomic.LoadInt32(&d.headSyncing) > 0
 }
 
 // RegisterPeer injects a new download peer into the set of block source to be
@@ -394,10 +423,10 @@ func (d *Downloader) synchronise(id string, dag common.HashArray, lastFinNr uint
 	//}
 
 	// Make sure only one goroutine is ever allowed past this point at once
-	if !atomic.CompareAndSwapInt32(&d.synchronising, 0, 1) {
+	if !atomic.CompareAndSwapInt32(&d.finSyncing, 0, 1) {
 		return errBusy
 	}
-	defer atomic.StoreInt32(&d.synchronising, 0)
+	defer atomic.StoreInt32(&d.finSyncing, 0)
 
 	// Post a user notification of the sync (only once per session)
 	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
@@ -635,7 +664,17 @@ func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastF
 
 // syncWithPeerDagChain downloads and set on current node dag chain from remote peer
 func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
+	// Make sure only one goroutine is ever allowed past this point at once
+	if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
+		return errBusy
+	}
 	defer func(start time.Time) {
+		atomic.StoreInt32(&d.dagSyncing, 0)
+
+		////todo
+		//if !atomic.CompareAndSwapInt32(&d.headSyncing, 0, 1) {
+		//	//return errBusy
+		//}
 		log.Debug("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 
@@ -718,7 +757,19 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 
 // syncWithPeerUnknownDagBlocks if remote peer has unknown dag blocks only sync such blocks only
 func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.HashArray) (err error) {
+	// Make sure only one goroutine is ever allowed past this point at once
+	if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
+		return errBusy
+	}
+
 	defer func(start time.Time) {
+		atomic.StoreInt32(&d.dagSyncing, 0)
+
+		////todo
+		//if !atomic.CompareAndSwapInt32(&d.headSyncing, 0, 1) {
+		//	//return errBusy
+		//}
+
 		log.Debug("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 
