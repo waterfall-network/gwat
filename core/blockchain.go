@@ -36,6 +36,7 @@ import (
 	"github.com/waterfall-foundation/gwat/core/state/snapshot"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/token/operation"
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/internal/syncx"
@@ -1803,6 +1804,108 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	return it.index, err
 }
 
+func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blocks, unknown common.HashArray) {
+	valid = make(types.Blocks, 0)
+	invalid = make(types.Blocks, 0)
+	unknown = make(common.HashArray, 0)
+
+	for _, block := range chain {
+		if len(block.ParentHashes()) == 0 {
+			log.Warn("block without PHs", "hash", block.Hash().Hex())
+			invalid = append(invalid, block)
+			continue
+		}
+		func() {
+			for _, parentHash := range block.ParentHashes() {
+				parent := bc.GetBlockByHash(parentHash)
+
+				if parent == nil {
+					unknown = append(unknown, parentHash)
+					continue
+				}
+
+				if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
+					log.Warn("invalid parent found", "hash", block.Hash().Hex(), "parent hash", parent.Hash().Hex(), "height", block.Height(), "parent height", parent.Height(), "slot", block.Slot(), "parent slot", parent.Slot())
+					invalid = append(invalid, block)
+					return
+				}
+			}
+			if !bc.verifyBlockParents(block) {
+				invalid = append(invalid, block)
+				return
+			}
+
+			valid = append(valid, block)
+		}()
+
+	}
+	return valid, invalid, unknown
+}
+
+func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
+	if len(block.ParentHashes()) == 0 {
+		log.Warn("block without PHs", "hash", block.Hash().Hex())
+		return false, nil
+	}
+	for _, parentHash := range block.ParentHashes() {
+		parent := bc.GetBlockByHash(parentHash)
+
+		if parent == nil {
+			log.Warn("block with unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
+			return false, ErrInsertUncompletedDag
+		}
+
+		if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
+			log.Warn("invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
+			return false, nil
+		}
+	}
+
+	intrGasSum := uint64(0)
+	for _, tx := range block.Transactions() {
+		isTokenOp := false
+		if _, err := operation.GetOpCode(tx.Data()); err == nil {
+			isTokenOp = true
+		}
+
+		var txData []byte
+		if !isTokenOp {
+			txData = tx.Data()
+		}
+
+		contractCreation := tx.To() == nil && !isTokenOp
+
+		intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
+		if err != nil {
+			log.Warn("verifyBlock: IntrinsicGas error", "err", err)
+			return false, nil
+		}
+		intrGasSum += intrGas
+	}
+	if intrGasSum > block.GasLimit() {
+		log.Warn("IntrinsicGas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
+		return false, nil
+	}
+
+	return bc.verifyBlockParents(block), nil
+}
+
+func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
+	parents := bc.GetBlocksByHashes(block.ParentHashes())
+	for i, parent := range parents {
+		for j, pparent := range parents {
+			if i == j {
+				continue
+			}
+			if bc.IsAncestorRecursive(parent, pparent.Hash()) {
+				log.Warn("recursive parents", "hash1", parent.Hash().Hex(), "hash2", pparent.Hash().Hex())
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // insertPropagatedBlocks inserts propagated block
 func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals bool, stateOnly bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up
@@ -1894,6 +1997,13 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		if BadHashes[block.Hash()] {
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
+		}
+
+		if ok, err := bc.verifyBlock(block); !ok {
+			if err == nil {
+				continue
+			}
+			return 0, err
 		}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
