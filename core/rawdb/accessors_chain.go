@@ -257,22 +257,22 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	return header
 }
 
-func ReadCreators(db ethdb.Reader, slot uint64) []common.Address {
+func ReadCreators(db ethdb.Reader, slot uint64) *[]common.Address {
 	data := ReadCreatorsRlp(db, slot)
-
-	if len(data) == 0 {
+	if data == nil {
 		return nil
 	}
-
+	if len(data) == 0 {
+		return new([]common.Address)
+	}
 	addrsCount := len(data) / common.AddressLength
-
 	addresses := make([]common.Address, 0, addrsCount)
 	for i := 0; i < addrsCount; i++ {
 		addr := common.Address{}
 		copy(addr[:], data[i*common.AddressLength:(i+1)*common.AddressLength])
 		addresses = append(addresses, addr)
 	}
-	return addresses
+	return &addresses
 }
 
 func WriteCreators(db ethdb.KeyValueWriter, slot uint64, addrs []common.Address) {

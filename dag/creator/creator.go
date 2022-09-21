@@ -1006,9 +1006,7 @@ func (c *Creator) isAddressAssigned(address common.Address) bool {
 		currMiner    = c.coinbase
 		creators     = c.getAssignment().Creators
 		creatorCount = len(creators)
-		countVal     = big.NewInt(int64(creatorCount))
 		creatorNr    = int64(-1)
-		val          = address.Hash().Big()
 	)
 	if creatorCount == 0 {
 		return false
@@ -1019,8 +1017,7 @@ func (c *Creator) isAddressAssigned(address common.Address) bool {
 			break
 		}
 	}
-	pos := new(big.Int).Mod(val, countVal).Int64()
-	return pos == creatorNr
+	return core.IsAddressAssigned(address, creators, creatorNr)
 }
 
 // getAssignment returns list of creators and slot

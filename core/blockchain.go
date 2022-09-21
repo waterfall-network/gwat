@@ -92,6 +92,7 @@ const (
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
 	recommitCacheLimit  = 512
+	creatorsCacheLimit  = 64
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -204,6 +205,7 @@ type BlockChain struct {
 	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
 	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
 	recommitCache *lru.Cache     // Cache for the most recent states of recommited blocks.
+	creatorsCache *lru.Cache
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -233,6 +235,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	recommitCache, _ := lru.New(recommitCacheLimit)
+	creatorsCache, _ := lru.New(creatorsCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -252,6 +255,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		blockCache:    blockCache,
 		txLookupCache: txLookupCache,
 		recommitCache: recommitCache,
+		creatorsCache: creatorsCache,
 		futureBlocks:  futureBlocks,
 		engine:        engine,
 		vmConfig:      vmConfig,
@@ -1466,10 +1470,6 @@ func (bc *BlockChain) WriteCreators(creators []common.Address, slot uint64) {
 	rawdb.WriteCreators(bc.db, slot, creators)
 }
 
-func (bc *BlockChain) ReadCreators(slot uint64) []common.Address {
-	return rawdb.ReadCreators(bc.db, slot)
-}
-
 // addFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
@@ -1555,7 +1555,8 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 	return n, err
 }
 
-func isAddressAssigned(address common.Address, creators []common.Address, creatorNr int64) bool {
+// IsAddressAssigned  checks if miner is allowed to add transaction from that address
+func IsAddressAssigned(address common.Address, creators []common.Address, creatorNr int64) bool {
 	var (
 		creatorCount = len(creators)
 		countVal     = big.NewInt(int64(creatorCount))
@@ -1931,31 +1932,38 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 
 // insertPropagatedBlocks inserts propagated block
 func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals bool, stateOnly bool) (int, error) {
-	slotCreators := make(map[uint64][]common.Address)
-
-	for _, block := range chain { // get creators list from DB
-		if _, exists := slotCreators[block.Slot()]; exists {
-			continue
-		}
-		slotCreators[block.Slot()] = bc.ReadCreators(block.Slot())
-	}
-
 	deletedBlocks := 0
+	// check creators
 	for i := range chain {
 		blockIndex := i - deletedBlocks
-
 		block := chain[blockIndex]
-		creators := slotCreators[block.Slot()]
 
-		if len(creators) == 0 {
+		creators := bc.GetCreators(block.Slot())
+		//if no record - skip (actual fo dag sync)
+		if creators == nil {
 			continue
 		}
-
 		blockCreator := block.Header().Coinbase
-		if contains, index := common.Contains(creators, blockCreator); !contains || !isAddressAssigned(block.Header().Coinbase, slotCreators[block.Slot()], int64(index)) {
-			log.Warn("deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "assigned creators", creators)
+		contains, index := common.Contains(*creators, blockCreator)
+		if !contains {
+			log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
 			chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
 			deletedBlocks++
+		} else {
+			signer := types.LatestSigner(bc.chainConfig)
+			addrMap := map[common.Address]bool{}
+			for _, tx := range block.Body().Transactions {
+				from, _ := types.Sender(signer, tx)
+				addrMap[from] = true
+			}
+			for txFrom, _ := range addrMap {
+				if !IsAddressAssigned(txFrom, *creators, int64(index)) {
+					log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+					chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
+					deletedBlocks++
+					break
+				}
+			}
 		}
 	}
 
@@ -2054,7 +2062,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			if err == nil {
 				continue
 			}
-			return 0, err
+			return it.index, err
 		}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
