@@ -1,11 +1,10 @@
-package dag
+package types
 
 import (
 	"encoding/json"
 
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
-	_ "github.com/waterfall-foundation/gwat/dag/finalizer"
 )
 
 // ConsensusInfo represents data of consensus request

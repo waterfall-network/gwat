@@ -1308,6 +1308,35 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
 
+// WriteFinalizedBlock writes the block and all associated state to the database.
+func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
+	if !bc.chainmu.TryLock() {
+		return errInsertionInterrupted
+	}
+	defer bc.chainmu.Unlock()
+
+	block := bc.GetBlockByNumber(finNr)
+	block.SetNumber(nil)
+
+	batch := bc.db.NewBatch()
+	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
+
+	// update finalized number cache
+	bc.hc.numberCache.Remove(block.Hash())
+
+	bc.hc.headerCache.Remove(block.Hash())
+	bc.hc.headerCache.Add(block.Hash(), block.Header())
+
+	bc.blockCache.Remove(block.Hash())
+	bc.blockCache.Add(block.Hash(), block)
+
+	// Flush the whole batch into the disk, exit the node if failed
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to rollback block finalization", "finNr", finNr, "hash", block.Hash().Hex(), "err", err)
+	}
+	return nil
+}
+
 // WriteSyncDagBlock writes the dag block and all associated state to the database
 //for dag synchronization process
 func (bc *BlockChain) WriteSyncDagBlock(block *types.Block) (status int, err error) {
@@ -1466,8 +1495,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
-func (bc *BlockChain) WriteCreators(creators []common.Address, slot uint64) {
+func (bc *BlockChain) WriteCreators(slot uint64, creators []common.Address) {
 	rawdb.WriteCreators(bc.db, slot, creators)
+}
+
+func (bc *BlockChain) WriteBlockDag(blockDag *types.BlockDAG) {
+	rawdb.WriteBlockDag(bc.db, blockDag)
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
