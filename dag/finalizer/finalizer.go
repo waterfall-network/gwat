@@ -81,8 +81,8 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 	for _, spineHash := range *spines {
 		block := bc.GetBlockByHash(spineHash)
 		if block == nil {
-			log.Error("unknown spine hash", "spineHash", spineHash.Hex())
-			return ErrUnknownHash
+			log.Error("Block finalization failed", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
+			return ErrSpineNotFound
 		}
 		spinesMap[block.Slot()] = block
 	}
@@ -105,13 +105,26 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 		}
 		log.Info("Finalization spine chain calculated", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
+		if isHeadSync {
+			//validate blocks while head sync
+			for _, block := range orderedChain {
+				if ok, err := bc.VerifyBlock(block); !ok {
+					if err == nil {
+						err = ErrInvalidBlock
+					}
+					log.Error("Block finalization failed (validation)", "valid", ok, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+					return err
+				}
+			}
+		}
+
 		// blocks finalizing
 		for i, block := range orderedChain {
 			nr := lastFinNr + uint64(i) + 1
 			block.SetNumber(&nr)
 			isHead := i == len(orderedChain)-1
 			if err := f.finalizeBlock(nr, *block, isHead); err != nil {
-				log.Error("block finalization failed", "nr", i, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+				log.Error("Block finalization failed", "isHead", isHead, "nr", nr, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 				return err
 			}
 		}

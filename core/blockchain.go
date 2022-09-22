@@ -1865,45 +1865,8 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	return it.index, err
 }
 
-func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blocks, unknown common.HashArray) {
-	valid = make(types.Blocks, 0)
-	invalid = make(types.Blocks, 0)
-	unknown = make(common.HashArray, 0)
-
-	for _, block := range chain {
-		if len(block.ParentHashes()) == 0 {
-			log.Warn("Block without parents", "hash", block.Hash().Hex())
-			invalid = append(invalid, block)
-			continue
-		}
-		func() {
-			for _, parentHash := range block.ParentHashes() {
-				parent := bc.GetBlockByHash(parentHash)
-
-				if parent == nil {
-					unknown = append(unknown, parentHash)
-					continue
-				}
-
-				if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
-					log.Warn("Invalid parent found", "hash", block.Hash().Hex(), "parent hash", parent.Hash().Hex(), "height", block.Height(), "parent height", parent.Height(), "slot", block.Slot(), "parent slot", parent.Slot())
-					invalid = append(invalid, block)
-					return
-				}
-			}
-			if !bc.verifyBlockParents(block) {
-				invalid = append(invalid, block)
-				return
-			}
-
-			valid = append(valid, block)
-		}()
-
-	}
-	return valid, invalid, unknown
-}
-
-func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
+// VerifyBlock validate block
+func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
@@ -1965,7 +1928,7 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 				continue
 			}
 			if bc.IsAncestorRecursive(parent, pparent.Hash()) {
-				log.Warn("Block verification: recursive parents", "hash1", parent.Hash().Hex(), "hash2", pparent.Hash().Hex())
+				log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parent.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
 				return false
 			}
 		}
@@ -2101,7 +2064,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			return it.index, ErrBannedHash
 		}
 
-		if ok, err := bc.verifyBlock(block); !ok {
+		if ok, err := bc.VerifyBlock(block); !ok {
 			if err == nil {
 				continue
 			}

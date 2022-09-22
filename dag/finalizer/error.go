@@ -33,6 +33,9 @@ var (
 	// but related hashes does not match.
 	ErrBadFinalizedSequence = errors.New("sequence of candidates does not match to the sequence of finalized blocks")
 
-	// if bc.getBlock(hash) == nil
-	ErrUnknownHash = errors.New("unknown spine hash")
+	// ErrSpineNotFound if spine block not found
+	ErrSpineNotFound = errors.New("spine not found")
+
+	// ErrInvalidBlock if block validation failed
+	ErrInvalidBlock = errors.New("invalid block")
 )
