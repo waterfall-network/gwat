@@ -93,6 +93,7 @@ const (
 	TriesInMemory       = 128
 	recommitCacheLimit  = 512
 	creatorsCacheLimit  = 64
+	invBlocksCacheLimit = 512
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -197,15 +198,16 @@ type BlockChain struct {
 	lastFinalizedBlock     atomic.Value // Current last finalized block of the blockchain
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
 
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	blockCache    *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
-	recommitCache *lru.Cache     // Cache for the most recent states of recommited blocks.
-	creatorsCache *lru.Cache
+	stateCache         state.Database // State database to reuse between imports (contains state cache)
+	bodyCache          *lru.Cache     // Cache for the most recent block bodies
+	bodyRLPCache       *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache      *lru.Cache     // Cache for the most recent receipts per block
+	blockCache         *lru.Cache     // Cache for the most recent entire blocks
+	txLookupCache      *lru.Cache     // Cache for the most recent transaction lookup data.
+	futureBlocks       *lru.Cache     // future blocks are blocks added for later processing
+	recommitCache      *lru.Cache     // Cache for the most recent states of recommited blocks.
+	creatorsCache      *lru.Cache     // Cache for the assigned creators
+	invalidBlocksCache *lru.Cache     // Cache for the blocks with unknown parents
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -236,6 +238,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	recommitCache, _ := lru.New(recommitCacheLimit)
 	creatorsCache, _ := lru.New(creatorsCacheLimit)
+	invBlocksCache, _ := lru.New(invBlocksCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -247,18 +250,19 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:          make(chan struct{}),
-		chainmu:       syncx.NewClosableMutex(),
-		bodyCache:     bodyCache,
-		bodyRLPCache:  bodyRLPCache,
-		receiptsCache: receiptsCache,
-		blockCache:    blockCache,
-		txLookupCache: txLookupCache,
-		recommitCache: recommitCache,
-		creatorsCache: creatorsCache,
-		futureBlocks:  futureBlocks,
-		engine:        engine,
-		vmConfig:      vmConfig,
+		quit:               make(chan struct{}),
+		chainmu:            syncx.NewClosableMutex(),
+		bodyCache:          bodyCache,
+		bodyRLPCache:       bodyRLPCache,
+		receiptsCache:      receiptsCache,
+		blockCache:         blockCache,
+		txLookupCache:      txLookupCache,
+		recommitCache:      recommitCache,
+		creatorsCache:      creatorsCache,
+		invalidBlocksCache: invBlocksCache,
+		futureBlocks:       futureBlocks,
+		engine:             engine,
+		vmConfig:           vmConfig,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -1908,6 +1912,10 @@ func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
 		parent := bc.GetBlockByHash(parentHash)
 
 		if parent == nil {
+			if _, ok := bc.invalidBlocksCache.Get(block.Hash()); ok {
+				return false, nil
+			}
+			bc.invalidBlocksCache.Add(block.Hash(), struct{}{})
 			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
 			return false, ErrInsertUncompletedDag
 		}
@@ -1917,6 +1925,8 @@ func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
 			return false, nil
 		}
 	}
+
+	bc.invalidBlocksCache.Remove(block.Hash())
 
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
