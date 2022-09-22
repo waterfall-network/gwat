@@ -84,7 +84,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 	case *eth.NewBlockHashesPacket:
 		// skip if synchronizing
-		if h.downloader.Synchronising() {
+		if h.downloader.FinSynchronising() {
 			return nil
 		}
 		hashes, numbers := packet.Unpack()
@@ -92,7 +92,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 	case *eth.NewBlockPacket:
 		// skip if synchronizing
-		if h.downloader.Synchronising() {
+		if h.downloader.FinSynchronising() {
 			return nil
 		}
 		return h.handleBlockBroadcast(peer, packet.Block)

@@ -22,11 +22,11 @@ import (
 	"sync"
 
 	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
 	"github.com/waterfall-foundation/gwat/params"
 )
 
@@ -117,7 +117,8 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	// start := time.Now()
 	// defer func() { fmt.Printf("test chain generated in %v\n", time.Since(start)) }()
 
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
+	db := rawdb.NewMemoryDatabase()
+	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, sealer.New(db), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
 		if heavy {

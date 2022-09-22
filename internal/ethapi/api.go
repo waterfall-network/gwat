@@ -33,7 +33,6 @@ import (
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
 	"github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/consensus/misc"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/state"
@@ -126,8 +125,11 @@ func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.Decim
 func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 	progress := s.b.SyncProgress()
 
-	// Return not syncing if the synchronisation already completed
-	if progress.CurrentBlock >= progress.HighestBlock {
+	//// Return not syncing if the synchronisation already completed
+	//if progress.CurrentBlock >= progress.HighestBlock {
+	//	return false, nil
+	//}
+	if progress.Stage == "none" {
 		return false, nil
 	}
 	// Otherwise gather the block sync stats
@@ -137,6 +139,7 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 		"highestBlock":  hexutil.Uint64(progress.HighestBlock),
 		"pulledStates":  hexutil.Uint64(progress.PulledStates),
 		"knownStates":   hexutil.Uint64(progress.KnownStates),
+		"stage":         progress.Stage,
 	}, nil
 }
 
@@ -1166,22 +1169,23 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
-		"number":           head.Number,
 		"hash":             head.Hash(),
-		"parentHashes":     head.ParentHashes,
 		"slot":             hexutil.Uint64(head.Slot),
 		"height":           hexutil.Uint64(head.Height),
-		"mixHash":          head.MixDigest,
-		"logsBloom":        head.Bloom,
-		"stateRoot":        head.Root,
+		"number":           head.Number,
+		"parentHashes":     head.ParentHashes,
+		"lfHash":           head.LFHash,
+		"lfNumber":         hexutil.Uint64(head.LFNumber),
 		"miner":            head.Coinbase,
-		"extraData":        hexutil.Bytes(head.Extra),
-		"size":             hexutil.Uint64(head.Size()),
-		"gasLimit":         hexutil.Uint64(head.GasLimit),
-		"gasUsed":          hexutil.Uint64(head.GasUsed),
-		"timestamp":        hexutil.Uint64(head.Time),
 		"transactionsRoot": head.TxHash,
+		"gasLimit":         hexutil.Uint64(head.GasLimit),
+		"timestamp":        hexutil.Uint64(head.Time),
+		"extraData":        hexutil.Bytes(head.Extra),
+		"stateRoot":        head.Root,
 		"receiptsRoot":     head.ReceiptHash,
+		"gasUsed":          hexutil.Uint64(head.GasUsed),
+		"logsBloom":        head.Bloom,
+		"size":             hexutil.Uint64(head.Size()),
 	}
 
 	if head.BaseFee != nil {
@@ -1962,15 +1966,6 @@ func (api *PublicDebugAPI) PrintBlock(ctx context.Context, number uint64) (strin
 		return "", fmt.Errorf("block #%d not found", number)
 	}
 	return spew.Sdump(block), nil
-}
-
-// SeedHash retrieves the seed hash of a block.
-func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string, error) {
-	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
-	if block == nil {
-		return "", fmt.Errorf("block #%d not found", number)
-	}
-	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
 }
 
 // PrivateDebugAPI is the collection of Ethereum APIs exposed over the private

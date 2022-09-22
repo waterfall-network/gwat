@@ -61,6 +61,11 @@ func ReadCodeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	return data
 }
 
+func ReadCreatorInfoWithPrefix(db ethdb.KeyValueReader, slot uint64) []byte {
+	data, _ := db.Get(creatorKey(slot))
+	return data
+}
+
 // WriteCode writes the provided contract code database.
 func WriteCode(db ethdb.KeyValueWriter, hash common.Hash, code []byte) {
 	if err := db.Put(codeKey(hash), code); err != nil {

@@ -25,11 +25,11 @@ import (
 
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
 	"github.com/waterfall-foundation/gwat/les/downloader"
 	"github.com/waterfall-foundation/gwat/light"
 	"github.com/waterfall-foundation/gwat/p2p"
@@ -640,7 +640,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	test(tx3, false, light.TxStatus{Status: core.TxStatusPending})
 
 	// generate and add a block with tx1 and tx2 included
-	gchain, _ := core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), server.db, 1, func(i int, block *core.BlockGen) {
+	gchain, _ := core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), sealer.New(server.db), server.db, 1, func(i int, block *core.BlockGen) {
 		block.AddTx(tx1)
 		block.AddTx(tx2)
 	})
@@ -649,12 +649,12 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	}
 	// wait until TxPool processes the inserted block
 	for i := 0; i < 10; i++ {
-		if pending, _ := server.handler.txpool.Stats(); pending == 1 {
+		if pending, _, _ := server.handler.txpool.Stats(); pending == 1 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if pending, _ := server.handler.txpool.Stats(); pending != 1 {
+	if pending, _, _ := server.handler.txpool.Stats(); pending != 1 {
 		t.Fatalf("pending count mismatch: have %d, want 1", pending)
 	}
 	// Discard new block announcement
@@ -668,18 +668,18 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	test(tx2, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, Index: 1}})
 
 	// create a reorg that rolls them back
-	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), server.db, 2, func(i int, block *core.BlockGen) {})
+	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), sealer.New(server.db), server.db, 2, func(i int, block *core.BlockGen) {})
 	if _, err := chain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
 	// wait until TxPool processes the reorg
 	for i := 0; i < 10; i++ {
-		if pending, _ := server.handler.txpool.Stats(); pending == 3 {
+		if pending, _, _ := server.handler.txpool.Stats(); pending == 3 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if pending, _ := server.handler.txpool.Stats(); pending != 3 {
+	if pending, _, _ := server.handler.txpool.Stats(); pending != 3 {
 		t.Fatalf("pending count mismatch: have %d, want 3", pending)
 	}
 	// Discard new block announcement

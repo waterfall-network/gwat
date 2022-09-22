@@ -35,6 +35,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/waterfall-foundation/gwat/accounts"
 	"github.com/waterfall-foundation/gwat/accounts/keystore"
 	"github.com/waterfall-foundation/gwat/cmd/utils"
@@ -54,8 +56,6 @@ import (
 	"github.com/waterfall-foundation/gwat/signer/fourbyte"
 	"github.com/waterfall-foundation/gwat/signer/rules"
 	"github.com/waterfall-foundation/gwat/signer/storage"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -881,7 +881,6 @@ func testExternalUI(api *core.SignerAPI) {
 			GasUsed:      1338,
 			Time:         1338,
 			Extra:        []byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
-			MixDigest:    common.HexToHash("0x0000H45H"),
 		}
 		cliqueRlp, err := rlp.EncodeToBytes(cliqueHeader)
 		if err != nil {

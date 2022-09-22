@@ -25,7 +25,6 @@ import (
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
 	math2 "github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/params"
 )
@@ -59,8 +58,6 @@ type alethGenesisSpec struct {
 	} `json:"params"`
 
 	Genesis struct {
-		Difficulty   *hexutil.Big     `json:"difficulty"`
-		MixHash      common.Hash      `json:"mixHash"`
 		Author       common.Address   `json:"author"`
 		Timestamp    hexutil.Uint64   `json:"timestamp"`
 		ParentHashes common.HashArray `json:"parentHashes"`
@@ -94,13 +91,13 @@ type alethGenesisSpecLinearPricing struct {
 // newAlethGenesisSpec converts a go-ethereum genesis block into a Aleth-specific
 // chain specification format.
 func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSpec, error) {
-	// Only ethash is currently supported between go-ethereum and aleth
-	if genesis.Config.Ethash == nil {
-		return nil, errors.New("unsupported consensus engine")
-	}
+	//// Only ethash is currently supported between go-ethereum and aleth
+	//if genesis.Config.Ethash == nil {
+	//	return nil, errors.New("unsupported consensus engine")
+	//}
 	// Reconstruct the chain spec in Aleth format
 	spec := &alethGenesisSpec{
-		SealEngine: "Ethash",
+		//SealEngine: "Ethash",
 	}
 	// Some defaults
 	spec.Params.AccountStartNonce = 0
@@ -140,9 +137,9 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.MaxGasLimit = (hexutil.Uint64)(math.MaxInt64)
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
 	spec.Params.DurationLimit = (*math2.HexOrDecimal256)(params.DurationLimit)
-	spec.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
+	//spec.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
 
-	spec.Genesis.MixHash = genesis.Mixhash
+	//spec.Genesis.MixHash = genesis.Mixhash
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
 	spec.Genesis.ParentHashes = genesis.ParentHashes
@@ -224,17 +221,17 @@ type parityChainSpec struct {
 	Name    string `json:"name"`
 	Datadir string `json:"dataDir"`
 	Engine  struct {
-		Ethash struct {
-			Params struct {
-				MinimumDifficulty      *hexutil.Big      `json:"minimumDifficulty"`
-				DifficultyBoundDivisor *hexutil.Big      `json:"difficultyBoundDivisor"`
-				DurationLimit          *hexutil.Big      `json:"durationLimit"`
-				BlockReward            map[string]string `json:"blockReward"`
-				DifficultyBombDelays   map[string]string `json:"difficultyBombDelays"`
-				HomesteadTransition    hexutil.Uint64    `json:"homesteadTransition"`
-				EIP100bTransition      hexutil.Uint64    `json:"eip100bTransition"`
-			} `json:"params"`
-		} `json:"Ethash"`
+		//Ethash struct {
+		//	Params struct {
+		//		MinimumDifficulty      *hexutil.Big      `json:"minimumDifficulty"`
+		//		DifficultyBoundDivisor *hexutil.Big      `json:"difficultyBoundDivisor"`
+		//		DurationLimit          *hexutil.Big      `json:"durationLimit"`
+		//		BlockReward            map[string]string `json:"blockReward"`
+		//		DifficultyBombDelays   map[string]string `json:"difficultyBombDelays"`
+		//		HomesteadTransition    hexutil.Uint64    `json:"homesteadTransition"`
+		//		EIP100bTransition      hexutil.Uint64    `json:"eip100bTransition"`
+		//	} `json:"params"`
+		//} `json:"Ethash"`
 	} `json:"engine"`
 
 	Params struct {
@@ -270,7 +267,7 @@ type parityChainSpec struct {
 	Genesis struct {
 		Seal struct {
 			Ethereum struct {
-				MixHash hexutil.Bytes `json:"mixHash"`
+				//MixHash hexutil.Bytes `json:"mixHash"`
 			} `json:"ethereum"`
 		} `json:"seal"`
 
@@ -356,24 +353,24 @@ type parityChainSpecVersionedPricing struct {
 // newParityChainSpec converts a go-ethereum genesis block into a Parity specific
 // chain specification format.
 func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []string) (*parityChainSpec, error) {
-	// Only ethash is currently supported between go-ethereum and Parity
-	if genesis.Config.Ethash == nil {
-		return nil, errors.New("unsupported consensus engine")
-	}
+	//// Only ethash is currently supported between go-ethereum and Parity
+	//if genesis.Config.Ethash == nil {
+	//	return nil, errors.New("unsupported consensus engine")
+	//}
 	// Reconstruct the chain spec in Parity's format
 	spec := &parityChainSpec{
 		Name:    network,
 		Nodes:   bootnodes,
 		Datadir: strings.ToLower(network),
 	}
-	spec.Engine.Ethash.Params.BlockReward = make(map[string]string)
-	spec.Engine.Ethash.Params.DifficultyBombDelays = make(map[string]string)
-	// Frontier
-	spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
-	spec.Engine.Ethash.Params.BlockReward["0x0"] = hexutil.EncodeBig(ethash.FrontierBlockReward)
-
-	// Homestead
-	spec.Engine.Ethash.Params.HomesteadTransition = hexutil.Uint64(genesis.Config.HomesteadBlock.Uint64())
+	//spec.Engine.Ethash.Params.BlockReward = make(map[string]string)
+	//spec.Engine.Ethash.Params.DifficultyBombDelays = make(map[string]string)
+	//// Frontier
+	//spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
+	//spec.Engine.Ethash.Params.BlockReward["0x0"] = hexutil.EncodeBig(ethash.FrontierBlockReward)
+	//
+	//// Homestead
+	//spec.Engine.Ethash.Params.HomesteadTransition = hexutil.Uint64(genesis.Config.HomesteadBlock.Uint64())
 
 	// Tangerine Whistle : 150
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-608.md
@@ -414,7 +411,6 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	// Disable this one
 	spec.Params.EIP98Transition = math.MaxInt64
 
-	spec.Genesis.Seal.Ethereum.MixHash = genesis.Mixhash[:]
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
 	spec.Genesis.ParentHashes = genesis.ParentHashes
@@ -547,10 +543,10 @@ func (spec *parityChainSpec) setPrecompile(address byte, data *parityChainSpecBu
 }
 
 func (spec *parityChainSpec) setByzantium(num *big.Int) {
-	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ByzantiumBlockReward)
-	spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(3000000)
+	//spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ByzantiumBlockReward)
+	//spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(3000000)
 	n := hexutil.Uint64(num.Uint64())
-	spec.Engine.Ethash.Params.EIP100bTransition = n
+	//spec.Engine.Ethash.Params.EIP100bTransition = n
 	spec.Params.EIP140Transition = n
 	spec.Params.EIP211Transition = n
 	spec.Params.EIP214Transition = n
@@ -558,8 +554,8 @@ func (spec *parityChainSpec) setByzantium(num *big.Int) {
 }
 
 func (spec *parityChainSpec) setConstantinople(num *big.Int) {
-	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ConstantinopleBlockReward)
-	spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(2000000)
+	//spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ConstantinopleBlockReward)
+	//spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(2000000)
 	n := hexutil.Uint64(num.Uint64())
 	spec.Params.EIP145Transition = n
 	spec.Params.EIP1014Transition = n
@@ -584,7 +580,6 @@ type pyEthereumGenesisSpec struct {
 	Timestamp    hexutil.Uint64    `json:"timestamp"`
 	ExtraData    hexutil.Bytes     `json:"extraData"`
 	GasLimit     hexutil.Uint64    `json:"gasLimit"`
-	Mixhash      common.Hash       `json:"mixhash"`
 	Coinbase     common.Address    `json:"coinbase"`
 	Alloc        core.GenesisAlloc `json:"alloc"`
 	ParentHashes common.HashArray  `json:"parentHashes"`
@@ -594,14 +589,13 @@ type pyEthereumGenesisSpec struct {
 // chain specification format.
 func newPyEthereumGenesisSpec(network string, genesis *core.Genesis) (*pyEthereumGenesisSpec, error) {
 	// Only ethash is currently supported between go-ethereum and pyethereum
-	if genesis.Config.Ethash == nil {
-		return nil, errors.New("unsupported consensus engine")
-	}
+	//if genesis.Config.Ethash == nil {
+	//	return nil, errors.New("unsupported consensus engine")
+	//}
 	spec := &pyEthereumGenesisSpec{
 		Timestamp:    (hexutil.Uint64)(genesis.Timestamp),
 		ExtraData:    genesis.ExtraData,
 		GasLimit:     (hexutil.Uint64)(genesis.GasLimit),
-		Mixhash:      genesis.Mixhash,
 		Coinbase:     genesis.Coinbase,
 		Alloc:        genesis.Alloc,
 		ParentHashes: genesis.ParentHashes,

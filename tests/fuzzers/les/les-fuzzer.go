@@ -23,12 +23,12 @@ import (
 	"math/big"
 
 	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
 	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
 	l "github.com/waterfall-foundation/gwat/les"
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/rlp"
@@ -62,7 +62,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 	}
 	genesis := gspec.MustCommit(db)
 	signer := types.HomesteadSigner{}
-	blocks, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, testChainLen,
+	blocks, _ := core.GenerateChain(gspec.Config, genesis, sealer.New(db), db, testChainLen,
 		func(i int, gen *core.BlockGen) {
 			var (
 				tx   *types.Transaction
@@ -80,7 +80,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 			addrHashes = append(addrHashes, crypto.Keccak256Hash(addr[:]))
 			txHashes = append(txHashes, tx.Hash())
 		})
-	bc, _ = core.NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil)
+	bc, _ = core.NewBlockChain(db, nil, gspec.Config, sealer.New(db), vm.Config{}, nil)
 	if _, err := bc.InsertChain(blocks); err != nil {
 		panic(err)
 	}

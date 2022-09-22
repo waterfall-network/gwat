@@ -126,6 +126,8 @@ func (h *Header) String() string {
 	return encodeOrError(h)
 }
 
+func (h *Header) GetLFHash() *Hash                   { return &Hash{h.header.LFHash} }
+func (h *Header) GetLFNumber() int64                 { return int64(h.header.LFNumber) }
 func (h *Header) GetParentHashes() *common.HashArray { return &h.header.ParentHashes }
 func (h *Header) GetCoinbase() *Address              { return &Address{h.header.Coinbase} }
 func (h *Header) GetRoot() *Hash                     { return &Hash{h.header.Root} }
@@ -137,7 +139,6 @@ func (h *Header) GetGasLimit() int64                 { return int64(h.header.Gas
 func (h *Header) GetGasUsed() int64                  { return int64(h.header.GasUsed) }
 func (h *Header) GetTime() int64                     { return int64(h.header.Time) }
 func (h *Header) GetExtra() []byte                   { return h.header.Extra }
-func (h *Header) GetMixDigest() *Hash                { return &Hash{h.header.MixDigest} }
 func (h *Header) GetHash() *Hash                     { return &Hash{h.header.Hash()} }
 
 // Headers represents a slice of headers.
@@ -198,7 +199,8 @@ func (b *Block) EncodeJSON() (string, error) {
 func (b *Block) String() string {
 	return encodeOrError(b)
 }
-
+func (b *Block) GetLFHash() *Hash                  { return &Hash{b.block.LFHash()} }
+func (b *Block) GetLFNumber() int64                { return int64(b.block.LFNumber()) }
 func (b *Block) GetParentHashes() common.HashArray { return b.block.ParentHashes() }
 func (b *Block) GetCoinbase() *Address             { return &Address{b.block.Coinbase()} }
 func (b *Block) GetRoot() *Hash                    { return &Hash{b.block.Root()} }
@@ -210,7 +212,6 @@ func (b *Block) GetGasLimit() int64                { return int64(b.block.GasLim
 func (b *Block) GetGasUsed() int64                 { return int64(b.block.GasUsed()) }
 func (b *Block) GetTime() int64                    { return int64(b.block.Time()) }
 func (b *Block) GetExtra() []byte                  { return b.block.Extra() }
-func (b *Block) GetMixDigest() *Hash               { return &Hash{b.block.MixDigest()} }
 func (b *Block) GetHash() *Hash                    { return &Hash{b.block.Hash()} }
 func (b *Block) GetHeader() *Header                { return &Header{b.block.Header()} }
 func (b *Block) GetTransactions() *Transactions    { return &Transactions{b.block.Transactions()} }

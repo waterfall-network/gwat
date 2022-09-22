@@ -20,8 +20,8 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/waterfall-foundation/gwat/token/operation"
 	"io"
+	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -43,6 +43,7 @@ import (
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/token/operation"
 	"github.com/waterfall-foundation/gwat/trie"
 )
 
@@ -91,6 +92,7 @@ const (
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
 	recommitCacheLimit  = 512
+	creatorsCacheLimit  = 64
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -203,6 +205,7 @@ type BlockChain struct {
 	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
 	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
 	recommitCache *lru.Cache     // Cache for the most recent states of recommited blocks.
+	creatorsCache *lru.Cache
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -232,6 +235,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	recommitCache, _ := lru.New(recommitCacheLimit)
+	creatorsCache, _ := lru.New(creatorsCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -251,6 +255,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		blockCache:    blockCache,
 		txLookupCache: txLookupCache,
 		recommitCache: recommitCache,
+		creatorsCache: creatorsCache,
 		futureBlocks:  futureBlocks,
 		engine:        engine,
 		vmConfig:      vmConfig,
@@ -656,12 +661,13 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 				Hash:                newHeadBlock.Hash(),
 				Height:              newHeadBlock.Height(),
 				Slot:                newHeadBlock.Slot(),
-				LastFinalizedHash:   newHeadBlock.Hash(),
-				LastFinalizedHeight: newHeadBlock.Nr(),
-				DagChainHashes:      common.HashArray{},
+				LastFinalizedHash:   newHeadBlock.LFHash(),
+				LastFinalizedHeight: newHeadBlock.LFNumber(),
+				//DagChainHashes:      common.HashArray{},
+				DagChainHashes: newHeadBlock.ParentHashes().Copy(),
 			}
 			bc.AddTips(newBlockDag)
-			bc.ReviseTips()
+			bc.WriteCurrentTips()
 		}
 		// Rewind the fast block in a simpleton way to the target head
 		if lastFinalizedFastBlock := bc.GetLastFinalizedFastBlock(); lastFinalizedFastBlock != nil && header.Nr() < lastFinalizedFastBlock.Nr() {
@@ -1460,6 +1466,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
+func (bc *BlockChain) WriteCreators(creators []common.Address, slot uint64) {
+	rawdb.WriteCreators(bc.db, slot, creators)
+}
+
 // addFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
@@ -1543,6 +1553,21 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 		}
 	}
 	return n, err
+}
+
+// IsAddressAssigned  checks if miner is allowed to add transaction from that address
+func IsAddressAssigned(address common.Address, creators []common.Address, creatorNr int64) bool {
+	var (
+		creatorCount = len(creators)
+		countVal     = big.NewInt(int64(creatorCount))
+		val          = address.Hash().Big()
+	)
+	if creatorCount == 0 {
+		return false
+	}
+
+	pos := new(big.Int).Mod(val, countVal).Int64()
+	return pos == creatorNr
 }
 
 // syncInsertChain is the internal implementation of SyncInsertChain, which assumes that
@@ -1767,13 +1792,18 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		// update tips
+		dagChainHashes := block.ParentHashes().Copy()
+		// if block not finalized
+		if block.Height() > 0 && block.Nr() == 0 {
+			dagChainHashes = bc.GetTips().GetOrderedDagChainHashes()
+		}
 		bc.RemoveTips(block.ParentHashes())
 		bc.AddTips(&types.BlockDAG{
 			Hash:                block.Hash(),
 			Height:              block.Height(),
-			LastFinalizedHash:   common.Hash{},
-			LastFinalizedHeight: 0,
-			DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
+			LastFinalizedHash:   block.LFHash(),
+			LastFinalizedHeight: block.LFNumber(),
+			DagChainHashes:      dagChainHashes,
 		})
 	}
 
@@ -1805,7 +1835,7 @@ func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blo
 
 	for _, block := range chain {
 		if len(block.ParentHashes()) == 0 {
-			log.Warn("block without PHs", "hash", block.Hash().Hex())
+			log.Warn("Block without parents", "hash", block.Hash().Hex())
 			invalid = append(invalid, block)
 			continue
 		}
@@ -1819,7 +1849,7 @@ func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blo
 				}
 
 				if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
-					log.Warn("invalid parent found", "hash", block.Hash().Hex(), "parent hash", parent.Hash().Hex(), "height", block.Height(), "parent height", parent.Height(), "slot", block.Slot(), "parent slot", parent.Slot())
+					log.Warn("Invalid parent found", "hash", block.Hash().Hex(), "parent hash", parent.Hash().Hex(), "height", block.Height(), "parent height", parent.Height(), "slot", block.Slot(), "parent slot", parent.Slot())
 					invalid = append(invalid, block)
 					return
 				}
@@ -1838,19 +1868,19 @@ func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blo
 
 func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
 	if len(block.ParentHashes()) == 0 {
-		log.Warn("block without PHs", "hash", block.Hash().Hex())
+		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
 	}
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetBlockByHash(parentHash)
 
 		if parent == nil {
-			log.Warn("block with unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
+			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
 			return false, ErrInsertUncompletedDag
 		}
 
 		if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
-			log.Warn("invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
+			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
 			return false, nil
 		}
 	}
@@ -1871,13 +1901,13 @@ func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
 
 		intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
 		if err != nil {
-			log.Warn("verifyBlock: IntrinsicGas error", "err", err)
+			log.Warn("Block verification: intrinsic gas error", "err", err)
 			return false, nil
 		}
 		intrGasSum += intrGas
 	}
 	if intrGasSum > block.GasLimit() {
-		log.Warn("IntrinsicGas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
+		log.Warn("Block verification: intrinsic gas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
 		return false, nil
 	}
 
@@ -1892,7 +1922,7 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 				continue
 			}
 			if bc.IsAncestorRecursive(parent, pparent.Hash()) {
-				log.Warn("recursive parents", "hash1", parent.Hash().Hex(), "hash2", pparent.Hash().Hex())
+				log.Warn("Block verification: recursive parents", "hash1", parent.Hash().Hex(), "hash2", pparent.Hash().Hex())
 				return false
 			}
 		}
@@ -1902,6 +1932,41 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 
 // insertPropagatedBlocks inserts propagated block
 func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals bool, stateOnly bool) (int, error) {
+	deletedBlocks := 0
+	// check creators
+	for i := range chain {
+		blockIndex := i - deletedBlocks
+		block := chain[blockIndex]
+
+		creators := bc.GetCreators(block.Slot())
+		//if no record - skip (actual fo dag sync)
+		if creators == nil {
+			continue
+		}
+		blockCreator := block.Header().Coinbase
+		contains, index := common.Contains(*creators, blockCreator)
+		if !contains {
+			log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+			chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
+			deletedBlocks++
+		} else {
+			signer := types.LatestSigner(bc.chainConfig)
+			addrMap := map[common.Address]bool{}
+			for _, tx := range block.Body().Transactions {
+				from, _ := types.Sender(signer, tx)
+				addrMap[from] = true
+			}
+			for txFrom, _ := range addrMap {
+				if !IsAddressAssigned(txFrom, *creators, int64(index)) {
+					log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+					chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
+					deletedBlocks++
+					break
+				}
+			}
+		}
+	}
+
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil
@@ -1997,18 +2062,19 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			if err == nil {
 				continue
 			}
-			return 0, err
+			return it.index, err
 		}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
 
+		tips := bc.GetTips()
 		if checkBlock := bc.GetBlock(block.Hash()); checkBlock != nil && !stateOnly {
 			if checkBlock.Nr() > 0 {
 				log.Info("Insert propagated block: check block finalized", "stateOnly", stateOnly, "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
 				stateOnly = true
 				continue
 			}
-			if tips := bc.GetTips(); tips.GetHashes().Has(block.Hash()) || tips.GetAncestorsHashes().Has(block.Hash()) {
+			if tips.GetHashes().Has(block.Hash()) || tips.GetAncestorsHashes().Has(block.Hash()) {
 				stateOnly = true
 			} else if children := bc.ReadChildren(block.Hash()); len(children) > 0 {
 				stateOnly = true
@@ -2028,28 +2094,50 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		if !stateOnly {
 			// update tips
+			dagChainHashes := common.HashArray{}
+			// if block not finalized
+			expCache := ExploreResultMap{}
+			if stateBlock.Height() > 0 && stateBlock.Nr() == 0 && stateBlock.Hash() != bc.genesisBlock.Hash() {
+				stBDag := bc.ReadBockDag(stateBlock.Hash())
+				if stBDag == nil {
+					log.Warn("Propagated block import failed (state block dag not found)", "stateBlock", stateBlock, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex())
+					_, _, _, graph, exc, _ := bc.ExploreChainRecursive(stateBlock.Hash(), expCache)
+					expCache = exc
+					if dch := graph.GetDagChainHashes(); dch != nil {
+						dagChainHashes = append(dagChainHashes, (*dch)...)
+					}
+				} else {
+					blks := bc.GetBlocksByHashes(stBDag.DagChainHashes)
+					for _, bl := range blks {
+						if bl == nil || stateBlock.Height() > 0 && stateBlock.Nr() > 0 || stateBlock.Hash() == bc.genesisBlock.Hash() {
+							continue
+						}
+						dagChainHashes = append(dagChainHashes, bl.Hash())
+					}
+				}
+				dagChainHashes = append(dagChainHashes, stateBlock.Hash())
+			}
+			for _, bl := range recommitBlocks {
+				dagChainHashes = append(dagChainHashes, bl.Hash())
+			}
+
 			bc.RemoveTips(block.ParentHashes())
 			bc.AddTips(&types.BlockDAG{
 				Hash:                block.Hash(),
 				Height:              block.Height(),
-				LastFinalizedHash:   common.Hash{},
-				LastFinalizedHeight: 0,
-				DagChainHashes:      common.HashArray{}.Concat(block.ParentHashes()),
+				LastFinalizedHash:   block.LFHash(),
+				LastFinalizedHeight: block.LFNumber(),
+				DagChainHashes:      dagChainHashes.Uniq(),
 			})
-			// TODO RED BLOCKS
-			////if block is red - skip processing
-			//upTips, _ := bc.ReviseTips()
-			//finDag := upTips.GetFinalizingDag()
-			//if finDag.Hash != block.Hash() {
-			//	log.Info("Insert propagated red block", "height", block.Height(), "hash", block.Hash().Hex())
-			//	continue
-			//}
+			bc.WriteCurrentTips()
+
+			log.Info("PROPAGATED TIPS >>>>>>", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "tips", bc.GetTips().Print())
+
 			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
 
 			if stateErr != nil || statedb == nil {
 				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.Hash().Hex(), "err", stateErr)
 				continue
-				//return it.index, stateErr
 			}
 		}
 
@@ -2166,7 +2254,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		dirty, _ := bc.stateCache.TrieDB().Size()
 		stats.report(chain, it.index, dirty)
 	}
-	bc.ReviseTips()
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
@@ -2241,39 +2328,20 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 
 // CollectStateDataByParents collects state data of current dag chain to insert block.
 func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, cachedHashes common.HashArray, err error) {
-	// TODO rm
-	//graph := &types.GraphDag{
-	//	Hash:   common.Hash{},
-	//	Height: 0,
-	//	Number: 0,
-	//	Graph:  nil,
-	//	State:  0,
-	//}
-	//var (
-	//	expCache = ExploreResultMap{}
-	//	fnl      = common.HashArray{}
-	//	unl      = common.HashArray{}
-	//)
-	//for _, h := range parents {
-	//	u, _, f, gr, c, e := bc.ExploreChainRecursive(h, expCache)
-	//	if e != nil {
-	//		log.Error("Error while collect state data by block", "hash", h.Hex(), "parents", parents, "err", e)
-	//		return statedb, stateBlock, recommitBlocks, cachedHashes, err
-	//	}
-	//	if len(u) > 0 {
-	//		unl = unl.Concat(u)
-	//	}
-	//	expCache = c
-	//	graph.Graph = append(graph.Graph, gr)
-	//	fnl = fnl.Concat(f).Uniq()
-	//}
-	//if len(unl) > 0 {
-	//	log.Error("Error while collect state data by block (unknown blocks detected)", "parents", parents, "unknown", unl)
-	//	return statedb, stateBlock, recommitBlocks, cachedHashes, ErrInsertUncompletedDag
-	//}
-
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	parentBlocks := bc.GetBlocksByHashes(parents)
+	//check is parents exists
+	unl := common.HashArray{}
+	for ph, b := range parentBlocks {
+		if b == nil {
+			unl = append(unl, ph)
+		}
+	}
+	if len(unl) > 0 {
+		log.Error("Error while collect state data by block (unknown blocks detected)", "parents", parents, "unknown", unl)
+		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrInsertUncompletedDag
+	}
+
 	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
 
 	//if state is last finalized block
@@ -3217,7 +3285,7 @@ func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
 	tipsHashes := common.HashArray{}
 	tips := bc.hc.GetTips()
 	for hash, dag := range *tips {
-		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) {
+		if dag == nil || dag.LastFinalizedHash == (common.Hash{}) && dag.Hash != bc.genesisBlock.Hash() {
 			tipsHashes = append(tipsHashes, hash)
 		}
 	}
@@ -3228,6 +3296,10 @@ func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
 // explore chains to update tips in accordance with sync process
 func (bc *BlockChain) ReviseTips() (tips *types.Tips, unloadedHashes common.HashArray) {
 	return bc.hc.ReviseTips(bc)
+}
+
+func (bc *BlockChain) WriteCurrentTips() {
+	bc.hc.writeCurrentTips(false)
 }
 
 type ExploreResult struct {
@@ -3365,7 +3437,7 @@ func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash commo
 func (bc *BlockChain) GetTips() types.Tips {
 	tips := types.Tips{}
 	for hash, dag := range *bc.hc.GetTips() {
-		if dag != nil && dag.LastFinalizedHash != (common.Hash{}) {
+		if dag != nil && dag.LastFinalizedHash != (common.Hash{}) || dag.Hash == bc.genesisBlock.Hash() {
 			tips[hash] = dag
 		}
 	}

@@ -28,13 +28,12 @@ import (
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/common/hexutil"
 	"github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/consensus"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/rawdb"
 	"github.com/waterfall-foundation/gwat/core/state"
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/rlp"
 )
@@ -71,7 +70,6 @@ type btBlock struct {
 type btHeader struct {
 	Bloom            types.Bloom
 	Coinbase         common.Address
-	MixHash          common.Hash
 	Number           *big.Int
 	Hash             common.Hash
 	ParentHashes     common.HashArray
@@ -113,12 +111,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	if gblock.Root() != t.json.Genesis.StateRoot {
 		return fmt.Errorf("genesis block state root does not match test: computed=%x, test=%x", gblock.Root().Bytes()[:6], t.json.Genesis.StateRoot[:6])
 	}
-	var engine consensus.Engine
-	if t.json.SealEngine == "NoProof" {
-		engine = ethash.NewFaker()
-	} else {
-		engine = ethash.NewShared()
-	}
+	engine := sealer.New(db)
 	cache := &core.CacheConfig{TrieCleanLimit: 0}
 	if snapshotter {
 		cache.SnapshotLimit = 1
@@ -162,7 +155,6 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		ExtraData:    t.json.Genesis.ExtraData,
 		GasLimit:     t.json.Genesis.GasLimit,
 		GasUsed:      t.json.Genesis.GasUsed,
-		Mixhash:      t.json.Genesis.MixHash,
 		Coinbase:     t.json.Genesis.Coinbase,
 		Alloc:        t.json.Pre,
 		BaseFee:      t.json.Genesis.BaseFeePerGas,
@@ -227,9 +219,6 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if h.Coinbase != h2.Coinbase {
 		return fmt.Errorf("coinbase: want: %x have: %x", h.Coinbase, h2.Coinbase)
-	}
-	if h.MixHash != h2.MixDigest {
-		return fmt.Errorf("MixHash: want: %x have: %x", h.MixHash, h2.MixDigest)
 	}
 	if h.Number.Cmp(new(big.Int).SetUint64(h2.Nr())) != 0 {
 		return fmt.Errorf("number: want: %v have: %v", h.Number, h2.Number)

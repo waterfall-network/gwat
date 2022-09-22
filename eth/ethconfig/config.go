@@ -21,12 +21,9 @@ import (
 	"math/big"
 	"os"
 	"os/user"
-	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/consensus/ethash"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/dag/creator"
 	"github.com/waterfall-foundation/gwat/eth/downloader"
@@ -56,16 +53,7 @@ var LightClientGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode: downloader.SnapSync,
-	Ethash: ethash.Config{
-		CacheDir:         "ethash",
-		CachesInMem:      2,
-		CachesOnDisk:     3,
-		CachesLockMmap:   false,
-		DatasetsInMem:    1,
-		DatasetsOnDisk:   2,
-		DatasetsLockMmap: false,
-	},
+	SyncMode:                downloader.SnapSync,
 	NetworkId:               1,
 	TxLookupLimit:           2350000,
 	LightPeers:              100,
@@ -95,18 +83,6 @@ func init() {
 		if user, err := user.Current(); err == nil {
 			home = user.HomeDir
 		}
-	}
-	if runtime.GOOS == "darwin" {
-		Defaults.Ethash.DatasetDir = filepath.Join(home, "Library", "Ethash")
-	} else if runtime.GOOS == "windows" {
-		localappdata := os.Getenv("LOCALAPPDATA")
-		if localappdata != "" {
-			Defaults.Ethash.DatasetDir = filepath.Join(localappdata, "Ethash")
-		} else {
-			Defaults.Ethash.DatasetDir = filepath.Join(home, "AppData", "Local", "Ethash")
-		}
-	} else {
-		Defaults.Ethash.DatasetDir = filepath.Join(home, ".ethash")
 	}
 }
 
@@ -165,9 +141,6 @@ type Config struct {
 
 	// Mining options
 	Creator creator.Config
-
-	// Ethash options
-	Ethash ethash.Config
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig

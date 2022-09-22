@@ -22,7 +22,6 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		Timestamp    math.HexOrDecimal64                         `json:"timestamp"`
 		ExtraData    hexutil.Bytes                               `json:"extraData"`
 		GasLimit     math.HexOrDecimal64                         `json:"gasLimit"   gencodec:"required"`
-		Mixhash      common.Hash                                 `json:"mixHash"`
 		Coinbase     common.Address                              `json:"coinbase"`
 		Alloc        map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
 		GasUsed      math.HexOrDecimal64                         `json:"gasUsed"`
@@ -36,7 +35,6 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	enc.Timestamp = math.HexOrDecimal64(g.Timestamp)
 	enc.ExtraData = g.ExtraData
 	enc.GasLimit = math.HexOrDecimal64(g.GasLimit)
-	enc.Mixhash = g.Mixhash
 	enc.Coinbase = g.Coinbase
 	if g.Alloc != nil {
 		enc.Alloc = make(map[common.UnprefixedAddress]GenesisAccount, len(g.Alloc))
@@ -59,7 +57,6 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		Timestamp    *math.HexOrDecimal64                        `json:"timestamp"`
 		ExtraData    *hexutil.Bytes                              `json:"extraData"`
 		GasLimit     *math.HexOrDecimal64                        `json:"gasLimit"   gencodec:"required"`
-		Mixhash      *common.Hash                                `json:"mixHash"`
 		Coinbase     *common.Address                             `json:"coinbase"`
 		Alloc        map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
 		Deposit      *common.Address                             `json:"deposit"    gencodec:"required"`
@@ -86,9 +83,6 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'gasLimit' for Genesis")
 	}
 	g.GasLimit = uint64(*dec.GasLimit)
-	if dec.Mixhash != nil {
-		g.Mixhash = *dec.Mixhash
-	}
 	if dec.Coinbase != nil {
 		g.Coinbase = *dec.Coinbase
 	}
