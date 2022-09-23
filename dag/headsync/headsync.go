@@ -140,6 +140,8 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 
 // Sync run head sync with coordinating network.
 func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
+	defer hs.eth.Downloader().HeadSyncEnd()
+
 	//skip if head synchronising is not active
 	if !hs.eth.Downloader().HeadSynchronising() {
 		log.Warn("⌛ Head synchronising is skipped (is not active)")

@@ -342,6 +342,11 @@ func (d *Downloader) HeadSynchronising() bool {
 	return atomic.LoadInt32(&d.headSyncing) > 0
 }
 
+// HeadSyncEnd ending head sync.
+func (d *Downloader) HeadSyncEnd() {
+	atomic.StoreInt32(&d.headSyncing, 0)
+}
+
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
 func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
