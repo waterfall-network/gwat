@@ -1894,18 +1894,13 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	return true
 }
 
-// VerifyBlock validate block and update cache (if it's needed)
-func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
-	ok, err = bc.verifyBlock(block)
-	if !ok {
-		bc.invalidBlocksCache.Add(block.Hash(), struct{}{})
-	}
-	return ok, err
+// CacheInvalidBlock cache invalid block
+func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
+	bc.invalidBlocksCache.Add(block.Hash(), struct{}{})
 }
 
 // verifyBlock validate block
-// DON'T USE THIS FUNCTION, VerifyBlock 🔼🔼🔼 only
-func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
+func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
@@ -2078,10 +2073,11 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		}
 
 		if ok, err := bc.VerifyBlock(block); !ok {
-			if err == nil {
-				continue
+			if err != nil {
+				return it.index, err
 			}
-			return it.index, err
+			bc.CacheInvalidBlock(block)
+			continue
 		}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())

@@ -110,6 +110,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 			for _, block := range orderedChain {
 				if ok, err := bc.VerifyBlock(block); !ok {
 					if err == nil {
+						bc.CacheInvalidBlock(block)
 						err = ErrInvalidBlock
 					}
 					log.Error("Block finalization failed (validation)", "valid", ok, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
