@@ -1865,22 +1865,67 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	return it.index, err
 }
 
-// VerifyBlock validate block
+// verifyCreators return false if creator is unassigned
+func (bc *BlockChain) verifyCreators(block *types.Block) bool {
+	creators := bc.GetCreators(block.Slot())
+	//if no record - skip (actual fo dag sync)
+	if creators == nil {
+		return true
+	}
+	blockCreator := block.Header().Coinbase
+	contains, index := common.Contains(*creators, blockCreator)
+	if !contains {
+		log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+		return false
+	} else {
+		signer := types.LatestSigner(bc.chainConfig)
+		addrMap := map[common.Address]bool{}
+		for _, tx := range block.Body().Transactions {
+			from, _ := types.Sender(signer, tx)
+			addrMap[from] = true
+		}
+		for txFrom := range addrMap {
+			if !IsAddressAssigned(txFrom, *creators, int64(index)) {
+				log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// VerifyBlock validate block and update cache (if it's needed)
 func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
+	ok, err = bc.verifyBlock(block)
+	if !ok {
+		bc.invalidBlocksCache.Add(block.Hash(), struct{}{})
+	}
+	return ok, err
+}
+
+// verifyBlock validate block
+// DON'T USE THIS FUNCTION, VerifyBlock 🔼🔼🔼 only
+func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
 	}
+	if !bc.verifyCreators(block) {
+		return false, nil
+	}
+
+	unknownParent := false
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetBlockByHash(parentHash)
 
 		if parent == nil {
-			if _, ok := bc.invalidBlocksCache.Get(block.Hash()); ok {
+			if _, ok := bc.invalidBlocksCache.Get(parentHash); ok {
+				log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
 				return false, nil
 			}
-			bc.invalidBlocksCache.Add(block.Hash(), struct{}{})
 			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
-			return false, ErrInsertUncompletedDag
+			unknownParent = true
+			continue
 		}
 
 		if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
@@ -1889,7 +1934,9 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		}
 	}
 
-	bc.invalidBlocksCache.Remove(block.Hash())
+	if unknownParent {
+		return false, ErrInsertUncompletedDag
+	}
 
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
@@ -1938,40 +1985,6 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 
 // insertPropagatedBlocks inserts propagated block
 func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals bool, stateOnly bool) (int, error) {
-	deletedBlocks := 0
-	// check creators
-	for i := range chain {
-		blockIndex := i - deletedBlocks
-		block := chain[blockIndex]
-
-		creators := bc.GetCreators(block.Slot())
-		//if no record - skip (actual fo dag sync)
-		if creators == nil {
-			continue
-		}
-		blockCreator := block.Header().Coinbase
-		contains, index := common.Contains(*creators, blockCreator)
-		if !contains {
-			log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
-			chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
-			deletedBlocks++
-		} else {
-			signer := types.LatestSigner(bc.chainConfig)
-			addrMap := map[common.Address]bool{}
-			for _, tx := range block.Body().Transactions {
-				from, _ := types.Sender(signer, tx)
-				addrMap[from] = true
-			}
-			for txFrom, _ := range addrMap {
-				if !IsAddressAssigned(txFrom, *creators, int64(index)) {
-					log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
-					chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
-					deletedBlocks++
-					break
-				}
-			}
-		}
-	}
 
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
