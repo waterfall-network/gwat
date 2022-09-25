@@ -216,11 +216,12 @@ type BlockChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	engine     consensus.Engine
-	validator  Validator // Block and state validator interface
-	prefetcher Prefetcher
-	processor  Processor // Block transaction processor interface
-	vmConfig   vm.Config
+	engine       consensus.Engine
+	validator    Validator // Block and state validator interface
+	prefetcher   Prefetcher
+	processor    Processor // Block transaction processor interface
+	vmConfig     vm.Config
+	syncProvider types.SyncProvider
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -263,6 +264,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		futureBlocks:       futureBlocks,
 		engine:             engine,
 		vmConfig:           vmConfig,
+		syncProvider:       nil,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -3541,4 +3543,43 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 
 func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
 	bc.rmTxFeed.Send(tx)
+}
+
+/* synchronization functionality */
+
+//SetSyncProvider set provider of access to synchronization functionality
+func (bc *BlockChain) SetSyncProvider(provider types.SyncProvider) {
+	bc.syncProvider = provider
+}
+
+// Synchronising returns whether the downloader is currently synchronising.
+func (bc *BlockChain) Synchronising() bool {
+	if bc.syncProvider == nil {
+		return false
+	}
+	return bc.syncProvider.Synchronising()
+}
+
+// FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
+func (bc *BlockChain) FinSynchronising() bool {
+	if bc.syncProvider == nil {
+		return false
+	}
+	return bc.syncProvider.FinSynchronising()
+}
+
+// DagSynchronising returns whether the downloader is currently retrieving dag chain blocks.
+func (bc *BlockChain) DagSynchronising() bool {
+	if bc.syncProvider == nil {
+		return false
+	}
+	return bc.syncProvider.DagSynchronising()
+}
+
+// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
+func (bc *BlockChain) HeadSynchronising() bool {
+	if bc.syncProvider == nil {
+		return false
+	}
+	return bc.syncProvider.HeadSynchronising()
 }

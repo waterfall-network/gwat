@@ -232,6 +232,8 @@ type BlockChain interface {
 	ResetTips() error
 	GetUnsynchronizedTipsHashes() common.HashArray
 	ExploreChainRecursive(headHash common.Hash, memo ...core.ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache core.ExploreResultMap, err error)
+	//SetSyncProvider set provider of access to synchronization functionality
+	SetSyncProvider(provider types.SyncProvider)
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -265,6 +267,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		},
 		trackStateReq: make(chan *stateReq),
 	}
+	chain.SetSyncProvider(dl)
 	go dl.stateFetcher()
 	return dl
 }
@@ -426,6 +429,11 @@ func (d *Downloader) synchronise(id string, dag common.HashArray, lastFinNr uint
 	//if d.synchroniseMock != nil {
 	//	return d.synchroniseMock(id, dag)
 	//}
+
+	if !dagOnly && d.HeadSynchronising() || d.DagSynchronising() {
+		log.Warn("Synchronization canceled (process busy)")
+		return errBusy
+	}
 
 	// Make sure only one goroutine is ever allowed past this point at once
 	if !atomic.CompareAndSwapInt32(&d.finSyncing, 0, 1) {
@@ -760,16 +768,18 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 
 // syncWithPeerUnknownDagBlocks if remote peer has unknown dag blocks only sync such blocks only
 func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.HashArray) (err error) {
-	// Make sure only one goroutine is ever allowed past this point at once
-	if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
-		return errBusy
-	}
+	//// Make sure only one goroutine is ever allowed past this point at once
+	//if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
+	//	return errBusy
+	//}
 
 	defer func(start time.Time) {
-		atomic.StoreInt32(&d.dagSyncing, 0)
-		if !atomic.CompareAndSwapInt32(&d.headSyncing, 0, 1) {
-			log.Warn("Head Synchronisation is already running")
-		}
+		//atomic.StoreInt32(&d.dagSyncing, 0)
+
+		//if !atomic.CompareAndSwapInt32(&d.headSyncing, 0, 1) {
+		//	log.Warn("Head Synchronisation is already running")
+		//}
+
 		log.Debug("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 

@@ -348,6 +348,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
+	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
 	return d.headsync.SetReadyState(checkpoint)
 }
 
@@ -355,6 +356,7 @@ func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error)
 func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
+	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
 	return d.headsync.Sync(data)
 }
 

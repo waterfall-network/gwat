@@ -113,6 +113,11 @@ func (cs *chainSyncer) loop() {
 
 	for {
 		op := cs.nextSyncOp()
+		// check sync is busy
+		if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
+			log.Warn("Synchronization canceled (process busy)")
+			op = nil
+		}
 		if op != nil {
 			cs.startSync(op)
 		}

@@ -66,21 +66,21 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 	atomic.StoreInt32(&hs.ready, 0)
 
 	if checkpoint == nil {
-		log.Warn("☠ Prepare to head synchronising is skipped (checkpoint is nil)")
+		log.Warn("☠ Prepare to head synchronising is skipped (checkpoint is nil)", "checkpoint", checkpoint)
 		return false, ErrBadParams
 	}
 	if len(checkpoint.Finalizing) == 0 {
-		log.Warn("☠ Prepare to head synchronising is skipped (spines empty)")
+		log.Warn("☠ Prepare to head synchronising is skipped (spines empty)", "checkpoint", checkpoint)
 		return false, ErrBadParams
 	}
 
 	if ok, err := hs.validateCheckpoint(checkpoint); !ok {
-		log.Warn("☠ Prepare to head synchronising is skipped (bad checkpoint)", "err", err)
+		log.Warn("☠ Prepare to head synchronising is skipped (bad checkpoint)", "err", err, "checkpoint", checkpoint)
 	}
 
 	//reorg finalized and dag chains in accordance with checkpoint
 	bc := hs.eth.BlockChain()
-	cpSpineHash := checkpoint.Finalizing[len(checkpoint.Finalizing)]
+	cpSpineHash := checkpoint.Finalizing[len(checkpoint.Finalizing)-1]
 	cpBlock := bc.GetBlock(cpSpineHash)
 
 	lfNr := bc.GetLastFinalizedNumber()
@@ -192,7 +192,7 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 // validateCheckpoint checkpoint validation
 func (hs *Headsync) validateCheckpoint(checkpoint *types.ConsensusInfo) (bool, error) {
 	bc := hs.eth.BlockChain()
-	cpSpineHash := checkpoint.Finalizing[len(checkpoint.Finalizing)]
+	cpSpineHash := checkpoint.Finalizing[len(checkpoint.Finalizing)-1]
 	block := bc.GetBlock(cpSpineHash)
 	// block exists
 	if block == nil {
@@ -204,12 +204,12 @@ func (hs *Headsync) validateCheckpoint(checkpoint *types.ConsensusInfo) (bool, e
 		return false, ErrCheckpointNotFin
 	}
 	// accordance height to number
-	if block.Height() == block.Nr() {
+	if block.Height() != block.Nr() {
 		return false, ErrCheckpointBadNr
 	}
 	// state exists
 	state, err := bc.StateAt(block.Root())
-	if err == nil {
+	if err != nil {
 		return false, err
 	}
 	if state == nil {
