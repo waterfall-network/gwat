@@ -328,6 +328,7 @@ func (b *Block) Extra() []byte                  { return common.CopyBytes(b.head
 func (b *Block) Number() *uint64                { return b.header.Number }
 func (b *Block) Nr() uint64                     { return b.header.Nr() }
 func (b *Block) SetNumber(finNr *uint64)        { b.header.Number = finNr }
+func (b *Block) FinalizedHash() common.Hash     { return b.header.FinalizedHash() }
 
 func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {
