@@ -1867,18 +1867,21 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	return it.index, err
 }
 
-func (bc *BlockChain) verifyLFHash(block *types.Block) bool {
-	if block.LFNumber() == 0 || bc.GetLastFinalizedNumber() < block.LFNumber() {
+func (bc *BlockChain) verifyLFData(block *types.Block) bool {
+	if block.LFNumber() > bc.GetLastFinalizedNumber() {
 		return true
 	}
-
 	LFBlock := bc.GetBlockByNumber(block.LFNumber())
-	if LFBlock.Number() == nil {
-		return true
+	if LFBlock == nil {
+		log.Warn("Block verification: LFBlock not found",
+			"block hash", block.Hash().Hex(),
+			"LFHash", block.LFHash(),
+			"LFNumber", block.LFNumber(),
+		)
+		return false
 	}
-
 	LFBlockFinHash := LFBlock.FinalizedHash()
-	if LFBlockFinHash != block.LFHash() {
+	if block.LFHash() != LFBlockFinHash {
 		log.Warn("Block verification: LFHash dismatch",
 			"block hash", block.Hash().Hex(),
 			"LFHash", block.LFHash(),
@@ -1985,7 +1988,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	return bc.verifyBlockParents(block) && bc.verifyLFHash(block), nil
+	return bc.verifyBlockParents(block) && bc.verifyLFData(block), nil
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
