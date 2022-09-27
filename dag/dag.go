@@ -16,6 +16,7 @@ import (
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/dag/creator"
 	"github.com/waterfall-foundation/gwat/dag/finalizer"
+	"github.com/waterfall-foundation/gwat/dag/headsync"
 	"github.com/waterfall-foundation/gwat/eth/downloader"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/log"
@@ -38,7 +39,7 @@ type Dag struct {
 	// events
 	mux *event.TypeMux
 
-	consensusInfo     *ConsensusInfo
+	consensusInfo     *types.ConsensusInfo
 	consensusInfoFeed event.Feed
 
 	eth Backend
@@ -46,25 +47,27 @@ type Dag struct {
 
 	//creator
 	creator *creator.Creator
-
 	//finalizer
 	finalizer *finalizer.Finalizer
+	//headsync
+	headsync *headsync.Headsync
 
 	busy int32
 }
 
 // New creates new instance of Dag
 func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creatorConfig *creator.Config, engine consensus.Engine) *Dag {
+	fin := finalizer.New(chainConfig, eth, mux)
 	d := &Dag{
 		chainConfig: chainConfig,
 		eth:         eth,
 		mux:         mux,
 		bc:          eth.BlockChain(),
 		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
-		finalizer:   finalizer.New(chainConfig, eth, mux),
+		finalizer:   fin,
+		headsync:    headsync.New(chainConfig, eth, mux, fin),
 	}
 	atomic.StoreInt32(&d.busy, 0)
-
 	return d
 }
 
@@ -78,11 +81,11 @@ func (d *Dag) Creator() *creator.Creator {
 // 2. collect next finalization candidates
 // 3. new block creation
 // 4. return result
-func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *ConsensusResult {
+func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Address) *types.ConsensusResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
-		return &ConsensusResult{
+		return &types.ConsensusResult{
 			Error: &errStr,
 		}
 	}
@@ -100,7 +103,7 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 
 	// finalization
 	if len(data.Finalizing) > 0 {
-		if err := d.finalizer.Finalize(&data.Finalizing); err != nil {
+		if err := d.finalizer.Finalize(&data.Finalizing, false); err != nil {
 			errs["finalization"] = err.Error()
 		}
 	}
@@ -187,10 +190,10 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 		}()
 	}
 
-	d.bc.WriteCreators(data.Creators, data.Slot)
+	d.bc.WriteCreators(data.Slot, data.Creators)
 
 	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
-	res := &ConsensusResult{
+	res := &types.ConsensusResult{
 		Error:      nil,
 		Info:       &info,
 		Candidates: candidates,
@@ -207,11 +210,11 @@ func (d *Dag) HandleConsensus(data *ConsensusInfo, accounts []common.Address) *C
 // HandleFinalize handles consensus data
 // 1. blocks finalization
 // 2. new block creation
-func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *FinalizationResult {
+func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Address) *types.FinalizationResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
-		return &FinalizationResult{
+		return &types.FinalizationResult{
 			Error: &errStr,
 		}
 	}
@@ -227,7 +230,7 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 
 	// finalization
 	if len(data.Finalizing) > 0 {
-		if err := d.finalizer.Finalize(&data.Finalizing); err != nil {
+		if err := d.finalizer.Finalize(&data.Finalizing, false); err != nil {
 			errs["finalization"] = err.Error()
 		}
 	}
@@ -296,7 +299,7 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 		}()
 	}
 
-	res := &FinalizationResult{
+	res := &types.FinalizationResult{
 		Error: nil,
 	}
 	if len(errs) > 0 {
@@ -309,11 +312,11 @@ func (d *Dag) HandleFinalize(data *ConsensusInfo, accounts []common.Address) *Fi
 }
 
 // HandleGetCandidates collect next finalization candidates
-func (d *Dag) HandleGetCandidates(slot uint64) *CandidatesResult {
+func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
-		return &CandidatesResult{
+		return &types.CandidatesResult{
 			Error: &errStr,
 		}
 	}
@@ -329,7 +332,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *CandidatesResult {
 		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
 	}
 	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
-	res := &CandidatesResult{
+	res := &types.CandidatesResult{
 		Error:      nil,
 		Candidates: candidates,
 	}
@@ -341,8 +344,22 @@ func (d *Dag) HandleGetCandidates(slot uint64) *CandidatesResult {
 	return res
 }
 
+// HandleHeadSyncReady set initial state to start head sync with coordinating network.
+func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+	return d.headsync.SetReadyState(checkpoint)
+}
+
+// HandleHeadSync run head sync with coordinating network.
+func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+	return d.headsync.Sync(data)
+}
+
 // GetConsensusInfo returns the last info received from the consensus network
-func (d *Dag) GetConsensusInfo() *ConsensusInfo {
+func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
 	if d.consensusInfo == nil {
 		return nil
 	}
@@ -350,7 +367,7 @@ func (d *Dag) GetConsensusInfo() *ConsensusInfo {
 }
 
 // SetConsensusInfo set info received from the coordinating network
-func (d *Dag) setConsensusInfo(dsi *ConsensusInfo) {
+func (d *Dag) setConsensusInfo(dsi *types.ConsensusInfo) {
 	d.consensusInfo = dsi
 	d.emitDagSyncInfo()
 }

@@ -93,6 +93,7 @@ const (
 	TriesInMemory       = 128
 	recommitCacheLimit  = 512
 	creatorsCacheLimit  = 64
+	invBlocksCacheLimit = 512
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -197,15 +198,16 @@ type BlockChain struct {
 	lastFinalizedBlock     atomic.Value // Current last finalized block of the blockchain
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
 
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	blockCache    *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
-	recommitCache *lru.Cache     // Cache for the most recent states of recommited blocks.
-	creatorsCache *lru.Cache
+	stateCache         state.Database // State database to reuse between imports (contains state cache)
+	bodyCache          *lru.Cache     // Cache for the most recent block bodies
+	bodyRLPCache       *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache      *lru.Cache     // Cache for the most recent receipts per block
+	blockCache         *lru.Cache     // Cache for the most recent entire blocks
+	txLookupCache      *lru.Cache     // Cache for the most recent transaction lookup data.
+	futureBlocks       *lru.Cache     // future blocks are blocks added for later processing
+	recommitCache      *lru.Cache     // Cache for the most recent states of recommited blocks.
+	creatorsCache      *lru.Cache     // Cache for the assigned creators
+	invalidBlocksCache *lru.Cache     // Cache for the blocks with unknown parents
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -236,6 +238,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	recommitCache, _ := lru.New(recommitCacheLimit)
 	creatorsCache, _ := lru.New(creatorsCacheLimit)
+	invBlocksCache, _ := lru.New(invBlocksCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -247,18 +250,19 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:          make(chan struct{}),
-		chainmu:       syncx.NewClosableMutex(),
-		bodyCache:     bodyCache,
-		bodyRLPCache:  bodyRLPCache,
-		receiptsCache: receiptsCache,
-		blockCache:    blockCache,
-		txLookupCache: txLookupCache,
-		recommitCache: recommitCache,
-		creatorsCache: creatorsCache,
-		futureBlocks:  futureBlocks,
-		engine:        engine,
-		vmConfig:      vmConfig,
+		quit:               make(chan struct{}),
+		chainmu:            syncx.NewClosableMutex(),
+		bodyCache:          bodyCache,
+		bodyRLPCache:       bodyRLPCache,
+		receiptsCache:      receiptsCache,
+		blockCache:         blockCache,
+		txLookupCache:      txLookupCache,
+		recommitCache:      recommitCache,
+		creatorsCache:      creatorsCache,
+		invalidBlocksCache: invBlocksCache,
+		futureBlocks:       futureBlocks,
+		engine:             engine,
+		vmConfig:           vmConfig,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -1308,6 +1312,35 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
 
+// WriteFinalizedBlock writes the block and all associated state to the database.
+func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
+	if !bc.chainmu.TryLock() {
+		return errInsertionInterrupted
+	}
+	defer bc.chainmu.Unlock()
+
+	block := bc.GetBlockByNumber(finNr)
+	block.SetNumber(nil)
+
+	batch := bc.db.NewBatch()
+	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
+
+	// update finalized number cache
+	bc.hc.numberCache.Remove(block.Hash())
+
+	bc.hc.headerCache.Remove(block.Hash())
+	bc.hc.headerCache.Add(block.Hash(), block.Header())
+
+	bc.blockCache.Remove(block.Hash())
+	bc.blockCache.Add(block.Hash(), block)
+
+	// Flush the whole batch into the disk, exit the node if failed
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to rollback block finalization", "finNr", finNr, "hash", block.Hash().Hex(), "err", err)
+	}
+	return nil
+}
+
 // WriteSyncDagBlock writes the dag block and all associated state to the database
 //for dag synchronization process
 func (bc *BlockChain) WriteSyncDagBlock(block *types.Block) (status int, err error) {
@@ -1466,8 +1499,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
-func (bc *BlockChain) WriteCreators(creators []common.Address, slot uint64) {
+func (bc *BlockChain) WriteCreators(slot uint64, creators []common.Address) {
 	rawdb.WriteCreators(bc.db, slot, creators)
+}
+
+func (bc *BlockChain) WriteBlockDag(blockDag *types.BlockDAG) {
+	rawdb.WriteBlockDag(bc.db, blockDag)
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
@@ -1828,61 +1865,72 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	return it.index, err
 }
 
-func (bc *BlockChain) verifyBlocks(chain types.Blocks) (valid, invalid types.Blocks, unknown common.HashArray) {
-	valid = make(types.Blocks, 0)
-	invalid = make(types.Blocks, 0)
-	unknown = make(common.HashArray, 0)
-
-	for _, block := range chain {
-		if len(block.ParentHashes()) == 0 {
-			log.Warn("Block without parents", "hash", block.Hash().Hex())
-			invalid = append(invalid, block)
-			continue
-		}
-		func() {
-			for _, parentHash := range block.ParentHashes() {
-				parent := bc.GetBlockByHash(parentHash)
-
-				if parent == nil {
-					unknown = append(unknown, parentHash)
-					continue
-				}
-
-				if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
-					log.Warn("Invalid parent found", "hash", block.Hash().Hex(), "parent hash", parent.Hash().Hex(), "height", block.Height(), "parent height", parent.Height(), "slot", block.Slot(), "parent slot", parent.Slot())
-					invalid = append(invalid, block)
-					return
-				}
-			}
-			if !bc.verifyBlockParents(block) {
-				invalid = append(invalid, block)
-				return
-			}
-
-			valid = append(valid, block)
-		}()
-
+// verifyCreators return false if creator is unassigned
+func (bc *BlockChain) verifyCreators(block *types.Block) bool {
+	creators := bc.GetCreators(block.Slot())
+	//if no record - skip (actual fo dag sync)
+	if creators == nil {
+		return true
 	}
-	return valid, invalid, unknown
+	blockCreator := block.Header().Coinbase
+	contains, index := common.Contains(*creators, blockCreator)
+	if !contains {
+		log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+		return false
+	} else {
+		signer := types.LatestSigner(bc.chainConfig)
+		addrMap := map[common.Address]bool{}
+		for _, tx := range block.Body().Transactions {
+			from, _ := types.Sender(signer, tx)
+			addrMap[from] = true
+		}
+		for txFrom := range addrMap {
+			if !IsAddressAssigned(txFrom, *creators, int64(index)) {
+				log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+				return false
+			}
+		}
+	}
+	return true
 }
 
-func (bc *BlockChain) verifyBlock(block *types.Block) (ok bool, err error) {
+// CacheInvalidBlock cache invalid block
+func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
+	bc.invalidBlocksCache.Add(block.Hash(), struct{}{})
+}
+
+// VerifyBlock validate block
+func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
 	}
+	if !bc.verifyCreators(block) {
+		return false, nil
+	}
+
+	unknownParent := false
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetBlockByHash(parentHash)
 
 		if parent == nil {
+			if _, ok := bc.invalidBlocksCache.Get(parentHash); ok {
+				log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
+				return false, nil
+			}
 			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
-			return false, ErrInsertUncompletedDag
+			unknownParent = true
+			continue
 		}
 
 		if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
 			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
 			return false, nil
 		}
+	}
+
+	if unknownParent {
+		return false, ErrInsertUncompletedDag
 	}
 
 	intrGasSum := uint64(0)
@@ -1922,7 +1970,7 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 				continue
 			}
 			if bc.IsAncestorRecursive(parent, pparent.Hash()) {
-				log.Warn("Block verification: recursive parents", "hash1", parent.Hash().Hex(), "hash2", pparent.Hash().Hex())
+				log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parent.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
 				return false
 			}
 		}
@@ -1932,40 +1980,6 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 
 // insertPropagatedBlocks inserts propagated block
 func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals bool, stateOnly bool) (int, error) {
-	deletedBlocks := 0
-	// check creators
-	for i := range chain {
-		blockIndex := i - deletedBlocks
-		block := chain[blockIndex]
-
-		creators := bc.GetCreators(block.Slot())
-		//if no record - skip (actual fo dag sync)
-		if creators == nil {
-			continue
-		}
-		blockCreator := block.Header().Coinbase
-		contains, index := common.Contains(*creators, blockCreator)
-		if !contains {
-			log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
-			chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
-			deletedBlocks++
-		} else {
-			signer := types.LatestSigner(bc.chainConfig)
-			addrMap := map[common.Address]bool{}
-			for _, tx := range block.Body().Transactions {
-				from, _ := types.Sender(signer, tx)
-				addrMap[from] = true
-			}
-			for txFrom, _ := range addrMap {
-				if !IsAddressAssigned(txFrom, *creators, int64(index)) {
-					log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
-					chain = append(chain[:blockIndex], chain[blockIndex+1:]...)
-					deletedBlocks++
-					break
-				}
-			}
-		}
-	}
 
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
@@ -2058,11 +2072,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			return it.index, ErrBannedHash
 		}
 
-		if ok, err := bc.verifyBlock(block); !ok {
-			if err == nil {
-				continue
+		if ok, err := bc.VerifyBlock(block); !ok {
+			if err != nil {
+				return it.index, err
 			}
-			return it.index, err
+			bc.CacheInvalidBlock(block)
+			continue
 		}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())

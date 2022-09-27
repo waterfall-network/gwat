@@ -28,7 +28,7 @@ type Backend interface {
 	Downloader() *downloader.Downloader
 }
 
-// Finalizer creates blocks and searches for proof-of-work values.
+// Finalizer
 type Finalizer struct {
 	chainConfig *params.ChainConfig
 
@@ -54,9 +54,9 @@ func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux) *Fina
 }
 
 // Finalize start finalization procedure
-func (f *Finalizer) Finalize(spines *common.HashArray) error {
+func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 
-	if f.isSyncing() {
+	if f.isSyncing() && !isHeadSync {
 		return ErrSyncing
 	}
 	if atomic.LoadInt32(&f.busy) == 1 {
@@ -81,8 +81,8 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 	for _, spineHash := range *spines {
 		block := bc.GetBlockByHash(spineHash)
 		if block == nil {
-			log.Error("unknown spine hash", "spineHash", spineHash.Hex())
-			return ErrUnknownHash
+			log.Error("Block finalization failed", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
+			return ErrSpineNotFound
 		}
 		spinesMap[block.Slot()] = block
 	}
@@ -105,13 +105,27 @@ func (f *Finalizer) Finalize(spines *common.HashArray) error {
 		}
 		log.Info("Finalization spine chain calculated", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
+		if isHeadSync {
+			//validate blocks while head sync
+			for _, block := range orderedChain {
+				if ok, err := bc.VerifyBlock(block); !ok {
+					if err == nil {
+						bc.CacheInvalidBlock(block)
+						err = ErrInvalidBlock
+					}
+					log.Error("Block finalization failed (validation)", "valid", ok, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+					return err
+				}
+			}
+		}
+
 		// blocks finalizing
 		for i, block := range orderedChain {
 			nr := lastFinNr + uint64(i) + 1
 			block.SetNumber(&nr)
 			isHead := i == len(orderedChain)-1
 			if err := f.finalizeBlock(nr, *block, isHead); err != nil {
-				log.Error("block finalization failed", "nr", i, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+				log.Error("Block finalization failed", "isHead", isHead, "nr", nr, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 				return err
 			}
 		}
@@ -162,16 +176,6 @@ func (f *Finalizer) isSyncing() bool {
 // GetFinalizingCandidates returns the ordered dag block hashes for finalization
 func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, error) {
 	bc := f.eth.BlockChain()
-	//tips, unloaded := bc.ReviseTips()
-	//if len(unloaded) > 0 || tips == nil || len(*tips) == 0 {
-	//	if tips == nil {
-	//		log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips)
-	//	} else {
-	//		log.Warn("Get finalized candidates received bad tips", "unloaded", unloaded, "tips", tips.Print())
-	//	}
-	//	return common.HashArray{}, ErrBadDag
-	//}
-
 	tips := bc.GetTips()
 
 	finChain := []*types.Block{}

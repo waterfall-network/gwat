@@ -39,7 +39,6 @@ import (
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
 	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/dag"
 	"github.com/waterfall-foundation/gwat/dag/sealer"
 	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/p2p"
@@ -2071,16 +2070,26 @@ func NewPublicDagAPI(b Backend) *PublicDagAPI {
 }
 
 // Sync start consensus procedure.
-func (api *PublicDagAPI) Sync(ctx context.Context, data *dag.ConsensusInfo) (*dag.ConsensusResult, error) {
+func (api *PublicDagAPI) Sync(ctx context.Context, data *types.ConsensusInfo) (*types.ConsensusResult, error) {
 	return api.b.Dag().HandleConsensus(data, api.am.Accounts()), nil
 }
 
 // Finalize finalize blocks.
-func (api *PublicDagAPI) Finalize(ctx context.Context, data *dag.ConsensusInfo) (*dag.FinalizationResult, error) {
+func (api *PublicDagAPI) Finalize(ctx context.Context, data *types.ConsensusInfo) (*types.FinalizationResult, error) {
 	return api.b.Dag().HandleFinalize(data, api.am.Accounts()), nil
 }
 
 // GetCandidates retrieves finalization candidates.
-func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*dag.CandidatesResult, error) {
+func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types.CandidatesResult, error) {
 	return api.b.Dag().HandleGetCandidates(slot), nil
+}
+
+// HeadSyncReady set initial state to start head sync with coordinating network.
+func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
+	return api.b.Dag().HandleHeadSyncReady(checkpoint)
+}
+
+// HeadSync run head sync with coordinating network.
+func (api *PublicDagAPI) HeadSync(ctx context.Context, data []types.ConsensusInfo) (bool, error) {
+	return api.b.Dag().HandleHeadSync(data)
 }
