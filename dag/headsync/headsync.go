@@ -156,7 +156,7 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 	defer atomic.StoreInt32(&hs.busy, 0)
 
 	//check ready state
-	if atomic.LoadInt32(&hs.ready) == 1 {
+	if atomic.LoadInt32(&hs.ready) != 1 {
 		log.Info("⌛ Head synchronising is skipped (not ready)")
 		return false, ErrNotReady
 	}
