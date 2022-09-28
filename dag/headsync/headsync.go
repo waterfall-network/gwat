@@ -69,6 +69,14 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 		log.Warn("☠ Prepare to head synchronising is skipped (checkpoint is nil)", "checkpoint", checkpoint)
 		return false, ErrBadParams
 	}
+	// if genesis checkpoint
+	if checkpoint.Slot == 0 {
+		log.Warn("Prepare to head synchronising set to genesis", "checkpoint", checkpoint)
+		atomic.StoreInt32(&hs.ready, 1)
+		hs.lastSyncData = checkpoint
+		return true, nil
+	}
+
 	if len(checkpoint.Finalizing) == 0 {
 		log.Warn("☠ Prepare to head synchronising is skipped (spines empty)", "checkpoint", checkpoint)
 		return false, ErrBadParams
@@ -163,14 +171,11 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 	defer atomic.StoreInt32(&hs.ready, 0)
 
 	//sort data by slots
-	dataBySlots := map[uint64]*types.ConsensusInfo{}
+	dataBySlots := map[uint64]types.ConsensusInfo{}
 	slots := common.SorterAskU64{}
 	for _, d := range data {
 		sl := d.Slot
-		if dataBySlots[sl] != nil {
-			log.Warn("Head synchronising has received duplicated data")
-		}
-		dataBySlots[sl] = &d
+		dataBySlots[sl] = d
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)
