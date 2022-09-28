@@ -1844,7 +1844,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			LastFinalizedHeight: block.LFNumber(),
 			DagChainHashes:      dagChainHashes,
 		})
-		bc.RemoveOldTips(dagChainHashes)
+		bc.RemoveTips(dagChainHashes)
 	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
@@ -2175,7 +2175,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 				DagChainHashes:      dagChainHashes.Uniq(),
 			}
 			bc.AddTips(dagBlock)
-			bc.RemoveOldTipsByBlock(dagBlock)
+			bc.RemoveTips(dagBlock.DagChainHashes)
 			bc.WriteCurrentTips()
 
 			log.Info("PROPAGATED TIPS >>>>>>", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "tips", bc.GetTips().Print())
@@ -3499,14 +3499,6 @@ func (bc *BlockChain) ResetTips() error {
 //AddTips add BlockDag to tips
 func (bc *BlockChain) AddTips(blockDag *types.BlockDAG) {
 	bc.hc.AddTips(blockDag)
-}
-
-func (bc *BlockChain) RemoveOldTipsByBlock(blockDag *types.BlockDAG) {
-	bc.RemoveTips(blockDag.DagChainHashes)
-}
-
-func (bc *BlockChain) RemoveOldTips(hashes common.HashArray) {
-	bc.RemoveTips(hashes)
 }
 
 //RemoveTips remove BlockDag from tips by hash from tips

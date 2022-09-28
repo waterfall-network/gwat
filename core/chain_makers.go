@@ -213,7 +213,7 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 		}
 		rawdb.WriteBlockDag(bc.db, blockDag)
 		bc.AddTips(blockDag)
-		bc.RemoveOldTips(tmpDagChainHashes)
+		bc.RemoveTips(tmpDagChainHashes)
 		bc.ReviseTips()
 	}
 }
