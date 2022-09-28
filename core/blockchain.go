@@ -2566,12 +2566,13 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 	hightNonce := false
 	lowNonce := false
 
+	gasUsed := new(uint64)
 	for i, tx := range block.Transactions() {
 		from, _ := types.Sender(signer, tx)
 		// Start executing the transaction
 		statedb.Prepare(tx.Hash(), i)
 
-		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool)
+		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool, gasUsed)
 		receipts = append(receipts, receipt)
 		rlogs = append(rlogs, logs...)
 		switch {
@@ -2623,9 +2624,9 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 }
 
 // recommitBlockTransaction applies single transactions wile recommit block process.
-func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool) (*types.Receipt, []*types.Log, error) {
+func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool, gasUsed *uint64) (*types.Receipt, []*types.Log, error) {
 	snap := statedb.Snapshot()
-	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, &block.Header().GasUsed, *bc.GetVMConfig())
+	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig())
 	if err != nil {
 		log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
 		statedb.RevertToSnapshot(snap)
