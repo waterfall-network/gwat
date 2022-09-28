@@ -1845,6 +1845,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			LastFinalizedHeight: block.LFNumber(),
 			DagChainHashes:      dagChainHashes,
 		})
+		bc.RemoveTips(dagChainHashes)
 	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
@@ -2168,13 +2169,15 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			}
 
 			bc.RemoveTips(block.ParentHashes())
-			bc.AddTips(&types.BlockDAG{
+			dagBlock := &types.BlockDAG{
 				Hash:                block.Hash(),
 				Height:              block.Height(),
 				LastFinalizedHash:   block.LFHash(),
 				LastFinalizedHeight: block.LFNumber(),
 				DagChainHashes:      dagChainHashes.Uniq(),
-			})
+			}
+			bc.AddTips(dagBlock)
+			bc.RemoveTips(dagBlock.DagChainHashes)
 			bc.WriteCurrentTips()
 
 			log.Info("PROPAGATED TIPS >>>>>>", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "tips", bc.GetTips().Print())
