@@ -119,23 +119,24 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 	// update BlockDags
 	expCache := core.ExploreResultMap{}
 	for _, bdag := range blockDagList {
-		_, _, _, graph, exc, _ := bc.ExploreChainRecursive(bdag.Hash, expCache)
+		_, loaded, _, _, exc, _ := bc.ExploreChainRecursive(bdag.Hash, expCache)
 		expCache = exc
-		if dch := graph.GetDagChainHashes(); dch != nil {
-			bdag.DagChainHashes = *dch
-		}
+		bdag.DagChainHashes = loaded
+		//if dch := graph.GetDagChainHashes(); dch != nil {
+		//	bdag.DagChainHashes = *dch
+		//}
 		bc.WriteBlockDag(&bdag)
 	}
 	// update tips
 	tips := bc.GetTips()
 	for _, tip := range tips {
-		_, _, _, graph, exc, _ := bc.ExploreChainRecursive(tip.Hash, expCache)
+		_, loaded, _, _, exc, _ := bc.ExploreChainRecursive(tip.Hash, expCache)
 		expCache = exc
-		if dch := graph.GetDagChainHashes(); dch != nil {
-			tip.DagChainHashes = *dch
-		}
+		tip.DagChainHashes = loaded
+		//if dch := graph.GetDagChainHashes(); dch != nil {
+		//	tip.DagChainHashes = *dch
+		//}
 		bc.AddTips(tip)
-
 	}
 	bc.WriteCurrentTips()
 	// save creators

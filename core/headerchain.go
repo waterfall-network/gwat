@@ -651,7 +651,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 			continue
 		}
 		// if block exists - check all ancestors to finalized state
-		unloaded, loaded, finalized, graph, expCacheUp, err := bc.ExploreChainRecursive(hash, expCache)
+		unloaded, loaded, finalized, _, expCacheUp, err := bc.ExploreChainRecursive(hash, expCache)
 		if err != nil {
 			hc.RemoveTips(common.HashArray{hash}, true)
 			continue
@@ -669,10 +669,10 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 		chain = chain.Difference(finalized)
 
 		// bad order of hashes
-		dag.DagChainHashes = chain.Difference(common.HashArray{hash})
+		dag.DagChainHashes = chain.Difference(common.HashArray{hash}).Uniq()
 		dag.LastFinalizedHash = header.LFHash
 		dag.LastFinalizedHeight = header.LFNumber
-		dag.DagChainHashes = *graph.GetDagChainHashes()
+		//dag.DagChainHashes = *graph.GetDagChainHashes()
 		hc.AddTips(dag, true)
 		// if curTips synchronized
 		if len(unloaded) == 0 {

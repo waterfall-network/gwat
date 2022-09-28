@@ -254,6 +254,7 @@ func (gd *GraphDag) GetDagChainHashes() *common.HashArray {
 	return &res
 }
 
+//todo deprecated (don't use)
 //GetOrderedLoadedAncestors retrieves ordered ancestors
 func (gd *GraphDag) GetOrderedLoadedAncestors() []*GraphDag {
 	//1) calculate order for parents

@@ -291,7 +291,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Initialize the chain with ancient data if it isn't empty.
 	var txIndexBlock uint64
 
-	if bc.empty() {
+	isEmpty := bc.empty()
+	if isEmpty {
 		//Start Freezer
 		rawdb.InitDatabaseFromFreezer(bc.db)
 		// If ancient database is not empty, reconstruct all missing
@@ -1993,9 +1994,9 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 	parents := bc.GetBlocksByHashes(block.ParentHashes())
-	for i, parent := range parents {
-		for j, pparent := range parents {
-			if i == j {
+	for ph, parent := range parents {
+		for pph, pparent := range parents {
+			if ph == pph {
 				continue
 			}
 			if bc.IsAncestorRecursive(parent, pparent.Hash()) {
@@ -2145,11 +2146,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 				stBDag := bc.ReadBockDag(stateBlock.Hash())
 				if stBDag == nil {
 					log.Warn("Propagated block import failed (state block dag not found)", "stateBlock", stateBlock, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex())
-					_, _, _, graph, exc, _ := bc.ExploreChainRecursive(stateBlock.Hash(), expCache)
+					_, loaded, _, _, exc, _ := bc.ExploreChainRecursive(stateBlock.Hash(), expCache)
 					expCache = exc
-					if dch := graph.GetDagChainHashes(); dch != nil {
-						dagChainHashes = append(dagChainHashes, (*dch)...)
-					}
+					dagChainHashes = append(dagChainHashes, loaded...).Uniq()
+					//if dch := graph.GetDagChainHashes(); dch != nil {
+					//	dagChainHashes = append(dagChainHashes, (*dch)...)
+					//}
 				} else {
 					blks := bc.GetBlocksByHashes(stBDag.DagChainHashes)
 					for _, bl := range blks {
@@ -3364,8 +3366,12 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 	if len(memo) == 0 {
 		memo = append(memo, make(ExploreResultMap))
 	}
+	lfNr := bc.GetLastFinalizedBlock().Nr()
 
 	block := bc.GetBlockByHash(headHash)
+	if block.Nr() > lfNr {
+		block.SetNumber(nil)
+	}
 	graph = &types.GraphDag{
 		Hash:   headHash,
 		Height: 0,
@@ -3438,6 +3444,9 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 
 // IsAncestorRecursive checks the passed ancestorHash is an acesstor of the given block.
 func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash common.Hash) bool {
+	if block.Hash() == ancestorHash {
+		return false
+	}
 	//if ancestorHash is genesis
 	if bc.genesisBlock.Hash() == ancestorHash {
 		return true
@@ -3451,9 +3460,24 @@ func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash commo
 	if ancestor == nil {
 		return false
 	}
+	//if ancestor slot is greater or equal that block slot
+	if ancestor.Slot() >= block.Slot() {
+		return false
+	}
 	//if ancestor is finalised and block is not finalised
 	if ancestor.Number() != nil && block.Number() == nil {
-		return true
+		_, _, f, _, _, err := bc.ExploreChainRecursive(block.Hash())
+		if err != nil {
+			return false
+		}
+		finBls := bc.GetBlocksByHashes(f)
+		maxFinNr := uint64(0)
+		for _, b := range finBls {
+			if maxFinNr < b.Nr() {
+				maxFinNr = b.Nr()
+			}
+		}
+		return ancestor.Nr() <= maxFinNr
 	}
 	//if ancestor is not finalised and block is finalised
 	if ancestor.Number() == nil && block.Number() != nil {
