@@ -118,6 +118,11 @@ func (cs *chainSyncer) loop() {
 			log.Warn("Synchronization canceled (process busy)")
 			op = nil
 		}
+		// if no finalization while defined slots number - start resync
+		if cs.isResync() {
+			op = cs.getResyncOp()
+			log.Warn("Resync required", "op", op)
+		}
 		if op != nil {
 			cs.startSync(op)
 		}
@@ -145,6 +150,62 @@ func (cs *chainSyncer) loop() {
 	}
 }
 
+func (cs *chainSyncer) isResync() bool {
+	const DagSlotsLimit = 10
+	if cs.handler.downloader.Synchronising() {
+		return false
+	}
+	lfSlot := cs.handler.chain.GetLastFinalizedBlock().Slot()
+	tips := cs.handler.chain.GetTips()
+	maxSlot := uint64(0)
+	for _, t := range tips {
+		if t.Slot > maxSlot {
+			maxSlot = t.Slot
+		}
+	}
+	return maxSlot-lfSlot >= DagSlotsLimit
+}
+
+// getResyncOp determines whether resync is required.
+func (cs *chainSyncer) getResyncOp() *chainSyncOp {
+	if cs.doneCh != nil {
+		return nil // Sync already running.
+	}
+
+	// Ensure we're at minimum peer count.
+	minPeers := defaultMinSyncPeers
+	if cs.forced {
+		minPeers = 1
+	} else if minPeers > cs.handler.maxPeers {
+		minPeers = cs.handler.maxPeers
+	}
+	if cs.handler.peers.len() < minPeers {
+		return nil
+	}
+	// We have enough peers, select peer to sync
+	peer := cs.handler.peers.getHighestPeer(false)
+	if peer == nil {
+		return nil
+	}
+	mode := cs.modeAndLocalHead()
+	if mode == downloader.FastSync && atomic.LoadUint32(&cs.handler.snapSync) == 1 {
+		// Fast sync via the snap protocol
+		mode = downloader.SnapSync
+	}
+	op := peerToSyncOp(mode, peer)
+	lastFinNr := cs.handler.chain.GetLastFinalizedNumber()
+
+	if lastFinNr >= op.lastFinNr {
+		return nil
+	}
+
+	if lastFinNr < op.lastFinNr {
+		// finalized chain sync required
+		return op
+	}
+	return nil
+}
+
 // nextSyncOp determines whether sync is required at this time.
 func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
@@ -161,8 +222,8 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
-	// We have enough peers, check TD
-	peer := cs.handler.peers.getHighestPeer()
+	// We have enough peers, select peer to sync
+	peer := cs.handler.peers.getHighestPeer(true)
 	if peer == nil {
 		return nil
 	}
@@ -174,7 +235,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	op := peerToSyncOp(mode, peer)
 	lastFinNr := cs.handler.chain.GetLastFinalizedNumber()
 
-	if lastFinNr > op.lastFinNr {
+	if lastFinNr >= op.lastFinNr {
 		return nil // We're in sync.
 	}
 

@@ -345,9 +345,17 @@ func (d *Downloader) HeadSynchronising() bool {
 	return atomic.LoadInt32(&d.headSyncing) > 0
 }
 
-// HeadSyncEnd ending head sync.
-func (d *Downloader) HeadSyncEnd() {
+// HeadSyncReset reset status of head sync.
+func (d *Downloader) HeadSyncReset() {
 	atomic.StoreInt32(&d.headSyncing, 0)
+}
+
+// HeadSyncSet set status of head sync.
+func (d *Downloader) HeadSyncSet() bool {
+	if !atomic.CompareAndSwapInt32(&d.headSyncing, 0, 1) {
+		return false
+	}
+	return true
 }
 
 // RegisterPeer injects a new download peer into the set of block source to be
@@ -431,7 +439,7 @@ func (d *Downloader) synchronise(id string, dag common.HashArray, lastFinNr uint
 	//}
 
 	if !dagOnly && d.HeadSynchronising() || d.DagSynchronising() {
-		log.Warn("Synchronization canceled (process busy)")
+		log.Warn("Synchronization canceled (synchronise process busy)")
 		return errBusy
 	}
 
@@ -683,9 +691,6 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	}
 	defer func(start time.Time) {
 		atomic.StoreInt32(&d.dagSyncing, 0)
-		if !atomic.CompareAndSwapInt32(&d.headSyncing, 0, 1) {
-			log.Warn("Head Synchronisation is already running")
-		}
 		log.Debug("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 

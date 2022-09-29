@@ -1841,6 +1841,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		bc.AddTips(&types.BlockDAG{
 			Hash:                block.Hash(),
 			Height:              block.Height(),
+			Slot:                block.Slot(),
 			LastFinalizedHash:   block.LFHash(),
 			LastFinalizedHeight: block.LFNumber(),
 			DagChainHashes:      dagChainHashes,
@@ -2172,6 +2173,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			dagBlock := &types.BlockDAG{
 				Hash:                block.Hash(),
 				Height:              block.Height(),
+				Slot:                block.Slot(),
 				LastFinalizedHash:   block.LFHash(),
 				LastFinalizedHeight: block.LFNumber(),
 				DagChainHashes:      dagChainHashes.Uniq(),

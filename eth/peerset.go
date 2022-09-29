@@ -229,7 +229,7 @@ func (ps *peerSet) snapLen() int {
 }
 
 // getHighestPeer retrieves the known peer with the max lastFinNr
-func (ps *peerSet) getHighestPeer() *eth.Peer {
+func (ps *peerSet) getHighestPeer(onlyNew bool) *eth.Peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
@@ -238,9 +238,13 @@ func (ps *peerSet) getHighestPeer() *eth.Peer {
 		bestHeight uint64
 	)
 	for _, p := range ps.peers {
+		if onlyNew && !p.IsNewlyConnected() {
+			continue
+		}
 		// dag == nil - has not synchronized tips
-		if height, dag := p.GetDagInfo(); dag != nil && (bestPeer == nil || height > bestHeight) {
-			bestPeer, bestHeight = p.Peer, height
+		if lastFinNr, dag := p.GetDagInfo(); dag != nil && (bestPeer == nil || lastFinNr > bestHeight) {
+			bestPeer, bestHeight = p.Peer, lastFinNr
+			p.ResetNewlyConnected()
 		}
 	}
 	return bestPeer

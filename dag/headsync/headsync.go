@@ -3,13 +3,14 @@
 package headsync
 
 import (
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/dag/finalizer"
 	"sort"
 	"sync/atomic"
+	"time"
 
+	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/core"
 	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/dag/finalizer"
 	"github.com/waterfall-foundation/gwat/eth/downloader"
 	"github.com/waterfall-foundation/gwat/event"
 	"github.com/waterfall-foundation/gwat/log"
@@ -22,6 +23,8 @@ type Backend interface {
 	Downloader() *downloader.Downloader
 }
 
+const HeadSyncTimeoutSec = 120
+
 // Headsync creates blocks and searches for proof-of-work values.
 type Headsync struct {
 	chainConfig  *params.ChainConfig
@@ -29,8 +32,9 @@ type Headsync struct {
 	eth          Backend
 	finalizer    *finalizer.Finalizer
 	ready        int32                // The indicator whether the headsync is ready to synck (SetReadyState method has been called).
-	busy         int32                // The indicator whether the headsync is finalizing blocks.
+	mainProc     int32                // The indicator whether the headsync is finalizing blocks.
 	lastSyncData *types.ConsensusInfo // last applied sync data
+	timeout      *time.Timer          // reset head sync timer
 }
 
 // New create new instance of Headsync
@@ -43,47 +47,45 @@ func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux, final
 		lastSyncData: nil,
 	}
 	atomic.StoreInt32(&f.ready, 0)
-	atomic.StoreInt32(&f.busy, 0)
+	atomic.StoreInt32(&f.mainProc, 0)
 
 	return f
 }
 
 // SetReadyState  set initial state to start head sync with coordinating network.
 func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error) {
-	//skip if head synchronising is not active
-	if !hs.eth.Downloader().HeadSynchronising() {
-		log.Warn("⌛ Prepare to head synchronising is skipped (is not active)")
-		return false, nil
-	}
-
-	if atomic.LoadInt32(&hs.busy) == 1 {
-		log.Warn("⌛ Prepare to head synchronising is skipped (process busy)")
-		return false, ErrBusy
-	}
-	atomic.StoreInt32(&hs.busy, 1)
-	defer atomic.StoreInt32(&hs.busy, 0)
-	// reset ready state
-	atomic.StoreInt32(&hs.ready, 0)
-
 	if checkpoint == nil {
 		log.Warn("☠ Prepare to head synchronising is skipped (checkpoint is nil)", "checkpoint", checkpoint)
 		return false, ErrBadParams
 	}
-	// if genesis checkpoint
+	if len(checkpoint.Finalizing) == 0 && checkpoint.Slot > 0 {
+		log.Warn("☠ Prepare to head synchronising is skipped (spines empty)", "checkpoint", checkpoint)
+		return false, ErrBadParams
+	}
+	//skip if other synchronising type is running
+	if hs.eth.Downloader().FinSynchronising() || hs.eth.Downloader().DagSynchronising() {
+		log.Warn("⌛ Prepare to head synchronising is skipped (process is locked)")
+		return false, ErrLocked
+	}
+	//skip if head synchronising is running
+	if err := hs.HeadSyncSet(); err != nil {
+		log.Warn("⌛ Prepare to head synchronising is skipped (process is running)")
+		return false, err
+	}
+	// reset ready state
+	atomic.StoreInt32(&hs.ready, 0)
+
+	// if genesis checkpoint -
 	if checkpoint.Slot == 0 {
-		log.Warn("Prepare to head synchronising set to genesis", "checkpoint", checkpoint)
+		log.Info("Prepare to head synchronising set to genesis", "checkpoint", checkpoint)
 		atomic.StoreInt32(&hs.ready, 1)
 		hs.lastSyncData = checkpoint
 		return true, nil
 	}
 
-	if len(checkpoint.Finalizing) == 0 {
-		log.Warn("☠ Prepare to head synchronising is skipped (spines empty)", "checkpoint", checkpoint)
-		return false, ErrBadParams
-	}
-
 	if ok, err := hs.validateCheckpoint(checkpoint); !ok {
 		log.Warn("☠ Prepare to head synchronising is skipped (bad checkpoint)", "err", err, "checkpoint", checkpoint)
+		return false, err
 	}
 
 	//reorg finalized and dag chains in accordance with checkpoint
@@ -149,24 +151,21 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 
 // Sync run head sync with coordinating network.
 func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
-	defer hs.eth.Downloader().HeadSyncEnd()
-
 	//skip if head synchronising is not active
 	if !hs.eth.Downloader().HeadSynchronising() {
-		log.Warn("⌛ Head synchronising is skipped (is not active)")
-		return false, nil
+		log.Warn("⌛ Head synchronising is skipped (not ready)")
+		return false, ErrNotReady
 	}
 
-	if atomic.LoadInt32(&hs.busy) == 1 {
-		log.Warn("⌛ Head synchronising is skipped (process busy)")
-		return false, ErrBusy
-	}
-	atomic.StoreInt32(&hs.busy, 1)
-	defer atomic.StoreInt32(&hs.busy, 0)
+	atomic.StoreInt32(&hs.mainProc, 1)
+	defer func() {
+		atomic.StoreInt32(&hs.mainProc, 0)
+		hs.headSyncReset()
+	}()
 
 	//check ready state
 	if atomic.LoadInt32(&hs.ready) != 1 {
-		log.Info("⌛ Head synchronising is skipped (not ready)")
+		log.Info("⌛ Head synchronising is skipped (set to checkpoint is not ready)")
 		return false, ErrNotReady
 	}
 	defer atomic.StoreInt32(&hs.ready, 0)
@@ -222,4 +221,48 @@ func (hs *Headsync) validateCheckpoint(checkpoint *types.ConsensusInfo) (bool, e
 		return false, ErrCheckpointNoState
 	}
 	return true, nil
+}
+
+// HeadSyncSet set status of head sync.
+func (hs *Headsync) HeadSyncSet() error {
+	//skip if head synchronising is running
+	if !hs.eth.Downloader().HeadSyncSet() {
+		return ErrLocked
+	}
+
+	// set timeout of head sync procedure
+	tot := HeadSyncTimeoutSec * time.Second
+	if hs.timeout == nil {
+		hs.timeout = time.NewTimer(tot)
+	} else {
+		hs.timeout.Reset(tot)
+	}
+
+	go func() {
+		select {
+		case <-hs.timeout.C:
+			log.Warn("Head sync: timeout reset")
+			hs.headSyncReset()
+			return
+		}
+	}()
+	return nil
+}
+
+// headSyncReset reset status of head sync.
+func (hs *Headsync) headSyncReset() bool {
+	// skip if main process is running
+	if atomic.LoadInt32(&hs.mainProc) == 1 {
+		log.Warn("⌛ Head synchronising is skipped (is running)")
+		return false
+	}
+
+	log.Warn("Head sync: reset")
+	if hs.timeout != nil {
+		hs.timeout.Stop()
+	}
+	hs.eth.Downloader().HeadSyncReset()
+	// set ready state
+	atomic.StoreInt32(&hs.ready, 0)
+	return true
 }

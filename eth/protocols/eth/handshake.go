@@ -65,6 +65,7 @@ func (p *Peer) Handshake(network uint64, lastFinNr uint64, dag *common.HashArray
 		}
 	}
 	p.lastFinNr, p.dag = status.LastFinNr, status.Dag
+	p.isNewCon = true
 	return nil
 }
 
