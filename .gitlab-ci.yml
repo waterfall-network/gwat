@@ -1,6 +1,6 @@
 image: golang:1.17.2
 
-build:
+gwat-build:
   stage: build
   tags:
     - docker
@@ -13,6 +13,7 @@ build:
     - cp ./build/bin/bootnode ./dist/gwat-bootnode
     - cp ./build/bin/geth ./dist/gwat
   artifacts:
+    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME"
     paths:
       - dist/gwat-bootnode
       - dist/gwat
