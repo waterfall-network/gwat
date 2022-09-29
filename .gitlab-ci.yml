@@ -1,8 +1,5 @@
 image: golang:1.17.2
-#before_script:
-#  - apt-get update -y
-#  - apt-get install cmake git libssl-dev libgmp-dev libtinfo5 libprotoc-dev -y
-#  - echo "$GITCONFIG" > ~/.gitconfig
+
 build:
   stage: build
   tags:
@@ -12,7 +9,6 @@ build:
   #      when: manual
   script:
     - go run build/ci.go install ./cmd/geth ./cmd/bootnode
-    - ls build/bin
     - mkdir -p ./dist
     - cp ./build/bin/bootnode ./dist/gwat-bootnode
     - cp ./build/bin/geth ./dist/gwat
@@ -20,10 +16,3 @@ build:
     paths:
       - dist/gwat-bootnode
       - dist/gwat
-cache:
-  paths:
-    - /apt-cache
-    - /go/src/github.com
-    - /go/src/golang.org
-    - /go/src/google.golang.org
-    - /go/src/gopkg.in
