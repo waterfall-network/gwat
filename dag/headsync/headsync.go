@@ -85,6 +85,7 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 
 	if ok, err := hs.validateCheckpoint(checkpoint); !ok {
 		log.Warn("☠ Prepare to head synchronising is skipped (bad checkpoint)", "err", err, "checkpoint", checkpoint)
+		hs.headSyncReset()
 		return false, err
 	}
 
@@ -116,6 +117,7 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 	}
 	// update head of finalized chain
 	if err := bc.WriteFinalizedBlock(cpBlock.Nr(), cpBlock, nil, nil, nil, true); err != nil {
+		hs.headSyncReset()
 		return false, err
 	}
 	// update BlockDags

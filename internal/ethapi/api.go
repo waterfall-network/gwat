@@ -139,6 +139,8 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 		"pulledStates":  hexutil.Uint64(progress.PulledStates),
 		"knownStates":   hexutil.Uint64(progress.KnownStates),
 		"stage":         progress.Stage,
+		"lastCoordSlot": progress.LastCoordSlot,
+		"maxBlockSlot":  progress.MaxBlockSlot,
 	}, nil
 }
 

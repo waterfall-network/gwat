@@ -234,6 +234,7 @@ type BlockChain interface {
 	ExploreChainRecursive(headHash common.Hash, memo ...core.ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache core.ExploreResultMap, err error)
 	//SetSyncProvider set provider of access to synchronization functionality
 	SetSyncProvider(provider types.SyncProvider)
+	GetLastCoordinatedSlot() uint64
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -304,7 +305,9 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	default:
 		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.blockchain != nil, "mode", mode)
 	}
+	isResync, maxBlockSlot, lastCoordinatedSlot := d.getResyncParams()
 
+	// define sync stage
 	stage := "none"
 	switch {
 	case d.FinSynchronising():
@@ -313,6 +316,8 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 		stage = "dag"
 	case d.HeadSynchronising():
 		stage = "head"
+	case isResync:
+		stage = "resync"
 	}
 
 	return ethereum.SyncProgress{
@@ -322,7 +327,25 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 		PulledStates:  d.syncStatsState.processed,
 		KnownStates:   d.syncStatsState.processed + d.syncStatsState.pending,
 		Stage:         stage,
+		LastCoordSlot: lastCoordinatedSlot,
+		MaxBlockSlot:  maxBlockSlot,
 	}
+}
+
+func (d *Downloader) IsResyncActive() bool {
+	isResync, _, _ := d.getResyncParams()
+	return isResync
+}
+
+func (d *Downloader) getResyncParams() (isResync bool, maxBlockSlot, lastCoordinatedSlot uint64) {
+	lastCoordinatedSlot = d.blockchain.GetLastCoordinatedSlot()
+	tips := d.blockchain.GetTips()
+	maxBlockSlot = tips.GetMaxSlot()
+	isResync = lastCoordinatedSlot < maxBlockSlot
+	if d.Synchronising() {
+		isResync = false
+	}
+	return isResync, maxBlockSlot, lastCoordinatedSlot
 }
 
 // Synchronising returns whether the downloader is currently synchronising.
@@ -773,13 +796,13 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 
 // syncWithPeerUnknownDagBlocks if remote peer has unknown dag blocks only sync such blocks only
 func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.HashArray) (err error) {
-	//// Make sure only one goroutine is ever allowed past this point at once
-	//if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
-	//	return errBusy
-	//}
+	// Make sure only one goroutine is ever allowed past this point at once
+	if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
+		return errBusy
+	}
 
 	defer func(start time.Time) {
-		//atomic.StoreInt32(&d.dagSyncing, 0)
+		atomic.StoreInt32(&d.dagSyncing, 0)
 
 		//if !atomic.CompareAndSwapInt32(&d.headSyncing, 0, 1) {
 		//	log.Warn("Head Synchronisation is already running")

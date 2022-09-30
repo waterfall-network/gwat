@@ -197,6 +197,7 @@ type BlockChain struct {
 
 	lastFinalizedBlock     atomic.Value // Current last finalized block of the blockchain
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
+	lastCoordinatedSlot    uint64       // Last slot received from coordinating network
 
 	stateCache         state.Database // State database to reuse between imports (contains state cache)
 	bodyCache          *lru.Cache     // Cache for the most recent block bodies

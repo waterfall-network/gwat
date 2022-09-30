@@ -157,12 +157,7 @@ func (cs *chainSyncer) isResync() bool {
 	}
 	lfSlot := cs.handler.chain.GetLastFinalizedBlock().Slot()
 	tips := cs.handler.chain.GetTips()
-	maxSlot := uint64(0)
-	for _, t := range tips {
-		if t.Slot > maxSlot {
-			maxSlot = t.Slot
-		}
-	}
+	maxSlot := tips.GetMaxSlot()
 	return maxSlot-lfSlot >= DagSlotsLimit
 }
 

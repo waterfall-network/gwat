@@ -123,6 +123,17 @@ func (tips Tips) getOrderedHashes() common.HashArray {
 	return sortedHashes
 }
 
+//GetMaxSlot get max slot of tips
+func (tips Tips) GetMaxSlot() uint64 {
+	maxSlot := uint64(0)
+	for _, t := range tips {
+		if t.Slot > maxSlot {
+			maxSlot = t.Slot
+		}
+	}
+	return maxSlot
+}
+
 /********** BlockDAG **********/
 
 // BlockDAG represents a currently no descendants block

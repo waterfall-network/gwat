@@ -372,6 +372,7 @@ func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
 func (d *Dag) setConsensusInfo(dsi *types.ConsensusInfo) {
 	d.consensusInfo = dsi
 	d.emitDagSyncInfo()
+	d.bc.SetLastCoordinatedSlot(dsi.Slot)
 }
 
 // SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
