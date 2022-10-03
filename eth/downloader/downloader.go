@@ -803,13 +803,10 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 
 	defer func(start time.Time) {
 		atomic.StoreInt32(&d.dagSyncing, 0)
-
-		//if !atomic.CompareAndSwapInt32(&d.headSyncing, 0, 1) {
-		//	log.Warn("Head Synchronisation is already running")
-		//}
-
 		log.Debug("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
+
+	log.Warn("<<<< Synchronization of unknown dag blocks >>>>", "count", len(dag), "dag", dag)
 
 	headers, err := d.fetchDagHeaders(p, dag)
 	log.Info("Synchronization of unknown dag blocks: dag headers retrieved", "count", len(headers), "headers", headers, "err", err)

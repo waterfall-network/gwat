@@ -230,7 +230,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	op := peerToSyncOp(mode, peer)
 	lastFinNr := cs.handler.chain.GetLastFinalizedNumber()
 
-	if lastFinNr >= op.lastFinNr {
+	if lastFinNr > op.lastFinNr {
 		return nil // We're in sync.
 	}
 
