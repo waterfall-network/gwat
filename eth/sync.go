@@ -151,14 +151,14 @@ func (cs *chainSyncer) loop() {
 }
 
 func (cs *chainSyncer) isResync() bool {
-	const DagSlotsLimit = 10
+	const DagSlotsLimit = 32
 	if cs.handler.downloader.Synchronising() {
 		return false
 	}
 	lfSlot := cs.handler.chain.GetLastFinalizedBlock().Slot()
 	tips := cs.handler.chain.GetTips()
 	maxSlot := tips.GetMaxSlot()
-	return maxSlot-lfSlot >= DagSlotsLimit
+	return maxSlot-lfSlot > DagSlotsLimit
 }
 
 // getResyncOp determines whether resync is required.
