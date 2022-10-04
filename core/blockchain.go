@@ -2183,9 +2183,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			bc.RemoveTips(dagBlock.DagChainHashes)
 			bc.WriteCurrentTips()
 
-			log.Info("PROPAGATED TIPS >>>>>>", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "tips", bc.GetTips().Print())
-
-			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
+			log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
 
 			if stateErr != nil || statedb == nil {
 				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.Hash().Hex(), "err", stateErr)

@@ -111,7 +111,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// collect next finalization candidates
-	const slotsDelay = uint64(2) // number of slots of delay to retrieve candidates
+	const slotsDelay = uint64(4) // number of slots of delay to retrieve candidates
 	candidatesSlot := data.Slot - slotsDelay
 	if candidatesSlot < 0 {
 		candidatesSlot = 0
