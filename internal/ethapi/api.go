@@ -857,7 +857,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 }
 
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
-	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
@@ -1096,6 +1096,115 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	return hexutil.Uint64(hi), nil
 }
 
+func DoEstimateGasQuick(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
+	// Binary search the gas requirement, as it may be higher than the amount used
+	var (
+		hi  uint64
+		cap uint64
+	)
+	// Use zero address if sender unspecified.
+	if args.From == nil {
+		args.From = new(common.Address)
+	}
+	// Determine the highest gas limit can be used during the estimation.
+	if args.Gas != nil && uint64(*args.Gas) >= params.TxGas {
+		hi = uint64(*args.Gas)
+	} else {
+		// Retrieve the block to act as the gas ceiling
+		block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
+		if block == nil {
+			block = b.GetLastFinalizedBlock()
+			if block == nil {
+				return 0, errors.New("block not found")
+			}
+			bNr := rpc.BlockNumber(block.Nr())
+			blockNrOrHash = rpc.BlockNumberOrHash{
+				BlockNumber:      &bNr,
+				BlockHash:        nil,
+				RequireCanonical: false,
+			}
+		}
+		hi = block.GasLimit()
+	}
+	// Normalize the max fee per gas the call is willing to spend.
+	var feeCap *big.Int
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	} else if args.GasPrice != nil {
+		feeCap = args.GasPrice.ToInt()
+	} else if args.MaxFeePerGas != nil {
+		feeCap = args.MaxFeePerGas.ToInt()
+	} else {
+		feeCap = common.Big0
+	}
+	// Recap the highest gas limit with account's available balance.
+	if feeCap.BitLen() != 0 {
+		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
+		balance := state.GetBalance(*args.From) // from can't be nil
+		available := new(big.Int).Set(balance)
+		if args.Value != nil {
+			if args.Value.ToInt().Cmp(available) >= 0 {
+				return 0, errors.New("insufficient funds for transfer")
+			}
+			available.Sub(available, args.Value.ToInt())
+		}
+		allowance := new(big.Int).Div(available, feeCap)
+
+		// If the allowance is larger than maximum uint64, skip checking
+		if allowance.IsUint64() && hi > allowance.Uint64() {
+			transfer := args.Value
+			if transfer == nil {
+				transfer = new(hexutil.Big)
+			}
+			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
+				"sent", transfer.ToInt(), "maxFeePerGas", feeCap, "fundable", allowance)
+			hi = allowance.Uint64()
+		}
+	}
+	// Recap the highest gas allowance with specified gascap.
+	if gasCap != 0 && hi > gasCap {
+		log.Warn("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
+		hi = gasCap
+	}
+	cap = hi
+
+	// Create a helper to check if a gas allowance results in an executable transaction
+	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
+		args.Gas = (*hexutil.Uint64)(&gas)
+
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
+		if err != nil {
+			if errors.Is(err, core.ErrIntrinsicGas) {
+				return true, nil, nil // Special case, raise gas limit
+			}
+			return true, nil, err // Bail out
+		}
+		return result.Failed(), result, nil
+	}
+	failed, result, err := executable(hi)
+	if err != nil {
+		return 0, err
+	}
+	if failed {
+		if result != nil && result.Err != vm.ErrOutOfGas {
+			if len(result.Revert()) > 0 {
+				return 0, newRevertError(result)
+			}
+			return 0, result.Err
+		}
+		// Otherwise, the specified gas cap is too low
+		return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+	}
+
+	return hexutil.Uint64(result.UsedGas), nil
+}
+
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
@@ -1103,7 +1212,8 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionA
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	return DoEstimateGasQuick(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	//return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM

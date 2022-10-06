@@ -671,7 +671,7 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
-			log.Trace("Skipping unsupported tx type while create", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
+			log.Error("Skipping unsupported tx type while create", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		default:

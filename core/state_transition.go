@@ -18,7 +18,6 @@ package core
 
 import (
 	"fmt"
-	"github.com/waterfall-foundation/gwat/log"
 	"math"
 	"math/big"
 
@@ -320,7 +319,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 	if st.gas < gas {
-		log.Warn("gasLimit is exceeded")
+		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
 	st.gas -= gas
 

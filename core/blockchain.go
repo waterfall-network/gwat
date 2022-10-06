@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"sort"
 	"sync"
@@ -1908,7 +1909,7 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	blockCreator := block.Header().Coinbase
 	contains, index := common.Contains(*creators, blockCreator)
 	if !contains {
-		log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+		log.Warn("Block verification: creator assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators)
 		return false
 	} else {
 		signer := types.LatestSigner(bc.chainConfig)
@@ -1919,7 +1920,7 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 		}
 		for txFrom := range addrMap {
 			if !IsAddressAssigned(txFrom, *creators, int64(index)) {
-				log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+				log.Warn("Block verification: creator txs assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators, "txFrom", txFrom)
 				return false
 			}
 		}
@@ -1968,8 +1969,12 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
+		var (
+			intrGas uint64
+			err     error
+		)
 		isTokenOp := false
-		if _, err := operation.GetOpCode(tx.Data()); err == nil {
+		if _, err = operation.GetOpCode(tx.Data()); err == nil {
 			isTokenOp = true
 		}
 
@@ -1979,10 +1984,17 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		}
 
 		contractCreation := tx.To() == nil && !isTokenOp
-
-		intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
+		if len(tx.Data()) > 0 {
+			intrGas, err = bc.TxEstimateGas(tx, nil)
+			if err != nil {
+				log.Warn("Block verification: gas usage error", "err", err)
+				return false, err
+			}
+		} else {
+			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
+		}
 		if err != nil {
-			log.Warn("Block verification: intrinsic gas error", "err", err)
+			log.Warn("Block verification: gas usage error", "err", err)
 			return false, nil
 		}
 		intrGasSum += intrGas
@@ -2637,6 +2649,38 @@ func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *s
 		return nil, nil, err
 	}
 	return receipt, receipt.Logs, nil
+}
+
+func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
+	defer func(start time.Time) { log.Info("+++ Executing EVM call finished +++", "runtime", time.Since(start)) }(time.Now())
+	header := bc.GetLastFinalizedHeader()
+	if lfNumber != nil {
+		header = bc.GetHeaderByNumber(*lfNumber)
+	}
+
+	statedb, err := bc.StateAt(header.Root)
+	if err != nil {
+		return 0, err
+	}
+
+	signer := types.LatestSigner(bc.chainConfig)
+	from, _ := types.Sender(signer, tx)
+	statedb.SetNonce(from, tx.Nonce())
+	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
+	gasBalance := new(big.Int).Mul(maxGas, tx.GasPrice())
+	reqBalance := new(big.Int).Add(gasBalance, tx.Value())
+	statedb.SetBalance(from, reqBalance)
+
+	gasPool := new(GasPool).AddGas(math.MaxUint64)
+	usedGas := uint64(0)
+
+	receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig())
+	if err != nil {
+		log.Error("Tx Estimate Gas: Error", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "err", err)
+		return 0, err
+	}
+	log.Info("Tx Estimate Gas: success", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "txGas", tx.Gas(), "calcGas", receipt.GasUsed)
+	return receipt.GasUsed, nil
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
