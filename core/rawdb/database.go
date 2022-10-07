@@ -24,12 +24,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/ethdb"
 	"github.com/waterfall-foundation/gwat/ethdb/leveldb"
 	"github.com/waterfall-foundation/gwat/ethdb/memorydb"
 	"github.com/waterfall-foundation/gwat/log"
-	"github.com/olekukonko/tablewriter"
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.
@@ -350,6 +350,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			hashNumPairings.Add(size)
 		case bytes.HasPrefix(key, lastCanonicalHashKey) && len(key) == (len(lastCanonicalHashKey)+common.HashLength):
 			hashNumPairings.Add(size)
+		case bytes.HasPrefix(key, lastCoordHashKey) && len(key) == (len(lastCoordHashKey)+common.HashLength):
+			hashNumPairings.Add(size)
 		case len(key) == common.HashLength:
 			tries.Add(size)
 		case bytes.HasPrefix(key, CodePrefix) && len(key) == len(CodePrefix)+common.HashLength:
@@ -381,7 +383,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
-				lastFinalizedHashKey, lastCanonicalHashKey,
+				lastFinalizedHashKey, lastCanonicalHashKey, lastCoordHashKey,
 				databaseVersionKey, tipsHashesKey, headFastBlockKey, lastPivotKey,
 				fastTrieProgressKey, snapshotDisabledKey, snapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey,

@@ -1508,6 +1508,10 @@ func (bc *BlockChain) WriteCreators(slot uint64, creators []common.Address) {
 	rawdb.WriteCreators(bc.db, slot, creators)
 }
 
+func (bc *BlockChain) WriteLastCoordinatedHash(hash common.Hash) {
+	rawdb.WriteLastCoordinatedHash(bc.db, hash)
+}
+
 func (bc *BlockChain) WriteBlockDag(blockDag *types.BlockDAG) {
 	rawdb.WriteBlockDag(bc.db, blockDag)
 }
