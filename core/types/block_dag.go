@@ -123,6 +123,17 @@ func (tips Tips) getOrderedHashes() common.HashArray {
 	return sortedHashes
 }
 
+//GetMaxSlot get max slot of tips
+func (tips Tips) GetMaxSlot() uint64 {
+	maxSlot := uint64(0)
+	for _, t := range tips {
+		if t.Slot > maxSlot {
+			maxSlot = t.Slot
+		}
+	}
+	return maxSlot
+}
+
 /********** BlockDAG **********/
 
 // BlockDAG represents a currently no descendants block
@@ -254,6 +265,7 @@ func (gd *GraphDag) GetDagChainHashes() *common.HashArray {
 	return &res
 }
 
+//todo deprecated (don't use)
 //GetOrderedLoadedAncestors retrieves ordered ancestors
 func (gd *GraphDag) GetOrderedLoadedAncestors() []*GraphDag {
 	//1) calculate order for parents

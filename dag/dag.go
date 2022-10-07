@@ -111,8 +111,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// collect next finalization candidates
-	const slotsDelay = uint64(2) // number of slots of delay to retrieve candidates
-	candidatesSlot := data.Slot - slotsDelay
+	candidatesSlot := data.Slot - finalizer.CoordDelaySlots
 	if candidatesSlot < 0 {
 		candidatesSlot = 0
 	}
@@ -132,15 +131,13 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	//tips, unloaded := d.bc.ReviseTips()
 	dagSlots := d.countDagSlots(&tips)
 	log.Info("Handle Consensus: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
-		//"unloaded", unloaded,
 		"dagSlots", dagSlots,
 	)
 
-	//if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Creators: data.Creators,
@@ -243,15 +240,13 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 	dagSlots := d.countDagSlots(&tips)
 
 	log.Info("Handle Consensus: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
-		//"unloaded", unloaded,
 		"dagSlots", dagSlots,
 	)
 
-	//if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Creators: data.Creators,
@@ -348,6 +343,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
+	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
 	return d.headsync.SetReadyState(checkpoint)
 }
 
@@ -355,6 +351,7 @@ func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error)
 func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
+	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
 	return d.headsync.Sync(data)
 }
 
@@ -370,6 +367,7 @@ func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
 func (d *Dag) setConsensusInfo(dsi *types.ConsensusInfo) {
 	d.consensusInfo = dsi
 	d.emitDagSyncInfo()
+	d.bc.SetLastCoordinatedSlot(dsi.Slot)
 }
 
 // SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event

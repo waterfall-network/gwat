@@ -73,6 +73,7 @@ type Peer struct {
 
 	lastFinNr uint64            // Latest advertised dag lastFinNr
 	dag       *common.HashArray // Latest advertised dag hashes
+	isNewCon  bool              // Is newly connected
 
 	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
@@ -103,6 +104,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		txAnnounce:      make(chan []common.Hash),
 		txpool:          txpool,
 		term:            make(chan struct{}),
+		isNewCon:        false,
 	}
 	// Start up all the broadcasters
 	go peer.broadcastBlocks()
@@ -140,6 +142,20 @@ func (p *Peer) GetDagInfo() (lastFinNr uint64, dag *common.HashArray) {
 		//dag =
 	}
 	return lastFinNr, dag
+}
+
+// IsNewlyConnected check is handled by sync.
+func (p *Peer) IsNewlyConnected() bool {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	return p.isNewCon
+}
+
+// ResetNewlyConnected  reset newly connected status (handled by sync).
+func (p *Peer) ResetNewlyConnected() {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	p.isNewCon = false
 }
 
 // SetDagInfo updates the lastFinNr, hash and dag of the peer.

@@ -152,6 +152,14 @@ func (h *Header) Nr() uint64 {
 	return 0
 }
 
+func (h *Header) FinalizedHash() common.Hash {
+	if h == nil || h.Number == nil {
+		return common.Hash{}
+	}
+	cpy := h.Copy()
+	return rlpHash(cpy)
+}
+
 // Size returns the approximate memory used by all internal contents. It is used
 // to approximate and limit the memory consumption of various caches.
 func (h *Header) Size() common.StorageSize {
@@ -320,6 +328,7 @@ func (b *Block) Extra() []byte                  { return common.CopyBytes(b.head
 func (b *Block) Number() *uint64                { return b.header.Number }
 func (b *Block) Nr() uint64                     { return b.header.Nr() }
 func (b *Block) SetNumber(finNr *uint64)        { b.header.Number = finNr }
+func (b *Block) FinalizedHash() common.Hash     { return b.header.FinalizedHash() }
 
 func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {

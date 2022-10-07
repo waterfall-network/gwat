@@ -671,7 +671,7 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
-			log.Trace("Skipping unsupported tx type while create", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
+			log.Error("Skipping unsupported tx type while create", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		default:
@@ -730,11 +730,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 					//if block not finalized
 					if parentBlock.Height() > 0 && parentBlock.Nr() == 0 {
 						log.Warn("Creator reorg tips: active BlockDag not found", "parent", ph.Hex(), "parent.slot", parentBlock.Slot(), "parent.height", parentBlock.Height(), "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex())
-						_, _, _, graph, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
+						_, loaded, _, _, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
 						expCache = exc
-						if dch := graph.GetDagChainHashes(); dch != nil {
-							dagChainHashes = *dch
-						}
+						dagChainHashes = loaded
+						//if dch := graph.GetDagChainHashes(); dch != nil {
+						//	dagChainHashes = *dch
+						//}
 					}
 					_dag = &types.BlockDAG{
 						Hash:                ph,
@@ -832,7 +833,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
 		Extra:        c.extra,
 		Time:         uint64(timestamp),
-		LFHash:       lastFinBlock.Hash(),
+		LFHash:       lastFinBlock.FinalizedHash(),
 		LFNumber:     lastFinBlock.Nr(),
 	}
 

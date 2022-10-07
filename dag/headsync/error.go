@@ -5,6 +5,9 @@ import (
 )
 
 var (
+	// ErrLocked returned when procedure is locked by another one.
+	ErrLocked = errors.New("procedure is locked")
+
 	// ErrBusy returned when process busy.
 	ErrBusy = errors.New("busy")
 

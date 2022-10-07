@@ -19,8 +19,8 @@ package vm
 import (
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
 	"github.com/holiman/uint256"
+	"github.com/waterfall-foundation/gwat/common"
 )
 
 // ContractRef is a reference to the contract's backing object

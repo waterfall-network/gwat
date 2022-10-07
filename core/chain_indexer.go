@@ -53,6 +53,7 @@ type ChainIndexerBackend interface {
 
 // ChainIndexerChain interface is used for connecting the indexer to a blockchain
 type ChainIndexerChain interface {
+	types.SyncProvider
 	// GetLastFinalizedHeader retrieves the latest locally known header.
 	GetLastFinalizedHeader() *types.Header
 
@@ -92,6 +93,8 @@ type ChainIndexer struct {
 	checkpointHead     common.Hash // Section head belonging to the checkpoint
 
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
+
+	syncProvider types.SyncProvider
 
 	log  log.Logger
 	lock sync.Mutex
@@ -149,6 +152,7 @@ func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
 	header := chain.GetLastFinalizedHeader()
+	c.syncProvider = chain
 	go c.eventLoop(header, events, sub)
 }
 
@@ -221,13 +225,16 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 				errc <- nil
 				return
 			}
+			if c.syncProvider.HeadSynchronising() {
+				continue
+			}
 			header := ev.Block.Header()
 			if !header.ParentHashes.Has(prevHash) {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
 
-				if rawdb.ReadFinalizedHashByNumber(c.chainDb, prevHeader.Nr()) != prevHash {
-					log.Error("FindCommonAncestor", "nr", prevHeader.Nr(), "height", prevHeader.Height, "hash", prevHash.Hex())
+				if h := rawdb.ReadFinalizedHashByNumber(c.chainDb, prevHeader.Nr()); h != prevHash {
+					log.Error("Indexer bad prev header", "slot", prevHeader.Slot, "nr", prevHeader.Nr(), "height", prevHeader.Height, "db.Hash", h.Hex(), "hash", prevHash.Hex())
 					if prevHeader.Nr() > 0 {
 						if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
 							c.newHead(h.Nr(), true)

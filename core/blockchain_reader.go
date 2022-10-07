@@ -93,6 +93,16 @@ func (bc *BlockChain) GetLastFinalizedNumber() uint64 {
 	return rawdb.ReadLastFinalizedNumber(bc.db)
 }
 
+// GetLastCoordinatedSlot returns last slot received from coordinating network.
+func (bc *BlockChain) GetLastCoordinatedSlot() uint64 {
+	return bc.lastCoordinatedSlot
+}
+
+// SetLastCoordinatedSlot set last slot received from coordinating network.
+func (bc *BlockChain) SetLastCoordinatedSlot(lastSlot uint64) {
+	bc.lastCoordinatedSlot = lastSlot
+}
+
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
 func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {

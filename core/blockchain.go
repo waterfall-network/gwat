@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"sort"
 	"sync"
@@ -197,6 +198,7 @@ type BlockChain struct {
 
 	lastFinalizedBlock     atomic.Value // Current last finalized block of the blockchain
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
+	lastCoordinatedSlot    uint64       // Last slot received from coordinating network
 
 	stateCache         state.Database // State database to reuse between imports (contains state cache)
 	bodyCache          *lru.Cache     // Cache for the most recent block bodies
@@ -216,11 +218,12 @@ type BlockChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	engine     consensus.Engine
-	validator  Validator // Block and state validator interface
-	prefetcher Prefetcher
-	processor  Processor // Block transaction processor interface
-	vmConfig   vm.Config
+	engine       consensus.Engine
+	validator    Validator // Block and state validator interface
+	prefetcher   Prefetcher
+	processor    Processor // Block transaction processor interface
+	vmConfig     vm.Config
+	syncProvider types.SyncProvider
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -263,6 +266,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		futureBlocks:       futureBlocks,
 		engine:             engine,
 		vmConfig:           vmConfig,
+		syncProvider:       nil,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -289,7 +293,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Initialize the chain with ancient data if it isn't empty.
 	var txIndexBlock uint64
 
-	if bc.empty() {
+	isEmpty := bc.empty()
+	if isEmpty {
 		//Start Freezer
 		rawdb.InitDatabaseFromFreezer(bc.db)
 		// If ancient database is not empty, reconstruct all missing
@@ -1838,10 +1843,12 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		bc.AddTips(&types.BlockDAG{
 			Hash:                block.Hash(),
 			Height:              block.Height(),
+			Slot:                block.Slot(),
 			LastFinalizedHash:   block.LFHash(),
 			LastFinalizedHeight: block.LFNumber(),
 			DagChainHashes:      dagChainHashes,
 		})
+		bc.RemoveTips(dagChainHashes)
 	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
@@ -1865,6 +1872,33 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	return it.index, err
 }
 
+func (bc *BlockChain) verifyLFData(block *types.Block) bool {
+	if block.LFNumber() > bc.GetLastFinalizedNumber() {
+		return true
+	}
+	LFBlock := bc.GetBlockByNumber(block.LFNumber())
+	if LFBlock == nil {
+		log.Warn("Block verification: LFBlock not found",
+			"block hash", block.Hash().Hex(),
+			"LFHash", block.LFHash(),
+			"LFNumber", block.LFNumber(),
+		)
+		return false
+	}
+	LFBlockFinHash := LFBlock.FinalizedHash()
+	if block.LFHash() != LFBlockFinHash {
+		log.Warn("Block verification: LFHash dismatch",
+			"block hash", block.Hash().Hex(),
+			"LFHash", block.LFHash(),
+			"LFNumber", block.LFNumber(),
+			"LFBlock hash", LFBlock.FinalizedHash().Hex(),
+			"LFBlock finHash", LFBlockFinHash.Hex(),
+		)
+		return false
+	}
+	return true
+}
+
 // verifyCreators return false if creator is unassigned
 func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	creators := bc.GetCreators(block.Slot())
@@ -1875,7 +1909,7 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	blockCreator := block.Header().Coinbase
 	contains, index := common.Contains(*creators, blockCreator)
 	if !contains {
-		log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+		log.Warn("Block verification: creator assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators)
 		return false
 	} else {
 		signer := types.LatestSigner(bc.chainConfig)
@@ -1886,7 +1920,7 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 		}
 		for txFrom := range addrMap {
 			if !IsAddressAssigned(txFrom, *creators, int64(index)) {
-				log.Warn("Deleted propagated block with unassigned creator", "blockHash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "creators", creators)
+				log.Warn("Block verification: creator txs assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators, "txFrom", txFrom)
 				return false
 			}
 		}
@@ -1935,8 +1969,12 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
+		var (
+			intrGas uint64
+			err     error
+		)
 		isTokenOp := false
-		if _, err := operation.GetOpCode(tx.Data()); err == nil {
+		if _, err = operation.GetOpCode(tx.Data()); err == nil {
 			isTokenOp = true
 		}
 
@@ -1946,10 +1984,17 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		}
 
 		contractCreation := tx.To() == nil && !isTokenOp
-
-		intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
+		if len(tx.Data()) > 0 {
+			intrGas, err = bc.TxEstimateGas(tx, nil)
+			if err != nil {
+				log.Warn("Block verification: gas usage error", "err", err)
+				return false, err
+			}
+		} else {
+			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
+		}
 		if err != nil {
-			log.Warn("Block verification: intrinsic gas error", "err", err)
+			log.Warn("Block verification: gas usage error", "err", err)
 			return false, nil
 		}
 		intrGasSum += intrGas
@@ -1959,14 +2004,14 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	return bc.verifyBlockParents(block), nil
+	return bc.verifyBlockParents(block) && bc.verifyLFData(block), nil
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 	parents := bc.GetBlocksByHashes(block.ParentHashes())
-	for i, parent := range parents {
-		for j, pparent := range parents {
-			if i == j {
+	for ph, parent := range parents {
+		for pph, pparent := range parents {
+			if ph == pph {
 				continue
 			}
 			if bc.IsAncestorRecursive(parent, pparent.Hash()) {
@@ -2004,8 +2049,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	headers := make([]*types.Header, len(chain))
 	headerMap := make(types.HeaderMap, len(chain))
 	seals := make([]bool, len(chain))
-
-	bc.MoveTxsToProcessing(chain)
 
 	for i, block := range chain {
 		headers[i] = block.Header()
@@ -2099,6 +2142,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
+		bc.MoveTxsToProcessing(types.Blocks{block})
 
 		//retrieve state data
 		statedb, stateBlock, recommitBlocks, cachedHashes, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
@@ -2116,11 +2160,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 				stBDag := bc.ReadBockDag(stateBlock.Hash())
 				if stBDag == nil {
 					log.Warn("Propagated block import failed (state block dag not found)", "stateBlock", stateBlock, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex())
-					_, _, _, graph, exc, _ := bc.ExploreChainRecursive(stateBlock.Hash(), expCache)
+					_, loaded, _, _, exc, _ := bc.ExploreChainRecursive(stateBlock.Hash(), expCache)
 					expCache = exc
-					if dch := graph.GetDagChainHashes(); dch != nil {
-						dagChainHashes = append(dagChainHashes, (*dch)...)
-					}
+					dagChainHashes = append(dagChainHashes, loaded...).Uniq()
+					//if dch := graph.GetDagChainHashes(); dch != nil {
+					//	dagChainHashes = append(dagChainHashes, (*dch)...)
+					//}
 				} else {
 					blks := bc.GetBlocksByHashes(stBDag.DagChainHashes)
 					for _, bl := range blks {
@@ -2137,18 +2182,19 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			}
 
 			bc.RemoveTips(block.ParentHashes())
-			bc.AddTips(&types.BlockDAG{
+			dagBlock := &types.BlockDAG{
 				Hash:                block.Hash(),
 				Height:              block.Height(),
+				Slot:                block.Slot(),
 				LastFinalizedHash:   block.LFHash(),
 				LastFinalizedHeight: block.LFNumber(),
 				DagChainHashes:      dagChainHashes.Uniq(),
-			})
+			}
+			bc.AddTips(dagBlock)
+			bc.RemoveTips(dagBlock.DagChainHashes)
 			bc.WriteCurrentTips()
 
-			log.Info("PROPAGATED TIPS >>>>>>", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "tips", bc.GetTips().Print())
-
-			log.Info("Insert propagated blue block", "height", block.Height(), "hash", block.Hash().Hex())
+			log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
 
 			if stateErr != nil || statedb == nil {
 				log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.Hash().Hex(), "err", stateErr)
@@ -2535,12 +2581,13 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 	hightNonce := false
 	lowNonce := false
 
+	gasUsed := new(uint64)
 	for i, tx := range block.Transactions() {
 		from, _ := types.Sender(signer, tx)
 		// Start executing the transaction
 		statedb.Prepare(tx.Hash(), i)
 
-		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool)
+		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool, gasUsed)
 		receipts = append(receipts, receipt)
 		rlogs = append(rlogs, logs...)
 		switch {
@@ -2592,15 +2639,47 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 }
 
 // recommitBlockTransaction applies single transactions wile recommit block process.
-func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool) (*types.Receipt, []*types.Log, error) {
+func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool, gasUsed *uint64) (*types.Receipt, []*types.Log, error) {
 	snap := statedb.Snapshot()
-	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, &block.Header().GasUsed, *bc.GetVMConfig())
+	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig())
 	if err != nil {
 		log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
 		statedb.RevertToSnapshot(snap)
 		return nil, nil, err
 	}
 	return receipt, receipt.Logs, nil
+}
+
+func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
+	defer func(start time.Time) { log.Info("+++ Executing EVM call finished +++", "runtime", time.Since(start)) }(time.Now())
+	header := bc.GetLastFinalizedHeader()
+	if lfNumber != nil {
+		header = bc.GetHeaderByNumber(*lfNumber)
+	}
+
+	statedb, err := bc.StateAt(header.Root)
+	if err != nil {
+		return 0, err
+	}
+
+	signer := types.LatestSigner(bc.chainConfig)
+	from, _ := types.Sender(signer, tx)
+	statedb.SetNonce(from, tx.Nonce())
+	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
+	gasBalance := new(big.Int).Mul(maxGas, tx.GasPrice())
+	reqBalance := new(big.Int).Add(gasBalance, tx.Value())
+	statedb.SetBalance(from, reqBalance)
+
+	gasPool := new(GasPool).AddGas(math.MaxUint64)
+	usedGas := uint64(0)
+
+	receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig())
+	if err != nil {
+		log.Error("Tx Estimate Gas: Error", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "err", err)
+		return 0, err
+	}
+	log.Info("Tx Estimate Gas: success", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "txGas", tx.Gas(), "calcGas", receipt.GasUsed)
+	return receipt.GasUsed, nil
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -3335,8 +3414,12 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 	if len(memo) == 0 {
 		memo = append(memo, make(ExploreResultMap))
 	}
+	lfNr := bc.GetLastFinalizedBlock().Nr()
 
 	block := bc.GetBlockByHash(headHash)
+	if block.Nr() > lfNr {
+		block.SetNumber(nil)
+	}
 	graph = &types.GraphDag{
 		Hash:   headHash,
 		Height: 0,
@@ -3409,6 +3492,9 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 
 // IsAncestorRecursive checks the passed ancestorHash is an acesstor of the given block.
 func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash common.Hash) bool {
+	if block.Hash() == ancestorHash {
+		return false
+	}
 	//if ancestorHash is genesis
 	if bc.genesisBlock.Hash() == ancestorHash {
 		return true
@@ -3422,9 +3508,24 @@ func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash commo
 	if ancestor == nil {
 		return false
 	}
+	//if ancestor slot is greater or equal that block slot
+	if ancestor.Slot() >= block.Slot() {
+		return false
+	}
 	//if ancestor is finalised and block is not finalised
 	if ancestor.Number() != nil && block.Number() == nil {
-		return true
+		_, _, f, _, _, err := bc.ExploreChainRecursive(block.Hash())
+		if err != nil {
+			return false
+		}
+		finBls := bc.GetBlocksByHashes(f)
+		maxFinNr := uint64(0)
+		for _, b := range finBls {
+			if maxFinNr < b.Nr() {
+				maxFinNr = b.Nr()
+			}
+		}
+		return ancestor.Nr() <= maxFinNr
 	}
 	//if ancestor is not finalised and block is finalised
 	if ancestor.Number() == nil && block.Number() != nil {
@@ -3541,4 +3642,43 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 
 func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
 	bc.rmTxFeed.Send(tx)
+}
+
+/* synchronization functionality */
+
+//SetSyncProvider set provider of access to synchronization functionality
+func (bc *BlockChain) SetSyncProvider(provider types.SyncProvider) {
+	bc.syncProvider = provider
+}
+
+// Synchronising returns whether the downloader is currently synchronising.
+func (bc *BlockChain) Synchronising() bool {
+	if bc.syncProvider == nil {
+		return false
+	}
+	return bc.syncProvider.Synchronising()
+}
+
+// FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
+func (bc *BlockChain) FinSynchronising() bool {
+	if bc.syncProvider == nil {
+		return false
+	}
+	return bc.syncProvider.FinSynchronising()
+}
+
+// DagSynchronising returns whether the downloader is currently retrieving dag chain blocks.
+func (bc *BlockChain) DagSynchronising() bool {
+	if bc.syncProvider == nil {
+		return false
+	}
+	return bc.syncProvider.DagSynchronising()
+}
+
+// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
+func (bc *BlockChain) HeadSynchronising() bool {
+	if bc.syncProvider == nil {
+		return false
+	}
+	return bc.syncProvider.HeadSynchronising()
 }

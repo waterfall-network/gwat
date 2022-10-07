@@ -871,6 +871,16 @@ web3._extend({
 			call: 'dag_getCandidates',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'headSyncReady',
+			call: 'dag_headSyncReady',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'headSync',
+			call: 'dag_headSync',
+			params: 1
+		}),
 	]
 });
 `

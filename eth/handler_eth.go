@@ -225,7 +225,27 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	h.blockFetcher.Enqueue(peer.ID(), block, peer.RequestOneHeader, peer.RequestBodies)
 	// Update the peer's status info if better than the previous
 	lastFinNr, dag := peer.GetDagInfo()
-	peer.SetDagInfo(lastFinNr, dag)
+	if dag == nil {
+		dag = &common.HashArray{}
+	}
+	if block.LFNumber() > lastFinNr {
+		lastFinNr = block.LFNumber()
+	}
+	lfb := h.chain.GetBlockByHash(block.LFHash())
+	if lfb != nil {
+		*dag = dag.Difference(append(lfb.ParentHashes(), lfb.Hash()))
+	}
+	upDag := common.HashArray{}
+	if len(*dag) > 0 {
+		localBlocks := h.chain.GetBlocksByHashes(*dag)
+		for hash, bl := range localBlocks {
+			if bl == nil || bl.Nr() == 0 && bl.Height() > 0 {
+				upDag = append(upDag, hash)
+			}
+		}
+	}
+	upDag = append(upDag, block.Hash())
+	peer.SetDagInfo(lastFinNr, &upDag)
 	h.chainSync.handlePeerEvent(peer)
 	return nil
 }
