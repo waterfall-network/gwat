@@ -88,6 +88,7 @@ func (p *Peer) broadcastTransactions() {
 					hashesCount++
 				} else {
 					log.Warn("storage size >= limit", "storage size", size, "limit", maxTxPacketSize)
+					break
 				}
 			}
 			queue = queue[:copy(queue, queue[hashesCount:])]
