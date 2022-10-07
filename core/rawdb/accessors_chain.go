@@ -953,6 +953,19 @@ func ReadLastFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 	return *height
 }
 
+// ReadLastCoordinatedHash retrieves the hash of the last Coordinated block.
+func ReadLastCoordinatedHash(db ethdb.KeyValueReader) common.Hash {
+	data, _ := db.Get(lastCoordHashKey)
+	return common.BytesToHash(data)
+}
+
+// WriteLastCoordinatedHash stores the hash of the last Coordinated block
+func WriteLastCoordinatedHash(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Put(lastCoordHashKey, hash.Bytes()); err != nil {
+		log.Crit("Failed to store the Last Coordinated Hash", "err", err)
+	}
+}
+
 /**** BlockDag ***/
 
 // ReadBlockDag retrieves the BlockDag structure by hash.

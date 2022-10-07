@@ -188,6 +188,9 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	}
 
 	d.bc.WriteCreators(data.Slot, data.Creators)
+	if len(data.Finalizing) > 0 {
+		d.bc.WriteLastCoordinatedHash(data.Finalizing[len(data.Finalizing)-1])
+	}
 
 	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
 	res := &types.ConsensusResult{
@@ -292,6 +295,11 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 				}()
 			}
 		}()
+	}
+
+	d.bc.WriteCreators(data.Slot, data.Creators)
+	if len(data.Finalizing) > 0 {
+		d.bc.WriteLastCoordinatedHash(data.Finalizing[len(data.Finalizing)-1])
 	}
 
 	res := &types.FinalizationResult{

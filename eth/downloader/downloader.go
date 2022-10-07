@@ -169,6 +169,9 @@ type LightChain interface {
 	// GetLastFinalizedHeader retrieves the head header from the local chain.
 	GetLastFinalizedHeader() *types.Header
 
+	// GetLastCoordinatedHeader retrieves the last coordinated header.
+	GetLastCoordinatedHeader() *types.Header
+
 	// InsertHeaderChain inserts a batch of headers into the local chain.
 	InsertHeaderChain([]*types.Header, int) (int, error)
 
@@ -596,11 +599,10 @@ func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastF
 	}
 	height := lastFinNr
 
-	origin, err := d.findAncestor(p, latest)
-
+	origin, err := d.findCoordinatedAncestor(p, latest)
 	log.Info("Synchronization of finalized chain: start", "origin", origin, "latest.Number", latest.Nr(), "latest.Hash", latest.Hash().Hex())
-
 	if err != nil {
+		d.dropPeer(p.id)
 		return err
 	}
 	d.syncStatsLock.Lock()
@@ -806,7 +808,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		log.Debug("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 
-	log.Warn("<<<< Synchronization of unknown dag blocks >>>>", "count", len(dag), "dag", dag)
+	log.Warn("Synchronization of unknown dag blocks", "count", len(dag), "dag", dag)
 
 	headers, err := d.fetchDagHeaders(p, dag)
 	log.Info("Synchronization of unknown dag blocks: dag headers retrieved", "count", len(headers), "headers", headers, "err", err)
@@ -1053,6 +1055,55 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 	}
 	max := from + (count-1)*span
 	return int64(from), count, span - 1, uint64(max)
+}
+
+// findCoordinatedAncestor tries to retrieve common ancestor by the last coordinated block
+// and checks remote peer consistency.
+func (d *Downloader) findCoordinatedAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
+	coordHeader := d.blockchain.GetLastCoordinatedHeader()
+	if coordHeader == nil {
+		p.log.Warn("Sync: No local coordinated block. Switching on search for common ancestor")
+		return d.findAncestor(p, remoteHeader)
+	}
+
+	headers, err := d.fetchDagHeaders(p, common.HashArray{coordHeader.TxHash})
+	if err != nil {
+		p.log.Error("Sync: coordinated block err", "localSlot", coordHeader.Slot, "localNr", coordHeader.Nr(), "localHash", coordHeader.Hash().Hex(), "err", err)
+		return 0, err
+	}
+	if len(headers) != 1 {
+		p.log.Error("Sync: coordinated block err", "localSlot", coordHeader.Slot, "localNr", coordHeader.Nr(), "localHash", coordHeader.Hash().Hex(), "err", errNoAncestorFound)
+		return 0, errNoAncestorFound
+	}
+	remoteCoordHeader := headers[0]
+	if remoteCoordHeader.FinalizedHash() != coordHeader.FinalizedHash() {
+		p.log.Error("Sync: coordinated block err (mismatching)",
+			"localSlot", coordHeader.Slot,
+			"localNr", coordHeader.Nr(),
+			"localHash", coordHeader.Hash().Hex(),
+			"localFinHash", coordHeader.FinalizedHash().Hex(),
+			"remoteSlot", remoteCoordHeader.Slot,
+			"remoteNr", remoteCoordHeader.Nr(),
+			"remoteHash", remoteCoordHeader.Hash().Hex(),
+			"remoteFinHash", remoteCoordHeader.FinalizedHash().Hex(),
+			"err", errInvalidAncestor,
+		)
+
+		return 0, errInvalidAncestor
+	}
+
+	coordNr := remoteCoordHeader.Nr()
+	p.log.Info("Sync: coordinated block found", "slot", remoteCoordHeader.Slot, "Nr", coordNr, "Hash", remoteCoordHeader.Hash().Hex())
+
+	origin, err := d.findAncestor(p, remoteHeader)
+	if err != nil {
+		p.log.Warn("Sync: coordinated block (find common ancestor failed)", "err", err)
+		return coordNr, nil
+	}
+	if origin > coordNr {
+		return origin, nil
+	}
+	return coordNr, nil
 }
 
 // findAncestor tries to locate the common ancestor link of the local chain and
