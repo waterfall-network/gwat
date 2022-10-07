@@ -2050,8 +2050,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	headerMap := make(types.HeaderMap, len(chain))
 	seals := make([]bool, len(chain))
 
-	bc.MoveTxsToProcessing(chain)
-
 	for i, block := range chain {
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
@@ -2144,6 +2142,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
+		bc.MoveTxsToProcessing(types.Blocks{block})
 
 		//retrieve state data
 		statedb, stateBlock, recommitBlocks, cachedHashes, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
