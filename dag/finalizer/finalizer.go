@@ -19,7 +19,10 @@ import (
 )
 
 const (
-	FinalisationDelaySlots = 3
+	//CoordDelaySlots number of slots of delay to retrieve candidates for coord network
+	CoordDelaySlots uint64 = 4
+	//CreateDagSlotsLimit limit of slots in dag chain to stop block creation
+	CreateDagSlotsLimit = int(CoordDelaySlots) * 2
 )
 
 // Backend wraps all methods required for finalizing.

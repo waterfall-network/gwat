@@ -111,8 +111,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// collect next finalization candidates
-	const slotsDelay = uint64(4) // number of slots of delay to retrieve candidates
-	candidatesSlot := data.Slot - slotsDelay
+	candidatesSlot := data.Slot - finalizer.CoordDelaySlots
 	if candidatesSlot < 0 {
 		candidatesSlot = 0
 	}
@@ -132,15 +131,13 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	//tips, unloaded := d.bc.ReviseTips()
 	dagSlots := d.countDagSlots(&tips)
 	log.Info("Handle Consensus: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
-		//"unloaded", unloaded,
 		"dagSlots", dagSlots,
 	)
 
-	//if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Creators: data.Creators,
@@ -243,15 +240,13 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 	dagSlots := d.countDagSlots(&tips)
 
 	log.Info("Handle Consensus: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1,
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
-		//"unloaded", unloaded,
 		"dagSlots", dagSlots,
 	)
 
-	//if d.creator.IsRunning() && len(errs) == 0 && len(unloaded) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.FinalisationDelaySlots+1 {
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
 			Creators: data.Creators,
