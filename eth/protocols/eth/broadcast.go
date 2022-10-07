@@ -19,6 +19,7 @@ package eth
 import (
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 const (
@@ -76,12 +77,18 @@ func (p *Peer) broadcastTransactions() {
 				txs         []*types.Transaction
 				size        common.StorageSize
 			)
-			for i := 0; i < len(queue) && size < maxTxPacketSize; i++ {
-				if tx := p.txpool.Get(queue[i]); tx != nil {
-					txs = append(txs, tx)
-					size += tx.Size()
+			for i := 0; i < len(queue); i++ {
+				if size < maxTxPacketSize {
+					if tx := p.txpool.Get(queue[i]); tx != nil {
+						txs = append(txs, tx)
+						size += tx.Size()
+					} else {
+						log.Warn("unknown tx", "hash", queue[i].Hex())
+					}
+					hashesCount++
+				} else {
+					log.Warn("storage size >= limit", "storage size", size, "limit", maxTxPacketSize)
 				}
-				hashesCount++
 			}
 			queue = queue[:copy(queue, queue[hashesCount:])]
 
