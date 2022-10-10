@@ -1937,7 +1937,7 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 	bc.invalidBlocksCache.Add(block.Hash(), struct{}{})
 }
 
-// verifyBlock validate block
+// VerifyBlock validate block
 func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())

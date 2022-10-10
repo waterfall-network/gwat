@@ -71,7 +71,7 @@ var Defaults = Config{
 		Recommit: 1 * time.Second,
 	},
 	TxPool:        core.DefaultTxPoolConfig,
-	RPCGasCap:     50000000,
+	RPCGasCap:     105000000,
 	RPCEVMTimeout: 5 * time.Second,
 	GPO:           FullNodeGPO,
 	RPCTxFeeCap:   1, // 1 ether
