@@ -1905,6 +1905,10 @@ func (bc *BlockChain) verifyLFData(block *types.Block) bool {
 
 // verifyCreators return false if creator is unassigned
 func (bc *BlockChain) verifyCreators(block *types.Block) bool {
+	//todo tmp off (remove after gazolandia implementation)
+	if true {
+		return true
+	}
 	creators := bc.GetCreators(block.Slot())
 	//if no record - skip (actual fo dag sync)
 	if creators == nil {

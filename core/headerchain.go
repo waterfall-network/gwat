@@ -507,9 +507,12 @@ func (hc *HeaderChain) loadTips() error {
 			log.Error("Bad tips hash", "hash", th.Hex())
 			continue
 		}
-
+		// rm finalized blocks from tips
+		tipHeader := hc.GetHeader(th)
+		if tipHeader.Nr() > 0 && tipHeader.Height > 0 {
+			continue
+		}
 		bdag := rawdb.ReadBlockDag(hc.chainDb, th)
-
 		// rm finalized blocks from DagChainHashes
 		upDagChainHashes := common.HashArray{}
 		for _, h := range bdag.DagChainHashes {
