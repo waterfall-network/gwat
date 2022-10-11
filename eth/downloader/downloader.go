@@ -231,7 +231,6 @@ type BlockChain interface {
 	AddTips(blockDag *types.BlockDAG)
 	//RemoveTips remove BlockDag from tips by hash from tips
 	RemoveTips(hashes common.HashArray)
-	ReviseTips() (tips *types.Tips, unloadedHashes common.HashArray)
 	ResetTips() error
 	GetUnsynchronizedTipsHashes() common.HashArray
 	ExploreChainRecursive(headHash common.Hash, memo ...core.ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache core.ExploreResultMap, err error)

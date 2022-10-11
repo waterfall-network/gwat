@@ -67,6 +67,26 @@ type downloadTester struct {
 	lock sync.RWMutex
 }
 
+func (dl *downloadTester) GetLastCoordinatedHeader() *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dl *downloadTester) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dl *downloadTester) SetSyncProvider(provider types.SyncProvider) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dl *downloadTester) GetLastCoordinatedSlot() uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (dl *downloadTester) SetHead(array common.Hash) error {
 	//TODO implement me
 	panic("implement me")
@@ -123,11 +143,6 @@ func (dl *downloadTester) AddTips(blockDag *types.BlockDAG) {
 }
 
 func (dl *downloadTester) RemoveTips(hashes common.HashArray) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (dl *downloadTester) ReviseTips() (tips *types.Tips, unloadedHashes common.HashArray) {
 	//TODO implement me
 	panic("implement me")
 }

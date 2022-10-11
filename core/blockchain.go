@@ -515,13 +515,12 @@ func (bc *BlockChain) loadLastState() error {
 	//load BlockDag
 	if err := bc.hc.loadTips(); err != nil {
 		log.Warn("State loading", "err", err)
-		//return bc.Reset()
-	}
-	tips, _ := bc.ReviseTips()
-
-	if len(*tips) == 0 {
 		bc.ResetTips()
-		tips, _ = bc.ReviseTips()
+	}
+	tips := bc.GetTips()
+	if len(tips) == 0 {
+		bc.ResetTips()
+		tips = bc.GetTips()
 	}
 
 	// Issue a status log for the user
@@ -3389,12 +3388,6 @@ func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
 		}
 	}
 	return tipsHashes
-}
-
-// ReviseTips revise tips state
-// explore chains to update tips in accordance with sync process
-func (bc *BlockChain) ReviseTips() (tips *types.Tips, unloadedHashes common.HashArray) {
-	return bc.hc.ReviseTips(bc)
 }
 
 func (bc *BlockChain) WriteCurrentTips() {

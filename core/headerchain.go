@@ -509,17 +509,33 @@ func (hc *HeaderChain) loadTips() error {
 		}
 
 		bdag := rawdb.ReadBlockDag(hc.chainDb, th)
-		if bdag == nil {
-			bdag = &types.BlockDAG{
-				Hash:                th,
-				Height:              0,
-				LastFinalizedHash:   common.Hash{},
-				LastFinalizedHeight: 0,
-				DagChainHashes:      common.HashArray{},
+
+		// rm finalized blocks from DagChainHashes
+		upDagChainHashes := common.HashArray{}
+		for _, h := range bdag.DagChainHashes {
+			header := hc.GetHeader(h)
+			if header.Nr() == 0 && header.Height > 0 {
+				upDagChainHashes = append(upDagChainHashes, h)
 			}
+		}
+		bdag.DagChainHashes = upDagChainHashes
+
+		if bdag == nil {
+			return fmt.Errorf("block dag not found")
 		}
 		hc.AddTips(bdag, true)
 	}
+
+	curTips := hc.GetTips(true)
+	// check top hashes in chains
+	ancestors := curTips.GetAncestorsHashes()
+	for hash := range *curTips {
+		if ancestors.Has(hash) {
+			curTips.Remove(hash)
+		}
+	}
+	hc.tips.Store(curTips)
+	hc.writeCurrentTips(true)
 	return nil
 }
 
@@ -607,6 +623,7 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 
 // ReviseTips revise tips state
 // explore chains to update tips in accordance with sync process
+// todo deprecated
 func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHashes common.HashArray) {
 	hc.tipsMu.Lock()
 	defer hc.tipsMu.Unlock()
