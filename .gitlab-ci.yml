@@ -1,4 +1,4 @@
-image: golang:1.17.2
+image: golang:1.17.2-stretch
 
 gwat-build:
   stage: build
@@ -8,7 +8,7 @@ gwat-build:
   #    - if: '$CI_COMMIT_TAG == null'
   #      when: manual
   script:
-    - go run build/ci.go install -static ./cmd/geth ./cmd/bootnode
+    - go run build/ci.go install ./cmd/geth ./cmd/bootnode
     - mkdir -p ./dist
     - cp ./build/bin/bootnode ./dist/gwat-bootnode
     - cp ./build/bin/geth ./dist/gwat
