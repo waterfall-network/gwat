@@ -8,12 +8,12 @@ gwat-build:
   #    - if: '$CI_COMMIT_TAG == null'
   #      when: manual
   script:
-    - go run build/ci.go install ./cmd/geth ./cmd/bootnode
+    - go run build/ci.go install -static ./cmd/geth ./cmd/bootnode
     - mkdir -p ./dist
     - cp ./build/bin/bootnode ./dist/gwat-bootnode
     - cp ./build/bin/geth ./dist/gwat
   artifacts:
     name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME"
     paths:
-      - dist/gwat-bootnode
-      - dist/gwat
+      - gwat/gwat-bootnode
+      - gwat/gwat
