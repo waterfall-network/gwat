@@ -145,6 +145,9 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 	bc.WriteCurrentTips()
 	// save creators
 	hs.eth.BlockChain().WriteCreators(checkpoint.Slot, checkpoint.Creators)
+	// update LastCoordinatedHash to checkpoint
+	bc.WriteLastCoordinatedHash(cpBlock.Hash())
+
 	// set ready state
 	atomic.StoreInt32(&hs.ready, 1)
 	hs.lastSyncData = checkpoint
