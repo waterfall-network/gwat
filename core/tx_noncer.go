@@ -21,6 +21,7 @@ import (
 
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/core/state"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of
@@ -61,6 +62,7 @@ func (txn *txNoncer) set(addr common.Address, nonce uint64) {
 	defer txn.lock.Unlock()
 
 	txn.nonces[addr] = nonce
+	log.Info("TXPOOL: updated nonce", "addr", addr.Hex(), "nonce", nonce)
 }
 
 // setIfLower updates a new virtual nonce into the virtual state database if the
@@ -76,6 +78,7 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 		return
 	}
 	txn.nonces[addr] = nonce
+	log.Info("TXPOOL: updated nonce", "addr", addr.Hex(), "nonce", nonce)
 }
 
 func (txn *txNoncer) setIfGreater(addr common.Address, nonce uint64) {
@@ -88,4 +91,5 @@ func (txn *txNoncer) setIfGreater(addr common.Address, nonce uint64) {
 		return
 	}
 	txn.nonces[addr] = nonce
+	log.Info("TXPOOL: updated nonce", "addr", addr.Hex(), "nonce", nonce)
 }
