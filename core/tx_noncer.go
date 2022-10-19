@@ -62,7 +62,7 @@ func (txn *txNoncer) set(addr common.Address, nonce uint64) {
 	defer txn.lock.Unlock()
 
 	txn.nonces[addr] = nonce
-	log.Info("TXPOOL: updated nonce", "addr", addr.Hex(), "nonce", nonce)
+	log.Info("TXPOOL: noncer.set", "addr", addr.Hex(), "nonce", nonce)
 }
 
 // setIfLower updates a new virtual nonce into the virtual state database if the
@@ -78,7 +78,7 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 		return
 	}
 	txn.nonces[addr] = nonce
-	log.Info("TXPOOL: updated nonce", "addr", addr.Hex(), "nonce", nonce)
+	log.Info("TXPOOL: noncer.setIfLower", "addr", addr.Hex(), "nonce", nonce)
 }
 
 func (txn *txNoncer) setIfGreater(addr common.Address, nonce uint64) {
@@ -91,5 +91,5 @@ func (txn *txNoncer) setIfGreater(addr common.Address, nonce uint64) {
 		return
 	}
 	txn.nonces[addr] = nonce
-	log.Info("TXPOOL: updated nonce", "addr", addr.Hex(), "nonce", nonce)
+	log.Info("TXPOOL: noncer.setIfGreater", "addr", addr.Hex(), "nonce", nonce)
 }
