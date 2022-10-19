@@ -1,4 +1,4 @@
-image: golang:1.17.2
+image: golang:1.17.2-stretch
 
 gwat-build:
   stage: build
