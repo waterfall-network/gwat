@@ -1274,6 +1274,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 }
 
 func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
+	ok := false
 	txNonce := tx.Nonce()
 
 	addr, _ := types.Sender(pool.signer, tx)
@@ -1288,6 +1289,10 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 				pool.all.Remove(pendingTx.Hash())
 				// Reduce the pending counter
 				pendingGauge.Dec(int64(1))
+
+				if pendingTx.Nonce() == txNonce {
+					ok = true
+				}
 			}
 		}
 		if pending.Empty() {
@@ -1306,6 +1311,9 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 				pool.all.Remove(queueTx.Hash())
 				// Reduce the queued counter
 				queuedGauge.Dec(1)
+				if queueTx.Nonce() == txNonce {
+					ok = true
+				}
 			}
 		}
 		if queue.Empty() {
@@ -1323,6 +1331,9 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 				log.Info("TXPOOL: removeProcessedTx: processing", "nonce", procTx.Nonce(), "hash", procTx.Hash().Hex())
 				processing.Delete(procTx)
 				pool.all.Remove(procTx.Hash())
+				if procTx.Nonce() == txNonce {
+					ok = true
+				}
 			}
 		}
 		if processing.Empty() {
@@ -1330,6 +1341,9 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 		}
 	}
 
+	if !ok {
+		log.Warn("TXPOOL: cant remove tx", "nonce", txNonce, "hash", tx.Hash().Hex())
+	}
 }
 
 // requestReset requests a pool reset to the new head block.
