@@ -1473,6 +1473,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	pool.mu.Lock()
 	if reset != nil && !pool.chain.Synchronising() {
 		// Reset from the old head to the new, rescheduling any reorged transactions
+		log.Warn("TXPOOL: RESET")
 		pool.reset(reset.oldHead, reset.newHead)
 
 		// Nonces were reset, discard any events that became stale
@@ -1615,6 +1616,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		return
 	}
 	pool.currentState = statedb
+	log.Warn("TXPOOL: newTxNoncer")
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit
 
