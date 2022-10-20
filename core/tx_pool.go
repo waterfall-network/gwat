@@ -1510,12 +1510,12 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// Update all accounts to the latest known pending nonce
 	for addr, list := range pool.processing {
 		highestPending := list.LastElement()
-		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
+		pool.pendingNonces.setIfGreater(addr, highestPending.Nonce()+1)
 	}
 	// Update all accounts to the latest known pending nonce
 	for addr, list := range pool.pending {
 		highestPending := list.LastElement()
-		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
+		pool.pendingNonces.setIfGreater(addr, highestPending.Nonce()+1)
 	}
 	//dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
 	//pool.changesSinceReorg = 0 // Reset change counter
@@ -1899,6 +1899,7 @@ func (pool *TxPool) demoteUnexecutables() {
 
 	for addr, list := range pool.processing {
 		nonce := pool.currentState.GetNonce(addr)
+		log.Info("TXPOOL: demoteUnexecutables: processing rm", "stateNonce", nonce)
 
 		oldsProc := list.Forward(nonce)
 		for _, tx := range oldsProc {
