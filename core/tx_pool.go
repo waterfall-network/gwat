@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -381,9 +382,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 func (pool *TxPool) loop() {
 	defer pool.wg.Done()
 	var (
-		prevPending, prevQueued, prevStales int
+		//prevPending, prevQueued, prevStales int
 		// Start the stats reporting and transaction eviction tickers
-		report  = time.NewTicker(statsReportInterval)
+		report  = time.NewTicker(300 * time.Millisecond)
 		evict   = time.NewTicker(evictionInterval)
 		journal = time.NewTicker(pool.config.Rejournal)
 		// Track the previous head headers for transaction reorgs
@@ -415,12 +416,16 @@ func (pool *TxPool) loop() {
 			pool.mu.RLock()
 			pending, queued, processing := pool.stats()
 			stales := int(atomic.LoadInt64(&pool.priced.stales))
+			nonces := pool.pendingNonces.nonces
 			pool.mu.RUnlock()
 
-			if pending != prevPending || queued != prevQueued || stales != prevStales {
-				log.Info("TXPOOL: Transaction pool status report", "pending", pending, "queued", queued, "processing", processing, "stales", stales)
-				prevPending, prevQueued, prevStales = pending, queued, stales
+			log.Info("TXPOOL: Transaction pool status report", "pending", pending, "queued", queued, "processing", processing, "stales", stales)
+			res := ""
+			for addr, nonce := range nonces {
+				res += fmt.Sprintf("%v: %v   ", addr.Hex(), nonce)
 			}
+			log.Info("TXPOOL: Nonces report", "nonces", res)
+			//prevPending, prevQueued, prevStales = pending, queued, stales
 
 		// Handle inactive account transaction eviction
 		case <-evict.C:
@@ -941,6 +946,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 		pendingGauge.Inc(1)
 	}
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
+	log.Info("TXPOOL: promoteTX: setNonce")
 	pool.pendingNonces.set(addr, tx.Nonce()+1)
 
 	// Successful promotion, bump the heartbeat
