@@ -1508,6 +1508,11 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	pool.truncateQueue()
 
 	// Update all accounts to the latest known pending nonce
+	for addr, list := range pool.processing {
+		highestPending := list.LastElement()
+		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
+	}
+	// Update all accounts to the latest known pending nonce
 	for addr, list := range pool.pending {
 		highestPending := list.LastElement()
 		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
