@@ -31,6 +31,7 @@ import (
 const (
 	forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
 	defaultMinSyncPeers = 1                // Amount of peers desired to start syncing
+	dagSlotsLimit       = 32
 )
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
@@ -151,14 +152,18 @@ func (cs *chainSyncer) loop() {
 }
 
 func (cs *chainSyncer) isResync() bool {
-	const DagSlotsLimit = 32
 	if cs.handler.downloader.Synchronising() {
 		return false
 	}
-	lfSlot := cs.handler.chain.GetLastFinalizedBlock().Slot()
 	tips := cs.handler.chain.GetTips()
-	maxSlot := tips.GetMaxSlot()
-	return maxSlot-lfSlot > DagSlotsLimit
+	dagHashes := tips.GetOrderedDagChainHashes()
+	blocks := cs.handler.chain.GetBlocksByHashes(dagHashes)
+	mapSlot := make(map[uint64]bool, 0)
+	for _, b := range blocks {
+		mapSlot[b.Slot()] = true
+	}
+	slotsCount := len(mapSlot)
+	return slotsCount > dagSlotsLimit
 }
 
 // getResyncOp determines whether resync is required.
