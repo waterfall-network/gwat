@@ -363,6 +363,14 @@ func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
 	return d.headsync.Sync(data)
 }
 
+// HandleValidateSpines collect next finalization candidates
+func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+	log.Info("Handle Validate Spines", "spines", spines)
+	return d.finalizer.IsValidSequenceOfSpines(spines)
+}
+
 // GetConsensusInfo returns the last info received from the consensus network
 func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
 	if d.consensusInfo == nil {

@@ -211,3 +211,90 @@ func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, 
 	spineHashes := spines.GetOrderedHashes()
 	return *spineHashes, nil
 }
+
+// ValidateSequenceOfSpines check is sequence of spines is valid.
+func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, error) {
+	if len(spines) == 0 {
+		return true, nil
+	}
+	var (
+		bc            = f.eth.BlockChain()
+		hasNotFin     = false          //has any not finalized items
+		dagCandidates common.HashArray // current dag candidates
+		err           error
+	)
+
+	mapHeaders := bc.GetHeadersByHashes(spines)
+	for _, b := range mapHeaders {
+		// if not found
+		if b == nil {
+			return false, nil
+		}
+		// if block is not finalized
+		if b.Nr() == 0 && b.Height > 0 {
+			hasNotFin = true
+		} else {
+			// if block is finalized - check is it spine
+			if b.Nr() != b.Height {
+				return false, nil
+			}
+		}
+	}
+
+	if hasNotFin {
+		dagCandidates, err = f.GetFinalizingCandidates(nil)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	// check order by slots and gap in sequence
+	var prevBlock *types.Header
+	for i, sp := range spines {
+		bl := mapHeaders[sp]
+		if i == 0 {
+			prevBlock = bl
+			continue
+		}
+		// check that slot must be greater than previous
+		if bl.Slot <= prevBlock.Slot {
+			return false, nil
+		}
+		// if prev block is not finalized
+		if prevBlock.Nr() == 0 && prevBlock.Height > 0 {
+			// check in current candidates
+			checkPart := common.HashArray{
+				prevBlock.Hash(),
+				bl.Hash(),
+			}
+			seqInter := dagCandidates.SequenceIntersection(checkPart)
+			if !checkPart.IsEqualTo(seqInter) {
+				return false, nil
+			}
+		} else {
+			// if prev block is finalized - find following spine
+			var followingSpine common.Hash
+			for fnr := prevBlock.Nr(); ; {
+				fnr++
+				nxt := bc.GetHeaderByNumber(fnr)
+				if nxt == nil {
+					spBlock := mapHeaders[sp]
+					// if spine block is not finalized - check first dag candidate
+					if spBlock.Nr() == 0 && spBlock.Height > 0 && len(dagCandidates) > 0 {
+						followingSpine = dagCandidates[0]
+					}
+					break
+				}
+				if nxt.Nr() == nxt.Height {
+					followingSpine = nxt.Hash()
+					break
+				}
+			}
+			if sp != followingSpine {
+				return false, nil
+			}
+		}
+		prevBlock = bl
+	}
+	return true, nil
+}
