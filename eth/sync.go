@@ -160,9 +160,14 @@ func (cs *chainSyncer) isResync() bool {
 	blocks := cs.handler.chain.GetBlocksByHashes(dagHashes)
 	mapSlot := make(map[uint64]bool, 0)
 	for _, b := range blocks {
-		mapSlot[b.Slot()] = true
+		if b.Nr() == 0 && b.Height() > 0 {
+			mapSlot[b.Slot()] = true
+		}
 	}
 	slotsCount := len(mapSlot)
+
+	log.Info("isResync>>>>>", "slotsCount", slotsCount, "dagSlotsLimit", dagSlotsLimit, "len(blocks)", len(blocks), "mapSlot", mapSlot)
+
 	return slotsCount > dagSlotsLimit
 }
 
