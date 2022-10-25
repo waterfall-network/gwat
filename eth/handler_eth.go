@@ -246,6 +246,6 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	}
 	upDag = append(upDag, block.Hash())
 	peer.SetDagInfo(lastFinNr, &upDag)
-	h.chainSync.handlePeerEvent(peer)
+	h.chainSync.handlePeerEvent(peer, evtBroadcast)
 	return nil
 }

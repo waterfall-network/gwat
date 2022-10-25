@@ -249,15 +249,22 @@ func (ha HashArray) SequenceIntersection(hashArray HashArray) HashArray {
 	c := make(HashArray, 0)
 	index := -1
 	for _, item := range ha {
-		if i := hashArray.IndexOf(item); i >= 0 {
-			if index == -1 {
-				index = i
-			} else {
-				index++
-			}
-			if i == index {
-				c = append(c, item)
-			}
+		i := hashArray.IndexOf(item)
+		// the first item found
+		if index == -1 && i >= 0 {
+			index = i + 1
+			c = append(c, item)
+			continue
+		}
+		//the next item found
+		if index >= 0 && index == i {
+			index = i + 1
+			c = append(c, item)
+			continue
+		}
+		//the sequence end
+		if index >= 0 && index != i {
+			break
 		}
 	}
 	return c

@@ -881,6 +881,11 @@ web3._extend({
 			call: 'dag_headSync',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'validateSpines',
+			call: 'dag_validateSpines',
+			params: 1
+		}),
 	]
 });
 `

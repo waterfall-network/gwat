@@ -2205,3 +2205,8 @@ func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.Co
 func (api *PublicDagAPI) HeadSync(ctx context.Context, data []types.ConsensusInfo) (bool, error) {
 	return api.b.Dag().HandleHeadSync(data)
 }
+
+// ValidateSpines validate given sequence of spines.
+func (api *PublicDagAPI) ValidateSpines(ctx context.Context, data common.HashArray) (bool, error) {
+	return api.b.Dag().HandleValidateSpines(data)
+}

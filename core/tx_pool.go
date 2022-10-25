@@ -1513,10 +1513,15 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		pool.pendingNonces.setIfGreater(addr, highestPending.Nonce()+1)
 	}
 	// Update all accounts to the latest known pending nonce
+	for addr, list := range pool.processing {
+		highestPending := list.LastElement()
+		pool.pendingNonces.setIfGreater(addr, highestPending.Nonce()+1)
+	}
 	for addr, list := range pool.pending {
 		highestPending := list.LastElement()
 		pool.pendingNonces.setIfGreater(addr, highestPending.Nonce()+1)
 	}
+
 	//dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
 	//pool.changesSinceReorg = 0 // Reset change counter
 	pool.mu.Unlock()
