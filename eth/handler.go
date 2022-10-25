@@ -265,7 +265,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		return err
 	}
 	// TODO(karalabe): Not sure why this is needed
-	if !h.chainSync.handlePeerEvent(peer) {
+	if !h.chainSync.handlePeerEvent(peer, evtPeerRun) {
 		return p2p.DiscQuitting
 	}
 	h.peerWG.Add(1)
@@ -327,7 +327,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return err
 		}
 	}
-	h.chainSync.handlePeerEvent(peer)
+	h.chainSync.handlePeerEvent(peer, evtPeerRun)
 
 	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.

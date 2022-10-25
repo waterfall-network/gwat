@@ -34,6 +34,15 @@ const (
 	dagSlotsLimit       = 32
 )
 
+type peerEvtKind int
+type peerEvt struct{ kind peerEvtKind }
+
+const (
+	evtDefault peerEvtKind = iota
+	evtBroadcast
+	evtPeerRun
+)
+
 // syncTransactions starts sending all currently pending transactions to the given peer.
 func (h *handler) syncTransactions(p *eth.Peer) {
 	// Assemble the set of transaction to broadcast or announce to the remote
@@ -65,7 +74,7 @@ type chainSyncer struct {
 	handler     *handler
 	force       *time.Timer
 	forced      bool // true when force timer fired
-	peerEventCh chan struct{}
+	peerEventCh chan peerEvt
 	doneCh      chan error // non-nil when sync is running
 }
 
@@ -82,15 +91,15 @@ type chainSyncOp struct {
 func newChainSyncer(handler *handler) *chainSyncer {
 	return &chainSyncer{
 		handler:     handler,
-		peerEventCh: make(chan struct{}),
+		peerEventCh: make(chan peerEvt),
 	}
 }
 
 // handlePeerEvent notifies the syncer about a change in the peer set.
 // This is called for new peers and every time a peer announces a new chain block.
-func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer) bool {
+func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer, kind peerEvtKind) bool {
 	select {
-	case cs.peerEventCh <- struct{}{}:
+	case cs.peerEventCh <- peerEvt{kind}:
 		return true
 	case <-cs.handler.quitSync:
 		return false
@@ -111,33 +120,38 @@ func (cs *chainSyncer) loop() {
 	// This ensures we'll always start sync even if there aren't enough peers.
 	cs.force = time.NewTimer(forceSyncCycle)
 	defer cs.force.Stop()
-
+	var pevt peerEvt
 	for {
 		op := cs.nextSyncOp()
 		// check sync is busy
-		if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
+		if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() || pevt.kind == evtBroadcast {
 			log.Warn("Synchronization canceled (process busy)")
 			op = nil
 		}
 		// if no finalization while defined slots number - start resync
-		if cs.isResync() {
+		if pevt.kind == evtBroadcast && cs.isResync() {
 			op = cs.getResyncOp()
 			log.Warn("Resync required", "op", op)
 		}
 		if op != nil {
 			cs.startSync(op)
 		}
+		pevt.kind = evtDefault
 		select {
-		case <-cs.peerEventCh:
+		case pevt = <-cs.peerEventCh:
+			log.Info("sync: peer evt", "kind", pevt.kind)
 			// Peer information changed, recheck.
 		case <-cs.doneCh:
+			log.Info("sync: done ch")
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
 		case <-cs.force.C:
+			log.Info("sync: force timer")
 			cs.forced = true
 
 		case <-cs.handler.quitSync:
+			log.Info("sync: quit")
 			// Disable all insertion on the blockchain. This needs to happen before
 			// terminating the downloader because the downloader waits for blockchain
 			// inserts, and these can take a long time to finish.
