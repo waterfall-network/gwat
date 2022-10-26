@@ -384,7 +384,7 @@ func (pool *TxPool) loop() {
 	var (
 		//prevPending, prevQueued, prevStales int
 		// Start the stats reporting and transaction eviction tickers
-		report  = time.NewTicker(500 * time.Millisecond)
+		report  = time.NewTicker(1500 * time.Millisecond)
 		evict   = time.NewTicker(evictionInterval)
 		journal = time.NewTicker(pool.config.Rejournal)
 		// Track the previous head headers for transaction reorgs

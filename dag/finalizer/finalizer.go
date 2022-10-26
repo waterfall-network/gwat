@@ -106,7 +106,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
 			continue
 		}
-		log.Info("Finalization spine chain calculated", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
+		log.Info("Finalization spine chain calculated", "isHeadSync", isHeadSync, "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
 		if isHeadSync {
 			//validate blocks while head sync

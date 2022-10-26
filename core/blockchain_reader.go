@@ -41,6 +41,12 @@ func (bc *BlockChain) CurrentHeader() *types.Header {
 // block is retrieved from the blockchain's internal cache.
 func (bc *BlockChain) GetLastFinalizedBlock() *types.Block {
 	lfb := bc.lastFinalizedBlock.Load().(*types.Block)
+	if lfb.Nr() == 0 && lfb.Height() > 0 {
+		lfHash := rawdb.ReadLastFinalizedHash(bc.db)
+		lfb = rawdb.ReadBlock(bc.db, lfHash)
+		bc.lastFinalizedBlock.Store(lfb)
+		headBlockGauge.Update(int64(lfb.Nr()))
+	}
 	return lfb
 }
 

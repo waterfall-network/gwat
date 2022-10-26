@@ -122,18 +122,23 @@ func (cs *chainSyncer) loop() {
 	defer cs.force.Stop()
 	var pevt peerEvt
 	for {
-		op := cs.nextSyncOp()
-		// check sync is busy
-		if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() || pevt.kind == evtBroadcast {
-			log.Warn("Synchronization canceled (process busy)")
-			op = nil
-		}
-		// if no finalization while defined slots number - start resync
-		if pevt.kind == evtBroadcast && cs.isResync() {
-			op = cs.getResyncOp()
-			log.Warn("Resync required", "op", op)
+		var op *chainSyncOp
+		if pevt.kind == evtBroadcast {
+			// if no finalization while defined slots number - start resync
+			if cs.isResync() {
+				op = cs.getResyncOp()
+				log.Warn("Resync required", "op", op)
+			}
+		} else {
+			op = cs.nextSyncOp()
+			// check sync is busy
+			if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
+				log.Warn("Synchronization canceled (process busy)", "op", op)
+				op = nil
+			}
 		}
 		if op != nil {
+			log.Warn("Synchronization start", "op", op)
 			cs.startSync(op)
 		}
 		pevt.kind = evtDefault
@@ -172,10 +177,12 @@ func (cs *chainSyncer) isResync() bool {
 	tips := cs.handler.chain.GetTips()
 	dagHashes := tips.GetOrderedDagChainHashes()
 	blocks := cs.handler.chain.GetBlocksByHashes(dagHashes)
-	mapSlot := make(map[uint64]bool, 0)
+	mapSlot := make(map[uint64]int, 0)
+	dagHeshCount := 0
 	for _, b := range blocks {
 		if b.Nr() == 0 && b.Height() > 0 {
-			mapSlot[b.Slot()] = true
+			mapSlot[b.Slot()]++
+			dagHeshCount++
 		}
 	}
 	slotsCount := len(mapSlot)

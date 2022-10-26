@@ -595,7 +595,18 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 		tHeader := hc.GetHeaderByHash(t.Hash)
 		// if tip isn't finalized - update it
 		if tHeader.Nr() == 0 && tHeader.Height > 0 {
-			t.DagChainHashes = t.DagChainHashes.Difference(finHashes)
+			difHashes := t.DagChainHashes.Difference(finHashes)
+			dagChainHashes := common.HashArray{}
+			for _, h := range difHashes {
+				number := rawdb.ReadFinalizedNumberByHash(hc.chainDb, h)
+				if number != nil {
+					hc.numberCache.Add(h, *number)
+					log.Warn("FinalizeTips: finalized detected", "nr", *number, "h", h)
+				} else {
+					dagChainHashes = append(dagChainHashes, h)
+				}
+			}
+			t.DagChainHashes = dagChainHashes
 			tips.Add(t)
 			continue
 		}
