@@ -99,7 +99,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 
 	d.setConsensusInfo(data)
 
-	log.Info("Handle Consensus: start", "data", data)
+	log.Info("Handle Consensus: start", "data", data, "\u2692", params.BuildId)
 
 	// finalization
 	if len(data.Finalizing) > 0 {
@@ -226,7 +226,7 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 
 	d.setConsensusInfo(data)
 
-	log.Info("Handle Consensus: start", "data", data)
+	log.Info("Handle Finalize: start", "data", data, "\u2692", params.BuildId)
 
 	// finalization
 	if len(data.Finalizing) > 0 {
@@ -235,14 +235,12 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 		}
 	}
 
-	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
-
 	// create block
 	tips := d.bc.GetTips()
 	//tips, unloaded := d.bc.ReviseTips()
 	dagSlots := d.countDagSlots(&tips)
 
-	log.Info("Handle Consensus: create condition",
+	log.Info("Handle Finalize: create condition",
 		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
@@ -290,7 +288,7 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 					if block != nil {
 						crtInfo["newBlock"] = block.Hash().Hex()
 					}
-					log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+					log.Info("Handle Finalize: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 
 				}()
 			}
@@ -334,7 +332,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	if len(candidates) == 0 {
 		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
 	}
-	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
+	log.Info("Handle GetCandidates: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	res := &types.CandidatesResult{
 		Error:      nil,
 		Candidates: candidates,
@@ -343,7 +341,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle GetCandidates: response", "result", res)
+	log.Info("Handle GetCandidates: response", "result", res, "\u2692", params.BuildId)
 	return res
 }
 
@@ -367,7 +365,7 @@ func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
-	log.Info("Handle Validate Spines", "spines", spines)
+	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
 
