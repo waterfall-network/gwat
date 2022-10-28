@@ -25,7 +25,6 @@ import (
 	"github.com/waterfall-foundation/gwat/core/types"
 	"github.com/waterfall-foundation/gwat/core/vm"
 	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/log"
 	"github.com/waterfall-foundation/gwat/params"
 	"github.com/waterfall-foundation/gwat/rlp"
 )
@@ -429,54 +428,6 @@ func (bc *BlockChain) GetTxBlockHash(txHash common.Hash) common.Hash {
 		return lookup.(*rawdb.LegacyTxLookupEntry).BlockHash
 	}
 	return rawdb.ReadTxLookupEntry(bc.db, txHash)
-}
-
-// GetTxBlockHash retrieves statedb for recently recommited block sequence.
-func (bc *BlockChain) GetCashedRecommit(chain common.HashArray) (statedb *state.StateDB, noCachedHashes, cachedHashes common.HashArray) {
-	for i := range chain {
-		cachedHashes = chain[:i]
-		key := cachedHashes.Key()
-		if data, exist := bc.recommitCache.Get(key); exist {
-			noCachedHashes = chain[i:]
-			root := data.(common.Hash)
-			if root != (common.Hash{}) {
-				var err error
-				statedb, err = bc.StateAt(root)
-				if statedb != nil {
-					log.Debug("Get cashed recommit", "statedb", statedb != nil, "root", root.Hex(), "cachedHashes", cachedHashes, "noCachedHashes", noCachedHashes, "len", len(chain), "i", i)
-					return statedb, noCachedHashes, cachedHashes
-				} else {
-					log.Debug("Get cashed recommit error", "statedb", statedb != nil, "root", root.Hex(), "err", err, "cachedHashes", cachedHashes, "noCachedHashes", noCachedHashes, "len", len(chain), "i", i)
-				}
-			}
-		}
-	}
-	log.Debug("Get cashed recommit not found", "statedb", statedb != nil, "chain", chain)
-	return statedb, chain, common.HashArray{}
-}
-
-// SetCashedRecommit add to cache statedb for recommited block sequence.
-func (bc *BlockChain) SetCashedRecommit(chain common.HashArray, statedb *state.StateDB, blueRoot *common.Hash) {
-	if len(chain) == 0 {
-		return
-	}
-	key := chain.Key()
-	if _, exist := bc.recommitCache.Get(key); !exist {
-		var (
-			root common.Hash
-			err  error
-		)
-		if blueRoot != nil && *blueRoot != (common.Hash{}) {
-			root = *blueRoot
-			log.Debug("Set cashed recommit", "root", root.Hex(), "chain", chain)
-		} else {
-			root, err = statedb.Commit(false)
-			if err != nil {
-				return
-			}
-		}
-		bc.recommitCache.Add(key, root)
-	}
 }
 
 func (bc *BlockChain) GetCreators(slot uint64) *[]common.Address {

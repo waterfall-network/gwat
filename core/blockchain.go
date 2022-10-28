@@ -92,7 +92,6 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
-	recommitCacheLimit  = 512
 	creatorsCacheLimit  = 64
 	invBlocksCacheLimit = 512
 
@@ -207,7 +206,6 @@ type BlockChain struct {
 	blockCache         *lru.Cache     // Cache for the most recent entire blocks
 	txLookupCache      *lru.Cache     // Cache for the most recent transaction lookup data.
 	futureBlocks       *lru.Cache     // future blocks are blocks added for later processing
-	recommitCache      *lru.Cache     // Cache for the most recent states of recommited blocks.
 	creatorsCache      *lru.Cache     // Cache for the assigned creators
 	invalidBlocksCache *lru.Cache     // Cache for the blocks with unknown parents
 
@@ -239,7 +237,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
-	recommitCache, _ := lru.New(recommitCacheLimit)
 	creatorsCache, _ := lru.New(creatorsCacheLimit)
 	invBlocksCache, _ := lru.New(invBlocksCacheLimit)
 
@@ -260,7 +257,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		receiptsCache:      receiptsCache,
 		blockCache:         blockCache,
 		txLookupCache:      txLookupCache,
-		recommitCache:      recommitCache,
 		creatorsCache:      creatorsCache,
 		invalidBlocksCache: invBlocksCache,
 		futureBlocks:       futureBlocks,
@@ -750,7 +746,6 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()
-	bc.recommitCache.Purge()
 
 	return rootNumber, bc.loadLastState()
 }
@@ -2074,13 +2069,13 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Debug("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
+		log.Warn("???? Pruned ancestor, inserting as sidechain", "hash", block.Hash())
 		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHashes()[0])):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
-			log.Debug("Future block, postponing import", "hash", block.Hash())
+			log.Warn("???? Future block, postponing import", "hash", block.Hash())
 			if err := bc.addFutureBlock(block); err != nil {
 				return it.index, err
 			}
@@ -2094,6 +2089,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 	// Some other error occurred, abort
 	case err != nil:
+		log.Error("???? propagate err", "hash", block.Hash(), "err", err)
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
@@ -2153,7 +2149,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		bc.MoveTxsToProcessing(types.Blocks{block})
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, cachedHashes, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil && stateBlock == nil {
 			log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
 			return it.index, stateErr
@@ -2215,13 +2211,9 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		statedb.StartPrefetcher("chain")
 		activeState = statedb
 
-		// recommit red blocks transactions
-		cacheChain := cachedHashes.Copy()
+		// recommit transactions
 		for _, bl := range recommitBlocks {
 			statedb = bc.RecommitBlockTransactions(bl, statedb)
-			//cache state
-			cacheChain = append(cacheChain, bl.Hash())
-			bc.SetCashedRecommit(cacheChain, statedb, nil)
 		}
 
 		// If we have a followup block, run that against the current state to pre-cache
@@ -2396,7 +2388,7 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 }
 
 // CollectStateDataByParents collects state data of current dag chain to insert block.
-func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, cachedHashes common.HashArray, err error) {
+func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	parentBlocks := bc.GetBlocksByHashes(parents)
 	//check is parents exists
@@ -2408,7 +2400,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	}
 	if len(unl) > 0 {
 		log.Error("Error while collect state data by block (unknown blocks detected)", "parents", parents, "unknown", unl)
-		return statedb, stateBlock, recommitBlocks, cachedHashes, ErrInsertUncompletedDag
+		return statedb, stateBlock, recommitBlocks, ErrInsertUncompletedDag
 	}
 
 	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
@@ -2423,7 +2415,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 			log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
 		}
 		recommitBlocks = sortedBlocks[1:]
-		return statedb, stateBlock, recommitBlocks, cachedHashes, nil
+		return statedb, stateBlock, recommitBlocks, nil
 	} else {
 		//if state is finalized block - search first spine in ancestors
 		stateBlock = sortedBlocks[0]
@@ -2433,7 +2425,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		}
 		if statedb != nil {
 			recommitBlocks = sortedBlocks[1:]
-			return statedb, stateBlock, recommitBlocks, cachedHashes, nil
+			return statedb, stateBlock, recommitBlocks, nil
 		}
 	}
 
@@ -2442,7 +2434,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	var recomFinBlocks []*types.Block
 	statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlockRecursive(lfAncestor, nil)
 	recommitBlocks = append(recomFinBlocks, sortedBlocks[1:]...)
-	return statedb, stateBlock, recommitBlocks, cachedHashes, nil
+	return statedb, stateBlock, recommitBlocks, nil
 }
 
 // CollectStateDataByFinalizedBlockRecursive collects state data of current dag chain to insert new block.
@@ -2538,40 +2530,6 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 	}
 	recommitBlocks = sortedBlocks[1:]
 	return statedb, stateBlock, recommitBlocks, nil
-
-	//// search previous blue block and collect red blocks
-	//stateBlock = block
-	//redBlocks := []*types.Block{}
-	//for i := finNr - 1; i >= 0; i-- {
-	//	prevBlock := bc.GetBlockByNumber(i)
-	//	if prevBlock == nil {
-	//		log.Error("Collect State Data By Finalized Block: bad finalized chain", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
-	//		return statedb, stateBlock, redBlocks, ErrInsertUncompletedDag
-	//	}
-	//
-	//	//if !bc.IsAncestorRecursive(block, prevBlock.Hash()) {
-	//	//	continue
-	//	//}
-	//
-	//	statedb, err = bc.StateAt(prevBlock.Root())
-	//	if statedb != nil {
-	//		stateBlock = prevBlock
-	//		break
-	//	}
-	//	redBlocks = append(redBlocks, prevBlock)
-	//}
-	//// reverse redBlocks
-	//for i := len(redBlocks) - 1; i >= 0; i-- {
-	//	recommitBlocks = append(recommitBlocks, redBlocks[i])
-	//}
-	//
-	//log.Info("Collect State Data By Finalized Block: bad block number", "isRed", block.Height() != block.Nr(), "Nr", block.Nr(), "Height", block.Height(), "Hash", block.Hash().Hex())
-	//
-	//statedb, err = bc.StateAt(stateBlock.Root())
-	//if err != nil {
-	//	return statedb, stateBlock, recommitBlocks, err
-	//}
-	//return statedb, stateBlock, recommitBlocks, err
 }
 
 // RecommitBlockTransactions recommits transactions of red blocks.
@@ -2795,7 +2753,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, _, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
 			return it.index, stateErr
 		}

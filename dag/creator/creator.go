@@ -552,7 +552,7 @@ func (c *Creator) makeCurrent(header *types.Header) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 
-	state, _, recommitBlocks, _, stateErr := c.chain.CollectStateDataByParents(header.ParentHashes)
+	state, _, recommitBlocks, stateErr := c.chain.CollectStateDataByParents(header.ParentHashes)
 	if stateErr != nil {
 		return stateErr
 	}
@@ -866,13 +866,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		return
 	}
 
-	//recommit transactions of dag chain
-	cacheChain := common.HashArray{}
 	for _, bl := range c.current.recommitBlocks {
-		statedb := c.chain.RecommitBlockTransactions(bl, c.current.state)
-		//cache state
-		cacheChain = append(cacheChain, bl.Hash())
-		c.chain.SetCashedRecommit(cacheChain, statedb, nil)
+		c.chain.RecommitBlockTransactions(bl, c.current.state)
 	}
 
 	// Fill the block with all available pending transactions.
