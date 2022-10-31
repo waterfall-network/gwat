@@ -9,7 +9,7 @@ gwat-build:
   #      when: manual
   script:
     - cp -r params/version.go /tmp/version.go
-    - sed -i "s|\u2692|${CI_COMMIT_SHORT_SHA}|g" params/version.go
+    - sed -i "s/\\\u2692/${CI_COMMIT_SHORT_SHA}/g" params/version.go
     - cat params/version.go
     - go run build/ci.go install ./cmd/geth ./cmd/bootnode
     - mkdir -p ./dist
