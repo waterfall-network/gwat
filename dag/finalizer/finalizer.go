@@ -97,7 +97,6 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 	}
 	sort.Sort(slots)
 
-	var headBlock *types.Block
 	for _, slot := range slots {
 		spine := spinesMap[slot]
 		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
@@ -128,18 +127,15 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 			block.SetNumber(&nr)
 			isHead := i == len(orderedChain)-1
 			if err := f.finalizeBlock(nr, *block, isHead); err != nil {
-				log.Error("Block finalization failed", "isHead", isHead, "nr", nr, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+				log.Error("Block finalization failed", "isHead", isHead, "calc.nr", nr, "b.nr", block.Nr(), "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 				return err
 			}
 		}
-		lastBlock := orderedChain[len(orderedChain)-1]
+		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
 		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
-		lastFinNr = lastBlock.Nr()
-		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		headBlock = lastBlock
-
-		if headBlock.Height() != headBlock.Nr() {
-			log.Error("☠ finalizing: mismatch nr and height", "slot", headBlock.Slot(), "nr", headBlock.Nr(), "height", headBlock.Height(), "hash", headBlock.Hash().Hex())
+		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		if lastBlock.Height() != lastBlock.Nr() {
+			log.Error("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		}
 	}
 	return nil
@@ -167,7 +163,7 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 		return err
 	}
 
-	log.Info("🔗 block finalized", "Number", finNr, "Slot", block.Slot(), "Height", block.Height(), "hash", block.Hash().Hex())
+	log.Info("🔗 block finalized", "Number", finNr, "b.nr", block.Nr(), "Slot", block.Slot(), "Height", block.Height(), "hash", block.Hash().Hex())
 	return nil
 }
 

@@ -807,12 +807,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	//calc new block height
 	lastFinBlock := c.chain.GetLastFinalizedBlock()
-	lastFinNr := lastFinBlock.Nr()
+	lastFinHeight := lastFinBlock.Height()
 	ancestorsCount := len(tmpDagChainHashes.Uniq())
-	newHeight := lastFinNr + uint64(ancestorsCount) + 1
+	newHeight := lastFinHeight + uint64(ancestorsCount) + 1
 	log.Info("Creator calculate block height", "newHeight", newHeight,
 		"ancestors", ancestorsCount,
-		"lastFinNr", lastFinNr,
+		"lastFinHeight", lastFinHeight,
 	)
 
 	// if max slot of parents is less or equal to last finalized block slot
