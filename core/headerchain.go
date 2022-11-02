@@ -122,11 +122,20 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 func (hc *HeaderChain) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
 		number := cached.(uint64)
-		return &number
+		if number > 0 {
+			return &number
+		}
+		if hash != hc.genesisHeader.Hash() {
+			log.Warn("???? GetBlockFinalizedNumber retrieve 0 (cached)", "number", number, "hash", hash)
+		}
 	}
 	number := rawdb.ReadFinalizedNumberByHash(hc.chainDb, hash)
 	if number != nil {
+		hc.numberCache.Remove(hash)
 		hc.numberCache.Add(hash, *number)
+	}
+	if hash != hc.genesisHeader.Hash() && number != nil && *number == 0 {
+		log.Warn("???? GetBlockFinalizedNumber retrieve 0 (db)", "number", number, "hash", hash)
 	}
 	return number
 }
@@ -181,7 +190,9 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 		if !alreadyKnown {
 			rawdb.WriteHeader(batch, header)
 			inserted = append(inserted, numberHash{number, hash})
+			hc.headerCache.Remove(hash)
 			hc.headerCache.Add(hash, header)
+			hc.numberCache.Remove(hash)
 			hc.numberCache.Add(hash, number)
 			if firstInserted < 0 {
 				firstInserted = i
@@ -456,6 +467,7 @@ func (hc *HeaderChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint
 	head.Number = &lastFinNr
 	hc.lastFinalisedHeader.Store(head)
 	hc.lastFinalisedHash = head.Hash()
+	hc.numberCache.Remove(head.Hash())
 	hc.numberCache.Add(head.Hash(), lastFinNr)
 	headHeaderGauge.Update(int64(lastFinNr))
 }
@@ -600,6 +612,7 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 			for _, h := range difHashes {
 				number := rawdb.ReadFinalizedNumberByHash(hc.chainDb, h)
 				if number != nil {
+					hc.numberCache.Remove(h)
 					hc.numberCache.Add(h, *number)
 					log.Warn("FinalizeTips: finalized detected", "nr", *number, "h", h)
 				} else {

@@ -132,9 +132,10 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 			}
 		}
 		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
-		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
-		lastFinNr = lastBlock.Nr()
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
+		//lastFinNr = lastBlock.Nr()
+		log.Info("⛓ Finalization of spine completed (updateTips)", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		if lastBlock.Height() != lastBlock.Nr() {
 			log.Error("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		}
