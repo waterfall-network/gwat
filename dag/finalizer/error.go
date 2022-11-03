@@ -38,4 +38,7 @@ var (
 
 	// ErrInvalidBlock if block validation failed
 	ErrInvalidBlock = errors.New("invalid block")
+
+	// ErrFinNrrUsed throws if fin nr is already used
+	ErrFinNrrUsed = errors.New("fin nr is already used")
 )

@@ -92,7 +92,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 
 	//sort by slots
 	slots := common.SorterAskU64{}
-	for sl, _ := range spinesMap {
+	for sl := range spinesMap {
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)
@@ -134,11 +134,11 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
-		//lastFinNr = lastBlock.Nr()
 		log.Info("⛓ Finalization of spine completed (updateTips)", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		if lastBlock.Height() != lastBlock.Nr() {
 			log.Error("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		}
+		lastFinNr = lastBlock.Nr()
 	}
 	return nil
 }
@@ -161,6 +161,12 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 		log.Warn("Block already finalized", "finNr", "nr", nr, "height", block.Height(), "hash", block.Hash().Hex())
 		return nil
 	}
+	usedHash := bc.ReadFinalizedHashByNumber(finNr)
+	if usedHash != (common.Hash{}) {
+		log.Warn("Fin Nr is already used", "finNr", finNr, "usedHash", usedHash.Hex(), "height", block.Height(), "hash", block.Hash().Hex())
+		return ErrFinNrrUsed
+	}
+
 	if err := bc.WriteFinalizedBlock(finNr, &block, []*types.Receipt{}, []*types.Log{}, &state.StateDB{}, isHead); err != nil {
 		return err
 	}
