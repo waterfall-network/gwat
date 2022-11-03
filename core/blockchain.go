@@ -284,18 +284,19 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Initialize the chain with ancient data if it isn't empty.
 	var txIndexBlock uint64
 
-	//TODO FREEZER TEMPORARY OFF
-	//isEmpty := bc.empty()
-	//if isEmpty {
-	//	//Start Freezer
-	//	rawdb.InitDatabaseFromFreezer(bc.db)
-	//	// If ancient database is not empty, reconstruct all missing
-	//	// indices in the background.
-	//	frozen, _ := bc.db.Ancients()
-	//	if frozen > 0 {
-	//		txIndexBlock = frozen
-	//	}
-	//}
+	//Start Freezer
+	isEmpty := bc.empty()
+	if isEmpty {
+		//Start Freezer
+		rawdb.InitDatabaseFromFreezer(bc.db)
+		// If ancient database is not empty, reconstruct all missing
+		// indices in the background.
+		frozen, _ := bc.db.Ancients()
+		if frozen > 0 {
+			txIndexBlock = frozen
+		}
+	}
+
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
