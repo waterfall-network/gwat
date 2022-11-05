@@ -769,6 +769,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 					"tips", tips.Print(),
 				)
 				delete(tips, ancestor)
+				delete(tipsBlocks, ancestor)
 			}
 		}
 	}
