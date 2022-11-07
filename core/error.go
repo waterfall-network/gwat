@@ -29,6 +29,9 @@ var (
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
+	// ErrNoGenesis is returned when there is no Genesis Block.
+	ErrBadSlotInfo = errors.New("blockchain received unacceptable slot info data")
+
 	errSideChainReceipts = errors.New("side blocks can't be accepted as ancient chain data")
 
 	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.

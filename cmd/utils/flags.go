@@ -144,6 +144,10 @@ var (
 		Name:  "devnet",
 		Usage: "Waterfall test network: pre-configured Directed Acyclic Graph (DAG) test network",
 	}
+	DeveloperFlag = cli.BoolFlag{
+		Name:  "dev",
+		Usage: "Activate developer mode functionality",
+	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -1442,6 +1446,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
+	}
+	if ctx.GlobalIsSet(DeveloperFlag.Name) {
+		cfg.IsDevMode = true
 	}
 	// Override any default configs for hard coded networks.
 	switch {

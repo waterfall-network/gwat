@@ -3,7 +3,12 @@ package types
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"math/bits"
 	"sort"
+	"time"
 
 	"github.com/waterfall-foundation/gwat/common"
 	"github.com/waterfall-foundation/gwat/log"
@@ -617,4 +622,91 @@ func (bm BlockMap) AvgGasLimit() uint64 {
 //FinalizingSort sort in finalizing order
 func (bm BlockMap) FinalizingSort() common.HashArray {
 	return bm.Headers().FinalizingSort()
+}
+
+/********** SlotInfo **********/
+
+type SlotInfo struct {
+	GenesisTime    uint64 `json:"genesisTime"`
+	SecondsPerSlot uint64 `json:"secondsPerSlot"`
+	SlotsPerEpoch  uint64 `json:"slotsPerEpoch"`
+}
+
+// StartSlotTime takes the given slot to determine the start time of the slot.
+func (si *SlotInfo) StartSlotTime(slot uint64) (time.Time, error) {
+	genesisTimeSec := si.GenesisTime
+	sps := si.SecondsPerSlot
+	overflows, timeSinceGenesis := bits.Mul64(slot, sps)
+	if overflows > 0 {
+		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, errors.New("multiplication overflows"))
+	}
+	sTime, carry := bits.Add64(timeSinceGenesis, genesisTimeSec, 0)
+	if carry > 0 {
+		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, errors.New("addition overflows"))
+	}
+	return time.Unix(int64(sTime), 0), nil // lint:ignore uintcast -- A timestamp will not exceed int64 in your lifetime.
+}
+
+// CurrentSlot returns the current slot as determined by the local clock.
+func (si *SlotInfo) CurrentSlot() uint64 {
+	genesisTimeSec := si.GenesisTime
+	sps := si.SecondsPerSlot
+	now := time.Now().Unix()
+	genesis := int64(genesisTimeSec) // lint:ignore uintcast -- Genesis timestamp will not exceed int64 in your lifetime.
+	if now < genesis {
+		return 0
+	}
+	return uint64(now-genesis) / sps
+}
+
+// IsEpochStart returns true if the given slot number is an epoch starting slot
+// number.
+func (si *SlotInfo) IsEpochStart(slot uint64) bool {
+	return slot%si.SlotsPerEpoch == 0
+}
+
+// IsEpochEnd returns true if the given slot number is an epoch ending slot
+// number.
+func (si *SlotInfo) IsEpochEnd(slot uint64) bool {
+	return si.IsEpochStart(slot + 1)
+}
+
+// SlotToEpoch returns the epoch number of the input slot.
+func (si *SlotInfo) SlotToEpoch(slot uint64) uint64 {
+	if si.SlotsPerEpoch == 0 {
+		panic("integer divide by zero")
+	}
+	val, _ := bits.Div64(0, slot, si.SlotsPerEpoch)
+	return val
+}
+
+// SlotOfEpochStart returns the first slot number of the
+// current epoch.
+func (si *SlotInfo) SlotOfEpochStart(epoch uint64) (uint64, error) {
+	overflows, slot := bits.Mul64(si.SlotsPerEpoch, epoch)
+	if overflows > 0 {
+		return slot, errors.New("start slot calculation overflows: multiplication overflows")
+	}
+	return slot, nil
+}
+
+// SlotOfEpochEnd returns the last slot number of the
+// current epoch.
+func (si *SlotInfo) SlotOfEpochEnd(epoch uint64) (uint64, error) {
+	if epoch == math.MaxUint64 {
+		return 0, errors.New("start slot calculation overflows")
+	}
+	slot, err := si.SlotOfEpochStart(epoch + 1)
+	if err != nil {
+		return 0, err
+	}
+	return slot - 1, nil
+}
+
+func (si *SlotInfo) Copy() *SlotInfo {
+	return &SlotInfo{
+		GenesisTime:    si.GenesisTime,
+		SecondsPerSlot: si.SecondsPerSlot,
+		SlotsPerEpoch:  si.SlotsPerEpoch,
+	}
 }

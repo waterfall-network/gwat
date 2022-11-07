@@ -123,6 +123,7 @@ var (
 		utils.NodeKeyHexFlag,
 		utils.DNSDiscoveryFlag,
 		utils.MainnetFlag,
+		utils.DeveloperFlag,
 		utils.DevNetFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
@@ -248,6 +249,9 @@ func prepare(ctx *cli.Context) {
 	switch {
 	case ctx.GlobalIsSet(utils.DevNetFlag.Name):
 		log.Info("Starting Geth on DevNet testnet...")
+
+	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
+		log.Info("Starting GWAT in dev mode...")
 
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
 		log.Info("Starting Geth on Ethereum mainnet...")

@@ -701,10 +701,10 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		chainConfigCopy := new(params.ChainConfig)
 		*chainConfigCopy = *chainConfig
 		chainConfig = chainConfigCopy
-		if berlin := config.LogConfig.Overrides.BerlinBlock; berlin != nil {
-			chainConfig.BerlinBlock = berlin
-			canon = false
-		}
+		//if berlin := config.LogConfig.Overrides.BerlinBlock; berlin != nil {
+		//	chainConfig.BerlinBlock = berlin
+		//	canon = false
+		//}
 	}
 	for i, tx := range block.Transactions() {
 		// Prepare the trasaction for un-traced execution

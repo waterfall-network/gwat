@@ -162,11 +162,11 @@ var defaultCacheConfig = &CacheConfig{
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
-
-	db     ethdb.Database // Low level persistent database to store final content in
-	snaps  *snapshot.Tree // Snapshot tree for fast trie leaf access
-	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
+	slotInfo    *types.SlotInfo     // coordinator slot settings
+	db          ethdb.Database      // Low level persistent database to store final content in
+	snaps       *snapshot.Tree      // Snapshot tree for fast trie leaf access
+	triegc      *prque.Prque        // Priority queue mapping block numbers to tries to gc
+	gcproc      time.Duration       // Accumulates canonical block processing for trie dumping
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
@@ -239,8 +239,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc := &BlockChain{
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
-		db:          db,
-		triegc:      prque.New(nil),
+		slotInfo: &types.SlotInfo{
+			GenesisTime:    chainConfig.GenesisTime,
+			SecondsPerSlot: chainConfig.SecondsPerSlot,
+			SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
+		},
+		db:     db,
+		triegc: prque.New(nil),
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.TrieCleanJournal,
@@ -525,6 +530,20 @@ func (bc *BlockChain) loadLastState() error {
 		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
 	}
 	return nil
+}
+
+// SetSlotInfo set new slot info.
+func (bc *BlockChain) SetSlotInfo(si *types.SlotInfo) error {
+	if si == nil {
+		return ErrBadSlotInfo
+	}
+	bc.slotInfo = si.Copy()
+	return nil
+}
+
+// GetSlotInfo get current slot info.
+func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
+	return bc.slotInfo.Copy()
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node

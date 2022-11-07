@@ -172,4 +172,7 @@ type Config struct {
 
 	// Berlin block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
+
+	// is dev mode running
+	IsDevMode bool
 }

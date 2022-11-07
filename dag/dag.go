@@ -101,14 +101,6 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 
 	log.Info("Handle Consensus: start", "data", data, "\u2692", params.BuildId)
 
-	//todo separate method for finalization only
-	//// finalization
-	//if len(data.Finalizing) > 0 {
-	//	if err := d.finalizer.Finalize(&data.Finalizing, false); err != nil {
-	//		errs["finalization"] = err.Error()
-	//	}
-	//}
-
 	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// collect next finalization candidates
@@ -225,8 +217,6 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 
 	errs := map[string]string{}
 
-	//d.setConsensusInfo(data)
-
 	log.Info("Handle Finalize: start", "data", data, "\u2692", params.BuildId)
 
 	// finalization
@@ -247,61 +237,6 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 		"errs", errs,
 		"dagSlots", dagSlots,
 	)
-
-	//todo separate method for finalization only
-	//todo create in dag.sync
-	//if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
-	//	assigned := &creator.Assignment{
-	//		Slot:     data.Slot,
-	//		Creators: data.Creators,
-	//	}
-	//
-	//	go func() {
-	//		crtStart := time.Now()
-	//		crtInfo := map[string]string{}
-	//		for _, creator := range assigned.Creators {
-	//			// if received next slot
-	//			if d.consensusInfo.Slot > assigned.Slot {
-	//				break
-	//			}
-	//
-	//			func() {
-	//				coinbase := common.Address{}
-	//				for _, acc := range accounts {
-	//					if creator == acc {
-	//						coinbase = creator
-	//						break
-	//					}
-	//				}
-	//				if coinbase == (common.Address{}) {
-	//					return
-	//				}
-	//
-	//				d.eth.SetEtherbase(coinbase)
-	//				if err := d.eth.CreatorAuthorize(coinbase); err != nil {
-	//					log.Error("Creator authorize err", "err", err, "creator", coinbase)
-	//					return
-	//				}
-	//				log.Info("Creator assigned", "creator", coinbase)
-	//
-	//				block, crtErr := d.creator.CreateBlock(assigned, &tips)
-	//				if crtErr != nil {
-	//					crtInfo["error"] = crtErr.Error()
-	//				}
-	//				if block != nil {
-	//					crtInfo["newBlock"] = block.Hash().Hex()
-	//				}
-	//				log.Info("Handle Finalize: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
-	//
-	//			}()
-	//		}
-	//	}()
-	//}
-	//
-	//d.bc.WriteCreators(data.Slot, data.Creators)
-	//if len(data.Finalizing) > 0 {
-	//	d.bc.WriteLastCoordinatedHash(data.Finalizing[len(data.Finalizing)-1])
-	//}
 
 	res := &types.FinalizationResult{
 		Error: nil,
