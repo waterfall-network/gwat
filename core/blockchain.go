@@ -239,13 +239,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc := &BlockChain{
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
-		slotInfo: &types.SlotInfo{
-			GenesisTime:    chainConfig.GenesisTime,
-			SecondsPerSlot: chainConfig.SecondsPerSlot,
-			SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
-		},
-		db:     db,
-		triegc: prque.New(nil),
+		db:          db,
+		triegc:      prque.New(nil),
 		stateCache: state.NewDatabaseWithConfig(db, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.TrieCleanJournal,
@@ -436,6 +431,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+
+	bc.SetSlotInfo(&types.SlotInfo{
+		GenesisTime:    bc.genesisBlock.Time(),
+		SecondsPerSlot: chainConfig.SecondsPerSlot,
+		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
+	})
+
 	return bc, nil
 }
 
