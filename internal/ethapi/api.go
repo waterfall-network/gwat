@@ -2197,8 +2197,8 @@ func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types
 }
 
 // HeadSyncReady set initial state to start head sync with coordinating network.
-func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, data *types.HeadSyncReadyData) (bool, error) {
-	return api.b.Dag().HandleHeadSyncReady(data)
+func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
+	return api.b.Dag().HandleHeadSyncReady(checkpoint)
 }
 
 // HeadSync run head sync with coordinating network.
@@ -2209,4 +2209,9 @@ func (api *PublicDagAPI) HeadSync(ctx context.Context, data []types.ConsensusInf
 // ValidateSpines validate given sequence of spines.
 func (api *PublicDagAPI) ValidateSpines(ctx context.Context, data common.HashArray) (bool, error) {
 	return api.b.Dag().HandleValidateSpines(data)
+}
+
+// SyncSlotInfo sync slot info.
+func (api *PublicDagAPI) SyncSlotInfo(ctx context.Context, data types.SlotInfo) (bool, error) {
+	return api.b.Dag().HandleSyncSlotInfo(data)
 }

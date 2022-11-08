@@ -886,6 +886,11 @@ web3._extend({
 			call: 'dag_validateSpines',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'syncSlotInfo',
+			call: 'dag_syncSlotInfo',
+			params: 1
+		}),
 	]
 });
 `

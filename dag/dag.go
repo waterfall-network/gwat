@@ -260,14 +260,32 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 }
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.
-func (d *Dag) HandleHeadSyncReady(params *types.HeadSyncReadyData) (bool, error) {
+func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
-	log.Info("Handle Head Sync Ready", "params", params)
-	if d.eth.IsDevMode() && params.SlotInfo != nil {
-		d.bc.SetSlotInfo(params.SlotInfo)
+	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
+	return d.headsync.SetReadyState(checkpoint)
+}
+
+// HandleSyncSlotInfo set initial state to start head sync with coordinating network.
+func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+	log.Info("Handle Sync Slot info", "params", slotInfo)
+	si := d.bc.GetSlotInfo()
+	if si.GenesisTime == slotInfo.GenesisTime &&
+		si.SecondsPerSlot == slotInfo.SecondsPerSlot &&
+		si.SlotsPerEpoch == slotInfo.SlotsPerEpoch {
+		return true, nil
 	}
-	return d.headsync.SetReadyState(params.Checkpoint)
+	if d.eth.IsDevMode() {
+		err := d.bc.SetSlotInfo(&slotInfo)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // HandleHeadSync run head sync with coordinating network.

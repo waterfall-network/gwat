@@ -71,8 +71,3 @@ type CandidatesResult struct {
 	Error      *string          `json:"error"`
 	Candidates common.HashArray `json:"candidates"`
 }
-
-type HeadSyncReadyData struct {
-	Checkpoint *ConsensusInfo `json:"checkpoint"`
-	SlotInfo   *SlotInfo      `json:"slotInfo"`
-}
