@@ -50,7 +50,6 @@ var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
 		ChainID:        big.NewInt(111000111),
-		GenesisTime:    0,
 		SecondsPerSlot: 4,
 		SlotsPerEpoch:  32,
 
@@ -95,7 +94,6 @@ var (
 	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
 	DevNetChainConfig = &ChainConfig{
 		ChainID:        big.NewInt(333777555),
-		GenesisTime:    0,
 		SecondsPerSlot: 4,
 		SlotsPerEpoch:  32,
 		//HomesteadBlock: big.NewInt(0),
@@ -146,7 +144,7 @@ var (
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
 	//AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 1633772500, 4, 32}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
@@ -154,10 +152,10 @@ var (
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
 	//AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0}}
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 1633772500, 4, 32}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32}
 
 	//TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
-	TestChainConfig = &ChainConfig{big.NewInt(1), 1633772500, 4, 32}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -217,7 +215,6 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// coordinator slot settings
-	GenesisTime    uint64 `json:"genesisTime"`
 	SecondsPerSlot uint64 `json:"secondsPerSlot"`
 	SlotsPerEpoch  uint64 `json:"slotsPerEpoch"`
 
@@ -279,8 +276,11 @@ func (c *ChainConfig) String() string {
 	//default:
 	//	engine = "unknown"
 	//}
-	return fmt.Sprintf("{ChainID: %v }",
+	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v}",
 		c.ChainID,
+		c.SecondsPerSlot,
+		c.SlotsPerEpoch,
+
 		//c.HomesteadBlock,
 		//c.DAOForkBlock,
 		//c.DAOForkSupport,

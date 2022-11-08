@@ -2187,8 +2187,8 @@ func (api *PublicDagAPI) Sync(ctx context.Context, data *types.ConsensusInfo) (*
 }
 
 // Finalize finalize blocks.
-func (api *PublicDagAPI) Finalize(ctx context.Context, data *types.ConsensusInfo) (*types.FinalizationResult, error) {
-	return api.b.Dag().HandleFinalize(data, api.am.Accounts()), nil
+func (api *PublicDagAPI) Finalize(ctx context.Context, data common.HashArray) (*types.FinalizationResult, error) {
+	return api.b.Dag().HandleFinalize(data), nil
 }
 
 // GetCandidates retrieves finalization candidates.
@@ -2197,8 +2197,8 @@ func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types
 }
 
 // HeadSyncReady set initial state to start head sync with coordinating network.
-func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
-	return api.b.Dag().HandleHeadSyncReady(checkpoint)
+func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, data *types.HeadSyncReadyData) (bool, error) {
+	return api.b.Dag().HandleHeadSyncReady(data)
 }
 
 // HeadSync run head sync with coordinating network.

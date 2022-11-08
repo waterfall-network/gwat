@@ -64,11 +64,15 @@ type ConsensusResult struct {
 }
 
 type FinalizationResult struct {
-	Error *string            `json:"error"`
-	Info  *map[string]string `json:"info"`
+	Error *string `json:"error"`
 }
 
 type CandidatesResult struct {
 	Error      *string          `json:"error"`
 	Candidates common.HashArray `json:"candidates"`
+}
+
+type HeadSyncReadyData struct {
+	Checkpoint *ConsensusInfo `json:"checkpoint"`
+	SlotInfo   *SlotInfo      `json:"slotInfo"`
 }

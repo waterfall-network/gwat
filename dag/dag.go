@@ -31,6 +31,7 @@ type Backend interface {
 	Etherbase() (eb common.Address, err error)
 	SetEtherbase(etherbase common.Address)
 	CreatorAuthorize(creator common.Address) error
+	IsDevMode() bool
 }
 
 type Dag struct {
@@ -100,8 +101,6 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	d.setConsensusInfo(data)
 
 	log.Info("Handle Consensus: start", "data", data, "\u2692", params.BuildId)
-
-	//log.Info("Handle Consensus: finalized", "err", errs["finalization"], "data", data)
 
 	// collect next finalization candidates
 	candidatesSlot := data.Slot - finalizer.CoordDelaySlots
@@ -181,9 +180,6 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	}
 
 	d.bc.WriteCreators(data.Slot, data.Creators)
-	if len(data.Finalizing) > 0 {
-		d.bc.WriteLastCoordinatedHash(data.Finalizing[len(data.Finalizing)-1])
-	}
 
 	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
 	res := &types.ConsensusResult{
@@ -202,8 +198,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 
 // HandleFinalize handles consensus data
 // 1. blocks finalization
-// 2. new block creation
-func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Address) *types.FinalizationResult {
+func (d *Dag) HandleFinalize(spines common.HashArray) *types.FinalizationResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
@@ -215,36 +210,17 @@ func (d *Dag) HandleFinalize(data *types.ConsensusInfo, accounts []common.Addres
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 
-	errs := map[string]string{}
-
-	log.Info("Handle Finalize: start", "data", data, "\u2692", params.BuildId)
-
-	// finalization
-	if len(data.Finalizing) > 0 {
-		if err := d.finalizer.Finalize(&data.Finalizing, false); err != nil {
-			errs["finalization"] = err.Error()
-		}
-	}
-
-	// create block
-	tips := d.bc.GetTips()
-	//tips, unloaded := d.bc.ReviseTips()
-	dagSlots := d.countDagSlots(&tips)
-
-	log.Info("Handle Finalize: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
-		"IsRunning", d.creator.IsRunning(),
-		"errs", errs,
-		"dagSlots", dagSlots,
-	)
-
+	log.Info("Handle Finalize: start", "spines", spines, "\u2692", params.BuildId)
 	res := &types.FinalizationResult{
 		Error: nil,
 	}
-	if len(errs) > 0 {
-		strBuf, _ := json.Marshal(errs)
-		estr := string(strBuf)
-		res.Error = &estr
+	// finalization
+	if len(spines) > 0 {
+		if err := d.finalizer.Finalize(&spines, false); err != nil {
+			e := err.Error()
+			res.Error = &e
+		}
+		d.bc.WriteLastCoordinatedHash(spines[len(spines)-1])
 	}
 	log.Info("Handle Finalize: response", "result", res)
 	return res
@@ -284,11 +260,14 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 }
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.
-func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
+func (d *Dag) HandleHeadSyncReady(params *types.HeadSyncReadyData) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
-	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
-	return d.headsync.SetReadyState(checkpoint)
+	log.Info("Handle Head Sync Ready", "params", params)
+	if d.eth.IsDevMode() && params.SlotInfo != nil {
+		d.bc.SetSlotInfo(params.SlotInfo)
+	}
+	return d.headsync.SetReadyState(params.Checkpoint)
 }
 
 // HandleHeadSync run head sync with coordinating network.
