@@ -1951,7 +1951,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 				return false, err
 			}
 		} else {
-			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation, true, true)
+			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation)
 		}
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)

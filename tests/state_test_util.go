@@ -187,13 +187,11 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
 
 	var baseFee *big.Int
-	if config.IsLondon(new(big.Int)) {
-		baseFee = t.json.Env.BaseFee
-		if baseFee == nil {
-			// Retesteth uses `0x10` for genesis baseFee. Therefore, it defaults to
-			// parent - 2 : 0xa as the basefee for 'this' context.
-			baseFee = big.NewInt(0x0a)
-		}
+	baseFee = t.json.Env.BaseFee
+	if baseFee == nil {
+		// Retesteth uses `0x10` for genesis baseFee. Therefore, it defaults to
+		// parent - 2 : 0xa as the basefee for 'this' context.
+		baseFee = big.NewInt(0x0a)
 	}
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	msg, err := t.json.Tx.toMessage(post, baseFee)
@@ -231,7 +229,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 
 	// Commit block
-	statedb.Commit(config.IsEIP158(new(big.Int).SetUint64(block.Nr())))
+	statedb.Commit(true)
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
 	// - the coinbase suicided, or
@@ -239,7 +237,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 	statedb.AddBalance(block.Coinbase(), new(big.Int))
 	// And _now_ get the state root
-	root := statedb.IntermediateRoot(config.IsEIP158(new(big.Int).SetUint64(block.Nr())))
+	root := statedb.IntermediateRoot(true)
 	return snaps, statedb, root, nil
 }
 

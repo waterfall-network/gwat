@@ -19,6 +19,7 @@ package params
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/waterfall-foundation/gwat/common"
@@ -49,25 +50,10 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:        big.NewInt(111000111),
-		SecondsPerSlot: 4,
-		SlotsPerEpoch:  32,
-
-		//HomesteadBlock: big.NewInt(0),
-		//DAOForkBlock:   big.NewInt(0),
-		//DAOForkSupport: true,
-		//EIP150Block:    big.NewInt(0),
-		////EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		//EIP155Block:         big.NewInt(0),
-		//EIP158Block:         big.NewInt(0),
-		//ByzantiumBlock:      big.NewInt(0),
-		//ConstantinopleBlock: big.NewInt(0),
-		//PetersburgBlock:     big.NewInt(0),
-		//IstanbulBlock:       big.NewInt(0),
-		//MuirGlacierBlock:    big.NewInt(0),
-		//BerlinBlock:         big.NewInt(0),
-		//LondonBlock:         big.NewInt(0),
-		//Ethash:              new(EthashConfig),
+		ChainID:         big.NewInt(111000111),
+		SecondsPerSlot:  4,
+		SlotsPerEpoch:   32,
+		ForkSlotSubNet1: math.MaxUint64,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -93,28 +79,10 @@ var (
 
 	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
 	DevNetChainConfig = &ChainConfig{
-		ChainID:        big.NewInt(333777555),
-		SecondsPerSlot: 4,
-		SlotsPerEpoch:  32,
-		//HomesteadBlock: big.NewInt(0),
-		////DAOForkBlock:   nil,
-		////DAOForkSupport: true,
-		//EIP150Block: big.NewInt(0),
-		////EIP150Hash:          common.Hash{},
-		//EIP155Block:         big.NewInt(0),
-		//EIP158Block:         big.NewInt(0),
-		//ByzantiumBlock:      big.NewInt(0),
-		//ConstantinopleBlock: big.NewInt(0),
-		//PetersburgBlock:     big.NewInt(0),
-		//IstanbulBlock:       big.NewInt(0),
-		//MuirGlacierBlock:    big.NewInt(0),
-		//BerlinBlock:         big.NewInt(0),
-		//LondonBlock:         big.NewInt(0),
-		//
-		//Clique: &CliqueConfig{
-		//	Period: 10,
-		//},
-		// //Ethash:              new(EthashConfig),
+		ChainID:         big.NewInt(333777555),
+		SecondsPerSlot:  4,
+		SlotsPerEpoch:   32,
+		ForkSlotSubNet1: math.MaxUint64,
 	}
 
 	// DevNetTrustedCheckpoint contains the light client trusted checkpoint for the DevNet.
@@ -143,20 +111,17 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	//AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	//AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0}}
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64}
 
-	//TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32}
-	TestRules       = TestChainConfig.Rules(new(big.Int))
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, math.MaxUint64}
+	TestRules       = TestChainConfig.Rules()
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -218,33 +183,8 @@ type ChainConfig struct {
 	SecondsPerSlot uint64 `json:"secondsPerSlot"`
 	SlotsPerEpoch  uint64 `json:"slotsPerEpoch"`
 
-	//HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
-	//
-	//DAOForkBlock   *big.Int `json:"daoForkBlock,omitempty"`   // TheDAO hard-fork switch block (nil = no fork)
-	//DAOForkSupport bool     `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
-	//
-	//// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
-	//EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
-	//EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (needed for header only clients as only gas pricing changed)
-	//
-	//EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
-	//EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
-	//
-	//ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
-	//ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
-	//PetersburgBlock     *big.Int `json:"petersburgBlock,omitempty"`     // Petersburg switch block (nil = same as Constantinople)
-	//IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
-	//MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
-	//BerlinBlock         *big.Int `json:"berlinBlock,omitempty"`         // Berlin switch block (nil = no fork, 0 = already on berlin)
-	//LondonBlock         *big.Int `json:"londonBlock,omitempty"`         // London switch block (nil = no fork, 0 = already on london)
-	//
-	//// TerminalTotalDifficulty is the amount of total difficulty reached by
-	//// the network that triggers the consensus upgrade.
-	//TerminalTotalDifficulty *big.Int `json:"terminalTotalDifficulty,omitempty"`
-	//
-	//// Various consensus engines
-	//Ethash *EthashConfig `json:"ethash,omitempty"`
-	//Clique *CliqueConfig `json:"clique,omitempty"`
+	// Fork slots
+	ForkSlotSubNet1 uint64 `json:"forkSlotSubNet1,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -267,97 +207,17 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	//var engine interface{}
-	//switch {
-	//case c.Ethash != nil:
-	//	engine = c.Ethash
-	//case c.Clique != nil:
-	//	engine = c.Clique
-	//default:
-	//	engine = "unknown"
-	//}
-	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v}",
+	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, ForkSlotSubNet1: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
-
-		//c.HomesteadBlock,
-		//c.DAOForkBlock,
-		//c.DAOForkSupport,
-		//c.EIP150Block,
-		//c.EIP155Block,
-		//c.EIP158Block,
-		//c.ByzantiumBlock,
-		//c.ConstantinopleBlock,
-		//c.PetersburgBlock,
-		//c.IstanbulBlock,
-		//c.MuirGlacierBlock,
-		//c.BerlinBlock,
-		//c.LondonBlock,
-		//engine,
+		c.ForkSlotSubNet1,
 	)
 }
 
-// IsHomestead returns whether num is either equal to the homestead block or greater.
-func (c *ChainConfig) IsHomestead(num *big.Int) bool {
-	return true
-}
-
-// IsDAOFork returns whether num is either equal to the DAO fork block or greater.
-func (c *ChainConfig) IsDAOFork(num *big.Int) bool {
-	return true
-}
-
-// IsEIP150 returns whether num is either equal to the EIP150 fork block or greater.
-func (c *ChainConfig) IsEIP150(num *big.Int) bool {
-	return true
-}
-
-// IsEIP155 returns whether num is either equal to the EIP155 fork block or greater.
-func (c *ChainConfig) IsEIP155(num *big.Int) bool {
-	return true
-}
-
-// IsEIP158 returns whether num is either equal to the EIP158 fork block or greater.
-func (c *ChainConfig) IsEIP158(num *big.Int) bool {
-	return true
-}
-
-// IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
-func (c *ChainConfig) IsByzantium(num *big.Int) bool {
-	return true
-}
-
-// IsConstantinople returns whether num is either equal to the Constantinople fork block or greater.
-func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
-	return true
-}
-
-// IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.
-func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
-	return true
-}
-
-// IsPetersburg returns whether num is either
-// - equal to or greater than the PetersburgBlock fork block,
-// - OR is nil, and Constantinople is active
-func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
-	return true
-}
-
-// IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
-func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
-	return true
-}
-
-// IsBerlin returns whether num is either equal to the Berlin fork block or greater.
-func (c *ChainConfig) IsBerlin(num *big.Int) bool {
-	return true
-}
-
-// IsLondon returns whether num is either equal to the London fork block or greater.
-func (c *ChainConfig) IsLondon(num *big.Int) bool {
-	return true
+// IsForkSlotSubNet1 returns true if provided slot greater or equal of the fork slot ForkSlotSubNet1.
+func (c *ChainConfig) IsForkSlotSubNet1(slot uint64) bool {
+	return slot >= c.ForkSlotSubNet1
 }
 
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
@@ -431,22 +291,22 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules(num *big.Int) Rules {
+func (c *ChainConfig) Rules() Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
 	}
 	return Rules{
 		ChainID:          new(big.Int).Set(chainID),
-		IsHomestead:      c.IsHomestead(num),
-		IsEIP150:         c.IsEIP150(num),
-		IsEIP155:         c.IsEIP155(num),
-		IsEIP158:         c.IsEIP158(num),
-		IsByzantium:      c.IsByzantium(num),
-		IsConstantinople: c.IsConstantinople(num),
-		IsPetersburg:     c.IsPetersburg(num),
-		IsIstanbul:       c.IsIstanbul(num),
-		IsBerlin:         c.IsBerlin(num),
-		IsLondon:         c.IsLondon(num),
+		IsHomestead:      true,
+		IsEIP150:         true,
+		IsEIP155:         true,
+		IsEIP158:         true,
+		IsByzantium:      true,
+		IsConstantinople: true,
+		IsPetersburg:     true,
+		IsIstanbul:       true,
+		IsBerlin:         true,
+		IsLondon:         true,
 	}
 }

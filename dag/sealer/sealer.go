@@ -125,21 +125,11 @@ type Sealer struct {
 // signers set to the ones provided by the user.
 //func New(config *params.CliqueConfig, db ethdb.Database) *Sealer {
 func New(db ethdb.Database) *Sealer {
-	//// Set any missing consensus parameters to their defaults
-	//conf := *config
-	//if conf.Epoch == 0 {
-	//	conf.Epoch = checkPontSlots
-	//}
-	//if conf.SlotsPerEpoch == 0 {
-	//	conf.SlotsPerEpoch = slotsPerEpoch
-	//}
-
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 
 	return &Sealer{
-		//config:     &conf,
 		db:         db,
 		recents:    recents,
 		signatures: signatures,

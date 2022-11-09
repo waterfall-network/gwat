@@ -257,10 +257,6 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 
-	istanbul bool // Fork indicator whether we are in the istanbul stage.
-	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
-	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
-
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 	currentMaxGas uint64         // Current gas limit for transaction caps
@@ -683,15 +679,6 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	////// Accept only legacy transactions until EIP-2718/2930 activates.
-	//if !pool.eip2718 && tx.Type() != types.LegacyTxType {
-	//	return ErrTxTypeNotSupported
-	//}
-
-	// Reject dynamic fee transactions until EIP-1559 activates.
-	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
-		return ErrTxTypeNotSupported
-	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
@@ -748,7 +735,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	contractCreation := tx.To() == nil && !isTokenOp
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, true, pool.istanbul)
+	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation)
 	if err != nil {
 		return err
 	}
@@ -1634,11 +1621,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	senderCacher.recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
-
-	// Update all fork indicator by next pending block number.
-	pool.istanbul = true
-	pool.eip2718 = true
-	pool.eip1559 = true
 }
 
 // promoteExecutables moves transactions that have become processable from the

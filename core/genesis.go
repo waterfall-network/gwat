@@ -282,7 +282,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
-	if g.Config != nil && g.Config.IsLondon(common.Big0) {
+	if g.Config != nil {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
 		} else {

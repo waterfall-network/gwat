@@ -174,7 +174,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(new(big.Int).SetUint64(block.Nr())))
+		statedb.Finalise(true)
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }
