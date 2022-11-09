@@ -125,17 +125,11 @@ func (hc *HeaderChain) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
 		if number > 0 {
 			return &number
 		}
-		if hash != hc.genesisHeader.Hash() {
-			log.Warn("???? GetBlockFinalizedNumber retrieve 0 (cached)", "number", number, "hash", hash)
-		}
 	}
 	number := rawdb.ReadFinalizedNumberByHash(hc.chainDb, hash)
 	if number != nil {
 		hc.numberCache.Remove(hash)
 		hc.numberCache.Add(hash, *number)
-	}
-	if hash != hc.genesisHeader.Hash() && number != nil && *number == 0 {
-		log.Warn("???? GetBlockFinalizedNumber retrieve 0 (db)", "number", number, "hash", hash)
 	}
 	return number
 }

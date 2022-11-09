@@ -1646,7 +1646,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("???? Pruned ancestor, inserting as sidechain", "hash", block.Hash())
+		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
 		return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
@@ -2026,12 +2026,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("???? Pruned ancestor, inserting as sidechain", "hash", block.Hash())
+		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
 		return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
 	case err != nil:
-		log.Error("???? propagate err", "hash", block.Hash(), "err", err)
+		log.Error("propagate err", "hash", block.Hash(), "err", err)
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
 		return it.index, err
@@ -2624,12 +2624,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("???? Pruned ancestor, inserting as sidechain", "number", block.Nr(), "hash", block.Hash().Hex())
+		log.Warn("Pruned ancestor, inserting as sidechain", "number", block.Nr(), "hash", block.Hash().Hex())
 		return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
 	case err != nil:
-		log.Error("???? insertChain err", "hash", block.Hash(), "err", err)
+		log.Error("insert chain err", "hash", block.Hash(), "err", err)
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
 		return it.index, err

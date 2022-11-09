@@ -144,19 +144,19 @@ func (cs *chainSyncer) loop() {
 		pevt.kind = evtDefault
 		select {
 		case pevt = <-cs.peerEventCh:
-			log.Info("sync: peer evt", "kind", pevt.kind)
+			log.Debug("sync: peer evt", "kind", pevt.kind)
 			// Peer information changed, recheck.
 		case <-cs.doneCh:
-			log.Info("sync: done ch")
+			log.Debug("sync: done ch")
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
 		case <-cs.force.C:
-			log.Info("sync: force timer")
+			log.Debug("sync: force timer")
 			cs.forced = true
 
 		case <-cs.handler.quitSync:
-			log.Info("sync: quit")
+			log.Debug("sync: quit")
 			// Disable all insertion on the blockchain. This needs to happen before
 			// terminating the downloader because the downloader waits for blockchain
 			// inserts, and these can take a long time to finish.
@@ -187,7 +187,7 @@ func (cs *chainSyncer) isResync() bool {
 	}
 	slotsCount := len(mapSlot)
 
-	log.Info("isResync>>>>>", "slotsCount", slotsCount, "dagSlotsLimit", dagSlotsLimit, "len(blocks)", len(blocks), "mapSlot", mapSlot)
+	log.Debug("is resync", "slotsCount", slotsCount, "dagSlotsLimit", dagSlotsLimit, "len(blocks)", len(blocks), "mapSlot", mapSlot)
 
 	return slotsCount > dagSlotsLimit
 }
