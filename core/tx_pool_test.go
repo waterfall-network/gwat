@@ -53,8 +53,6 @@ func init() {
 
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
-	eip1559Config.BerlinBlock = common.Big0
-	eip1559Config.LondonBlock = common.Big0
 }
 
 func getTestGenesisBlock() *types.Block {
@@ -87,6 +85,25 @@ type testBlockChain struct {
 	moveToProcessingCh chan *types.Transaction
 	removeTxFromPoolCh chan *types.Transaction
 	genesisBlock       *types.Block
+}
+
+func (bc *testBlockChain) Synchronising() bool {
+	return false
+}
+
+func (bc *testBlockChain) FinSynchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) DagSynchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) HeadSynchronising() bool {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (bc *testBlockChain) GetDagHashes() *common.HashArray {

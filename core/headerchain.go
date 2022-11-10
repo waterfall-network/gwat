@@ -519,6 +519,9 @@ func (hc *HeaderChain) loadTips() error {
 			continue
 		}
 		bdag := rawdb.ReadBlockDag(hc.chainDb, th)
+		if bdag == nil {
+			return fmt.Errorf("block dag not found")
+		}
 		// rm finalized blocks from DagChainHashes
 		upDagChainHashes := common.HashArray{}
 		for _, h := range bdag.DagChainHashes {
@@ -528,10 +531,6 @@ func (hc *HeaderChain) loadTips() error {
 			}
 		}
 		bdag.DagChainHashes = upDagChainHashes
-
-		if bdag == nil {
-			return fmt.Errorf("block dag not found")
-		}
 		hc.AddTips(bdag, true)
 	}
 
