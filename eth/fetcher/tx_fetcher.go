@@ -276,8 +276,18 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		underpriced int64
 		otherreject int64
 	)
+
+	txHashes := common.HashArray{}
+	for _, tx := range txs {
+		txHashes = append(txHashes, tx.Hash())
+	}
+	log.Info("???? func (f *TxFetcher) Enqueue: start", "txHashes", txHashes)
+
 	errs := f.addTxs(txs)
 	for i, err := range errs {
+
+		log.Error("???? func (f *TxFetcher) Enqueue:", "err", err)
+
 		// Track the transaction hash if the price is too low for us.
 		// Avoid re-request this transaction when we receive another
 		// announcement.

@@ -323,6 +323,9 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
+
+	log.Info("???? handleNewPooledTransactionHashes:: 0000")
+
 	// New transaction announcement arrived, make sure we have
 	// a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
@@ -336,6 +339,9 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	for _, hash := range *ann {
 		peer.markTransaction(hash)
 	}
+
+	log.Info("???? handleNewPooledTransactionHashes::111", "txHashes", *ann)
+
 	return backend.Handle(peer, ann)
 }
 
@@ -345,7 +351,13 @@ func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) err
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+
+	log.Info("???? handleGetPooledTransactions66::000", "txHashes", query.GetPooledTransactionsPacket)
+
 	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsPacket, peer)
+
+	log.Info("???? handleGetPooledTransactions66::111", "txHashes", hashes)
+
 	return peer.ReplyPooledTransactionsRLP(query.RequestId, hashes, txs)
 }
 
@@ -378,6 +390,9 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 }
 
 func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
+
+	log.Info("???? handleTransactions:: 0000")
+
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
 		return nil
@@ -387,13 +402,20 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&txs); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+
+	hashes := common.HashArray{}
+
 	for i, tx := range txs {
+		hashes = append(hashes, tx.Hash())
 		// Validate and mark the remote transaction
 		if tx == nil {
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
 		peer.markTransaction(tx.Hash())
 	}
+
+	log.Info("???? handleGetPooledTransactions66::111", "txHashes", hashes)
+
 	return backend.Handle(peer, &txs)
 }
 

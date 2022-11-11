@@ -247,6 +247,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		if p == nil {
 			return errors.New("unknown peer")
 		}
+		log.Info("???? fetchTx:", "hashes", hashes)
 		return p.RequestTxs(hashes)
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, h.txpool.AddRemotes, fetchTx)
