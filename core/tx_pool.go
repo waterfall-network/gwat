@@ -772,7 +772,11 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		return false, err
 	}
 	// If the transaction pool is full, discard underpriced transactions
-	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
+	allSlots := pool.all.Slots()
+	nrSlots := numSlots(tx)
+	globalSlots := pool.config.GlobalSlots
+	globalQueue := pool.config.GlobalQueue
+	if uint64(allSlots+nrSlots) > globalSlots+globalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
 			log.Info("TXPOOL: Discarding underpriced transaction", "hash", hash.Hex(), "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
@@ -1140,7 +1144,13 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	txNonce := tx.Nonce()
 	if curNonce > txNonce {
 		if pool.processing[addr] != nil {
+
+			pool.slotLogs("moveToProcessing:0000-0")
+
 			pool.processing[addr].Forward(curNonce)
+
+			pool.slotLogs("moveToProcessing:0000-1")
+
 			// If no more pending transactions are left, remove the list
 			if pool.processing[addr].Empty() {
 				delete(pool.pending, addr)
@@ -1155,8 +1165,10 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	moveTxs := append(pendingLteNonce, queueLteNonce...)
 	moveTxs = append(moveTxs, tx)
 	for _, t := range moveTxs {
+		pool.slotLogs("moveToProcessing:1111-0")
 		pool.processing[addr].Add(t, pool.config.PriceBump)
 		pool.all.Add(t, false)
+		pool.slotLogs("moveToProcessing:1111-1")
 	}
 	// Update the account nonce if needed
 	pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
@@ -1210,6 +1222,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
+	pool.slotLogs("removeTx:0000-0")
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
 	if tx == nil {
@@ -1225,6 +1238,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	if pool.locals.contains(addr) {
 		localGauge.Dec(1)
 	}
+	pool.slotLogs("removeTx:0000-1")
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {
@@ -1904,6 +1918,11 @@ func (pool *TxPool) demoteUnexecutables() {
 	}
 }
 
+func (pool *TxPool) slotLogs(msg string) {
+	pending, queued, processing := pool.stats()
+	log.Info("??LOG", "msg", msg, "slot", pool.all.slots, "remotes", len(pool.all.remotes), "locals", len(pool.all.locals), "pending", pending, "queued", queued, "processing", processing)
+}
+
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
 type addressByHeartbeat struct {
 	address   common.Address
@@ -2104,8 +2123,14 @@ func (t *txLookup) Add(tx *types.Transaction, local bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.slots += numSlots(tx)
-	slotsGauge.Update(int64(t.slots))
+	log.Info("???? Add:Slots", "numSlots(tx)", numSlots(tx), "tx.Size()", tx.Size(), "txHash", tx.Hash().Hex())
+
+	if t.locals[tx.Hash()] == nil && t.remotes[tx.Hash()] == nil {
+		t.slots += numSlots(tx)
+		slotsGauge.Update(int64(t.slots))
+	} else {
+		log.Warn("???? Add:Slots:SKIPPING SLOTS INCR", "numSlots(tx)", numSlots(tx), "tx.Size()", tx.Size(), "txHash", tx.Hash().Hex())
+	}
 
 	if local {
 		t.locals[tx.Hash()] = tx
@@ -2165,5 +2190,6 @@ func (t *txLookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
-	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+	txSize := tx.Size()
+	return int((txSize + txSlotSize - 1) / txSlotSize)
 }
