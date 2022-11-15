@@ -165,21 +165,17 @@ func (p *Peer) announceTransactions() {
 				done = make(chan struct{})
 				go func() {
 					if err := p.sendPooledTransactionHashes(pending); err != nil {
-						p.Log().Error("???? Sent transaction announcements", "err", err, "count", len(pending), "txHashes", pending)
 						fail <- err
 						return
 					}
 					close(done)
-					p.Log().Info("???? Sent transaction announcements", "count", len(pending))
+					p.Log().Trace("Sent transaction announcements", "count", len(pending))
 				}()
 			}
 		}
 		// Transfer goroutine may or may not have been started, listen for events
 		select {
 		case hashes := <-p.txAnnounce:
-
-			log.Info("???? announceTransactions:<-p.txAnnounce::111", "failed", failed, "txHashes", hashes)
-
 			// If the connection failed, discard all transaction events
 			if failed {
 				continue
