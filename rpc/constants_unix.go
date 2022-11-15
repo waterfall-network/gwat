@@ -20,15 +20,20 @@
 package rpc
 
 /*
+#ifndef gwat_rpc_cgo_functions
+#define gwat_rpc_cgo_functions
+
 #include <sys/un.h>
 
-int max_socket_path_size() {
-struct sockaddr_un s;
-return sizeof(s.sun_path);
+int gwat_max_socket_path_size() {
+	struct sockaddr_un s;
+	return sizeof(s.sun_path);
 }
+
+#endif
 */
 import "C"
 
 var (
-	max_path_size = C.max_socket_path_size()
+	max_path_size = C.gwat_max_socket_path_size()
 )

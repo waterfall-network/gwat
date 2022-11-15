@@ -28,21 +28,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/eth"
-	ethdownloader "github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/les/downloader"
-	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/eth"
+	ethdownloader "github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"github.com/waterfall-foundation/gwat/les/downloader"
+	"github.com/waterfall-foundation/gwat/les/flowcontrol"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/node"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/p2p/simulations"
+	"github.com/waterfall-foundation/gwat/p2p/simulations/adapters"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 // Additional command line flags for the test binary.
@@ -496,7 +494,6 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
 	config.SyncMode = (ethdownloader.SyncMode)(downloader.LightSync)
-	config.Ethash.PowMode = ethash.ModeFake
 	return New(stack, &config)
 }
 

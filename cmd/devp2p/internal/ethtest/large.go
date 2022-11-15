@@ -20,9 +20,9 @@ import (
 	"crypto/rand"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/core/types"
 )
 
 // largeNumber returns a very large big.Int.
@@ -60,21 +60,18 @@ func randHash() common.Hash {
 }
 
 func largeHeader() *types.Header {
+	nr := uint64(2)
 	return &types.Header{
-		MixDigest:   randHash(),
-		ReceiptHash: randHash(),
-		TxHash:      randHash(),
-		Nonce:       types.BlockNonce{},
-		Extra:       []byte{},
-		Bloom:       types.Bloom{},
-		GasUsed:     0,
-		Coinbase:    common.Address{},
-		GasLimit:    0,
-		UncleHash:   types.EmptyUncleHash,
-		Time:        1337,
-		ParentHash:  randHash(),
-		Root:        randHash(),
-		Number:      largeNumber(2),
-		Difficulty:  largeNumber(2),
+		ReceiptHash:  randHash(),
+		TxHash:       randHash(),
+		Extra:        []byte{},
+		Bloom:        types.Bloom{},
+		GasUsed:      0,
+		Coinbase:     common.Address{},
+		GasLimit:     0,
+		Time:         1337,
+		ParentHashes: common.HashArray{randHash()},
+		Root:         randHash(),
+		Number:       &nr,
 	}
 }

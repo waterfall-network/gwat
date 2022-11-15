@@ -24,13 +24,13 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/internal/utesting"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/rlpx"
 )
 
 var (
@@ -165,12 +165,9 @@ loop:
 	for {
 		switch msg := c.Read().(type) {
 		case *Status:
-			if have, want := msg.Head, chain.blocks[chain.Len()-1].Hash(); have != want {
+			if have, want := msg.LastFinNr, chain.blocks[chain.Len()-1].Nr(); have != want {
 				return nil, fmt.Errorf("wrong head block in status, want:  %#x (block %d) have %#x",
-					want, chain.blocks[chain.Len()-1].NumberU64(), have)
-			}
-			if have, want := msg.TD.Cmp(chain.TD()), 0; have != want {
-				return nil, fmt.Errorf("wrong TD in status: have %v want %v", have, want)
+					want, chain.blocks[chain.Len()-1].Nr(), have)
 			}
 			if have, want := msg.ForkID, chain.ForkID(); !reflect.DeepEqual(have, want) {
 				return nil, fmt.Errorf("wrong fork ID in status: have %v, want %v", have, want)
@@ -198,8 +195,7 @@ loop:
 		status = &Status{
 			ProtocolVersion: uint32(c.negotiatedProtoVersion),
 			NetworkID:       chain.chainConfig.ChainID.Uint64(),
-			TD:              chain.TD(),
-			Head:            chain.blocks[chain.Len()-1].Hash(),
+			LastFinNr:       chain.blocks[chain.Len()-1].Nr(),
 			Genesis:         chain.blocks[0].Hash(),
 			ForkID:          chain.ForkID(),
 		}
@@ -381,7 +377,6 @@ func (s *Suite) sendNextBlock(isEth66 bool) error {
 	nextBlock := s.fullChain.blocks[s.chain.Len()]
 	blockAnnouncement := &NewBlock{
 		Block: nextBlock,
-		TD:    s.fullChain.TotalDifficultyAt(s.chain.Len()),
 	}
 	// send announcement and wait for node to request the header
 	if err = s.testAnnounce(sendConn, recvConn, blockAnnouncement); err != nil {
@@ -414,9 +409,6 @@ func (s *Suite) waitAnnounce(conn *Conn, blockAnnouncement *NewBlock) error {
 				return fmt.Errorf("wrong header in block announcement: \nexpected %v "+
 					"\ngot %v", blockAnnouncement.Block.Header(), msg.Block.Header())
 			}
-			if !reflect.DeepEqual(blockAnnouncement.TD, msg.TD) {
-				return fmt.Errorf("wrong TD in announcement: expected %v, got %v", blockAnnouncement.TD, msg.TD)
-			}
 			return nil
 		case *NewBlockHashes:
 			hashes := *msg
@@ -438,7 +430,7 @@ func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block, isEth66 bool)
 	conn.SetReadDeadline(time.Now().Add(20 * time.Second))
 	// create request
 	req := &GetBlockHeaders{
-		Origin: eth.HashOrNumber{
+		Origin: &eth.HashOrNumber{
 			Hash: block.Hash(),
 		},
 		Amount: 1,
@@ -487,7 +479,6 @@ func (s *Suite) oldAnnounce(isEth66 bool) error {
 	// create old block announcement
 	oldBlockAnnounce := &NewBlock{
 		Block: s.chain.blocks[len(s.chain.blocks)/2],
-		TD:    s.chain.blocks[len(s.chain.blocks)/2].Difficulty(),
 	}
 	if err := sendConn.Write(oldBlockAnnounce); err != nil {
 		return fmt.Errorf("could not write to connection: %v", err)
@@ -617,8 +608,7 @@ func (s *Suite) maliciousStatus(conn *Conn) error {
 	status := &Status{
 		ProtocolVersion: uint32(conn.negotiatedProtoVersion),
 		NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
-		TD:              largeNumber(2),
-		Head:            s.chain.blocks[s.chain.Len()-1].Hash(),
+		LastFinNr:       s.chain.blocks[s.chain.Len()-1].Nr(),
 		Genesis:         s.chain.blocks[0].Hash(),
 		ForkID:          s.chain.ForkID(),
 	}
@@ -663,7 +653,7 @@ func (s *Suite) hashAnnounce(isEth66 bool) error {
 		Number uint64      // Number of one particular block being announced
 	}
 	nextBlock := s.fullChain.blocks[s.chain.Len()]
-	announcement := anno{Hash: nextBlock.Hash(), Number: nextBlock.Number().Uint64()}
+	announcement := anno{Hash: nextBlock.Hash(), Number: nextBlock.Nr()}
 	newBlockHash := &NewBlockHashes{announcement}
 	if err := sendConn.Write(newBlockHash); err != nil {
 		return fmt.Errorf("failed to write to connection: %v", err)
@@ -733,7 +723,7 @@ func (s *Suite) hashAnnounce(isEth66 bool) error {
 	case *NewBlock:
 		// node should only propagate NewBlock without having requested the body if the body is empty
 		nextBlockBody := nextBlock.Body()
-		if len(nextBlockBody.Transactions) != 0 || len(nextBlockBody.Uncles) != 0 {
+		if len(nextBlockBody.Transactions) != 0 {
 			return fmt.Errorf("unexpected non-empty new block propagated: %s", pretty.Sdump(msg))
 		}
 		if msg.Block.Hash() != nextBlock.Hash() {

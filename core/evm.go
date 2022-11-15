@@ -19,10 +19,10 @@ package core
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/consensus"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -32,7 +32,7 @@ type ChainContext interface {
 	Engine() consensus.Engine
 
 	// GetHeader returns the hash corresponding to their hash.
-	GetHeader(common.Hash, uint64) *types.Header
+	GetHeader(common.Hash) *types.Header
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
@@ -56,9 +56,9 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
 		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
+		BlockHeight: new(big.Int).SetUint64(header.Height),
+		BlockNumber: new(big.Int).SetUint64(header.Nr()),
 		Time:        new(big.Int).SetUint64(header.Time),
-		Difficulty:  new(big.Int).Set(header.Difficulty),
 		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
 	}
@@ -72,6 +72,7 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 	}
 }
 
+// todo fix
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
 func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
 	// Cache will initially contain [refHash.parent],
@@ -81,26 +82,28 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 	return func(n uint64) common.Hash {
 		// If there's no hash cache yet, make one
 		if len(cache) == 0 {
-			cache = append(cache, ref.ParentHash)
+			cache = append(cache, ref.ParentHashes[0])
 		}
-		if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
-			return cache[idx]
-		}
+		//if idx := ref.Nr() - n - 1; idx < uint64(len(cache)) {
+		//	return cache[idx]
+		//}
+
 		// No luck in the cache, but we can start iterating from the last element we already know
 		lastKnownHash := cache[len(cache)-1]
-		lastKnownNumber := ref.Number.Uint64() - uint64(len(cache))
+		//lastKnownNumber := ref.Nr() - uint64(len(cache))
 
 		for {
-			header := chain.GetHeader(lastKnownHash, lastKnownNumber)
+			header := chain.GetHeader(lastKnownHash)
 			if header == nil {
 				break
 			}
-			cache = append(cache, header.ParentHash)
-			lastKnownHash = header.ParentHash
-			lastKnownNumber = header.Number.Uint64() - 1
-			if n == lastKnownNumber {
-				return lastKnownHash
-			}
+			cache = append(cache, header.ParentHashes[0])
+			lastKnownHash = header.ParentHashes[0]
+			return lastKnownHash
+			//lastKnownNumber = header.Nr() - 1
+			//if n == lastKnownNumber {
+			//	return lastKnownHash
+			//}
 		}
 		return common.Hash{}
 	}

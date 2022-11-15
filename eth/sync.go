@@ -17,21 +17,30 @@
 package eth
 
 import (
-	"math/big"
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 const (
 	forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
-	defaultMinSyncPeers = 5                // Amount of peers desired to start syncing
+	defaultMinSyncPeers = 1                // Amount of peers desired to start syncing
+	dagSlotsLimit       = 32
+)
+
+type peerEvtKind int
+type peerEvt struct{ kind peerEvtKind }
+
+const (
+	evtDefault peerEvtKind = iota
+	evtBroadcast
+	evtPeerRun
 )
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
@@ -65,32 +74,32 @@ type chainSyncer struct {
 	handler     *handler
 	force       *time.Timer
 	forced      bool // true when force timer fired
-	peerEventCh chan struct{}
+	peerEventCh chan peerEvt
 	doneCh      chan error // non-nil when sync is running
 }
 
 // chainSyncOp is a scheduled sync operation.
 type chainSyncOp struct {
-	mode downloader.SyncMode
-	peer *eth.Peer
-	td   *big.Int
-	head common.Hash
+	mode      downloader.SyncMode
+	peer      *eth.Peer
+	lastFinNr uint64
+	dag       common.HashArray
+	dagOnly   bool
 }
 
 // newChainSyncer creates a chainSyncer.
 func newChainSyncer(handler *handler) *chainSyncer {
 	return &chainSyncer{
 		handler:     handler,
-		peerEventCh: make(chan struct{}),
+		peerEventCh: make(chan peerEvt),
 	}
 }
 
 // handlePeerEvent notifies the syncer about a change in the peer set.
-// This is called for new peers and every time a peer announces a new
-// chain head.
-func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer) bool {
+// This is called for new peers and every time a peer announces a new chain block.
+func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer, kind peerEvtKind) bool {
 	select {
-	case cs.peerEventCh <- struct{}{}:
+	case cs.peerEventCh <- peerEvt{kind}:
 		return true
 	case <-cs.handler.quitSync:
 		return false
@@ -111,22 +120,43 @@ func (cs *chainSyncer) loop() {
 	// This ensures we'll always start sync even if there aren't enough peers.
 	cs.force = time.NewTimer(forceSyncCycle)
 	defer cs.force.Stop()
-
+	var pevt peerEvt
 	for {
-		if op := cs.nextSyncOp(); op != nil {
+		var op *chainSyncOp
+		if pevt.kind == evtBroadcast {
+			// if no finalization while defined slots number - start resync
+			if cs.isResync() {
+				op = cs.getResyncOp()
+				log.Warn("Resync required", "op", op)
+			}
+		} else {
+			op = cs.nextSyncOp()
+			// check sync is busy
+			if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
+				log.Warn("Synchronization canceled (process busy)", "op", op)
+				op = nil
+			}
+		}
+		if op != nil {
+			log.Warn("Synchronization start", "op", op)
 			cs.startSync(op)
 		}
+		pevt.kind = evtDefault
 		select {
-		case <-cs.peerEventCh:
+		case pevt = <-cs.peerEventCh:
+			log.Debug("sync: peer evt", "kind", pevt.kind)
 			// Peer information changed, recheck.
 		case <-cs.doneCh:
+			log.Debug("sync: done ch")
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
 		case <-cs.force.C:
+			log.Debug("sync: force timer")
 			cs.forced = true
 
 		case <-cs.handler.quitSync:
+			log.Debug("sync: quit")
 			// Disable all insertion on the blockchain. This needs to happen before
 			// terminating the downloader because the downloader waits for blockchain
 			// inserts, and these can take a long time to finish.
@@ -138,6 +168,68 @@ func (cs *chainSyncer) loop() {
 			return
 		}
 	}
+}
+
+func (cs *chainSyncer) isResync() bool {
+	if cs.handler.downloader.Synchronising() {
+		return false
+	}
+	tips := cs.handler.chain.GetTips()
+	dagHashes := tips.GetOrderedDagChainHashes()
+	blocks := cs.handler.chain.GetBlocksByHashes(dagHashes)
+	mapSlot := make(map[uint64]int, 0)
+	dagHeshCount := 0
+	for _, b := range blocks {
+		if b.Nr() == 0 && b.Height() > 0 {
+			mapSlot[b.Slot()]++
+			dagHeshCount++
+		}
+	}
+	slotsCount := len(mapSlot)
+
+	log.Debug("is resync", "slotsCount", slotsCount, "dagSlotsLimit", dagSlotsLimit, "len(blocks)", len(blocks), "mapSlot", mapSlot)
+
+	return slotsCount > dagSlotsLimit
+}
+
+// getResyncOp determines whether resync is required.
+func (cs *chainSyncer) getResyncOp() *chainSyncOp {
+	if cs.doneCh != nil {
+		return nil // Sync already running.
+	}
+
+	// Ensure we're at minimum peer count.
+	minPeers := defaultMinSyncPeers
+	if cs.forced {
+		minPeers = 1
+	} else if minPeers > cs.handler.maxPeers {
+		minPeers = cs.handler.maxPeers
+	}
+	if cs.handler.peers.len() < minPeers {
+		return nil
+	}
+	// We have enough peers, select peer to sync
+	peer := cs.handler.peers.getHighestPeer(false)
+	if peer == nil {
+		return nil
+	}
+	mode := cs.modeAndLocalHead()
+	if mode == downloader.FastSync && atomic.LoadUint32(&cs.handler.snapSync) == 1 {
+		// Fast sync via the snap protocol
+		mode = downloader.SnapSync
+	}
+	op := peerToSyncOp(mode, peer)
+	lastFinNr := cs.handler.chain.GetLastFinalizedNumber()
+
+	if lastFinNr >= op.lastFinNr {
+		return nil
+	}
+
+	if lastFinNr < op.lastFinNr {
+		// finalized chain sync required
+		return op
+	}
+	return nil
 }
 
 // nextSyncOp determines whether sync is required at this time.
@@ -156,48 +248,77 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
-	// We have enough peers, check TD
-	peer := cs.handler.peers.peerWithHighestTD()
+	// We have enough peers, select peer to sync
+	peer := cs.handler.peers.getHighestPeer(true)
 	if peer == nil {
 		return nil
 	}
-	mode, ourTD := cs.modeAndLocalHead()
+	mode := cs.modeAndLocalHead()
 	if mode == downloader.FastSync && atomic.LoadUint32(&cs.handler.snapSync) == 1 {
 		// Fast sync via the snap protocol
 		mode = downloader.SnapSync
 	}
 	op := peerToSyncOp(mode, peer)
-	if op.td.Cmp(ourTD) <= 0 {
+	lastFinNr := cs.handler.chain.GetLastFinalizedNumber()
+
+	if lastFinNr > op.lastFinNr {
 		return nil // We're in sync.
 	}
-	return op
+
+	if lastFinNr < op.lastFinNr {
+		// finalized chain sync required
+		return op
+	}
+
+	localTips := cs.handler.chain.GetTips()
+	dagHashes := common.HashArray{}
+	if dhs := cs.handler.chain.GetDagHashes(); dhs != nil {
+		dagHashes = *dhs
+	}
+	_, dag := peer.GetDagInfo()
+	for _, hash := range *dag {
+		block := cs.handler.chain.GetBlockByHash(hash)
+		if len(localTips) == 0 && block != nil && block.Nr() == lastFinNr {
+			// if remote tips set to last finalized block - do same
+			cs.handler.chain.ResetTips()
+			break
+		}
+		if block == nil || (!dagHashes.Has(hash) && block.Number() == nil) {
+			// dag sync required
+			if op.dag == nil {
+				op.dag = common.HashArray{}
+			}
+			op.dag = append(op.dag, hash)
+			op.dagOnly = true
+		}
+	}
+	if op.dagOnly {
+		return op
+	}
+	return nil
 }
 
 func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
-	peerHead, peerTD := p.Head()
-	return &chainSyncOp{mode: mode, peer: p, td: peerTD, head: peerHead}
+	lastFinNr, _ := p.GetDagInfo()
+	return &chainSyncOp{mode: mode, peer: p, lastFinNr: lastFinNr, dag: common.HashArray{}, dagOnly: false}
 }
 
-func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
+func (cs *chainSyncer) modeAndLocalHead() downloader.SyncMode {
 	// If we're in fast sync mode, return that directly
 	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
-		block := cs.handler.chain.CurrentFastBlock()
-		td := cs.handler.chain.GetTd(block.Hash(), block.NumberU64())
-		return downloader.FastSync, td
+		return downloader.FastSync
 	}
 	// We are probably in full sync, but we might have rewound to before the
 	// fast sync pivot, check if we should reenable
 	if pivot := rawdb.ReadLastPivotNumber(cs.handler.database); pivot != nil {
-		if head := cs.handler.chain.CurrentBlock(); head.NumberU64() < *pivot {
-			block := cs.handler.chain.CurrentFastBlock()
-			td := cs.handler.chain.GetTd(block.Hash(), block.NumberU64())
-			return downloader.FastSync, td
+		head := cs.handler.chain.GetLastFinalizedBlock()
+		height := cs.handler.chain.GetBlockFinalizedNumber(head.Hash())
+		if height != nil && *height < *pivot {
+			return downloader.FastSync
 		}
 	}
 	// Nope, we're really full syncing
-	head := cs.handler.chain.CurrentBlock()
-	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
-	return downloader.FullSync, td
+	return downloader.FullSync
 }
 
 // startSync launches doSync in a new goroutine.
@@ -227,7 +348,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		}
 	}
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
-	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.td, op.mode)
+	err := h.downloader.Synchronise(op.peer.ID(), op.dag, op.lastFinNr, op.mode, op.dagOnly)
 	if err != nil {
 		return err
 	}
@@ -241,22 +362,28 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	}
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
-	head := h.chain.CurrentBlock()
-	if head.NumberU64() >= h.checkpointNumber {
+	lastFinalizedBlock := h.chain.GetLastFinalizedBlock()
+	lastFinalizedNr := h.chain.GetLastFinalizedNumber()
+
+	log.Info("Sync process",
+		"lastFinalizedBlock", lastFinalizedBlock,
+		"lastFinalizedNr", lastFinalizedNr,
+		"h.checkpointNumber", h.checkpointNumber,
+		"lastFinalizedNr >= h.checkpointNumber", lastFinalizedNr >= h.checkpointNumber,
+	)
+
+	if lastFinalizedNr >= h.checkpointNumber {
 		// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
 		// for non-checkpointed (number = 0) private networks.
-		if head.Time() >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
+		if lastFinalizedBlock.Time() >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
 			atomic.StoreUint32(&h.acceptTxs, 1)
 		}
 	}
-	if head.NumberU64() > 0 {
-		// We've completed a sync cycle, notify all peers of new state. This path is
-		// essential in star-topology networks where a gateway node needs to notify
-		// all its out-of-date peers of the availability of a new block. This failure
-		// scenario will most often crop up in private and hackathon networks with
-		// degenerate connectivity, but it should be healthy for the mainnet too to
-		// more reliably update peers or the local TD state.
-		h.BroadcastBlock(head, false)
+	atomic.StoreUint32(&h.acceptTxs, 1)
+
+	bTips := h.chain.GetBlocksByHashes(h.chain.GetTips().GetHashes())
+	for _, block := range bTips {
+		h.BroadcastBlock(block, false)
 	}
 	return nil
 }

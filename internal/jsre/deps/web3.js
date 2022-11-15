@@ -3831,15 +3831,15 @@ var outputBlockFormatter = function(block) {
     if (block.baseFeePerGas !== undefined) {
       block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
     }
+    block.height = utils.toDecimal(block.height);
+    block.lfNumber = utils.toDecimal(block.lfNumber);
+    block.slot = utils.toDecimal(block.slot);
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);
     block.timestamp = utils.toDecimal(block.timestamp);
     if(block.number !== null)
         block.number = utils.toDecimal(block.number);
-
-    block.difficulty = utils.toBigNumber(block.difficulty);
-    block.totalDifficulty = utils.toBigNumber(block.totalDifficulty);
 
     if (utils.isArray(block.transactions)) {
         block.transactions.forEach(function(item){

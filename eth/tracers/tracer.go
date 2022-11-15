@@ -25,12 +25,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/log"
 	"gopkg.in/olebedev/go-duktape.v3"
 )
 
@@ -686,13 +686,11 @@ func (jst *Tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	jst.ctx["block"] = env.Context.BlockNumber.Uint64()
 	jst.dbWrapper.db = env.StateDB
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	rules := env.ChainConfig().Rules()
 	jst.activePrecompiles = vm.ActivePrecompiles(rules)
 
 	// Compute intrinsic gas
-	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
-	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE", isHomestead, isIstanbul)
+	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE")
 	if err != nil {
 		return
 	}

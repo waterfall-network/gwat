@@ -17,42 +17,27 @@
 package misc
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // copyConfig does a _shallow_ copy of a given config. Safe to set new values, but
 // do not use e.g. SetInt() on the numbers. For testing only
 func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 	return &params.ChainConfig{
-		ChainID:                 original.ChainID,
-		HomesteadBlock:          original.HomesteadBlock,
-		DAOForkBlock:            original.DAOForkBlock,
-		DAOForkSupport:          original.DAOForkSupport,
-		EIP150Block:             original.EIP150Block,
-		EIP150Hash:              original.EIP150Hash,
-		EIP155Block:             original.EIP155Block,
-		EIP158Block:             original.EIP158Block,
-		ByzantiumBlock:          original.ByzantiumBlock,
-		ConstantinopleBlock:     original.ConstantinopleBlock,
-		PetersburgBlock:         original.PetersburgBlock,
-		IstanbulBlock:           original.IstanbulBlock,
-		MuirGlacierBlock:        original.MuirGlacierBlock,
-		BerlinBlock:             original.BerlinBlock,
-		LondonBlock:             original.LondonBlock,
-		TerminalTotalDifficulty: original.TerminalTotalDifficulty,
-		Ethash:                  original.Ethash,
-		Clique:                  original.Clique,
+		ChainID:         original.ChainID,
+		SecondsPerSlot:  4,
+		SlotsPerEpoch:   32,
+		ForkSlotSubNet1: math.MaxUint64,
 	}
 }
 
 func config() *params.ChainConfig {
 	config := copyConfig(params.TestChainConfig)
-	config.LondonBlock = big.NewInt(5)
 	return config
 }
 
@@ -84,17 +69,20 @@ func TestBlockGasLimits(t *testing.T) {
 		{40000000, 5, 39960939, true},  // lower limit
 		{40000000, 5, 39960938, false}, // Lower limit -1
 	} {
+		nrPt := uint64(tc.pNum)
 		parent := &types.Header{
 			GasUsed:  tc.pGasLimit / 2,
 			GasLimit: tc.pGasLimit,
 			BaseFee:  initial,
-			Number:   big.NewInt(tc.pNum),
+			Number:   &nrPt,
 		}
+
+		nrHd := uint64(tc.pNum + 1)
 		header := &types.Header{
 			GasUsed:  tc.gasLimit / 2,
 			GasLimit: tc.gasLimit,
 			BaseFee:  initial,
-			Number:   big.NewInt(tc.pNum + 1),
+			Number:   &nrHd,
 		}
 		err := VerifyEip1559Header(config(), parent, header)
 		if tc.ok && err != nil {
@@ -120,7 +108,7 @@ func TestCalcBaseFee(t *testing.T) {
 	}
 	for i, test := range tests {
 		parent := &types.Header{
-			Number:   common.Big32,
+			Number:   new(uint64),
 			GasLimit: test.parentGasLimit,
 			GasUsed:  test.parentGasUsed,
 			BaseFee:  big.NewInt(test.parentBaseFee),

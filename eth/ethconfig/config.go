@@ -21,22 +21,14 @@ import (
 	"math/big"
 	"os"
 	"os/user"
-	"path/filepath"
-	"runtime"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/dag/creator"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/eth/gasprice"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -61,16 +53,7 @@ var LightClientGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode: downloader.SnapSync,
-	Ethash: ethash.Config{
-		CacheDir:         "ethash",
-		CachesInMem:      2,
-		CachesOnDisk:     3,
-		CachesLockMmap:   false,
-		DatasetsInMem:    1,
-		DatasetsOnDisk:   2,
-		DatasetsLockMmap: false,
-	},
+	SyncMode:                downloader.SnapSync,
 	NetworkId:               1,
 	TxLookupLimit:           2350000,
 	LightPeers:              100,
@@ -82,13 +65,13 @@ var Defaults = Config{
 	TrieDirtyCache:          256,
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
-	Miner: miner.Config{
+	Creator: creator.Config{
 		GasCeil:  8000000,
 		GasPrice: big.NewInt(params.GWei),
-		Recommit: 3 * time.Second,
+		Recommit: 1 * time.Second,
 	},
 	TxPool:        core.DefaultTxPoolConfig,
-	RPCGasCap:     50000000,
+	RPCGasCap:     105000000,
 	RPCEVMTimeout: 5 * time.Second,
 	GPO:           FullNodeGPO,
 	RPCTxFeeCap:   1, // 1 ether
@@ -100,18 +83,6 @@ func init() {
 		if user, err := user.Current(); err == nil {
 			home = user.HomeDir
 		}
-	}
-	if runtime.GOOS == "darwin" {
-		Defaults.Ethash.DatasetDir = filepath.Join(home, "Library", "Ethash")
-	} else if runtime.GOOS == "windows" {
-		localappdata := os.Getenv("LOCALAPPDATA")
-		if localappdata != "" {
-			Defaults.Ethash.DatasetDir = filepath.Join(localappdata, "Ethash")
-		} else {
-			Defaults.Ethash.DatasetDir = filepath.Join(home, "AppData", "Local", "Ethash")
-		}
-	} else {
-		Defaults.Ethash.DatasetDir = filepath.Join(home, ".ethash")
 	}
 }
 
@@ -169,10 +140,7 @@ type Config struct {
 	Preimages               bool
 
 	// Mining options
-	Miner miner.Config
-
-	// Ethash options
-	Ethash ethash.Config
+	Creator creator.Config
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
@@ -204,35 +172,7 @@ type Config struct {
 
 	// Berlin block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
-}
 
-// CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
-	// If proof-of-authority is requested, set it up
-	if chainConfig.Clique != nil {
-		return clique.New(chainConfig.Clique, db)
-	}
-	// Otherwise assume proof-of-work
-	switch config.PowMode {
-	case ethash.ModeFake:
-		log.Warn("Ethash used in fake mode")
-	case ethash.ModeTest:
-		log.Warn("Ethash used in test mode")
-	case ethash.ModeShared:
-		log.Warn("Ethash used in shared mode")
-	}
-	engine := ethash.New(ethash.Config{
-		PowMode:          config.PowMode,
-		CacheDir:         stack.ResolvePath(config.CacheDir),
-		CachesInMem:      config.CachesInMem,
-		CachesOnDisk:     config.CachesOnDisk,
-		CachesLockMmap:   config.CachesLockMmap,
-		DatasetDir:       config.DatasetDir,
-		DatasetsInMem:    config.DatasetsInMem,
-		DatasetsOnDisk:   config.DatasetsOnDisk,
-		DatasetsLockMmap: config.DatasetsLockMmap,
-		NotifyFull:       config.NotifyFull,
-	}, notify, noverify)
-	engine.SetThreads(-1) // Disable CPU mining
-	return engine
+	// is dev mode running
+	IsDevMode bool
 }

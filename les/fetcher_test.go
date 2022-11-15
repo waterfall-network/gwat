@@ -17,15 +17,14 @@
 package les
 
 import (
-	"math/big"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
 )
 
 // verifyImportEvent verifies that one single event arrive on an import channel.
@@ -56,7 +55,7 @@ func verifyImportDone(t *testing.T, imported chan interface{}) {
 
 // verifyChainHeight verifies the chain height is as expected.
 func verifyChainHeight(t *testing.T, fetcher *lightFetcher, height uint64) {
-	local := fetcher.chain.CurrentHeader().Number.Uint64()
+	local := fetcher.chain.GetLastFinalizedHeader().Nr()
 	if local != height {
 		t.Fatalf("chain height mismatch, got %d, want %d", local, height)
 	}
@@ -84,12 +83,10 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 	c.handler.fetcher.newHeadHook = func(header *types.Header) {
 		importCh <- header
 	}
-	for i := uint64(1); i <= s.backend.Blockchain().CurrentHeader().Number.Uint64(); i++ {
+	for i := uint64(1); i <= s.backend.Blockchain().GetLastFinalizedHeader().Nr(); i++ {
 		header := s.backend.Blockchain().GetHeaderByNumber(i)
-		hash, number := header.Hash(), header.Number.Uint64()
-		td := rawdb.ReadTd(s.db, hash, number)
-
-		announce := announceData{hash, number, td, 0, nil}
+		hash, number := header.Hash(), header.Nr()
+		announce := announceData{hash, number, 0, nil}
 		if p1.cpeer.announceType == announceTypeSigned {
 			announce.sign(s.handler.server.privateKey)
 		}
@@ -122,12 +119,11 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 	c.handler.fetcher.newHeadHook = func(header *types.Header) { done <- header }
 
 	// Prepare announcement by latest header.
-	latest := s.backend.Blockchain().CurrentHeader()
-	hash, number := latest.Hash(), latest.Number.Uint64()
-	td := rawdb.ReadTd(s.db, hash, number)
+	latest := s.backend.Blockchain().GetLastFinalizedHeader()
+	hash, number := latest.Hash(), latest.Nr()
 
 	// Sign the announcement if necessary.
-	announce := announceData{hash, number, td, 0, nil}
+	announce := announceData{hash, number, 0, nil}
 	if peer.cpeer.announceType == announceTypeSigned {
 		announce.sign(s.handler.server.privateKey)
 	}
@@ -138,7 +134,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 
 	// Send a reorged announcement
 	blocks, _ := core.GenerateChain(rawdb.ReadChainConfig(s.db, s.backend.Blockchain().Genesis().Hash()), s.backend.Blockchain().GetBlockByNumber(3),
-		ethash.NewFaker(), s.db, 2, func(i int, gen *core.BlockGen) {
+		sealer.New(s.db), s.db, 2, func(i int, gen *core.BlockGen) {
 			gen.OffsetTime(-9) // higher block difficulty
 		})
 	s.backend.Blockchain().InsertChain(blocks)
@@ -200,11 +196,10 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 		for i := 0; i < len(height); i++ {
 			for j := 0; j < len(servers); j++ {
 				h := servers[j].backend.Blockchain().GetHeaderByNumber(height[i])
-				hash, number := h.Hash(), h.Number.Uint64()
-				td := rawdb.ReadTd(servers[j].db, hash, number)
+				hash, number := h.Hash(), h.Nr()
 
 				// Sign the announcement if necessary.
-				announce := announceData{hash, number, td, 0, nil}
+				announce := announceData{hash, number, 0, nil}
 				p := cpeers[j]
 				if p.announceType == announceTypeSigned {
 					announce.sign(servers[j].handler.server.privateKey)
@@ -246,11 +241,10 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 
 	// Prepare announcement by latest header.
 	headerOne := s.backend.Blockchain().GetHeaderByNumber(1)
-	hash, number := headerOne.Hash(), headerOne.Number.Uint64()
-	td := big.NewInt(200) // bad td
+	hash, number := headerOne.Hash(), headerOne.Nr()
 
 	// Sign the announcement if necessary.
-	announce := announceData{hash, number, td, 0, nil}
+	announce := announceData{hash, number, 0, nil}
 	if peer.cpeer.announceType == announceTypeSigned {
 		announce.sign(s.handler.server.privateKey)
 	}

@@ -24,12 +24,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 // ChainIndexerBackend defines the methods needed to process chain segments in
@@ -53,8 +53,9 @@ type ChainIndexerBackend interface {
 
 // ChainIndexerChain interface is used for connecting the indexer to a blockchain
 type ChainIndexerChain interface {
-	// CurrentHeader retrieves the latest locally known header.
-	CurrentHeader() *types.Header
+	types.SyncProvider
+	// GetLastFinalizedHeader retrieves the latest locally known header.
+	GetLastFinalizedHeader() *types.Header
 
 	// SubscribeChainHeadEvent subscribes to new head header notifications.
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
@@ -92,6 +93,8 @@ type ChainIndexer struct {
 	checkpointHead     common.Hash // Section head belonging to the checkpoint
 
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
+
+	syncProvider types.SyncProvider
 
 	log  log.Logger
 	lock sync.Mutex
@@ -148,8 +151,9 @@ func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
-
-	go c.eventLoop(chain.CurrentHeader(), events, sub)
+	header := chain.GetLastFinalizedHeader()
+	c.syncProvider = chain
+	go c.eventLoop(header, events, sub)
 }
 
 // Close tears down all goroutines belonging to the indexer and returns any error
@@ -194,18 +198,18 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
-func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
+func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
 	// Mark the chain indexer as active, requiring an additional teardown
 	atomic.StoreUint32(&c.active, 1)
 
 	defer sub.Unsubscribe()
 
 	// Fire the initial new head event to start any outstanding processing
-	c.newHead(currentHeader.Number.Uint64(), false)
+	c.newHead(lastFinalisedHeader.Nr(), false)
 
 	var (
-		prevHeader = currentHeader
-		prevHash   = currentHeader.Hash()
+		prevHeader = lastFinalisedHeader
+		prevHash   = lastFinalisedHeader.Hash()
 	)
 	for {
 		select {
@@ -221,18 +225,24 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 				errc <- nil
 				return
 			}
+			if c.syncProvider.HeadSynchronising() {
+				continue
+			}
 			header := ev.Block.Header()
-			if header.ParentHash != prevHash {
+			if !header.ParentHashes.Has(prevHash) {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
 
-				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number.Uint64()) != prevHash {
-					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-						c.newHead(h.Number.Uint64(), true)
+				if h := rawdb.ReadFinalizedHashByNumber(c.chainDb, prevHeader.Nr()); h != prevHash {
+					log.Error("Indexer bad prev header", "slot", prevHeader.Slot, "nr", prevHeader.Nr(), "height", prevHeader.Height, "db.Hash", h.Hex(), "hash", prevHash.Hex())
+					if prevHeader.Nr() > 0 {
+						if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
+							c.newHead(h.Nr(), true)
+						}
 					}
 				}
 			}
-			c.newHead(header.Number.Uint64(), false)
+			c.newHead(header.Nr(), false)
 
 			prevHeader, prevHash = header, header.Hash()
 		}
@@ -283,7 +293,7 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 		if sections > c.knownSections {
 			if c.knownSections < c.checkpointSections {
 				// syncing reached the checkpoint, verify section head
-				syncedHead := rawdb.ReadCanonicalHash(c.chainDb, c.checkpointSections*c.sectionSize-1)
+				syncedHead := rawdb.ReadFinalizedHashByNumber(c.chainDb, c.checkpointSections*c.sectionSize-1)
 				if syncedHead != c.checkpointHead {
 					c.log.Error("Synced chain does not match checkpoint", "number", c.checkpointSections*c.sectionSize-1, "expected", c.checkpointHead, "synced", syncedHead)
 					return
@@ -386,7 +396,7 @@ func (c *ChainIndexer) updateLoop() {
 // held while processing, the continuity can be broken by a long reorg, in which
 // case the function returns with an error.
 func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (common.Hash, error) {
-	c.log.Trace("Processing new chain section", "section", section)
+	c.log.Debug("Processing new chain section", "section", section)
 
 	// Reset and partial processing
 	if err := c.backend.Reset(c.ctx, section, lastHead); err != nil {
@@ -395,14 +405,14 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 	}
 
 	for number := section * c.sectionSize; number < (section+1)*c.sectionSize; number++ {
-		hash := rawdb.ReadCanonicalHash(c.chainDb, number)
+		hash := rawdb.ReadFinalizedHashByNumber(c.chainDb, number)
 		if hash == (common.Hash{}) {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
 		}
-		header := rawdb.ReadHeader(c.chainDb, hash, number)
+		header := rawdb.ReadHeader(c.chainDb, hash)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
-		} else if header.ParentHash != lastHead {
+		} else if !header.ParentHashes.Has(lastHead) {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
 		if err := c.backend.Process(c.ctx, header); err != nil {
@@ -421,7 +431,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 // sections are all valid
 func (c *ChainIndexer) verifyLastHead() {
 	for c.storedSections > 0 && c.storedSections > c.checkpointSections {
-		if c.SectionHead(c.storedSections-1) == rawdb.ReadCanonicalHash(c.chainDb, c.storedSections*c.sectionSize-1) {
+		if c.SectionHead(c.storedSections-1) == rawdb.ReadFinalizedHashByNumber(c.chainDb, c.storedSections*c.sectionSize-1) {
 			return
 		}
 		c.setValidSections(c.storedSections - 1)

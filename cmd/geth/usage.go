@@ -22,9 +22,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/waterfall-foundation/gwat/cmd/utils"
+	"github.com/waterfall-foundation/gwat/internal/debug"
+	"github.com/waterfall-foundation/gwat/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -42,9 +42,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.SmartCardDaemonPathFlag,
 			utils.NetworkIdFlag,
 			utils.MainnetFlag,
-			utils.GoerliFlag,
-			utils.RinkebyFlag,
-			utils.RopstenFlag,
+			utils.DevNetFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,
 			utils.GCModeFlag,
@@ -73,20 +71,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name: "DEVELOPER CHAIN",
 		Flags: []cli.Flag{
 			utils.DeveloperFlag,
-			utils.DeveloperPeriodFlag,
-		},
-	},
-	{
-		Name: "ETHASH",
-		Flags: []cli.Flag{
-			utils.EthashCacheDirFlag,
-			utils.EthashCachesInMemoryFlag,
-			utils.EthashCachesOnDiskFlag,
-			utils.EthashCachesLockMmapFlag,
-			utils.EthashDatasetDirFlag,
-			utils.EthashDatasetsInMemoryFlag,
-			utils.EthashDatasetsOnDiskFlag,
-			utils.EthashDatasetsLockMmapFlag,
 		},
 	},
 	{
@@ -177,13 +161,11 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	{
 		Name: "MINER",
 		Flags: []cli.Flag{
-			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
 			utils.MinerNotifyFlag,
 			utils.MinerNotifyFullFlag,
 			utils.MinerGasPriceFlag,
 			utils.MinerGasLimitFlag,
-			utils.MinerEtherbaseFlag,
 			utils.MinerExtraDataFlag,
 			utils.MinerRecommitIntervalFlag,
 			utils.MinerNoVerifyFlag,
@@ -227,7 +209,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.SnapshotFlag,
 			utils.BloomFilterSizeFlag,
 			cli.HelpFlag,
-			utils.CatalystFlag,
 		},
 	},
 }

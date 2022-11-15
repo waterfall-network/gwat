@@ -30,9 +30,9 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/math"
+	"github.com/waterfall-foundation/gwat/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -93,6 +93,17 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	}
 	d.Read(h[:])
 	return h
+}
+
+// Keccak256Address calculates and returns the Keccak256 address of the input data,
+// converting it to an internal Address data structure.
+func Keccak256Address(data ...[]byte) (address common.Address) {
+	d := NewKeccakState()
+	for _, b := range data {
+		d.Write(b)
+	}
+	d.Read(address[:])
+	return address
 }
 
 // Keccak512 calculates and returns the Keccak512 hash of the input data.

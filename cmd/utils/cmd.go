@@ -28,17 +28,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/internal/debug"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/node"
+	"github.com/waterfall-foundation/gwat/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -174,7 +174,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 				return fmt.Errorf("at block %d: %v", n, err)
 			}
 			// don't import first block
-			if b.NumberU64() == 0 {
+			if b.Height() == 0 {
 				i--
 				continue
 			}
@@ -201,17 +201,17 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 }
 
 func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
-	head := chain.CurrentBlock()
+	head := chain.GetLastFinalizedBlock()
 	for i, block := range blocks {
 		// If we're behind the chain head, only check block, state is available at head
-		if head.NumberU64() > block.NumberU64() {
-			if !chain.HasBlock(block.Hash(), block.NumberU64()) {
+		if head.Nr() > block.Nr() {
+			if !chain.HasBlock(block.Hash()) {
 				return blocks[i:]
 			}
 			continue
 		}
 		// If we're above the chain head, state availability is a must
-		if !chain.HasBlockAndState(block.Hash(), block.NumberU64()) {
+		if !chain.HasBlockAndState(block.Hash()) {
 			return blocks[i:]
 		}
 	}

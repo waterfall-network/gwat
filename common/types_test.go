@@ -63,6 +63,37 @@ func TestIsHexAddress(t *testing.T) {
 	}
 }
 
+func Test(t *testing.T) {
+	tests := []struct {
+		srcAddrs []Address
+		expAddrs []Address
+	}{
+		{
+			srcAddrs: []Address{
+				HexToAddress("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+				HexToAddress("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+				HexToAddress("ccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+				HexToAddress("ffffAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+				HexToAddress("0000000000000000000000000000000000000000"),
+			},
+			expAddrs: []Address{
+				HexToAddress("0000000000000000000000000000000000000000"),
+				HexToAddress("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+				HexToAddress("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+				HexToAddress("ccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+				HexToAddress("ffffAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		if result := SortAddresses(test.srcAddrs); fmt.Sprintf("%x", result) != fmt.Sprintf("%x", test.expAddrs) {
+			t.Errorf("IsHexAddress(%s) == %v; expected %v",
+				test.srcAddrs, result, test.expAddrs)
+		}
+	}
+}
+
 func TestHashJsonValidation(t *testing.T) {
 	var tests = []struct {
 		Prefix string
@@ -533,6 +564,317 @@ func TestHash_Format(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.out != tt.want {
 				t.Errorf("%s does not render as expected:\n got %s\nwant %s", tt.name, tt.out, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArrayFromBytes(t *testing.T) {
+	hashes := HashArray{Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	bts := []byte{
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0,
+		17, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0,
+		34, 34, 34, 34, 34, 34, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0,
+		51, 51, 51, 51, 51, 51, 51, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0,
+	}
+
+	tests := []struct {
+		name    string
+		ba      []byte
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArrayFromBytes",
+			ba:      bts,
+			want:    fmt.Sprintf("%s", hashes),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fmt.Sprintf("%v", HashArrayFromBytes(bts))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArrayFromBytes = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArray_Intersection(t *testing.T) {
+	hashes := HashArray{Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	hashes2 := HashArray{Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44}}
+	intersect := HashArray{Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	tests := []struct {
+		name    string
+		ha      HashArray
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArray.Intersection()",
+			ha:      hashes,
+			want:    fmt.Sprintf("%v", intersect),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fmt.Sprintf("%v", tt.ha.Intersection(hashes2))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArray.Intersection() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArray_SequenceIntersection(t *testing.T) {
+	hashes := HashArray{Hash{}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x11}, Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44}}
+	hashes2 := HashArray{Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44}}
+	intersect := HashArray{Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	tests := []struct {
+		name    string
+		ha      HashArray
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArray.Intersection()",
+			ha:      hashes,
+			want:    fmt.Sprintf("%v", intersect),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fmt.Sprintf("%v", tt.ha.SequenceIntersection(hashes2))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArray.Intersection() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArray_Difference(t *testing.T) {
+	hashes := HashArray{Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	hashes2 := HashArray{Hash{0x77, 0x77, 0x77, 0x77, 0x77, 0x77}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44}}
+	dif1 := HashArray{Hash{}}
+	dif2 := HashArray{Hash{0x77, 0x77, 0x77, 0x77, 0x77, 0x77}, Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44}}
+	tests := []struct {
+		name    string
+		ha      HashArray
+		difha   HashArray
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArray.Difference()",
+			ha:      hashes,
+			difha:   hashes2,
+			want:    fmt.Sprintf("%v", dif1),
+			wantErr: false,
+		},
+		{
+			name:    "HashArray.Difference()",
+			ha:      hashes2,
+			difha:   hashes,
+			want:    fmt.Sprintf("%v", dif2),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fmt.Sprintf("%v", tt.ha.Difference(tt.difha))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArray.Difference() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArray_Uniq(t *testing.T) {
+	uniq := HashArray{Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	hashes := HashArray{Hash{}, Hash{}, Hash{0x11}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}}
+
+	tests := []struct {
+		name    string
+		ha      HashArray
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArray.Uniq()",
+			ha:      hashes,
+			want:    fmt.Sprintf("%v", uniq),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fmt.Sprintf("%v", tt.ha.Uniq())
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArray.Uniq() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArray_IsEqualTo(t *testing.T) {
+	hashes := HashArray{Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	hashes1 := HashArray{Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	hashes2 := HashArray{Hash{0x77, 0x77, 0x77, 0x77, 0x77, 0x77}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44}}
+	hashes3 := HashArray{Hash{}, Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	tests := []struct {
+		name    string
+		ha      HashArray
+		difha   HashArray
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArray.IsEqualTo()",
+			ha:      hashes,
+			difha:   hashes1,
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:    "HashArray.IsEqualTo()",
+			ha:      hashes2,
+			difha:   hashes,
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name:    "HashArray.IsEqualTo()",
+			ha:      hashes3,
+			difha:   hashes,
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name:    "HashArray.IsEqualTo()",
+			ha:      hashes3.Uniq(),
+			difha:   hashes,
+			want:    true,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.ha.IsEqualTo(tt.difha)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArray.IsEqualTo() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArray_Concat(t *testing.T) {
+	hashes1 := HashArray{Hash{0x77, 0x77, 0x77, 0x77, 0x77, 0x77}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44}}
+	hashes2 := HashArray{Hash{}, Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	concated := HashArray{Hash{0x77, 0x77, 0x77, 0x77, 0x77, 0x77}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44}, Hash{}, Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+
+	tests := []struct {
+		name    string
+		ha      HashArray
+		ha2     HashArray
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArray.Concat()",
+			ha:      hashes1,
+			ha2:     hashes2,
+			want:    fmt.Sprintf("%v", concated),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fmt.Sprintf("%v", tt.ha.Concat(tt.ha2))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArray.Concat() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArray_Sort(t *testing.T) {
+	hashes := HashArray{Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{}, Hash{0x11}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+	sorted := HashArray{Hash{}, Hash{}, Hash{0x11}, Hash{0x11}, Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}, Hash{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33}}
+
+	tests := []struct {
+		name    string
+		ha      HashArray
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArray.Sort()",
+			ha:      hashes,
+			want:    fmt.Sprintf("%v", sorted),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fmt.Sprintf("%v", tt.ha.Sort())
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArray.Sort() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHashArray_Reverse(t *testing.T) {
+	hashesOrig := HashArray{
+		Hash{0x00},
+		Hash{0x11, 0x11},
+		Hash{0x22, 0x22, 0x22},
+		Hash{0x33, 0x33, 0x33, 0x33},
+		Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44},
+	}
+	hashesRvsd := HashArray{
+		Hash{0x44, 0x44, 0x44, 0x44, 0x44, 0x44},
+		Hash{0x33, 0x33, 0x33, 0x33},
+		Hash{0x22, 0x22, 0x22},
+		Hash{0x11, 0x11},
+		Hash{0x00},
+	}
+
+	tests := []struct {
+		name    string
+		ha      HashArray
+		difha   HashArray
+		want    driver.Value
+		wantErr bool
+	}{
+		{
+			name:    "HashArray.Reverse()",
+			ha:      hashesOrig,
+			difha:   hashesRvsd,
+			want:    fmt.Sprintf("%#v", hashesRvsd),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fmt.Sprintf("%#v", tt.ha.Reverse())
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("HashArray.Reverse() = %v, want %v", got, tt.want)
 			}
 		})
 	}

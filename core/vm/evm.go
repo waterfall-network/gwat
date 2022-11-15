@@ -21,10 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -71,6 +71,7 @@ type BlockContext struct {
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
 	GasLimit    uint64         // Provides information for GASLIMIT
+	BlockHeight *big.Int       // Provides information for HEIGHT
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
@@ -131,7 +132,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		StateDB:     statedb,
 		Config:      config,
 		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
+		chainRules:  chainConfig.Rules(),
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
@@ -505,6 +506,17 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE)
+}
+
+// CreateGenesisContract creates a new contract while handle genesis.
+func (evm *EVM) CreateGenesisContract(depositAddr common.Address, code []byte) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	var (
+		caller = AccountRef(common.Address{})
+		gas    = uint64(10000000)
+		value  = new(big.Int).SetInt64(0)
+	)
+	contractAddr = depositAddr
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE)
 }
 

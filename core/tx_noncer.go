@@ -19,8 +19,8 @@ package core
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/state"
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of
@@ -63,7 +63,7 @@ func (txn *txNoncer) set(addr common.Address, nonce uint64) {
 	txn.nonces[addr] = nonce
 }
 
-// setIfLower updates a new virtual nonce into the virtual state database if the
+// setIfLower updates a new virtual nonce into the virtual state database if
 // the new one is lower.
 func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 	txn.lock.Lock()
@@ -73,6 +73,18 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 		txn.nonces[addr] = txn.fallback.GetNonce(addr)
 	}
 	if txn.nonces[addr] <= nonce {
+		return
+	}
+	txn.nonces[addr] = nonce
+}
+
+func (txn *txNoncer) setIfGreater(addr common.Address, nonce uint64) {
+	txn.lock.Lock()
+	defer txn.lock.Unlock()
+	if _, ok := txn.nonces[addr]; !ok {
+		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+	}
+	if txn.nonces[addr] >= nonce {
 		return
 	}
 	txn.nonces[addr] = nonce

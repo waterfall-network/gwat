@@ -26,10 +26,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 var (
@@ -53,7 +53,7 @@ type Blockchain interface {
 	Genesis() *types.Block
 
 	// CurrentHeader retrieves the current head header of the canonical chain.
-	CurrentHeader() *types.Header
+	GetLastFinalizedHeader() *types.Header
 }
 
 // ID is a fork identifier as defined by EIP-2124.
@@ -89,7 +89,7 @@ func NewIDWithChain(chain Blockchain) ID {
 	return NewID(
 		chain.Config(),
 		chain.Genesis().Hash(),
-		chain.CurrentHeader().Number.Uint64(),
+		chain.GetLastFinalizedHeader().Nr(),
 	)
 }
 
@@ -100,7 +100,7 @@ func NewFilter(chain Blockchain) Filter {
 		chain.Config(),
 		chain.Genesis().Hash(),
 		func() uint64 {
-			return chain.CurrentHeader().Number.Uint64()
+			return chain.GetLastFinalizedHeader().Nr()
 		},
 	)
 }

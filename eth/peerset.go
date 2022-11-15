@@ -18,13 +18,12 @@ package eth
 
 import (
 	"errors"
-	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/eth/protocols/snap"
+	"github.com/waterfall-foundation/gwat/p2p"
 )
 
 var (
@@ -229,19 +228,23 @@ func (ps *peerSet) snapLen() int {
 	return ps.snapPeers
 }
 
-// peerWithHighestTD retrieves the known peer with the currently highest total
-// difficulty.
-func (ps *peerSet) peerWithHighestTD() *eth.Peer {
+// getHighestPeer retrieves the known peer with the max lastFinNr
+func (ps *peerSet) getHighestPeer(onlyNew bool) *eth.Peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	var (
-		bestPeer *eth.Peer
-		bestTd   *big.Int
+		bestPeer   *eth.Peer
+		bestHeight uint64
 	)
 	for _, p := range ps.peers {
-		if _, td := p.Head(); bestPeer == nil || td.Cmp(bestTd) > 0 {
-			bestPeer, bestTd = p.Peer, td
+		if onlyNew && !p.IsNewlyConnected() {
+			continue
+		}
+		// dag == nil - has not synchronized tips
+		if lastFinNr, dag := p.GetDagInfo(); dag != nil && (bestPeer == nil || lastFinNr > bestHeight) {
+			bestPeer, bestHeight = p.Peer, lastFinNr
+			p.ResetNewlyConnected()
 		}
 	}
 	return bestPeer

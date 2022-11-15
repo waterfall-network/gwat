@@ -17,10 +17,9 @@
 package eth
 
 import (
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 const (
@@ -33,7 +32,6 @@ const (
 // broadcast queue.
 type blockPropagation struct {
 	block *types.Block
-	td    *big.Int
 }
 
 // broadcastBlocks is a write loop that multiplexes blocks and block accouncements
@@ -43,16 +41,16 @@ func (p *Peer) broadcastBlocks() {
 	for {
 		select {
 		case prop := <-p.queuedBlocks:
-			if err := p.SendNewBlock(prop.block, prop.td); err != nil {
+			if err := p.SendNewBlock(prop.block); err != nil {
 				return
 			}
-			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "td", prop.td)
+			p.Log().Trace("Propagated block", "number", prop.block.Nr(), "hash", prop.block.Hash().Hex())
 
 		case block := <-p.queuedBlockAnns:
-			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()}); err != nil {
+			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}); err != nil {
 				return
 			}
-			p.Log().Trace("Announced block", "number", block.Number(), "hash", block.Hash())
+			p.Log().Trace("Announced block", "height", block.Height(), "hash", block.Hash().Hex())
 
 		case <-p.term:
 			return
@@ -79,12 +77,19 @@ func (p *Peer) broadcastTransactions() {
 				txs         []*types.Transaction
 				size        common.StorageSize
 			)
-			for i := 0; i < len(queue) && size < maxTxPacketSize; i++ {
-				if tx := p.txpool.Get(queue[i]); tx != nil {
-					txs = append(txs, tx)
-					size += tx.Size()
+			for i := 0; i < len(queue); i++ {
+				if size < maxTxPacketSize {
+					if tx := p.txpool.Get(queue[i]); tx != nil {
+						txs = append(txs, tx)
+						size += tx.Size()
+					} else {
+						log.Warn("unknown tx", "hash", queue[i].Hex())
+					}
+					hashesCount++
+				} else {
+					log.Warn("storage size >= limit", "storage size", size, "limit", maxTxPacketSize)
+					break
 				}
-				hashesCount++
 			}
 			queue = queue[:copy(queue, queue[hashesCount:])]
 

@@ -25,18 +25,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/core/vm"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
+	"github.com/waterfall-foundation/gwat/eth"
+	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"github.com/waterfall-foundation/gwat/node"
+	"github.com/waterfall-foundation/gwat/params"
 )
 
 func TestBuildSchema(t *testing.T) {
@@ -238,12 +237,8 @@ func createGQLService(t *testing.T, stack *node.Node) {
 	// create backend
 	ethConf := &ethconfig.Config{
 		Genesis: &core.Genesis{
-			Config:     params.AllEthashProtocolChanges,
-			GasLimit:   11500000,
-			Difficulty: big.NewInt(1048576),
-		},
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeFake,
+			Config:   params.AllEthashProtocolChanges,
+			GasLimit: 11500000,
 		},
 		NetworkId:               1337,
 		TrieCleanCache:          5,
@@ -259,7 +254,7 @@ func createGQLService(t *testing.T, stack *node.Node) {
 	}
 	// Create some blocks and import them
 	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
-		ethash.NewFaker(), ethBackend.ChainDb(), 10, func(i int, gen *core.BlockGen) {})
+		sealer.New(ethBackend.ChainDb()), ethBackend.ChainDb(), 10, func(i int, gen *core.BlockGen) {})
 	_, err = ethBackend.BlockChain().InsertChain(chain)
 	if err != nil {
 		t.Fatalf("could not create import blocks: %v", err)
@@ -280,9 +275,8 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 
 	ethConf := &ethconfig.Config{
 		Genesis: &core.Genesis{
-			Config:     params.AllEthashProtocolChanges,
-			GasLimit:   11500000,
-			Difficulty: big.NewInt(1048576),
+			Config:   params.AllEthashProtocolChanges,
+			GasLimit: 11500000,
 			Alloc: core.GenesisAlloc{
 				address: {Balance: funds},
 				// The address 0xdad sloads 0x00 and 0x01
@@ -298,9 +292,6 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 				},
 			},
 			BaseFee: big.NewInt(params.InitialBaseFee),
-		},
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeFake,
 		},
 		NetworkId:               1337,
 		TrieCleanCache:          5,
@@ -339,7 +330,7 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 
 	// Create some blocks and import them
 	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
-		ethash.NewFaker(), ethBackend.ChainDb(), 1, func(i int, b *core.BlockGen) {
+		sealer.New(ethBackend.ChainDb()), ethBackend.ChainDb(), 1, func(i int, b *core.BlockGen) {
 			b.SetCoinbase(common.Address{1})
 			b.AddTx(legacyTx)
 			b.AddTx(envelopTx)

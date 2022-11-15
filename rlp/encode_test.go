@@ -27,7 +27,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/waterfall-foundation/gwat/common/math"
 )
 
 type testEncoder struct {

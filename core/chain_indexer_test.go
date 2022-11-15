@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
 )
 
 // Runs multiple tests with randomized parameters.
@@ -92,12 +92,12 @@ func testChainIndexer(t *testing.T, count int) {
 	}
 	// inject inserts a new random canonical header into the database directly
 	inject := func(number uint64) {
-		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes()}
+		header := &types.Header{Height: number, Number: &number, Extra: big.NewInt(rand.Int63()).Bytes()}
 		if number > 0 {
-			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
+			header.ParentHashes[0] = rawdb.ReadFinalizedHashByNumber(db, number-1)
 		}
 		rawdb.WriteHeader(db, header)
-		rawdb.WriteCanonicalHash(db, header.Hash(), number)
+		rawdb.WriteFinalizedHashNumber(db, header.Hash(), number)
 	}
 	// Start indexer with an already existing chain
 	for i := uint64(0); i <= 100; i++ {
@@ -229,7 +229,7 @@ func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Heade
 		// Can't use Fatal since this is not the test's goroutine.
 		// Returning error stops the chainIndexer's updateLoop
 		return errors.New("Unexpected call to Process")
-	case b.processCh <- header.Number.Uint64():
+	case b.processCh <- header.Nr():
 	}
 	return nil
 }

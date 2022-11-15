@@ -25,8 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -245,6 +245,13 @@ func (m *txSortedMap) LastElement() *types.Transaction {
 	return cache[len(cache)-1]
 }
 
+// FirstElement returns the first element of a flattened list, thus, the
+// transaction with the lowest nonce
+func (m *txSortedMap) FirstElement() *types.Transaction {
+	cache := m.flatten()
+	return cache[0]
+}
+
 // txList is a "list" of transactions belonging to an account, sorted by account
 // nonce. The same type can be used both for storing contiguous transactions for
 // the executable/pending queue; and for storing gapped transactions for the non-
@@ -380,6 +387,16 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 		return true, l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
 	}
 	return true, nil
+}
+
+// Delete deletes a transaction from the maintained list
+func (l *txList) Delete(tx *types.Transaction) bool {
+	// Remove the transaction from the set
+	nonce := tx.Nonce()
+	if removed := l.txs.Remove(nonce); !removed {
+		return false
+	}
+	return true
 }
 
 // Ready retrieves a sequentially increasing list of transactions starting at the

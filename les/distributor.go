@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/les/utils"
+	"github.com/waterfall-foundation/gwat/common/mclock"
+	"github.com/waterfall-foundation/gwat/les/utils"
 )
 
 // requestDistributor implements a mechanism that distributes requests to

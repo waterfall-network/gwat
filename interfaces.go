@@ -15,15 +15,15 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package ethereum defines interfaces for interacting with Ethereum.
-package ethereum
+package gwat
 
 import (
 	"context"
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core/types"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.
@@ -103,6 +103,9 @@ type SyncProgress struct {
 	HighestBlock  uint64 // Highest alleged block number in the chain
 	PulledStates  uint64 // Number of state trie entries already downloaded
 	KnownStates   uint64 // Total number of state trie entries known about
+	Stage         string // stage of sync process (finalized, dag, head, resync)
+	MaxBlockSlot  uint64
+	LastCoordSlot uint64
 }
 
 // ChainSyncReader wraps access to the node's current sync status. If there's no

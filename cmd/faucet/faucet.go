@@ -41,23 +41,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/waterfall-foundation/gwat/accounts"
+	"github.com/waterfall-foundation/gwat/accounts/keystore"
+	"github.com/waterfall-foundation/gwat/cmd/utils"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/downloader"
+	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"github.com/waterfall-foundation/gwat/ethclient"
+	"github.com/waterfall-foundation/gwat/ethstats"
+	"github.com/waterfall-foundation/gwat/les"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/node"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/p2p/nat"
+	"github.com/waterfall-foundation/gwat/params"
 	"github.com/gorilla/websocket"
 )
 
@@ -86,8 +86,7 @@ var (
 	twitterTokenFlag   = flag.String("twitter.token", "", "Bearer token to authenticate with the v2 Twitter API")
 	twitterTokenV1Flag = flag.String("twitter.token.v1", "", "Bearer token to authenticate with the v1.1 Twitter API")
 
-	goerliFlag  = flag.Bool("goerli", false, "Initializes the faucet with Görli network config")
-	rinkebyFlag = flag.Bool("rinkeby", false, "Initializes the faucet with Rinkeby network config")
+	devnetFlag = flag.Bool("devnet", false, "Initializes the faucet with Waterfall test net config")
 )
 
 var (
@@ -147,7 +146,7 @@ func main() {
 		log.Crit("Failed to render the faucet template", "err", err)
 	}
 	// Load and parse the genesis block requested by the user
-	genesis, err := getGenesis(genesisFlag, *goerliFlag, *rinkebyFlag)
+	genesis, err := getGenesis(genesisFlag, *devnetFlag)
 	if err != nil {
 		log.Crit("Failed to parse genesis config", "err", err)
 	}
@@ -564,10 +563,10 @@ func (f *faucet) refresh(head *types.Header) error {
 		nonce   uint64
 		price   *big.Int
 	)
-	if balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number); err != nil {
+	if balance, err = f.client.BalanceAt(ctx, f.account.Address, new(big.Int).SetUint64(head.Nr())); err != nil {
 		return err
 	}
-	if nonce, err = f.client.NonceAt(ctx, f.account.Address, head.Number); err != nil {
+	if nonce, err = f.client.NonceAt(ctx, f.account.Address, new(big.Int).SetUint64(head.Nr())); err != nil {
 		return err
 	}
 	if price, err = f.client.SuggestGasPrice(ctx); err != nil {
@@ -886,16 +885,14 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 }
 
 // getGenesis returns a genesis based on input args
-func getGenesis(genesisFlag *string, goerliFlag bool, rinkebyFlag bool) (*core.Genesis, error) {
+func getGenesis(genesisFlag *string, devnetFlag bool) (*core.Genesis, error) {
 	switch {
 	case genesisFlag != nil:
 		var genesis core.Genesis
 		err := common.LoadJSON(*genesisFlag, &genesis)
 		return &genesis, err
-	case goerliFlag:
-		return core.DefaultGoerliGenesisBlock(), nil
-	case rinkebyFlag:
-		return core.DefaultRinkebyGenesisBlock(), nil
+	case devnetFlag:
+		return core.DefaultDevNetGenesisBlock(), nil
 	default:
 		return nil, fmt.Errorf("no genesis flag provided")
 	}

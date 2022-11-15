@@ -1,11 +1,9 @@
 {
   "genesis": {
-    "difficulty": "117067574",
     "extraData": "0xd783010502846765746887676f312e372e33856c696e7578",
     "gasLimit": "4712380",
     "hash": "0xe05db05eeb3f288041ecb10a787df121c0ed69499355716e17c307de313a4486",
     "miner": "0x0c062b329265c965deef1eede55183b3acb8f611",
-    "mixHash": "0xb669ae39118a53d2c65fd3b1e1d3850dd3f8c6842030698ed846a2762d68b61d",
     "nonce": "0x2b469722b8e28c45",
     "number": "24973",
     "stateRoot": "0x532a5c3f75453a696428db078e32ae283c85cb97e4d8560dbdf022adac6df369",

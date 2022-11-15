@@ -28,7 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 var (
@@ -43,6 +43,8 @@ const (
 	// Timeouts
 	defaultDialTimeout = 10 * time.Second // used if context has no deadline
 	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+	// limit of incoming requests
+	requestsLimit = 256
 )
 
 const (
@@ -231,7 +233,7 @@ func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *C
 		closing:     make(chan struct{}),
 		didClose:    make(chan struct{}),
 		reconnected: make(chan ServerCodec),
-		readOp:      make(chan readOp),
+		readOp:      make(chan readOp, requestsLimit*2),
 		readErr:     make(chan error),
 		reqInit:     make(chan *requestOp),
 		reqSent:     make(chan error, 1),
@@ -657,7 +659,13 @@ func (c *Client) read(codec ServerCodec) {
 			c.readErr <- err
 			return
 		}
-		c.readOp <- readOp{msgs, batch}
+		// requestsLimit-2 - reserving channel capacity for request and response of dag_sync
+		if len(c.readOp) < requestsLimit-2 || (!batch && msgs[0].isDagSync()) {
+			c.readOp <- readOp{msgs, batch}
+		} else {
+			log.Warn("rpc: limit of requests reached", "requestsLimit", requestsLimit-2, "count", len(c.readOp), "batch", batch, "Method", msgs[0].Method)
+			c.readErr <- errors.New("limit of requests reached")
+		}
 	}
 }
 

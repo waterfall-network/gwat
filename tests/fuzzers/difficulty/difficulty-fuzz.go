@@ -23,8 +23,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/waterfall-foundation/gwat/core/types"
 )
 
 type fuzzer struct {
@@ -82,31 +81,19 @@ func Fuzz(data []byte) int {
 	return f.fuzz()
 }
 
-var minDifficulty = big.NewInt(0x2000)
-
 type calculator func(time uint64, parent *types.Header) *big.Int
 
 func (f *fuzzer) fuzz() int {
 	// A parent header
 	header := &types.Header{}
-	if f.readBool() {
-		header.UncleHash = types.EmptyUncleHash
-	}
-	// Difficulty can range between 0x2000 (2 bytes) and up to 32 bytes
-	{
-		diff := new(big.Int).SetBytes(f.readSlice(2, 32))
-		if diff.Cmp(minDifficulty) < 0 {
-			diff.Set(minDifficulty)
-		}
-		header.Difficulty = diff
-	}
 	// Number can range between 0 and up to 32 bytes (but not so that the child exceeds it)
 	{
 		// However, if we use astronomic numbers, then the bomb exp karatsuba calculation
 		// in the legacy methods)
 		// times out, so we limit it to fit within reasonable bounds
 		number := new(big.Int).SetBytes(f.readSlice(0, 4)) // 4 bytes: 32 bits: block num max 4 billion
-		header.Number = number
+		nr := number.Uint64()
+		header.Number = &nr
 	}
 	// Both parent and child time must fit within uint64
 	var time uint64
@@ -129,11 +116,7 @@ func (f *fuzzer) fuzz() int {
 	for i, pair := range []struct {
 		bigFn  calculator
 		u256Fn calculator
-	}{
-		{ethash.FrontierDifficultyCalulator, ethash.CalcDifficultyFrontierU256},
-		{ethash.HomesteadDifficultyCalulator, ethash.CalcDifficultyHomesteadU256},
-		{ethash.DynamicDifficultyCalculator(bombDelay), ethash.MakeDifficultyCalculatorU256(bombDelay)},
-	} {
+	}{} {
 		want := pair.bigFn(time, header)
 		have := pair.u256Fn(time, header)
 		if want.Cmp(have) != 0 {

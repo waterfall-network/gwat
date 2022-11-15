@@ -17,9 +17,9 @@
 package rawdb
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/log"
 )
 
 // ReadPreimage retrieves a single preimage of the provided hash.
@@ -58,6 +58,11 @@ func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 // will only check the existence with latest scheme(with prefix).
 func ReadCodeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(codeKey(hash))
+	return data
+}
+
+func ReadCreatorInfoWithPrefix(db ethdb.KeyValueReader, slot uint64) []byte {
+	data, _ := db.Get(creatorKey(slot))
 	return data
 }
 

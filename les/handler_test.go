@@ -23,19 +23,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/les/downloader"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/common/mclock"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/crypto"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
+	"github.com/waterfall-foundation/gwat/les/downloader"
+	"github.com/waterfall-foundation/gwat/light"
+	"github.com/waterfall-foundation/gwat/p2p"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rlp"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}) error {
@@ -120,20 +120,20 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 			&GetBlockHeadersData{Origin: hashOrNumber{Number: 0}, Amount: 1},
 			[]common.Hash{bc.GetBlockByNumber(0).Hash()},
 		}, {
-			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64()}, Amount: 1},
-			[]common.Hash{bc.CurrentBlock().Hash()},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.GetLastFinalizedBlock().Nr()}, Amount: 1},
+			[]common.Hash{bc.GetLastFinalizedBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
 		//{
-		//	&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
+		//	&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().Nr() - 1}, Amount: limit + 10, Reverse: true},
 		//	[]common.Hash{},
 		//},
 		// Check that requesting more than available is handled gracefully
 		{
-			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.GetLastFinalizedBlock().Nr() - 4}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 4).Hash(),
-				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64()).Hash(),
+				bc.GetBlockByNumber(bc.GetLastFinalizedBlock().Nr() - 4).Hash(),
+				bc.GetBlockByNumber(bc.GetLastFinalizedBlock().Nr()).Hash(),
 			},
 		}, {
 			&GetBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
@@ -144,10 +144,10 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		},
 		// Check that requesting more than available is handled gracefully, even if mid skip
 		{
-			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.GetLastFinalizedBlock().Nr() - 4}, Skip: 2, Amount: 3},
 			[]common.Hash{
-				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 4).Hash(),
-				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1).Hash(),
+				bc.GetBlockByNumber(bc.GetLastFinalizedBlock().Nr() - 4).Hash(),
+				bc.GetBlockByNumber(bc.GetLastFinalizedBlock().Nr() - 1).Hash(),
 			},
 		}, {
 			&GetBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
@@ -161,7 +161,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 			&GetBlockHeadersData{Origin: hashOrNumber{Hash: unknown}, Amount: 1},
 			[]common.Hash{},
 		}, {
-			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() + 1}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.GetLastFinalizedBlock().Nr() + 1}, Amount: 1},
 			[]common.Hash{},
 		},
 	}
@@ -214,9 +214,9 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		{10, nil, nil, 10},       // Multiple random blocks should be retrievable
 		{limit, nil, nil, limit}, // The maximum possible blocks should be retrievable
 		//{limit + 1, nil, nil, limit},                                  // No more than the possible block count should be returned
-		{0, []common.Hash{bc.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
-		{0, []common.Hash{bc.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{{}}, []bool{false}, 0},                      // A non existent block should not be returned
+		{0, []common.Hash{bc.Genesis().Hash()}, []bool{true}, 1},               // The genesis block should be retrievable
+		{0, []common.Hash{bc.GetLastFinalizedBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
+		{0, []common.Hash{{}}, []bool{false}, 0},                               // A non existent block should not be returned
 
 		// Existing and non-existing blocks interleaved should not cause problems
 		{0, []common.Hash{
@@ -239,14 +239,14 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 
 		for j := 0; j < tt.random; j++ {
 			for {
-				num := rand.Int63n(int64(bc.CurrentBlock().NumberU64()))
+				num := rand.Int63n(int64(bc.GetLastFinalizedBlock().Nr()))
 				if !seen[num] {
 					seen[num] = true
 
 					block := bc.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
 					if len(bodies) < tt.expected {
-						bodies = append(bodies, &types.Body{Transactions: block.Transactions(), Uncles: block.Uncles()})
+						bodies = append(bodies, &types.Body{Transactions: block.Transactions()})
 					}
 					break
 				}
@@ -256,7 +256,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := bc.GetBlockByHash(hash)
-				bodies = append(bodies, &types.Body{Transactions: block.Transactions(), Uncles: block.Uncles()})
+				bodies = append(bodies, &types.Body{Transactions: block.Transactions()})
 			}
 		}
 		reqID++
@@ -291,7 +291,7 @@ func testGetCode(t *testing.T, protocol int) {
 
 	var codereqs []*CodeReq
 	var codes [][]byte
-	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= bc.GetLastFinalizedBlock().Nr(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		req := &CodeReq{
 			BHash:  header.Hash(),
@@ -338,9 +338,9 @@ func testGetStaleCode(t *testing.T, protocol int) {
 			t.Errorf("codes mismatch: %v", err)
 		}
 	}
-	check(0, [][]byte{})                                                          // Non-exist contract
-	check(testContractDeployed, [][]byte{})                                       // Stale contract
-	check(bc.CurrentHeader().Number.Uint64(), [][]byte{testContractCodeDeployed}) // Fresh contract
+	check(0, [][]byte{})                                                        // Non-exist contract
+	check(testContractDeployed, [][]byte{})                                     // Stale contract
+	check(bc.GetLastFinalizedHeader().Nr(), [][]byte{testContractCodeDeployed}) // Fresh contract
 }
 
 // Tests that the transaction receipts can be retrieved based on hashes.
@@ -366,11 +366,11 @@ func testGetReceipt(t *testing.T, protocol int) {
 	// Collect the hashes to request, and the response to expect
 	var receipts []types.Receipts
 	var hashes []common.Hash
-	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= bc.GetLastFinalizedBlock().Nr(); i++ {
 		block := bc.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, rawdb.ReadReceipts(server.db, block.Hash(), block.NumberU64(), bc.Config()))
+		receipts = append(receipts, rawdb.ReadReceipts(server.db, block.Hash(), bc.Config()))
 	}
 	// Send the hash request and verify the response
 	sendRequest(rawPeer.app, GetReceiptsMsg, 42, hashes)
@@ -403,7 +403,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	proofsV2 := light.NewNodeSet()
 
 	accounts := []common.Address{bankAddr, userAddr1, userAddr2, signerAddr, {}}
-	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= bc.GetLastFinalizedBlock().Nr(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		trie, _ := trie.New(header.Root, trie.NewDatabase(server.db))
 
@@ -464,9 +464,9 @@ func testGetStaleProof(t *testing.T, protocol int) {
 			t.Errorf("codes mismatch: %v", err)
 		}
 	}
-	check(0, false)                                 // Non-exist proof
-	check(2, false)                                 // Stale proof
-	check(bc.CurrentHeader().Number.Uint64(), true) // Fresh proof
+	check(0, false)                               // Non-exist proof
+	check(2, false)                               // Stale proof
+	check(bc.GetLastFinalizedHeader().Nr(), true) // Fresh proof
 }
 
 // Tests that CHT proofs can be correctly retrieved.
@@ -640,7 +640,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	test(tx3, false, light.TxStatus{Status: core.TxStatusPending})
 
 	// generate and add a block with tx1 and tx2 included
-	gchain, _ := core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), server.db, 1, func(i int, block *core.BlockGen) {
+	gchain, _ := core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), sealer.New(server.db), server.db, 1, func(i int, block *core.BlockGen) {
 		block.AddTx(tx1)
 		block.AddTx(tx2)
 	})
@@ -649,12 +649,12 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	}
 	// wait until TxPool processes the inserted block
 	for i := 0; i < 10; i++ {
-		if pending, _ := server.handler.txpool.Stats(); pending == 1 {
+		if pending, _, _ := server.handler.txpool.Stats(); pending == 1 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if pending, _ := server.handler.txpool.Stats(); pending != 1 {
+	if pending, _, _ := server.handler.txpool.Stats(); pending != 1 {
 		t.Fatalf("pending count mismatch: have %d, want 1", pending)
 	}
 	// Discard new block announcement
@@ -662,24 +662,24 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	msg.Discard()
 
 	// check if their status is included now
-	block1hash := rawdb.ReadCanonicalHash(server.db, 1)
-	test(tx1, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
+	block1hash := rawdb.ReadFinalizedHashByNumber(server.db, 1)
+	test(tx1, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, Index: 0}})
 
-	test(tx2, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
+	test(tx2, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, Index: 1}})
 
 	// create a reorg that rolls them back
-	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), server.db, 2, func(i int, block *core.BlockGen) {})
+	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), sealer.New(server.db), server.db, 2, func(i int, block *core.BlockGen) {})
 	if _, err := chain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
 	// wait until TxPool processes the reorg
 	for i := 0; i < 10; i++ {
-		if pending, _ := server.handler.txpool.Stats(); pending == 3 {
+		if pending, _, _ := server.handler.txpool.Stats(); pending == 3 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if pending, _ := server.handler.txpool.Stats(); pending != 3 {
+	if pending, _, _ := server.handler.txpool.Stats(); pending != 3 {
 		t.Fatalf("pending count mismatch: have %d, want 3", pending)
 	}
 	// Discard new block announcement
@@ -714,7 +714,7 @@ func testStopResume(t *testing.T, protocol int) {
 		expBuf   = testBufLimit
 		testCost = testBufLimit / 10
 	)
-	header := server.handler.blockchain.CurrentHeader()
+	header := server.handler.blockchain.GetLastFinalizedHeader()
 	req := func() {
 		reqID++
 		sendRequest(rawPeer.app, GetBlockHeadersMsg, reqID, &GetBlockHeadersData{Origin: hashOrNumber{Hash: header.Hash()}, Amount: 1})

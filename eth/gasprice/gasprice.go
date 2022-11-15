@@ -22,13 +22,13 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rpc"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -111,7 +111,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	go func() {
 		var lastHead common.Hash
 		for ev := range headEvent {
-			if ev.Block.ParentHash() != lastHead {
+			if !ev.Block.ParentHashes().Has(lastHead) {
 				cache.Purge()
 			}
 			lastHead = ev.Block.Hash()
@@ -160,13 +160,13 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	}
 	var (
 		sent, exp int
-		number    = head.Number.Uint64()
+		number    = head.Nr()
 		result    = make(chan results, oracle.checkBlocks)
 		quit      = make(chan struct{})
 		results   []*big.Int
 	)
 	for sent < oracle.checkBlocks && number > 0 {
-		go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, oracle.ignorePrice, result, quit)
+		go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig()), number, sampleNumber, oracle.ignorePrice, result, quit)
 		sent++
 		exp++
 		number--
@@ -189,7 +189,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 		// meaningful returned, try to query more blocks. But the maximum
 		// is 2*checkBlocks.
 		if len(res.values) == 1 && len(results)+1+exp < oracle.checkBlocks*2 && number > 0 {
-			go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, oracle.ignorePrice, result, quit)
+			go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig()), number, sampleNumber, oracle.ignorePrice, result, quit)
 			sent++
 			exp++
 			number--

@@ -26,17 +26,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	ethereum "github.com/waterfall-foundation/gwat"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/bloombits"
+	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/dag/sealer"
+	"github.com/waterfall-foundation/gwat/ethdb"
+	"github.com/waterfall-foundation/gwat/event"
+	"github.com/waterfall-foundation/gwat/params"
+	"github.com/waterfall-foundation/gwat/rpc"
 )
 
 var (
@@ -64,40 +64,39 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		num  uint64
 	)
 	if blockNr == rpc.LatestBlockNumber {
-		hash = rawdb.ReadHeadBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
+		hash = rawdb.ReadLastCanonicalHash(b.db)
+		number := rawdb.ReadFinalizedNumberByHash(b.db, hash)
 		if number == nil {
 			return nil, nil
 		}
-		num = *number
 	} else {
 		num = uint64(blockNr)
-		hash = rawdb.ReadCanonicalHash(b.db, num)
+		hash = rawdb.ReadFinalizedHashByNumber(b.db, num)
 	}
-	return rawdb.ReadHeader(b.db, hash, num), nil
+	return rawdb.ReadHeader(b.db, hash), nil
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
+	number := rawdb.ReadFinalizedNumberByHash(b.db, hash)
 	if number == nil {
 		return nil, nil
 	}
-	return rawdb.ReadHeader(b.db, hash, *number), nil
+	return rawdb.ReadHeader(b.db, hash), nil
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
-		return rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig), nil
+	if number := rawdb.ReadFinalizedNumberByHash(b.db, hash); number != nil {
+		return rawdb.ReadReceipts(b.db, hash, params.TestChainConfig), nil
 	}
 	return nil, nil
 }
 
 func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
+	number := rawdb.ReadFinalizedNumberByHash(b.db, hash)
 	if number == nil {
 		return nil, nil
 	}
-	receipts := rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig)
+	receipts := rawdb.ReadReceipts(b.db, hash, params.TestChainConfig)
 
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
@@ -147,7 +146,7 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 				task.Bitsets = make([][]byte, len(task.Sections))
 				for i, section := range task.Sections {
 					if rand.Int()%4 != 0 { // Handle occasional missing deliveries
-						head := rawdb.ReadCanonicalHash(b.db, (section+1)*params.BloomBitsBlocks-1)
+						head := rawdb.ReadFinalizedHashByNumber(b.db, (section+1)*params.BloomBitsBlocks-1)
 						task.Bitsets[i], _ = rawdb.ReadBloomBits(b.db, task.Bit, section, head)
 					}
 				}
@@ -170,7 +169,7 @@ func TestBlockSubscription(t *testing.T) {
 		backend     = &testBackend{db: db}
 		api         = NewPublicFilterAPI(backend, false, deadline)
 		genesis     = (&core.Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
-		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
+		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, sealer.New(db), db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
 	)
 

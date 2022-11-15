@@ -19,17 +19,16 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/waterfall-foundation/gwat/common"
+	"github.com/waterfall-foundation/gwat/core"
+	"github.com/waterfall-foundation/gwat/core/types"
+	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
+	"github.com/waterfall-foundation/gwat/log"
+	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"github.com/waterfall-foundation/gwat/trie"
 )
 
 // ethHandler implements the eth.Backend interface to handle the various network
@@ -68,8 +67,8 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.handleHeaders(peer, *packet)
 
 	case *eth.BlockBodiesPacket:
-		txset, uncleset := packet.Unpack()
-		return h.handleBodies(peer, txset, uncleset)
+		txset := packet.Unpack()
+		return h.handleBodies(peer, txset)
 
 	case *eth.NodeDataPacket:
 		if err := h.downloader.DeliverNodeData(peer.ID(), *packet); err != nil {
@@ -84,11 +83,19 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return nil
 
 	case *eth.NewBlockHashesPacket:
+		// skip if synchronizing
+		if h.downloader.FinSynchronising() {
+			return nil
+		}
 		hashes, numbers := packet.Unpack()
 		return h.handleBlockAnnounces(peer, hashes, numbers)
 
 	case *eth.NewBlockPacket:
-		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
+		// skip if synchronizing
+		if h.downloader.FinSynchronising() {
+			return nil
+		}
+		return h.handleBlockBroadcast(peer, packet.Block)
 
 	case *eth.NewPooledTransactionHashesPacket:
 		return h.txFetcher.Notify(peer.ID(), *packet)
@@ -98,6 +105,10 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 	case *eth.PooledTransactionsPacket:
 		return h.txFetcher.Enqueue(peer.ID(), *packet, true)
+
+	case *eth.DagPacket:
+		dag := common.HashArray(*packet)
+		return h.handleDag(peer, dag)
 
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
@@ -129,7 +140,7 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 	filter := len(headers) == 1
 	if filter {
 		// If it's a potential sync progress check, validate the content and advertised chain weight
-		if p.syncDrop != nil && headers[0].Number.Uint64() == h.checkpointNumber {
+		if p.syncDrop != nil && *headers[0].Number == h.checkpointNumber {
 			// Disable the sync drop timer
 			p.syncDrop.Stop()
 			p.syncDrop = nil
@@ -141,12 +152,12 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 			return nil
 		}
 		// Otherwise if it's a whitelisted block, validate against the set
-		if want, ok := h.whitelist[headers[0].Number.Uint64()]; ok {
+		if want, ok := h.whitelist[headers[0].Nr()]; ok {
 			if hash := headers[0].Hash(); want != hash {
-				peer.Log().Info("Whitelist mismatch, dropping peer", "number", headers[0].Number.Uint64(), "hash", hash, "want", want)
+				peer.Log().Info("Whitelist mismatch, dropping peer", "number", headers[0].Nr(), "hash", hash, "want", want)
 				return errors.New("whitelist block mismatch")
 			}
-			peer.Log().Debug("Whitelist block verified", "number", headers[0].Number.Uint64(), "hash", want)
+			peer.Log().Debug("Whitelist block verified", "number", headers[0].Nr(), "hash", want)
 		}
 		// Irrelevant of the fork checks, send the header to the fetcher just in case
 		headers = h.blockFetcher.FilterHeaders(peer.ID(), headers, time.Now())
@@ -154,7 +165,7 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 	if len(headers) > 0 || !filter {
 		err := h.downloader.DeliverHeaders(peer.ID(), headers)
 		if err != nil {
-			log.Debug("Failed to deliver headers", "err", err)
+			log.Info("Failed to deliver headers", "err", err)
 		}
 	}
 	return nil
@@ -162,17 +173,27 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 
 // handleBodies is invoked from a peer's message handler when it transmits a batch
 // of block bodies for the local node to process.
-func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, uncles [][]*types.Header) error {
+func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction) error {
 	// Filter out any explicitly requested bodies, deliver the rest to the downloader
-	filter := len(txs) > 0 || len(uncles) > 0
+	filter := len(txs) > 0
 	if filter {
-		txs, uncles = h.blockFetcher.FilterBodies(peer.ID(), txs, uncles, time.Now())
+		txs = h.blockFetcher.FilterBodies(peer.ID(), txs, time.Now())
 	}
-	if len(txs) > 0 || len(uncles) > 0 || !filter {
-		err := h.downloader.DeliverBodies(peer.ID(), txs, uncles)
+	if len(txs) > 0 || !filter {
+		err := h.downloader.DeliverBodies(peer.ID(), txs)
 		if err != nil {
-			log.Debug("Failed to deliver bodies", "err", err)
+			log.Warn("Failed to deliver bodies", "err", err)
 		}
+	}
+	return nil
+}
+
+// handleDag is invoked from a peer's message handler when it transmits a dag chain
+// for the local node to process.
+func (h *ethHandler) handleDag(peer *eth.Peer, dag common.HashArray) error {
+	err := h.downloader.DeliverDag(peer.ID(), dag)
+	if err != nil {
+		log.Error("Failed to deliver dag hashes", "err", err)
 	}
 	return nil
 }
@@ -186,7 +207,7 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 		unknownNumbers = make([]uint64, 0, len(numbers))
 	)
 	for i := 0; i < len(hashes); i++ {
-		if !h.chain.HasBlock(hashes[i], numbers[i]) {
+		if !h.chain.HasBlock(hashes[i]) {
 			unknownHashes = append(unknownHashes, hashes[i])
 			unknownNumbers = append(unknownNumbers, numbers[i])
 		}
@@ -199,20 +220,32 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int) error {
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
 	// Schedule the block for import
-	h.blockFetcher.Enqueue(peer.ID(), block)
-
-	// Assuming the block is importable by the peer, but possibly not yet done so,
-	// calculate the head hash and TD that the peer truly must have.
-	var (
-		trueHead = block.ParentHash()
-		trueTD   = new(big.Int).Sub(td, block.Difficulty())
-	)
-	// Update the peer's total difficulty if better than the previous
-	if _, td := peer.Head(); trueTD.Cmp(td) > 0 {
-		peer.SetHead(trueHead, trueTD)
-		h.chainSync.handlePeerEvent(peer)
+	h.blockFetcher.Enqueue(peer.ID(), block, peer.RequestOneHeader, peer.RequestBodies)
+	// Update the peer's status info if better than the previous
+	lastFinNr, dag := peer.GetDagInfo()
+	if dag == nil {
+		dag = &common.HashArray{}
 	}
+	if block.LFNumber() > lastFinNr {
+		lastFinNr = block.LFNumber()
+	}
+	lfb := h.chain.GetBlockByHash(block.LFHash())
+	if lfb != nil {
+		*dag = dag.Difference(append(lfb.ParentHashes(), lfb.Hash()))
+	}
+	upDag := common.HashArray{}
+	if len(*dag) > 0 {
+		localBlocks := h.chain.GetBlocksByHashes(*dag)
+		for hash, bl := range localBlocks {
+			if bl == nil || bl.Nr() == 0 && bl.Height() > 0 {
+				upDag = append(upDag, hash)
+			}
+		}
+	}
+	upDag = append(upDag, block.Hash())
+	peer.SetDagInfo(lastFinNr, &upDag)
+	h.chainSync.handlePeerEvent(peer, evtBroadcast)
 	return nil
 }
