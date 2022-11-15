@@ -451,7 +451,7 @@ func (pool *TxPool) loop() {
 			func() {
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
-				log.Info("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+				log.Debug("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
 				pool.moveToProcessing(tx)
 			}()
 
@@ -1315,7 +1315,7 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 	}
 
 	if !ok {
-		log.Warn("tx pool: cant remove processed tx", "nonce", txNonce, "hash", tx.Hash().Hex())
+		log.Debug("tx pool: cant remove processed tx", "nonce", txNonce, "hash", tx.Hash().Hex())
 	}
 }
 

@@ -78,10 +78,9 @@ func (d *Dag) Creator() *creator.Creator {
 }
 
 // HandleConsensus handles consensus data
-// 1. block finalization
-// 2. collect next finalization candidates
 // 3. new block creation
 // 4. return result
+// depracated
 func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Address) *types.ConsensusResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
@@ -102,22 +101,10 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 
 	log.Info("Handle Consensus: start", "data", data, "\u2692", params.BuildId)
 
-	// collect next finalization candidates
-	candidatesSlot := data.Slot - finalizer.CoordDelaySlots
-	if candidatesSlot < 0 {
-		candidatesSlot = 0
-	}
-	candidates, err := d.finalizer.GetFinalizingCandidates(&candidatesSlot)
-	if err != nil {
-		errs["candidates"] = err.Error()
-	}
-
-	if len(candidates) == 0 {
-		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
-	}
-
-	log.Info("Handle Consensus: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)))
-
+	var (
+		err        error
+		candidates = common.HashArray{}
+	)
 	// create block
 	tips := d.bc.GetTips()
 	//tips, unloaded := d.bc.ReviseTips()

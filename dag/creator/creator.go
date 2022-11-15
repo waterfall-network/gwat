@@ -526,8 +526,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 	c.chain.AddTips(newBlockDag)
 	c.chain.WriteCurrentTips()
 
-	// todo rm
-	log.Info("<<<<<< c.chain.AddTips(newBlockDag) >>>>>>", "tips", c.chain.GetTips().Print())
+	log.Info("Creator: end tips", "tips", c.chain.GetTips().Print())
 
 	c.chain.MoveTxsToProcessing(types.Blocks{block})
 
@@ -572,7 +571,7 @@ func (c *Creator) makeCurrent(header *types.Header) error {
 	env.tcount = 0
 
 	// Swap out the old work with the new one, terminating any leftover prefetcher
-	// processes in the mean time and starting a new one.
+	// processes in the meantime and starting a new one.
 	if c.current != nil && c.current.state != nil {
 		c.current.state.StopPrefetcher()
 	}
@@ -804,7 +803,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
 	}
 
-	log.Info("Creator data", "tips", tips.Print())
+	log.Info("Creator: start tips", "tips", tips.Print())
 
 	//calc new block height
 	lastFinBlock := c.chain.GetLastFinalizedBlock()
