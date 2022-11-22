@@ -23,12 +23,12 @@ import (
 	"os/user"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/dag/creator"
-	"github.com/waterfall-foundation/gwat/eth/downloader"
-	"github.com/waterfall-foundation/gwat/eth/gasprice"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/gasprice"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.

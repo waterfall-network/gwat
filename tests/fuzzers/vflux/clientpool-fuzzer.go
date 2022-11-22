@@ -24,14 +24,14 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/ethdb/memorydb"
-	"github.com/waterfall-foundation/gwat/les/vflux"
-	vfs "github.com/waterfall-foundation/gwat/les/vflux/server"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb/memorydb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/vflux"
+	vfs "gitlab.waterfall.network/waterfall/protocol/gwat/les/vflux/server"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 var (

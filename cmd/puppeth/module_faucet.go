@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // faucetDockerfile is the Dockerfile required to build a faucet container to

@@ -3,10 +3,11 @@ package operation
 import (
 	"bytes"
 	"fmt"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/internal/token/testutils"
 	"math/big"
 	"testing"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
 )
 
 var (

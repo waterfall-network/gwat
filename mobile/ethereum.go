@@ -21,8 +21,8 @@ package geth
 import (
 	"errors"
 
-	ethereum "github.com/waterfall-foundation/gwat"
-	"github.com/waterfall-foundation/gwat/common"
+	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // Subscription represents an event subscription where events are

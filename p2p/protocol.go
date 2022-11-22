@@ -19,8 +19,8 @@ package p2p
 import (
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 )
 
 // Protocol represents a P2P subprotocol implementation.

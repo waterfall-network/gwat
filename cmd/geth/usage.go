@@ -22,9 +22,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/cmd/utils"
-	"github.com/waterfall-foundation/gwat/internal/debug"
-	"github.com/waterfall-foundation/gwat/internal/flags"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/debug"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

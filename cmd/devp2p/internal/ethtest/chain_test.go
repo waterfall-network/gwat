@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
-	"github.com/waterfall-foundation/gwat/p2p"
 	"github.com/stretchr/testify/assert"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
 )
 
 // TestEthProtocolNegotiation tests whether the test suite

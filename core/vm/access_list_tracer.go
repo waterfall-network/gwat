@@ -20,8 +20,8 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
 // accessList is an accumulator for the set of accounts and storage slots an EVM

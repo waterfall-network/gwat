@@ -1,7 +1,7 @@
 package operation
 
 import (
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 
 	"math/big"
 )

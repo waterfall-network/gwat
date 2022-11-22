@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/les/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/utils"
 )
 
 func TestTransition(t *testing.T) {

@@ -26,8 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/bitutil"
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/bitutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 // bloomIndexes represents the bit indexes inside the bloom filter that belong

@@ -21,8 +21,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 )
 
 // This is the number of consecutive leaf requests that may fail before

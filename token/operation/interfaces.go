@@ -3,7 +3,7 @@ package operation
 import (
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // Allowance contains attributes for an allowance operation

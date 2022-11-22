@@ -21,8 +21,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // copyConfig does a _shallow_ copy of a given config. Safe to set new values, but

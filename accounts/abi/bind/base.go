@@ -24,12 +24,12 @@ import (
 	"strings"
 	"sync"
 
-	ethereum "github.com/waterfall-foundation/gwat"
-	"github.com/waterfall-foundation/gwat/accounts/abi"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/event"
+	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to

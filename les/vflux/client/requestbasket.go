@@ -19,8 +19,8 @@ package client
 import (
 	"io"
 
-	"github.com/waterfall-foundation/gwat/les/utils"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 const basketFactor = 1000000 // reference basket amount and value scale factor

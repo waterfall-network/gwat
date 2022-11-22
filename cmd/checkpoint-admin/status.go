@@ -19,8 +19,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/cmd/utils"
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 )
 
 func TestMain(m *testing.M) {

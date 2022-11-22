@@ -20,10 +20,10 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
-	"github.com/waterfall-foundation/gwat/eth/protocols/snap"
-	"github.com/waterfall-foundation/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/snap"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
 )
 
 var (

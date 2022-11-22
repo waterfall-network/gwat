@@ -19,7 +19,7 @@ package core
 import (
 	"runtime"
 
-	"github.com/waterfall-foundation/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
 // senderCacher is a concurrent transaction sender recoverer and cacher.

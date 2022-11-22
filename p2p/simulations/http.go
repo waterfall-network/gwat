@@ -29,13 +29,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/simulations/adapters"
-	"github.com/waterfall-foundation/gwat/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/simulations/adapters"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // DefaultClient is the default simulation API client which expects the API

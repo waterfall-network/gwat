@@ -21,9 +21,9 @@ package geth
 import (
 	"encoding/json"
 
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // MainnetGenesis returns the JSON spec to use for the main Ethereum network. It

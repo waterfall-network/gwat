@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/core/asm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/asm"
 )
 
 func Compile(fn string, src []byte, debug bool) (string, error) {

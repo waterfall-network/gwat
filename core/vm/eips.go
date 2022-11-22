@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/params"
 	"github.com/holiman/uint256"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 var activators = map[int]func(*JumpTable){

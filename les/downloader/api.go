@@ -20,9 +20,9 @@ import (
 	"context"
 	"sync"
 
-	ethereum "github.com/waterfall-foundation/gwat"
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/rpc"
+	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // PublicDownloaderAPI provides an API which gives information about the current synchronisation status.

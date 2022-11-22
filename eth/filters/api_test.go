@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 func TestUnmarshalJSONNewFilterArgs(t *testing.T) {

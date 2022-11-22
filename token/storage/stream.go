@@ -4,8 +4,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 )
 
 var ErrInvalidOff = errors.New("negative offset")

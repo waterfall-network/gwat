@@ -16,7 +16,7 @@
 
 package state
 
-import "github.com/waterfall-foundation/gwat/metrics"
+import "gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 
 var (
 	accountUpdatedMeter   = metrics.NewRegisteredMeter("state/update/account", nil)

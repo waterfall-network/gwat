@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/waterfall-foundation/gwat/internal/cmdtest"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/cmdtest"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 func tmpdir(t *testing.T) string {

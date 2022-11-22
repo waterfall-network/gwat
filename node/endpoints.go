@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.

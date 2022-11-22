@@ -25,8 +25,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/log"
 	"github.com/jedisct1/go-minisign"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

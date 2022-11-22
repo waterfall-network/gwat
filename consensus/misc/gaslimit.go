@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // VerifyGaslimit verifies the header gas limit according increase/decrease

@@ -21,7 +21,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // Entry is implemented by known node record entry types.

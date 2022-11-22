@@ -20,8 +20,8 @@
 package node
 
 import (
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // NoopLifecycle is a trivial implementation of the Service interface.

@@ -19,8 +19,8 @@ package eth
 import (
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/bitutil"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/bitutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 )
 
 const (

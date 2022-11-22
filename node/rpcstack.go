@@ -29,9 +29,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/rpc"
 	"github.com/rs/cors"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // httpConfig is the JSON-RPC/HTTP configuration.

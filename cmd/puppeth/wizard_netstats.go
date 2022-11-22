@@ -23,9 +23,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/log"
 	"github.com/olekukonko/tablewriter"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // networkStats verifies the status of network components and generates a protip

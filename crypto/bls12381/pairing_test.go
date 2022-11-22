@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 func TestPairingExpected(t *testing.T) {

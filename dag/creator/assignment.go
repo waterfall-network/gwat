@@ -1,6 +1,6 @@
 package creator
 
-import "github.com/waterfall-foundation/gwat/common"
+import "gitlab.waterfall.network/waterfall/protocol/gwat/common"
 
 // Assignment represents consensus data of block creators assignment
 type Assignment struct {

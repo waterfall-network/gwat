@@ -23,8 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/accounts/abi"
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // decodedCallData is an internal type to represent a method call parsed according

@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/core/forkid"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
-	"github.com/waterfall-foundation/gwat/params"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/forkid"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 

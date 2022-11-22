@@ -28,13 +28,13 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/consensus"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 const (
@@ -547,7 +547,7 @@ func (hc *HeaderChain) loadTips() error {
 	return nil
 }
 
-//GetTips retrieves active tips
+// GetTips retrieves active tips
 func (hc *HeaderChain) GetTips(skipLock ...bool) *types.Tips {
 	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()
@@ -565,7 +565,7 @@ func (hc *HeaderChain) GetTips(skipLock ...bool) *types.Tips {
 	return &cpy
 }
 
-//AddTips add BlockDag to tips
+// AddTips add BlockDag to tips
 func (hc *HeaderChain) AddTips(blockDag *types.BlockDAG, skipLock ...bool) {
 	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()
@@ -577,7 +577,7 @@ func (hc *HeaderChain) AddTips(blockDag *types.BlockDAG, skipLock ...bool) {
 	hc.tips.Store(tips)
 }
 
-//RemoveTips remove BlockDag from tips by hashes from tips
+// RemoveTips remove BlockDag from tips by hashes from tips
 func (hc *HeaderChain) RemoveTips(hashes common.HashArray, skipLock ...bool) {
 	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()
@@ -591,7 +591,7 @@ func (hc *HeaderChain) RemoveTips(hashes common.HashArray, skipLock ...bool) {
 	hc.tips.Store(tips)
 }
 
-//FinalizeTips update tips in accordance with finalization result
+// FinalizeTips update tips in accordance with finalization result
 func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
 	hc.tipsMu.Lock()
 	defer hc.tipsMu.Unlock()
@@ -729,7 +729,7 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 	return hc.GetTips(true), unloadedHashes
 }
 
-//WriteCurrentTips save current tips blockDags and hashes
+// WriteCurrentTips save current tips blockDags and hashes
 func (hc *HeaderChain) writeCurrentTips(skipLock ...bool) {
 	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()

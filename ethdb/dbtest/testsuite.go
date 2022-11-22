@@ -22,7 +22,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database

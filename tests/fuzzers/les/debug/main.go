@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/tests/fuzzers/les"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/fuzzers/les"
 )
 
 func main() {

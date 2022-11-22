@@ -20,8 +20,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
 // senderFromServer is a types.Signer that remembers the sender address returned by the RPC

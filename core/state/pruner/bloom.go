@@ -21,10 +21,10 @@ import (
 	"errors"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
-	"github.com/waterfall-foundation/gwat/log"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // stateBloomHasher is a wrapper around a byte blob to satisfy the interface API

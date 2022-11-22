@@ -24,17 +24,17 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/eth/downloader"
-	"github.com/waterfall-foundation/gwat/eth/ethconfig"
-	"github.com/waterfall-foundation/gwat/ethclient"
-	"github.com/waterfall-foundation/gwat/ethstats"
-	"github.com/waterfall-foundation/gwat/internal/debug"
-	"github.com/waterfall-foundation/gwat/les"
-	"github.com/waterfall-foundation/gwat/node"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/nat"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethclient"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethstats"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/debug"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/nat"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth

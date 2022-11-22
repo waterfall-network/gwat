@@ -20,8 +20,8 @@
 package metrics
 
 import (
-	"github.com/waterfall-foundation/gwat/log"
 	"github.com/shirou/gopsutil/cpu"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // ReadCPUStats retrieves the current CPU stats.

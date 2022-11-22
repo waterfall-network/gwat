@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 )
 
 // Tests that the node iterator indeed walks over the entire database contents.

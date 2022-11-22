@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // In this example, our client wishes to track the latest 'block number'

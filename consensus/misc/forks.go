@@ -17,8 +17,8 @@
 package misc
 
 import (
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // VerifyForkHashes verifies that blocks conforming to network hard-forks do have

@@ -24,10 +24,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/console/prompt"
-	"github.com/waterfall-foundation/gwat/internal/ethapi"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/console/prompt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/ethapi"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 type CommandlineUI struct {

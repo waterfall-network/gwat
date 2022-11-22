@@ -20,7 +20,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/les/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/utils"
 )
 
 func checkU64(t *testing.T, name string, value, exp uint64) {

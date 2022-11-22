@@ -19,7 +19,7 @@ package snap
 import (
 	"time"
 
-	"github.com/waterfall-foundation/gwat/p2p/tracker"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/tracker"
 )
 
 // requestTracker is a singleton tracker for request times.

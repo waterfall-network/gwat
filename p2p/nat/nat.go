@@ -25,8 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/log"
 	natpmp "github.com/jackpal/go-nat-pmp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // An implementation of nat.Interface can map local ports to ports

@@ -27,20 +27,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/accounts"
-	"github.com/waterfall-foundation/gwat/accounts/keystore"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/internal/ethapi"
-	"github.com/waterfall-foundation/gwat/rlp"
-	"github.com/waterfall-foundation/gwat/signer/core"
-	"github.com/waterfall-foundation/gwat/signer/core/apitypes"
-	"github.com/waterfall-foundation/gwat/signer/fourbyte"
-	"github.com/waterfall-foundation/gwat/signer/storage"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/ethapi"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core/apitypes"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/fourbyte"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/storage"
 )
 
-//Used for testing
+// Used for testing
 type headlessUi struct {
 	approveCh chan string // to send approve/deny
 	inputCh   chan string // to send password

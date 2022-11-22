@@ -21,7 +21,7 @@ package p2p
 import (
 	"net"
 
-	"github.com/waterfall-foundation/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 )
 
 const (

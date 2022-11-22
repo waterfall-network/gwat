@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 )
 
 func TestBytesPadding(t *testing.T) {

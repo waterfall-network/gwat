@@ -25,11 +25,11 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/ethdb/leveldb"
-	"github.com/waterfall-foundation/gwat/ethdb/memorydb"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb/leveldb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb/memorydb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.

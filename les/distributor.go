@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/les/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/utils"
 )
 
 // requestDistributor implements a mechanism that distributes requests to

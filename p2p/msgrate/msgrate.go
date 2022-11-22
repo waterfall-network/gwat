@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // measurementImpact is the impact a single measurement has on a peer's final

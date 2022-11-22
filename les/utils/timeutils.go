@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
 )
 
 type UpdateTimer struct {

@@ -24,8 +24,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
 )
 
 // Tests that datadirs can be successfully created, be them manually configured

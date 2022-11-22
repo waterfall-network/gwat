@@ -19,7 +19,7 @@ package utils
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
 )
 
 func TestValueExpiration(t *testing.T) {

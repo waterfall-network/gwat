@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 var (

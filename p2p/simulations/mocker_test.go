@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 )
 
 func TestMocker(t *testing.T) {

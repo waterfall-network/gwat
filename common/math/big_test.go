@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 func TestHexOrDecimal256(t *testing.T) {

@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common/hexutil"
 	"github.com/stretchr/testify/assert"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 )
 
 func TestReadBufferReset(t *testing.T) {

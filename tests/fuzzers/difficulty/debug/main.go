@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/tests/fuzzers/difficulty"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/fuzzers/difficulty"
 )
 
 func main() {

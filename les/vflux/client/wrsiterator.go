@@ -19,9 +19,9 @@ package client
 import (
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/les/utils"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/nodestate"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/nodestate"
 )
 
 // WrsIterator returns nodes from the specified selectable set with a weighted random

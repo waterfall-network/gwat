@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/waterfall-foundation/gwat/cmd/devp2p/internal/ethtest"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/internal/utesting"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/rlpx"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/devp2p/internal/ethtest"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/utesting"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/rlpx"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/rpc"
 	"github.com/stretchr/testify/assert"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // This test uses the admin_startRPC and admin_startWS APIs,

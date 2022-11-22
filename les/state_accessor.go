@@ -21,12 +21,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/core/state"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/light"
-	"github.com/waterfall-foundation/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/light"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 )
 
 // stateAtBlock retrieves the state database associated with a certain block.

@@ -2,16 +2,17 @@ package token
 
 import (
 	"errors"
-	"github.com/holiman/uint256"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/token/operation"
-	tokenStorage "github.com/waterfall-foundation/gwat/token/storage"
+	"github.com/holiman/uint256"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	tokenStorage "gitlab.waterfall.network/waterfall/protocol/gwat/token/storage"
 )
 
 var (

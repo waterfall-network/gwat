@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // explorerDockerfile is the Dockerfile required to run a block explorer.

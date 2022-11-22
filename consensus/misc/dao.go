@@ -20,8 +20,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/core/state"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 var (
