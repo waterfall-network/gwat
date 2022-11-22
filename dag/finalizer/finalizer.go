@@ -133,12 +133,13 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 		}
 		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		lastFinNr = lastBlock.Nr()
+		//todo add logs to catch Reset Nr to update tips
 		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
 		log.Info("⛓ Finalization of spine completed (updateTips)", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		if lastBlock.Height() != lastBlock.Nr() {
 			log.Error("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		}
-		lastFinNr = lastBlock.Nr()
 	}
 	return nil
 }
@@ -146,11 +147,31 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 // updateTips update tips in accordance of finalized blocks.
 func (f *Finalizer) updateTips(finHashes common.HashArray, lastBlock types.Block) {
 	bc := f.eth.BlockChain()
-	bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height())
+
+	//todo reset nr log
+	if lastBlock.Nr() == 0 {
+		log.Error("☠☠☠ RESET NR DETECTED:updateTips 000 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+	}
+
+	//todo reset nr rollback
+	//bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height())
+	bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height(), lastBlock)
+
+	//todo reset nr log
+	if lastBlock.Nr() == 0 {
+		log.Error("☠☠☠ RESET NR DETECTED:updateTips 111 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+	}
+
 	//remove stale blockDags
 	for _, h := range finHashes {
 		bc.DeleteBlockDag(h)
 	}
+
+	//todo reset nr log
+	if lastBlock.Nr() == 0 {
+		log.Error("☠☠☠ RESET NR DETECTED:updateTips 111 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+	}
+
 }
 
 // finalizeBlock finalize block
