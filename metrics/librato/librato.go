@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 )
 
 // a regexp for extracting the unit from time.Duration.String

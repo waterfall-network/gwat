@@ -20,11 +20,11 @@ import (
 	"crypto/ecdsa"
 	"net"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
-	"github.com/waterfall-foundation/gwat/p2p/netutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/netutil"
 )
 
 // UDPConn is a network connection on which discovery can operate.

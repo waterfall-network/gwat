@@ -6,11 +6,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/log"
 	lru "github.com/hashicorp/golang-lru"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // Vote represents a single vote that an authorized signer made to modify the

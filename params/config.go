@@ -22,7 +22,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"golang.org/x/crypto/sha3"
 )
 

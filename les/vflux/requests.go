@@ -21,7 +21,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 var ErrNoReply = errors.New("no reply for given request")

@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	"github.com/waterfall-foundation/gwat/accounts/scwallet"
-	"github.com/waterfall-foundation/gwat/accounts/usbwallet"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/console/prompt"
-	"github.com/waterfall-foundation/gwat/internal/jsre"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/scwallet"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/usbwallet"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/console/prompt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/jsre"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // bridge is a collection of JavaScript utility methods to bride the .js runtime

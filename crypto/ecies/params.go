@@ -42,7 +42,7 @@ import (
 	"fmt"
 	"hash"
 
-	ethcrypto "github.com/waterfall-foundation/gwat/crypto"
+	ethcrypto "gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 var (

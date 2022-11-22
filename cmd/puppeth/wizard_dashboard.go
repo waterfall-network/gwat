@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // deployDashboard queries the user for various input on deploying a web-service

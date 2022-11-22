@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/common/fdlimit"
-	"github.com/waterfall-foundation/gwat/internal/flags"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/fdlimit"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/flags"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -19,7 +19,7 @@ package ethapi
 import (
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 type AddrLocker struct {

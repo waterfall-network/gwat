@@ -21,9 +21,9 @@ import (
 	"container/heap"
 	"errors"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // Iterator is a key-value trie iterator that traverses a Trie.

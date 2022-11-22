@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/metrics"
-	"github.com/waterfall-foundation/gwat/metrics/prometheus"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics/prometheus"
 )
 
 type exp struct {

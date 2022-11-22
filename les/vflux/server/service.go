@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/les/utils"
-	"github.com/waterfall-foundation/gwat/les/vflux"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/vflux"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 type (

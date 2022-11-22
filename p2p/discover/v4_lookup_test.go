@@ -23,10 +23,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/p2p/discover/v4wire"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/discover/v4wire"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 )
 
 func TestUDPv4_Lookup(t *testing.T) {

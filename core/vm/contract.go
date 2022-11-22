@@ -20,7 +20,7 @@ import (
 	"math/big"
 
 	"github.com/holiman/uint256"
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // ContractRef is a reference to the contract's backing object

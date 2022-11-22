@@ -25,7 +25,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // fileCache is a cache of files seen during scan of keystore.

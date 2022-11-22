@@ -25,9 +25,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -114,8 +114,10 @@ func (k kvs) Swap(i, j int) {
 
 // The function must return
 // 1 if the fuzzer should increase priority of the
-//    given input during subsequent fuzzing (for example, the input is lexically
-//    correct and was parsed successfully);
+//
+//	given input during subsequent fuzzing (for example, the input is lexically
+//	correct and was parsed successfully);
+//
 // -1 if the input must not be added to corpus even if gives new coverage; and
 // 0  otherwise
 // other values are reserved for future use.

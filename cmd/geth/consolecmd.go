@@ -21,10 +21,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/cmd/utils"
-	"github.com/waterfall-foundation/gwat/console"
-	"github.com/waterfall-foundation/gwat/node"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/console"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 

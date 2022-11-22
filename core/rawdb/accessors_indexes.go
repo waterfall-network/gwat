@@ -19,12 +19,12 @@ package rawdb
 import (
 	"bytes"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/params"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // ReadTxLookupEntry retrieves the positional metadata associated with a transaction

@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/forkid"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/forkid"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // Constants to match up protocol versions and messages

@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/signer/core/apitypes"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core/apitypes"
 )
 
 // ValidateTransaction does a number of checks on the supplied transaction, and

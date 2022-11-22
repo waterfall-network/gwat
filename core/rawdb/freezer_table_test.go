@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/metrics"
 	"github.com/stretchr/testify/require"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 )
 
 func init() {

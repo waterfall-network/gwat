@@ -3,8 +3,8 @@ package types
 import (
 	"encoding/json"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 )
 
 // ConsensusInfo represents data of consensus request

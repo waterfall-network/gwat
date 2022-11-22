@@ -21,9 +21,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
 	"github.com/stretchr/testify/assert"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 )
 
 func newLocalNodeForTesting() (*LocalNode, *DB) {

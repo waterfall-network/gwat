@@ -22,9 +22,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/p2p/discover/v4wire"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/discover/v4wire"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 )
 
 const waitTime = 300 * time.Millisecond

@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/accounts/abi"
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // Tests that all the selectors contained in the 4byte database are valid.

@@ -29,14 +29,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/node"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/simulations/adapters"
-	"github.com/waterfall-foundation/gwat/rpc"
 	"github.com/mattn/go-colorable"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/simulations/adapters"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 func TestMain(m *testing.M) {

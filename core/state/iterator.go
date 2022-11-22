@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/rlp"
-	"github.com/waterfall-foundation/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 // NodeIterator is an iterator to traverse the entire state trie post-order,

@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/eth/downloader"
-	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 )
 
 // Tests that fast sync is disabled after a successful sync cycle.

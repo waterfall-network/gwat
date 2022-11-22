@@ -26,12 +26,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 const (

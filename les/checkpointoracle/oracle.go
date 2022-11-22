@@ -25,12 +25,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/accounts/abi/bind"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/contracts/checkpointoracle"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi/bind"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/contracts/checkpointoracle"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // CheckpointOracle is responsible for offering the latest stable checkpoint

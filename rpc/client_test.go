@@ -33,7 +33,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 func TestClientRequest(t *testing.T) {

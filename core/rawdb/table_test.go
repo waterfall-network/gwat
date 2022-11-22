@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 )
 
 func TestTableDatabase(t *testing.T)            { testTableDatabase(t, "prefix") }

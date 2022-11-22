@@ -17,9 +17,9 @@
 package core
 
 import (
-	"github.com/waterfall-foundation/gwat/core/state"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 )
 
 // Validator is an interface which defines the standard for block validation. It

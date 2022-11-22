@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/holiman/uint256"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already

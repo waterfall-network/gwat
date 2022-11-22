@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 )
 
 var unmarshalLogTests = map[string]struct {

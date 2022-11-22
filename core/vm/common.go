@@ -17,9 +17,9 @@
 package vm
 
 import (
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/math"
 	"github.com/holiman/uint256"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 )
 
 // calcMemSize64 calculates the required memory size, and returns

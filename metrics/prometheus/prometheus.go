@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 )
 
 // Handler returns an HTTP handler which dump metrics in Prometheus format.

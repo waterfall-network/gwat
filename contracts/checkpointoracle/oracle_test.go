@@ -27,13 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/accounts/abi/bind"
-	"github.com/waterfall-foundation/gwat/accounts/abi/bind/backends"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/contracts/checkpointoracle/contract"
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi/bind"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi/bind/backends"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/contracts/checkpointoracle/contract"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 var (

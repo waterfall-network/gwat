@@ -20,9 +20,9 @@ import (
 	"crypto/rand"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
 // largeNumber returns a very large big.Int.

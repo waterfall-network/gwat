@@ -31,15 +31,15 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/waterfall-foundation/gwat/accounts"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/dag/sealer"
-	"github.com/waterfall-foundation/gwat/rlp"
-	"github.com/waterfall-foundation/gwat/signer/core/apitypes"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core/apitypes"
 )
 
 type SigFormat struct {

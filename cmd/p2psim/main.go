@@ -19,21 +19,20 @@
 // Here is an example of creating a 2 node network with the first node
 // connected to the second:
 //
-//     $ p2psim node create
-//     Created node01
+//	$ p2psim node create
+//	Created node01
 //
-//     $ p2psim node start node01
-//     Started node01
+//	$ p2psim node start node01
+//	Started node01
 //
-//     $ p2psim node create
-//     Created node02
+//	$ p2psim node create
+//	Created node02
 //
-//     $ p2psim node start node02
-//     Started node02
+//	$ p2psim node start node02
+//	Started node02
 //
-//     $ p2psim node connect node01 node02
-//     Connected node01 to node02
-//
+//	$ p2psim node connect node01 node02
+//	Connected node01 to node02
 package main
 
 import (
@@ -45,12 +44,12 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/simulations"
-	"github.com/waterfall-foundation/gwat/p2p/simulations/adapters"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/simulations"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/simulations/adapters"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 

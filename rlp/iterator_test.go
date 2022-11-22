@@ -19,7 +19,7 @@ package rlp
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 )
 
 // TestIterator tests some basic things about the ListIterator. A more

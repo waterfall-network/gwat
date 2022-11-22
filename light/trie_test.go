@@ -24,13 +24,13 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
-	"github.com/waterfall-foundation/gwat/core/state"
-	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/dag/sealer"
-	"github.com/waterfall-foundation/gwat/params"
-	"github.com/waterfall-foundation/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 func TestNodeIterator(t *testing.T) {

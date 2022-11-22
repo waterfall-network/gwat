@@ -25,11 +25,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/internal/testlog"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/testlog"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // TestCorsHandler makes sure CORS are properly handled on the http server.

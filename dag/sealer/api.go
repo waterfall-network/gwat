@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/consensus"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/rlp"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting

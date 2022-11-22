@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"golang.org/x/crypto/sha3"
 )
 

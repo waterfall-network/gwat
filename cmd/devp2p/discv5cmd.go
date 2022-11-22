@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/cmd/devp2p/internal/v5test"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/p2p/discover"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/devp2p/internal/v5test"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/discover"
 	"gopkg.in/urfave/cli.v1"
 )
 

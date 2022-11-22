@@ -41,11 +41,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/accounts"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/log"
 	pcsc "github.com/gballet/go-libpcsclite"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // Scheme is the URI prefix for smartcard wallets.

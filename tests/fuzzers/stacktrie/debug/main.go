@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/tests/fuzzers/stacktrie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/fuzzers/stacktrie"
 )
 
 func main() {

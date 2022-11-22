@@ -26,9 +26,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
-	"github.com/waterfall-foundation/gwat/p2p/netutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/netutil"
 )
 
 const (

@@ -20,7 +20,7 @@ import (
 	"math"
 	"math/rand"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 type (

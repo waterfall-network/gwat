@@ -19,7 +19,7 @@ package types
 import (
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // LegacyTx is the transaction data of regular Ethereum transactions.

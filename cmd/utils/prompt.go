@@ -20,7 +20,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/console/prompt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/console/prompt"
 )
 
 // GetPassPhrase displays the given text(prompt) to the user and requests some textual

@@ -26,12 +26,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/accounts/keystore"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/signer/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core"
 )
 
 var typesStandard = core.Types{

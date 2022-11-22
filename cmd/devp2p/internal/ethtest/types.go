@@ -20,10 +20,10 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/rlpx"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/rlpx"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 type Message interface {

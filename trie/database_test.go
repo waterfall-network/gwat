@@ -19,8 +19,8 @@ package trie
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/ethdb/memorydb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb/memorydb"
 )
 
 // Tests that the trie database returns a missing trie node error if attempting

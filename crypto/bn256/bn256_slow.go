@@ -8,7 +8,7 @@
 // Package bn256 implements the Optimal Ate pairing over a 256-bit Barreto-Naehrig curve.
 package bn256
 
-import bn256 "github.com/waterfall-foundation/gwat/crypto/bn256/google"
+import bn256 "gitlab.waterfall.network/waterfall/protocol/gwat/crypto/bn256/google"
 
 // G1 is an abstract cyclic group. The zero value is suitable for use as the
 // output of an operation, but cannot be used as an input.

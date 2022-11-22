@@ -19,8 +19,8 @@ package snap
 import (
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
 	"github.com/holiman/uint256"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // hashRange is a utility to handle ranges of hashes, Split up the

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/waterfall-foundation/gwat/cmd/evm/internal/compiler"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/evm/internal/compiler"
 
 	"gopkg.in/urfave/cli.v1"
 )

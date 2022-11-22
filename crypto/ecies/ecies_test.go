@@ -39,7 +39,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 func TestKDF(t *testing.T) {

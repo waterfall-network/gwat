@@ -20,9 +20,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/state/snapshot"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // Constants to match up protocol versions and messages

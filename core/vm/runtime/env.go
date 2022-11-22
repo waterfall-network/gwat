@@ -17,8 +17,8 @@
 package runtime
 
 import (
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {

@@ -26,16 +26,16 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/dag/sealer"
-	"github.com/waterfall-foundation/gwat/eth"
-	"github.com/waterfall-foundation/gwat/eth/ethconfig"
-	"github.com/waterfall-foundation/gwat/node"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 func TestBuildSchema(t *testing.T) {

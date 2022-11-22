@@ -19,9 +19,9 @@ package vm
 import (
 	"errors"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {

@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // JSRE is a JS runtime environment embedding the goja interpreter.

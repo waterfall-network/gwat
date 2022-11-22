@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 const (

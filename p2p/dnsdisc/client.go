@@ -26,12 +26,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
 	lru "github.com/hashicorp/golang-lru"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 )

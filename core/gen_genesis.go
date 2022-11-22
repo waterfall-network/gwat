@@ -7,10 +7,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
-	"github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 var _ = (*genesisSpecMarshaling)(nil)

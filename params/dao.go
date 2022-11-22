@@ -19,7 +19,7 @@ package params
 import (
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // DAOForkBlockExtra is the block header extra-data field to set for the DAO fork

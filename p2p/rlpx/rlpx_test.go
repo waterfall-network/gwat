@@ -29,11 +29,11 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/crypto/ecies"
-	"github.com/waterfall-foundation/gwat/p2p/simulations/pipes"
-	"github.com/waterfall-foundation/gwat/rlp"
 	"github.com/stretchr/testify/assert"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto/ecies"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/simulations/pipes"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 type message struct {

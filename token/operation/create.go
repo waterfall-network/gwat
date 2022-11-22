@@ -1,9 +1,10 @@
 package operation
 
 import (
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/rlp"
 	"math/big"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 type createOperation struct {

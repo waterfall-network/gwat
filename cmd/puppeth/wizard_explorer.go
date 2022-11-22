@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // deployExplorer creates a new block explorer based on some user input.

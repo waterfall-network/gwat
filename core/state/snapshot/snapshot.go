@@ -24,13 +24,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/metrics"
-	"github.com/waterfall-foundation/gwat/rlp"
-	"github.com/waterfall-foundation/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 var (
@@ -179,10 +179,10 @@ type Tree struct {
 // If the memory layers in the journal do not match the disk layer (e.g. there is
 // a gap) or the journal is missing, there are two repair cases:
 //
-// - if the 'recovery' parameter is true, all memory diff-layers will be discarded.
-//   This case happens when the snapshot is 'ahead' of the state trie.
-// - otherwise, the entire snapshot is considered invalid and will be recreated on
-//   a background thread.
+//   - if the 'recovery' parameter is true, all memory diff-layers will be discarded.
+//     This case happens when the snapshot is 'ahead' of the state trie.
+//   - otherwise, the entire snapshot is considered invalid and will be recreated on
+//     a background thread.
 func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{

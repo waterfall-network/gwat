@@ -23,10 +23,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/accounts/abi/bind"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/contracts/checkpointoracle/contract"
-	"github.com/waterfall-foundation/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi/bind"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/contracts/checkpointoracle/contract"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
 // CheckpointOracle is a Go wrapper around an on-chain checkpoint oracle contract.

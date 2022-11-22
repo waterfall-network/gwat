@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/forkid"
-	"github.com/waterfall-foundation/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/forkid"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
 )
 
 const (

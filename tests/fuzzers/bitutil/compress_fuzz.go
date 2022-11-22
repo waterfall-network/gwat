@@ -19,7 +19,7 @@ package bitutil
 import (
 	"bytes"
 
-	"github.com/waterfall-foundation/gwat/common/bitutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/bitutil"
 )
 
 // Fuzz implements a go-fuzz fuzzer method to test various encoding method

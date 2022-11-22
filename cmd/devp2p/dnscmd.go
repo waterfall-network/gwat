@@ -25,11 +25,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/accounts/keystore"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/console/prompt"
-	"github.com/waterfall-foundation/gwat/p2p/dnsdisc"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/console/prompt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/dnsdisc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 	"gopkg.in/urfave/cli.v1"
 )
 

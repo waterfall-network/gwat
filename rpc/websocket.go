@@ -28,8 +28,8 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/waterfall-foundation/gwat/log"
 	"github.com/gorilla/websocket"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 const (

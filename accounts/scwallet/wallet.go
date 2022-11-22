@@ -33,14 +33,14 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/waterfall-foundation/gwat"
-	"github.com/waterfall-foundation/gwat/accounts"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/log"
 	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/status-im/keycard-go/derivationpath"
+	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // ErrPairingPasswordNeeded is returned if opening the smart card requires pairing with a pairing

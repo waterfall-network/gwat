@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/internal/flags"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

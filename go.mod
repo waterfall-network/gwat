@@ -1,4 +1,4 @@
-module github.com/waterfall-foundation/gwat
+module gitlab.waterfall.network/waterfall/protocol/gwat
 
 go 1.15
 

@@ -22,9 +22,9 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/cmd/evm/internal/t8ntool"
-	"github.com/waterfall-foundation/gwat/cmd/utils"
-	"github.com/waterfall-foundation/gwat/internal/flags"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/evm/internal/t8ntool"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

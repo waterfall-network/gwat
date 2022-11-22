@@ -23,12 +23,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/eth/ethconfig"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/les/flowcontrol"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/flowcontrol"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 )
 
 const makeCostStats = false // make request cost statistics during operation

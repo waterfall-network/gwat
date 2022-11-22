@@ -28,9 +28,9 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/waterfall-foundation/gwat/accounts"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does

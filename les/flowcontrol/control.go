@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 const (

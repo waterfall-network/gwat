@@ -27,8 +27,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 func tmpKeyStoreIface(t *testing.T, encrypted bool) (dir string, ks keyStore) {

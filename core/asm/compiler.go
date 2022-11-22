@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/common/math"
-	"github.com/waterfall-foundation/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 )
 
 // Compiler contains information about the parsed source

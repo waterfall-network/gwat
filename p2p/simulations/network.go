@@ -27,11 +27,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/simulations/adapters"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/simulations/adapters"
 )
 
 var DialBanTimeout = 200 * time.Millisecond

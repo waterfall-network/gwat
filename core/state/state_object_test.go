@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 func BenchmarkCutOriginal(b *testing.B) {

@@ -21,8 +21,8 @@ package geth
 import (
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/ethclient"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethclient"
 )
 
 // EthereumClient provides access to the Ethereum APIs.

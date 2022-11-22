@@ -19,7 +19,7 @@ package event_test
 import (
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 )
 
 func ExampleNewSubscription() {

@@ -22,8 +22,8 @@ package keystore
 import (
 	"time"
 
-	"github.com/waterfall-foundation/gwat/log"
 	"github.com/rjeczalik/notify"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 type watcher struct {

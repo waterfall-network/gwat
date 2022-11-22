@@ -4,9 +4,9 @@ import (
 	"crypto/ecdsa"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 // testerAccountPool is a pool to maintain currently active tester accounts,

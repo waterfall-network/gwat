@@ -17,8 +17,8 @@
 package les
 
 import (
-	"github.com/waterfall-foundation/gwat/metrics"
-	"github.com/waterfall-foundation/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
 )
 
 var (

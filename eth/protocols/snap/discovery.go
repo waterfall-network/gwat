@@ -17,7 +17,7 @@
 package snap
 
 import (
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // enrEntry is the ENR entry which advertises `snap` protocol on the discovery.

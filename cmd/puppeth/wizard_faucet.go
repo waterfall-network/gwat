@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/accounts/keystore"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // deployFaucet queries the user for various input on deploying a faucet, after

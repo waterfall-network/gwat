@@ -26,11 +26,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/eth/protocols/eth"
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/p2p/msgrate"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/msgrate"
 )
 
 const (

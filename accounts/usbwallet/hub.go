@@ -23,10 +23,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/accounts"
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/log"
 	"github.com/karalabe/usb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.

@@ -23,7 +23,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/p2p/simulations/pipes"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/simulations/pipes"
 )
 
 func TestTCPPipe(t *testing.T) {

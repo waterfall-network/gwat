@@ -19,7 +19,7 @@ package keystore
 import (
 	"os"
 
-	"github.com/waterfall-foundation/gwat/accounts/keystore"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
 )
 
 func Fuzz(input []byte) int {

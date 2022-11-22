@@ -20,7 +20,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
 )
 
 // ExpiredValue is a scalar value that is continuously expired (decreased

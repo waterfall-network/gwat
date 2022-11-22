@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/waterfall-foundation/gwat/internal/cmdtest"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/cmdtest"
 )
 
 type testEthkey struct {

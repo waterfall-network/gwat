@@ -20,10 +20,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/state"
-	"github.com/waterfall-foundation/gwat/params"
 	"github.com/holiman/uint256"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 type dummyContractRef struct {

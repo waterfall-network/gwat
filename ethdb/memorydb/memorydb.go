@@ -23,8 +23,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 )
 
 var (

@@ -17,7 +17,7 @@
 package runtime
 
 import (
-	"github.com/waterfall-foundation/gwat/core/vm/runtime"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm/runtime"
 )
 
 // Fuzz is the basic entry point for the go-fuzz tool

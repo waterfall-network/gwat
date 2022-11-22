@@ -2,15 +2,16 @@ package core
 
 import (
 	"errors"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/dag/sealer"
-	"github.com/waterfall-foundation/gwat/params"
 	"math/big"
 	"testing"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 func TestAddBlocksToChain(t *testing.T) {

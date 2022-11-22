@@ -19,10 +19,10 @@ package simulations
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/p2p"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/enr"
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // NoopService is the service that does not do anything

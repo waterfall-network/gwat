@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/accounts/keystore"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // deployNode creates a new node configuration based on some user input.

@@ -19,7 +19,7 @@ package p2p
 import (
 	"container/heap"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
 )
 
 // expHeap tracks strings and their expiry time.

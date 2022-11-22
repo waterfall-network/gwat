@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // Keys in the node database.

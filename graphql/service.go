@@ -20,9 +20,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/waterfall-foundation/gwat/internal/ethapi"
-	"github.com/waterfall-foundation/gwat/node"
 	"github.com/graph-gophers/graphql-go"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/ethapi"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
 )
 
 type handler struct {

@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 )
 
 func TestState(t *testing.T) {

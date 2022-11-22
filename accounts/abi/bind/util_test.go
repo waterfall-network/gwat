@@ -23,12 +23,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/accounts/abi/bind"
-	"github.com/waterfall-foundation/gwat/accounts/abi/bind/backends"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi/bind"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi/bind/backends"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

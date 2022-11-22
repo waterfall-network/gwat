@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 var (

@@ -26,8 +26,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // nodeDockerfile is the Dockerfile required to run an Ethereum node.

@@ -27,15 +27,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
-	"github.com/waterfall-foundation/gwat/core/state/snapshot"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/rlp"
-	"github.com/waterfall-foundation/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 const (
@@ -66,9 +66,9 @@ var (
 // Pruner is an offline tool to prune the stale state with the
 // help of the snapshot. The workflow of pruner is very simple:
 //
-// - iterate the snapshot, reconstruct the relevant state
-// - iterate the database, delete all other state entries which
-//   don't belong to the target state and the genesis state
+//   - iterate the snapshot, reconstruct the relevant state
+//   - iterate the database, delete all other state entries which
+//     don't belong to the target state and the genesis state
 //
 // It can take several hours(around 2 hours for mainnet) to finish
 // the whole pruning work. It's recommended to run this offline tool

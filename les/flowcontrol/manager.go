@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/common/prque"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
 )
 
 // cmNodeFields are ClientNode fields used by the client manager

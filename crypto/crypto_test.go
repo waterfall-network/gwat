@@ -26,8 +26,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 )
 
 var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"

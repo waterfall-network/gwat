@@ -21,7 +21,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/waterfall-foundation/gwat/eth/tracers/internal/tracers"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/tracers/internal/tracers"
 )
 
 // all contains all the built in JavaScript tracers by name.

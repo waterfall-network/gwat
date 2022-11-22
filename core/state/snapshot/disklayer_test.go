@@ -23,12 +23,12 @@ import (
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/ethdb/leveldb"
-	"github.com/waterfall-foundation/gwat/ethdb/memorydb"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb/leveldb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb/memorydb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // reverse reverses the contents of a byte slice. It's used to update random accs

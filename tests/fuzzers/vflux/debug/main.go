@@ -21,8 +21,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/tests/fuzzers/vflux"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/fuzzers/vflux"
 )
 
 func main() {

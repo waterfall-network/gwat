@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 func TestInterfaceGetSet(t *testing.T) {

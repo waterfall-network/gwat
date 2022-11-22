@@ -10,17 +10,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/consensus"
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/dag/creator"
-	"github.com/waterfall-foundation/gwat/dag/finalizer"
-	"github.com/waterfall-foundation/gwat/dag/headsync"
-	"github.com/waterfall-foundation/gwat/eth/downloader"
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/headsync"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // Backend wraps all methods required for block creation.

@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/eth"
-	"github.com/waterfall-foundation/gwat/eth/ethconfig"
-	"github.com/waterfall-foundation/gwat/internal/utesting"
-	"github.com/waterfall-foundation/gwat/node"
-	"github.com/waterfall-foundation/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/utesting"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
 )
 
 var (

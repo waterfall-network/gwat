@@ -21,8 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/common/prque"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
 )
 
 // servingQueue allows running tasks in a limited number of threads and puts the
