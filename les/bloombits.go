@@ -19,8 +19,8 @@ package les
 import (
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/bitutil"
-	"github.com/waterfall-foundation/gwat/light"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/bitutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/light"
 )
 
 const (

@@ -25,7 +25,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // ethstatsDockerfile is the Dockerfile required to build an ethstats backend

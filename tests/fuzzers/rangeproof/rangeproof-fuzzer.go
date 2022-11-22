@@ -23,9 +23,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/ethdb/memorydb"
-	"github.com/waterfall-foundation/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb/memorydb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 type kv struct {
@@ -182,8 +182,10 @@ func (f *fuzzer) fuzz() int {
 
 // The function must return
 // 1 if the fuzzer should increase priority of the
-//   given input during subsequent fuzzing (for example, the input is lexically
-//   correct and was parsed successfully);
+//
+//	given input during subsequent fuzzing (for example, the input is lexically
+//	correct and was parsed successfully);
+//
 // -1 if the input must not be added to corpus even if gives new coverage; and
 // 0 otherwise; other values are reserved for future use.
 func Fuzz(input []byte) int {

@@ -21,7 +21,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // Handler returns a log handler which logs to the unit test log of t.

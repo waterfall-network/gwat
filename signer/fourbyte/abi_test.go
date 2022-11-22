@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/accounts/abi"
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {

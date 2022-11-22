@@ -17,7 +17,7 @@
 package vm
 
 import (
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 func minSwapStack(n int) int {

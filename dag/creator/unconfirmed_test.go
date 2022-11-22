@@ -3,7 +3,7 @@ package creator
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
 // noopChainRetriever is an implementation of headerRetriever that always

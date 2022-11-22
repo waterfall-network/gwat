@@ -19,8 +19,8 @@ package memorydb
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/ethdb/dbtest"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb/dbtest"
 )
 
 func TestMemoryDB(t *testing.T) {

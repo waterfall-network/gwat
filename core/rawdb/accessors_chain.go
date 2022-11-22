@@ -23,13 +23,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/params"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
@@ -905,7 +905,7 @@ func _writeFinalizedHashByNumber(db ethdb.KeyValueWriter, number uint64, hash co
 	}
 }
 
-//_deleteFinalizedHashByNumber removes the finalised blocks' height->hash mapping.
+// _deleteFinalizedHashByNumber removes the finalised blocks' height->hash mapping.
 func _deleteFinalizedHashByNumber(db ethdb.KeyValueWriter, number uint64) {
 	key := finHashByNumberKey(number)
 	if err := db.Delete(key); err != nil {

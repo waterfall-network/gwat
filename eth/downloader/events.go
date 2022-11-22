@@ -16,7 +16,7 @@
 
 package downloader
 
-import "github.com/waterfall-foundation/gwat/core/types"
+import "gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 
 type DoneEvent struct {
 	Latest *types.Header

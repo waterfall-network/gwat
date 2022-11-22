@@ -19,7 +19,7 @@ package server
 import (
 	"reflect"
 
-	"github.com/waterfall-foundation/gwat/p2p/nodestate"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/nodestate"
 )
 
 type peerWrapper struct{ clientPeer } // the NodeStateMachine type system needs this wrapper

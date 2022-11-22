@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // Enabled is checked by the constructor functions for all of the

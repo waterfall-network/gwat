@@ -19,9 +19,9 @@ package main
 import (
 	"os"
 
-	"github.com/waterfall-foundation/gwat/cmd/devp2p/internal/v4test"
-	"github.com/waterfall-foundation/gwat/internal/utesting"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/devp2p/internal/v4test"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/utesting"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

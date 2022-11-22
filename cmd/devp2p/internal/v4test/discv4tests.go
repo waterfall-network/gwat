@@ -23,9 +23,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/internal/utesting"
-	"github.com/waterfall-foundation/gwat/p2p/discover/v4wire"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/utesting"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/discover/v4wire"
 )
 
 const (

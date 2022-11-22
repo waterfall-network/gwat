@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/waterfall-foundation/gwat/tests/fuzzers/rangeproof"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/fuzzers/rangeproof"
 )
 
 func main() {

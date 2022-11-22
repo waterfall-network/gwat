@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/core/asm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/asm"
 	"gopkg.in/urfave/cli.v1"
 )
 

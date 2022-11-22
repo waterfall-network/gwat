@@ -17,10 +17,10 @@
 package les
 
 import (
-	"github.com/waterfall-foundation/gwat/core/forkid"
-	"github.com/waterfall-foundation/gwat/p2p/dnsdisc"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/forkid"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/dnsdisc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // lesEntry is the "les" ENR entry. This is set for LES servers only.

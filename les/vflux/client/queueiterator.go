@@ -19,8 +19,8 @@ package client
 import (
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/p2p/enode"
-	"github.com/waterfall-foundation/gwat/p2p/nodestate"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/nodestate"
 )
 
 // QueueIterator returns nodes from the specified selectable set in the same order as

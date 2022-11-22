@@ -23,8 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/signer/core/apitypes"
-	"github.com/waterfall-foundation/gwat/signer/fourbyte"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core/apitypes"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/fourbyte"
 )
 
 func init() {

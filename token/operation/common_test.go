@@ -3,11 +3,12 @@ package operation
 import (
 	"errors"
 	"fmt"
-	"github.com/waterfall-foundation/gwat/internal/token/testutils"
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 func TestApproveOperation(t *testing.T) {

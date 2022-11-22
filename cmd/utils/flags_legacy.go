@@ -19,7 +19,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/eth/ethconfig"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gopkg.in/urfave/cli.v1"
 )
 

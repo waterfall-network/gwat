@@ -19,7 +19,7 @@ package bloombits
 import (
 	"errors"
 
-	"github.com/waterfall-foundation/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
 var (

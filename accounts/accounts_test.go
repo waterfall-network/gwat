@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 )
 
 func TestTextHash(t *testing.T) {

@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 func TestFeeHistory(t *testing.T) {

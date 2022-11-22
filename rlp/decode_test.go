@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 )
 
 func TestStreamKind(t *testing.T) {

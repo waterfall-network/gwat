@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/accounts/abi"
 	fuzz "github.com/google/gofuzz"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi"
 )
 
 var (

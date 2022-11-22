@@ -19,7 +19,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // journalEntry is a modification entry in the state change journal that can be

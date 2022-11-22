@@ -25,9 +25,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/accounts"
-	"github.com/waterfall-foundation/gwat/crypto"
 	"github.com/google/uuid"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"golang.org/x/crypto/pbkdf2"
 )
 

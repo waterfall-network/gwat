@@ -21,11 +21,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/les/downloader"
-	"github.com/waterfall-foundation/gwat/light"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/downloader"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/light"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 var errInvalidCheckpoint = errors.New("invalid advertised checkpoint")

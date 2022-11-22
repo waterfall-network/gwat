@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // deployEthstats queries the user for various input on deploying an ethstats

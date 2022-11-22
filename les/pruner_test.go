@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/light"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/light"
 )
 
 func TestLightPruner(t *testing.T) {

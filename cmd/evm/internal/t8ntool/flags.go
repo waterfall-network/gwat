@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/tests"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests"
 	"gopkg.in/urfave/cli.v1"
 )
 

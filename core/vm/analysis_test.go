@@ -19,7 +19,7 @@ package vm
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {

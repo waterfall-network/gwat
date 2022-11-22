@@ -19,7 +19,7 @@ package downloader
 import (
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.

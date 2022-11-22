@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/waterfall-foundation/gwat/internal/token/testutils"
 	"math/big"
 	"testing"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
 )
 
 func TestCreateOperationOperation(t *testing.T) {

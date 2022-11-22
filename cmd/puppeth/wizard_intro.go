@@ -25,7 +25,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // makeWizard creates and returns a new puppeth wizard.

@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 )
 
 var (

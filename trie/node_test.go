@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 func newTestFullNode(v []byte) []interface{} {

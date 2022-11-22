@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
 )
 
 // Subscription represents a stream of events. The carrier of the events is typically a

@@ -10,8 +10,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 /********** Tips **********/
@@ -107,7 +107,7 @@ func (tips Tips) Print() string {
 	return string(mapB)
 }
 
-//getOrderedHashes sort tips in finalizing order
+// getOrderedHashes sort tips in finalizing order
 func (tips Tips) getOrderedHashes() common.HashArray {
 	heightMap := map[uint64]common.HashArray{}
 	for _, dag := range tips {
@@ -128,7 +128,7 @@ func (tips Tips) getOrderedHashes() common.HashArray {
 	return sortedHashes
 }
 
-//GetMaxSlot get max slot of tips
+// GetMaxSlot get max slot of tips
 func (tips Tips) GetMaxSlot() uint64 {
 	maxSlot := uint64(0)
 	for _, t := range tips {
@@ -256,7 +256,7 @@ func (gd *GraphDag) GetLastFinalizedAncestor() *GraphDag {
 }
 
 // GetDagChainHashes retrieves ordered DagChainHashes for
-//tips item
+// tips item
 func (gd *GraphDag) GetDagChainHashes() *common.HashArray {
 	ancestors := gd.GetOrderedLoadedAncestors()
 	if ancestors == nil {
@@ -270,8 +270,8 @@ func (gd *GraphDag) GetDagChainHashes() *common.HashArray {
 	return &res
 }
 
-//todo deprecated (don't use)
-//GetOrderedLoadedAncestors retrieves ordered ancestors
+// todo deprecated (don't use)
+// GetOrderedLoadedAncestors retrieves ordered ancestors
 func (gd *GraphDag) GetOrderedLoadedAncestors() []*GraphDag {
 	//1) calculate order for parents
 	lenMap := map[uint64][]*GraphDag{}
@@ -333,7 +333,7 @@ func (gd *GraphDag) GetOrderedLoadedAncestors() []*GraphDag {
 	return uniqAncestors
 }
 
-//GetAncestorsHashes retrieves graph ancestors
+// GetAncestorsHashes retrieves graph ancestors
 func (gd *GraphDag) GetAncestorsHashes() common.HashArray {
 	res := common.HashArray{}
 	for _, itm := range gd.GetAncestors() {
@@ -342,7 +342,7 @@ func (gd *GraphDag) GetAncestorsHashes() common.HashArray {
 	return res
 }
 
-//GetAncestors retrieves graph ancestors
+// GetAncestors retrieves graph ancestors
 func (gd *GraphDag) GetAncestors() []*GraphDag {
 	parents := gd.Graph
 	//1) recursive calculate order for all ancestors
@@ -435,7 +435,7 @@ func (hm HeaderMap) Add(header *Header) HeaderMap {
 	return hm
 }
 
-//Hashes retrieves hashes of map
+// Hashes retrieves hashes of map
 func (hm HeaderMap) Hashes() common.HashArray {
 	hashes := make(common.HashArray, 0)
 	for _, h := range hm {
@@ -479,7 +479,7 @@ func (hm HeaderMap) ParentHashes() common.HashArray {
 	return hashes
 }
 
-//FinalizingSort sort in finalizing order
+// FinalizingSort sort in finalizing order
 func (hm HeaderMap) FinalizingSort() common.HashArray {
 	heightMap := map[uint64]common.HashArray{}
 	for _, h := range hm {
@@ -614,12 +614,12 @@ func (bm BlockMap) GetMaxTime() uint64 {
 	return bm.Headers().GetMaxTime()
 }
 
-//AvgGasLimit calculate average GasLimit
+// AvgGasLimit calculate average GasLimit
 func (bm BlockMap) AvgGasLimit() uint64 {
 	return bm.Headers().AvgGasLimit()
 }
 
-//FinalizingSort sort in finalizing order
+// FinalizingSort sort in finalizing order
 func (bm BlockMap) FinalizingSort() common.HashArray {
 	return bm.Headers().FinalizingSort()
 }

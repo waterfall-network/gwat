@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/p2p/enr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 )
 
 func TestReadNodes(t *testing.T) {

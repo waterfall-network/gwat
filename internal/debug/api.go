@@ -35,8 +35,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/log"
 	"github.com/hashicorp/go-bexpr"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // Handler is the global debugging handler.

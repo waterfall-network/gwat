@@ -22,8 +22,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/cmd/utils"
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

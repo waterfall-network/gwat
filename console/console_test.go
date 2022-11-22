@@ -26,13 +26,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/console/prompt"
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/eth"
-	"github.com/waterfall-foundation/gwat/eth/ethconfig"
-	"github.com/waterfall-foundation/gwat/internal/jsre"
-	"github.com/waterfall-foundation/gwat/node"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/console/prompt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/jsre"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
 )
 
 const (

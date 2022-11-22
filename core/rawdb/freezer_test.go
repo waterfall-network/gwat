@@ -27,9 +27,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/rlp"
 	"github.com/stretchr/testify/require"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 var freezerTestTableDef = map[string]bool{"test": true}

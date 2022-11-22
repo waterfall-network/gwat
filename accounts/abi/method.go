@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
 // FunctionType represents different types of functions a contract might have.

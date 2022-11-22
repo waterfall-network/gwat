@@ -26,7 +26,7 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 var (

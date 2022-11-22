@@ -29,23 +29,23 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/common/mclock"
-	"github.com/waterfall-foundation/gwat/common/prque"
-	"github.com/waterfall-foundation/gwat/consensus"
-	"github.com/waterfall-foundation/gwat/core/rawdb"
-	"github.com/waterfall-foundation/gwat/core/state"
-	"github.com/waterfall-foundation/gwat/core/state/snapshot"
-	"github.com/waterfall-foundation/gwat/core/types"
-	"github.com/waterfall-foundation/gwat/core/vm"
-	"github.com/waterfall-foundation/gwat/ethdb"
-	"github.com/waterfall-foundation/gwat/event"
-	"github.com/waterfall-foundation/gwat/internal/syncx"
-	"github.com/waterfall-foundation/gwat/log"
-	"github.com/waterfall-foundation/gwat/metrics"
-	"github.com/waterfall-foundation/gwat/params"
-	"github.com/waterfall-foundation/gwat/token/operation"
-	"github.com/waterfall-foundation/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/syncx"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 var (
@@ -1343,7 +1343,7 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 }
 
 // WriteSyncDagBlock writes the dag block and all associated state to the database
-//for dag synchronization process
+// for dag synchronization process
 func (bc *BlockChain) WriteSyncDagBlock(block *types.Block) (status int, err error) {
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
@@ -3220,7 +3220,7 @@ func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash commo
 	return false
 }
 
-//GetTips retrieves active tips headers:
+// GetTips retrieves active tips headers:
 // - no descendants
 // - chained to finalized state (skips unchained)
 func (bc *BlockChain) GetTips() types.Tips {
@@ -3238,17 +3238,17 @@ func (bc *BlockChain) ResetTips() error {
 	return bc.hc.ResetTips()
 }
 
-//AddTips add BlockDag to tips
+// AddTips add BlockDag to tips
 func (bc *BlockChain) AddTips(blockDag *types.BlockDAG) {
 	bc.hc.AddTips(blockDag)
 }
 
-//RemoveTips remove BlockDag from tips by hash from tips
+// RemoveTips remove BlockDag from tips by hash from tips
 func (bc *BlockChain) RemoveTips(hashes common.HashArray) {
 	bc.hc.RemoveTips(hashes)
 }
 
-//FinalizeTips update tips in accordance with finalization result
+// FinalizeTips update tips in accordance with finalization result
 //todo reset nr rollback
 //func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
 func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64, lastBlock types.Block) {
@@ -3257,7 +3257,7 @@ func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash commo
 	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr, lastBlock)
 }
 
-//AppendToChildren append block hash as child of block
+// AppendToChildren append block hash as child of block
 func (bc *BlockChain) AppendToChildren(child common.Hash, parents common.HashArray) {
 	batch := bc.db.NewBatch()
 	for _, parent := range parents {
@@ -3323,7 +3323,7 @@ func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
 
 /* synchronization functionality */
 
-//SetSyncProvider set provider of access to synchronization functionality
+// SetSyncProvider set provider of access to synchronization functionality
 func (bc *BlockChain) SetSyncProvider(provider types.SyncProvider) {
 	bc.syncProvider = provider
 }

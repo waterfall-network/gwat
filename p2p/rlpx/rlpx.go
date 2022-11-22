@@ -34,10 +34,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/crypto"
-	"github.com/waterfall-foundation/gwat/crypto/ecies"
-	"github.com/waterfall-foundation/gwat/rlp"
 	"github.com/golang/snappy"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto/ecies"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

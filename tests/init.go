@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // Forks table defines supported forks and their chain config.

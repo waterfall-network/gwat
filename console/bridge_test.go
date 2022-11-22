@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/dop251/goja"
-	"github.com/waterfall-foundation/gwat/internal/jsre"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/jsre"
 )
 
 // TestUndefinedAsParam ensures that personal functions can receive

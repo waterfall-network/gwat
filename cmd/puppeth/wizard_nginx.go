@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // ensureVirtualHost checks whether a reverse-proxy is running on the specified

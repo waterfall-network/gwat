@@ -29,7 +29,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"golang.org/x/crypto/sha3"
 )
 

@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // binaryIterator is a simplistic iterator to step over the accounts or storage

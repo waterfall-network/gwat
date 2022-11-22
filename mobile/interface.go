@@ -22,7 +22,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // Interface represents a wrapped version of Go's interface{}, with the capacity

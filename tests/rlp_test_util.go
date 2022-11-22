@@ -24,7 +24,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 // RLPTest is the JSON structure of a single RLP test.

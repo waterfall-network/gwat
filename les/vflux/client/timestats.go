@@ -21,8 +21,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/les/utils"
-	"github.com/waterfall-foundation/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/les/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 const (

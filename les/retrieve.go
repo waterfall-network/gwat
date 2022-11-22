@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/waterfall-foundation/gwat/light"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/light"
 )
 
 var (

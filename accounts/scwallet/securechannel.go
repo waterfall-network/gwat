@@ -26,8 +26,8 @@ import (
 	"crypto/sha512"
 	"fmt"
 
-	"github.com/waterfall-foundation/gwat/crypto"
 	pcsc "github.com/gballet/go-libpcsclite"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/unicode/norm"
 )

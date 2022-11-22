@@ -21,7 +21,7 @@ package geth
 import (
 	"errors"
 
-	"github.com/waterfall-foundation/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
 )
 
 // NodeInfo represents pi short summary of the information known about the host.

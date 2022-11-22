@@ -19,8 +19,8 @@ package core
 import (
 	"sync"
 
-	"github.com/waterfall-foundation/gwat/common"
-	"github.com/waterfall-foundation/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of

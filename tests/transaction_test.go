@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 func TestTransaction(t *testing.T) {

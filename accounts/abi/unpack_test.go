@@ -26,8 +26,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
 	"github.com/stretchr/testify/require"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // TestUnpack tests the general pack/unpack tests in packing_test.go

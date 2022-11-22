@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // weightedIterator is a iterator with an assigned weight. It is used to prioritise

@@ -19,7 +19,7 @@ package snap
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // Tests that given a starting hash and a density, the hash ranger can correctly

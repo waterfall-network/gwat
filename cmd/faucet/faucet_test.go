@@ -19,7 +19,7 @@ package main
 import (
 	"testing"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 func TestFacebook(t *testing.T) {

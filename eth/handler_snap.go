@@ -17,9 +17,9 @@
 package eth
 
 import (
-	"github.com/waterfall-foundation/gwat/core"
-	"github.com/waterfall-foundation/gwat/eth/protocols/snap"
-	"github.com/waterfall-foundation/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/snap"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 )
 
 // snapHandler implements the snap.Backend interface to handle the various network

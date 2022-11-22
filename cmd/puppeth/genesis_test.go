@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/waterfall-foundation/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 )
 
 // Tests the go-ethereum to Aleth chainspec conversion for the Stureby testnet.

@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 
-	"github.com/waterfall-foundation/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // hashes is a helper to implement sort.Interface.
