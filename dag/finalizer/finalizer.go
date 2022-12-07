@@ -123,6 +123,11 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 
 		// blocks finalizing
 		for i, block := range orderedChain {
+			err := bc.UpdateFinalizingState(block)
+			if err != nil {
+				log.Error("Block finalization failed: PreFinalizingUpdateState failed", "err", err)
+				return err
+			}
 			nr := lastFinNr + uint64(i) + 1
 			block.SetNumber(&nr)
 			isHead := i == len(orderedChain)-1
