@@ -1313,7 +1313,7 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
 
-// WriteFinalizedBlock writes the block and all associated state to the database.
+// RollbackFinalization writes the block and all associated state to the database.
 func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	if !bc.chainmu.TryLock() {
 		return errInsertionInterrupted
@@ -1970,6 +1970,9 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 	parents := bc.GetBlocksByHashes(block.ParentHashes())
 	for ph, parent := range parents {
+		if parent.Nr() > 0 || parent.Height() == 0 {
+			continue
+		}
 		for pph, pparent := range parents {
 			if ph == pph {
 				continue
