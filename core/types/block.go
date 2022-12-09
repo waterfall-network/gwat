@@ -339,6 +339,19 @@ func (b *Block) BaseFee() *big.Int {
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
+func (b *Block) SetHeader(header *Header) {
+	b.header = header
+}
+
+func (b *Block) SetReceipt(receipts []*Receipt, hasher TrieHasher) {
+	if len(receipts) == 0 {
+		b.header.ReceiptHash = EmptyRootHash
+	} else {
+		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
+		b.header.Bloom = CreateBloom(receipts)
+	}
+}
+
 // Body returns the non-header content of the block.
 func (b *Block) Body() *Body { return &Body{b.transactions} }
 

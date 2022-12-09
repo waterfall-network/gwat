@@ -2137,13 +2137,17 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 
 	headers := block.Header()
 	headers.GasUsed = usedGas
+	block.SetHeader(headers)
+	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
 	// TODO check whether  root is not null
-	block, err = bc.engine.FinalizeAndAssemble(bc, headers, statedb, block.Transactions(), receipts)
-	if err != nil {
-		log.Warn("Failed finalize and assemble sealing", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
-		return err
-	}
+	//block, err = bc.engine.FinalizeAndAssemble(bc, headers, statedb, block.Transactions(), receipts)
+	//if err != nil {
+	//	log.Warn("Failed finalize and assemble sealing", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+	//	return err
+	//}
+
+	bc.engine.Finalize(bc, headers, statedb, block.Transactions())
 
 	// Update the metrics touched during block processing
 	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
