@@ -483,8 +483,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 	//c.chain.RemoveTips(block.ParentHashes()) // TODO test not remove
 	//2. create for new blockDag
 
-	// del 27 nov
-	//tmpDagChainHashes := task.tips.GetOrderedDagChainHashes() // TODO: ask
+	tmpDagChainHashes := c.chain.GetTips().GetOrderedDagChainHashes()
 
 	newBlockDag := &types.BlockDAG{
 		Hash:                block.Hash(),
@@ -492,7 +491,7 @@ func (c *Creator) resultHandler(block *types.Block) {
 		Slot:                block.Slot(),
 		LastFinalizedHash:   block.LFHash(),
 		LastFinalizedHeight: block.LFNumber(),
-		DagChainHashes:      block.ParentHashes(),
+		DagChainHashes:      tmpDagChainHashes,
 	}
 	c.chain.AddTips(newBlockDag)
 	c.chain.WriteCurrentTips()
