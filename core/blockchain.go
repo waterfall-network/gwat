@@ -2110,7 +2110,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 		}
 	}()
 
-	stateBlock := bc.GetBlockByNumber(block.LFNumber())
+	stateBlock := bc.GetLastFinalizedBlock() //bc.GetBlockByNumber(block.LFNumber())
 	if stateBlock == nil {
 		log.Error("PreFinalizingUpdateState: LFBlock = nil", "LFNumber", block.LFNumber())
 		return fmt.Errorf("PreFinalizingUpdateState: unknown LFBlock, number=%v", block.LFNumber())
