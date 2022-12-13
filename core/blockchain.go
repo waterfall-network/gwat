@@ -2115,7 +2115,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 		log.Error("PreFinalizingUpdateState: LFBlock = nil", "LFNumber", block.LFNumber())
 		return fmt.Errorf("PreFinalizingUpdateState: unknown LFBlock, number=%v", block.LFNumber())
 	}
-	statedb, stateErr := bc.StateAt(stateBlock.Root())
+	stateDB, stateErr := bc.StateAt(stateBlock.Root())
 	if stateErr != nil && stateBlock == nil {
 		log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
 		return stateErr
@@ -2123,12 +2123,12 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 
 	start := time.Now()
 	// Enable prefetching to pull in trie node paths while processing transactions
-	statedb.StartPrefetcher("chain")
-	activeState = statedb
+	stateDB.StartPrefetcher("chain")
+	activeState = stateDB
 
 	// Process block using the parent state as reference point
-	substart := time.Now()
-	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	subStart := time.Now()
+	receipts, logs, usedGas, err := bc.processor.Process(block, stateDB, bc.vmConfig)
 	if err != nil {
 		bc.reportBlock(block, receipts, err)
 		//atomic.StoreUint32(&followupInterrupt, 1)
@@ -2147,47 +2147,47 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 	//	return err
 	//}
 
-	bc.engine.Finalize(bc, headers, statedb, block.Transactions())
+	bc.engine.Finalize(bc, headers, stateDB, block.Transactions())
 
 	// Update the metrics touched during block processing
-	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-	triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
-	trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
+	accountReadTimer.Update(stateDB.AccountReads)                 // Account reads are complete, we can mark them
+	storageReadTimer.Update(stateDB.StorageReads)                 // Storage reads are complete, we can mark them
+	accountUpdateTimer.Update(stateDB.AccountUpdates)             // Account updates are complete, we can mark them
+	storageUpdateTimer.Update(stateDB.StorageUpdates)             // Storage updates are complete, we can mark them
+	snapshotAccountReadTimer.Update(stateDB.SnapshotAccountReads) // Account reads are complete, we can mark them
+	snapshotStorageReadTimer.Update(stateDB.SnapshotStorageReads) // Storage reads are complete, we can mark them
+	trieHash := stateDB.AccountHashes + stateDB.StorageHashes     // Save to not double count in validation
+	trieProc := stateDB.SnapshotAccountReads + stateDB.AccountReads + stateDB.AccountUpdates
+	trieProc += stateDB.SnapshotStorageReads + stateDB.StorageReads + stateDB.StorageUpdates
 
-	blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
+	blockExecutionTimer.Update(time.Since(subStart) - trieProc - trieHash)
 
 	// Validate the state using the default validator
-	substart = time.Now()
-	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
+	subStart = time.Now()
+	if err := bc.validator.ValidateState(block, stateDB, receipts, usedGas); err != nil {
 		log.Warn("Red block insertion to chain while propagate", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
 		return err
 	}
-	proctime := time.Since(start)
+	procTime := time.Since(start)
 
 	// Update the metrics touched during block validation
-	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
+	accountHashTimer.Update(stateDB.AccountHashes) // Account hashes are complete, we can mark them
+	storageHashTimer.Update(stateDB.StorageHashes) // Storage hashes are complete, we can mark them
 
-	blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
+	blockValidationTimer.Update(time.Since(subStart) - (stateDB.AccountHashes + stateDB.StorageHashes - trieHash))
 
 	// Write the block to the chain and get the status.
-	substart = time.Now()
-	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
+	subStart = time.Now()
+	status, err := bc.writeBlockWithState(block, receipts, logs, stateDB, ET_SKIP, "insertPropagatedBlocks")
 	if err != nil {
 		return err
 	}
 	// Update the metrics touched during block commit
-	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
-	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
-	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
+	accountCommitTimer.Update(stateDB.AccountCommits)   // Account commits are complete, we can mark them
+	storageCommitTimer.Update(stateDB.StorageCommits)   // Storage commits are complete, we can mark them
+	snapshotCommitTimer.Update(stateDB.SnapshotCommits) // Snapshot commits are complete, we can mark them
 
-	blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
+	blockWriteTimer.Update(time.Since(subStart) - stateDB.AccountCommits - stateDB.StorageCommits - stateDB.SnapshotCommits)
 	blockInsertTimer.UpdateSince(start)
 
 	switch status {
@@ -2200,7 +2200,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 		lastCanon = block
 
 		// Only count canonical blocks for GC processing time
-		bc.gcproc += proctime
+		bc.gcproc += procTime
 
 	case SideStatTy:
 		log.Debug("Inserted forked block", "hash", block.Hash(),

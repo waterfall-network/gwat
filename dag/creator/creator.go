@@ -794,7 +794,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
 		Extra:        c.extra,
 		Time:         uint64(timestamp),
-		LFHash:       lastFinBlock.Hash(),
+		LFHash:       lastFinBlock.FinalizedHash(),
 		LFNumber:     lastFinBlock.Nr(),
 	}
 
