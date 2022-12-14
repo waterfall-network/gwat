@@ -19,8 +19,7 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 	sort.Slice(blocks, func(i, j int) bool {
 		ibn := new(big.Int).SetBytes(blocks[i].Hash().Bytes())
 		jbn := new(big.Int).SetBytes(blocks[j].Hash().Bytes())
-		return (blocks[i].Slot() > blocks[j].Slot()) ||
-			(blocks[i].Height() > blocks[j].Height()) ||
+		return (blocks[i].Height() > blocks[j].Height()) ||
 			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes())) ||
 			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) == len(blocks[j].ParentHashes()) &&
 				ibn.Cmp(jbn) < 0)

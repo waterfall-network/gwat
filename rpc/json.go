@@ -61,9 +61,17 @@ func (msg *jsonrpcMessage) isNotification() bool {
 	return msg.ID == nil && msg.Method != ""
 }
 
-// isDagSync if request is a call of consensus api
-func (msg *jsonrpcMessage) isDagSync() bool {
-	return msg.Method == "dag_sync" || msg.Method == "dag_finalize"
+// isDagApi if request is a call of consensus api
+func (msg *jsonrpcMessage) isDagApi() bool {
+	return msg.Method == "dag_sync" ||
+		msg.Method == "dag_finalize" ||
+		msg.Method == "dag_getCandidates" ||
+		msg.Method == "dag_validateSpines" ||
+		// does not intersect with above
+		msg.Method == "dag_syncSlotInfo" ||
+		msg.Method == "dag_headSyncReady" ||
+		// does not intersect with above
+		msg.Method == "dag_headSync"
 }
 
 func (msg *jsonrpcMessage) isCall() bool {
