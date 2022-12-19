@@ -547,14 +547,14 @@ func (c *Creator) getUnhandledReceipts() []*types.Receipt {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (c *Creator) makeCurrent(header *types.Header) error {
+func (c *Creator) makeCurrent(header *types.Header, state *state.StateDB, recommitBlocks []*types.Block) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 
-	state, _, recommitBlocks, stateErr := c.chain.CollectStateDataByParents(header.ParentHashes)
-	if stateErr != nil {
-		return stateErr
-	}
+	//state, _, recommitBlocks, stateErr := c.chain.CollectStateDataByParents(header.ParentHashes)
+	//if stateErr != nil {
+	//	return stateErr
+	//}
 
 	state.StartPrefetcher("miner")
 
@@ -807,15 +807,15 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	//calc new block height
 	lastFinBlock := c.chain.GetLastFinalizedBlock()
-	lastFinNr := lastFinBlock.Nr()
-	ancestorsCount := len(tmpDagChainHashes.Uniq())
-	newHeight := lastFinNr + uint64(ancestorsCount) + 1
-	log.Info("Creator calculate block height", "newHeight", newHeight,
-		"ancestors", ancestorsCount,
-		"lastFinNr", lastFinNr,
-		"lastFinHeight", lastFinBlock.Height(),
-		"lFNr == lFHeight ", lastFinBlock.Height() == lastFinNr,
-	)
+	//lastFinNr := lastFinBlock.Nr()
+	//ancestorsCount := len(tmpDagChainHashes.Uniq())
+	//newHeight := lastFinNr + uint64(ancestorsCount) + 1
+	//log.Info("Creator calculate block height", "newHeight", newHeight,
+	//	"ancestors", ancestorsCount,
+	//	"lastFinNr", lastFinNr,
+	//	"lastFinHeight", lastFinBlock.Height(),
+	//	"lFNr == lFHeight ", lastFinBlock.Height() == lastFinNr,
+	//)
 
 	// if max slot of parents is less or equal to last finalized block slot
 	// - add last finalized block to parents
@@ -828,8 +828,27 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	if maxParentSlot <= lastFinBlock.Slot() {
 		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
 	}
+
+	parentHashes := tipsBlocks.Hashes().Sort()
+
+	//calc new block height
+	state, stateBlock, recommitBlocks, stateErr := c.chain.CollectStateDataByParents(parentHashes)
+	if stateErr != nil {
+		log.Error("Failed to make block creation context", "err", stateErr)
+		c.errWorkCh <- &stateErr
+		return
+	}
+
+	baseHeight := stateBlock.Height()
+	recommitBlocksCount := len(recommitBlocks)
+	newHeight := baseHeight + uint64(recommitBlocksCount) + 1
+	log.Info("Creator calculate block height", "newHeight", newHeight,
+		"recommitBlocksCount", recommitBlocksCount,
+		"baseHeight", baseHeight,
+	)
+
 	header := &types.Header{
-		ParentHashes: tipsBlocks.Hashes().Sort(),
+		ParentHashes: parentHashes,
 		Slot:         slotInfo.Slot,
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
@@ -861,7 +880,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	// Could potentially happen if starting to mine in an odd state.
-	err := c.makeCurrent(header)
+	err := c.makeCurrent(header, state, recommitBlocks)
 	if err != nil {
 		log.Error("Failed to make block creation context", "err", err)
 		c.errWorkCh <- &err
