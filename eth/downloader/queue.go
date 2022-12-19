@@ -34,6 +34,10 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
+var ignoreLowHeight = common.HashArray{
+	common.HexToHash("0xcef36700962f215546e8d69dfe704cc7b38d14c16a715c537faa13a5ff6a81df"),
+}
+
 const (
 	bodyType    = uint(0)
 	receiptType = uint(1)
@@ -299,7 +303,7 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 	for _, header := range headers {
 		// Make sure chain order is honoured and preserved throughout
 		hash := header.Hash()
-		if header.Number == nil || *header.Number != from || header.Height > *header.Number {
+		if header.Number == nil || *header.Number != from || header.Height > *header.Number && !ignoreLowHeight.Has(hash) {
 			log.Warn("Header broke chain ordering", "number", header.Nr(), "height", header.Height, "hash", hash.Hex(), "expected", from)
 			break
 		}
