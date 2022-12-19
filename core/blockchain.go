@@ -860,7 +860,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 			return err
 		}
 		if time.Since(reported) >= statsReportLimit {
-			log.Info("Exporting blocks", "exported", block.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Exporting blocks", "exported", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(start)))
 			reported = time.Now()
 		}
 	}
@@ -1538,7 +1538,7 @@ func (bc *BlockChain) SyncInsertChain(chain types.Blocks) (int, error) {
 		}
 		if curNr != prevNr+1 {
 			// Chain broke ancestry, log a message (programming error) and skip insertion
-			log.Error("Non contiguous block insert", "number", block.Nr(), "hash", block.Hash(), "prevnumber", prev.Nr(), "prevhash", prev.Hash())
+			log.Error("Non contiguous block insert", "number", block.Nr(), "hash", block.Hash().Hex(), "prevnumber", prev.Nr(), "prevhash", prev.Hash())
 			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..]", i-1, prev.Nr(),
 				prev.Hash().Bytes()[:4], i, block.Nr(), block.Hash().Bytes()[:4])
 		}
@@ -1646,7 +1646,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
+		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash().Hex())
 		return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
@@ -1776,7 +1776,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 
 		switch status {
 		case CanonStatTy:
-			log.Error("Inserted new block", "hash", block.Hash(),
+			log.Error("Inserted new block", "hash", block.Hash().Hex(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -1784,7 +1784,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			bc.gcproc += proctime
 
 		case SideStatTy:
-			log.Debug("Inserted forked block", "hash", block.Hash(),
+			log.Debug("Inserted forked block", "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -1792,7 +1792,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
 			// a log, instead of trying to track down blocks imports that don't emit logs.
-			log.Warn("Inserted block with unknown status", "hash", block.Hash(),
+			log.Warn("Inserted block with unknown status", "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -1964,6 +1964,21 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	//validate height
+	_, stateBlock, _, calcHeight, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+	if stateErr != nil {
+		log.Error("Block verification: calc height err", "block hash", block.Hash().Hex())
+		return false, stateErr
+	}
+	if block.Height() != calcHeight {
+		log.Warn("Block verification: block invalid height",
+			"calcHeight", calcHeight,
+			"height", block.Height(),
+			"hash", block.Hash().Hex(),
+			"stateBlock", stateBlock,
+		)
+		return false, nil
+	}
 	return bc.verifyBlockParents(block) && bc.verifyLFData(block), nil
 }
 
@@ -2029,12 +2044,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
+		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash().Hex())
 		return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
 	case err != nil:
-		log.Error("propagate err", "hash", block.Hash(), "err", err)
+		log.Error("propagate err", "hash", block.Hash().Hex(), "err", err)
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
 		return it.index, err
@@ -2093,9 +2108,9 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		bc.MoveTxsToProcessing(types.Blocks{block})
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+		statedb, stateBlock, recommitBlocks, _, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil && stateBlock == nil {
-			log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
+			log.Error("Propagated block import state err", "height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
 			return it.index, stateErr
 		}
 
@@ -2229,7 +2244,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 
 		switch status {
 		case CanonStatTy:
-			log.Debug("Inserted new block", "hash", block.Hash(),
+			log.Debug("Inserted new block", "hash", block.Hash().Hex(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -2240,7 +2255,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			bc.gcproc += proctime
 
 		case SideStatTy:
-			log.Debug("Inserted forked block", "hash", block.Hash(),
+			log.Debug("Inserted forked block", "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -2248,7 +2263,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
 			// a log, instead of trying to track down blocks imports that don't emit logs.
-			log.Warn("Inserted block with unknown status", "hash", block.Hash(),
+			log.Warn("Inserted block with unknown status", "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -2290,7 +2305,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		prev = chain[i-1]
 		if block.Number() != nil && prev.Number() != nil && *block.Number() != *prev.Number()+1 {
 			// Chain broke ancestry, log a message (programming error) and skip insertion
-			log.Error("Non contiguous block insert", "number", block.Nr(), "hash", block.Hash(), "prevnumber", prev.Nr(), "prevhash", prev.Hash())
+			log.Error("Non contiguous block insert", "number", block.Nr(), "hash", block.Hash().Hex(), "prevnumber", prev.Nr(), "prevhash", prev.Hash())
 			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..]", i-1, prev.Nr(),
 				prev.Hash().Bytes()[:4], i, block.Nr(), block.Hash().Bytes()[:4])
 		}
@@ -2317,8 +2332,20 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	return bc.insertChain(types.Blocks([]*types.Block{block}), false)
 }
 
+func (bc *BlockChain) calcBlockHeight(stateBlock *types.Block, recommitBlocks []*types.Block) uint64 {
+	baseHeight := stateBlock.Height()
+	recommitsLen := len(recommitBlocks)
+	height := baseHeight + uint64(recommitsLen) + 1
+	log.Info("Creator calculate block height",
+		"height", height,
+		"recommitsLen", recommitsLen,
+		"baseHeight", baseHeight,
+	)
+	return height
+}
+
 // CollectStateDataByParents collects state data of current dag chain to insert block.
-func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
+func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, calcHeight uint64, err error) {
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	parentBlocks := bc.GetBlocksByHashes(parents)
 	//check is parents exists
@@ -2330,7 +2357,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	}
 	if len(unl) > 0 {
 		log.Error("Error while collect state data by block (unknown blocks detected)", "parents", parents, "unknown", unl)
-		return statedb, stateBlock, recommitBlocks, ErrInsertUncompletedDag
+		return statedb, stateBlock, recommitBlocks, calcHeight, ErrInsertUncompletedDag
 	}
 
 	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
@@ -2345,7 +2372,8 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 			log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
 		}
 		recommitBlocks = sortedBlocks[1:]
-		return statedb, stateBlock, recommitBlocks, nil
+		calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+		return statedb, stateBlock, recommitBlocks, calcHeight, nil
 	} else {
 		//if state is finalized block - search first spine in ancestors
 		stateBlock = sortedBlocks[0]
@@ -2355,7 +2383,8 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		}
 		if statedb != nil {
 			recommitBlocks = sortedBlocks[1:]
-			return statedb, stateBlock, recommitBlocks, nil
+			calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+			return statedb, stateBlock, recommitBlocks, calcHeight, nil
 		}
 	}
 
@@ -2364,7 +2393,8 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	var recomFinBlocks []*types.Block
 	statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlockRecursive(lfAncestor, nil)
 	recommitBlocks = append(recomFinBlocks, sortedBlocks[1:]...)
-	return statedb, stateBlock, recommitBlocks, nil
+	calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	return statedb, stateBlock, recommitBlocks, calcHeight, nil
 }
 
 // CollectStateDataByFinalizedBlockRecursive collects state data of current dag chain to insert new block.
@@ -2632,7 +2662,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 	// Some other error occurred, abort
 	case err != nil:
-		log.Error("insert chain err", "hash", block.Hash(), "err", err)
+		log.Error("insert chain err", "hash", block.Hash().Hex(), "err", err)
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
 		return it.index, err
@@ -2661,14 +2691,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			return it.index, ErrBannedHash
 		}
 
-		// Retrieve the parent block and it's state to execute on top
+		// Retrieve the parent block, and it's state to execute on top
 		start := time.Now()
 
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+		statedb, stateBlock, recommitBlocks, _, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -2750,7 +2780,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		switch status {
 		case CanonStatTy:
-			log.Debug("Inserted new block", "number", block.Nr(), "hash", block.Hash(),
+			log.Debug("Inserted new block", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -2761,7 +2791,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.gcproc += proctime
 
 		case SideStatTy:
-			log.Debug("Inserted forked block", "number", block.Nr(), "hash", block.Hash(),
+			log.Debug("Inserted forked block", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -2769,7 +2799,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
 			// a log, instead of trying to track down blocks imports that don't emit logs.
-			log.Warn("Inserted block with unknown status", "number", block.Nr(), "hash", block.Hash(),
+			log.Warn("Inserted block with unknown status", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -2831,7 +2861,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 			if err := bc.writeBlockWithoutState(block); err != nil {
 				return it.index, err
 			}
-			log.Debug("Injected sidechain block", "number", block.Nr(), "hash", block.Hash(),
+			log.Debug("Injected sidechain block", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -2871,7 +2901,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// all raised events and logs from notifications since we're too heavy on the
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
-			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].Hash(), "end", block.Hash())
+			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].Hash().Hex(), "end", block.Hash().Hex())
 			if _, err := bc.insertChain(blocks, false); err != nil {
 				return 0, err
 			}
@@ -3119,7 +3149,7 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		if block.Hash() == bc.genesisBlock.Hash() {
 			return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
 		}
-		log.Warn("Detect block without parents", "hash", block.Hash(), "height", block.Height(), "slot", block.Slot())
+		log.Warn("Detect block without parents", "hash", block.Hash().Hex(), "height", block.Height(), "slot", block.Slot())
 		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
 		return unloaded, loaded, finalized, graph, memo[0], err
 	}
