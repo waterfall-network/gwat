@@ -17,12 +17,21 @@ type BlockChain interface {
 // SpineSortBlocks sorts hashes by order of finalization
 func SpineSortBlocks(blocks []*Block) []*Block {
 	sort.Slice(blocks, func(i, j int) bool {
+		if blocks[i].Height() > blocks[j].Height() {
+			return true
+		}
+		if blocks[i].Height() < blocks[j].Height() {
+			return false
+		}
+		if len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes()) {
+			return true
+		}
+		if len(blocks[i].ParentHashes()) < len(blocks[j].ParentHashes()) {
+			return false
+		}
 		ibn := new(big.Int).SetBytes(blocks[i].Hash().Bytes())
 		jbn := new(big.Int).SetBytes(blocks[j].Hash().Bytes())
-		return (blocks[i].Height() > blocks[j].Height()) ||
-			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes())) ||
-			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) == len(blocks[j].ParentHashes()) &&
-				ibn.Cmp(jbn) < 0)
+		return ibn.Cmp(jbn) < 0
 	})
 	return blocks
 }
