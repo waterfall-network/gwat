@@ -158,7 +158,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x10, 0x10},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_1_10.Hash().Hex())
+	//fmt.Println(bl_1_1_10.Hash().Hex())
 
 	// hash: 0xeb1398459d792dc162b29fb6a39fc01f048c22aa3db0ac292ac90d6d4ebf67bd
 	bl_1_1_eb := NewBlock(&Header{
@@ -169,7 +169,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x99, 0x99},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_1_eb.Hash().Hex())
+	//fmt.Println(bl_1_1_eb.Hash().Hex())
 
 	// hash: 0xf0a3dc02fd91e096e497bf3b3e24c58b2cb36b1796da470da7558fbbd212f41b
 	bl_1_1_f0 := NewBlock(&Header{
@@ -180,7 +180,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x77, 0x77},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_1_f0.Hash().Hex())
+	//fmt.Println(bl_1_1_f0.Hash().Hex())
 
 	// hash: 0x0f3920e993ac0819034c82804860c2116154ad1d2bb1153af61140229b6b4722
 	bl_1_2_0f := NewBlock(&Header{
@@ -192,7 +192,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x22, 0x22},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_2_0f.Hash().Hex())
+	//fmt.Println(bl_1_2_0f.Hash().Hex())
 
 	// hash: 0x1eb775dd4986d2c6d5d376491931ab66c3d94d25994a9d6ce4e3f4710054bf43
 	bl_1_2_1e := NewBlock(&Header{
@@ -204,7 +204,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x10, 0x10},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_2_1e.Hash().Hex())
+	//fmt.Println(bl_1_2_1e.Hash().Hex())
 
 	// hash: 0x9a8be4e7dc146fcc3401dea07c50dc70e4e68d64ab867a831d2fd55ab172bb73
 	bl_1_2_9a := NewBlock(&Header{
@@ -216,7 +216,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x55, 0x55},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_2_9a.Hash().Hex())
+	//fmt.Println(bl_1_2_9a.Hash().Hex())
 
 	// hash: 0x3278bfffa0aabca5653e4419bfd5673ab196ae3690e7272cabfeaef16f3b624f
 	bl_1_3_32 := NewBlock(&Header{
@@ -229,7 +229,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x77, 0x77},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_3_32.Hash().Hex())
+	//fmt.Println(bl_1_3_32.Hash().Hex())
 
 	// hash: 0x37ad7f596ceb520f06fb5e8e66e1e28ca574895f45d36e2b6ec9fcde5f3d4f23
 	bl_1_3_37 := NewBlock(&Header{
@@ -242,7 +242,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x10, 0x10},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_3_37.Hash().Hex())
+	//fmt.Println(bl_1_3_37.Hash().Hex())
 
 	// hash: 0xa5b6939a5c9c2ac36bbc0dfbab6158e67f9253f84c90c1ef9f161d4e2509469d
 	bl_1_3_a5 := NewBlock(&Header{
@@ -255,7 +255,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x33, 0x33},
 	}, nil, nil, nil)
-	fmt.Println(bl_1_3_a5.Hash().Hex())
+	//fmt.Println(bl_1_3_a5.Hash().Hex())
 
 	// hash: 0xa96581afc4e419ba31db2d5c1e000ee3a8ee7e9df343e338e573738ee33d6103
 	bl_2_1_a9 := NewBlock(&Header{
@@ -266,7 +266,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x77},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_1_a9.Hash().Hex())
+	//fmt.Println(bl_2_1_a9.Hash().Hex())
 
 	// hash: 0xc5cf17853f214139ed23d3785adbffb866632732d3dc7ba0f3a9796fcfe65a54
 	bl_2_1_c5 := NewBlock(&Header{
@@ -277,7 +277,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x10},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_1_c5.Hash().Hex())
+	//fmt.Println(bl_2_1_c5.Hash().Hex())
 
 	// hash: 0xf50297a79dc1bccea0d58876cf2793ef0fdb93fc20510bdda8b0055c353d3d4a
 	bl_2_1_f5 := NewBlock(&Header{
@@ -288,7 +288,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x99},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_1_f5.Hash().Hex())
+	//fmt.Println(bl_2_1_f5.Hash().Hex())
 
 	// hash: 0x27f1c39b0905151984589e3a47685979298048e019eeeb04fb3880f875996db8
 	bl_2_2_27 := NewBlock(&Header{
@@ -300,7 +300,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x44},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_2_27.Hash().Hex())
+	//fmt.Println(bl_2_2_27.Hash().Hex())
 
 	// hash: 0x5a1914dc7c0a70b5359fceabf98a6aa5b5df0b2ca3e8dcb370cf529aa7af38a3
 	bl_2_2_5a := NewBlock(&Header{
@@ -312,7 +312,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x22},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_2_5a.Hash().Hex())
+	//fmt.Println(bl_2_2_5a.Hash().Hex())
 
 	// hash: 0xaf1274d8c3aeafbffa48c5139450efcd5e337e8ac9c7bbe5e6840988f17fa783
 	bl_2_2_af := NewBlock(&Header{
@@ -324,7 +324,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x10, 0x10},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_2_af.Hash().Hex())
+	//fmt.Println(bl_2_2_af.Hash().Hex())
 
 	// hash: 0xe4aef5b721840e99b399409fd1406e2cccba3143ed4ad5e8ce3b2f732380ecff
 	bl_2_3_e4 := NewBlock(&Header{
@@ -337,7 +337,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x10, 0x10},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_3_e4.Hash().Hex())
+	//fmt.Println(bl_2_3_e4.Hash().Hex())
 
 	// hash: 0xea8664fd377c38eb2dbac1b0c90d98b8275c5b97a8ef5974e2b11e72c37332b7
 	bl_2_3_ea := NewBlock(&Header{
@@ -350,7 +350,7 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x55},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_3_ea.Hash().Hex())
+	//fmt.Println(bl_2_3_ea.Hash().Hex())
 
 	// hash: 0xd3e7c1eb394d390c53e2b2d97ff0e2e18bcf086215d941f7220530ad111746c6
 	bl_2_3_d3 := NewBlock(&Header{
@@ -363,12 +363,12 @@ func TestSortBlocks(t *testing.T) {
 		Slot:     1,
 		Coinbase: common.Address{0x66},
 	}, nil, nil, nil)
-	fmt.Println(bl_2_3_d3.Hash().Hex())
+	//fmt.Println(bl_2_3_d3.Hash().Hex())
 
 	corectOrder := []*Block{
+		bl_2_3_d3,
 		bl_2_3_e4,
 		bl_2_3_ea,
-		bl_2_3_d3,
 
 		bl_2_2_27,
 		bl_2_2_5a,
@@ -398,18 +398,32 @@ func TestSortBlocks(t *testing.T) {
 	}{
 		{
 			name: "sequence-1",
-
-			seq: corectOrder,
-
+			seq: []*Block{
+				bl_2_2_27,
+				bl_2_3_e4,
+				bl_1_1_f0,
+				bl_2_2_5a,
+				bl_1_1_10,
+				bl_2_2_af,
+				bl_1_1_eb,
+				bl_1_2_0f,
+				bl_2_1_a9,
+				bl_1_2_1e,
+				bl_2_1_c5,
+				bl_2_1_f5,
+				bl_1_2_9a,
+				bl_2_3_d3,
+				bl_1_3_37,
+				bl_2_3_ea,
+				bl_1_3_32,
+				bl_1_3_a5,
+			},
 			want: fmt.Sprintf("%#v", getBlocksHashes(corectOrder)),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := fmt.Sprintf("%#v", getBlocksHashes(SpineSortBlocks(tt.seq)))
-
-			fmt.Println(got)
-
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got:  %v\nwant: %v", got, tt.want)
 			}
