@@ -54,7 +54,7 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 				hashKeys = append(hashKeys, h)
 			}
 			hashKeys = hashKeys.Sort()
-			//add sorted to blocks
+			//add to sorted blocks
 			for _, hash := range hashKeys {
 				sortedBlocks = append(sortedBlocks, hashMap[hash])
 			}
