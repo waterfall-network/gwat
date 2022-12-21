@@ -2478,7 +2478,9 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlockRecursive(block *types.Blo
 		if err != nil {
 			log.Warn("Collect State Data By Finalized Block: skip block", "nr", finNr, "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
 		}
-		if stateBlock == nil || stateBlock.Nr() > stateBlock.Nr() {
+		//todo check condition
+		// if stateBlock == nil || stateBlock.Nr() > stateBlock.Nr() {
+		if stateBlock == nil || stateBlock.Nr() > spineBlock.Nr() {
 			statedb = _stdb
 			stateBlock = _stBlock
 			for _, b := range _recomBls {
