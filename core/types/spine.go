@@ -1,7 +1,6 @@
 package types
 
 import (
-	"math/big"
 	"sort"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -16,24 +15,53 @@ type BlockChain interface {
 
 // SpineSortBlocks sorts hashes by order of finalization
 func SpineSortBlocks(blocks []*Block) []*Block {
-	sort.Slice(blocks, func(i, j int) bool {
-		if blocks[i].Height() > blocks[j].Height() {
-			return true
+	heightPlenMap := map[uint64]map[uint64]map[common.Hash]*Block{}
+	for _, bl := range blocks {
+		h := bl.Height()
+		plen := uint64(len(bl.ParentHashes()))
+		hash := bl.Hash()
+		if heightPlenMap[h] == nil {
+			heightPlenMap[h] = map[uint64]map[common.Hash]*Block{}
 		}
-		if blocks[i].Height() < blocks[j].Height() {
-			return false
+		if heightPlenMap[h][plen] == nil {
+			heightPlenMap[h][plen] = map[common.Hash]*Block{}
 		}
-		if len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes()) {
-			return true
+		heightPlenMap[h][plen][hash] = bl
+	}
+
+	//sort by height
+	heightKeys := make(common.SorterDeskU64, 0, len(heightPlenMap))
+	for k := range heightPlenMap {
+		heightKeys = append(heightKeys, k)
+	}
+	sort.Sort(heightKeys)
+
+	sortedBlocks := []*Block{}
+	for _, hk := range heightKeys {
+		plenMap := heightPlenMap[hk]
+		// sort by number of parents
+		plenKeys := make(common.SorterDeskU64, 0, len(plenMap))
+		for plk, _ := range plenMap {
+			plenKeys = append(plenKeys, plk)
 		}
-		if len(blocks[i].ParentHashes()) < len(blocks[j].ParentHashes()) {
-			return false
+		sort.Sort(plenKeys)
+
+		for _, k := range plenKeys {
+			hashMap := plenMap[k]
+			// sort by hash
+			hashKeys := make(common.HashArray, 0, len(hashMap))
+			for h, _ := range hashMap {
+				hashKeys = append(hashKeys, h)
+			}
+			hashKeys = hashKeys.Sort()
+			//add sorted to blocks
+			for _, hash := range hashKeys {
+				sortedBlocks = append(sortedBlocks, hashMap[hash])
+			}
 		}
-		ibn := new(big.Int).SetBytes(blocks[i].Hash().Bytes())
-		jbn := new(big.Int).SetBytes(blocks[j].Hash().Bytes())
-		return ibn.Cmp(jbn) < 0
-	})
-	return blocks
+	}
+
+	return sortedBlocks
 }
 
 func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
