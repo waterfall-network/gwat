@@ -1690,7 +1690,9 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		//insertion of blue blocks
 		start := time.Now()
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlockRecursive(block, nil)
+		//todo check
+		//statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlockRecursive(block, nil)
+		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlock(block)
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -2362,36 +2364,80 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 
 	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
 
+	////if state is last finalized block
+	//if sortedBlocks[0].Nr() == lastFinBlock.Nr() ||
+	//	//if state is dag block
+	//	sortedBlocks[0].Slot() > lastFinBlock.Slot() && sortedBlocks[0].Nr() == 0 && sortedBlocks[0].Height() > 0 {
+	//	stateBlock = sortedBlocks[0]
+	//	statedb, err = bc.StateAt(stateBlock.Root())
+	//	if err != nil {
+	//		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
+	//	}
+	//	recommitBlocks = sortedBlocks[1:]
+	//	calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	//	return statedb, stateBlock, recommitBlocks, calcHeight, nil
+	//} else {
+	//	//if state is finalized block - search first spine in ancestors
+	//	stateBlock = sortedBlocks[0]
+	//	statedb, err = bc.StateAt(stateBlock.Root())
+	//	if err != nil {
+	//		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+	//	}
+	//	if statedb != nil {
+	//		recommitBlocks = sortedBlocks[1:]
+	//		calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	//		return statedb, stateBlock, recommitBlocks, calcHeight, nil
+	//	}
+	//}
+
+	stateBlock = sortedBlocks[0]
+	statedb, err = bc.StateAt(stateBlock.Root())
+	if err != nil {
+		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+	}
+	if statedb != nil {
+		baseRecommitBlocks := sortedBlocks[1:]
+
+		//check that all parents are in state
+		stateParents := stateBlock.ParentHashes()
+		for _, rb := range baseRecommitBlocks {
+			phs := rb.ParentHashes()
+			difParents := phs.Difference(stateParents)
+			if len(difParents) > 0 {
+				_, _, parentRecommits, _, err := bc.CollectStateDataByParents(phs)
+				if err != nil {
+					log.Error("Error while get state by parents (forked parents)", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+					return statedb, stateBlock, recommitBlocks, calcHeight, err
+				}
+				for _, parentRb := range parentRecommits {
+					if difParents.Has(parentRb.Hash()) {
+						recommitBlocks = append(recommitBlocks, parentRb)
+					}
+				}
+			}
+			recommitBlocks = append(recommitBlocks, rb)
+		}
+
+		calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+		return statedb, stateBlock, recommitBlocks, calcHeight, nil
+	}
 	//if state is last finalized block
 	if sortedBlocks[0].Nr() == lastFinBlock.Nr() ||
 		//if state is dag block
 		sortedBlocks[0].Slot() > lastFinBlock.Slot() && sortedBlocks[0].Nr() == 0 && sortedBlocks[0].Height() > 0 {
-		stateBlock = sortedBlocks[0]
-		statedb, err = bc.StateAt(stateBlock.Root())
-		if err != nil {
-			log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
-		}
-		recommitBlocks = sortedBlocks[1:]
-		calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
-		return statedb, stateBlock, recommitBlocks, calcHeight, nil
-	} else {
-		//if state is finalized block - search first spine in ancestors
-		stateBlock = sortedBlocks[0]
-		statedb, err = bc.StateAt(stateBlock.Root())
-		if err != nil {
-			log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
-		}
-		if statedb != nil {
-			recommitBlocks = sortedBlocks[1:]
-			calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
-			return statedb, stateBlock, recommitBlocks, calcHeight, nil
-		}
+		log.Error("Error while collect state data by block (bad spine state)", "parents", parents)
+		return statedb, stateBlock, recommitBlocks, calcHeight, ErrSpineStateNF
 	}
 
 	//if state is finalized block - search first spine in ancestors
 	lfAncestor := bc.GetBlockByHash(sortedBlocks[0].Hash())
 	var recomFinBlocks []*types.Block
-	statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlockRecursive(lfAncestor, nil)
+	//todo check
+	//statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlockRecursive(lfAncestor, nil)
+	statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlock(lfAncestor)
+	if err != nil {
+		return statedb, stateBlock, recommitBlocks, calcHeight, err
+	}
 	recommitBlocks = append(recomFinBlocks, sortedBlocks[1:]...)
 	calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
 	return statedb, stateBlock, recommitBlocks, calcHeight, nil
@@ -2436,7 +2482,9 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlockRecursive(block *types.Blo
 		if err != nil {
 			log.Warn("Collect State Data By Finalized Block: skip block", "nr", finNr, "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
 		}
-		if stateBlock == nil || stateBlock.Nr() > stateBlock.Nr() {
+		//todo check condition
+		// if stateBlock == nil || stateBlock.Nr() > stateBlock.Nr() {
+		if stateBlock == nil || stateBlock.Nr() > spineBlock.Nr() {
 			statedb = _stdb
 			stateBlock = _stBlock
 			for _, b := range _recomBls {
@@ -2479,6 +2527,10 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 			log.Error("Collect State Data By Finalized Block: bad block number", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
 			return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: bad block number: nr=%d (height=%d  hash=%v)", finNr, block.Height(), block.Hash().Hex())
 		}
+		stdb, err := bc.StateAt(block.Root())
+		if err == nil || stdb != nil {
+			return stdb, block, recommitBlocks, nil
+		}
 	}
 
 	parentBlocks := bc.GetBlocksByHashes(block.ParentHashes())
@@ -2488,7 +2540,28 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 	if err != nil || statedb == nil {
 		return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: state not found number: nr=%d (height=%d  hash=%v) err=%s", finNr, block.Height(), block.Hash().Hex(), err)
 	}
-	recommitBlocks = sortedBlocks[1:]
+	baseRecommitBlocks := sortedBlocks[1:]
+
+	//check that all parents are in state
+	stateParents := stateBlock.ParentHashes()
+	for _, rb := range baseRecommitBlocks {
+		phs := rb.ParentHashes()
+		difParents := phs.Difference(stateParents)
+		if len(difParents) > 0 {
+			_, _, parentRecommits, err := bc.CollectStateDataByFinalizedBlock(rb)
+			if err != nil {
+				log.Error("Error while get state by parents (forked parents)", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+				return statedb, stateBlock, recommitBlocks, err
+			}
+			for _, parentRb := range parentRecommits {
+				if difParents.Has(parentRb.Hash()) {
+					recommitBlocks = append(recommitBlocks, parentRb)
+				}
+			}
+		}
+		recommitBlocks = append(recommitBlocks, rb)
+	}
+
 	return statedb, stateBlock, recommitBlocks, nil
 }
 

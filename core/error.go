@@ -36,6 +36,9 @@ var (
 
 	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.
 	ErrInsertUncompletedDag = errors.New("insert uncompleted dag chain")
+
+	// ErrSpineStateNF is returned when spine state not found.
+	ErrSpineStateNF = errors.New("spine state not found")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
