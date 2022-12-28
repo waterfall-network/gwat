@@ -513,7 +513,25 @@ func (c *Creator) resultHandler(block *types.Block) {
 	//1. remove stale tips
 	c.chain.RemoveTips(block.ParentHashes())
 	//2. create for new blockDag
-	tmpDagChainHashes := task.tips.GetOrderedDagChainHashes()
+	tips := task.tips.Copy()
+	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
+	finDag := tips.GetFinalizingDag()
+
+	// after reorg tips can content hashes of finalized blocks
+	finHashes := common.HashArray{}
+	for _, h := range tmpDagChainHashes.Copy() {
+		block := c.eth.BlockChain().GetBlock(h)
+		finNr := block.Number()
+		if finNr != nil {
+			finHashes = append(finHashes, h)
+		}
+	}
+	if len(finHashes) > 0 {
+		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
+	}
+	if finDag.Hash == c.chain.Genesis().Hash() {
+		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
+	}
 
 	newBlockDag := &types.BlockDAG{
 		Hash:                block.Hash(),
@@ -550,11 +568,6 @@ func (c *Creator) getUnhandledReceipts() []*types.Receipt {
 func (c *Creator) makeCurrent(header *types.Header, state *state.StateDB, recommitBlocks []*types.Block) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
-
-	//state, _, recommitBlocks, stateErr := c.chain.CollectStateDataByParents(header.ParentHashes)
-	//if stateErr != nil {
-	//	return stateErr
-	//}
 
 	state.StartPrefetcher("miner")
 
@@ -732,9 +745,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 						_, loaded, _, _, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
 						expCache = exc
 						dagChainHashes = loaded
-						//if dch := graph.GetDagChainHashes(); dch != nil {
-						//	dagChainHashes = *dch
-						//}
 					}
 					_dag = &types.BlockDAG{
 						Hash:                ph,
@@ -784,38 +794,10 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		c.errWorkCh <- &err
 		return
 	}
-	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
-
-	// after reorg tips can content hashes of finalized blocks
-	finHashes := common.HashArray{}
-	for _, h := range tmpDagChainHashes.Copy() {
-		block := c.eth.BlockChain().GetBlock(h)
-		finNr := block.Number()
-		if finNr != nil {
-			finHashes = append(finHashes, h)
-		}
-	}
-	if len(finHashes) > 0 {
-		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
-	}
-
-	if finDag.Hash == c.chain.Genesis().Hash() {
-		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
-	}
-
 	log.Info("Creator: start tips", "tips", tips.Print())
 
 	//calc new block height
 	lastFinBlock := c.chain.GetLastFinalizedBlock()
-	//lastFinNr := lastFinBlock.Nr()
-	//ancestorsCount := len(tmpDagChainHashes.Uniq())
-	//newHeight := lastFinNr + uint64(ancestorsCount) + 1
-	//log.Info("Creator calculate block height", "newHeight", newHeight,
-	//	"ancestors", ancestorsCount,
-	//	"lastFinNr", lastFinNr,
-	//	"lastFinHeight", lastFinBlock.Height(),
-	//	"lFNr == lFHeight ", lastFinBlock.Height() == lastFinNr,
-	//)
 
 	// if max slot of parents is less or equal to last finalized block slot
 	// - add last finalized block to parents

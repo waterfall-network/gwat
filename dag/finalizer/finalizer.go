@@ -99,7 +99,12 @@ func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
 
 	for _, slot := range slots {
 		spine := spinesMap[slot]
-		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
+		_, _, recommitBlocks, _, err := f.eth.BlockChain().CollectStateDataByParents(spine.ParentHashes())
+		if err != nil {
+			log.Error("Block finalization failed", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex(), "err", err)
+			return err
+		}
+		var orderedChain types.Blocks = append(recommitBlocks, spine)
 
 		if len(orderedChain) == 0 {
 			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())

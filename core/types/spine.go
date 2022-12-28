@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 type BlockChain interface {
@@ -87,66 +86,4 @@ func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
 		spines[slot] = slotBlocks[0]
 	}
 	return spines, nil
-}
-
-func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
-	// collect all ancestors in dag (not finalized)
-	candidatesInChain := make(map[common.Hash]struct{})
-	dagBlocks := make(Blocks, 0)
-	spineProcessBlock(bc, spine, candidatesInChain, &dagBlocks)
-	// sort by slot
-	blocksBySlot, err := dagBlocks.GroupBySlot()
-	if err != nil {
-		//todo
-		log.Error("☠ Ordering dag chain failed", "err", err)
-	}
-	//sort by slots
-	slots := common.SorterAskU64{}
-	for sl, _ := range blocksBySlot {
-		slots = append(slots, sl)
-	}
-	sort.Sort(slots)
-
-	orderedBlocks := Blocks{}
-	for _, slot := range slots {
-		// sort slot blocks
-		slotBlocks := SpineSortBlocks(blocksBySlot[slot])
-		if len(slotBlocks) == 0 {
-			continue
-		}
-		orderedBlocks = append(orderedBlocks, slotBlocks...)
-	}
-	// todo rm
-	// check that spine is the last in chain
-	if len(orderedBlocks) > 0 {
-		if orderedBlocks[len(orderedBlocks)-1].Hash() != spine.Hash() {
-			panic("☠ Ordering of spine finalization chain is bad")
-		}
-	}
-	return orderedBlocks
-}
-
-func spineCalculateChain(bc BlockChain, block *Block, candidatesInChain map[common.Hash]struct{}) Blocks {
-	chain := make(Blocks, 0, len(block.ParentHashes()))
-	spineProcessBlock(bc, block, candidatesInChain, &chain)
-	return chain
-}
-
-func spineProcessBlock(bc BlockChain, block *Block, candidatesInChain map[common.Hash]struct{}, chain *Blocks) {
-	if _, wasProcessed := candidatesInChain[block.Hash()]; wasProcessed || block.Number() != nil {
-		return
-	}
-	parents := bc.GetBlocksByHashes(block.ParentHashes()).ToArray()
-	sortedParents := SpineSortBlocks(parents)
-
-	candidatesInChain[block.Hash()] = struct{}{}
-	for _, parent := range sortedParents {
-		if _, wasProcessed := candidatesInChain[parent.Hash()]; !wasProcessed && parent.Number() == nil {
-			if chainPart := spineCalculateChain(bc, parent, candidatesInChain); len(chainPart) != 0 {
-				*chain = append(*chain, chainPart...)
-			}
-			candidatesInChain[parent.Hash()] = struct{}{}
-		}
-	}
-	*chain = append(*chain, block)
 }
