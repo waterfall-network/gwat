@@ -520,8 +520,8 @@ func (c *Creator) resultHandler(block *types.Block) {
 	// after reorg tips can content hashes of finalized blocks
 	finHashes := common.HashArray{}
 	for _, h := range tmpDagChainHashes.Copy() {
-		block := c.eth.BlockChain().GetBlock(h)
-		finNr := block.Number()
+		blk := c.eth.BlockChain().GetBlock(h)
+		finNr := blk.Number()
 		if finNr != nil {
 			finHashes = append(finHashes, h)
 		}
