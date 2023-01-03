@@ -65,6 +65,28 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs   []*types.Log
 		gp        = new(GasPool).AddGas(block.GasLimit())
 	)
+
+	log.Info("<<<<<< StateProcessor Process >>>>>>>", "sealhash",
+		"TxHash", block.TxHash(),
+		"GasUsed", block.GasUsed(),
+		"ParentHashes", block.ParentHashes(),
+		"LFHash", block.LFHash(),
+		"Root", block.Root(),
+		"Height", block.Height(),
+		"Slot", block.Slot(),
+		"Nr", block.Nr(),
+		"ReceivedAt", block.ReceivedAt,
+		"ReceivedFrom", block.ReceivedFrom,
+		"LFNumber", block.LFNumber(),
+		"LFRoot", block.LFRoot(),
+		"ReceiptHash", block.ReceiptHash(),
+		"Size", block.Size(),
+		"Time", block.Time(),
+		"Bloom", block.Bloom(),
+		"Extra", block.Extra(),
+		"Coinbase", block.Coinbase(),
+	)
+
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
@@ -88,6 +110,27 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions())
+
+	log.Info("<<<<<< StateProcessor Process after Finalize >>>>>>>", "sealhash",
+		"TxHash", block.TxHash(),
+		"GasUsed", block.GasUsed(),
+		"ParentHashes", block.ParentHashes(),
+		"LFHash", block.LFHash(),
+		"Root", block.Root(),
+		"Height", block.Height(),
+		"Slot", block.Slot(),
+		"Nr", block.Nr(),
+		"ReceivedAt", block.ReceivedAt,
+		"ReceivedFrom", block.ReceivedFrom,
+		"LFNumber", block.LFNumber(),
+		"LFRoot", block.LFRoot(),
+		"ReceiptHash", block.ReceiptHash(),
+		"Size", block.Size(),
+		"Time", block.Time(),
+		"Bloom", block.Bloom(),
+		"Extra", block.Extra(),
+		"Coinbase", block.Coinbase(),
+	)
 
 	return receipts, allLogs, *usedGas, nil
 }

@@ -33,6 +33,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
@@ -1690,6 +1691,8 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
+		bc.MoveTxsToProcessing(types.Blocks{block})
+
 		isHead := maxFinNr == block.Nr()
 		bc.writeFinalizedBlock(block.Nr(), block, isHead)
 		if err != nil {
@@ -1699,7 +1702,11 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		//insertion of blue blocks
 		start := time.Now()
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlockRecursive(block, nil)
+		//
+		//statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlockRecursive(block, nil)
+		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByPreviousFinalizedBlock(block)
+		//statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -1812,7 +1819,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		if block.Height() > 0 && block.Nr() == 0 {
 			dagChainHashes = bc.GetTips().GetOrderedDagChainHashes()
 		}
-		bc.RemoveTips(block.ParentHashes())
+		//bc.RemoveTips(block.ParentHashes())
 		bc.AddTips(&types.BlockDAG{
 			Hash:                block.Hash(),
 			Height:              block.Height(),
@@ -1842,14 +1849,15 @@ func (bc *BlockChain) verifyLFData(block *types.Block) bool {
 		)
 		return false
 	}
-	LFBlockFinHash := LFBlock.FinalizedHash()
-	if block.LFHash() != LFBlockFinHash {
+	LFBlockRoot := LFBlock.Root()
+	if block.LFRoot() != LFBlockRoot {
 		log.Warn("Block verification: LFHash dismatch",
 			"block hash", block.Hash().Hex(),
 			"LFHash", block.LFHash(),
 			"LFNumber", block.LFNumber(),
-			"LFBlock hash", LFBlock.FinalizedHash().Hex(),
-			"LFBlock finHash", LFBlockFinHash.Hex(),
+			"LFBlock hash", LFBlock.Root().Hex(),
+			"LFRoot", block.LFRoot().Hex(),
+			"LFBlock finHash", LFBlockRoot.Hex(),
 		)
 		return false
 	}
@@ -2061,13 +2069,13 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
-		LFBlock := bc.GetBlockByNumber(block.LFNumber())
+		LFBlock := bc.GetBlockByHash(block.LFHash())
 
 		dagChainHashes := common.HashArray{}
 
 		dagChainHashes = append(dagChainHashes, LFBlock.ParentHashes()...)
 
-		bc.RemoveTips(block.ParentHashes())
+		//bc.RemoveTips(block.ParentHashes())
 		dagBlock := &types.BlockDAG{
 			Hash:                block.Hash(),
 			Height:              block.Height(),
@@ -2126,6 +2134,14 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 	stateDB.StartPrefetcher("chain")
 	activeState = stateDB
 
+	headers := block.Header()
+
+	// TODO: check
+	// Set baseFee and GasLimit
+	headers.BaseFee = misc.CalcBaseFee(bc.chainConfig, stateBlock.Header())
+	//headers.GasUsed = 21000 // TODO test
+	block.SetHeader(headers)
+
 	// Process block using the parent state as reference point
 	subStart := time.Now()
 	receipts, logs, usedGas, err := bc.processor.Process(block, stateDB, bc.vmConfig)
@@ -2135,9 +2151,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 		return err
 	}
 
-	headers := block.Header()
 	headers.GasUsed = usedGas
-	block.SetHeader(headers)
 	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
 	// TODO check whether  root is not null
@@ -2147,7 +2161,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 	//	return err
 	//}
 
-	bc.engine.Finalize(bc, headers, stateDB, block.Transactions())
+	bc.engine.Finalize(bc, headers, stateDB, block.Transactions()) // TODO check root
 
 	// Update the metrics touched during block processing
 	accountReadTimer.Update(stateDB.AccountReads)                 // Account reads are complete, we can mark them
@@ -2540,6 +2554,53 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 		return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: state not found number: nr=%d (height=%d  hash=%v) err=%s", finNr, block.Height(), block.Hash().Hex(), err)
 	}
 	recommitBlocks = sortedBlocks[1:]
+	return statedb, stateBlock, recommitBlocks, nil
+}
+
+// CollectStateDataByPreviousFinalizedBlock collects state data of current dag chain to insert new block.
+func (bc *BlockChain) CollectStateDataByPreviousFinalizedBlock(block *types.Block) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
+	finNr := block.Nr()
+	if finNr == 0 {
+		if block.Hash() != bc.genesisBlock.Hash() {
+			log.Error("Collect State Data By Finalized Block: bad block number", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
+			return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: bad block number: nr=%d (height=%d  hash=%v)", finNr, block.Height(), block.Hash().Hex())
+		}
+		stdb, err := bc.StateAt(block.Root())
+		if err == nil || stdb != nil {
+			return stdb, block, recommitBlocks, nil
+		}
+	}
+
+	parentBlocks := bc.GetBlocksByHashes(block.ParentHashes())
+	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
+	stateBlock = bc.GetBlockByNumber(block.Nr() - 1)
+
+	statedb, err = bc.StateAt(stateBlock.Root())
+	if err != nil || statedb == nil {
+		return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: state not found number: nr=%d (height=%d  hash=%v) err=%s", finNr, block.Height(), block.Hash().Hex(), err)
+	}
+	baseRecommitBlocks := sortedBlocks[1:]
+
+	//check that all parents are in state
+	stateParents := stateBlock.ParentHashes()
+	for _, rb := range baseRecommitBlocks {
+		phs := rb.ParentHashes()
+		difParents := phs.Difference(stateParents)
+		if len(difParents) > 0 {
+			_, _, parentRecommits, err := bc.CollectStateDataByFinalizedBlock(rb)
+			if err != nil {
+				log.Error("Error while get state by parents (forked parents)", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+				return statedb, stateBlock, recommitBlocks, err
+			}
+			for _, parentRb := range parentRecommits {
+				if difParents.Has(parentRb.Hash()) {
+					recommitBlocks = append(recommitBlocks, parentRb)
+				}
+			}
+		}
+		recommitBlocks = append(recommitBlocks, rb)
+	}
+
 	return statedb, stateBlock, recommitBlocks, nil
 }
 

@@ -69,13 +69,19 @@ type Header struct {
 	ParentHashes common.HashArray `json:"parentHashes"     gencodec:"required"`
 	Slot         uint64           `json:"slot"             gencodec:"required"`
 	Height       uint64           `json:"height"           gencodec:"required"`
-	LFHash       common.Hash      `json:"lfHash"           gencodec:"required"`
-	LFNumber     uint64           `json:"lfNumber"         gencodec:"required"`
 	Coinbase     common.Address   `json:"miner"            gencodec:"required"`
 	TxHash       common.Hash      `json:"transactionsRoot" gencodec:"required"`
 	GasLimit     uint64           `json:"gasLimit"         gencodec:"required"`
 	Time         uint64           `json:"timestamp"        gencodec:"required"`
 	Extra        []byte           `json:"extraData"        gencodec:"required"`
+	//Last finalized block fields (set while create)
+	LFHash        common.Hash `json:"lfHash"           gencodec:"required"`
+	LFNumber      uint64      `json:"lfNumber"         gencodec:"required"`
+	LFBaseFee     *big.Int    `json:"lfBaseFeePerGas"  gencodec:"required"`
+	LFRoot        common.Hash `json:"lfStateRoot"      gencodec:"required"`
+	LFReceiptHash common.Hash `json:"lfReceiptsRoot"   gencodec:"required"`
+	LFGasUsed     uint64      `json:"lfGasUsed"        gencodec:"required"`
+	LFBloom       Bloom       `json:"lfLogsBloom"      gencodec:"required"`
 	//State fields (set while finalize)
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee     *big.Int    `json:"baseFeePerGas" rlp:"optional"`
@@ -88,15 +94,17 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Height   *hexutil.Big
-	LFHash   common.Hash
-	LFNumber hexutil.Uint64
-	GasLimit hexutil.Uint64
-	GasUsed  hexutil.Uint64
-	Time     hexutil.Uint64
-	Extra    hexutil.Bytes
-	BaseFee  *hexutil.Big
-	Hash     common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Height    *hexutil.Big
+	LFHash    common.Hash
+	LFNumber  hexutil.Uint64
+	LFBaseFee *hexutil.Big
+	LFGasUsed hexutil.Uint64
+	GasLimit  hexutil.Uint64
+	GasUsed   hexutil.Uint64
+	Time      hexutil.Uint64
+	Extra     hexutil.Bytes
+	BaseFee   *hexutil.Big
+	Hash      common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -120,22 +128,27 @@ func (h *Header) Copy() *Header {
 	var cpy *Header = nil
 	if h != nil {
 		cpy = &Header{
-			ParentHashes: h.ParentHashes,
-			Slot:         h.Slot,
-			Height:       h.Height,
-			LFHash:       h.LFHash,
-			LFNumber:     h.LFNumber,
-			Coinbase:     h.Coinbase,
-			Root:         h.Root,
-			TxHash:       h.TxHash,
-			ReceiptHash:  h.ReceiptHash,
-			Bloom:        h.Bloom,
-			GasLimit:     h.GasLimit,
-			GasUsed:      h.GasUsed,
-			Time:         h.Time,
-			Extra:        h.Extra,
-			BaseFee:      h.BaseFee,
-			Number:       h.Number,
+			ParentHashes:  h.ParentHashes,
+			Slot:          h.Slot,
+			Height:        h.Height,
+			LFHash:        h.LFHash,
+			LFNumber:      h.LFNumber,
+			LFBaseFee:     h.LFBaseFee,
+			LFBloom:       h.LFBloom,
+			LFRoot:        h.LFRoot,
+			LFReceiptHash: h.LFReceiptHash,
+			LFGasUsed:     h.LFGasUsed,
+			Coinbase:      h.Coinbase,
+			Root:          h.Root,
+			TxHash:        h.TxHash,
+			ReceiptHash:   h.ReceiptHash,
+			Bloom:         h.Bloom,
+			GasLimit:      h.GasLimit,
+			GasUsed:       h.GasUsed,
+			Time:          h.Time,
+			Extra:         h.Extra,
+			BaseFee:       h.BaseFee,
+			Number:        h.Number,
 		}
 	}
 	return cpy
@@ -248,6 +261,27 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher Tr
 	return b
 }
 
+// NewStatelessBlock creates a new block. The input data is copied,
+// changes to header and to the field values will not affect the
+// block.
+//
+// The values of TxHash, UncleHash and Bloom in header
+// are ignored and set to values derived from the given txs and uncles.
+func NewStatelessBlock(header *Header, txs []*Transaction, hasher TrieHasher) *Block {
+	b := &Block{header: CopyHeader(header)}
+
+	// TODO: panic if len(txs) != len(receipts)
+	if len(txs) == 0 {
+		b.header.TxHash = EmptyRootHash
+	} else {
+		b.header.TxHash = DeriveSha(Transactions(txs), hasher)
+		b.transactions = make(Transactions, len(txs))
+		copy(b.transactions, txs)
+	}
+
+	return b
+}
+
 // NewBlockWithHeader creates a block with the given header data. The
 // header data is copied, changes to header and to the field values
 // will not affect the block.
@@ -329,6 +363,7 @@ func (b *Block) Number() *uint64                { return b.header.Number }
 func (b *Block) Nr() uint64                     { return b.header.Nr() }
 func (b *Block) SetNumber(finNr *uint64)        { b.header.Number = finNr }
 func (b *Block) FinalizedHash() common.Hash     { return b.header.FinalizedHash() }
+func (b *Block) LFRoot() common.Hash            { return b.header.LFRoot }
 
 func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {
@@ -338,6 +373,29 @@ func (b *Block) BaseFee() *big.Int {
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
+func (b *Block) BaseHeader() *Header {
+	var cpy *Header = nil
+	if b.header != nil {
+		cpy = &Header{
+			ParentHashes:  b.header.ParentHashes,
+			Slot:          b.header.Slot,
+			Height:        b.header.Height,
+			LFHash:        b.header.LFHash,
+			LFNumber:      b.header.LFNumber,
+			LFBaseFee:     b.header.LFBaseFee,
+			LFBloom:       b.header.LFBloom,
+			LFRoot:        b.header.LFRoot,
+			LFReceiptHash: b.header.LFReceiptHash,
+			LFGasUsed:     b.header.LFGasUsed,
+			Coinbase:      b.header.Coinbase,
+			TxHash:        b.header.TxHash,
+			GasLimit:      b.header.GasLimit,
+			Time:          b.header.Time,
+			Extra:         b.header.Extra,
+		}
+	}
+	return cpy
+}
 
 func (b *Block) SetHeader(header *Header) {
 	b.header = header

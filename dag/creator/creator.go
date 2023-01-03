@@ -788,19 +788,20 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	// Base fields for hash calculation during block creation.
 	// Hash value is a block identifier.
 	header := &types.Header{
-		ParentHashes: tipsBlocks.Hashes().Sort(),
-		Slot:         slotInfo.Slot,
-		Height:       newHeight,
-		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
-		Extra:        c.extra,
-		Time:         uint64(timestamp),
-		LFHash:       lastFinBlock.FinalizedHash(),
-		LFNumber:     lastFinBlock.Nr(),
+		ParentHashes:  tipsBlocks.Hashes().Sort(),
+		Slot:          slotInfo.Slot,
+		Height:        newHeight,
+		GasLimit:      core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
+		Extra:         c.extra,
+		Time:          uint64(timestamp),
+		LFHash:        lastFinBlock.Hash(),
+		LFNumber:      lastFinBlock.Nr(),
+		LFBaseFee:     lastFinBlock.BaseFee(),
+		LFBloom:       lastFinBlock.Bloom(),
+		LFGasUsed:     lastFinBlock.GasUsed(),
+		LFReceiptHash: lastFinBlock.ReceiptHash(),
+		LFRoot:        lastFinBlock.Root(),
 	}
-
-	// TODO: check
-	// Set baseFee and GasLimit
-	//header.BaseFee = misc.CalcBaseFee(c.chainConfig, lastFinBlock.Header())
 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if c.IsRunning() {
@@ -855,10 +856,9 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 // and commits new work if consensus engine is running.
 func (c *Creator) commit(tips types.Tips, interval func(), update bool, start time.Time) error {
 
-	block := types.NewBlock(
+	block := types.NewStatelessBlock(
 		c.current.header,
 		c.getUnhandledTxs(),
-		nil,
 		trie.NewStackTrie(nil),
 	)
 
