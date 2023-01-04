@@ -881,7 +881,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
-		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64))
+		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "hash", block.Hash().Hex())
 	}
 
 	// update finalized number cache
