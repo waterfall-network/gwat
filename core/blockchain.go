@@ -861,7 +861,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 			return err
 		}
 		if time.Since(reported) >= statsReportLimit {
-			log.Info("Exporting blocks", "exported", block.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Exporting blocks", "exported", block.Hash().Hex(), "elapsed", common.PrettyDuration(time.Since(start)))
 			reported = time.Now()
 		}
 	}
@@ -1314,7 +1314,7 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
 
-// WriteFinalizedBlock writes the block and all associated state to the database.
+// RollbackFinalization writes the block and all associated state to the database.
 func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	if !bc.chainmu.TryLock() {
 		return errInsertionInterrupted
@@ -1548,7 +1548,7 @@ func (bc *BlockChain) SyncInsertChain(chain types.Blocks) (int, error) {
 		}
 		if curNr != prevNr+1 {
 			// Chain broke ancestry, log a message (programming error) and skip insertion
-			log.Error("Non contiguous block insert", "number", block.Nr(), "hash", block.Hash(), "prevnumber", prev.Nr(), "prevhash", prev.Hash())
+			log.Error("Non contiguous block insert", "number", block.Nr(), "hash", block.Hash().Hex(), "prevnumber", prev.Nr(), "prevhash", prev.Hash())
 			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..]", i-1, prev.Nr(),
 				prev.Hash().Bytes()[:4], i, block.Nr(), block.Hash().Bytes()[:4])
 		}
@@ -1656,7 +1656,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
+		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash().Hex())
 		return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
@@ -1784,7 +1784,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 
 		switch status {
 		case CanonStatTy:
-			log.Error("Inserted new block", "hash", block.Hash(),
+			log.Error("Inserted new block", "hash", block.Hash().Hex(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -1792,7 +1792,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			bc.gcproc += proctime
 
 		case SideStatTy:
-			log.Debug("Inserted forked block", "hash", block.Hash(),
+			log.Debug("Inserted forked block", "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -1800,7 +1800,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
 			// a log, instead of trying to track down blocks imports that don't emit logs.
-			log.Warn("Inserted block with unknown status", "hash", block.Hash(),
+			log.Warn("Inserted block with unknown status", "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -1973,12 +1973,30 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	//validate height
+	_, stateBlock, _, calcHeight, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+	if stateErr != nil {
+		log.Error("Block verification: calc height err", "block hash", block.Hash().Hex())
+		return false, stateErr
+	}
+	if block.Height() != calcHeight {
+		log.Warn("Block verification: block invalid height",
+			"calcHeight", calcHeight,
+			"height", block.Height(),
+			"hash", block.Hash().Hex(),
+			"stateBlock", stateBlock,
+		)
+		return false, nil
+	}
 	return bc.verifyBlockParents(block) && bc.verifyLFData(block), nil
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 	parents := bc.GetBlocksByHashes(block.ParentHashes())
 	for ph, parent := range parents {
+		if parent.Nr() > 0 || parent.Height() == 0 {
+			continue
+		}
 		for pph, pparent := range parents {
 			if ph == pph {
 				continue
@@ -2033,12 +2051,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash())
+		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash().Hex())
 		return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
 	case err != nil:
-		log.Error("propagate err", "hash", block.Hash(), "err", err)
+		log.Error("propagate err", "hash", block.Hash().Hex(), "err", err)
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
 		return it.index, err
@@ -2090,6 +2108,150 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 
 		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
 
+		// // Merge add v0.6-fix-height-calc-validate
+
+		// //retrieve state data
+		// statedb, stateBlock, recommitBlocks, _, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+		// if stateErr != nil && stateBlock == nil {
+		// 	log.Error("Propagated block import state err", "height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
+		// 	return it.index, stateErr
+
+		// Merge add v0.6-fix-height-calc-validate
+
+		// Merge add v0.6-fix-height-calc-validate
+
+		// 		bc.RemoveTips(block.ParentHashes())
+		// 		dagBlock := &types.BlockDAG{
+		// 			Hash:                block.Hash(),
+		// 			Height:              block.Height(),
+		// 			Slot:                block.Slot(),
+		// 			LastFinalizedHash:   block.LFHash(),
+		// 			LastFinalizedHeight: block.LFNumber(),
+		// 			DagChainHashes:      dagChainHashes.Uniq(),
+		// 		}
+		// 		bc.AddTips(dagBlock)
+		// 		bc.RemoveTips(dagBlock.DagChainHashes)
+		// 		bc.WriteCurrentTips()
+
+		// 		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
+
+		// 		if stateErr != nil || statedb == nil {
+		// 			log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.Hash().Hex(), "err", stateErr)
+		// 			continue
+		// 		}
+		// 	}
+
+		// 	start := time.Now()
+		// 	// Enable prefetching to pull in trie node paths while processing transactions
+		// 	statedb.StartPrefetcher("chain")
+		// 	activeState = statedb
+
+		// 	// recommit transactions
+		// 	for _, bl := range recommitBlocks {
+		// 		statedb = bc.RecommitBlockTransactions(bl, statedb)
+		// 	}
+
+		// 	// If we have a followup block, run that against the current state to pre-cache
+		// 	// transactions and probabilistically some of the account/storage trie nodes.
+		// 	var followupInterrupt uint32
+		// 	if !bc.cacheConfig.TrieCleanNoPrefetch {
+		// 		if followup, err := it.peek(); followup != nil && err == nil {
+		// 			throwaway, _ := state.New(stateBlock.Root(), bc.stateCache, bc.snaps)
+
+		// 			go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
+		// 				bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
+
+		// 				blockPrefetchExecuteTimer.Update(time.Since(start))
+		// 				if atomic.LoadUint32(interrupt) == 1 {
+		// 					blockPrefetchInterruptMeter.Mark(1)
+		// 				}
+		// 			}(time.Now(), followup, throwaway, &followupInterrupt)
+		// 		}
+		// 	}
+		// 	// Process block using the parent state as reference point
+		// 	substart := time.Now()
+		// 	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		// 	if err != nil {
+		// 		bc.reportBlock(block, receipts, err)
+		// 		atomic.StoreUint32(&followupInterrupt, 1)
+		// 		return it.index, err
+		// 	}
+		// 	// Update the metrics touched during block processing
+		// 	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
+		// 	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
+		// 	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
+		// 	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
+		// 	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
+		// 	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
+		// 	triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
+		// 	trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
+		// 	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
+
+		// 	blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
+
+		// 	// Validate the state using the default validator
+		// 	substart = time.Now()
+		// 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
+		// 		log.Warn("Red block insertion to chain while propagate", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
+		// 		continue
+		// 	}
+		// 	proctime := time.Since(start)
+
+		// 	// Update the metrics touched during block validation
+		// 	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
+		// 	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
+
+		// 	blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
+
+		// 	// Write the block to the chain and get the status.
+		// 	substart = time.Now()
+		// 	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
+		// 	atomic.StoreUint32(&followupInterrupt, 1)
+		// 	if err != nil {
+		// 		return it.index, err
+		// 	}
+		// 	// Update the metrics touched during block commit
+		// 	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
+		// 	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
+		// 	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
+
+		// 	blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
+		// 	blockInsertTimer.UpdateSince(start)
+
+		// 	switch status {
+		// 	case CanonStatTy:
+		// 		log.Debug("Inserted new block", "hash", block.Hash().Hex(),
+		// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
+		// 			"elapsed", common.PrettyDuration(time.Since(start)),
+		// 			"root", block.Root())
+
+		// 		lastCanon = block
+
+		// 		// Only count canonical blocks for GC processing time
+		// 		bc.gcproc += proctime
+
+		// 	case SideStatTy:
+		// 		log.Debug("Inserted forked block", "hash", block.Hash().Hex(),
+		// 			"elapsed", common.PrettyDuration(time.Since(start)),
+		// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
+		// 			"root", block.Root())
+
+		// 	default:
+		// 		// This in theory is impossible, but lets be nice to our future selves and leave
+		// 		// a log, instead of trying to track down blocks imports that don't emit logs.
+		// 		log.Warn("Inserted block with unknown status", "hash", block.Hash().Hex(),
+		// 			"elapsed", common.PrettyDuration(time.Since(start)),
+		// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
+		// 			"root", block.Root())
+		// 	}
+		// 	stats.processed++
+		// 	stats.usedGas += usedGas
+
+		// 	dirty, _ := bc.stateCache.TrieDB().Size()
+		// 	stats.report(chain, it.index, dirty)
+
+		// }
+		// Merge add v0.6-fix-height-calc-validate
 	}
 
 	return it.index, err
@@ -2385,7 +2547,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		prev = chain[i-1]
 		if block.Number() != nil && prev.Number() != nil && *block.Number() != *prev.Number()+1 {
 			// Chain broke ancestry, log a message (programming error) and skip insertion
-			log.Error("Non contiguous block insert", "number", block.Nr(), "hash", block.Hash(), "prevnumber", prev.Nr(), "prevhash", prev.Hash())
+			log.Error("Non contiguous block insert", "number", block.Nr(), "hash", block.Hash().Hex(), "prevnumber", prev.Nr(), "prevhash", prev.Hash())
 			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..]", i-1, prev.Nr(),
 				prev.Hash().Bytes()[:4], i, block.Nr(), block.Hash().Bytes()[:4])
 		}
@@ -2412,8 +2574,20 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	return bc.insertChain(types.Blocks([]*types.Block{block}), false)
 }
 
+func (bc *BlockChain) calcBlockHeight(stateBlock *types.Block, recommitBlocks []*types.Block) uint64 {
+	baseHeight := stateBlock.Height()
+	recommitsLen := len(recommitBlocks)
+	height := baseHeight + uint64(recommitsLen) + 1
+	log.Info("Creator calculate block height",
+		"height", height,
+		"recommitsLen", recommitsLen,
+		"baseHeight", baseHeight,
+	)
+	return height
+}
+
 // CollectStateDataByParents collects state data of current dag chain to insert block.
-func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
+func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, calcHeight uint64, err error) {
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	parentBlocks := bc.GetBlocksByHashes(parents)
 	//check is parents exists
@@ -2425,41 +2599,88 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	}
 	if len(unl) > 0 {
 		log.Error("Error while collect state data by block (unknown blocks detected)", "parents", parents, "unknown", unl)
-		return statedb, stateBlock, recommitBlocks, ErrInsertUncompletedDag
+		return statedb, stateBlock, recommitBlocks, calcHeight, ErrInsertUncompletedDag
 	}
 
 	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
 
+	////if state is last finalized block
+	//if sortedBlocks[0].Nr() == lastFinBlock.Nr() ||
+	//	//if state is dag block
+	//	sortedBlocks[0].Slot() > lastFinBlock.Slot() && sortedBlocks[0].Nr() == 0 && sortedBlocks[0].Height() > 0 {
+	//	stateBlock = sortedBlocks[0]
+	//	statedb, err = bc.StateAt(stateBlock.Root())
+	//	if err != nil {
+	//		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
+	//	}
+	//	recommitBlocks = sortedBlocks[1:]
+	//	calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	//	return statedb, stateBlock, recommitBlocks, calcHeight, nil
+	//} else {
+	//	//if state is finalized block - search first spine in ancestors
+	//	stateBlock = sortedBlocks[0]
+	//	statedb, err = bc.StateAt(stateBlock.Root())
+	//	if err != nil {
+	//		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+	//	}
+	//	if statedb != nil {
+	//		recommitBlocks = sortedBlocks[1:]
+	//		calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	//		return statedb, stateBlock, recommitBlocks, calcHeight, nil
+	//	}
+	//}
+
+	stateBlock = sortedBlocks[0]
+	statedb, err = bc.StateAt(stateBlock.Root())
+	if err != nil {
+		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+	}
+	if statedb != nil {
+		baseRecommitBlocks := sortedBlocks[1:]
+
+		//check that all parents are in state
+		stateParents := stateBlock.ParentHashes()
+		for _, rb := range baseRecommitBlocks {
+			phs := rb.ParentHashes()
+			difParents := phs.Difference(stateParents)
+			if len(difParents) > 0 {
+				_, _, parentRecommits, _, err := bc.CollectStateDataByParents(phs)
+				if err != nil {
+					log.Error("Error while get state by parents (forked parents)", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+					return statedb, stateBlock, recommitBlocks, calcHeight, err
+				}
+				for _, parentRb := range parentRecommits {
+					if difParents.Has(parentRb.Hash()) {
+						recommitBlocks = append(recommitBlocks, parentRb)
+					}
+				}
+			}
+			recommitBlocks = append(recommitBlocks, rb)
+		}
+
+		calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+		return statedb, stateBlock, recommitBlocks, calcHeight, nil
+	}
 	//if state is last finalized block
 	if sortedBlocks[0].Nr() == lastFinBlock.Nr() ||
 		//if state is dag block
 		sortedBlocks[0].Slot() > lastFinBlock.Slot() && sortedBlocks[0].Nr() == 0 && sortedBlocks[0].Height() > 0 {
-		stateBlock = sortedBlocks[0]
-		statedb, err = bc.StateAt(stateBlock.Root())
-		if err != nil {
-			log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
-		}
-		recommitBlocks = sortedBlocks[1:]
-		return statedb, stateBlock, recommitBlocks, nil
-	} else {
-		//if state is finalized block - search first spine in ancestors
-		stateBlock = sortedBlocks[0]
-		statedb, err = bc.StateAt(stateBlock.Root())
-		if err != nil {
-			log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
-		}
-		if statedb != nil {
-			recommitBlocks = sortedBlocks[1:]
-			return statedb, stateBlock, recommitBlocks, nil
-		}
+		log.Error("Error while collect state data by block (bad spine state)", "parents", parents)
+		return statedb, stateBlock, recommitBlocks, calcHeight, ErrSpineStateNF
 	}
 
 	//if state is finalized block - search first spine in ancestors
 	lfAncestor := bc.GetBlockByHash(sortedBlocks[0].Hash())
 	var recomFinBlocks []*types.Block
-	statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlockRecursive(lfAncestor, nil)
+	//todo check
+	//statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlockRecursive(lfAncestor, nil)
+	statedb, stateBlock, recomFinBlocks, err = bc.CollectStateDataByFinalizedBlock(lfAncestor)
+	if err != nil {
+		return statedb, stateBlock, recommitBlocks, calcHeight, err
+	}
 	recommitBlocks = append(recomFinBlocks, sortedBlocks[1:]...)
-	return statedb, stateBlock, recommitBlocks, nil
+	calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	return statedb, stateBlock, recommitBlocks, calcHeight, nil
 }
 
 // CollectStateDataByFinalizedBlockRecursive collects state data of current dag chain to insert new block.
@@ -2501,7 +2722,9 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlockRecursive(block *types.Blo
 		if err != nil {
 			log.Warn("Collect State Data By Finalized Block: skip block", "nr", finNr, "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
 		}
-		if stateBlock == nil || stateBlock.Nr() > stateBlock.Nr() {
+		//todo check condition
+		// if stateBlock == nil || stateBlock.Nr() > stateBlock.Nr() {
+		if stateBlock == nil || stateBlock.Nr() > spineBlock.Nr() {
 			statedb = _stdb
 			stateBlock = _stBlock
 			for _, b := range _recomBls {
@@ -2544,6 +2767,10 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 			log.Error("Collect State Data By Finalized Block: bad block number", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
 			return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: bad block number: nr=%d (height=%d  hash=%v)", finNr, block.Height(), block.Hash().Hex())
 		}
+		stdb, err := bc.StateAt(block.Root())
+		if err == nil || stdb != nil {
+			return stdb, block, recommitBlocks, nil
+		}
 	}
 
 	parentBlocks := bc.GetBlocksByHashes(block.ParentHashes())
@@ -2553,7 +2780,28 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 	if err != nil || statedb == nil {
 		return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: state not found number: nr=%d (height=%d  hash=%v) err=%s", finNr, block.Height(), block.Hash().Hex(), err)
 	}
-	recommitBlocks = sortedBlocks[1:]
+	baseRecommitBlocks := sortedBlocks[1:]
+
+	//check that all parents are in state
+	stateParents := stateBlock.ParentHashes()
+	for _, rb := range baseRecommitBlocks {
+		phs := rb.ParentHashes()
+		difParents := phs.Difference(stateParents)
+		if len(difParents) > 0 {
+			_, _, parentRecommits, err := bc.CollectStateDataByFinalizedBlock(rb)
+			if err != nil {
+				log.Error("Error while get state by parents (forked parents)", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
+				return statedb, stateBlock, recommitBlocks, err
+			}
+			for _, parentRb := range parentRecommits {
+				if difParents.Has(parentRb.Hash()) {
+					recommitBlocks = append(recommitBlocks, parentRb)
+				}
+			}
+		}
+		recommitBlocks = append(recommitBlocks, rb)
+	}
+
 	return statedb, stateBlock, recommitBlocks, nil
 }
 
@@ -2774,7 +3022,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 	// Some other error occurred, abort
 	case err != nil:
-		log.Error("insert chain err", "hash", block.Hash(), "err", err)
+		log.Error("insert chain err", "hash", block.Hash().Hex(), "err", err)
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
 		return it.index, err
@@ -2803,14 +3051,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			return it.index, ErrBannedHash
 		}
 
-		// Retrieve the parent block and it's state to execute on top
+		// Retrieve the parent block, and it's state to execute on top
 		start := time.Now()
 
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+		statedb, stateBlock, recommitBlocks, _, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 		if stateErr != nil {
 			return it.index, stateErr
 		}
@@ -2892,7 +3140,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		switch status {
 		case CanonStatTy:
-			log.Debug("Inserted new block", "number", block.Nr(), "hash", block.Hash(),
+			log.Debug("Inserted new block", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -2903,7 +3151,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.gcproc += proctime
 
 		case SideStatTy:
-			log.Debug("Inserted forked block", "number", block.Nr(), "hash", block.Hash(),
+			log.Debug("Inserted forked block", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -2911,7 +3159,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
 			// a log, instead of trying to track down blocks imports that don't emit logs.
-			log.Warn("Inserted block with unknown status", "number", block.Nr(), "hash", block.Hash(),
+			log.Warn("Inserted block with unknown status", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -2973,7 +3221,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 			if err := bc.writeBlockWithoutState(block); err != nil {
 				return it.index, err
 			}
-			log.Debug("Injected sidechain block", "number", block.Nr(), "hash", block.Hash(),
+			log.Debug("Injected sidechain block", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -3013,7 +3261,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// all raised events and logs from notifications since we're too heavy on the
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
-			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].Hash(), "end", block.Hash())
+			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].Hash().Hex(), "end", block.Hash().Hex())
 			if _, err := bc.insertChain(blocks, false); err != nil {
 				return 0, err
 			}
@@ -3261,7 +3509,7 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		if block.Hash() == bc.genesisBlock.Hash() {
 			return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
 		}
-		log.Warn("Detect block without parents", "hash", block.Hash(), "height", block.Height(), "slot", block.Slot())
+		log.Warn("Detect block without parents", "hash", block.Hash().Hex(), "height", block.Height(), "slot", block.Slot())
 		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
 		return unloaded, loaded, finalized, graph, memo[0], err
 	}
@@ -3394,8 +3642,12 @@ func (bc *BlockChain) RemoveTips(hashes common.HashArray) {
 }
 
 // FinalizeTips update tips in accordance with finalization result
-func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
-	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
+// todo reset nr rollback
+// func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
+func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64, lastBlock types.Block) {
+	//todo reset nr rollback
+	//bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
+	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr, lastBlock)
 }
 
 // AppendToChildren append block hash as child of block

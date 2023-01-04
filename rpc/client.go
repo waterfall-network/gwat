@@ -659,8 +659,9 @@ func (c *Client) read(codec ServerCodec) {
 			c.readErr <- err
 			return
 		}
-		// requestsLimit-2 - reserving channel capacity for request and response of dag_sync
-		if len(c.readOp) < requestsLimit-2 || (!batch && msgs[0].isDagSync()) {
+		// requestsLimit-dagApiReserved - reserving channel capacity for requests and responses of dag api
+		dagApiReserved := 4 * 2 // 4 - max intersected req (dag_sync, dag_finalize, dag_getCandidates, dag_validateSpines)
+		if len(c.readOp) < requestsLimit-dagApiReserved || (!batch && msgs[0].isDagApi()) {
 			c.readOp <- readOp{msgs, batch}
 		} else {
 			log.Warn("rpc: limit of requests reached", "requestsLimit", requestsLimit-2, "count", len(c.readOp), "batch", batch, "Method", msgs[0].Method)

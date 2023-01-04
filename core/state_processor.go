@@ -66,7 +66,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp        = new(GasPool).AddGas(block.GasLimit())
 	)
 
-	log.Info("<<<<<< StateProcessor Process >>>>>>>", "sealhash",
+	log.Info("<<<<<< StateProcessor Process >>>>>>>",
 		"TxHash", block.TxHash(),
 		"GasUsed", block.GasUsed(),
 		"ParentHashes", block.ParentHashes(),
@@ -111,7 +111,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions())
 
-	log.Info("<<<<<< StateProcessor Process after Finalize >>>>>>>", "sealhash",
+	log.Info("<<<<<< StateProcessor Process after Finalize >>>>>>>",
 		"TxHash", block.TxHash(),
 		"GasUsed", block.GasUsed(),
 		"ParentHashes", block.ParentHashes(),

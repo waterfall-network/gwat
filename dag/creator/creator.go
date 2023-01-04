@@ -101,7 +101,7 @@ type Creator struct {
 	// Channels
 	newWorkCh    chan *newWorkReq
 	taskCh       chan *task
-	resultCh     chan *types.Block
+	resultCh     chan *task
 	finishWorkCh chan *types.Block
 	errWorkCh    chan *error
 	exitCh       chan struct{}
@@ -154,7 +154,7 @@ func New(config *Config, chainConfig *params.ChainConfig, engine consensus.Engin
 		chainSideCh:  make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:    make(chan *newWorkReq),
 		taskCh:       make(chan *task),
-		resultCh:     make(chan *types.Block),
+		resultCh:     make(chan *task),
 		finishWorkCh: make(chan *types.Block),
 		errWorkCh:    make(chan *error),
 		exitCh:       make(chan struct{}),
@@ -445,33 +445,33 @@ func (c *Creator) taskLoop() {
 func (c *Creator) resultLoop() {
 	for {
 		select {
-		case block := <-c.resultCh:
-			c.resultHandler(block)
-			c.finishWorkCh <- block
+		case task := <-c.resultCh:
+			c.resultHandler(task)
+			c.finishWorkCh <- task.block
 		case <-c.exitCh:
 			return
 		}
 	}
 }
 
-func (c *Creator) resultHandler(block *types.Block) {
+func (c *Creator) resultHandler(task *task) {
 	// Short circuit when receiving empty result.
-	if block == nil {
+	if task.block == nil {
 		return
 	}
 	// Short circuit when receiving duplicate result caused by resubmitting.
-	if c.chain.HasBlock(block.Hash()) {
+	if c.chain.HasBlock(task.block.Hash()) {
 		return
 	}
 	var (
-		hash = block.Hash()
+		hash = task.block.Hash()
 	)
 
 	c.pendingMu.RLock()
 	c.pendingMu.RUnlock()
 
 	//// Commit block and state to database.
-	_, err := c.chain.WriteMinedBlock(block) // TODO: delete delete receipts
+	_, err := c.chain.WriteMinedBlock(task.block) // TODO: delete delete receipts
 	if err != nil {
 		log.Error("Failed writing block to chain", "err", err)
 		return
@@ -485,12 +485,35 @@ func (c *Creator) resultHandler(block *types.Block) {
 
 	tmpDagChainHashes := c.chain.GetTips().GetOrderedDagChainHashes()
 
+	// Merge add v0.6-fix-height-calc-validate
+	tips := task.tips.Copy()
+	// tmpDagChainHashes := tips.GetOrderedDagChainHashes()
+	finDag := tips.GetFinalizingDag()
+
+	// after reorg tips can content hashes of finalized blocks
+	finHashes := common.HashArray{}
+	for _, h := range tmpDagChainHashes.Copy() {
+		blk := c.eth.BlockChain().GetBlock(h)
+		finNr := blk.Number()
+		if finNr != nil {
+			finHashes = append(finHashes, h)
+		}
+	}
+	if len(finHashes) > 0 {
+		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
+	}
+	if finDag.Hash == c.chain.Genesis().Hash() {
+		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
+	}
+
+	// Merge add v0.6-fix-height-calc-validate
+
 	newBlockDag := &types.BlockDAG{
-		Hash:                block.Hash(),
-		Height:              block.Height(),
-		Slot:                block.Slot(),
-		LastFinalizedHash:   block.LFHash(),
-		LastFinalizedHeight: block.LFNumber(),
+		Hash:                task.block.Hash(),
+		Height:              task.block.Height(),
+		Slot:                task.block.Slot(),
+		LastFinalizedHash:   task.block.LFHash(),
+		LastFinalizedHeight: task.block.LFNumber(),
 		DagChainHashes:      tmpDagChainHashes,
 	}
 	c.chain.AddTips(newBlockDag)
@@ -498,14 +521,14 @@ func (c *Creator) resultHandler(block *types.Block) {
 
 	log.Info("Creator: end tips", "tips", c.chain.GetTips().Print())
 
-	c.chain.MoveTxsToProcessing(types.Blocks{block})
+	c.chain.MoveTxsToProcessing(types.Blocks{task.block})
 
 	// Broadcast the block and announce chain insertion event
-	c.mux.Post(core.NewMinedBlockEvent{Block: block})
+	c.mux.Post(core.NewMinedBlockEvent{Block: task.block})
 
 	// Insert the block into the set of pending ones to resultLoop for confirmations
-	log.Info("🔨 created dag block", "slot", block.Slot(), "height", block.Height(),
-		"hash", hash.Hex(), "parents", block.ParentHashes(), "LFHash", block.LFHash(), "LFNumber", block.LFNumber())
+	log.Info("🔨 created dag block", "slot", task.block.Slot(), "height", task.block.Height(),
+		"hash", hash.Hex(), "parents", task.block.ParentHashes(), "LFHash", task.block.LFHash(), "LFNumber", task.block.LFNumber())
 }
 
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
@@ -513,9 +536,11 @@ func (c *Creator) getUnhandledTxs() []*types.Transaction {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (c *Creator) makeCurrent(header *types.Header) error {
+func (c *Creator) makeCurrent(header *types.Header, recommitBlocks []*types.Block) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
+
+	// state.StartPrefetcher("miner") // Merge v0.6-fix-height-calc-validate
 
 	env := &environment{
 		signer: types.MakeSigner(c.chainConfig),
@@ -688,9 +713,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 						_, loaded, _, _, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
 						expCache = exc
 						dagChainHashes = loaded
-						//if dch := graph.GetDagChainHashes(); dch != nil {
-						//	dagChainHashes = *dch
-						//}
 					}
 					_dag = &types.BlockDAG{
 						Hash:                ph,
@@ -740,38 +762,10 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		c.errWorkCh <- &err
 		return
 	}
-	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
-
-	// after reorg tips can content hashes of finalized blocks
-	finHashes := common.HashArray{}
-	for _, h := range tmpDagChainHashes.Copy() {
-		block := c.eth.BlockChain().GetBlock(h)
-		finNr := block.Number()
-		if finNr != nil {
-			finHashes = append(finHashes, h)
-		}
-	}
-	if len(finHashes) > 0 {
-		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
-	}
-
-	if finDag.Hash == c.chain.Genesis().Hash() {
-		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
-	}
-
 	log.Info("Creator: start tips", "tips", tips.Print())
 
 	//calc new block height
 	lastFinBlock := c.chain.GetLastFinalizedBlock()
-	lastFinNr := lastFinBlock.Nr()
-	ancestorsCount := len(tmpDagChainHashes.Uniq())
-	newHeight := lastFinNr + uint64(ancestorsCount) + 1
-	log.Info("Creator calculate block height", "newHeight", newHeight,
-		"ancestors", ancestorsCount,
-		"lastFinNr", lastFinNr,
-		"lastFinHeight", lastFinBlock.Height(),
-		"lFNr == lFHeight ", lastFinBlock.Height() == lastFinNr,
-	)
 
 	// if max slot of parents is less or equal to last finalized block slot
 	// - add last finalized block to parents
@@ -784,6 +778,37 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	if maxParentSlot <= lastFinBlock.Slot() {
 		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
 	}
+
+	/// MERGE ADD
+
+	parentHashes := tipsBlocks.Hashes().Sort()
+
+	//calc new block height
+	_, stateBlock, recommitBlocks, newHeight, _ := c.chain.CollectStateDataByParents(parentHashes)
+	// if stateErr != nil {
+	// 	log.Error("Failed to make block creation context", "err", stateErr)
+	// 	c.errWorkCh <- &stateErr
+	// 	return
+	// }
+
+	log.Info("Creator calculate block height", "newHeight", newHeight,
+		"recommitsCount", len(recommitBlocks),
+		"baseHeight", stateBlock.Height(),
+		"baseHash", stateBlock.Hash(),
+	)
+
+	// header := &types.Header{
+	// 	ParentHashes: parentHashes,
+	// 	Slot:         slotInfo.Slot,
+	// 	Height:       newHeight,
+	// 	GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
+	// 	Extra:        c.extra,
+	// 	Time:         uint64(timestamp),
+	// 	LFHash:       lastFinBlock.FinalizedHash(),
+	// 	LFNumber:     lastFinBlock.Nr(),
+	// }
+
+	/// MERGE ADD
 
 	// Base fields for hash calculation during block creation.
 	// Hash value is a block identifier.
@@ -822,7 +847,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	// Could potentially happen if starting to mine in an odd state.
-	err := c.makeCurrent(header)
+	err := c.makeCurrent(header, recommitBlocks)
 	if err != nil {
 		log.Error("Failed to make block creation context", "err", err)
 		c.errWorkCh <- &err
@@ -862,13 +887,19 @@ func (c *Creator) commit(tips types.Tips, interval func(), update bool, start ti
 		trie.NewStackTrie(nil),
 	)
 
+	task := &task{
+		block:     block,
+		tips:      &tips,
+		createdAt: time.Now(),
+	}
+
 	if c.IsRunning() {
 		if interval != nil {
 			interval()
 		}
 		select {
 
-		case c.resultCh <- block:
+		case c.resultCh <- task:
 			log.Info("Commit new block creation work", "sealhash", c.engine.SealHash(block.Header()),
 				"txs", c.current.tcount,
 				"gas", block.GasUsed(), "fees", c.current.cumutativeGas,
