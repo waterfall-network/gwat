@@ -1702,10 +1702,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		//insertion of blue blocks
 		start := time.Now()
 		//retrieve state data
-		//
-		//statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByFinalizedBlockRecursive(block, nil)
 		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByPreviousFinalizedBlock(block)
-		//statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 
 		if stateErr != nil {
 			return it.index, stateErr
