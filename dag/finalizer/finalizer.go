@@ -57,7 +57,7 @@ func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux) *Fina
 }
 
 // Finalize start finalization procedure
-func (f *Finalizer) Finalize(spines *common.HashArray, isHeadSync bool) error {
+func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, isHeadSync bool) error {
 
 	if f.isSyncing() && !isHeadSync {
 		return ErrSyncing

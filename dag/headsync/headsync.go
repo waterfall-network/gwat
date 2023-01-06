@@ -185,16 +185,18 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 	}
 	sort.Sort(slots)
 	// apply data
+	baseSpine := hs.eth.BlockChain().GetLastFinalizedHeader().Hash()
 	for _, slot := range slots {
 		d := dataBySlots[slot]
 		// save creators
 		hs.eth.BlockChain().WriteCreators(d.Slot, d.Creators)
 		// finalize spines
-		err := hs.finalizer.Finalize(&d.Finalizing, true)
+		err := hs.finalizer.Finalize(&d.Finalizing, &baseSpine, true)
 		if err != nil {
 			log.Warn("☠ Head synchronising failed", "err", err)
 			return false, err
 		}
+		baseSpine = d.Finalizing[len(d.Finalizing)-1]
 	}
 	return true, nil
 }
