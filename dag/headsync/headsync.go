@@ -25,7 +25,6 @@ type Backend interface {
 
 const HeadSyncTimeoutSec = 120
 
-// Headsync creates blocks and searches for proof-of-work values.
 type Headsync struct {
 	chainConfig  *params.ChainConfig
 	mux          *event.TypeMux
