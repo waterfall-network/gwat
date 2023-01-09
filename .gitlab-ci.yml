@@ -27,7 +27,7 @@ build branch:
       when: on_success
   script: *job_build
   artifacts:
-    name: "$CI_PROJECT_NAMESPACE-$CI_COMMIT_REF_NAME"
+    name: "$CI_PROJECT_NAME-$CI_COMMIT_REF_NAME"
     paths:
       - dist/gwat-bootnode
       - dist/gwat
@@ -41,7 +41,7 @@ build latest:
       when: on_success
   script: *job_build
   artifacts:
-    name: "$CI_PROJECT_NAMESPACE-latest"
+    name: "$CI_PROJECT_NAME-latest"
     paths:
       - dist/gwat-bootnode
       - dist/gwat
@@ -55,7 +55,7 @@ release tag:
       when: on_success
   script: *job_build
   artifacts:
-    name: "$CI_PROJECT_NAMESPACE-$CI_BUILD_TAG"
+    name: "$CI_PROJECT_NAME-$CI_BUILD_TAG"
     paths:
       - dist/gwat-bootnode
       - dist/gwat
