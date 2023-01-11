@@ -74,6 +74,8 @@ type HeaderChain struct {
 
 	rand   *mrand.Rand
 	engine consensus.Engine
+
+	procRollback int32
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
@@ -116,6 +118,15 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	headHeaderGauge.Update(int64(heihgt))
 	return hc, nil
 }
+
+//todo
+//func (hc *HeaderChain) StartHeadRollback() {
+//	atomic.StoreInt32(&bc.procRollback, 1)
+//}
+//
+//func (hc *HeaderChain) EndHeadRollback() {
+//	atomic.StoreInt32(&bc.procRollback, 0)
+//}
 
 // GetBlockFinalizedNumber retrieves the block number belonging to the given hash
 // from the cache or database

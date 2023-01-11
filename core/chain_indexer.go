@@ -225,6 +225,7 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 				errc <- nil
 				return
 			}
+			// todo check rollback steate finalization
 			if c.syncProvider.HeadSynchronising() {
 				continue
 			}

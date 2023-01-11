@@ -1313,6 +1313,19 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
 
+func (bc *BlockChain) StartHeadRollback() {
+	atomic.StoreInt32(&bc.procRollback, 1)
+}
+
+func (bc *BlockChain) EndHeadRollback() {
+	atomic.StoreInt32(&bc.procRollback, 0)
+}
+
+// insertStopped returns true after StopInsert has been called.
+func (bc *BlockChain) IsHeadRollback() bool {
+	return atomic.LoadInt32(&bc.procRollback) == 1
+}
+
 // RollbackFinalization writes the block and all associated state to the database.
 func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	if !bc.chainmu.TryLock() {
@@ -3460,6 +3473,7 @@ func (bc *BlockChain) DagSynchronising() bool {
 
 // HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
 func (bc *BlockChain) HeadSynchronising() bool {
+
 	if bc.syncProvider == nil {
 		return false
 	}

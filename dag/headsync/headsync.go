@@ -189,6 +189,10 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 		d := dataBySlots[slot]
 		// save creators
 		hs.eth.BlockChain().WriteCreators(d.Slot, d.Creators)
+		if len(d.Finalizing) == 0 {
+			log.Info("⌛ Head synchronising is skipped (received spines empty)", "slot", slot)
+			continue
+		}
 		// finalize spines
 		err := hs.finalizer.Finalize(&d.Finalizing, &baseSpine, true)
 		if err != nil {
