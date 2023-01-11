@@ -199,7 +199,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	defer d.bc.DagMu.Unlock()
 
 	if data.BaseSpine != nil {
-		log.Info("Handle Finalize: start", "baseSpine", *data.BaseSpine, "spines", data.Spines, "\u2692", params.BuildId)
+		log.Info("Handle Finalize: start", "baseSpine", (*data.BaseSpine).Hex(), "spines", data.Spines, "\u2692", params.BuildId)
 	} else {
 		log.Info("Handle Finalize: start", "baseSpine", nil, "spines", data.Spines, "\u2692", params.BuildId)
 	}
@@ -214,19 +214,20 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		} else {
 			d.bc.WriteLastCoordinatedHash(data.Spines[len(data.Spines)-1])
 		}
-		lfHeader := d.bc.GetLastFinalizedHeader()
-		if lfHeader.Height != lfHeader.Nr() {
-			err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
-			if res.Error == nil {
-				res.Error = &err
-			} else {
-				mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
-				res.Error = &mrg
-			}
-		}
-		lfHash := lfHeader.Hash()
-		res.LFSpine = &lfHash
 	}
+	lfHeader := d.bc.GetLastFinalizedHeader()
+	if lfHeader.Height != lfHeader.Nr() {
+		err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
+		if res.Error == nil {
+			res.Error = &err
+		} else {
+			mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
+			res.Error = &mrg
+		}
+	}
+	lfHash := lfHeader.Hash()
+	res.LFSpine = &lfHash
+
 	log.Info("Handle Finalize: response", "result", res)
 	return res
 }

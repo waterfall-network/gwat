@@ -1313,17 +1313,19 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
 
-func (bc *BlockChain) StartHeadRollback() {
-	atomic.StoreInt32(&bc.procRollback, 1)
+// SetRollbackActive set flag of rollback proc is running.
+func (bc *BlockChain) SetRollbackActive() {
+	bc.hc.SetRollbackActive()
 }
 
-func (bc *BlockChain) EndHeadRollback() {
-	atomic.StoreInt32(&bc.procRollback, 0)
+// ResetRollbackActive reset flag of rollback proc running.
+func (bc *BlockChain) ResetRollbackActive() {
+	bc.hc.ResetRollbackActive()
 }
 
-// insertStopped returns true after StopInsert has been called.
-func (bc *BlockChain) IsHeadRollback() bool {
-	return atomic.LoadInt32(&bc.procRollback) == 1
+// IsRollbackActive returns true if rollback proc is running.
+func (bc *BlockChain) IsRollbackActive() bool {
+	return bc.hc.IsRollbackActive()
 }
 
 // RollbackFinalization writes the block and all associated state to the database.
@@ -3368,8 +3370,8 @@ func (bc *BlockChain) RemoveTips(hashes common.HashArray) {
 }
 
 // FinalizeTips update tips in accordance with finalization result
-//todo reset nr rollback
-//func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
+// todo reset nr rollback
+// func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
 func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64, lastBlock types.Block) {
 	//todo reset nr rollback
 	//bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
