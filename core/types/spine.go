@@ -1,7 +1,6 @@
 package types
 
 import (
-	"math/big"
 	"sort"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -12,20 +11,58 @@ type BlockChain interface {
 	GetBlockByHash(hash common.Hash) *Block
 	GetBlocksByHashes(hashes common.HashArray) BlockMap
 	GetLastFinalizedBlock() *Block
+	GetBlockFinalizedNumber(hash common.Hash) *uint64
 }
 
 // SpineSortBlocks sorts hashes by order of finalization
 func SpineSortBlocks(blocks []*Block) []*Block {
-	sort.Slice(blocks, func(i, j int) bool {
-		ibn := new(big.Int).SetBytes(blocks[i].Hash().Bytes())
-		jbn := new(big.Int).SetBytes(blocks[j].Hash().Bytes())
-		return (blocks[i].Slot() > blocks[j].Slot()) ||
-			(blocks[i].Height() > blocks[j].Height()) ||
-			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) > len(blocks[j].ParentHashes())) ||
-			(blocks[i].Height() == blocks[j].Height() && len(blocks[i].ParentHashes()) == len(blocks[j].ParentHashes()) &&
-				ibn.Cmp(jbn) < 0)
-	})
-	return blocks
+	heightPlenMap := map[uint64]map[uint64]map[common.Hash]*Block{}
+	for _, bl := range blocks {
+		h := bl.Height()
+		plen := uint64(len(bl.ParentHashes()))
+		hash := bl.Hash()
+		if heightPlenMap[h] == nil {
+			heightPlenMap[h] = map[uint64]map[common.Hash]*Block{}
+		}
+		if heightPlenMap[h][plen] == nil {
+			heightPlenMap[h][plen] = map[common.Hash]*Block{}
+		}
+		heightPlenMap[h][plen][hash] = bl
+	}
+
+	//sort by height
+	heightKeys := make(common.SorterDeskU64, 0, len(heightPlenMap))
+	for k := range heightPlenMap {
+		heightKeys = append(heightKeys, k)
+	}
+	sort.Sort(heightKeys)
+
+	sortedBlocks := []*Block{}
+	for _, hk := range heightKeys {
+		plenMap := heightPlenMap[hk]
+		// sort by number of parents
+		plenKeys := make(common.SorterDeskU64, 0, len(plenMap))
+		for plk, _ := range plenMap {
+			plenKeys = append(plenKeys, plk)
+		}
+		sort.Sort(plenKeys)
+
+		for _, k := range plenKeys {
+			hashMap := plenMap[k]
+			// sort by hash
+			hashKeys := make(common.HashArray, 0, len(hashMap))
+			for h, _ := range hashMap {
+				hashKeys = append(hashKeys, h)
+			}
+			hashKeys = hashKeys.Sort()
+			//add to sorted blocks
+			for _, hash := range hashKeys {
+				sortedBlocks = append(sortedBlocks, hashMap[hash])
+			}
+		}
+	}
+
+	return sortedBlocks
 }
 
 func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
@@ -61,7 +98,6 @@ func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
 	// sort by slot
 	blocksBySlot, err := dagBlocks.GroupBySlot()
 	if err != nil {
-		//todo
 		log.Error("☠ Ordering dag chain failed", "err", err)
 	}
 	//sort by slots
@@ -105,7 +141,8 @@ func spineProcessBlock(bc BlockChain, block *Block, candidatesInChain map[common
 
 	candidatesInChain[block.Hash()] = struct{}{}
 	for _, parent := range sortedParents {
-		if _, wasProcessed := candidatesInChain[parent.Hash()]; !wasProcessed && parent.Number() == nil {
+		nr := bc.GetBlockFinalizedNumber(parent.Hash())
+		if _, wasProcessed := candidatesInChain[parent.Hash()]; !wasProcessed && nr == nil {
 			if chainPart := spineCalculateChain(bc, parent, candidatesInChain); len(chainPart) != 0 {
 				*chain = append(*chain, chainPart...)
 			}
