@@ -119,14 +119,20 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	return hc, nil
 }
 
-//todo
-//func (hc *HeaderChain) StartHeadRollback() {
-//	atomic.StoreInt32(&bc.procRollback, 1)
-//}
-//
-//func (hc *HeaderChain) EndHeadRollback() {
-//	atomic.StoreInt32(&bc.procRollback, 0)
-//}
+// SetRollbackActive set flag of rollback proc is running.
+func (hc *HeaderChain) SetRollbackActive() {
+	atomic.StoreInt32(&hc.procRollback, 1)
+}
+
+// ResetRollbackActive reset flag of rollback proc running.
+func (hc *HeaderChain) ResetRollbackActive() {
+	atomic.StoreInt32(&hc.procRollback, 0)
+}
+
+// IsRollbackActive returns true if rollback proc is running.
+func (hc *HeaderChain) IsRollbackActive() bool {
+	return atomic.LoadInt32(&hc.procRollback) == 1
+}
 
 // GetBlockFinalizedNumber retrieves the block number belonging to the given hash
 // from the cache or database
@@ -603,8 +609,8 @@ func (hc *HeaderChain) RemoveTips(hashes common.HashArray, skipLock ...bool) {
 }
 
 // FinalizeTips update tips in accordance with finalization result
-//todo reset nr rollback
-//func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
+// todo reset nr rollback
+// func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
 func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64, lastBlock types.Block) {
 	hc.tipsMu.Lock()
 	defer hc.tipsMu.Unlock()

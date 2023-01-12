@@ -59,6 +59,9 @@ type ChainIndexerChain interface {
 
 	// SubscribeChainHeadEvent subscribes to new head header notifications.
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+
+	// IsRollbackActive returns true if rollback proc of chain head is running.
+	IsRollbackActive() bool
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
@@ -94,7 +97,8 @@ type ChainIndexer struct {
 
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
 
-	syncProvider types.SyncProvider
+	//syncProvider types.SyncProvider
+	syncProvider ChainIndexerChain
 
 	log  log.Logger
 	lock sync.Mutex
@@ -225,8 +229,8 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 				errc <- nil
 				return
 			}
-			// todo check rollback steate finalization
-			if c.syncProvider.HeadSynchronising() {
+			// check any proc to reorg chain
+			if c.syncProvider.HeadSynchronising() || c.syncProvider.IsRollbackActive() {
 				continue
 			}
 			header := ev.Block.Header()

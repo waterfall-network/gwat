@@ -358,8 +358,8 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash) error {
 		return nil
 	}
 
-	bc.StartHeadRollback()
-	defer bc.EndHeadRollback()
+	bc.SetRollbackActive()
+	defer bc.ResetRollbackActive()
 
 	//reorg finalized and dag chains in accordance with spineHash
 	lfNr := lastFinBlock.Nr()
