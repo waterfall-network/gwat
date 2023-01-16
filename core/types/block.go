@@ -237,7 +237,7 @@ type extblock struct {
 // changes to header and to the field values will not affect the
 // block.
 //
-// The values of TxHash, UncleHash, ReceiptHash and Bloom in header
+// The values of TxHash, ReceiptHash and Bloom in header
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher TrieHasher) *Block {
@@ -265,7 +265,7 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher Tr
 // changes to header and to the field values will not affect the
 // block.
 //
-// The values of TxHash, UncleHash and Bloom in header
+// The values of TxHash and Bloom in header
 // are ignored and set to values derived from the given txs and uncles.
 func NewStatelessBlock(header *Header, txs []*Transaction, hasher TrieHasher) *Block {
 	b := &Block{header: CopyHeader(header)}
