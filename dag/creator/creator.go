@@ -480,14 +480,11 @@ func (c *Creator) resultHandler(task *task) {
 	//update state of tips
 
 	//1. remove stale tips
-	//c.chain.RemoveTips(block.ParentHashes()) // TODO test not remove
+	c.chain.RemoveTips(task.block.ParentHashes())
 	//2. create for new blockDag
 
-	tmpDagChainHashes := c.chain.GetTips().GetOrderedDagChainHashes()
-
-	// Merge add v0.6-fix-height-calc-validate
 	tips := task.tips.Copy()
-	// tmpDagChainHashes := tips.GetOrderedDagChainHashes()
+	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
 	finDag := tips.GetFinalizingDag()
 
 	// after reorg tips can content hashes of finalized blocks
@@ -560,10 +557,6 @@ func (c *Creator) makeCurrent(header *types.Header, recommitBlocks []*types.Bloc
 func (c *Creator) updateSnapshot() {
 	c.snapshotMu.Lock()
 	defer c.snapshotMu.Unlock()
-
-	/// SLOT INFO
-	log.Info(" >>>>>>>>>>> Tips creator 611 hashes: ", "tips", c.chain.GetTips().GetOrderedDagChainHashes())
-	/// SLOT INFO
 
 	txs := c.getUnhandledTxs()
 	//receipts := c.getUnhandledReceipts()
