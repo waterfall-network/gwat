@@ -2296,13 +2296,13 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	stateDB.StartPrefetcher("chain")
 	activeState = stateDB
 
-	headers := block.Header()
+	header := block.Header()
 
 	// TODO: check
 	// Set baseFee and GasLimit
-	headers.BaseFee = misc.CalcBaseFee(bc.chainConfig, stateBlock.Header())
+	header.BaseFee = misc.CalcBaseFee(bc.chainConfig, stateBlock.Header())
 	//headers.GasUsed = 21000 // TODO test
-	block.SetHeader(headers)
+	block.SetHeader(header)
 
 	// Process block using the parent state as reference point
 	subStart := time.Now()
@@ -2313,7 +2313,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 		return err
 	}
 
-	headers.GasUsed = usedGas
+	header.GasUsed = usedGas
 	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
 	// TODO check whether  root is not null
@@ -2323,7 +2323,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	//	return err
 	//}
 
-	bc.engine.Finalize(bc, headers, stateDB, block.Transactions()) // TODO check root
+	bc.engine.Finalize(bc, header, stateDB, block.Transactions()) // TODO check root
 
 	// Update the metrics touched during block processing
 	accountReadTimer.Update(stateDB.AccountReads)                 // Account reads are complete, we can mark them
