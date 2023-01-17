@@ -569,14 +569,14 @@ func (c *Creator) updateSnapshot() {
 	)
 }
 
-func (c *Creator) appendTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
+func (c *Creator) appendTransaction(tx *types.Transaction, coinbase common.Address) error {
 	// TODO:
 	// estimateGas estimategaslimit
 	// DoEstimategas
 	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), false)
 	if err != nil {
 		log.Error("Failed to compute the intrinsic gas", "err", err)
-		return nil, err
+		return err
 	}
 
 	expectedGas := c.current.cumutativeGas + gas
@@ -584,8 +584,7 @@ func (c *Creator) appendTransaction(tx *types.Transaction, coinbase common.Addre
 		c.current.cumutativeGas = expectedGas
 		c.current.txs = append(c.current.txs, tx)
 	}
-
-	return nil, nil
+	return nil
 }
 
 func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address) bool {
@@ -618,33 +617,12 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(c.current.signer, tx)
 
-		logs, err := c.appendTransaction(tx, coinbase)
+		err := c.appendTransaction(tx, coinbase)
 
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Error("Gas limit exceeded for current block while create", "sender", from, "hash", tx.Hash().Hex())
-			txs.Pop()
-
-		case errors.Is(err, core.ErrNonceTooLow):
-			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping tx with low nonce while create", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
-			txs.Shift()
-
-		case errors.Is(err, core.ErrNonceTooHigh):
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Error("Skipping account with hight nonce while create", "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
-			txs.Pop()
-
-		case errors.Is(err, nil):
-			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
-			c.current.tcount++
-			txs.Shift()
-
-		case errors.Is(err, core.ErrTxTypeNotSupported):
-			// Pop the unsupported transaction without shifting in the next from the account
-			log.Error("Skipping unsupported tx type while create", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
 			txs.Pop()
 
 		default:
