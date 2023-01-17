@@ -729,7 +729,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	for _, th := range tips.GetHashes() {
 		block := tipsBlocks[th]
 		for _, ancestor := range tips.GetHashes() {
-			if block == nil || block.Hash() == ancestor { // TODO temp panic fix
+			if block.Hash() == ancestor {
 				continue
 			}
 			if c.chain.IsAncestorRecursive(block, ancestor) {

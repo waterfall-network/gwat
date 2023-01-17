@@ -1702,7 +1702,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		//insertion of blue blocks
 		start := time.Now()
 		//retrieve state data
-		statedb, stateBlock, recommitBlocks, stateErr := bc.CollectStateDataByPreviousFinalizedBlock(block)
+		statedb, stateBlock, stateErr := bc.CollectStateDataByBlock(block)
 
 		if stateErr != nil {
 			return it.index, stateErr
@@ -1710,11 +1710,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		// Enable prefetching to pull in trie node paths while processing transactions
 		statedb.StartPrefetcher("chain")
 		activeState = statedb
-
-		// recommit red blocks transactions
-		for _, bl := range recommitBlocks {
-			statedb = bc.RecommitBlockTransactions(bl, statedb)
-		}
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
@@ -2085,6 +2080,15 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		LFBlock := bc.GetBlockByHash(block.LFHash())
+		if LFBlock == nil {
+			log.Warn("LFBlock not found",
+				"block hash", block.Hash().Hex(),
+				"LFHash", block.LFHash(),
+				"LFNumber", block.LFNumber(),
+			)
+			// TODO: check
+			return it.index, ErrInsertUncompletedDag
+		}
 
 		dagChainHashes := common.HashArray{}
 
@@ -2254,7 +2258,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 	return it.index, err
 }
 
-func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO rename
+func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *types.Block) error {
 	var (
 		lastCanon   *types.Block
 		activeState *state.StateDB
@@ -2277,7 +2281,6 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block) error { // TODO 
 		}
 	}()
 
-	stateBlock := bc.GetLastFinalizedBlock() //bc.GetBlockByNumber(block.LFNumber())
 	if stateBlock == nil {
 		log.Error("PreFinalizingUpdateState: LFBlock = nil", "LFNumber", block.LFNumber())
 		return fmt.Errorf("PreFinalizingUpdateState: unknown LFBlock, number=%v", block.LFNumber())
@@ -2802,51 +2805,27 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 	return statedb, stateBlock, recommitBlocks, nil
 }
 
-// CollectStateDataByPreviousFinalizedBlock collects state data of current dag chain to insert new block.
-func (bc *BlockChain) CollectStateDataByPreviousFinalizedBlock(block *types.Block) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
+// CollectStateDataByBlock collects state data of current dag chain to insert new block.
+func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *state.StateDB, stateBlock *types.Block, err error) {
 	finNr := block.Nr()
 	if finNr == 0 {
 		if block.Hash() != bc.genesisBlock.Hash() {
 			log.Error("Collect State Data By Finalized Block: bad block number", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
-			return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: bad block number: nr=%d (height=%d  hash=%v)", finNr, block.Height(), block.Hash().Hex())
+			return statedb, stateBlock, fmt.Errorf("Collect State Data By Finalized Block: bad block number: nr=%d (height=%d  hash=%v)", finNr, block.Height(), block.Hash().Hex())
 		}
 		stdb, err := bc.StateAt(block.Root())
 		if err == nil || stdb != nil {
-			return stdb, block, recommitBlocks, nil
+			return stdb, block, nil
 		}
 	}
-
-	parentBlocks := bc.GetBlocksByHashes(block.ParentHashes())
-	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
 	stateBlock = bc.GetBlockByNumber(block.Nr() - 1)
 
 	statedb, err = bc.StateAt(stateBlock.Root())
 	if err != nil || statedb == nil {
-		return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: state not found number: nr=%d (height=%d  hash=%v) err=%s", finNr, block.Height(), block.Hash().Hex(), err)
-	}
-	baseRecommitBlocks := sortedBlocks[1:]
-
-	//check that all parents are in state
-	stateParents := stateBlock.ParentHashes()
-	for _, rb := range baseRecommitBlocks {
-		phs := rb.ParentHashes()
-		difParents := phs.Difference(stateParents)
-		if len(difParents) > 0 {
-			_, _, parentRecommits, err := bc.CollectStateDataByFinalizedBlock(rb)
-			if err != nil {
-				log.Error("Error while get state by parents (forked parents)", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
-				return statedb, stateBlock, recommitBlocks, err
-			}
-			for _, parentRb := range parentRecommits {
-				if difParents.Has(parentRb.Hash()) {
-					recommitBlocks = append(recommitBlocks, parentRb)
-				}
-			}
-		}
-		recommitBlocks = append(recommitBlocks, rb)
+		return statedb, stateBlock, fmt.Errorf("Collect State Data By Finalized Block: state not found number: nr=%d (height=%d  hash=%v) err=%s", finNr, block.Height(), block.Hash().Hex(), err)
 	}
 
-	return statedb, stateBlock, recommitBlocks, nil
+	return statedb, stateBlock, nil
 }
 
 // RecommitBlockTransactions recommits transactions of red blocks.
