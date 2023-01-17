@@ -1559,7 +1559,7 @@ func (bc *BlockChain) SyncInsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	return bc.syncInsertChain(chain, true)
+	return bc.syncInsertChain(chain)
 }
 
 // InsertPropagatedBlocks inserts propagated block
@@ -1616,7 +1616,7 @@ func IsAddressAssigned(address common.Address, creators []common.Address, creato
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int, error) {
+func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil
@@ -1631,12 +1631,12 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 	// Start the parallel header verifier
 	headers := make([]*types.Header, len(chain))
 	headerMap := make(types.HeaderMap, len(chain))
-	seals := make([]bool, len(chain))
+	//seals := make([]bool, len(chain))
 
 	for i, block := range chain {
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
-		seals[i] = verifySeals
+		//seals[i] = verifySeals
 		if block.Number() != nil {
 			if block.Nr() > maxFinNr {
 				maxFinNr = block.Nr()
@@ -2558,7 +2558,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	return bc.insertChain(chain, true)
+	return bc.insertChain(chain)
 }
 
 // InsertChainWithoutSealVerification works exactly the same
@@ -2571,7 +2571,7 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	return bc.insertChain(types.Blocks([]*types.Block{block}), false)
+	return bc.insertChain(types.Blocks([]*types.Block{block}))
 }
 
 func (bc *BlockChain) calcBlockHeight(stateBlock *types.Block, recommitBlocks []*types.Block) uint64 {
@@ -2952,7 +2952,7 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (ui
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
+func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return 0, nil
@@ -2974,12 +2974,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	// Start the parallel header verifier
 	headers := make([]*types.Header, len(chain))
 	headerMap := make(types.HeaderMap, len(chain))
-	seals := make([]bool, len(chain))
+	//seals := make([]bool, len(chain))
 
 	for i, block := range chain {
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
-		seals[i] = verifySeals
+		//seals[i] = verifySeals
 	}
 
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
@@ -3238,7 +3238,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].Hash().Hex(), "end", block.Hash().Hex())
-			if _, err := bc.insertChain(blocks, false); err != nil {
+			if _, err := bc.insertChain(blocks); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -3252,7 +3252,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].Nr(), "end", blocks[len(blocks)-1].Nr(), "start", blocks[0].Hash().Hex(), "end", blocks[len(blocks)-1].Hash().Hex())
-		return bc.insertChain(blocks, false)
+		return bc.insertChain(blocks)
 	}
 	return 0, nil
 }
