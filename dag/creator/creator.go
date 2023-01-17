@@ -777,12 +777,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	parentHashes := tipsBlocks.Hashes().Sort()
 
 	//calc new block height
-	_, stateBlock, recommitBlocks, newHeight, _ := c.chain.CollectStateDataByParents(parentHashes)
-	// if stateErr != nil {
-	// 	log.Error("Failed to make block creation context", "err", stateErr)
-	// 	c.errWorkCh <- &stateErr
-	// 	return
-	// }
+	_, stateBlock, recommitBlocks, newHeight, stateErr := c.chain.CollectStateDataByParents(parentHashes)
+	if stateErr != nil {
+		log.Error("Failed to make block creation context", "err", stateErr)
+		c.errWorkCh <- &stateErr
+		return
+	}
 
 	log.Info("Creator calculate block height", "newHeight", newHeight,
 		"recommitsCount", len(recommitBlocks),
