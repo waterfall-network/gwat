@@ -569,13 +569,13 @@ func (c *Creator) updateSnapshot() {
 	)
 }
 
-func (c *Creator) appendTransaction(tx *types.Transaction, coinbase common.Address) error {
+func (c *Creator) appendTransaction(tx *types.Transaction, lfNumber *uint64) error {
 	// TODO:
 	// estimateGas estimategaslimit
 	// DoEstimategas
-	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), false)
+	gas, err := c.chain.TxEstimateGas(tx, lfNumber)
 	if err != nil {
-		log.Error("Failed to compute the intrinsic gas", "err", err)
+		log.Error("Failed to estimate gas for the transaction", "err", err)
 		return err
 	}
 
@@ -587,7 +587,7 @@ func (c *Creator) appendTransaction(tx *types.Transaction, coinbase common.Addre
 	return nil
 }
 
-func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address) bool {
+func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, lfNumber *uint64) bool {
 	// Short circuit if current is nil
 	if c.current == nil {
 		return true
@@ -617,13 +617,19 @@ func (c *Creator) commitTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(c.current.signer, tx)
 
-		err := c.appendTransaction(tx, coinbase)
+		err := c.appendTransaction(tx, lfNumber)
 
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Error("Gas limit exceeded for current block while create", "sender", from, "hash", tx.Hash().Hex())
 			txs.Pop()
+
+		case errors.Is(err, nil):
+			// Everything ok, shift in the next transaction from the same account
+			log.Info("Tx added", "hash", tx.Hash().Hex(), "err", err)
+			c.current.tcount++
+			txs.Shift()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
@@ -838,7 +844,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	if len(pending) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pending, header.BaseFee)
-		if c.commitTransactions(txs, c.coinbase) {
+		if c.appendTransactions(txs, c.coinbase, &header.LFNumber) {
 			pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 			log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 			c.errWorkCh <- &ErrNoTxs
