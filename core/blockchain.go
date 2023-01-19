@@ -2285,7 +2285,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 		log.Error("PreFinalizingUpdateState: LFBlock = nil", "LFNumber", block.LFNumber())
 		return fmt.Errorf("PreFinalizingUpdateState: unknown LFBlock, number=%v", block.LFNumber())
 	}
-	stateDB, stateErr := bc.StateAt(stateBlock.Root())
+	statedb, stateErr := bc.StateAt(stateBlock.Root())
 	if stateErr != nil && stateBlock == nil {
 		log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
 		return stateErr
@@ -2293,77 +2293,63 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 
 	start := time.Now()
 	// Enable prefetching to pull in trie node paths while processing transactions
-	stateDB.StartPrefetcher("chain")
-	activeState = stateDB
+	statedb.StartPrefetcher("chain")
+	activeState = statedb
 
 	header := block.Header()
 
-	// TODO: check
 	// Set baseFee and GasLimit
 	header.BaseFee = misc.CalcBaseFee(bc.chainConfig, stateBlock.Header())
-	//headers.GasUsed = 21000 // TODO test
 	block.SetHeader(header)
 
 	// Process block using the parent state as reference point
 	subStart := time.Now()
-	receipts, logs, usedGas, err := bc.processor.Process(block, stateDB, bc.vmConfig)
-	if err != nil {
-		bc.reportBlock(block, receipts, err)
-		//atomic.StoreUint32(&followupInterrupt, 1)
-		return err
-	}
+	statedb, receipts, logs, usedGas := bc.CommitBlockTransactions(block, statedb)
 
 	header.GasUsed = usedGas
 	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
-	// TODO check whether  root is not null
-	//block, err = bc.engine.FinalizeAndAssemble(bc, headers, statedb, block.Transactions(), receipts)
-	//if err != nil {
-	//	log.Warn("Failed finalize and assemble sealing", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
-	//	return err
-	//}
-
-	bc.engine.Finalize(bc, header, stateDB, block.Transactions()) // TODO check root
+	bc.engine.Finalize(bc, header, statedb, block.Transactions())
 
 	// Update the metrics touched during block processing
-	accountReadTimer.Update(stateDB.AccountReads)                 // Account reads are complete, we can mark them
-	storageReadTimer.Update(stateDB.StorageReads)                 // Storage reads are complete, we can mark them
-	accountUpdateTimer.Update(stateDB.AccountUpdates)             // Account updates are complete, we can mark them
-	storageUpdateTimer.Update(stateDB.StorageUpdates)             // Storage updates are complete, we can mark them
-	snapshotAccountReadTimer.Update(stateDB.SnapshotAccountReads) // Account reads are complete, we can mark them
-	snapshotStorageReadTimer.Update(stateDB.SnapshotStorageReads) // Storage reads are complete, we can mark them
-	trieHash := stateDB.AccountHashes + stateDB.StorageHashes     // Save to not double count in validation
-	trieProc := stateDB.SnapshotAccountReads + stateDB.AccountReads + stateDB.AccountUpdates
-	trieProc += stateDB.SnapshotStorageReads + stateDB.StorageReads + stateDB.StorageUpdates
+	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
+	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
+	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
+	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
+	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
+	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
+	trieHash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
+	trieProc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
+	trieProc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
 
 	blockExecutionTimer.Update(time.Since(subStart) - trieProc - trieHash)
 
 	// Validate the state using the default validator
 	subStart = time.Now()
-	if err := bc.validator.ValidateState(block, stateDB, receipts, usedGas); err != nil {
+	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 		log.Warn("Red block insertion to chain while propagate", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
 		return err
 	}
 	procTime := time.Since(start)
 
 	// Update the metrics touched during block validation
-	accountHashTimer.Update(stateDB.AccountHashes) // Account hashes are complete, we can mark them
-	storageHashTimer.Update(stateDB.StorageHashes) // Storage hashes are complete, we can mark them
+	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
+	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
 
-	blockValidationTimer.Update(time.Since(subStart) - (stateDB.AccountHashes + stateDB.StorageHashes - trieHash))
+	blockValidationTimer.Update(time.Since(subStart) - (statedb.AccountHashes + statedb.StorageHashes - trieHash))
 
 	// Write the block to the chain and get the status.
 	subStart = time.Now()
-	status, err := bc.writeBlockWithState(block, receipts, logs, stateDB, ET_SKIP, "insertPropagatedBlocks")
+	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
 	if err != nil {
 		return err
 	}
 	// Update the metrics touched during block commit
-	accountCommitTimer.Update(stateDB.AccountCommits)   // Account commits are complete, we can mark them
-	storageCommitTimer.Update(stateDB.StorageCommits)   // Storage commits are complete, we can mark them
-	snapshotCommitTimer.Update(stateDB.SnapshotCommits) // Snapshot commits are complete, we can mark them
+	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
+	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
+	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
 
-	blockWriteTimer.Update(time.Since(subStart) - stateDB.AccountCommits - stateDB.StorageCommits - stateDB.SnapshotCommits)
+	blockWriteTimer.Update(time.Since(subStart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 	blockInsertTimer.UpdateSince(start)
 
 	switch status {
@@ -2898,6 +2884,79 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 	}
 
 	return statedb
+}
+
+// CommitBlockTransactions commits transactions of red blocks.
+func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state.StateDB) (*state.StateDB, []*types.Receipt, []*types.Log, uint64) {
+
+	log.Info("Commit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
+
+	gasPool := new(GasPool).AddGas(block.GasLimit())
+	signer := types.MakeSigner(bc.chainConfig)
+
+	var coalescedLogs []*types.Log
+	var receipts []*types.Receipt
+	var rlogs []*types.Log
+
+	hightNonce := false
+	lowNonce := false
+
+	gasUsed := new(uint64)
+	for i, tx := range block.Transactions() {
+		from, _ := types.Sender(signer, tx)
+		// Start executing the transaction
+		statedb.Prepare(tx.Hash(), i)
+
+		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool, gasUsed)
+		receipts = append(receipts, receipt)
+		rlogs = append(rlogs, logs...)
+		switch {
+		case errors.Is(err, ErrGasLimitReached):
+			// Pop the current out-of-gas transaction without shifting in the next from the account
+			log.Error("Gas limit exceeded for current block while recommit", "sender", from, "hash", tx.Hash().Hex())
+
+		case errors.Is(err, ErrNonceTooLow):
+			if lowNonce {
+				continue
+			}
+			lowNonce = true
+			// New head notification data race between the transaction pool and miner, shift
+			log.Error("Skipping transaction with low nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+
+		case errors.Is(err, ErrNonceTooHigh):
+			if hightNonce {
+				continue
+			}
+			hightNonce = true
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Error("Skipping account with hight nonce while commit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+
+		case errors.Is(err, nil):
+			// Everything ok, collect the logs and shift in the next transaction from the same account
+			coalescedLogs = append(coalescedLogs, logs...)
+			// create transaction lookup
+			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+
+			// TODO: check/add validation of tx type
+		case errors.Is(err, ErrTxTypeNotSupported):
+			// Pop the unsupported transaction without shifting in the next from the account
+			log.Error("Skipping unsupported transaction type while commit", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
+
+		default:
+			// Strange error, discard the transaction and get the next in line (note, the
+			// nonce-too-high clause will prevent us from executing in vain).
+			log.Error("Transaction failed, account skipped while commit", "hash", tx.Hash().Hex(), "err", err)
+		}
+	}
+
+	rawdb.WriteReceipts(bc.db, block.Hash(), receipts)
+
+	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: rlogs})
+	if len(rlogs) > 0 {
+		bc.logsFeed.Send(rlogs)
+	}
+
+	return statedb, receipts, rlogs, *gasUsed
 }
 
 // recommitBlockTransaction applies single transactions wile recommit block process.
