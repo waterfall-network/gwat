@@ -609,18 +609,10 @@ func (hc *HeaderChain) RemoveTips(hashes common.HashArray, skipLock ...bool) {
 }
 
 // FinalizeTips update tips in accordance with finalization result
-// todo reset nr rollback
-// func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
-func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64, lastBlock types.Block) {
+func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
 	hc.tipsMu.Lock()
 	defer hc.tipsMu.Unlock()
 	tips := hc.GetTips(true)
-
-	//todo reset nr log
-	if lastBlock.Nr() == 0 {
-		log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 000 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-	}
-
 	for _, t := range *tips {
 		tHeader := hc.GetHeaderByHash(t.Hash)
 		// if tip isn't finalized - update it
@@ -633,54 +625,19 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 					hc.numberCache.Remove(h)
 					hc.numberCache.Add(h, *number)
 					log.Warn("FinalizeTips: finalized detected", "nr", *number, "h", h)
-
-					//todo reset nr log
-					if lastBlock.Nr() == 0 {
-						log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 111 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-					}
-
 				} else {
 					dagChainHashes = append(dagChainHashes, h)
-
-					//todo reset nr log
-					if lastBlock.Nr() == 0 {
-						log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 222 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-					}
 				}
 			}
 			t.DagChainHashes = dagChainHashes
 			tips.Add(t)
-
-			//todo reset nr log
-			if lastBlock.Nr() == 0 {
-				log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 333 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-			}
-
 			continue
 		}
-
-		//todo reset nr log
-		if lastBlock.Nr() == 0 {
-			log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 333 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		}
-
 		// if tip isn't finalized - rm it
 		if tHeader.Nr() <= lastFinNr {
 			tips.Remove(t.Hash)
 		}
-
-		//todo reset nr log
-		if lastBlock.Nr() == 0 {
-			log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 444 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		}
-
 	}
-
-	//todo reset nr log
-	if lastBlock.Nr() == 0 {
-		log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 555 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-	}
-
 	//if tips is empty - set last fin block
 	if len(*tips) == 0 {
 		bdag := rawdb.ReadBlockDag(hc.chainDb, lastFinHash)
@@ -697,26 +654,8 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 		}
 		tips.Add(bdag)
 	}
-
-	//todo reset nr log
-	if lastBlock.Nr() == 0 {
-		log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 666 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-	}
-
 	hc.tips.Store(tips)
-
-	//todo reset nr log
-	if lastBlock.Nr() == 0 {
-		log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 777 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-	}
-
 	hc.writeCurrentTips(true)
-
-	//todo reset nr log
-	if lastBlock.Nr() == 0 {
-		log.Error("☠☠☠ RESET NR DETECTED:FinalizeTips 888 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-	}
-
 }
 
 // ReviseTips revise tips state
