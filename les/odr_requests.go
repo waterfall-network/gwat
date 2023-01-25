@@ -36,7 +36,7 @@ var (
 	errInvalidMessageType  = errors.New("invalid message type")
 	errInvalidEntryCount   = errors.New("invalid number of response entries")
 	errHeaderUnavailable   = errors.New("header unavailable")
-	errTxHashMismatch      = errors.New("transaction hash mismatch")
+	errBodyHashMismatch    = errors.New("body hash mismatch")
 	errReceiptHashMismatch = errors.New("receipt hash mismatch")
 	errDataHashMismatch    = errors.New("data hash mismatch")
 	errCHTHashMismatch     = errors.New("cht hash mismatch")
@@ -115,8 +115,8 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
-	if r.Header.TxHash != types.DeriveSha(types.Transactions(body.Transactions), trie.NewStackTrie(nil)) {
-		return errTxHashMismatch
+	if r.Header.BodyHash != types.CalcBlockBodyHash(body.Transactions, trie.NewStackTrie(nil)) {
+		return errBodyHashMismatch
 	}
 	// Validations passed, encode and store RLP
 	data, err := rlp.EncodeToBytes(body)

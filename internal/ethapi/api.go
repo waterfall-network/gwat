@@ -1297,6 +1297,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"gasUsed":          hexutil.Uint64(head.GasUsed),
 		"logsBloom":        head.Bloom,
 		"size":             hexutil.Uint64(head.Size()),
+		"bodyRoot":         head.BodyHash,
 	}
 
 	if head.BaseFee != nil {

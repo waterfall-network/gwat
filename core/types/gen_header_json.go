@@ -23,6 +23,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		LFHash       common.Hash     `json:"lfHash"           gencodec:"required"`
 		Coinbase     common.Address  `json:"miner"            gencodec:"required"`
 		TxHash       common.Hash     `json:"transactionsRoot" gencodec:"required"`
+		BodyHash     common.Hash     `json:"bodyRoot" 		  gencodec:"required"`
 		GasLimit     hexutil.Uint64  `json:"gasLimit"         gencodec:"required"`
 		Time         hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
 		Extra        hexutil.Bytes   `json:"extraData"        gencodec:"required"`
@@ -43,6 +44,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.Coinbase = h.Coinbase
 	enc.Root = h.Root
 	enc.TxHash = h.TxHash
+	enc.BodyHash = h.BodyHash
 	enc.ReceiptHash = h.ReceiptHash
 	enc.Bloom = h.Bloom
 	enc.GasLimit = hexutil.Uint64(h.GasLimit)
@@ -68,6 +70,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		LFNumber     *hexutil.Uint64 `json:"lfNumber"         gencodec:"required"`
 		Coinbase     *common.Address `json:"miner"            gencodec:"required"`
 		TxHash       *common.Hash    `json:"transactionsRoot" gencodec:"required"`
+		BodyHash     *common.Hash    `json:"bodyRoot" 		  gencodec:"required"`
 		GasLimit     *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
 		Time         *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
 		Extra        *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
@@ -114,6 +117,10 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'transactionsRoot' for Header")
 	}
 	h.TxHash = *dec.TxHash
+	if dec.BodyHash == nil {
+		return errors.New("missing required field 'bodyRoot' for Header")
+	}
+	h.BodyHash = *dec.BodyHash
 	if dec.ReceiptHash == nil {
 		return errors.New("missing required field 'receiptsRoot' for Header")
 	}

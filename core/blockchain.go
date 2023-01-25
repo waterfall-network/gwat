@@ -3475,7 +3475,6 @@ func (bc *BlockChain) DagSynchronising() bool {
 
 // HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
 func (bc *BlockChain) HeadSynchronising() bool {
-
 	if bc.syncProvider == nil {
 		return false
 	}

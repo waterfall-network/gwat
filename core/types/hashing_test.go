@@ -51,6 +51,30 @@ func TestDeriveSha(t *testing.T) {
 	}
 }
 
+func TestCalcBlockBodyHash(t *testing.T) {
+	// empty body
+	txs_0, err := genTxs(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash_0 := types.CalcBlockBodyHash(txs_0, trie.NewStackTrie(nil))
+	exp_0 := types.DeriveSha(txs_0, trie.NewStackTrie(nil))
+	if !bytes.Equal(exp_0[:], hash_0[:]) {
+		t.Fatalf("%d txs: exp %x got %x", len(txs_0), exp_0, hash_0)
+	}
+
+	// body with txs only
+	txs_1, err := genTxs(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash_1 := types.CalcBlockBodyHash(txs_1, trie.NewStackTrie(nil))
+	exp_1 := types.DeriveSha(txs_1, trie.NewStackTrie(nil))
+	if !bytes.Equal(exp_1[:], hash_1[:]) {
+		t.Fatalf("%d txs: exp %x got %x", len(txs_1), exp_1, hash_1)
+	}
+}
+
 // TestEIP2718DeriveSha tests that the input to the DeriveSha function is correct.
 func TestEIP2718DeriveSha(t *testing.T) {
 	for _, tc := range []struct {

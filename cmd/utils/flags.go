@@ -1099,7 +1099,6 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		}
 		cfg.NetRestrict = list
 	}
-
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
