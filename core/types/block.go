@@ -232,7 +232,6 @@ type extblock struct {
 func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher TrieHasher) *Block {
 	b := &Block{header: CopyHeader(header)}
 
-	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
 		b.header.TxHash = EmptyRootHash
 	} else {
@@ -247,6 +246,8 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher Tr
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
 		b.header.Bloom = CreateBloom(receipts)
 	}
+	// calc BodyHash
+	b.header.BodyHash = CalcBlockBodyHash(txs, hasher)
 	return b
 }
 
