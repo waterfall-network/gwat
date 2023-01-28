@@ -426,6 +426,7 @@ func TestAncientStorage(t *testing.T) {
 	block := types.NewBlockWithHeader(&types.Header{
 		Height:      nr,
 		Extra:       []byte("test block"),
+		BodyHash:    types.EmptyRootHash,
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,
 	})

@@ -1297,6 +1297,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"gasUsed":          hexutil.Uint64(head.GasUsed),
 		"logsBloom":        head.Bloom,
 		"size":             hexutil.Uint64(head.Size()),
+		"bodyRoot":         head.BodyHash,
 	}
 
 	if head.BaseFee != nil {
@@ -2186,7 +2187,7 @@ func (api *PublicDagAPI) Sync(ctx context.Context, data *types.ConsensusInfo) (*
 }
 
 // Finalize finalize blocks.
-func (api *PublicDagAPI) Finalize(ctx context.Context, data common.HashArray) (*types.FinalizationResult, error) {
+func (api *PublicDagAPI) Finalize(ctx context.Context, data *types.FinalizationParams) (*types.FinalizationResult, error) {
 	return api.b.Dag().HandleFinalize(data), nil
 }
 

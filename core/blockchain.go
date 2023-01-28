@@ -1313,6 +1313,21 @@ func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, rece
 	return bc.writeFinalizedBlock(finNr, block, isHead)
 }
 
+// SetRollbackActive set flag of rollback proc is running.
+func (bc *BlockChain) SetRollbackActive() {
+	bc.hc.SetRollbackActive()
+}
+
+// ResetRollbackActive reset flag of rollback proc running.
+func (bc *BlockChain) ResetRollbackActive() {
+	bc.hc.ResetRollbackActive()
+}
+
+// IsRollbackActive returns true if rollback proc is running.
+func (bc *BlockChain) IsRollbackActive() bool {
+	return bc.hc.IsRollbackActive()
+}
+
 // RollbackFinalization writes the block and all associated state to the database.
 func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	if !bc.chainmu.TryLock() {
@@ -3355,12 +3370,8 @@ func (bc *BlockChain) RemoveTips(hashes common.HashArray) {
 }
 
 // FinalizeTips update tips in accordance with finalization result
-//todo reset nr rollback
-//func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
-func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64, lastBlock types.Block) {
-	//todo reset nr rollback
-	//bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
-	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr, lastBlock)
+func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
+	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
 }
 
 // AppendToChildren append block hash as child of block

@@ -56,6 +56,44 @@ func (ci *ConsensusInfo) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+// FinalizationParams represents params of finalization request
+type FinalizationParams struct {
+	Spines    common.HashArray `json:"spines"`
+	BaseSpine *common.Hash     `json:"baseSpine"`
+}
+
+// Copy duplicates the current storage.
+func (fp *FinalizationParams) Copy() *FinalizationParams {
+	cpy := &FinalizationParams{
+		Spines: fp.Spines.Copy(),
+	}
+	if fp.BaseSpine != nil {
+		cpy.BaseSpine = &common.Hash{}
+		copy(cpy.BaseSpine[:], fp.BaseSpine[:])
+	}
+	return cpy
+}
+
+func (fp *FinalizationParams) MarshalJSON() ([]byte, error) {
+	return json.Marshal(*fp)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (fp *FinalizationParams) UnmarshalJSON(input []byte) error {
+	type Decoding FinalizationParams
+	dec := Decoding{}
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.Spines != nil {
+		fp.Spines = dec.Spines
+	}
+	if dec.BaseSpine != nil {
+		fp.BaseSpine = dec.BaseSpine
+	}
+	return nil
+}
+
 // ConsensusResult represents result of handling of consensus request
 type ConsensusResult struct {
 	Error      *string            `json:"error"`
@@ -64,7 +102,8 @@ type ConsensusResult struct {
 }
 
 type FinalizationResult struct {
-	Error *string `json:"error"`
+	Error   *string      `json:"error"`
+	LFSpine *common.Hash `json:"lf_spine"`
 }
 
 type CandidatesResult struct {

@@ -557,7 +557,7 @@ func (f *BlockFetcher) loop() {
 						announce.time = task.time
 
 						// If the block is empty (header only), short circuit into the final import queue
-						if header.TxHash == types.EmptyRootHash {
+						if header.BodyHash == types.EmptyRootHash {
 							log.Info("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Nr(), "hash", header.Hash().Hex())
 
 							block := types.NewBlockWithHeader(header)
@@ -621,17 +621,17 @@ func (f *BlockFetcher) loop() {
 				for i := 0; i < len(task.transactions); i++ {
 					// Match up a body to any possible completion request
 					var (
-						matched = false
-						txnHash common.Hash // calculated lazily and reused
+						matched  = false
+						bodyHash common.Hash // calculated lazily and reused
 					)
 					for hash, announce := range f.completing {
 						if f.queued[hash] != nil || announce.origin != task.peer {
 							continue
 						}
-						if txnHash == (common.Hash{}) {
-							txnHash = types.DeriveSha(types.Transactions(task.transactions[i]), trie.NewStackTrie(nil))
+						if bodyHash == (common.Hash{}) {
+							bodyHash = types.CalcBlockBodyHash(task.transactions[i], trie.NewStackTrie(nil))
 						}
-						if txnHash != announce.header.TxHash {
+						if bodyHash != announce.header.BodyHash {
 							continue
 						}
 						// Mark the body matched, reassemble if still unknown

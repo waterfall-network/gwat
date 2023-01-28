@@ -7,6 +7,7 @@ package dag
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -185,7 +186,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 
 // HandleFinalize handles consensus data
 // 1. blocks finalization
-func (d *Dag) HandleFinalize(spines common.HashArray) *types.FinalizationResult {
+func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
@@ -197,18 +198,36 @@ func (d *Dag) HandleFinalize(spines common.HashArray) *types.FinalizationResult 
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 
-	log.Info("Handle Finalize: start", "spines", spines, "\u2692", params.BuildId)
+	if data.BaseSpine != nil {
+		log.Info("Handle Finalize: start", "baseSpine", (*data.BaseSpine).Hex(), "spines", data.Spines, "\u2692", params.BuildId)
+	} else {
+		log.Info("Handle Finalize: start", "baseSpine", nil, "spines", data.Spines, "\u2692", params.BuildId)
+	}
 	res := &types.FinalizationResult{
 		Error: nil,
 	}
 	// finalization
-	if len(spines) > 0 {
-		if err := d.finalizer.Finalize(&spines, false); err != nil {
+	if len(data.Spines) > 0 {
+		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
 			e := err.Error()
 			res.Error = &e
+		} else {
+			d.bc.WriteLastCoordinatedHash(data.Spines[len(data.Spines)-1])
 		}
-		d.bc.WriteLastCoordinatedHash(spines[len(spines)-1])
 	}
+	lfHeader := d.bc.GetLastFinalizedHeader()
+	if lfHeader.Height != lfHeader.Nr() {
+		err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
+		if res.Error == nil {
+			res.Error = &err
+		} else {
+			mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
+			res.Error = &mrg
+		}
+	}
+	lfHash := lfHeader.Hash()
+	res.LFSpine = &lfHash
+
 	log.Info("Handle Finalize: response", "result", res)
 	return res
 }

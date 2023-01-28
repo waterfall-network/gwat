@@ -25,7 +25,6 @@ type Backend interface {
 
 const HeadSyncTimeoutSec = 120
 
-// Headsync creates blocks and searches for proof-of-work values.
 type Headsync struct {
 	chainConfig  *params.ChainConfig
 	mux          *event.TypeMux
@@ -185,16 +184,22 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 	}
 	sort.Sort(slots)
 	// apply data
+	baseSpine := hs.eth.BlockChain().GetLastFinalizedHeader().Hash()
 	for _, slot := range slots {
 		d := dataBySlots[slot]
 		// save creators
 		hs.eth.BlockChain().WriteCreators(d.Slot, d.Creators)
+		if len(d.Finalizing) == 0 {
+			log.Info("⌛ Head synchronising is skipped (received spines empty)", "slot", slot)
+			continue
+		}
 		// finalize spines
-		err := hs.finalizer.Finalize(&d.Finalizing, true)
+		err := hs.finalizer.Finalize(&d.Finalizing, &baseSpine, true)
 		if err != nil {
 			log.Warn("☠ Head synchronising failed", "err", err)
 			return false, err
 		}
+		baseSpine = d.Finalizing[len(d.Finalizing)-1]
 	}
 	return true, nil
 }
