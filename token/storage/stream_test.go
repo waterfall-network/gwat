@@ -8,6 +8,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testmodels"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
 )
 
 var (
