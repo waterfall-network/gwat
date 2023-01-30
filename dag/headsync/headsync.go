@@ -143,7 +143,7 @@ func (hs *Headsync) SetReadyState(checkpoint *types.ConsensusInfo) (bool, error)
 	}
 	bc.WriteCurrentTips()
 	// save creators
-	hs.eth.BlockChain().WriteCreators(checkpoint.Slot, checkpoint.Creators)
+	hs.eth.BlockChain().WriteCreators(checkpoint.Creators)
 	// update LastCoordinatedHash to checkpoint
 	bc.WriteLastCoordinatedHash(cpBlock.Hash())
 
@@ -185,10 +185,12 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 	sort.Sort(slots)
 	// apply data
 	baseSpine := hs.eth.BlockChain().GetLastFinalizedHeader().Hash()
+
+	creators := make([]common.Address, 0)
 	for _, slot := range slots {
 		d := dataBySlots[slot]
 		// save creators
-		hs.eth.BlockChain().WriteCreators(d.Slot, d.Creators)
+		creators = append(creators, d.Creators...)
 		if len(d.Finalizing) == 0 {
 			log.Info("⌛ Head synchronising is skipped (received spines empty)", "slot", slot)
 			continue
@@ -201,6 +203,8 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 		}
 		baseSpine = d.Finalizing[len(d.Finalizing)-1]
 	}
+
+	hs.eth.BlockChain().WriteCreators(creators)
 	return true, nil
 }
 

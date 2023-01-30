@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -25,6 +26,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
@@ -430,23 +432,6 @@ func (bc *BlockChain) GetTxBlockHash(txHash common.Hash) common.Hash {
 	return rawdb.ReadTxLookupEntry(bc.db, txHash)
 }
 
-func (bc *BlockChain) GetCreators(slot uint64) *[]common.Address {
-	if val, ok := bc.creatorsCache.Get(slot); ok {
-		creators := val.(*[]common.Address)
-		if creators != nil {
-			return creators
-		}
-		bc.creatorsCache.Remove(slot)
-	}
-	creators := rawdb.ReadCreators(bc.db, slot)
-	if creators == nil {
-		return nil
-	}
-	// Cache the found block for next time and return
-	bc.creatorsCache.Add(slot, creators)
-	return creators
-}
-
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
 func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch))
@@ -484,4 +469,40 @@ func (bc *BlockChain) SubscribeProcessing(ch chan<- *types.Transaction) event.Su
 
 func (bc *BlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription {
 	return bc.scope.Track(bc.rmTxFeed.Subscribe(ch))
+}
+
+func (bc *BlockChain) GetAllActiveCreators() []common.Address {
+	return bc.creatorsCache.GetAllCreators()
+}
+
+func (bc *BlockChain) GetSubnetCreators(subnet uint64) ([]common.Address, error) {
+	return bc.creatorsCache.GetSubnetCreators(subnet)
+}
+
+func (bc *BlockChain) GetShuffledCreatorsBySlot(slot uint64) ([]common.Address, error) {
+	slotInEpoch := slot % bc.GetSlotInfo().SlotsPerEpoch
+	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
+
+	slotCreators, err := bc.creatorsCache.GetShuffledCreatorsBySlot(epoch, slotInEpoch)
+	if err == nil {
+		return slotCreators, nil
+	}
+
+	log.Error("can`t get shuffled creators by slot", "error", err)
+
+	indexes := bc.creatorsCache.GetAllCreatorsIndexes()
+	if indexes == nil {
+		return nil, errors.New("can`t get creators from database")
+	}
+
+	err = bc.CachingShuffledCreators(epoch, indexes)
+	if err != nil {
+		return nil, errors.New("can`t cached creators")
+	}
+
+	return bc.getShuffledCreators(epoch, slotInEpoch)
+}
+
+func (bc *BlockChain) getShuffledCreators(epoch, slot uint64) ([]common.Address, error) {
+	return bc.creatorsCache.GetShuffledCreatorsBySlot(epoch, slot)
 }

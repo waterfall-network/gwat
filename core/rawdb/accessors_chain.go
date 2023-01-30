@@ -210,11 +210,11 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
-func ReadCreatorsRlp(db ethdb.Reader, slot uint64) rlp.RawValue {
+func ReadCreatorsRlp(db ethdb.Reader, key []byte) rlp.RawValue {
 	var data []byte
 
 	// Try to look up the data in leveldb.
-	data, _ = db.Get(creatorKey(slot))
+	data, _ = db.Get(key)
 	if len(data) > 0 {
 		return data
 	}
@@ -257,8 +257,8 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	return header
 }
 
-func ReadCreators(db ethdb.Reader, slot uint64) *[]common.Address {
-	data := ReadCreatorsRlp(db, slot)
+func ReadCreators(db ethdb.Reader, key []byte) *[]common.Address {
+	data := ReadCreatorsRlp(db, key)
 	if data == nil {
 		return nil
 	}
@@ -275,16 +275,20 @@ func ReadCreators(db ethdb.Reader, slot uint64) *[]common.Address {
 	return &addresses
 }
 
-func WriteCreators(db ethdb.KeyValueWriter, slot uint64, addrs []common.Address) {
-	key := creatorKey(slot)
-
+func WriteCreators(db ethdb.KeyValueWriter, addrs []common.Address) {
 	data := make([]byte, 0, len(addrs)*20)
 	for _, addr := range addrs {
 		data = append(data, addr[:]...)
 	}
 
-	if err := db.Put(key, data); err != nil {
+	if err := db.Put(CreatorsPrefix, data); err != nil {
 		log.Crit("Failed to store creators", "err", err)
+	}
+}
+
+func DeleteCreators(db ethdb.KeyValueWriter, slot uint64) {
+	if err := db.Delete(creatorKey(slot)); err != nil {
+		log.Crit("Failed to delete creators", "err", err)
 	}
 }
 
@@ -312,12 +316,6 @@ func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, finNr *uint64) {
 	deleteHeaderWithoutNumber(db, hash)
 	if finNr != nil {
 		DeleteFinalizedHashNumber(db, hash, *finNr)
-	}
-}
-
-func DeleteCreators(db ethdb.KeyValueWriter, slot uint64) {
-	if err := db.Delete(creatorKey(slot)); err != nil {
-		log.Crit("Failed to delete creators", "err", err)
 	}
 }
 
@@ -1048,4 +1046,39 @@ func DeleteChildren(db ethdb.KeyValueWriter, parent common.Hash) {
 	if err := db.Delete(key); err != nil {
 		log.Crit("Failed to delete Children", "err", err)
 	}
+}
+
+func WriteSeedHash(db ethdb.KeyValueWriter, epoch uint64, seed common.Hash) {
+	key := seedKey(epoch)
+	err := db.Put(key, seed.Bytes())
+	if err != nil {
+		log.Crit("Failed to store epoch seed", "err", err, "epoch", epoch)
+	}
+}
+
+func ReedSeedHash(db ethdb.KeyValueReader, epoch uint64) (*common.Hash, error) {
+	key := seedKey(epoch)
+	buf, err := db.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	seed := common.BytesToHash(buf)
+
+	return &seed, nil
+}
+
+func DeleteSeedHash(db ethdb.KeyValueWriter, epoch uint64) {
+	key := seedKey(epoch)
+	err := db.Delete(key)
+	if err != nil {
+		log.Crit("Failed to delete epoch seed", "err", err, "epoch", epoch)
+	}
+}
+
+func ExistSeedHash(db ethdb.KeyValueReader, epoch uint64) bool {
+	key := seedKey(epoch)
+	exist, _ := db.Has(key)
+
+	return exist
 }

@@ -34,6 +34,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/shuffle"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -82,6 +83,7 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
+	errNoEpochSeed          = errors.New("there is no seed for epoch")
 )
 
 const (
@@ -90,9 +92,7 @@ const (
 	receiptsCacheLimit  = 32
 	txLookupCacheLimit  = 1024
 	TriesInMemory       = 128
-	creatorsCacheLimit  = 64
 	invBlocksCacheLimit = 512
-
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
 	// Changelog:
@@ -117,6 +117,8 @@ const (
 	//  The following incompatible database changes were added:
 	//    * New scheme for contract code in order to separate the codes and trie nodes
 	BlockChainVersion uint64 = 8
+
+	creatorsPerSlot = 4
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -203,8 +205,9 @@ type BlockChain struct {
 	receiptsCache      *lru.Cache     // Cache for the most recent receipts per block
 	blockCache         *lru.Cache     // Cache for the most recent entire blocks
 	txLookupCache      *lru.Cache     // Cache for the most recent transaction lookup data.
-	creatorsCache      *lru.Cache     // Cache for the assigned creators
 	invalidBlocksCache *lru.Cache     // Cache for the blocks with unknown parents
+
+	creatorsCache *types.CreatorsCache
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -233,7 +236,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
-	creatorsCache, _ := lru.New(creatorsCacheLimit)
 	invBlocksCache, _ := lru.New(invBlocksCacheLimit)
 
 	bc := &BlockChain{
@@ -253,7 +255,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		receiptsCache:      receiptsCache,
 		blockCache:         blockCache,
 		txLookupCache:      txLookupCache,
-		creatorsCache:      creatorsCache,
+		creatorsCache:      types.NewCreatorsCache(),
 		invalidBlocksCache: invBlocksCache,
 		engine:             engine,
 		vmConfig:           vmConfig,
@@ -1513,8 +1515,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
-func (bc *BlockChain) WriteCreators(slot uint64, creators []common.Address) {
-	rawdb.WriteCreators(bc.db, slot, creators)
+func (bc *BlockChain) WriteCreators(creators []common.Address) {
+	rawdb.WriteCreators(bc.db, creators)
 }
 
 func (bc *BlockChain) WriteLastCoordinatedHash(hash common.Hash) {
@@ -1878,13 +1880,17 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	if true {
 		return true
 	}
-	creators := bc.GetCreators(block.Slot())
+	creators, err := bc.GetShuffledCreatorsBySlot(block.Slot())
+	if err != nil {
+		log.Error(err.Error())
+		return false
+	}
 	//if no record - skip (actual fo dag sync)
 	if creators == nil {
-		return true
+		return false
 	}
 	blockCreator := block.Header().Coinbase
-	contains, index := common.Contains(*creators, blockCreator)
+	contains, index := common.Contains(creators, blockCreator)
 	if !contains {
 		log.Warn("Block verification: creator assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators)
 		return false
@@ -1896,7 +1902,7 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 			addrMap[from] = true
 		}
 		for txFrom := range addrMap {
-			if !IsAddressAssigned(txFrom, *creators, int64(index)) {
+			if !IsAddressAssigned(txFrom, creators, int64(index)) {
 				log.Warn("Block verification: creator txs assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators, "txFrom", txFrom)
 				return false
 			}
@@ -3475,4 +3481,96 @@ func (bc *BlockChain) HeadSynchronising() bool {
 		return false
 	}
 	return bc.syncProvider.HeadSynchronising()
+}
+
+func (bc *BlockChain) CachingShuffledCreators(epoch uint64, indexes []int) error {
+	seed, err := bc.seed(epoch)
+	if err != nil {
+		return err
+	}
+
+	shuffledList, err := shuffle.ShuffleCreators(indexes, seed)
+	if err != nil {
+		return err
+	}
+
+	shuffledCreators := bc.creatorsCache.GetCreatorsByIndexes(shuffledList)
+
+	creatorsBySlots := bc.breakByCreatorsBySlotCount(shuffledCreators, creatorsPerSlot)
+
+	if len(creatorsBySlots) != int(bc.GetSlotInfo().SlotsPerEpoch) {
+		for len(creatorsBySlots) != int(bc.GetSlotInfo().SlotsPerEpoch) {
+			creatorsBySlots = append(creatorsBySlots, bc.breakByCreatorsBySlotCount(shuffledCreators, creatorsPerSlot)...)
+		}
+	}
+
+	bc.creatorsCache.AddShuffledCreators(epoch, creatorsBySlots)
+
+	return nil
+}
+
+func (bc *BlockChain) CachingCreatorsBySubnet(subnet uint64, creators []common.Address) {
+	bc.creatorsCache.AddSubnetCreators(subnet, creators)
+}
+
+func (bc *BlockChain) CachingAllActiveCreators() {
+	creators := rawdb.ReadCreators(bc.db, rawdb.CreatorsPrefix)
+
+	if creators != nil {
+		bc.creatorsCache.AddAllCreators(creators)
+	}
+}
+
+func (bc *BlockChain) WriteSeedHash(block *types.Block) {
+	// check that block epoch is higher than second epoch
+	// because for the first and second epoch use genesis hash for shuffling
+	if block.Slot()%bc.GetSlotInfo().SlotsPerEpoch == 0 && block.Slot() >= bc.GetSlotInfo().SlotsPerEpoch*2 {
+		if !bc.SeedExist(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
+			rawdb.WriteSeedHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
+		}
+	}
+}
+
+func (bc *BlockChain) ReedSeedHash(epoch uint64) (*common.Hash, error) {
+	return rawdb.ReedSeedHash(bc.db, epoch)
+}
+
+func (bc *BlockChain) DeleteSeedHash(epoch uint64) {
+	rawdb.DeleteSeedHash(bc.db, epoch)
+}
+
+func (bc *BlockChain) SeedExist(epoch uint64) bool {
+	return rawdb.ExistSeedHash(bc.db, epoch)
+}
+
+// seed make Seed for shuffling represents in [32] byte
+// Seed = hash of the first finalized block in the epoch finalized two epoch ago + epoch number represents in [32] byte
+func (bc *BlockChain) seed(epoch uint64) ([32]byte, error) {
+	epochBytes := shuffle.Bytes32(epoch)
+	epochSeed, err := bc.ReedSeedHash(epoch)
+	if err != nil && epochSeed == nil {
+		// for the first and second epoch use genesis hash
+		if epoch >= 2 {
+			return common.Hash{}, errNoEpochSeed
+		} else {
+			*epochSeed = bc.Genesis().Hash()
+		}
+	}
+
+	seed32 := common.BytesToHash(append(epochSeed.Bytes(), epochBytes...))
+
+	return seed32, nil
+}
+
+func (bc *BlockChain) breakByCreatorsBySlotCount(creators []common.Address, creatorsPerSlot int) [][]common.Address {
+	chunks := make([][]common.Address, 0)
+	for i := 0; i < len(creators); i += creatorsPerSlot {
+		end := i + creatorsPerSlot
+		chunks = append(chunks, creators[i:end])
+		if len(chunks) == int(bc.GetSlotInfo().SlotsPerEpoch) {
+			return chunks
+		}
+	}
+
+	return chunks
 }

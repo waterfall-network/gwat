@@ -103,7 +103,6 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	log.Info("Handle Consensus: start", "data", data, "\u2692", params.BuildId)
 
 	var (
-		err        error
 		candidates = common.HashArray{}
 	)
 	// create block
@@ -118,9 +117,18 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	)
 
 	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
+		creators, err := d.bc.GetShuffledCreatorsBySlot(data.Slot)
+		if err != nil {
+			log.Error("no creators for slot", "slot", data.Slot, "error", err)
+
+			errStr := err.Error()
+			return &types.ConsensusResult{
+				Error: &errStr}
+		}
+
 		assigned := &creator.Assignment{
 			Slot:     data.Slot,
-			Creators: data.Creators,
+			Creators: creators,
 		}
 
 		go func() {
@@ -167,7 +175,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 		}()
 	}
 
-	d.bc.WriteCreators(data.Slot, data.Creators)
+	d.bc.WriteCreators(data.Creators)
 
 	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
 	res := &types.ConsensusResult{

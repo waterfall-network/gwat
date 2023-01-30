@@ -98,7 +98,8 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
-	CreatorsPrefix        = []byte("m")
+	CreatorsPrefix        = []byte("Active-creators")
+	SeedPrefix            = []byte("seed")
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
@@ -255,4 +256,9 @@ func blockDagKey(hash common.Hash) []byte {
 // childrenKey = childrenPrefix + hash
 func childrenKey(hash common.Hash) []byte {
 	return append(childrenPrefix, hash.Bytes()...)
+}
+
+// seedKey = SeedPrefix+epoch
+func seedKey(epoch uint64) []byte {
+	return append(SeedPrefix, Uint64ToByteSlice(epoch)...)
 }

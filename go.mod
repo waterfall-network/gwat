@@ -19,7 +19,6 @@ require (
 	github.com/deckarep/golang-set v1.8.0
 	github.com/docker/docker v1.4.2-0.20180625184442-8e610b2b55bf
 	github.com/dop251/goja v0.0.0-20211011172007-d99e4b8cbf48
-	github.com/edsrzf/mmap-go v1.0.0
 	github.com/ethereum/go-ethereum v1.10.17
 	github.com/fatih/color v1.7.0
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
@@ -44,6 +43,7 @@ require (
 	github.com/karalabe/usb v0.0.2
 	github.com/mattn/go-colorable v0.1.8
 	github.com/mattn/go-isatty v0.0.12
+	github.com/minio/sha256-simd v1.0.0
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
