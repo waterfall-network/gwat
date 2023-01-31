@@ -1067,6 +1067,11 @@ func (d *Downloader) findCoordinatedAncestor(p *peerConnection, remoteHeader *ty
 		return d.findAncestor(p, remoteHeader)
 	}
 
+	// if coordinated block is not finalized - use common ancestor
+	if coordHeader.Nr() == 0 && coordHeader.Height > 0 {
+		return d.findAncestor(p, remoteHeader)
+	}
+
 	headers, err := d.fetchDagHeaders(p, common.HashArray{coordHeader.Hash()})
 	if err != nil {
 		p.log.Error("Sync: coordinated block err", "localSlot", coordHeader.Slot, "localNr", coordHeader.Nr(), "localHash", coordHeader.Hash().Hex(), "err", err)
