@@ -106,11 +106,20 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		spine := spinesMap[slot]
 		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
 
+		log.Info("Finalization spine chain calculated", "isHeadSync", isHeadSync, "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
+
 		if len(orderedChain) == 0 {
+			if lastFinNr > spine.Nr() {
+				successSpine = spine.Hash()
+				if err := f.SetSpineState(&successSpine, lastFinNr); err != nil {
+					return err
+				}
+				lastFinNr = spine.Nr()
+				lastFinBlock = spine
+			}
 			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
 			continue
 		}
-		log.Info("Finalization spine chain calculated", "isHeadSync", isHeadSync, "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
 		if isHeadSync {
 			//validate blocks while head sync
