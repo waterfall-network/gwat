@@ -1510,7 +1510,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	oldNum := pool.chain.ReadFinalizedNumberByHash(oldHead.Hash())
 	newNum := pool.chain.ReadFinalizedNumberByHash(newHead.Hash())
 
-	if oldHead != nil && oldNum != nil && oldNum != newNum {
+	if oldHead != nil && oldNum != nil && newNum != nil && oldNum != newNum {
 		// If the reorg is too deep, avoid doing it (will happen during fast sync)
 		if depth := uint64(math.Abs(float64(*oldNum) - float64(*newNum))); depth > 64 {
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
@@ -1575,7 +1575,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		}
 	}
 	// Initialize the internal state to the current head
-	if newHead == nil {
+	if newHead == nil || newNum == nil {
 		bl := pool.chain.GetLastFinalizedBlock()
 		newHead = bl.Header() // Special case during testing
 	}
