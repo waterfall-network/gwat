@@ -77,12 +77,14 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 
 	bc := f.eth.BlockChain()
 	lastFinBlock := bc.GetLastFinalizedBlock()
-	lastFinNr := lastFinBlock.Nr()
-	successSpine := lastFinBlock.Hash()
 
-	if err := f.SetSpineState(baseSpine, lastFinNr); err != nil {
+	if err := f.SetSpineState(baseSpine, lastFinBlock.Nr()); err != nil {
 		return err
 	}
+
+	lastFinBlock = bc.GetLastFinalizedBlock()
+	lastFinNr := lastFinBlock.Nr()
+	successSpine := lastFinBlock.Hash()
 
 	//collect and check finalizing blocks
 	spinesMap := make(types.SlotSpineMap, len(*spines))
@@ -109,15 +111,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		log.Info("Finalization spine chain calculated", "isHeadSync", isHeadSync, "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
 		if len(orderedChain) == 0 {
-			if lastFinNr > spine.Nr() {
-				successSpine = spine.Hash()
-				if err := f.SetSpineState(&successSpine, lastFinNr); err != nil {
-					return err
-				}
-				lastFinNr = spine.Nr()
-				lastFinBlock = spine
-			}
-			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
+			log.Warn("⌛ Finalization skip finalized spine: (must never happened)", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
 			continue
 		}
 
