@@ -49,12 +49,13 @@ var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
-	Config    *params.ChainConfig `json:"config"`
-	Timestamp uint64              `json:"timestamp"`
-	ExtraData []byte              `json:"extraData"`
-	GasLimit  uint64              `json:"gasLimit"   gencodec:"required"`
-	Coinbase  common.Address      `json:"coinbase"`
-	Alloc     GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Config     *params.ChainConfig `json:"config"`
+	Timestamp  uint64              `json:"timestamp"`
+	ExtraData  []byte              `json:"extraData"`
+	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
+	Coinbase   common.Address      `json:"coinbase"`
+	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Validators []common.Address    `json:"validators"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -91,14 +92,16 @@ type GenesisAccount struct {
 
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
-	Nonce     math.HexOrDecimal64
-	Timestamp math.HexOrDecimal64
-	ExtraData hexutil.Bytes
-	GasLimit  math.HexOrDecimal64
-	GasUsed   math.HexOrDecimal64
-	Number    math.HexOrDecimal64
-	BaseFee   *math.HexOrDecimal256
-	Alloc     map[common.UnprefixedAddress]GenesisAccount
+	Timestamp    math.HexOrDecimal64
+	ExtraData    hexutil.Bytes
+	GasLimit     math.HexOrDecimal64
+	GasUsed      math.HexOrDecimal64
+	BaseFee      *math.HexOrDecimal256
+	Alloc        map[common.UnprefixedAddress]GenesisAccount
+	Validators   []common.Address
+	ParentHashes []common.Hash
+	Slot         math.HexOrDecimal64
+	Height       math.HexOrDecimal64
 }
 
 type genesisAccountMarshaling struct {
@@ -290,7 +293,36 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 
+	buf := make([]byte, len(g.Validators)*common.AddressLength)
+	for i, validator := range g.Validators {
+		beginning := i * common.AddressLength
+		end := beginning + common.AddressLength
+		copy(buf[beginning:end], validator[:])
+	}
+
+	g.Config.ValidatorsStateAddress = crypto.Keccak256Address(buf)
+
 	g.CreateDepositContract(statedb, head)
+
+	statedb.AddValidatorsList(g.Config.ValidatorsStateAddress, g.Validators)
+
+	for i, validator := range g.Validators {
+		v := types.Validator{
+			Address:           validator,
+			WithdrawalAddress: nil,
+			ValidatorIndex:    uint64(i),
+			ActivationEpoch:   0,
+			ExitEpoch:         math.MaxInt64,
+			Balance:           new(big.Int),
+		}
+
+		info, err := v.MarshalBinary()
+		if err != nil {
+			log.Error("can`t add validator to the state", "address", validator, "error", err)
+		}
+
+		statedb.SetValidatorInfo(validator, info)
+	}
 
 	root := statedb.IntermediateRoot(false)
 	head.Root = root

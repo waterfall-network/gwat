@@ -35,113 +35,113 @@ var (
 )
 
 func TestNewCreatorsCache(t *testing.T) {
-	creatorsCache := NewCreatorsCache()
-	if creatorsCache.allCreatorsCache == nil {
-		t.Fatal("allCreatorsCache not initialized")
+	creatorsCache := NewValidatorsCache()
+	if creatorsCache.allValidatorsCache == nil {
+		t.Fatal("allValidatorsCache not initialized")
 	}
-	if creatorsCache.subnetCreatorsCache == nil {
-		t.Fatal("subnetCreatorsCache not initialized")
+	if creatorsCache.subnetValidatorsCache == nil {
+		t.Fatal("subnetValidatorsCache not initialized")
 	}
-	if creatorsCache.shuffledCreatorsCache == nil {
-		t.Fatal("shuffledCreatorsCache not initialized")
+	if creatorsCache.shuffledValidatorsCache == nil {
+		t.Fatal("shuffledValidatorsCache not initialized")
 	}
-	if creatorsCache.shuffledSubnetCreatorsCache == nil {
-		t.Fatal("shuffledSubnetCreatorsCache not initialized")
+	if creatorsCache.shuffledSubnetValidatorsCache == nil {
+		t.Fatal("shuffledSubnetValidatorsCache not initialized")
 	}
 }
 
 func TestAllCreatorsCache(t *testing.T) {
-	c := NewCreatorsCache()
+	c := NewValidatorsCache()
 
-	c.AddAllCreators(&inputCreators)
+	c.AddAllValidators(&inputCreators)
 
-	creators := c.GetAllCreators()
+	creators := c.GetAllValidatorsByEpoch()
 	testutils.AssertEqual(t, []common.Address{addr1, addr2, addr3}, creators)
 
-	indexes := c.GetAllCreatorsIndexes()
+	indexes := c.GetValidatorsIndexes()
 	testutils.AssertEqual(t, []int{0, 1, 2}, indexes)
 
-	creatorsByIndexes := c.GetCreatorsByIndexes([]int{1, 2})
+	creatorsByIndexes := c.GetValidatorsByIndexes([]int{1, 2})
 	testutils.AssertEqual(t, []common.Address{addr2, addr3}, creatorsByIndexes)
 }
 
 func TestSubnetCreatorsCache(t *testing.T) {
-	c := NewCreatorsCache()
+	c := NewValidatorsCache()
 
-	creators, err := c.GetSubnetCreators(subnet)
+	creators, err := c.GetSubnetValidators(subnet)
 	testutils.AssertError(t, err, errNoSubnetCreators)
 	testutils.AssertNil(t, creators)
 
-	c.AddSubnetCreators(subnet, inputCreators)
-	creators, err = c.GetSubnetCreators(subnet)
+	c.AddSubnetValidators(subnet, inputCreators)
+	creators, err = c.GetSubnetValidators(subnet)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, []common.Address{addr1, addr2, addr3}, creators)
 }
 
 func TestShuffledCreatorsCache(t *testing.T) {
-	c := NewCreatorsCache()
+	c := NewValidatorsCache()
 
-	creators, err := c.GetShuffledCreatorsByEpoch(epoch)
+	creators, err := c.GetShuffledValidatorsByEpoch(epoch)
 	testutils.AssertError(t, err, errNoEpochCreators)
 	testutils.AssertNil(t, creators)
 
-	creatorsBySlot, err := c.GetShuffledCreatorsBySlot(epoch, slot)
+	creatorsBySlot, err := c.GetShuffledValidatorsBySlot(epoch, slot)
 	testutils.AssertError(t, err, errNoEpochCreators)
 	testutils.AssertNil(t, creatorsBySlot)
 
-	c.AddShuffledCreators(epoch, shuffledCreators)
+	c.AddShuffledValidators(epoch, shuffledCreators)
 
-	creatorsBySlot, err = c.GetShuffledCreatorsBySlot(epoch, 5)
+	creatorsBySlot, err = c.GetShuffledValidatorsBySlot(epoch, 5)
 	testutils.AssertError(t, err, errNoSlotCreators)
 	testutils.AssertNil(t, creatorsBySlot)
 
-	creators, err = c.GetShuffledCreatorsByEpoch(epoch)
+	creators, err = c.GetShuffledValidatorsByEpoch(epoch)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, [][]common.Address{{addr1, addr2, addr3}, {addr4, addr5, addr6}}, creators)
 
-	creatorsBySlot, err = c.GetShuffledCreatorsBySlot(epoch, slot)
+	creatorsBySlot, err = c.GetShuffledValidatorsBySlot(epoch, slot)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, []common.Address{addr1, addr2, addr3}, creatorsBySlot)
 }
 
 func TestShuffledSubnetCreators(t *testing.T) {
-	c := NewCreatorsCache()
+	c := NewValidatorsCache()
 
-	c.AddShuffledSubnetCreators(subnet, epoch, shuffledCreators)
+	c.AddShuffledSubnetValidators(subnet, epoch, shuffledCreators)
 
-	slotCreators, err := c.GetShuffledSubnetCreatorsBySlot(subnet, epoch, 5)
+	slotCreators, err := c.GetShuffledSubnetValidatorsBySlot(subnet, epoch, 5)
 	testutils.AssertError(t, err, errNoSlotCreators)
 	testutils.AssertNil(t, slotCreators)
 
-	slotCreators, err = c.GetShuffledSubnetCreatorsBySlot(subnet, 3, slot)
+	slotCreators, err = c.GetShuffledSubnetValidatorsBySlot(subnet, 3, slot)
 	testutils.AssertError(t, err, errNoEpochCreators)
 	testutils.AssertNil(t, slotCreators)
 
-	slotCreators, err = c.GetShuffledSubnetCreatorsBySlot(3, epoch, slot)
+	slotCreators, err = c.GetShuffledSubnetValidatorsBySlot(3, epoch, slot)
 	testutils.AssertError(t, err, errNoSubnetCreators)
 	testutils.AssertNil(t, slotCreators)
 
-	epochCreators, err := c.GetShuffledSubnetCreatorsByEpoch(subnet, 3)
+	epochCreators, err := c.GetShuffledSubnetValidatorsByEpoch(subnet, 3)
 	testutils.AssertError(t, err, errNoEpochCreators)
 	testutils.AssertNil(t, epochCreators)
 
-	epochCreators, err = c.GetShuffledSubnetCreatorsByEpoch(1, epoch)
+	epochCreators, err = c.GetShuffledSubnetValidatorsByEpoch(1, epoch)
 	testutils.AssertError(t, err, errNoSubnetCreators)
 	testutils.AssertNil(t, epochCreators)
 
-	subnetCreators, err := c.GetShuffledSubnetCreators(1)
+	subnetCreators, err := c.GetShuffledSubnetValidators(1)
 	testutils.AssertError(t, err, errNoSubnetCreators)
 	testutils.AssertNil(t, subnetCreators)
 
-	subnetCreators, err = c.GetShuffledSubnetCreators(subnet)
+	subnetCreators, err = c.GetShuffledSubnetValidators(subnet)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, map[uint64][][]common.Address{1: shuffledCreators}, subnetCreators)
 
-	epochCreators, err = c.GetShuffledSubnetCreatorsByEpoch(subnet, epoch)
+	epochCreators, err = c.GetShuffledSubnetValidatorsByEpoch(subnet, epoch)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, shuffledCreators, epochCreators)
 
-	slotCreators, err = c.GetShuffledSubnetCreatorsBySlot(subnet, epoch, 0)
+	slotCreators, err = c.GetShuffledSubnetValidatorsBySlot(subnet, epoch, 0)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, shuffledCreators[0], slotCreators)
 }

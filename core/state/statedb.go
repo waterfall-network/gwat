@@ -382,6 +382,38 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
+func (s *StateDB) AddValidatorsList(key common.Address, validators []common.Address) {
+	stateObject := s.GetOrNewStateObject(key)
+	if stateObject != nil {
+		stateObject.SetValidatorsList(validators)
+	}
+}
+
+func (s *StateDB) GetValidatorsList(key common.Address) []common.Address {
+	stateObject := s.GetOrNewStateObject(key)
+	if stateObject != nil {
+		return stateObject.GetValidatorsList()
+	}
+
+	return nil
+}
+
+func (s *StateDB) GetValidatorInfo(validatorAddress common.Address) types.ValidatorInfo {
+	stateObject := s.GetOrNewStateObject(validatorAddress)
+	if stateObject != nil {
+		return stateObject.ValidatorInfo()
+	}
+
+	return nil
+}
+
+func (s *StateDB) SetValidatorInfo(validatorAddress common.Address, info types.ValidatorInfo) {
+	stateObject := s.GetOrNewStateObject(validatorAddress)
+	if stateObject != nil {
+		stateObject.SetValidatorInfo(info)
+	}
+}
+
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)

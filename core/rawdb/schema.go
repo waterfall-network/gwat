@@ -98,7 +98,7 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
-	CreatorsPrefix        = []byte("Active-creators")
+	ValidatorsPrefix      = []byte("v")
 	SeedPrefix            = []byte("seed")
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
@@ -210,16 +210,16 @@ func codeKey(hash common.Hash) []byte {
 }
 
 func creatorKey(slot uint64) []byte {
-	res := make([]byte, 0, len(CreatorsPrefix))
-	res = append(res, CreatorsPrefix...)
+	res := make([]byte, 0, len(ValidatorsPrefix))
+	res = append(res, ValidatorsPrefix...)
 	res = append(res, Uint64ToByteSlice(slot)...)
 
 	return res
 }
 
 func IsCreatorKey(key []byte) (bool, []byte) {
-	if bytes.HasPrefix(key, CreatorsPrefix) && len(key) == len(CreatorsPrefix)+8 { // uint64 = 8 bytes
-		return true, key[len(CreatorsPrefix):]
+	if bytes.HasPrefix(key, ValidatorsPrefix) && len(key) == len(ValidatorsPrefix)+8 { // uint64 = 8 bytes
+		return true, key[len(ValidatorsPrefix):]
 	}
 	return false, nil
 }

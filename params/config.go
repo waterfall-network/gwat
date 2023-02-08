@@ -111,16 +111,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64, common.Address{}}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64, common.Address{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, math.MaxUint64}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, math.MaxUint64, common.Address{}}
 	TestRules       = TestChainConfig.Rules()
 )
 
@@ -185,6 +185,8 @@ type ChainConfig struct {
 
 	// Fork slots
 	ForkSlotSubNet1 uint64 `json:"forkSlotSubNet1,omitempty"`
+
+	ValidatorsStateAddress common.Address
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

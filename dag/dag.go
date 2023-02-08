@@ -117,7 +117,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	)
 
 	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
-		creators, err := d.bc.GetShuffledCreatorsBySlot(data.Slot)
+		creators, err := d.bc.GetShuffledValidatorsBySlot(data.Slot)
 		if err != nil {
 			log.Error("no creators for slot", "slot", data.Slot, "error", err)
 

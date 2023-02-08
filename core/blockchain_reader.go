@@ -471,38 +471,51 @@ func (bc *BlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) ev
 	return bc.scope.Track(bc.rmTxFeed.Subscribe(ch))
 }
 
-func (bc *BlockChain) GetAllActiveCreators() []common.Address {
-	return bc.creatorsCache.GetAllCreators()
+func (bc *BlockChain) GetAllValidatorsByEpoch(epoch uint64) []types.Validator {
+	return bc.validatorsCache.GetAllValidatorsByEpoch(epoch)
 }
 
-func (bc *BlockChain) GetSubnetCreators(subnet uint64) ([]common.Address, error) {
-	return bc.creatorsCache.GetSubnetCreators(subnet)
+func (bc *BlockChain) GetActiveValidatorsByEpoch(epoch uint64) []types.Validator {
+	validators := make([]types.Validator, 0)
+	for _, validator := range bc.validatorsCache.GetAllValidatorsByEpoch(epoch) {
+		if validator.ActivationEpoch <= epoch && validator.ExitEpoch > epoch {
+			validators = append(validators, validator)
+		}
+	}
+
+	return validators
 }
 
-func (bc *BlockChain) GetShuffledCreatorsBySlot(slot uint64) ([]common.Address, error) {
+func (bc *BlockChain) GetSubnetValidators(subnet uint64) ([]common.Address, error) {
+	return bc.validatorsCache.GetSubnetValidators(subnet)
+}
+
+func (bc *BlockChain) GetShuffledValidatorsBySlot(slot uint64) ([]common.Address, error) {
 	slotInEpoch := slot % bc.GetSlotInfo().SlotsPerEpoch
 	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
 
-	slotCreators, err := bc.creatorsCache.GetShuffledCreatorsBySlot(epoch, slotInEpoch)
+	slotCreators, err := bc.validatorsCache.GetShuffledValidatorsBySlot(epoch, slotInEpoch)
 	if err == nil {
 		return slotCreators, nil
 	}
 
 	log.Error("can`t get shuffled creators by slot", "error", err)
 
-	indexes := bc.creatorsCache.GetAllCreatorsIndexes()
+	activeValidators := bc.GetActiveValidatorsByEpoch(epoch)
+
+	indexes := bc.validatorsCache.GetValidatorsIndexes(activeValidators)
 	if indexes == nil {
 		return nil, errors.New("can`t get creators from database")
 	}
 
-	err = bc.CachingShuffledCreators(epoch, indexes)
+	err = bc.ShuffleAndCachingValidators(epoch, indexes)
 	if err != nil {
 		return nil, errors.New("can`t cached creators")
 	}
 
-	return bc.getShuffledCreators(epoch, slotInEpoch)
+	return bc.getShuffledValidators(epoch, slotInEpoch)
 }
 
-func (bc *BlockChain) getShuffledCreators(epoch, slot uint64) ([]common.Address, error) {
-	return bc.creatorsCache.GetShuffledCreatorsBySlot(epoch, slot)
+func (bc *BlockChain) getShuffledValidators(epoch, slot uint64) ([]common.Address, error) {
+	return bc.validatorsCache.GetShuffledValidatorsBySlot(epoch, slot)
 }

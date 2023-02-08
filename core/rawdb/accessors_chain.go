@@ -257,7 +257,7 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	return header
 }
 
-func ReadCreators(db ethdb.Reader, key []byte) *[]common.Address {
+func ReadValidators(db ethdb.Reader, key []byte) *[]common.Address {
 	data := ReadCreatorsRlp(db, key)
 	if data == nil {
 		return nil
@@ -281,7 +281,7 @@ func WriteCreators(db ethdb.KeyValueWriter, addrs []common.Address) {
 		data = append(data, addr[:]...)
 	}
 
-	if err := db.Put(CreatorsPrefix, data); err != nil {
+	if err := db.Put(ValidatorsPrefix, data); err != nil {
 		log.Crit("Failed to store creators", "err", err)
 	}
 }

@@ -2,6 +2,7 @@ package types
 
 import (
 	"errors"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"sort"
 	"sync"
 
@@ -14,11 +15,11 @@ var (
 	errNoEpochCreators  = errors.New("there are no creators for epoch")
 )
 
-type CreatorsCache struct {
-	allCreatorsCache            map[int]common.Address                   // index/creator address
-	subnetCreatorsCache         map[uint64][]common.Address              // subnet/creators arrey
-	shuffledCreatorsCache       map[uint64][][]common.Address            // epoch/array of creators arrays (slot is the index in it)
-	shuffledSubnetCreatorsCache map[uint64]map[uint64][][]common.Address // subnet/epoch/array of creators arrays (slot is the index in it)
+type ValidatorsCache struct {
+	allValidatorsCache            map[uint64][]Validator                   // epoch/array of validators
+	subnetValidatorsCache         map[uint64][]common.Address              // subnet/validators arrey
+	shuffledValidatorsCache       map[uint64][][]common.Address            // epoch/array of validators arrays (slot is the index in it)
+	shuffledSubnetValidatorsCache map[uint64]map[uint64][][]common.Address // subnet/epoch/array of validators arrays (slot is the index in it)
 
 	allMu            *sync.Mutex
 	subnetMu         *sync.Mutex
@@ -26,78 +27,107 @@ type CreatorsCache struct {
 	shuffledSubnetMu *sync.Mutex
 }
 
-func NewCreatorsCache() *CreatorsCache {
-	return &CreatorsCache{
-		allCreatorsCache:            make(map[int]common.Address),
-		subnetCreatorsCache:         make(map[uint64][]common.Address),
-		shuffledCreatorsCache:       make(map[uint64][][]common.Address, 0),
-		shuffledSubnetCreatorsCache: make(map[uint64]map[uint64][][]common.Address),
-		allMu:                       new(sync.Mutex),
-		subnetMu:                    new(sync.Mutex),
-		shuffledMu:                  new(sync.Mutex),
-		shuffledSubnetMu:            new(sync.Mutex),
+func NewValidatorsCache() *ValidatorsCache {
+	return &ValidatorsCache{
+		allValidatorsCache:            make(map[uint64][]Validator),
+		subnetValidatorsCache:         make(map[uint64][]common.Address),
+		shuffledValidatorsCache:       make(map[uint64][][]common.Address, 0),
+		shuffledSubnetValidatorsCache: make(map[uint64]map[uint64][][]common.Address),
+		allMu:                         new(sync.Mutex),
+		subnetMu:                      new(sync.Mutex),
+		shuffledMu:                    new(sync.Mutex),
+		shuffledSubnetMu:              new(sync.Mutex),
 	}
 }
 
-func (c *CreatorsCache) AddAllCreators(creators *[]common.Address) {
+func (c *ValidatorsCache) AddAllValidators(epoch uint64, validatorsList []Validator) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
-	for index, creator := range *creators {
-		c.allCreatorsCache[index] = creator
-	}
+	c.allValidatorsCache[epoch] = validatorsList
 }
 
-func (c *CreatorsCache) GetAllCreators() []common.Address {
+func (c *ValidatorsCache) GetAllValidatorsByEpoch(epoch uint64) []Validator {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
-	creators := make([]common.Address, len(c.allCreatorsCache), len(c.allCreatorsCache))
-	for index, creator := range c.allCreatorsCache {
-		creators[index] = creator
+	validators, ok := c.allValidatorsCache[epoch]
+	if !ok {
+		log.Error("there are no cached validators", "epoch", epoch)
+		return nil
 	}
-
-	return creators
+	return validators
 }
 
-func (c *CreatorsCache) GetAllCreatorsIndexes() []int {
+func (c *ValidatorsCache) GetActiveValidatorsByEpoch(epoch uint64) []Validator {
+	validators := make([]Validator, 0)
+	validatorsList, ok := c.allValidatorsCache[epoch]
+	if !ok {
+		log.Error("there are no cached validators", "epoch", epoch)
+		return nil
+	}
+
+	for _, validator := range validatorsList {
+		if validator.ActivationEpoch <= epoch && validator.ExitEpoch > epoch {
+			validators = append(validators, validator)
+		}
+	}
+
+	return validators
+}
+
+func (c *ValidatorsCache) GetValidatorsIndexes(validators []Validator) []uint64 {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
-	indexes := make([]int, len(c.allCreatorsCache), len(c.allCreatorsCache))
-	for index := range c.allCreatorsCache {
-		indexes[index] = index
+	indexes := make([]uint64, len(validators))
+
+	for i, validator := range validators {
+		indexes[i] = validator.ValidatorIndex
 	}
 
-	sort.Ints(indexes)
+	sort.Slice(indexes, func(i, j int) bool {
+		return indexes[i] < indexes[j]
+	})
 
 	return indexes
 }
 
-func (c *CreatorsCache) GetCreatorsByIndexes(indexes []int) []common.Address {
+func (c *ValidatorsCache) GetValidatorsByIndexes(epoch uint64, indexes []uint64) []common.Address {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
-	creators := make([]common.Address, 0)
-	for _, index := range indexes {
-		creators = append(creators, c.allCreatorsCache[index])
+	validators := make([]common.Address, len(indexes))
+
+	epochValidators, ok := c.allValidatorsCache[epoch]
+	if !ok {
+		log.Error("there are no validators", "epoch", epoch)
+		return nil
 	}
 
-	return creators
+	for i, index := range indexes {
+		for _, validator := range epochValidators {
+			if index == validator.ValidatorIndex {
+				validators[i] = validator.Address
+			}
+		}
+	}
+
+	return validators
 }
 
-func (c *CreatorsCache) AddSubnetCreators(subnet uint64, creators []common.Address) {
+func (c *ValidatorsCache) AddSubnetValidators(subnet uint64, validators []common.Address) {
 	c.subnetMu.Lock()
 	defer c.subnetMu.Unlock()
 
-	c.subnetCreatorsCache[subnet] = creators
+	c.subnetValidatorsCache[subnet] = validators
 }
 
-func (c *CreatorsCache) GetSubnetCreators(subnet uint64) ([]common.Address, error) {
+func (c *ValidatorsCache) GetSubnetValidators(subnet uint64) ([]common.Address, error) {
 	c.subnetMu.Lock()
 	defer c.subnetMu.Unlock()
 
-	subnetCreators, ok := c.subnetCreatorsCache[subnet]
+	subnetCreators, ok := c.subnetValidatorsCache[subnet]
 	if !ok {
 		return nil, errNoSubnetCreators
 	}
@@ -105,18 +135,18 @@ func (c *CreatorsCache) GetSubnetCreators(subnet uint64) ([]common.Address, erro
 	return subnetCreators, nil
 }
 
-func (c *CreatorsCache) AddShuffledCreators(epoch uint64, shuffledCreators [][]common.Address) {
+func (c *ValidatorsCache) AddShuffledValidators(epoch uint64, shuffledCreators [][]common.Address) {
 	c.shuffledMu.Lock()
 	defer c.shuffledMu.Unlock()
 
-	c.shuffledCreatorsCache[epoch] = shuffledCreators
+	c.shuffledValidatorsCache[epoch] = shuffledCreators
 }
 
-func (c *CreatorsCache) GetShuffledCreatorsByEpoch(epoch uint64) ([][]common.Address, error) {
+func (c *ValidatorsCache) GetShuffledValidatorsByEpoch(epoch uint64) ([][]common.Address, error) {
 	c.shuffledMu.Lock()
 	defer c.shuffledMu.Unlock()
 
-	epochCreators, ok := c.shuffledCreatorsCache[epoch]
+	epochCreators, ok := c.shuffledValidatorsCache[epoch]
 	if !ok {
 		return nil, errNoEpochCreators
 	}
@@ -124,8 +154,8 @@ func (c *CreatorsCache) GetShuffledCreatorsByEpoch(epoch uint64) ([][]common.Add
 	return epochCreators, nil
 }
 
-func (c *CreatorsCache) GetShuffledCreatorsBySlot(epoch, slot uint64) ([]common.Address, error) {
-	epochCreators, err := c.GetShuffledCreatorsByEpoch(epoch)
+func (c *ValidatorsCache) GetShuffledValidatorsBySlot(epoch, slot uint64) ([]common.Address, error) {
+	epochCreators, err := c.GetShuffledValidatorsByEpoch(epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -137,22 +167,22 @@ func (c *CreatorsCache) GetShuffledCreatorsBySlot(epoch, slot uint64) ([]common.
 	return epochCreators[slot], nil
 }
 
-func (c *CreatorsCache) AddShuffledSubnetCreators(subnet, epoch uint64, shuffledCreators [][]common.Address) {
+func (c *ValidatorsCache) AddShuffledSubnetValidators(subnet, epoch uint64, shuffledCreators [][]common.Address) {
 	c.shuffledSubnetMu.Lock()
 	defer c.shuffledSubnetMu.Unlock()
 
-	if _, ok := c.shuffledSubnetCreatorsCache[subnet]; !ok {
-		c.shuffledSubnetCreatorsCache[subnet] = map[uint64][][]common.Address{}
+	if _, ok := c.shuffledSubnetValidatorsCache[subnet]; !ok {
+		c.shuffledSubnetValidatorsCache[subnet] = map[uint64][][]common.Address{}
 	}
 
-	c.shuffledSubnetCreatorsCache[subnet][epoch] = shuffledCreators
+	c.shuffledSubnetValidatorsCache[subnet][epoch] = shuffledCreators
 }
 
-func (c *CreatorsCache) GetShuffledSubnetCreators(subnet uint64) (map[uint64][][]common.Address, error) {
+func (c *ValidatorsCache) GetShuffledSubnetValidators(subnet uint64) (map[uint64][][]common.Address, error) {
 	c.shuffledSubnetMu.Lock()
 	defer c.shuffledSubnetMu.Unlock()
 
-	subnetCreators, ok := c.shuffledSubnetCreatorsCache[subnet]
+	subnetCreators, ok := c.shuffledSubnetValidatorsCache[subnet]
 	if !ok {
 		return nil, errNoSubnetCreators
 	}
@@ -160,8 +190,8 @@ func (c *CreatorsCache) GetShuffledSubnetCreators(subnet uint64) (map[uint64][][
 	return subnetCreators, nil
 }
 
-func (c *CreatorsCache) GetShuffledSubnetCreatorsByEpoch(subnet, epoch uint64) ([][]common.Address, error) {
-	subnetCreators, err := c.GetShuffledSubnetCreators(subnet)
+func (c *ValidatorsCache) GetShuffledSubnetValidatorsByEpoch(subnet, epoch uint64) ([][]common.Address, error) {
+	subnetCreators, err := c.GetShuffledSubnetValidators(subnet)
 	if err != nil {
 		return nil, err
 	}
@@ -174,8 +204,8 @@ func (c *CreatorsCache) GetShuffledSubnetCreatorsByEpoch(subnet, epoch uint64) (
 	return epochCreators, nil
 }
 
-func (c *CreatorsCache) GetShuffledSubnetCreatorsBySlot(subnet, epoch, slot uint64) ([]common.Address, error) {
-	epochCreators, err := c.GetShuffledSubnetCreatorsByEpoch(subnet, epoch)
+func (c *ValidatorsCache) GetShuffledSubnetValidatorsBySlot(subnet, epoch, slot uint64) ([]common.Address, error) {
+	epochCreators, err := c.GetShuffledSubnetValidatorsByEpoch(subnet, epoch)
 	if err != nil {
 		return nil, err
 	}

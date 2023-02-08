@@ -14,8 +14,8 @@ const shuffleRoundCount = uint8(90)
 
 var maxShuffleListSize uint64 = 1 << 40
 
-// ShuffleCreators returns list of shuffled addresses in a pseudorandom permutation `p` of `0...list_size - 1` with “seed“ as entropy.
-func ShuffleCreators(indexes []int, seed [32]byte) ([]int, error) {
+// ShuffleValidators returns list of shuffled addresses in a pseudorandom permutation `p` of `0...list_size - 1` with “seed“ as entropy.
+func ShuffleValidators(indexes []uint64, seed [32]byte) ([]uint64, error) {
 	shuffledList, err := unshuffleList(indexes, seed)
 	if err != nil {
 		return nil, err
@@ -24,15 +24,15 @@ func ShuffleCreators(indexes []int, seed [32]byte) ([]int, error) {
 	return shuffledList, nil
 }
 
-func shuffleList(indexes []int, seed [32]byte) ([]int, error) {
+func shuffleList(indexes []uint64, seed [32]byte) ([]uint64, error) {
 	return innerShuffleList(indexes, seed, true /* shuffle */)
 }
 
-func unshuffleList(indexes []int, seed [32]byte) ([]int, error) {
+func unshuffleList(indexes []uint64, seed [32]byte) ([]uint64, error) {
 	return innerShuffleList(indexes, seed, false /* un-shuffle */)
 }
 
-func innerShuffleList(input []int, seed [32]byte, shuffl bool) ([]int, error) {
+func innerShuffleList(input []uint64, seed [32]byte, shuffl bool) ([]uint64, error) {
 	if len(input) <= 1 {
 		return input, nil
 	}
@@ -97,7 +97,7 @@ func swapOrNot(
 	buf []byte,
 	byteV byte,
 	i, j uint64,
-	input []int,
+	input []uint64,
 	source [32]byte,
 	hashFunc func([]byte) [32]byte,
 ) (byte, [32]byte) {

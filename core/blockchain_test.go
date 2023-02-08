@@ -18,7 +18,7 @@ func TestBreakByCreatorsPerSlotCount(t *testing.T) {
 		{common.HexToAddress("0x3"), common.HexToAddress("0x4")},
 	}
 
-	result := bc.breakByCreatorsBySlotCount(creators, 2)
+	result := bc.breakByValidatorsBySlotCount(creators, 2)
 
 	testutils.AssertEqual(t, expected, result)
 }

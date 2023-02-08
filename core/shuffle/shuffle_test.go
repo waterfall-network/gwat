@@ -20,7 +20,7 @@ func TestShuffleCreators(t *testing.T) {
 
 	seed := sha256.Sum256(Bytes32(uint64(testutils.RandomInt(0, 9999))))
 
-	shuffledList, err := ShuffleCreators(input, seed)
+	shuffledList, err := ShuffleValidators(input, seed)
 	if err != nil {
 		t.Fatalf("unexpected error: %+v", err)
 	}
