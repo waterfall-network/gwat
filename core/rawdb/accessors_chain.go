@@ -1056,16 +1056,16 @@ func WriteSeedHash(db ethdb.KeyValueWriter, epoch uint64, seed common.Hash) {
 	}
 }
 
-func ReedSeedHash(db ethdb.KeyValueReader, epoch uint64) (*common.Hash, error) {
+func ReedSeedHash(db ethdb.KeyValueReader, epoch uint64) (common.Hash, error) {
 	key := seedKey(epoch)
 	buf, err := db.Get(key)
 	if err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
 
 	seed := common.BytesToHash(buf)
 
-	return &seed, nil
+	return seed, nil
 }
 
 func DeleteSeedHash(db ethdb.KeyValueWriter, epoch uint64) {

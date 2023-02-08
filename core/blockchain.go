@@ -275,19 +275,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		return nil, ErrNoGenesis
 	}
 
-	var st *state.StateDB
-	var epoch uint64
-	if bc.lastFinalizedBlock.Load() != nil {
-		lastBlock := bc.GetLastFinalizedBlock()
-		st, _ = bc.StateAt(lastBlock.Root())
-		epoch = bc.slotInfo.SlotToEpoch(lastBlock.Slot())
-	} else {
-		st, _ = bc.StateAt(bc.genesisBlock.Root())
-		epoch = 0
-	}
-
-	bc.CachingAllValidators(st, epoch)
-
 	if bc.GetBlockFinalizedNumber(bc.genesisBlock.Hash()) == nil {
 		rawdb.WriteLastFinalizedHash(db, bc.genesisBlock.Hash())
 		rawdb.WriteFinalizedHashNumber(db, bc.genesisBlock.Hash(), uint64(0))
@@ -453,6 +440,28 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		SecondsPerSlot: chainConfig.SecondsPerSlot,
 		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
 	})
+
+	var st *state.StateDB
+	var epoch uint64
+	if bc.lastFinalizedBlock.Load() != nil {
+		lastBlock := bc.GetLastFinalizedBlock()
+		st, _ = bc.StateAt(lastBlock.Root())
+		epoch = bc.slotInfo.SlotToEpoch(lastBlock.Slot())
+	} else {
+		st, _ = bc.StateAt(bc.genesisBlock.Root())
+		epoch = 0
+	}
+
+	bc.CachingAllValidators(st, epoch)
+
+	activeValidators := bc.GetActiveValidatorsByEpoch(epoch)
+
+	indexes := bc.validatorsCache.GetValidatorsIndexes(activeValidators)
+
+	err = bc.ShuffleAndCachingValidators(epoch, indexes)
+	if err != nil {
+		return nil, err
+	}
 
 	return bc, nil
 }
@@ -3559,7 +3568,7 @@ func (bc *BlockChain) WriteSeedHash(block *types.Block) {
 	}
 }
 
-func (bc *BlockChain) ReedSeedHash(epoch uint64) (*common.Hash, error) {
+func (bc *BlockChain) ReedSeedHash(epoch uint64) (common.Hash, error) {
 	return rawdb.ReedSeedHash(bc.db, epoch)
 }
 
@@ -3576,12 +3585,12 @@ func (bc *BlockChain) SeedExist(epoch uint64) bool {
 func (bc *BlockChain) seed(epoch uint64) ([32]byte, error) {
 	epochBytes := shuffle.Bytes32(epoch)
 	epochSeed, err := bc.ReedSeedHash(epoch)
-	if err != nil && epochSeed == nil {
+	if err != nil {
 		// for the first and second epoch use genesis hash
 		if epoch >= 2 {
 			return common.Hash{}, errNoEpochSeed
 		} else {
-			*epochSeed = bc.Genesis().Hash()
+			epochSeed = bc.Genesis().Hash()
 		}
 	}
 

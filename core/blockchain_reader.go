@@ -476,14 +476,26 @@ func (bc *BlockChain) GetAllValidatorsByEpoch(epoch uint64) []types.Validator {
 }
 
 func (bc *BlockChain) GetActiveValidatorsByEpoch(epoch uint64) []types.Validator {
-	validators := make([]types.Validator, 0)
-	for _, validator := range bc.validatorsCache.GetAllValidatorsByEpoch(epoch) {
-		if validator.ActivationEpoch <= epoch && validator.ExitEpoch > epoch {
-			validators = append(validators, validator)
+	activeValidators := bc.validatorsCache.GetActiveValidatorsByEpoch(epoch)
+	if activeValidators == nil {
+		hash, err := bc.ReedSeedHash(epoch)
+		if err != nil {
+			log.Error("there are no blocks", "epoch", epoch)
+			return nil
 		}
+
+		firstEpochBlock := bc.GetBlock(hash)
+		state, err := bc.StateAt(firstEpochBlock.Root())
+		if err != nil {
+			log.Error("there are no state", "root", firstEpochBlock.Root())
+		}
+
+		bc.CachingAllValidators(state, epoch)
+
+		activeValidators = bc.validatorsCache.GetActiveValidatorsByEpoch(epoch)
 	}
 
-	return validators
+	return activeValidators
 }
 
 func (bc *BlockChain) GetSubnetValidators(subnet uint64) ([]common.Address, error) {

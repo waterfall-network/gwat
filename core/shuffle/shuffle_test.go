@@ -10,12 +10,12 @@ import (
 )
 
 func TestShuffleCreators(t *testing.T) {
-	indexes := make([]int, testutils.RandomInt(10, 9999))
+	indexes := make([]uint64, testutils.RandomInt(10, 9999))
 	for i := 0; i < len(indexes); i++ {
-		indexes[i] = i
+		indexes[i] = uint64(i)
 	}
 
-	input := make([]int, len(indexes))
+	input := make([]uint64, len(indexes))
 	copy(input, indexes)
 
 	seed := sha256.Sum256(Bytes32(uint64(testutils.RandomInt(0, 9999))))
@@ -38,13 +38,13 @@ func TestUnshuffleList(t *testing.T) {
 	testInnerShuffleList(t, unshuffleList, uint64(testutils.RandomInt(0, 9999)))
 }
 
-func testInnerShuffleList(t *testing.T, f func([]int, [32]byte) ([]int, error), epoch uint64) {
-	indexes := make([]int, uint64(testutils.RandomInt(0, 9999)))
+func testInnerShuffleList(t *testing.T, f func([]uint64, [32]byte) ([]uint64, error), epoch uint64) {
+	indexes := make([]uint64, uint64(testutils.RandomInt(0, 9999)))
 	for i := 0; i < 100; i++ {
-		indexes[i] = i
+		indexes[i] = uint64(i)
 	}
 
-	input := make([]int, len(indexes))
+	input := make([]uint64, len(indexes))
 	copy(input, indexes)
 
 	seed := sha256.Sum256(Bytes32(epoch))
@@ -60,28 +60,28 @@ func testInnerShuffleList(t *testing.T, f func([]int, [32]byte) ([]int, error), 
 }
 
 func TestSwapOrNot(t *testing.T) {
-	index1 := 1
-	index2 := 2
-	index3 := 3
-	input := []int{index1, index2, index3}
+	index1 := uint64(1)
+	index2 := uint64(2)
+	index3 := uint64(3)
+	input := []uint64{index1, index2, index3}
 	buf := make([]byte, totalSize)
 
 	tests := []struct {
 		name           string
-		expectedOutput []int
+		expectedOutput []uint64
 		buf            []byte
 		source         [32]byte
 		byteV          byte
 	}{
 		{
 			name:           "don`t swap elements",
-			expectedOutput: []int{index1, index2, index3},
+			expectedOutput: []uint64{index1, index2, index3},
 			buf:            make([]byte, totalSize),
 			source:         [32]byte{},
 			byteV:          byte(0),
 		}, {
 			name:           "swap elements",
-			expectedOutput: []int{index1, index3, index2},
+			expectedOutput: []uint64{index1, index3, index2},
 			buf:            make([]byte, totalSize),
 			source:         common.BytesToHash([]byte{1, 2, 3}),
 			byteV:          byte(4),
