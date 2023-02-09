@@ -3534,7 +3534,6 @@ func (bc *BlockChain) ShuffleForNextEpoch(epoch uint64) {
 			err := bc.ShuffleAndCachingValidators(epoch, activeValidators)
 			if err != nil {
 				log.Error("can`t shuffle creators for the next epoch", "epoch", epoch, "error", err)
-				return
 			}
 		}
 	}
