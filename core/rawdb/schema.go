@@ -98,7 +98,6 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
-	ValidatorsPrefix      = []byte("v")
 	SeedPrefix            = []byte("seed")
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
@@ -207,21 +206,6 @@ func preimageKey(hash common.Hash) []byte {
 // codeKey = CodePrefix + hash
 func codeKey(hash common.Hash) []byte {
 	return append(CodePrefix, hash.Bytes()...)
-}
-
-func creatorKey(slot uint64) []byte {
-	res := make([]byte, 0, len(ValidatorsPrefix))
-	res = append(res, ValidatorsPrefix...)
-	res = append(res, Uint64ToByteSlice(slot)...)
-
-	return res
-}
-
-func IsCreatorKey(key []byte) (bool, []byte) {
-	if bytes.HasPrefix(key, ValidatorsPrefix) && len(key) == len(ValidatorsPrefix)+8 { // uint64 = 8 bytes
-		return true, key[len(ValidatorsPrefix):]
-	}
-	return false, nil
 }
 
 // IsCodeKey reports whether the given byte slice is the key of contract code,

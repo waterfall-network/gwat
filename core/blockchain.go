@@ -1547,10 +1547,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
-func (bc *BlockChain) WriteCreators(creators []common.Address) {
-	rawdb.WriteCreators(bc.db, creators)
-}
-
 func (bc *BlockChain) WriteLastCoordinatedHash(hash common.Hash) {
 	rawdb.WriteLastCoordinatedHash(bc.db, hash)
 }

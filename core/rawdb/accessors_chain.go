@@ -245,17 +245,6 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	return header
 }
 
-func WriteCreators(db ethdb.KeyValueWriter, addrs []common.Address) {
-	data := make([]byte, 0, len(addrs)*20)
-	for _, addr := range addrs {
-		data = append(data, addr[:]...)
-	}
-
-	if err := db.Put(ValidatorsPrefix, data); err != nil {
-		log.Crit("Failed to store creators", "err", err)
-	}
-}
-
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
