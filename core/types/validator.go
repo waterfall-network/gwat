@@ -26,7 +26,7 @@ type Validator struct {
 	Balance           *big.Int
 }
 
-func NewValidator(address common.Address, withdrawal *common.Address, balance *big.Int, validatorIndex, activationEpoch, exitEpoch uint64) *Validator {
+func NewValidator(address common.Address, withdrawal *common.Address, validatorIndex, activationEpoch, exitEpoch uint64, balance *big.Int) *Validator {
 	if balance == nil {
 		balance = new(big.Int)
 	}

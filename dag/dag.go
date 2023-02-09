@@ -175,8 +175,6 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 		}()
 	}
 
-	d.bc.WriteCreators(data.Creators)
-
 	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
 	res := &types.ConsensusResult{
 		Error:      nil,

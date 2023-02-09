@@ -307,14 +307,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	statedb.AddValidatorsList(g.Config.ValidatorsStateAddress, g.Validators)
 
 	for i, validator := range g.Validators {
-		v := types.Validator{
-			Address:           validator,
-			WithdrawalAddress: nil,
-			ValidatorIndex:    uint64(i),
-			ActivationEpoch:   0,
-			ExitEpoch:         math.MaxInt64,
-			Balance:           new(big.Int),
-		}
+		v := types.NewValidator(validator, nil, uint64(i), 0, math.MaxUint64, nil)
 
 		info, err := v.MarshalBinary()
 		if err != nil {

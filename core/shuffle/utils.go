@@ -11,8 +11,9 @@ func FromBytes8(x []byte) uint64 {
 	return binary.LittleEndian.Uint64(x)
 }
 
-func Bytes32(x uint64) []byte {
-	bytes := make([]byte, 32)
+// Bytes8 returns integer x to bytes in little-endian format, x.to_bytes(8, 'little').
+func Bytes8(x uint64) []byte {
+	bytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bytes, x)
 	return bytes
 }

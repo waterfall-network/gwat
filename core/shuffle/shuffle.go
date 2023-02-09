@@ -3,6 +3,8 @@ package shuffle
 import (
 	"encoding/binary"
 	"fmt"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 const seedSize = int8(32)
@@ -15,8 +17,8 @@ const shuffleRoundCount = uint8(90)
 var maxShuffleListSize uint64 = 1 << 40
 
 // ShuffleValidators returns list of shuffled addresses in a pseudorandom permutation `p` of `0...list_size - 1` with “seed“ as entropy.
-func ShuffleValidators(indexes []uint64, seed [32]byte) ([]uint64, error) {
-	shuffledList, err := unshuffleList(indexes, seed)
+func ShuffleValidators(validators []common.Address, seed [32]byte) ([]common.Address, error) {
+	shuffledList, err := unshuffleList(validators, seed)
 	if err != nil {
 		return nil, err
 	}
@@ -24,30 +26,30 @@ func ShuffleValidators(indexes []uint64, seed [32]byte) ([]uint64, error) {
 	return shuffledList, nil
 }
 
-func shuffleList(indexes []uint64, seed [32]byte) ([]uint64, error) {
-	return innerShuffleList(indexes, seed, true /* shuffle */)
+func shuffleList(validators []common.Address, seed [32]byte) ([]common.Address, error) {
+	return innerShuffleList(validators, seed, true /* shuffle */)
 }
 
-func unshuffleList(indexes []uint64, seed [32]byte) ([]uint64, error) {
-	return innerShuffleList(indexes, seed, false /* un-shuffle */)
+func unshuffleList(validators []common.Address, seed [32]byte) ([]common.Address, error) {
+	return innerShuffleList(validators, seed, false /* un-shuffle */)
 }
 
-func innerShuffleList(input []uint64, seed [32]byte, shuffl bool) ([]uint64, error) {
-	if len(input) <= 1 {
-		return input, nil
+func innerShuffleList(validators []common.Address, seed [32]byte, shuffl bool) ([]common.Address, error) {
+	if len(validators) <= 1 {
+		return validators, nil
 	}
 
-	if uint64(len(input)) > maxShuffleListSize {
-		return nil, fmt.Errorf("list size %d out of bounds", len(input))
+	if uint64(len(validators)) > maxShuffleListSize {
+		return nil, fmt.Errorf("list size %d out of bounds", len(validators))
 	}
 
 	rounds := shuffleRoundCount
 	hashfunc := CustomSHA256Hasher()
 	if rounds == 0 {
-		return input, nil
+		return validators, nil
 	}
 
-	listSize := uint64(len(input))
+	listSize := uint64(len(validators))
 	buf := make([]byte, totalSize)
 	r := uint8(0)
 	if !shuffl {
@@ -64,7 +66,7 @@ func innerShuffleList(input []uint64, seed [32]byte, shuffl bool) ([]uint64, err
 		source := hashfunc(buf)
 		byteV := source[(pivot&0xff)>>3]
 		for i, j := uint64(0), pivot; i < mirror; i, j = i+1, j-1 {
-			byteV, source = swapOrNot(buf, byteV, i, j, input, source, hashfunc)
+			byteV, source = swapOrNot(buf, byteV, i, j, validators, source, hashfunc)
 		}
 		// Now repeat, but for the part after the pivot.
 		mirror = (pivot + listSize + 1) >> 1
@@ -73,7 +75,7 @@ func innerShuffleList(input []uint64, seed [32]byte, shuffl bool) ([]uint64, err
 		source = hashfunc(buf)
 		byteV = source[(end&0xff)>>3]
 		for i, j := pivot+1, end; i < mirror; i, j = i+1, j-1 {
-			byteV, source = swapOrNot(buf, byteV, i, j, input, source, hashfunc)
+			byteV, source = swapOrNot(buf, byteV, i, j, validators, source, hashfunc)
 		}
 		if shuffl {
 			r++
@@ -88,7 +90,7 @@ func innerShuffleList(input []uint64, seed [32]byte, shuffl bool) ([]uint64, err
 		}
 	}
 
-	return input, nil
+	return validators, nil
 }
 
 // swapOrNot describes the main algorithm behind the shuffle where we swap bytes in the inputted value
@@ -97,7 +99,7 @@ func swapOrNot(
 	buf []byte,
 	byteV byte,
 	i, j uint64,
-	input []uint64,
+	validators []common.Address,
 	source [32]byte,
 	hashFunc func([]byte) [32]byte,
 ) (byte, [32]byte) {
@@ -113,7 +115,7 @@ func swapOrNot(
 	bitV := (byteV >> (j & 0x7)) & 0x1
 
 	if bitV == 1 {
-		input[i], input[j] = input[j], input[i]
+		validators[i], validators[j] = validators[j], validators[i]
 	}
 
 	return byteV, source

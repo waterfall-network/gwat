@@ -2,11 +2,10 @@ package types
 
 import (
 	"errors"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
-	"sort"
 	"sync"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 var (
@@ -17,9 +16,9 @@ var (
 
 type ValidatorsCache struct {
 	allValidatorsCache            map[uint64][]Validator                   // epoch/array of validators
-	subnetValidatorsCache         map[uint64][]common.Address              // subnet/validators arrey
-	shuffledValidatorsCache       map[uint64][][]common.Address            // epoch/array of validators arrays (slot is the index in it)
-	shuffledSubnetValidatorsCache map[uint64]map[uint64][][]common.Address // subnet/epoch/array of validators arrays (slot is the index in it)
+	subnetValidatorsCache         map[uint64][]common.Address              // subnet/validators array
+	shuffledValidatorsCache       map[uint64][][]common.Address            // epoch/array of validators arrays (slot is the index in array)
+	shuffledSubnetValidatorsCache map[uint64]map[uint64][][]common.Address // subnet/epoch/array of validators arrays (slot is the index in array)
 
 	allMu            *sync.Mutex
 	subnetMu         *sync.Mutex
@@ -40,7 +39,7 @@ func NewValidatorsCache() *ValidatorsCache {
 	}
 }
 
-func (c *ValidatorsCache) AddAllValidators(epoch uint64, validatorsList []Validator) {
+func (c *ValidatorsCache) AddAllValidatorsByEpoch(epoch uint64, validatorsList []Validator) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
@@ -76,46 +75,6 @@ func (c *ValidatorsCache) GetActiveValidatorsByEpoch(epoch uint64) []Validator {
 	return validators
 }
 
-func (c *ValidatorsCache) GetValidatorsIndexes(validators []Validator) []uint64 {
-	c.allMu.Lock()
-	defer c.allMu.Unlock()
-
-	indexes := make([]uint64, len(validators))
-
-	for i, validator := range validators {
-		indexes[i] = validator.ValidatorIndex
-	}
-
-	sort.Slice(indexes, func(i, j int) bool {
-		return indexes[i] < indexes[j]
-	})
-
-	return indexes
-}
-
-func (c *ValidatorsCache) GetValidatorsByIndexes(epoch uint64, indexes []uint64) []common.Address {
-	c.allMu.Lock()
-	defer c.allMu.Unlock()
-
-	validators := make([]common.Address, len(indexes))
-
-	epochValidators, ok := c.allValidatorsCache[epoch]
-	if !ok {
-		log.Error("there are no validators", "epoch", epoch)
-		return nil
-	}
-
-	for i, index := range indexes {
-		for _, validator := range epochValidators {
-			if index == validator.ValidatorIndex {
-				validators[i] = validator.Address
-			}
-		}
-	}
-
-	return validators
-}
-
 func (c *ValidatorsCache) AddSubnetValidators(subnet uint64, validators []common.Address) {
 	c.subnetMu.Lock()
 	defer c.subnetMu.Unlock()
@@ -135,23 +94,23 @@ func (c *ValidatorsCache) GetSubnetValidators(subnet uint64) ([]common.Address, 
 	return subnetCreators, nil
 }
 
-func (c *ValidatorsCache) AddShuffledValidators(epoch uint64, shuffledCreators [][]common.Address) {
+func (c *ValidatorsCache) AddShuffledValidators(epoch uint64, shuffledValidators [][]common.Address) {
 	c.shuffledMu.Lock()
 	defer c.shuffledMu.Unlock()
 
-	c.shuffledValidatorsCache[epoch] = shuffledCreators
+	c.shuffledValidatorsCache[epoch] = shuffledValidators
 }
 
 func (c *ValidatorsCache) GetShuffledValidatorsByEpoch(epoch uint64) ([][]common.Address, error) {
 	c.shuffledMu.Lock()
 	defer c.shuffledMu.Unlock()
 
-	epochCreators, ok := c.shuffledValidatorsCache[epoch]
+	epochValidators, ok := c.shuffledValidatorsCache[epoch]
 	if !ok {
 		return nil, errNoEpochCreators
 	}
 
-	return epochCreators, nil
+	return epochValidators, nil
 }
 
 func (c *ValidatorsCache) GetShuffledValidatorsBySlot(epoch, slot uint64) ([]common.Address, error) {
@@ -182,12 +141,12 @@ func (c *ValidatorsCache) GetShuffledSubnetValidators(subnet uint64) (map[uint64
 	c.shuffledSubnetMu.Lock()
 	defer c.shuffledSubnetMu.Unlock()
 
-	subnetCreators, ok := c.shuffledSubnetValidatorsCache[subnet]
+	subnetValidators, ok := c.shuffledSubnetValidatorsCache[subnet]
 	if !ok {
 		return nil, errNoSubnetCreators
 	}
 
-	return subnetCreators, nil
+	return subnetValidators, nil
 }
 
 func (c *ValidatorsCache) GetShuffledSubnetValidatorsByEpoch(subnet, epoch uint64) ([][]common.Address, error) {
@@ -215,4 +174,23 @@ func (c *ValidatorsCache) GetShuffledSubnetValidatorsBySlot(subnet, epoch, slot 
 	}
 
 	return epochCreators[slot], nil
+}
+
+func (c *ValidatorsCache) AddValidator(validator Validator, epoch uint64) {
+	c.allMu.Lock()
+	defer c.allMu.Unlock()
+
+	c.allValidatorsCache[epoch] = append(c.allValidatorsCache[epoch], validator)
+}
+
+func (c *ValidatorsCache) DelValidator(validator Validator, epoch uint64) {
+	c.allMu.Lock()
+	defer c.allMu.Unlock()
+
+	for i, v := range c.allValidatorsCache[epoch] {
+		if v.Address == validator.Address {
+			c.allValidatorsCache[epoch] = append(c.allValidatorsCache[epoch][:i], c.allValidatorsCache[epoch][i+1:]...)
+
+		}
+	}
 }

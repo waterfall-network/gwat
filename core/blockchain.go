@@ -39,6 +39,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/syncx"
@@ -441,27 +442,33 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
 	})
 
-	var st *state.StateDB
-	var epoch uint64
+	var (
+		st        *state.StateDB
+		epoch     uint64
+		lastBlock *types.Block
+	)
+
 	if bc.lastFinalizedBlock.Load() != nil {
-		lastBlock := bc.GetLastFinalizedBlock()
+		lastBlock = bc.GetLastFinalizedBlock()
 		st, _ = bc.StateAt(lastBlock.Root())
 		epoch = bc.slotInfo.SlotToEpoch(lastBlock.Slot())
 	} else {
+		lastBlock = bc.genesisBlock
 		st, _ = bc.StateAt(bc.genesisBlock.Root())
-		epoch = 0
 	}
+
+	bc.WriteSeedHash(lastBlock)
 
 	bc.CachingAllValidators(st, epoch)
 
-	activeValidators := bc.GetActiveValidatorsByEpoch(epoch)
+	activeValidators := bc.GetActiveValidatorsAddressesByEpoch(epoch)
 
-	indexes := bc.validatorsCache.GetValidatorsIndexes(activeValidators)
-
-	err = bc.ShuffleAndCachingValidators(epoch, indexes)
+	err = bc.ShuffleAndCachingValidators(epoch, activeValidators)
 	if err != nil {
 		return nil, err
 	}
+
+	go bc.ShuffleForNextEpoch(epoch)
 
 	return bc, nil
 }
@@ -944,6 +951,8 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	for _, tx := range block.Transactions() {
 		bc.RemoveTxFromPool(tx)
 	}
+
+	bc.WriteSeedHash(block)
 
 	return nil
 }
@@ -1903,11 +1912,26 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	if true {
 		return true
 	}
-	creators, err := bc.GetShuffledValidatorsBySlot(block.Slot())
-	if err != nil {
-		log.Error(err.Error())
-		return false
+
+	var (
+		creators []common.Address
+		err      error
+	)
+	if !bc.Config().IsForkSlotSubNet1(bc.GetSlotInfo().CurrentSlot()) {
+		creators, err = bc.GetShuffledValidatorsBySlot(block.Slot())
+		if err != nil {
+			log.Error("can`t get shuffled validators", "error", err)
+			return false
+		}
+	} else {
+		// TODO: uncomment and transfer subnet to the function GetShuffledSubnetValidatorsBySlot()
+		//creators, err = bc.GetShuffledSubnetValidatorsBySlot(subnet, block.Slot())
+		//if err != nil {
+		//	log.Error("can`t get shuffled subnet validators", "error", err)
+		//	return false
+		//}
 	}
+
 	//if no record - skip (actual fo dag sync)
 	if creators == nil {
 		return false
@@ -3506,23 +3530,44 @@ func (bc *BlockChain) HeadSynchronising() bool {
 	return bc.syncProvider.HeadSynchronising()
 }
 
-func (bc *BlockChain) ShuffleAndCachingValidators(epoch uint64, indexes []uint64) error {
-	seed, err := bc.seed(epoch)
+func (bc *BlockChain) ShuffleForNextEpoch(epoch uint64) {
+	for {
+		if bc.GetSlotInfo().CurrentSlot()%bc.GetSlotInfo().SlotsPerEpoch == bc.GetSlotInfo().SlotsPerEpoch-2 {
+			epoch++
+			activeValidators := bc.GetActiveValidatorsAddressesByEpoch(epoch)
+			err := bc.ShuffleAndCachingValidators(epoch, activeValidators)
+			if err != nil {
+				log.Error("can`t shuffle creators for the next epoch", "epoch", epoch, "error", err)
+				return
+			}
+		}
+	}
+}
+
+func (bc *BlockChain) ShuffleAndCachingValidators(epoch uint64, validators []common.Address) error {
+	shuffleFunc := func(epoch uint64, validators []common.Address) ([]common.Address, error) {
+		seed, err := bc.seed(epoch)
+		if err != nil {
+			return nil, err
+		}
+
+		return shuffle.ShuffleValidators(validators, seed)
+	}
+
+	shuffledValidators, err := shuffleFunc(epoch, validators)
 	if err != nil {
 		return err
 	}
 
-	shuffledList, err := shuffle.ShuffleValidators(indexes, seed)
-	if err != nil {
-		return err
-	}
-
-	shuffledValidators := bc.validatorsCache.GetValidatorsByIndexes(epoch, shuffledList)
-
-	validatorsBySlots := bc.breakByValidatorsBySlotCount(shuffledValidators, validatorsPerSlot)
+	validatorsBySlots, err := bc.breakByValidatorsBySlotCount(shuffledValidators, validatorsPerSlot), nil
 
 	if len(validatorsBySlots) != int(bc.GetSlotInfo().SlotsPerEpoch) {
 		for len(validatorsBySlots) != int(bc.GetSlotInfo().SlotsPerEpoch) {
+			shuffledValidators, err = shuffleFunc(epoch, shuffledValidators)
+			if err != nil {
+				return err
+			}
+
 			validatorsBySlots = append(validatorsBySlots, bc.breakByValidatorsBySlotCount(shuffledValidators, validatorsPerSlot)...)
 		}
 	}
@@ -3532,8 +3577,8 @@ func (bc *BlockChain) ShuffleAndCachingValidators(epoch uint64, indexes []uint64
 	return nil
 }
 
-func (bc *BlockChain) CachingValidatorsBySubnet(subnet uint64, creators []common.Address) {
-	bc.validatorsCache.AddSubnetValidators(subnet, creators)
+func (bc *BlockChain) CachingValidatorsBySubnet(subnet uint64, validators []common.Address) {
+	bc.validatorsCache.AddSubnetValidators(subnet, validators)
 }
 
 func (bc *BlockChain) CachingAllValidators(stateDb *state.StateDB, epoch uint64) {
@@ -3554,7 +3599,7 @@ func (bc *BlockChain) CachingAllValidators(stateDb *state.StateDB, epoch uint64)
 			validators[i] = v
 		}
 
-		bc.validatorsCache.AddAllValidators(epoch, validators)
+		bc.validatorsCache.AddAllValidatorsByEpoch(epoch, validators)
 	}
 }
 
@@ -3563,7 +3608,7 @@ func (bc *BlockChain) WriteSeedHash(block *types.Block) {
 	// because for the first and second epoch use genesis hash for shuffling
 	if block.Slot()%bc.GetSlotInfo().SlotsPerEpoch == 0 && block.Slot() >= bc.GetSlotInfo().SlotsPerEpoch*2 {
 		if !bc.SeedExist(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
-			rawdb.WriteSeedHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
+			rawdb.WriteSeedHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot())+2, block.Hash())
 		}
 	}
 }
@@ -3583,7 +3628,7 @@ func (bc *BlockChain) SeedExist(epoch uint64) bool {
 // seed make Seed for shuffling represents in [32] byte
 // Seed = hash of the first finalized block in the epoch finalized two epoch ago + epoch number represents in [32] byte
 func (bc *BlockChain) seed(epoch uint64) ([32]byte, error) {
-	epochBytes := shuffle.Bytes32(epoch)
+	epochBytes := shuffle.Bytes8(epoch)
 	epochSeed, err := bc.ReedSeedHash(epoch)
 	if err != nil {
 		// for the first and second epoch use genesis hash
@@ -3594,16 +3639,20 @@ func (bc *BlockChain) seed(epoch uint64) ([32]byte, error) {
 		}
 	}
 
-	seed32 := common.BytesToHash(append(epochSeed.Bytes(), epochBytes...))
+	seed := crypto.Keccak256(append(epochSeed.Bytes(), epochBytes...))
+
+	seed32 := common.BytesToHash(seed)
 
 	return seed32, nil
 }
 
 func (bc *BlockChain) breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot int) [][]common.Address {
 	chunks := make([][]common.Address, 0)
-	for i := 0; i < len(validators); i += validatorsPerSlot {
+	for i := 0; i+validatorsPerSlot < len(validators); i += validatorsPerSlot {
 		end := i + validatorsPerSlot
-		chunks = append(chunks, validators[i:end])
+		slotValidators := make([]common.Address, len(validators[i:end]))
+		copy(slotValidators, validators[i:end])
+		chunks = append(chunks, slotValidators)
 		if len(chunks) == int(bc.GetSlotInfo().SlotsPerEpoch) {
 			return chunks
 		}

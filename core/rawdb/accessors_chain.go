@@ -210,18 +210,6 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
-func ReadCreatorsRlp(db ethdb.Reader, key []byte) rlp.RawValue {
-	var data []byte
-
-	// Try to look up the data in leveldb.
-	data, _ = db.Get(key)
-	if len(data) > 0 {
-		return data
-	}
-
-	return nil // Can't find the data anywhere.
-}
-
 // HasHeader verifies the existence of a block header corresponding to the hash.
 func HasHeader(db ethdb.Reader, hash common.Hash) bool {
 	number := ReadFinalizedNumberByHash(db, hash)
@@ -257,24 +245,6 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	return header
 }
 
-func ReadValidators(db ethdb.Reader, key []byte) *[]common.Address {
-	data := ReadCreatorsRlp(db, key)
-	if data == nil {
-		return nil
-	}
-	if len(data) == 0 {
-		return new([]common.Address)
-	}
-	addrsCount := len(data) / common.AddressLength
-	addresses := make([]common.Address, 0, addrsCount)
-	for i := 0; i < addrsCount; i++ {
-		addr := common.Address{}
-		copy(addr[:], data[i*common.AddressLength:(i+1)*common.AddressLength])
-		addresses = append(addresses, addr)
-	}
-	return &addresses
-}
-
 func WriteCreators(db ethdb.KeyValueWriter, addrs []common.Address) {
 	data := make([]byte, 0, len(addrs)*20)
 	for _, addr := range addrs {
@@ -283,12 +253,6 @@ func WriteCreators(db ethdb.KeyValueWriter, addrs []common.Address) {
 
 	if err := db.Put(ValidatorsPrefix, data); err != nil {
 		log.Crit("Failed to store creators", "err", err)
-	}
-}
-
-func DeleteCreators(db ethdb.KeyValueWriter, slot uint64) {
-	if err := db.Delete(creatorKey(slot)); err != nil {
-		log.Crit("Failed to delete creators", "err", err)
 	}
 }
 
