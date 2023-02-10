@@ -2,19 +2,20 @@ package types
 
 import (
 	"encoding/binary"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"math/big"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 const (
-	Uint64Size              = 8
-	BigIntSize              = 32
-	WithdrawalAddressOffset = common.AddressLength
-	ValidatorIndexOffset    = WithdrawalAddressOffset + common.AddressLength
-	ActivationEpochOffset   = ValidatorIndexOffset + Uint64Size
-	ExitEpochOffset         = ActivationEpochOffset + Uint64Size
-	BalanceOffset           = ExitEpochOffset + Uint64Size
-	MetricOffset            = BalanceOffset + BigIntSize
+	uint64Size              = 8
+	withdrawalAddressOffset = common.AddressLength
+	validatorIndexOffset    = withdrawalAddressOffset + common.AddressLength
+	activationEpochOffset   = validatorIndexOffset + uint64Size
+	exitEpochOffset         = activationEpochOffset + uint64Size
+	balanceLengthOffset     = exitEpochOffset + uint64Size
+	balanceOffset           = balanceLengthOffset + uint64Size
+	metricOffset            = balanceOffset // TODO: add balance length to calculate offset
 )
 
 type Validator struct {
@@ -52,19 +53,21 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 
 	balance := v.Balance.Bytes()
 
-	data := make([]byte, common.AddressLength*2+Uint64Size*3+len(balance))
+	data := make([]byte, common.AddressLength*2+uint64Size*4+len(balance))
 
 	copy(data[:common.AddressLength], address)
 
-	copy(data[WithdrawalAddressOffset:WithdrawalAddressOffset+common.AddressLength], withdrawalAddress)
+	copy(data[withdrawalAddressOffset:withdrawalAddressOffset+common.AddressLength], withdrawalAddress)
 
-	binary.BigEndian.PutUint64(data[ValidatorIndexOffset:ValidatorIndexOffset+Uint64Size], v.ValidatorIndex)
+	binary.BigEndian.PutUint64(data[validatorIndexOffset:validatorIndexOffset+uint64Size], v.ValidatorIndex)
 
-	binary.BigEndian.PutUint64(data[ActivationEpochOffset:ActivationEpochOffset+Uint64Size], v.ActivationEpoch)
+	binary.BigEndian.PutUint64(data[activationEpochOffset:activationEpochOffset+uint64Size], v.ActivationEpoch)
 
-	binary.BigEndian.PutUint64(data[ExitEpochOffset:ExitEpochOffset+Uint64Size], v.ExitEpoch)
+	binary.BigEndian.PutUint64(data[exitEpochOffset:exitEpochOffset+uint64Size], v.ExitEpoch)
 
-	copy(data[BalanceOffset:BalanceOffset+len(balance)], balance)
+	binary.BigEndian.PutUint64(data[balanceLengthOffset:balanceOffset], uint64(len(balance)))
+
+	copy(data[balanceOffset:balanceOffset+len(balance)], balance)
 	return data, nil
 }
 
@@ -73,15 +76,17 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 	copy(v.Address[:], data[:common.AddressLength])
 
 	v.WithdrawalAddress = new(common.Address)
-	copy(v.WithdrawalAddress[:], data[WithdrawalAddressOffset:WithdrawalAddressOffset+common.AddressLength])
+	copy(v.WithdrawalAddress[:], data[withdrawalAddressOffset:withdrawalAddressOffset+common.AddressLength])
 
-	v.ValidatorIndex = binary.BigEndian.Uint64(data[ValidatorIndexOffset : ValidatorIndexOffset+Uint64Size])
+	v.ValidatorIndex = binary.BigEndian.Uint64(data[validatorIndexOffset : validatorIndexOffset+uint64Size])
 
-	v.ActivationEpoch = binary.BigEndian.Uint64(data[ActivationEpochOffset : ActivationEpochOffset+Uint64Size])
+	v.ActivationEpoch = binary.BigEndian.Uint64(data[activationEpochOffset : activationEpochOffset+uint64Size])
 
-	v.ExitEpoch = binary.BigEndian.Uint64(data[ExitEpochOffset : ExitEpochOffset+Uint64Size])
+	v.ExitEpoch = binary.BigEndian.Uint64(data[exitEpochOffset : exitEpochOffset+uint64Size])
 
-	v.Balance = new(big.Int).SetBytes(data[BalanceOffset:])
+	balanceLen := binary.BigEndian.Uint64(data[balanceLengthOffset:balanceOffset])
+
+	v.Balance = new(big.Int).SetBytes(data[balanceOffset : balanceOffset+balanceLen])
 	return nil
 }
 
@@ -96,41 +101,49 @@ func (vi ValidatorInfo) SetAddress(address common.Address) {
 }
 
 func (vi ValidatorInfo) GetWithdrawalAddress() common.Address {
-	return common.BytesToAddress(vi[WithdrawalAddressOffset:ValidatorIndexOffset])
+	return common.BytesToAddress(vi[withdrawalAddressOffset:validatorIndexOffset])
 }
 
 func (vi ValidatorInfo) SetWithdrawalAddress(address common.Address) {
-	copy(vi[WithdrawalAddressOffset:ValidatorIndexOffset], address[:])
+	copy(vi[withdrawalAddressOffset:validatorIndexOffset], address[:])
 }
 
 func (vi ValidatorInfo) GetValidatorIndex() uint64 {
-	return binary.BigEndian.Uint64(vi[ValidatorIndexOffset:ActivationEpochOffset])
+	return binary.BigEndian.Uint64(vi[validatorIndexOffset:activationEpochOffset])
 }
 
 func (vi ValidatorInfo) SetValidatorIndex(index uint64) {
-	binary.BigEndian.PutUint64(vi[ValidatorIndexOffset:ActivationEpochOffset], index)
+	binary.BigEndian.PutUint64(vi[validatorIndexOffset:activationEpochOffset], index)
 }
 
 func (vi ValidatorInfo) GetActivationEpoch() uint64 {
-	return binary.BigEndian.Uint64(vi[ActivationEpochOffset:ExitEpochOffset])
+	return binary.BigEndian.Uint64(vi[activationEpochOffset:exitEpochOffset])
 }
 
 func (vi ValidatorInfo) SetActivationEpoch(epoch uint64) {
-	binary.BigEndian.PutUint64(vi[ActivationEpochOffset:ExitEpochOffset], epoch)
+	binary.BigEndian.PutUint64(vi[activationEpochOffset:exitEpochOffset], epoch)
 }
 
 func (vi ValidatorInfo) GetExitEpoch() uint64 {
-	return binary.BigEndian.Uint64(vi[ExitEpochOffset:BalanceOffset])
+	return binary.BigEndian.Uint64(vi[exitEpochOffset:balanceOffset])
 }
 
 func (vi ValidatorInfo) SetExitEpoch(epoch uint64) {
-	binary.BigEndian.PutUint64(vi[ExitEpochOffset:BalanceOffset], epoch)
+	binary.BigEndian.PutUint64(vi[exitEpochOffset:balanceOffset], epoch)
 }
 
-func (vi ValidatorInfo) GetValidatorBalance() uint64 {
-	return binary.BigEndian.Uint64(vi[BalanceOffset:MetricOffset])
+func (vi ValidatorInfo) GetValidatorBalance() *big.Int {
+	balanceLength := binary.BigEndian.Uint64(vi[balanceLengthOffset:balanceOffset])
+
+	bal := vi[balanceOffset : balanceOffset+balanceLength]
+
+	return new(big.Int).SetBytes(bal)
 }
 
 func (vi ValidatorInfo) SetValidatorBalance(balance *big.Int) {
-	copy(vi[BalanceOffset:MetricOffset], balance.Bytes())
+	newLen := len(balance.Bytes())
+
+	binary.BigEndian.PutUint64(vi[balanceLengthOffset:balanceOffset], uint64(newLen))
+
+	copy(vi[balanceOffset:balanceOffset+newLen], balance.Bytes())
 }
