@@ -812,3 +812,32 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 		}
 	})
 }
+
+func TestWriteReadDeleteSeedHash(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	// Test writing seed hash
+	epoch := uint64(0)
+	seed := common.HexToHash("0x1234567890abcdef")
+	WriteSeedHash(db, epoch, seed)
+	if !ExistSeedHash(db, epoch) {
+		t.Fatalf("Failed to write seed hash")
+	}
+
+	// Test reading seed hash
+	readSeed, err := ReedSeedHash(db, epoch)
+	if err != nil {
+		t.Fatalf("Failed to read seed hash: %v", err)
+	}
+	if readSeed != seed {
+		t.Fatalf("Incorrect seed hash read: expected %x, got %x", seed, readSeed)
+	}
+
+	// Test deleting seed hash
+	DeleteSeedHash(db, epoch)
+
+	// Test checking the existence of seed hash
+	if ExistSeedHash(db, epoch) {
+		t.Fatalf("Seed hash should not exist")
+	}
+}

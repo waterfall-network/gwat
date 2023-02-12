@@ -3541,7 +3541,7 @@ func (bc *BlockChain) ShuffleForNextEpoch(epoch uint64) {
 
 func (bc *BlockChain) ShuffleAndCachingValidators(epoch uint64, validators []common.Address) error {
 	shuffleFunc := func(epoch uint64, validators []common.Address) ([]common.Address, error) {
-		seed, err := bc.seed(epoch)
+		seed, err := bc.seed(epoch - 2)
 		if err != nil {
 			return nil, err
 		}
@@ -3601,9 +3601,9 @@ func (bc *BlockChain) CachingAllValidators(stateDb *state.StateDB, epoch uint64)
 func (bc *BlockChain) WriteSeedHash(block *types.Block) {
 	// check that block epoch is higher than second epoch
 	// because for the first and second epoch use genesis hash for shuffling
-	if block.Slot()%bc.GetSlotInfo().SlotsPerEpoch == 0 && block.Slot() >= bc.GetSlotInfo().SlotsPerEpoch*2 {
+	if block.Slot() >= bc.GetSlotInfo().SlotsPerEpoch*2 {
 		if !bc.SeedExist(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
-			rawdb.WriteSeedHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot())+2, block.Hash())
+			rawdb.WriteSeedHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
 		}
 	}
 }

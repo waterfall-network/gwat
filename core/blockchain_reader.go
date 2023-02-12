@@ -471,7 +471,7 @@ func (bc *BlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) ev
 	return bc.scope.Track(bc.rmTxFeed.Subscribe(ch))
 }
 
-func (bc *BlockChain) GetAllValidatorsByEpoch(epoch uint64) []types.Validator {
+func (bc *BlockChain) GetAllValidatorsByEpoch(epoch uint64) ([]types.Validator, error) {
 	return bc.validatorsCache.GetAllValidatorsByEpoch(epoch)
 }
 
@@ -498,7 +498,7 @@ func (bc *BlockChain) GetActiveValidatorsByEpoch(epoch uint64) []types.Validator
 		firstEpochBlock := bc.GetBlock(hash)
 		state, err := bc.StateAt(firstEpochBlock.Root())
 		if err != nil {
-			log.Error("there are no state", "root", firstEpochBlock.Root())
+			log.Error("there is no state", "root", firstEpochBlock.Root())
 			return nil
 		}
 

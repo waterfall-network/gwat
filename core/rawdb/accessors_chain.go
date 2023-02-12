@@ -1003,6 +1003,7 @@ func DeleteChildren(db ethdb.KeyValueWriter, parent common.Hash) {
 
 func WriteSeedHash(db ethdb.KeyValueWriter, epoch uint64, seed common.Hash) {
 	key := seedKey(epoch)
+
 	err := db.Put(key, seed.Bytes())
 	if err != nil {
 		log.Crit("Failed to store epoch seed", "err", err, "epoch", epoch)

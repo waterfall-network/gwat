@@ -285,13 +285,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
-	if g.Config != nil {
-		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
-		}
-	}
 
 	buf := make([]byte, len(g.Validators)*common.AddressLength)
 	for i, validator := range g.Validators {
@@ -300,7 +293,17 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		copy(buf[beginning:end], validator[:])
 	}
 
-	g.Config.ValidatorsStateAddress = crypto.Keccak256Address(buf)
+	if g.Config != nil {
+		if g.BaseFee != nil {
+			head.BaseFee = g.BaseFee
+		} else {
+			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+		}
+
+		g.Config.ValidatorsStateAddress = crypto.Keccak256Address(buf)
+	} else {
+		g.Config = &params.ChainConfig{ValidatorsStateAddress: crypto.Keccak256Address(buf)}
+	}
 
 	g.CreateDepositContract(statedb, head)
 

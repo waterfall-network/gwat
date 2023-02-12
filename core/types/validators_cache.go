@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	errNoSlotCreators   = errors.New("there are no creators for slot")
-	errNoSubnetCreators = errors.New("there are no creators for subnet")
-	errNoEpochCreators  = errors.New("there are no creators for epoch")
+	errNoSlotValidators   = errors.New("there are no creators for slot")
+	errNoSubnetValidators = errors.New("there are no creators for subnet")
+	errNoEpochValidators  = errors.New("there are no creators for epoch")
+	errNoCachedValidators = errors.New("there are no cached validators")
 )
 
 type ValidatorsCache struct {
@@ -46,23 +47,22 @@ func (c *ValidatorsCache) AddAllValidatorsByEpoch(epoch uint64, validatorsList [
 	c.allValidatorsCache[epoch] = validatorsList
 }
 
-func (c *ValidatorsCache) GetAllValidatorsByEpoch(epoch uint64) []Validator {
+func (c *ValidatorsCache) GetAllValidatorsByEpoch(epoch uint64) ([]Validator, error) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
 	validators, ok := c.allValidatorsCache[epoch]
 	if !ok {
-		log.Error("there are no cached validators", "epoch", epoch)
-		return nil
+		return nil, errNoCachedValidators
 	}
-	return validators
+	return validators, nil
 }
 
 func (c *ValidatorsCache) GetActiveValidatorsByEpoch(epoch uint64) []Validator {
 	validators := make([]Validator, 0)
 	validatorsList, ok := c.allValidatorsCache[epoch]
 	if !ok {
-		log.Error("there are no cached validators", "epoch", epoch)
+		log.Error(errNoEpochValidators.Error(), "epoch", epoch)
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func (c *ValidatorsCache) GetSubnetValidators(subnet uint64) ([]common.Address, 
 
 	subnetCreators, ok := c.subnetValidatorsCache[subnet]
 	if !ok {
-		return nil, errNoSubnetCreators
+		return nil, errNoSubnetValidators
 	}
 
 	return subnetCreators, nil
@@ -107,26 +107,26 @@ func (c *ValidatorsCache) GetShuffledValidatorsByEpoch(epoch uint64) ([][]common
 
 	epochValidators, ok := c.shuffledValidatorsCache[epoch]
 	if !ok {
-		return nil, errNoEpochCreators
+		return nil, errNoEpochValidators
 	}
 
 	return epochValidators, nil
 }
 
 func (c *ValidatorsCache) GetShuffledValidatorsBySlot(epoch, slot uint64) ([]common.Address, error) {
-	epochCreators, err := c.GetShuffledValidatorsByEpoch(epoch)
+	epochValidators, err := c.GetShuffledValidatorsByEpoch(epoch)
 	if err != nil {
 		return nil, err
 	}
 
-	if slot > uint64(len(epochCreators)) {
-		return nil, errNoSlotCreators
+	if slot > uint64(len(epochValidators)) {
+		return nil, errNoSlotValidators
 	}
 
-	return epochCreators[slot], nil
+	return epochValidators[slot], nil
 }
 
-func (c *ValidatorsCache) AddShuffledSubnetValidators(subnet, epoch uint64, shuffledCreators [][]common.Address) {
+func (c *ValidatorsCache) AddShuffledSubnetValidators(subnet, epoch uint64, shuffledValidators [][]common.Address) {
 	c.shuffledSubnetMu.Lock()
 	defer c.shuffledSubnetMu.Unlock()
 
@@ -134,7 +134,7 @@ func (c *ValidatorsCache) AddShuffledSubnetValidators(subnet, epoch uint64, shuf
 		c.shuffledSubnetValidatorsCache[subnet] = map[uint64][][]common.Address{}
 	}
 
-	c.shuffledSubnetValidatorsCache[subnet][epoch] = shuffledCreators
+	c.shuffledSubnetValidatorsCache[subnet][epoch] = shuffledValidators
 }
 
 func (c *ValidatorsCache) GetShuffledSubnetValidators(subnet uint64) (map[uint64][][]common.Address, error) {
@@ -143,37 +143,37 @@ func (c *ValidatorsCache) GetShuffledSubnetValidators(subnet uint64) (map[uint64
 
 	subnetValidators, ok := c.shuffledSubnetValidatorsCache[subnet]
 	if !ok {
-		return nil, errNoSubnetCreators
+		return nil, errNoSubnetValidators
 	}
 
 	return subnetValidators, nil
 }
 
 func (c *ValidatorsCache) GetShuffledSubnetValidatorsByEpoch(subnet, epoch uint64) ([][]common.Address, error) {
-	subnetCreators, err := c.GetShuffledSubnetValidators(subnet)
+	subnetValidators, err := c.GetShuffledSubnetValidators(subnet)
 	if err != nil {
 		return nil, err
 	}
 
-	epochCreators, ok := subnetCreators[epoch]
+	epochCreators, ok := subnetValidators[epoch]
 	if !ok {
-		return nil, errNoEpochCreators
+		return nil, errNoEpochValidators
 	}
 
 	return epochCreators, nil
 }
 
 func (c *ValidatorsCache) GetShuffledSubnetValidatorsBySlot(subnet, epoch, slot uint64) ([]common.Address, error) {
-	epochCreators, err := c.GetShuffledSubnetValidatorsByEpoch(subnet, epoch)
+	epochValidators, err := c.GetShuffledSubnetValidatorsByEpoch(subnet, epoch)
 	if err != nil {
 		return nil, err
 	}
 
-	if slot > uint64(len(epochCreators)) {
-		return nil, errNoSlotCreators
+	if slot > uint64(len(epochValidators)) {
+		return nil, errNoSlotValidators
 	}
 
-	return epochCreators[slot], nil
+	return epochValidators[slot], nil
 }
 
 func (c *ValidatorsCache) AddValidator(validator Validator, epoch uint64) {
