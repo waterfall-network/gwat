@@ -3370,12 +3370,8 @@ func (bc *BlockChain) RemoveTips(hashes common.HashArray) {
 }
 
 // FinalizeTips update tips in accordance with finalization result
-// todo reset nr rollback
-// func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
-func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64, lastBlock types.Block) {
-	//todo reset nr rollback
-	//bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
-	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr, lastBlock)
+func (bc *BlockChain) FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64) {
+	bc.hc.FinalizeTips(finHashes, lastFinHash, lastFinNr)
 }
 
 // AppendToChildren append block hash as child of block
