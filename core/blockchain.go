@@ -2353,7 +2353,7 @@ func (bc *BlockChain) calcBlockHeight(stateBlock *types.Block, recommitBlocks []
 	baseHeight := stateBlock.Height()
 	recommitsLen := len(recommitBlocks)
 	height := baseHeight + uint64(recommitsLen) + 1
-	log.Info("Creator calculate block height",
+	log.Info("Calculate block height",
 		"height", height,
 		"recommitsLen", recommitsLen,
 		"baseHeight", baseHeight,
