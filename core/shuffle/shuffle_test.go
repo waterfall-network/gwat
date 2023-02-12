@@ -3,6 +3,7 @@ package shuffle
 import (
 	"crypto/sha256"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -10,15 +11,15 @@ import (
 )
 
 func TestShuffleCreators(t *testing.T) {
-	indexes := make([]uint64, testutils.RandomInt(10, 9999))
+	indexes := make([]common.Address, testutils.RandomInt(10, 9999))
 	for i := 0; i < len(indexes); i++ {
-		indexes[i] = uint64(i)
+		indexes[i] = common.HexToAddress(strconv.Itoa(i))
 	}
 
-	input := make([]uint64, len(indexes))
+	input := make([]common.Address, len(indexes))
 	copy(input, indexes)
 
-	seed := sha256.Sum256(Bytes32(uint64(testutils.RandomInt(0, 9999))))
+	seed := sha256.Sum256(Bytes8(uint64(testutils.RandomInt(0, 9999))))
 
 	shuffledList, err := ShuffleValidators(input, seed)
 	if err != nil {
@@ -38,50 +39,52 @@ func TestUnshuffleList(t *testing.T) {
 	testInnerShuffleList(t, unshuffleList, uint64(testutils.RandomInt(0, 9999)))
 }
 
-func testInnerShuffleList(t *testing.T, f func([]uint64, [32]byte) ([]uint64, error), epoch uint64) {
-	indexes := make([]uint64, uint64(testutils.RandomInt(0, 9999)))
+func testInnerShuffleList(t *testing.T, f func([]common.Address, [32]byte) ([]common.Address, error), epoch uint64) {
+	validatorsCount := uint64(testutils.RandomInt(0, 9999))
+
+	validators := make([]common.Address, validatorsCount)
 	for i := 0; i < 100; i++ {
-		indexes[i] = uint64(i)
+		validators[i] = common.HexToAddress(strconv.Itoa(i))
 	}
 
-	input := make([]uint64, len(indexes))
-	copy(input, indexes)
+	input := make([]common.Address, len(validators))
+	copy(input, validators)
 
-	seed := sha256.Sum256(Bytes32(epoch))
+	seed := sha256.Sum256(Bytes8(epoch))
 
 	shuffledList, err := f(input, seed)
 	if err != nil {
 		t.Fatalf("error while shuffling list: %v", err)
 	}
 
-	if reflect.DeepEqual(indexes, shuffledList) {
+	if reflect.DeepEqual(validators, shuffledList) {
 		t.Fatalf("unexpected output: %v", shuffledList)
 	}
 }
 
 func TestSwapOrNot(t *testing.T) {
-	index1 := uint64(1)
-	index2 := uint64(2)
-	index3 := uint64(3)
-	input := []uint64{index1, index2, index3}
+	addr1 := common.HexToAddress(strconv.Itoa(1))
+	addr2 := common.HexToAddress(strconv.Itoa(2))
+	addr3 := common.HexToAddress(strconv.Itoa(3))
+	input := []common.Address{addr1, addr2, addr3}
 	buf := make([]byte, totalSize)
 
 	tests := []struct {
 		name           string
-		expectedOutput []uint64
+		expectedOutput []common.Address
 		buf            []byte
 		source         [32]byte
 		byteV          byte
 	}{
 		{
 			name:           "don`t swap elements",
-			expectedOutput: []uint64{index1, index2, index3},
+			expectedOutput: []common.Address{addr1, addr2, addr3},
 			buf:            make([]byte, totalSize),
 			source:         [32]byte{},
 			byteV:          byte(0),
 		}, {
 			name:           "swap elements",
-			expectedOutput: []uint64{index1, index3, index2},
+			expectedOutput: []common.Address{addr1, addr3, addr2},
 			buf:            make([]byte, totalSize),
 			source:         common.BytesToHash([]byte{1, 2, 3}),
 			byteV:          byte(4),

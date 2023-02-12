@@ -17,8 +17,6 @@
 package core
 
 import (
-	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -27,7 +25,9 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
