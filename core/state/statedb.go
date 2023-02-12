@@ -382,17 +382,21 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
-func (s *StateDB) AddValidatorsList(key common.Address, validators []common.Address) {
-	stateObject := s.GetOrNewStateObject(key)
-	if stateObject != nil {
-		stateObject.SetValidatorsList(validators)
+func (s *StateDB) AddValidatorsList(key *common.Address, validators []common.Address) {
+	if key != nil {
+		stateObject := s.GetOrNewStateObject(*key)
+		if stateObject != nil {
+			stateObject.SetValidatorsList(validators)
+		}
 	}
 }
 
-func (s *StateDB) GetValidatorsList(key common.Address) []common.Address {
-	stateObject := s.GetOrNewStateObject(key)
-	if stateObject != nil {
-		return stateObject.GetValidatorsList()
+func (s *StateDB) GetValidatorsList(key *common.Address) []common.Address {
+	if key != nil {
+		stateObject := s.GetOrNewStateObject(*key)
+		if stateObject != nil {
+			return stateObject.GetValidatorsList()
+		}
 	}
 
 	return nil

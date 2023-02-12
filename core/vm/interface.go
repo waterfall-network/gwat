@@ -47,6 +47,11 @@ type StateDB interface {
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
 
+	AddValidatorsList(key *common.Address, validators []common.Address)
+	GetValidatorsList(key *common.Address) []common.Address
+	GetValidatorInfo(validatorAddress common.Address) types.ValidatorInfo
+	SetValidatorInfo(validatorAddress common.Address, info types.ValidatorInfo)
+
 	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool
 

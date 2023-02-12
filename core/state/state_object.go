@@ -550,7 +550,7 @@ func (s *stateObject) Value() *big.Int {
 
 func (s *stateObject) GetValidatorsList() []common.Address {
 	validators := make([]common.Address, 0)
-	for i := 0; i < len(s.data.CodeHash); i += common.AddressLength {
+	for i := 0; i+common.AddressLength < len(s.data.CodeHash); i += common.AddressLength {
 		validators = append(validators, common.BytesToAddress(s.data.CodeHash[i:i+common.AddressLength]))
 	}
 

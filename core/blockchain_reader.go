@@ -536,13 +536,13 @@ func (bc *BlockChain) GetShuffledValidatorsBySlot(slot uint64) ([]common.Address
 	return bc.getShuffledValidators(epoch, slotInEpoch)
 }
 
-func (bc *BlockChain) getShuffledValidators(epoch, slot uint64) ([]common.Address, error) {
-	return bc.validatorsCache.GetShuffledValidatorsBySlot(epoch, slot)
-}
-
 func (bc *BlockChain) GetShuffledSubnetValidatorsBySlot(subnet, slot uint64) ([]common.Address, error) {
 	slotInEpoch := slot % bc.GetSlotInfo().SlotsPerEpoch
 	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
 
 	return bc.validatorsCache.GetShuffledSubnetValidatorsBySlot(subnet, epoch, slotInEpoch)
+}
+
+func (bc *BlockChain) getShuffledValidators(epoch, slot uint64) ([]common.Address, error) {
+	return bc.validatorsCache.GetShuffledValidatorsBySlot(epoch, slot)
 }

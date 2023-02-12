@@ -28,9 +28,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xa645b86a27d2fe68737d18013e24855d758a1e165dae0aab689b0279a4e20bd6")
+	MainnetGenesisHash = common.HexToHash("0x2d5a825666a4b49059a39c608e5fa1f4949b46ab7793853fc58307a54857743e")
 	// DevNetGenesisHash  waterfall test net
-	DevNetGenesisHash = common.HexToHash("0xe6e0f3cc76502a94cdb3e1365e75bb2c72dd7db996b5a96580688ef64de1269c")
+	DevNetGenesisHash = common.HexToHash("0x733a3d6e8e0800197423933a03593b235d8a7af19049782af792775c378f25f1")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -111,16 +111,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64, common.Address{}}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64, common.Address{}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64, nil}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, math.MaxUint64, common.Address{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, math.MaxUint64, nil}
 	TestRules       = TestChainConfig.Rules()
 )
 
@@ -186,7 +186,7 @@ type ChainConfig struct {
 	// Fork slots
 	ForkSlotSubNet1 uint64 `json:"forkSlotSubNet1,omitempty"`
 
-	ValidatorsStateAddress common.Address
+	ValidatorsStateAddress *common.Address
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

@@ -3528,12 +3528,17 @@ func (bc *BlockChain) HeadSynchronising() bool {
 
 func (bc *BlockChain) ShuffleForNextEpoch(epoch uint64) {
 	for {
-		if bc.GetSlotInfo().CurrentSlot()%bc.GetSlotInfo().SlotsPerEpoch == bc.GetSlotInfo().SlotsPerEpoch-2 {
-			epoch++
-			activeValidators := bc.GetActiveValidatorsAddressesByEpoch(epoch)
-			err := bc.ShuffleAndCachingValidators(epoch, activeValidators)
-			if err != nil {
-				log.Error("can`t shuffle creators for the next epoch", "epoch", epoch, "error", err)
+		select {
+		case <-bc.quit:
+			return
+		default:
+			if bc.GetSlotInfo().CurrentSlot()%bc.GetSlotInfo().SlotsPerEpoch == bc.GetSlotInfo().SlotsPerEpoch-2 {
+				epoch++
+				activeValidators := bc.GetActiveValidatorsAddressesByEpoch(epoch)
+				err := bc.ShuffleAndCachingValidators(epoch, activeValidators)
+				if err != nil {
+					log.Error("can`t shuffle creators for the next epoch", "epoch", epoch, "error", err)
+				}
 			}
 		}
 	}
@@ -3541,7 +3546,7 @@ func (bc *BlockChain) ShuffleForNextEpoch(epoch uint64) {
 
 func (bc *BlockChain) ShuffleAndCachingValidators(epoch uint64, validators []common.Address) error {
 	shuffleFunc := func(epoch uint64, validators []common.Address) ([]common.Address, error) {
-		seed, err := bc.seed(epoch - 2)
+		seed, err := bc.seed(epoch)
 		if err != nil {
 			return nil, err
 		}

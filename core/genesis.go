@@ -293,6 +293,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		copy(buf[beginning:end], validator[:])
 	}
 
+	validatorsStateAddress := crypto.Keccak256Address(buf)
+
 	if g.Config != nil {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
@@ -300,9 +302,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 
-		g.Config.ValidatorsStateAddress = crypto.Keccak256Address(buf)
+		g.Config.ValidatorsStateAddress = &validatorsStateAddress
 	} else {
-		g.Config = &params.ChainConfig{ValidatorsStateAddress: crypto.Keccak256Address(buf)}
+		g.Config = &params.ChainConfig{ValidatorsStateAddress: &validatorsStateAddress}
 	}
 
 	g.CreateDepositContract(statedb, head)

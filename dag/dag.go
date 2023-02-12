@@ -117,7 +117,23 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	)
 
 	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
-		creators, err := d.bc.GetShuffledValidatorsBySlot(data.Slot)
+		var (
+			creators []common.Address
+			err      error
+		)
+
+		if d.bc.Config().IsForkSlotSubNet1(data.Slot) {
+			// TODO: add subnet, uncomment and add else condition for this if on line 135 !!!!
+			//creators, err = d.bc.GetShuffledSubnetValidatorsBySlot(subnet, data.Slot)
+			//if err != nil {
+			//	log.Error("no creators for slot", "slot", data.Slot, "error", err)
+			//
+			//	errStr := err.Error()
+			//	return &types.ConsensusResult{
+			//		Error: &errStr}
+			//}
+		}
+		creators, err = d.bc.GetShuffledValidatorsBySlot(data.Slot)
 		if err != nil {
 			log.Error("no creators for slot", "slot", data.Slot, "error", err)
 
