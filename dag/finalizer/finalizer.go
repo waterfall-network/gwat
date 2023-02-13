@@ -75,12 +75,14 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		return nil
 	}
 
-	if err := f.SetSpineState(baseSpine); err != nil {
+	bc := f.eth.BlockChain()
+	lastFinBlock := bc.GetLastFinalizedBlock()
+
+	if err := f.SetSpineState(baseSpine, lastFinBlock.Nr()); err != nil {
 		return err
 	}
 
-	bc := f.eth.BlockChain()
-	lastFinBlock := bc.GetLastFinalizedBlock()
+	lastFinBlock = bc.GetLastFinalizedBlock()
 	lastFinNr := lastFinBlock.Nr()
 	successSpine := lastFinBlock.Hash()
 
@@ -106,11 +108,12 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		spine := spinesMap[slot]
 		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
 
+		log.Info("Finalization spine chain calculated", "isHeadSync", isHeadSync, "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
+
 		if len(orderedChain) == 0 {
-			log.Info("⌛ Finalization skip finalized spine:", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
+			log.Warn("⌛ Finalization skip finalized spine: (must never happened)", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
 			continue
 		}
-		log.Info("Finalization spine chain calculated", "isHeadSync", isHeadSync, "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
 		if isHeadSync {
 			//validate blocks while head sync
@@ -133,7 +136,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 			isHead := i == len(orderedChain)-1
 			if err := f.finalizeBlock(nr, *block, isHead); err != nil {
 				log.Error("Block finalization failed", "isHead", isHead, "calc.nr", nr, "b.nr", block.Nr(), "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
-				if err := f.SetSpineState(&successSpine); err != nil {
+				if err := f.SetSpineState(&successSpine, nr); err != nil {
 					return err
 				}
 				return err
@@ -141,13 +144,16 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		}
 		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		if lastBlock.Height() != lastBlock.Nr() {
+			log.Error("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+			return f.SetSpineState(&successSpine, lastFinNr)
+		}
 		lastFinNr = lastBlock.Nr()
 		//todo add logs to catch Reset Nr to update tips
 		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
 		log.Info("⛓ Finalization of spine completed (updateTips)", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		if lastBlock.Height() != lastBlock.Nr() {
-			log.Error("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-			return f.SetSpineState(&successSpine)
+			log.Error("☠ finalizing: mismatch nr and height (aft updateTips)", "calc.nr", lastFinNr, "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		}
 		successSpine = spine.Hash()
 	}
@@ -157,11 +163,31 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 // updateTips update tips in accordance of finalized blocks.
 func (f *Finalizer) updateTips(finHashes common.HashArray, lastBlock types.Block) {
 	bc := f.eth.BlockChain()
-	bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height())
+
+	//todo reset nr log
+	if lastBlock.Nr() == 0 {
+		log.Error("☠☠☠ RESET NR DETECTED:updateTips 000 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+	}
+
+	//todo reset nr rollback
+	//bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height())
+	bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height(), lastBlock)
+
+	//todo reset nr log
+	if lastBlock.Nr() == 0 {
+		log.Error("☠☠☠ RESET NR DETECTED:updateTips 111 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+	}
+
 	//remove stale blockDags
 	for _, h := range finHashes {
 		bc.DeleteBlockDag(h)
 	}
+
+	//todo reset nr log
+	if lastBlock.Nr() == 0 {
+		log.Error("☠☠☠ RESET NR DETECTED:updateTips 111 ☠☠☠", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+	}
+
 }
 
 // finalizeBlock finalize block
@@ -315,7 +341,7 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 }
 
 // SetSpineState set state by past spine.
-func (f *Finalizer) SetSpineState(spineHash *common.Hash) error {
+func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	if spineHash == nil {
 		log.Error("Set spine state: bad param", "spineHash", nil)
 		return ErrBadParams
@@ -334,7 +360,7 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash) error {
 	}
 
 	lastFinBlock := bc.GetLastFinalizedBlock()
-	if spineBlock.Hash() == lastFinBlock.Hash() {
+	if spineBlock.Hash() == lastFinBlock.Hash() && spineBlock.Nr() >= lfNr {
 		return nil
 	}
 
@@ -342,7 +368,7 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash) error {
 	defer bc.ResetRollbackActive()
 
 	//reorg finalized and dag chains in accordance with spineHash
-	lfNr := lastFinBlock.Nr()
+	//lfNr := lastFinBlock.Nr()
 	blockDagList := []types.BlockDAG{}
 	for i := lfNr; i > spineBlock.Nr(); i-- {
 		block := bc.GetBlockByNumber(i)

@@ -104,8 +104,6 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
 			e := err.Error()
 			res.Error = &e
-		} else {
-			d.bc.WriteLastCoordinatedHash(data.Spines[len(data.Spines)-1])
 		}
 	}
 	lfHeader := d.bc.GetLastFinalizedHeader()
@@ -117,6 +115,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
 			res.Error = &mrg
 		}
+	} else {
+		d.bc.WriteLastCoordinatedHash(lfHeader.Hash())
 	}
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash
