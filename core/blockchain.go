@@ -3637,7 +3637,7 @@ func (bc *BlockChain) SeedExist(epoch uint64) bool {
 
 // seed make Seed for shuffling represents in [32] byte
 // Seed = hash of the first finalized block in the epoch finalized two epoch ago + epoch number represents in [32] byte
-func (bc *BlockChain) seed(epoch uint64) ([32]byte, error) {
+func (bc *BlockChain) seed(epoch uint64) (common.Hash, error) {
 	epochBytes := shuffle.Bytes8(epoch)
 	epochSeed, err := bc.ReedSeedHash(epoch)
 	if err != nil {

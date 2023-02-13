@@ -17,7 +17,7 @@ const shuffleRoundCount = uint8(90)
 var maxShuffleListSize uint64 = 1 << 40
 
 // ShuffleValidators returns list of shuffled addresses in a pseudorandom permutation `p` of `0...list_size - 1` with “seed“ as entropy.
-func ShuffleValidators(validators []common.Address, seed [32]byte) ([]common.Address, error) {
+func ShuffleValidators(validators []common.Address, seed common.Hash) ([]common.Address, error) {
 	shuffledList, err := unshuffleList(validators, seed)
 	if err != nil {
 		return nil, err
@@ -26,15 +26,15 @@ func ShuffleValidators(validators []common.Address, seed [32]byte) ([]common.Add
 	return shuffledList, nil
 }
 
-func shuffleList(validators []common.Address, seed [32]byte) ([]common.Address, error) {
+func shuffleList(validators []common.Address, seed common.Hash) ([]common.Address, error) {
 	return innerShuffleList(validators, seed, true /* shuffle */)
 }
 
-func unshuffleList(validators []common.Address, seed [32]byte) ([]common.Address, error) {
+func unshuffleList(validators []common.Address, seed common.Hash) ([]common.Address, error) {
 	return innerShuffleList(validators, seed, false /* un-shuffle */)
 }
 
-func innerShuffleList(validators []common.Address, seed [32]byte, shuffl bool) ([]common.Address, error) {
+func innerShuffleList(validators []common.Address, seed common.Hash, shuffl bool) ([]common.Address, error) {
 	if len(validators) <= 1 {
 		return validators, nil
 	}
@@ -100,9 +100,9 @@ func swapOrNot(
 	byteV byte,
 	i, j uint64,
 	validators []common.Address,
-	source [32]byte,
+	source common.Hash,
 	hashFunc func([]byte) common.Hash,
-) (byte, [32]byte) {
+) (byte, common.Hash) {
 	if j&0xff == 0xff {
 		binary.LittleEndian.PutUint32(buf[pivotViewSize:], uint32(j>>8))
 		source = hashFunc(buf)

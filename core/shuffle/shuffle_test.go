@@ -39,7 +39,7 @@ func TestUnshuffleList(t *testing.T) {
 	testInnerShuffleList(t, unshuffleList, uint64(testutils.RandomInt(0, 9999)))
 }
 
-func testInnerShuffleList(t *testing.T, f func([]common.Address, [32]byte) ([]common.Address, error), epoch uint64) {
+func testInnerShuffleList(t *testing.T, f func([]common.Address, common.Hash) ([]common.Address, error), epoch uint64) {
 	validatorsCount := uint64(testutils.RandomInt(0, 9999))
 
 	validators := make([]common.Address, validatorsCount)
@@ -73,14 +73,14 @@ func TestSwapOrNot(t *testing.T) {
 		name           string
 		expectedOutput []common.Address
 		buf            []byte
-		source         [32]byte
+		source         common.Hash
 		byteV          byte
 	}{
 		{
 			name:           "don`t swap elements",
 			expectedOutput: []common.Address{addr1, addr2, addr3},
 			buf:            make([]byte, totalSize),
-			source:         [32]byte{},
+			source:         common.Hash{},
 			byteV:          byte(0),
 		}, {
 			name:           "swap elements",

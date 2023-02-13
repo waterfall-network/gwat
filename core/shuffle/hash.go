@@ -23,7 +23,7 @@ func CustomSHA256Hasher() func([]byte) common.Hash {
 	} else {
 		hasher.Reset()
 	}
-	var h [32]byte
+	var h common.Hash
 
 	return func(data []byte) common.Hash {
 		hasher.Write(data)
