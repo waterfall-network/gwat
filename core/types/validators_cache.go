@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	errNoSlotValidators   = errors.New("there are no creators for slot")
-	errNoSubnetValidators = errors.New("there are no creators for subnet")
-	errNoEpochValidators  = errors.New("there are no creators for epoch")
+	errNoSlotValidators   = errors.New("there are no validators for slot")
+	errNoSubnetValidators = errors.New("there are no validators for subnet")
+	errNoEpochValidators  = errors.New("there are no validators for epoch")
 	errNoCachedValidators = errors.New("there are no cached validators")
 )
 

@@ -54,6 +54,9 @@ type Dag struct {
 	headsync *headsync.Headsync
 
 	busy int32
+
+	exitChan chan struct{}
+	errChan  chan error
 }
 
 // New creates new instance of Dag
@@ -67,6 +70,8 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
 		finalizer:   fin,
 		headsync:    headsync.New(chainConfig, eth, mux, fin),
+		exitChan:    make(chan struct{}),
+		errChan:     make(chan error),
 	}
 	atomic.StoreInt32(&d.busy, 0)
 	return d
@@ -214,6 +219,126 @@ func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
 // SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
 func (d *Dag) SubscribeConsensusInfoEvent(ch chan<- types.Tips) event.Subscription {
 	return d.consensusInfoFeed.Subscribe(ch)
+}
+
+func (d *Dag) StartWork(accounts []common.Address) {
+	slotTime := d.bc.GetSlotInfo().SecondsPerSlot
+	ticker := time.NewTicker(time.Duration(slotTime) * time.Second)
+
+	for {
+		select {
+		case <-d.exitChan:
+			close(d.exitChan)
+			close(d.errChan)
+			ticker.Stop()
+			return
+		case err := <-d.errChan:
+			close(d.errChan)
+			close(d.exitChan)
+			ticker.Stop()
+
+			log.Error("dag worker has error", "error", err)
+			return
+		case <-ticker.C:
+			var (
+				err      error
+				creators []common.Address
+			)
+
+			slot := d.bc.GetSlotInfo().CurrentSlot()
+
+			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 112)
+
+			//if d.bc.Config().IsForkSlotSubNet1(slot) {
+			//	creators, err = d.bc.GetShuffledSubnetValidatorsBySlot(subnet,slot)
+			//	if err != nil {
+			//		d.errChan <- err
+			//	}
+			//}else{}
+			// TODO: move this code to the else condition after subnet support.
+			creators, err = d.bc.GetShuffledValidatorsBySlot(slot)
+			if err != nil {
+				d.errChan <- err
+			}
+
+			d.work(slot, creators, accounts)
+		}
+	}
+
+}
+
+func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
+	//skip if synchronising
+	if d.eth.Downloader().Synchronising() {
+		err := creator.ErrSynchronization
+		d.errChan <- err
+	}
+
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+
+	errs := map[string]string{}
+
+	var (
+		err error
+	)
+	// create block
+	tips := d.bc.GetTips()
+	//tips, unloaded := d.bc.ReviseTips()
+	dagSlots := d.countDagSlots(&tips)
+	log.Info("Handle Consensus: create condition",
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
+		"IsRunning", d.creator.IsRunning(),
+		"errs", errs,
+		"dagSlots", dagSlots,
+	)
+
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
+		assigned := &creator.Assignment{
+			Slot:     slot,
+			Creators: creators,
+		}
+
+		crtStart := time.Now()
+		crtInfo := map[string]string{}
+		for _, creator := range assigned.Creators {
+			// if received next slot
+			if d.consensusInfo.Slot > assigned.Slot {
+				break
+			}
+
+			d.eth.BlockChain().DagMu.Lock()
+			defer d.eth.BlockChain().DagMu.Unlock()
+
+			coinbase := common.Address{}
+			for _, acc := range accounts {
+				if creator == acc {
+					coinbase = creator
+					break
+				}
+			}
+			if coinbase == (common.Address{}) {
+				return
+			}
+
+			d.eth.SetEtherbase(coinbase)
+			if err = d.eth.CreatorAuthorize(coinbase); err != nil {
+				log.Error("Creator authorize err", "err", err, "creator", coinbase)
+				return
+			}
+			log.Info("Creator assigned", "creator", coinbase)
+
+			block, crtErr := d.creator.CreateBlock(assigned, &tips)
+			if crtErr != nil {
+				crtInfo["error"] = crtErr.Error()
+			}
+
+			if block != nil {
+				crtInfo["newBlock"] = block.Hash().Hex()
+			}
+			log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+		}
+	}
 }
 
 // countDagSlots count number of slots in dag chain

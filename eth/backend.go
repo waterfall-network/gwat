@@ -228,6 +228,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	eth.dag.Creator().SetExtra(makeExtraData(config.Creator.ExtraData))
 
+	go eth.dag.StartWork(eth.accountManager.Accounts())
+
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
