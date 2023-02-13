@@ -247,7 +247,7 @@ func (d *Dag) StartWork(accounts []common.Address) {
 
 			slot := d.bc.GetSlotInfo().CurrentSlot()
 
-			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 112)
+			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 
 			//if d.bc.Config().IsForkSlotSubNet1(slot) {
 			//	creators, err = d.bc.GetShuffledSubnetValidatorsBySlot(subnet,slot)
@@ -270,8 +270,7 @@ func (d *Dag) StartWork(accounts []common.Address) {
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
-		err := creator.ErrSynchronization
-		d.errChan <- err
+		d.errChan <- creator.ErrSynchronization
 	}
 
 	d.bc.DagMu.Lock()
