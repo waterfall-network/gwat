@@ -101,7 +101,7 @@ func swapOrNot(
 	i, j uint64,
 	validators []common.Address,
 	source [32]byte,
-	hashFunc func([]byte) [32]byte,
+	hashFunc func([]byte) common.Hash,
 ) (byte, [32]byte) {
 	if j&0xff == 0xff {
 		binary.LittleEndian.PutUint32(buf[pivotViewSize:], uint32(j>>8))

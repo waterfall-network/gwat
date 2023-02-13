@@ -2181,11 +2181,6 @@ func NewPublicDagAPI(b Backend) *PublicDagAPI {
 	return &PublicDagAPI{b: b, am: b.AccountManager()}
 }
 
-// Sync start consensus procedure.
-func (api *PublicDagAPI) Sync(ctx context.Context, data *types.ConsensusInfo) (*types.ConsensusResult, error) {
-	return api.b.Dag().HandleConsensus(data, api.am.Accounts()), nil
-}
-
 // Finalize finalize blocks.
 func (api *PublicDagAPI) Finalize(ctx context.Context, data *types.FinalizationParams) (*types.FinalizationResult, error) {
 	return api.b.Dag().HandleFinalize(data), nil

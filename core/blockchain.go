@@ -3526,6 +3526,8 @@ func (bc *BlockChain) HeadSynchronising() bool {
 	return bc.syncProvider.HeadSynchronising()
 }
 
+// ShuffleForNextEpoch checks the current slot and if a new epoch starts 2 slots after the current one,
+// it takes active validators, shuffles and caches for the next epoch.
 func (bc *BlockChain) ShuffleForNextEpoch(epoch uint64) {
 	for {
 		select {
@@ -3544,6 +3546,7 @@ func (bc *BlockChain) ShuffleForNextEpoch(epoch uint64) {
 	}
 }
 
+// ShuffleAndCachingValidators shuffles the list of validators, divides it into slots and then adds them to the cache
 func (bc *BlockChain) ShuffleAndCachingValidators(epoch uint64, validators []common.Address) error {
 	shuffleFunc := func(epoch uint64, validators []common.Address) ([]common.Address, error) {
 		seed, err := bc.seed(epoch)
@@ -3582,6 +3585,7 @@ func (bc *BlockChain) CachingValidatorsBySubnet(subnet uint64, validators []comm
 }
 
 func (bc *BlockChain) CachingAllValidators(stateDb *state.StateDB, epoch uint64) {
+	// get list of all validators from state
 	validatorsList := stateDb.GetValidatorsList(bc.chainConfig.ValidatorsStateAddress)
 
 	if validatorsList != nil {
@@ -3589,6 +3593,7 @@ func (bc *BlockChain) CachingAllValidators(stateDb *state.StateDB, epoch uint64)
 		for i, validator := range validatorsList {
 			var v types.Validator
 
+			// get info about validator from state
 			vInfo := stateDb.GetValidatorInfo(validator)
 			err := v.UnmarshalBinary(vInfo)
 			if err != nil {
@@ -3599,6 +3604,7 @@ func (bc *BlockChain) CachingAllValidators(stateDb *state.StateDB, epoch uint64)
 			validators[i] = v
 		}
 
+		// add validators to the cache
 		bc.validatorsCache.AddAllValidatorsByEpoch(epoch, validators)
 	}
 }
@@ -3646,6 +3652,7 @@ func (bc *BlockChain) seed(epoch uint64) ([32]byte, error) {
 	return seed32, nil
 }
 
+// breakByValidatorsBySlotCount splits the list of all validators into sublists for each slot
 func (bc *BlockChain) breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot int) [][]common.Address {
 	chunks := make([][]common.Address, 0)
 	for i := 0; i+validatorsPerSlot < len(validators); i += validatorsPerSlot {

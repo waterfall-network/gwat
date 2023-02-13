@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	"github.com/minio/sha256-simd"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 var sha256Pool = sync.Pool{New: func() interface{} {
@@ -14,7 +16,7 @@ var sha256Pool = sync.Pool{New: func() interface{} {
 // CustomSHA256Hasher returns a hash function that uses
 // an enclosed hasher. This is not safe for concurrent
 // use as the same hasher is being called throughout.
-func CustomSHA256Hasher() func([]byte) [32]byte {
+func CustomSHA256Hasher() func([]byte) common.Hash {
 	hasher, ok := sha256Pool.Get().(hash.Hash)
 	if !ok {
 		hasher = sha256.New()
@@ -23,7 +25,7 @@ func CustomSHA256Hasher() func([]byte) [32]byte {
 	}
 	var h [32]byte
 
-	return func(data []byte) [32]byte {
+	return func(data []byte) common.Hash {
 		hasher.Write(data)
 		hasher.Sum(h[:0])
 		hasher.Reset()

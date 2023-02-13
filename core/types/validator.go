@@ -90,6 +90,7 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// ValidatorInfo is a Validator represented as an array of bytes.
 type ValidatorInfo []byte
 
 func (vi ValidatorInfo) GetAddress() common.Address {

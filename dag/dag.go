@@ -6,7 +6,6 @@
 package dag
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -76,134 +75,6 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 // Creator get current creator
 func (d *Dag) Creator() *creator.Creator {
 	return d.creator
-}
-
-// HandleConsensus handles consensus data
-// 3. new block creation
-// 4. return result
-// depracated
-func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Address) *types.ConsensusResult {
-	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
-		errStr := creator.ErrSynchronization.Error()
-		return &types.ConsensusResult{
-			Error: &errStr,
-		}
-	}
-
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
-
-	errs := map[string]string{}
-	info := map[string]string{}
-	tstart := time.Now()
-
-	d.setConsensusInfo(data)
-
-	log.Info("Handle Consensus: start", "data", data, "\u2692", params.BuildId)
-
-	var (
-		candidates = common.HashArray{}
-	)
-	// create block
-	tips := d.bc.GetTips()
-	//tips, unloaded := d.bc.ReviseTips()
-	dagSlots := d.countDagSlots(&tips)
-	log.Info("Handle Consensus: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
-		"IsRunning", d.creator.IsRunning(),
-		"errs", errs,
-		"dagSlots", dagSlots,
-	)
-
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
-		var (
-			creators []common.Address
-			err      error
-		)
-
-		if d.bc.Config().IsForkSlotSubNet1(data.Slot) {
-			// TODO: add subnet, uncomment and add else condition for this if on line 135 !!!!
-			//creators, err = d.bc.GetShuffledSubnetValidatorsBySlot(subnet, data.Slot)
-			//if err != nil {
-			//	log.Error("no creators for slot", "slot", data.Slot, "error", err)
-			//
-			//	errStr := err.Error()
-			//	return &types.ConsensusResult{
-			//		Error: &errStr}
-			//}
-		}
-		creators, err = d.bc.GetShuffledValidatorsBySlot(data.Slot)
-		if err != nil {
-			log.Error("no creators for slot", "slot", data.Slot, "error", err)
-
-			errStr := err.Error()
-			return &types.ConsensusResult{
-				Error: &errStr}
-		}
-
-		assigned := &creator.Assignment{
-			Slot:     data.Slot,
-			Creators: creators,
-		}
-
-		go func() {
-			crtStart := time.Now()
-			crtInfo := map[string]string{}
-			for _, creator := range assigned.Creators {
-				// if received next slot
-				if d.consensusInfo.Slot > assigned.Slot {
-					break
-				}
-
-				func() {
-					d.eth.BlockChain().DagMu.Lock()
-					defer d.eth.BlockChain().DagMu.Unlock()
-
-					coinbase := common.Address{}
-					for _, acc := range accounts {
-						if creator == acc {
-							coinbase = creator
-							break
-						}
-					}
-					if coinbase == (common.Address{}) {
-						return
-					}
-
-					d.eth.SetEtherbase(coinbase)
-					if err = d.eth.CreatorAuthorize(coinbase); err != nil {
-						log.Error("Creator authorize err", "err", err, "creator", coinbase)
-						return
-					}
-					log.Info("Creator assigned", "creator", coinbase)
-
-					block, crtErr := d.creator.CreateBlock(assigned, &tips)
-					if crtErr != nil {
-						crtInfo["error"] = crtErr.Error()
-					}
-					if block != nil {
-						crtInfo["newBlock"] = block.Hash().Hex()
-					}
-					log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
-				}()
-			}
-		}()
-	}
-
-	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
-	res := &types.ConsensusResult{
-		Error:      nil,
-		Info:       &info,
-		Candidates: candidates,
-	}
-	if len(errs) > 0 {
-		strBuf, _ := json.Marshal(errs)
-		estr := string(strBuf)
-		res.Error = &estr
-	}
-	log.Info("Handle Consensus: response", "result", res)
-	return res
 }
 
 // HandleFinalize handles consensus data
@@ -340,25 +211,9 @@ func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
 	return d.consensusInfo.Copy()
 }
 
-// SetConsensusInfo set info received from the coordinating network
-func (d *Dag) setConsensusInfo(dsi *types.ConsensusInfo) {
-	d.consensusInfo = dsi
-	d.emitDagSyncInfo()
-	d.bc.SetLastCoordinatedSlot(dsi.Slot)
-}
-
 // SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
 func (d *Dag) SubscribeConsensusInfoEvent(ch chan<- types.Tips) event.Subscription {
 	return d.consensusInfoFeed.Subscribe(ch)
-}
-
-// emitDagSyncInfo emit consensusInfo updated event
-func (d *Dag) emitDagSyncInfo() bool {
-	if dsi := d.GetConsensusInfo(); dsi != nil {
-		d.consensusInfoFeed.Send(*dsi)
-		return true
-	}
-	return false
 }
 
 // countDagSlots count number of slots in dag chain
