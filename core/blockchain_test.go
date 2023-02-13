@@ -1,14 +1,15 @@
 package core
 
 import (
+	"math/big"
+	"testing"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/shuffle"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
-	"math/big"
-	"testing"
 )
 
 func TestBreakByCreatorsPerSlotCount(t *testing.T) {
