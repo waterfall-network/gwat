@@ -240,6 +240,9 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 
 				if h := rawdb.ReadFinalizedHashByNumber(c.chainDb, prevHeader.Nr()); h != prevHash {
 					log.Error("Indexer bad prev header", "slot", prevHeader.Slot, "nr", prevHeader.Nr(), "height", prevHeader.Height, "db.Hash", h.Hex(), "hash", prevHash.Hex())
+					if h == (common.Hash{}) {
+						continue
+					}
 					if prevHeader.Nr() > 0 {
 						if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
 							c.newHead(h.Nr(), true)

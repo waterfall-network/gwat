@@ -180,7 +180,7 @@ func (cs *chainSyncer) isResync() bool {
 	mapSlot := make(map[uint64]int, 0)
 	dagHeshCount := 0
 	for _, b := range blocks {
-		if b.Nr() == 0 && b.Height() > 0 {
+		if b != nil && b.Nr() == 0 && b.Height() > 0 {
 			mapSlot[b.Slot()]++
 			dagHeshCount++
 		}
