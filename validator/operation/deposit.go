@@ -20,6 +20,21 @@ func (op *depositOperation) init(
 	signature common.BlsSignature,
 	deposit_data_root common.Hash,
 ) error {
+	if pubkey == (common.BlsPubKey{}) {
+		return ErrNoPubKey
+	}
+	if creator_address == (common.Address{}) {
+		return ErrNoCreatorAddress
+	}
+	if withdrawal_address == (common.Address{}) {
+		return ErrNoWithdrawalAddress
+	}
+	if signature == (common.BlsSignature{}) {
+		return ErrNoSignature
+	}
+	if deposit_data_root == (common.Hash{}) {
+		return ErrNoDepositDataRoot
+	}
 	op.pubkey = pubkey
 	op.creator_address = creator_address
 	op.withdrawal_address = withdrawal_address
