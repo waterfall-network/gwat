@@ -25,6 +25,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // statePrefetcher is a basic Prefetcher, which blindly executes a block on top
@@ -50,12 +51,13 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 // only goal is to pre-cache transaction signatures and state trie nodes.
 func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *uint32) {
 	var (
-		header         = block.Header()
-		gaspool        = new(GasPool).AddGas(block.GasLimit())
-		blockContext   = NewEVMBlockContext(header, p.bc, nil)
-		evm            = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
-		tokenProcessor = token.NewProcessor(blockContext, statedb)
-		signer         = types.MakeSigner(p.config)
+		header             = block.Header()
+		gaspool            = new(GasPool).AddGas(block.GasLimit())
+		blockContext       = NewEVMBlockContext(header, p.bc, nil)
+		evm                = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
+		tokenProcessor     = token.NewProcessor(blockContext, statedb)
+		validatorProcessor = validator.NewProcessor(blockContext, statedb)
+		signer             = types.MakeSigner(p.config)
 	)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -69,7 +71,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			return // Also invalid block, bail out
 		}
 		statedb.Prepare(tx.Hash(), i)
-		if err := precacheTransaction(msg, p.config, gaspool, statedb, header, evm, tokenProcessor); err != nil {
+		if err := precacheTransaction(msg, p.config, gaspool, statedb, header, evm, tokenProcessor, validatorProcessor); err != nil {
 			return // Ugh, something went horribly wrong, bail out
 		}
 	}
@@ -79,10 +81,10 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 // precacheTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. The goal is not to execute
 // the transaction successfully, rather to warm up touched data slots.
-func precacheTransaction(msg types.Message, config *params.ChainConfig, gaspool *GasPool, statedb *state.StateDB, header *types.Header, evm *vm.EVM, tokenProcessor *token.Processor) error {
+func precacheTransaction(msg types.Message, config *params.ChainConfig, gaspool *GasPool, statedb *state.StateDB, header *types.Header, evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor) error {
 	// Update the evm with the new transaction context.
 	evm.Reset(NewEVMTxContext(msg), statedb)
 	// Add addresses to access list if applicable
-	_, err := ApplyMessage(evm, tokenProcessor, msg, gaspool)
+	_, err := ApplyMessage(evm, tokenProcessor, validatorProcessor, msg, gaspool)
 	return err
 }

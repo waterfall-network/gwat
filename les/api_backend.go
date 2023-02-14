@@ -40,6 +40,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 type LesApiBackend struct {
@@ -227,6 +228,11 @@ func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 func (b *LesApiBackend) GetTP(ctx context.Context, state *state.StateDB, header *types.Header) (*token.Processor, func() error, error) {
 	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
 	return token.NewProcessor(context, state), state.Error, nil
+}
+
+func (b *LesApiBackend) GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error) {
+	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
+	return validator.NewProcessor(context, state), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {

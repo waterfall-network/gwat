@@ -29,6 +29,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -55,6 +56,7 @@ The state transitioning model does all the necessary work to work out a valid ne
 type StateTransition struct {
 	gp         *GasPool
 	tp         *token.Processor
+	vp         *validator.Processor
 	msg        Message
 	gas        uint64
 	gasPrice   *big.Int
@@ -158,11 +160,12 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:        gp,
 		evm:       evm,
 		tp:        tokenProcessor,
+		vp:        validatorProcessor,
 		msg:       msg,
 		gasPrice:  msg.GasPrice(),
 		gasFeeCap: msg.GasFeeCap(),
@@ -180,8 +183,8 @@ func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Messag
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, tokenProcessor, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
+	return NewStateTransition(evm, tokenProcessor, validatorProcessor, msg, gp).TransitionDb()
 }
 
 // to returns the recipient of the message.

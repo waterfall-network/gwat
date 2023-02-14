@@ -18,20 +18,21 @@
 package web3ext
 
 var Modules = map[string]string{
-	"admin":    AdminJs,
-	"clique":   CliqueJs,
-	"ethash":   EthashJs,
-	"debug":    DebugJs,
-	"eth":      EthJs,
-	"miner":    MinerJs,
-	"net":      NetJs,
-	"personal": PersonalJs,
-	"rpc":      RpcJs,
-	"txpool":   TxpoolJs,
-	"les":      LESJs,
-	"vflux":    VfluxJs,
-	"dag":      DagJs,
-	"wat":      WatJs,
+	"admin":     AdminJs,
+	"clique":    CliqueJs,
+	"ethash":    EthashJs,
+	"debug":     DebugJs,
+	"eth":       EthJs,
+	"miner":     MinerJs,
+	"net":       NetJs,
+	"personal":  PersonalJs,
+	"rpc":       RpcJs,
+	"txpool":    TxpoolJs,
+	"les":       LESJs,
+	"vflux":     VfluxJs,
+	"dag":       DagJs,
+	"wat":       WatJs,
+	"validator": ValidatorJs,
 }
 
 const CliqueJs = `
@@ -851,6 +852,7 @@ web3._extend({
 	]
 });
 `
+
 const DagJs = `
 web3._extend({
 	property: 'dag',
@@ -1055,6 +1057,48 @@ web3._extend({
 			call: 'wat_buy',
 			params: 2,
 			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
+		}),
+	]
+});
+`
+
+const ValidatorJs = `
+web3._extend({
+	property: 'validator',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'depositData',
+			call: 'validator_depositData',
+			params: 1,
+			//TODO RM
+			inputFormatter: [function(options) {
+				function isHex (str) {
+					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
+				}
+				function handleHexField (key, valLen) {
+					val = options[key]
+					if (val) {
+						val = val.replace('0x', '')
+						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
+						if (!isHex(val)) throw new Error(key +': invalid hex.');
+						options[key] = '0x' + val;
+					} else {
+						throw new Error(key +': field is required.');
+					}
+				}
+				var BlsPubKeyLength = 48 * 2
+				var BlsSigLength = 96 * 2
+				var HashLength = 32 * 2
+				var AddressLength = 20 * 2
+
+				handleHexField('pubkey', BlsPubKeyLength)
+				handleHexField('creator_address', AddressLength)
+				handleHexField('withdrawal_address', AddressLength)
+				handleHexField('signature', BlsSigLength)
+				handleHexField('deposit_data_root', HashLength)
+				return options;
+			}]
 		}),
 	]
 });
