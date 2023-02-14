@@ -294,21 +294,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
 
-	// Check if token prefix and opcode are valid in raw data
-	isTokenOp := false
-	if _, err := operation.GetOpCode(msg.Data()); err == nil {
-		isTokenOp = true
-	}
-
-	var data []byte
-	if !isTokenOp {
-		data = st.data
-	}
-
-	contractCreation := msg.To() == nil && !isTokenOp
+	// Check if it's token related operations
+	opCode, err := operation.GetOpCode(msg.Data())
+	isTokenOperation := err == nil                                        // It's token operation if data was successfully parsed
+	isTokenCreation := isTokenOperation && opCode == operation.CreateCode // It's token creation if opCode is CreateCode
+	isContractCreation := msg.To() == nil && !isTokenCreation             // If to address is empty, and it's not token creation op code
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(data, st.msg.AccessList(), contractCreation)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation)
 	if err != nil {
 		return nil, err
 	}
@@ -330,11 +323,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
-	if contractCreation {
+	if isContractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
-
-		if isTokenOp {
+		if isTokenOperation {
 			op, err := operation.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
