@@ -295,10 +295,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	sender := vm.AccountRef(msg.From())
 
 	// Check if it's token related operations
-	opCode, err := operation.GetOpCode(msg.Data())
-	isTokenOperation := err == nil                                        // It's token operation if data was successfully parsed
-	isTokenCreation := isTokenOperation && opCode == operation.CreateCode // It's token creation if opCode is CreateCode
-	isContractCreation := msg.To() == nil && !isTokenCreation             // If to address is empty, and it's not token creation op code
+	opCode, err := operation.GetOpCode(msg.Data())                  // It's token operation if data was successfully parsed
+	isTokenCreation := err == nil && opCode == operation.CreateCode // It's token creation if opCode is CreateCode
+	isContractCreation := msg.To() == nil && !isTokenCreation       // If to address is empty, and it's not token creation op code
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation)
