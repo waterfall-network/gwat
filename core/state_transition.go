@@ -28,8 +28,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -299,12 +300,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Check if token prefix and opcode are valid in raw data
 	isTokenOp := false
-	if _, err := operation.GetOpCode(msg.Data()); err == nil {
+	if _, err := tokenOp.GetOpCode(msg.Data()); err == nil {
 		isTokenOp = true
 	}
 
+	isValidatorOp := validatorOp.IsValidatorOp(msg.To())
+
 	var data []byte
-	if !isTokenOp {
+	if !isTokenOp || isValidatorOp {
 		data = st.data
 	}
 
@@ -338,11 +341,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 
 		if isTokenOp {
-			op, err := operation.DecodeBytes(msg.Data())
+			op, err := tokenOp.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
 			}
 			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
+		} else if isValidatorOp {
+			op, err := validatorOp.DecodeBytes(msg.Data())
+			if err != nil {
+				return nil, err
+			}
+			ret, vmerr = st.vp.Call(sender, st.to(), st.value, op)
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
