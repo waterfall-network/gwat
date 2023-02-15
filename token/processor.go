@@ -121,15 +121,15 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
 // Call performs all transaction related operations that mutates state of the token
 //
 // The only following operations can be performed using the method:
-//  * token creation of WRC-20 or WRC-721 tokens
-//  * transfer from
-//  * transfer
-//  * approve
-//  * mint
-//  * burn
-//  * set approval for all
-//	* buy
-//	* setPrice
+//   - token creation of WRC-20 or WRC-721 tokens
+//   - transfer from
+//   - transfer
+//   - approve
+//   - mint
+//   - burn
+//   - set approval for all
+//   - buy
+//   - setPrice
 //
 // It returns byte representation of the return value of an operation.
 func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op operation.Operation) (ret []byte, err error) {
@@ -176,6 +176,13 @@ func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op op
 	}
 
 	return ret, err
+}
+
+// Exists performs check if token with given address exists
+//
+// It returns `true` if the token with given address exists.
+func (p *Processor) Exists(token common.Address) bool {
+	return p.state.Exist(token)
 }
 
 func (p *Processor) tokenCreate(caller Ref, tokenAddr common.Address, op operation.Create) (_ []byte, err error) {

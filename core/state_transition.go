@@ -326,7 +326,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if isContractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
-		if isTokenOperation {
+		// check if "to" address belongs to token, otherwise it's a contract
+		if st.tp.Exists(st.to()) {
+			// perform token operation if its valid op code
 			op, err := operation.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
