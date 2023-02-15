@@ -304,7 +304,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		isTokenOp = true
 	}
 
-	isValidatorOp := validatorOp.IsValidatorOp(msg.To())
+	isValidatorOp := st.vp.IsValidatorOp(msg.To())
 
 	var data []byte
 	if !isTokenOp || isValidatorOp {

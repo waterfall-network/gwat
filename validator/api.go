@@ -2,20 +2,15 @@ package validator
 
 import (
 	"context"
-	"errors"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
-)
-
-var (
-	ErrNotEnoughArgs = errors.New("not enough arguments for token create operation")
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 type Backend interface {
@@ -24,12 +19,12 @@ type Backend interface {
 	GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*Processor, func() error, error)
 }
 
-// PublicValidatorAPI provides an API to access native token functions.
+// PublicValidatorAPI provides an API to access validator functions.
 type PublicValidatorAPI struct {
 	b Backend
 }
 
-// NewPublicValidatorAPI creates a new native token API.
+// NewPublicValidatorAPI creates a new validator API.
 func NewPublicValidatorAPI(b Backend) *PublicValidatorAPI {
 	return &PublicValidatorAPI{b}
 }

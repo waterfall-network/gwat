@@ -23,11 +23,6 @@ var (
 		"77f32241384fa77efedbb3079bcc9a95930152ee87f341134a4e59c3e312ee5c2197732ea30d9aac2993cc4aad75335009815d07a" +
 		"8735f96c6dde443ba3a10f5523c4d00f6b3a7b48af5a42795183ab5aa2f1b2dd1b4cb40679413e0a38f670a4d19b21871f830f955" +
 		"ce41dace0926f19aad0d434b"
-
-	opTo    = common.HexToAddress("7dc9c9730689ff0b0fd506c67db815f12d90a448")
-	opFrom  = common.HexToAddress("7986bad81f4cbd9317f5a46861437dae58d69113")
-	opValue = big.NewInt(112233)
-	oData   = []byte{243, 12, 202, 20, 133, 116, 111, 107, 101, 110, 116, 100, 5}
 )
 
 type operationTestCase struct {

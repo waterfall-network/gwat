@@ -1,8 +1,9 @@
 package operation
 
 import (
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"unsafe"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 type depositOperation struct {
@@ -43,8 +44,7 @@ func (op *depositOperation) init(
 	return nil
 }
 
-// NewWRC721CreateOperation creates an operation for creating WRC-721 token
-// It sets Standard of the operation to StdWRC721 and all other WRC-721 related fields
+// NewDepositOperation creates an operation for creating validator deposit
 func NewDepositOperation(
 	pubkey common.BlsPubKey,
 	creator_address common.Address,
@@ -57,14 +57,6 @@ func NewDepositOperation(
 		return nil, err
 	}
 	return &op, nil
-}
-
-type depositOpData struct {
-	PubKey            common.BlsPubKey
-	CreatorAddress    common.Address
-	WithdrawalAddress common.Address
-	Signature         common.BlsSignature
-	DepositDataRoot   common.Hash
 }
 
 // UnmarshalBinary unmarshals a create operation from byte encoding
@@ -113,11 +105,9 @@ func (op *depositOperation) OpCode() Code {
 	return DepositCode
 }
 
-// todo RM ?
 // Code always returns an empty address
 // It's just a stub for the Operation interface.
 func (op *depositOperation) Address() common.Address {
-	panic("(op *depositOperation) Address()")
 	return common.Address{}
 }
 

@@ -2,8 +2,6 @@ package operation
 
 import (
 	"encoding"
-
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // Validator operation code
@@ -29,16 +27,6 @@ type Operation interface {
 
 	encoding.BinaryUnmarshaler
 	encoding.BinaryMarshaler
-}
-
-// IsValidatorOp returns true if tx is validator operation
-func IsValidatorOp(addrTo *common.Address) bool {
-	if addrTo == nil {
-		return false
-	}
-	//todo get the address from genesis config
-	validatorsStateAddress := common.HexToAddress("0x1111111111111111111111111111111111111111")
-	return *addrTo == validatorsStateAddress
 }
 
 // GetOpCode gets op code of an encoded validator operation
