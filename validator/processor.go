@@ -66,6 +66,16 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
 	}
 }
 
+// TODO correct implementation required !!!
+var deposit_count uint64
+
+func (p *Processor) getDepositCount() uint64 {
+	return deposit_count
+}
+func (p *Processor) incrDepositCount() {
+	deposit_count++
+}
+
 //todo get the address from genesis config
 // IsValidatorOp returns true if tx is validator operation
 func (p *Processor) GetValidatorsStateAddress() common.Address {
@@ -144,12 +154,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		return nil, err
 	}
 
-	//op.DepositDataRoot()
-
-	//todo
-	deposit_count := uint64(222)
-
-	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), deposit_count)
+	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
 
 	defer p.eventEmmiter.Deposit(toAddr, logData)
 

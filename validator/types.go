@@ -18,7 +18,7 @@ func PackDepositLogData(
 	withdrawalAddress common.Address,
 	amount *big.Int,
 	signature common.BlsSignature,
-	depositCount uint64,
+	depositIndex uint64,
 ) []byte {
 	data := make([]byte, 0, DepositLogDataLength)
 	data = append(data, pubkey.Bytes()...)
@@ -33,7 +33,7 @@ func PackDepositLogData(
 	data = append(data, common.Uint64ToBytes(amntGwei)...)
 
 	data = append(data, signature.Bytes()...)
-	data = append(data, common.Uint64ToBytes(depositCount)...)
+	data = append(data, common.Uint64ToBytes(depositIndex)...)
 	return data
 }
 
@@ -44,7 +44,7 @@ func UnpackDepositLogData(data []byte) (
 	withdrawalAddress common.Address,
 	amount uint64,
 	signature common.BlsSignature,
-	depositCount uint64,
+	depositIndex uint64,
 	err error,
 ) {
 	if len(data) != DepositLogDataLength {
@@ -73,7 +73,7 @@ func UnpackDepositLogData(data []byte) (
 
 	startOffset = endOffset
 	endOffset = startOffset + 8
-	depositCount = common.BytesToUint64(data[startOffset:endOffset])
+	depositIndex = common.BytesToUint64(data[startOffset:endOffset])
 
 	return
 }
