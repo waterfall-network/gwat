@@ -11,7 +11,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
-	validatorStorage "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 var (
@@ -139,42 +138,42 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	// burn value from sender balance
 	p.state.SubBalance(from, value)
 
-	//todo add creator to list of creators
-	// predefined account of common validators info
-	validatorsStorage, err := p.newStorage(toAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	//todo update state of creator
-	// creators account
-	creatorAddr := op.CreatorAddress()
-	creatorStorage, err := p.newStorage(creatorAddr)
-	if err != nil {
-		return nil, err
-	}
+	////todo add creator to list of creators
+	//// predefined account of common validators info
+	//validatorsStorage, err := p.newStorage(toAddr)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	////todo update state of creator
+	//// creators account
+	//creatorAddr := op.CreatorAddress()
+	//creatorStorage, err := p.newStorage(creatorAddr)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
 
 	defer p.eventEmmiter.Deposit(toAddr, logData)
 
 	log.Info("Deposit", "address", toAddr.Hex(), "from", from.Hex(), "value", value.String(), "pabkey", op.PubKey().Hex(), "creator", op.CreatorAddress().Hex())
-	validatorsStorage.Flush()
-	creatorStorage.Flush()
+	//validatorsStorage.Flush()
+	//creatorStorage.Flush()
 
 	return value.FillBytes(make([]byte, 32)), nil
 
 	//todo
-	return toAddr.Bytes(), nil
+	//return toAddr.Bytes(), nil
 }
 
-func (p *Processor) newStorage(addr common.Address) (validatorStorage.Storage, error) {
-	storage, err := validatorStorage.ReadStorage(validatorStorage.NewStorageStream(addr, p.state))
-	if err != nil {
-		return nil, err
-	}
-	return storage, nil
-}
+//func (p *Processor) newStorage(addr common.Address) (validatorStorage.Storage, error) {
+//	storage, err := validatorStorage.ReadStorage(validatorStorage.NewStorageStream(addr, p.state))
+//	if err != nil {
+//		return nil, err
+//	}
+//	return storage, nil
+//}
 
 type logEntry struct {
 	name      string
