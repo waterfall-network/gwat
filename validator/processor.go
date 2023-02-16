@@ -66,18 +66,17 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
 }
 
 // TODO correct implementation required !!!
-var deposit_count uint64
-
 func (p *Processor) getDepositCount() uint64 {
-	return deposit_count
+	count := p.state.GetBalance(GetValidatorsStateAddress())
+	return count.Uint64()
 }
 func (p *Processor) incrDepositCount() {
-	deposit_count++
+	p.state.AddBalance(GetValidatorsStateAddress(), big.NewInt(1))
 }
 
 //todo get the address from genesis config
 // IsValidatorOp returns true if tx is validator operation
-func (p *Processor) GetValidatorsStateAddress() common.Address {
+func GetValidatorsStateAddress() common.Address {
 	return common.HexToAddress("0x1111111111111111111111111111111111111111")
 }
 
@@ -86,7 +85,7 @@ func (p *Processor) IsValidatorOp(addrTo *common.Address) bool {
 	if addrTo == nil {
 		return false
 	}
-	return *addrTo == p.GetValidatorsStateAddress()
+	return *addrTo == GetValidatorsStateAddress()
 }
 
 // Call performs all transaction related operations that mutates state of the validator and validators state
@@ -155,7 +154,9 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
 
-	defer p.eventEmmiter.Deposit(toAddr, logData)
+	p.eventEmmiter.Deposit(toAddr, logData)
+
+	p.incrDepositCount()
 
 	log.Info("Deposit", "address", toAddr.Hex(), "from", from.Hex(), "value", value.String(), "pabkey", op.PubKey().Hex(), "creator", op.CreatorAddress().Hex())
 	//validatorsStorage.Flush()

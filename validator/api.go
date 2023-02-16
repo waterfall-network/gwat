@@ -17,6 +17,7 @@ type Backend interface {
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
 	RPCEVMTimeout() time.Duration // global timeout for eth_call over rpc: DoS protection
 	GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*Processor, func() error, error)
+	GetLastFinalizedBlock() *types.Block
 }
 
 // PublicValidatorAPI provides an API to access validator functions.
@@ -84,25 +85,17 @@ func (s *PublicValidatorAPI) DepositData(_ context.Context, args DepositArgs) (h
 	return b, nil
 }
 
-func (s *PublicValidatorAPI) newTokenProcessor(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (tp *Processor, cancel context.CancelFunc, tpError func() error, err error) {
-	// Setup context so it may be cancelled the call has completed
-	// or, in case of unmetered gas, setup a context with a timeout.
-	timeout := s.b.RPCEVMTimeout()
-	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-	} else {
-		ctx, cancel = context.WithCancel(ctx)
+// DepositCount returns a validators deposit count.
+func (s *PublicValidatorAPI) DepositCount(ctx context.Context, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+	//TODO implement
+	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
+	if blockNrOrHash != nil {
+		bNrOrHash = *blockNrOrHash
 	}
-
-	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, bNrOrHash)
 	if state == nil || err != nil {
-		return nil, cancel, nil, err
+		return 0, err
 	}
-
-	tp, tpError, err = s.b.GetVP(ctx, state, header)
-	if err != nil {
-		return nil, cancel, nil, err
-	}
-
-	return
+	count := state.GetBalance(GetValidatorsStateAddress())
+	return hexutil.Uint64(count.Uint64()), state.Error()
 }

@@ -1071,7 +1071,6 @@ web3._extend({
 			name: 'depositData',
 			call: 'validator_depositData',
 			params: 1,
-			//TODO RM
 			inputFormatter: [function(options) {
 				function isHex (str) {
 					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
@@ -1099,6 +1098,13 @@ web3._extend({
 				handleHexField('deposit_data_root', HashLength)
 				return options;
 			}]
+		}),
+		new web3._extend.Method({
+			name: 'depositCount',
+			call: 'validator_depositCount',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: web3._extend.utils.toDecimal
 		}),
 	]
 });
