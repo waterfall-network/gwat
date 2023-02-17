@@ -17,13 +17,13 @@
 package core
 
 import (
+	"github.com/stretchr/testify/assert"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -39,8 +39,10 @@ var (
 	data                                   []byte
 	name                                   []byte
 	symbol                                 []byte
+	baseURI                                []byte
 	totalSupply                            *big.Int
 	decimals                               uint8
+	percentFee                             uint8
 )
 
 func init() {
@@ -51,19 +53,19 @@ func init() {
 	decimals = uint8(testutils.RandomInt(0, 255))
 	name = testutils.RandomStringInBytes(testutils.RandomInt(10, 20))
 	symbol = testutils.RandomStringInBytes(testutils.RandomInt(5, 8))
+	baseURI = testutils.RandomStringInBytes(testutils.RandomInt(10, 20))
 	gasPrice = big.NewInt(100)
 	gasFreeCap = big.NewInt(0)
 	gasTipCap = big.NewInt(0)
 	gas = 25200
+	percentFee = 5
 }
 
 func TestTransitionDb(t *testing.T) {
 	// set up a test scenario
 	stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	stateDB.CreateAccount(from)
-	stateDB.CreateAccount(to)
 	stateDB.SetBalance(from, big.NewInt(10000000000000000))
-	stateDB.SetBalance(to, big.NewInt(10000000000000000))
 	if err != nil {
 		panic("cannot create state DB")
 	}
@@ -95,7 +97,7 @@ func TestTransitionDb(t *testing.T) {
 		st  = NewStateTransition(evm, tp, msg, new(GasPool).AddGas(50000000))
 	)
 
-	st.value = big.NewInt(101)
+	st.value = value
 	result, err := st.TransitionDb()
 	assert.NoError(t, err, err)
 	assert.NotNil(t, result)

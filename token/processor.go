@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ErrTokenAlreadyExists      = errors.New("token address already exists")
+	ErrAddressAlreadyExists    = errors.New("address already exists")
 	ErrTokenNotExists          = errors.New("token doesn't exist")
 	ErrTokenOpStandardNotValid = errors.New("token standard isn't valid for the operation")
 	ErrNotEnoughBalance        = errors.New("transfer amount exceeds token balance")
@@ -140,7 +140,7 @@ func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op op
 
 		token = crypto.CreateAddress(caller.Address(), p.state.GetNonce(caller.Address()))
 		if p.state.Exist(token) {
-			return nil, ErrTokenAlreadyExists
+			return nil, ErrAddressAlreadyExists
 		}
 	}
 
@@ -178,11 +178,28 @@ func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op op
 	return ret, err
 }
 
-// Exists performs check if token with given address exists
+// IsToken performs check if address belongs to token
+// WRC20 and WRC721 tokens both have balance of operation,
+// so we can verify that it's token by checking its balance.
 //
-// It returns `true` if the token with given address exists.
-func (p *Processor) Exists(token common.Address) bool {
-	return p.state.Exist(token)
+// It returns `true` if address belongs to token.
+func (p *Processor) IsToken(token common.Address, owner common.Address) bool {
+	if p.state.Exist(token) {
+		op, err := operation.NewBalanceOfOperation(token, owner)
+		if err != nil {
+			return false
+		}
+		balance, err := p.BalanceOf(op)
+		if err != nil {
+			return false
+		}
+
+		if balance.Cmp(big.NewInt(0)) >= 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (p *Processor) tokenCreate(caller Ref, tokenAddr common.Address, op operation.Create) (_ []byte, err error) {
