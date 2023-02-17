@@ -1344,6 +1344,12 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
 
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+	epochBlockSeed, err := rawdb.ReedSeedBlockHash(bc.db, blockEpoch)
+	if err == nil && epochBlockSeed == block.Root() {
+		rawdb.DeleteSeedBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
+	}
+
 	// update finalized number cache
 	bc.hc.numberCache.Remove(block.Hash())
 
