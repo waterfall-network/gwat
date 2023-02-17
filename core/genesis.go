@@ -22,10 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
-	"strings"
-	"time"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
@@ -41,6 +37,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
+	"math/big"
+	"strings"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -274,8 +272,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	head := &types.Header{
-		//Time:         g.Timestamp,
-		Time:         uint64(time.Now().Unix()),
+		Time:         g.Timestamp,
 		ParentHashes: g.ParentHashes,
 		Slot:         g.Slot,
 		Height:       g.Height,
