@@ -183,23 +183,27 @@ func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op op
 // so we can verify that it's token by checking its balance.
 //
 // It returns `true` if address belongs to token.
-func (p *Processor) IsToken(token common.Address, owner common.Address) bool {
-	if p.state.Exist(token) {
-		op, err := operation.NewBalanceOfOperation(token, owner)
-		if err != nil {
-			return false
-		}
-		balance, err := p.BalanceOf(op)
-		if err != nil {
-			return false
-		}
-
-		if balance.Cmp(big.NewInt(0)) >= 0 {
-			return true
-		}
+func (p *Processor) IsToken(token common.Address) bool {
+	if !p.state.Exist(token) {
+		return false
 	}
 
-	return false
+	op, err := operation.NewPropertiesOperation(token, nil)
+	if err != nil {
+		return false
+	}
+
+	props, err := p.Properties(op)
+	if err != nil {
+		return false
+	}
+
+	switch props.(type) {
+	case *WRC20PropertiesResult, *WRC721PropertiesResult:
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *Processor) tokenCreate(caller Ref, tokenAddr common.Address, op operation.Create) (_ []byte, err error) {
