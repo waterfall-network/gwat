@@ -28,6 +28,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -550,7 +551,7 @@ func (s *stateObject) Value() *big.Int {
 
 func (s *stateObject) GetValidatorsList() []common.Address {
 	validators := make([]common.Address, 0)
-	for i := 0; i+common.AddressLength < len(s.data.CodeHash); i += common.AddressLength {
+	for i := 0; i+common.AddressLength <= len(s.data.CodeHash); i += common.AddressLength {
 		validators = append(validators, common.BytesToAddress(s.data.CodeHash[i:i+common.AddressLength]))
 	}
 
@@ -568,10 +569,10 @@ func (s *stateObject) SetValidatorsList(validators []common.Address) {
 	s.data.CodeHash = buf
 }
 
-func (s *stateObject) ValidatorInfo() types.ValidatorInfo {
+func (s *stateObject) ValidatorInfo() cache.ValidatorInfo {
 	return s.data.CodeHash
 }
 
-func (s *stateObject) SetValidatorInfo(info types.ValidatorInfo) {
+func (s *stateObject) SetValidatorInfo(info cache.ValidatorInfo) {
 	s.data.CodeHash = info
 }

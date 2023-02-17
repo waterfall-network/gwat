@@ -34,12 +34,10 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/shuffle"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/syncx"
@@ -48,6 +46,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 var (
@@ -118,8 +117,6 @@ const (
 	//  The following incompatible database changes were added:
 	//    * New scheme for contract code in order to separate the codes and trie nodes
 	BlockChainVersion uint64 = 8
-
-	validatorsPerSlot = 4
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -208,7 +205,7 @@ type BlockChain struct {
 	txLookupCache      *lru.Cache     // Cache for the most recent transaction lookup data.
 	invalidBlocksCache *lru.Cache     // Cache for the blocks with unknown parents
 
-	validatorsCache *types.ValidatorsCache
+	consensus validator.Consensus
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -256,11 +253,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		receiptsCache:      receiptsCache,
 		blockCache:         blockCache,
 		txLookupCache:      txLookupCache,
-		validatorsCache:    types.NewValidatorsCache(),
 		invalidBlocksCache: invBlocksCache,
 		engine:             engine,
 		vmConfig:           vmConfig,
 		syncProvider:       nil,
+		consensus:          validator.NewConsensus(db, chainConfig),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -441,34 +438,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		SecondsPerSlot: chainConfig.SecondsPerSlot,
 		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
 	})
-
-	var (
-		st        *state.StateDB
-		epoch     uint64
-		lastBlock *types.Block
-	)
-
-	if bc.lastFinalizedBlock.Load() != nil {
-		lastBlock = bc.GetLastFinalizedBlock()
-		st, _ = bc.StateAt(lastBlock.Root())
-		epoch = bc.slotInfo.SlotToEpoch(lastBlock.Slot())
-	} else {
-		lastBlock = bc.genesisBlock
-		st, _ = bc.StateAt(bc.genesisBlock.Root())
-	}
-
-	bc.WriteSeedHash(lastBlock)
-
-	bc.CachingAllValidators(st, epoch)
-
-	activeValidators := bc.GetActiveValidatorsAddressesByEpoch(epoch)
-
-	err = bc.ShuffleAndCachingValidators(epoch, activeValidators)
-	if err != nil {
-		return nil, err
-	}
-
-	go bc.ShuffleForNextEpoch(epoch)
 
 	return bc, nil
 }
@@ -952,7 +921,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 		bc.RemoveTxFromPool(tx)
 	}
 
-	bc.WriteSeedHash(block)
+	bc.WriteSeedBlockHash(block)
 
 	return nil
 }
@@ -1913,19 +1882,29 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 		creators []common.Address
 		err      error
 	)
-	if !bc.Config().IsForkSlotSubNet1(bc.GetSlotInfo().CurrentSlot()) {
-		creators, err = bc.GetShuffledValidatorsBySlot(block.Slot())
+
+	st, err := bc.StateAt(block.Root())
+	if err != nil {
+		log.Error("can`t get block state", "error", err)
+		return false
+	}
+
+	epoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+	slotInEpoch := block.Slot() % bc.GetSlotInfo().SlotsPerEpoch
+
+	if bc.Config().IsForkSlotSubNet1(bc.GetSlotInfo().CurrentSlot()) {
+		// TODO: uncomment and transfer subnet to the function GetShuffledValidators()
+		//creators, err = bc.Consensus().GetShuffledValidators(st, epoch, slotInEpoch,subnet)
+		//if err != nil {
+		//	log.Error("can`t get shuffled validators", "error", err)
+		//	return false
+		//}
+	} else {
+		creators, err = bc.Consensus().GetShuffledValidators(st, epoch, slotInEpoch)
 		if err != nil {
 			log.Error("can`t get shuffled validators", "error", err)
 			return false
 		}
-	} else {
-		// TODO: uncomment and transfer subnet to the function GetShuffledSubnetValidatorsBySlot()
-		//creators, err = bc.GetShuffledSubnetValidatorsBySlot(subnet, block.Slot())
-		//if err != nil {
-		//	log.Error("can`t get shuffled subnet validators", "error", err)
-		//	return false
-		//}
 	}
 
 	//if no record - skip (actual fo dag sync)
@@ -3530,144 +3509,33 @@ func (bc *BlockChain) HeadSynchronising() bool {
 	return bc.syncProvider.HeadSynchronising()
 }
 
-// ShuffleForNextEpoch checks the current slot and if a new epoch starts 2 slots after the current one,
-// it takes active validators, shuffles and caches for the next epoch.
-func (bc *BlockChain) ShuffleForNextEpoch(epoch uint64) {
-	for {
-		select {
-		case <-bc.quit:
-			return
-		default:
-			if bc.GetSlotInfo().CurrentSlot()%bc.GetSlotInfo().SlotsPerEpoch == bc.GetSlotInfo().SlotsPerEpoch-2 {
-				epoch++
-				activeValidators := bc.GetActiveValidatorsAddressesByEpoch(epoch)
-				err := bc.ShuffleAndCachingValidators(epoch, activeValidators)
-				if err != nil {
-					log.Error("can`t shuffle creators for the next epoch", "epoch", epoch, "error", err)
-				}
-			}
-		}
+func (bc *BlockChain) WriteSeedBlockHash(block *types.Block) {
+	// check that block hash for block`s epoch was not wrote to the db.
+	// if it does not - write hash to the db
+	if !bc.SeedBlockExist(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
+		rawdb.WriteSeedBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Root())
 	}
 }
 
-// ShuffleAndCachingValidators shuffles the list of validators, divides it into slots and then adds them to the cache
-func (bc *BlockChain) ShuffleAndCachingValidators(epoch uint64, validators []common.Address) error {
-	shuffleFunc := func(epoch uint64, validators []common.Address) ([]common.Address, error) {
-		seed, err := bc.seed(epoch)
-		if err != nil {
-			return nil, err
-		}
-
-		return shuffle.ShuffleValidators(validators, seed)
+// ReedSeedBlockHash return first epoch block hash. Use this hash at seed for shuffle algorithm.
+// For the first two epochs, the genesis hash is used,
+// for the next, the hash of the first block that was completed two epochs ago is used.
+func (bc *BlockChain) ReedSeedBlockHash(epoch uint64) (common.Hash, error) {
+	if epoch > 2 {
+		epoch = epoch - 2
 	}
 
-	shuffledValidators, err := shuffleFunc(epoch, validators)
-	if err != nil {
-		return err
-	}
-
-	validatorsBySlots, err := bc.breakByValidatorsBySlotCount(shuffledValidators, validatorsPerSlot), nil
-
-	if len(validatorsBySlots) != int(bc.GetSlotInfo().SlotsPerEpoch) {
-		for len(validatorsBySlots) != int(bc.GetSlotInfo().SlotsPerEpoch) {
-			shuffledValidators, err = shuffleFunc(epoch, shuffledValidators)
-			if err != nil {
-				return err
-			}
-
-			validatorsBySlots = append(validatorsBySlots, bc.breakByValidatorsBySlotCount(shuffledValidators, validatorsPerSlot)...)
-		}
-	}
-
-	bc.validatorsCache.AddShuffledValidators(epoch, validatorsBySlots)
-
-	return nil
+	return rawdb.ReedSeedBlockHash(bc.db, epoch)
 }
 
-func (bc *BlockChain) CachingValidatorsBySubnet(subnet uint64, validators []common.Address) {
-	bc.validatorsCache.AddSubnetValidators(subnet, validators)
+func (bc *BlockChain) DeleteSeedBlockHash(epoch uint64) {
+	rawdb.DeleteSeedBlockHash(bc.db, epoch)
 }
 
-func (bc *BlockChain) CachingAllValidators(stateDb *state.StateDB, epoch uint64) {
-	// get list of all validators from state
-	validatorsList := stateDb.GetValidatorsList(bc.chainConfig.ValidatorsStateAddress)
-
-	if validatorsList != nil {
-		validators := make([]types.Validator, len(validatorsList))
-		for i, validator := range validatorsList {
-			var v types.Validator
-
-			// get info about validator from state
-			vInfo := stateDb.GetValidatorInfo(validator)
-			err := v.UnmarshalBinary(vInfo)
-			if err != nil {
-				log.Error("can`t unmarshal validator info", "address", validator, "error", err)
-				continue
-			}
-
-			validators[i] = v
-		}
-
-		// add validators to the cache
-		bc.validatorsCache.AddAllValidatorsByEpoch(epoch, validators)
-	}
+func (bc *BlockChain) SeedBlockExist(epoch uint64) bool {
+	return rawdb.ExistSeedBlockHash(bc.db, epoch)
 }
 
-func (bc *BlockChain) WriteSeedHash(block *types.Block) {
-	// check that block epoch is higher than second epoch
-	// because for the first and second epoch use genesis hash for shuffling
-	if block.Slot() >= bc.GetSlotInfo().SlotsPerEpoch*2 {
-		if !bc.SeedExist(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
-			rawdb.WriteSeedHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
-		}
-	}
-}
-
-func (bc *BlockChain) ReedSeedHash(epoch uint64) (common.Hash, error) {
-	return rawdb.ReedSeedHash(bc.db, epoch)
-}
-
-func (bc *BlockChain) DeleteSeedHash(epoch uint64) {
-	rawdb.DeleteSeedHash(bc.db, epoch)
-}
-
-func (bc *BlockChain) SeedExist(epoch uint64) bool {
-	return rawdb.ExistSeedHash(bc.db, epoch)
-}
-
-// seed make Seed for shuffling represents in [32] byte
-// Seed = hash of the first finalized block in the epoch finalized two epoch ago + epoch number represents in [32] byte
-func (bc *BlockChain) seed(epoch uint64) (common.Hash, error) {
-	epochBytes := shuffle.Bytes8(epoch)
-	epochSeed, err := bc.ReedSeedHash(epoch)
-	if err != nil {
-		// for the first and second epoch use genesis hash
-		if epoch >= 2 {
-			return common.Hash{}, errNoEpochSeed
-		} else {
-			epochSeed = bc.Genesis().Hash()
-		}
-	}
-
-	seed := crypto.Keccak256(append(epochSeed.Bytes(), epochBytes...))
-
-	seed32 := common.BytesToHash(seed)
-
-	return seed32, nil
-}
-
-// breakByValidatorsBySlotCount splits the list of all validators into sublists for each slot
-func (bc *BlockChain) breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot int) [][]common.Address {
-	chunks := make([][]common.Address, 0)
-	for i := 0; i+validatorsPerSlot < len(validators); i += validatorsPerSlot {
-		end := i + validatorsPerSlot
-		slotValidators := make([]common.Address, len(validators[i:end]))
-		copy(slotValidators, validators[i:end])
-		chunks = append(chunks, slotValidators)
-		if len(chunks) == int(bc.GetSlotInfo().SlotsPerEpoch) {
-			return chunks
-		}
-	}
-
-	return chunks
+func (bc *BlockChain) Consensus() validator.Consensus {
+	return bc.consensus
 }

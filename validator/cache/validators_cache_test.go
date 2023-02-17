@@ -1,4 +1,4 @@
-package types
+package cache
 
 import (
 	"math/rand"
@@ -36,7 +36,7 @@ var (
 )
 
 func TestNewValidatorsCache(t *testing.T) {
-	validatorsCache := NewValidatorsCache()
+	validatorsCache := New()
 	if validatorsCache.allValidatorsCache == nil {
 		t.Fatal("allValidatorsCache not initialized")
 	}
@@ -52,7 +52,7 @@ func TestNewValidatorsCache(t *testing.T) {
 }
 
 func TestAllValidatorsCache(t *testing.T) {
-	c := NewValidatorsCache()
+	c := New()
 
 	validators := make([]Validator, len(inputValidators))
 	for i, validator := range inputValidators {
@@ -71,7 +71,7 @@ func TestAllValidatorsCache(t *testing.T) {
 }
 
 func TestSubnetValidatorsCache(t *testing.T) {
-	c := NewValidatorsCache()
+	c := New()
 
 	validators, err := c.GetSubnetValidators(subnet)
 	testutils.AssertError(t, err, errNoSubnetValidators)
@@ -84,7 +84,7 @@ func TestSubnetValidatorsCache(t *testing.T) {
 }
 
 func TestShuffledValidatorsCache(t *testing.T) {
-	c := NewValidatorsCache()
+	c := New()
 
 	validators, err := c.GetShuffledValidatorsByEpoch(epoch)
 	testutils.AssertError(t, err, errNoEpochValidators)
@@ -110,7 +110,7 @@ func TestShuffledValidatorsCache(t *testing.T) {
 }
 
 func TestShuffledSubnetValidators(t *testing.T) {
-	c := NewValidatorsCache()
+	c := New()
 
 	c.AddShuffledSubnetValidators(subnet, epoch, shuffledValidators)
 
@@ -152,7 +152,7 @@ func TestShuffledSubnetValidators(t *testing.T) {
 }
 
 func TestGetActiveValidatorsByEpoch(t *testing.T) {
-	cache := NewValidatorsCache()
+	cache := New()
 
 	validators := cache.GetActiveValidatorsByEpoch(1)
 	if validators != nil {
@@ -175,7 +175,7 @@ func TestGetActiveValidatorsByEpoch(t *testing.T) {
 }
 
 func TestValidatorsCacheAddValidator(t *testing.T) {
-	c := NewValidatorsCache()
+	c := New()
 	validator := Validator{
 		Address:         addr1,
 		ActivationEpoch: 10,
@@ -193,7 +193,7 @@ func TestValidatorsCacheAddValidator(t *testing.T) {
 }
 
 func TestValidatorsCacheDelValidator(t *testing.T) {
-	c := NewValidatorsCache()
+	c := New()
 	validator := Validator{
 		Address:         common.Address{1},
 		ActivationEpoch: 10,

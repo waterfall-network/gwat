@@ -13,6 +13,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
@@ -243,25 +244,38 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			var (
 				err      error
 				creators []common.Address
+				st       *state.StateDB
 			)
 
-			slot := d.bc.GetSlotInfo().CurrentSlot()
+			currentSlot := d.bc.GetSlotInfo().CurrentSlot()
+			epoch := d.bc.GetSlotInfo().SlotToEpoch(currentSlot)
+			epochSlot := currentSlot % d.bc.GetSlotInfo().SlotsPerEpoch
+			seedBlock, err := d.bc.ReedSeedBlockHash(epoch)
+			if err != nil {
+				log.Error("can`t create block, epoch seed is empty", "epoch", epoch)
+				continue
+			}
 
+			st, err = d.bc.StateAt(seedBlock)
+			if err != nil {
+				log.Error("can`t get block state", "error", err)
+				continue
+			}
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 
 			//if d.bc.Config().IsForkSlotSubNet1(slot) {
-			//	creators, err = d.bc.GetShuffledSubnetValidatorsBySlot(subnet,slot)
+			//	creators, err = d.bc.Consensus().GetShuffledValidators(st,epoch,slot, subnet)
 			//	if err != nil {
 			//		d.errChan <- err
 			//	}
 			//}else{}
 			// TODO: move this code to the else condition after subnet support.
-			creators, err = d.bc.GetShuffledValidatorsBySlot(slot)
+			creators, err = d.bc.Consensus().GetShuffledValidators(st, epoch, epochSlot)
 			if err != nil {
 				d.errChan <- err
 			}
 
-			d.work(slot, creators, accounts)
+			d.work(currentSlot, creators, accounts)
 		}
 	}
 
@@ -302,12 +316,14 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		crtInfo := map[string]string{}
 		for _, creator := range assigned.Creators {
 			// if received next slot
-			if d.consensusInfo.Slot > assigned.Slot {
+
+			// TODO: may be drop consensusInfo field from blockchain because we don`t write value to it
+			if d.consensusInfo != nil && d.consensusInfo.Slot > assigned.Slot {
 				break
 			}
 
-			d.eth.BlockChain().DagMu.Lock()
-			defer d.eth.BlockChain().DagMu.Unlock()
+			//d.eth.BlockChain().DagMu.Lock()
+			//defer d.eth.BlockChain().DagMu.Unlock()
 
 			coinbase := common.Address{}
 			for _, acc := range accounts {

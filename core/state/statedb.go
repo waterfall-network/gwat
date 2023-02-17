@@ -33,6 +33,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
 )
 
 type revision struct {
@@ -301,6 +302,11 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	if stateObject == nil {
 		return common.Hash{}
 	}
+
+	if len(stateObject.CodeHash()) > len(common.Hash{}) {
+		return common.Hash{}
+	}
+
 	return common.BytesToHash(stateObject.CodeHash())
 }
 
@@ -402,7 +408,7 @@ func (s *StateDB) GetValidatorsList(key *common.Address) []common.Address {
 	return nil
 }
 
-func (s *StateDB) GetValidatorInfo(validatorAddress common.Address) types.ValidatorInfo {
+func (s *StateDB) GetValidatorInfo(validatorAddress common.Address) cache.ValidatorInfo {
 	stateObject := s.GetOrNewStateObject(validatorAddress)
 	if stateObject != nil {
 		return stateObject.ValidatorInfo()
@@ -411,7 +417,7 @@ func (s *StateDB) GetValidatorInfo(validatorAddress common.Address) types.Valida
 	return nil
 }
 
-func (s *StateDB) SetValidatorInfo(validatorAddress common.Address, info types.ValidatorInfo) {
+func (s *StateDB) SetValidatorInfo(validatorAddress common.Address, info cache.ValidatorInfo) {
 	stateObject := s.GetOrNewStateObject(validatorAddress)
 	if stateObject != nil {
 		stateObject.SetValidatorInfo(info)

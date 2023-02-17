@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
@@ -39,6 +40,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -272,7 +274,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	head := &types.Header{
-		Time:         g.Timestamp,
+		//Time:         g.Timestamp,
+		Time:         uint64(time.Now().Unix()),
 		ParentHashes: g.ParentHashes,
 		Slot:         g.Slot,
 		Height:       g.Height,
@@ -312,7 +315,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	statedb.AddValidatorsList(g.Config.ValidatorsStateAddress, g.Validators)
 
 	for i, validator := range g.Validators {
-		v := types.NewValidator(validator, nil, uint64(i), 0, math.MaxUint64, nil)
+		v := cache.NewValidator(validator, nil, uint64(i), 0, math.MaxUint64, nil)
 
 		info, err := v.MarshalBinary()
 		if err != nil {
@@ -324,6 +327,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	root := statedb.IntermediateRoot(false)
 	head.Root = root
+
+	// Use genesis root as seed for first and second epochs
+	rawdb.WriteSeedBlockHash(db, 0, root)
+	rawdb.WriteSeedBlockHash(db, 1, root)
 
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)

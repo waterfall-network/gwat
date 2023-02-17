@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/minio/sha256-simd"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 

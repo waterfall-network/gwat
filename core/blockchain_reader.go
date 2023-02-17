@@ -17,7 +17,6 @@
 package core
 
 import (
-	"errors"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -26,7 +25,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
@@ -469,80 +467,4 @@ func (bc *BlockChain) SubscribeProcessing(ch chan<- *types.Transaction) event.Su
 
 func (bc *BlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription {
 	return bc.scope.Track(bc.rmTxFeed.Subscribe(ch))
-}
-
-func (bc *BlockChain) GetAllValidatorsByEpoch(epoch uint64) ([]types.Validator, error) {
-	return bc.validatorsCache.GetAllValidatorsByEpoch(epoch)
-}
-
-func (bc *BlockChain) GetActiveValidatorsAddressesByEpoch(epoch uint64) []common.Address {
-	activeValidators := bc.GetActiveValidatorsByEpoch(epoch)
-
-	addresses := make([]common.Address, len(activeValidators))
-	for i, validator := range activeValidators {
-		addresses[i] = validator.Address
-	}
-
-	return addresses
-}
-
-func (bc *BlockChain) GetActiveValidatorsByEpoch(epoch uint64) []types.Validator {
-	activeValidators := bc.validatorsCache.GetActiveValidatorsByEpoch(epoch)
-	if activeValidators == nil {
-		hash, err := bc.ReedSeedHash(epoch)
-		if err != nil {
-			log.Error("there are no blocks", "epoch", epoch)
-			return nil
-		}
-
-		firstEpochBlock := bc.GetBlock(hash)
-		state, err := bc.StateAt(firstEpochBlock.Root())
-		if err != nil {
-			log.Error("there is no state", "root", firstEpochBlock.Root())
-			return nil
-		}
-
-		bc.CachingAllValidators(state, epoch)
-
-		activeValidators = bc.validatorsCache.GetActiveValidatorsByEpoch(epoch)
-	}
-
-	return activeValidators
-}
-
-func (bc *BlockChain) GetSubnetValidators(subnet uint64) ([]common.Address, error) {
-	return bc.validatorsCache.GetSubnetValidators(subnet)
-}
-
-func (bc *BlockChain) GetShuffledValidatorsBySlot(slot uint64) ([]common.Address, error) {
-	slotInEpoch := slot % bc.GetSlotInfo().SlotsPerEpoch
-	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
-
-	slotValidators, err := bc.validatorsCache.GetShuffledValidatorsBySlot(epoch, slotInEpoch)
-	if err == nil {
-		return slotValidators, nil
-	}
-
-	log.Error("can`t get shuffled validators by slot", "error", err)
-	log.Info("start shuffling active validators", "epoch", epoch)
-
-	activeValidators := bc.GetActiveValidatorsAddressesByEpoch(epoch)
-
-	err = bc.ShuffleAndCachingValidators(epoch, activeValidators)
-	if err != nil {
-		return nil, errors.New("can`t cached creators")
-	}
-
-	return bc.getShuffledValidators(epoch, slotInEpoch)
-}
-
-func (bc *BlockChain) GetShuffledSubnetValidatorsBySlot(subnet, slot uint64) ([]common.Address, error) {
-	slotInEpoch := slot % bc.GetSlotInfo().SlotsPerEpoch
-	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
-
-	return bc.validatorsCache.GetShuffledSubnetValidatorsBySlot(subnet, epoch, slotInEpoch)
-}
-
-func (bc *BlockChain) getShuffledValidators(epoch, slot uint64) ([]common.Address, error) {
-	return bc.validatorsCache.GetShuffledValidatorsBySlot(epoch, slot)
 }

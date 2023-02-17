@@ -1,12 +1,12 @@
 package core
 
 import (
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 	"math/big"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/shuffle"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"

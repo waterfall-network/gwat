@@ -1,4 +1,4 @@
-package types
+package cache
 
 import (
 	"encoding/binary"

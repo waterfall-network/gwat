@@ -1001,7 +1001,7 @@ func DeleteChildren(db ethdb.KeyValueWriter, parent common.Hash) {
 	}
 }
 
-func WriteSeedHash(db ethdb.KeyValueWriter, epoch uint64, seed common.Hash) {
+func WriteSeedBlockHash(db ethdb.KeyValueWriter, epoch uint64, seed common.Hash) {
 	key := seedKey(epoch)
 
 	err := db.Put(key, seed.Bytes())
@@ -1010,7 +1010,7 @@ func WriteSeedHash(db ethdb.KeyValueWriter, epoch uint64, seed common.Hash) {
 	}
 }
 
-func ReedSeedHash(db ethdb.KeyValueReader, epoch uint64) (common.Hash, error) {
+func ReedSeedBlockHash(db ethdb.KeyValueReader, epoch uint64) (common.Hash, error) {
 	key := seedKey(epoch)
 	buf, err := db.Get(key)
 	if err != nil {
@@ -1022,7 +1022,7 @@ func ReedSeedHash(db ethdb.KeyValueReader, epoch uint64) (common.Hash, error) {
 	return seed, nil
 }
 
-func DeleteSeedHash(db ethdb.KeyValueWriter, epoch uint64) {
+func DeleteSeedBlockHash(db ethdb.KeyValueWriter, epoch uint64) {
 	key := seedKey(epoch)
 	err := db.Delete(key)
 	if err != nil {
@@ -1030,7 +1030,7 @@ func DeleteSeedHash(db ethdb.KeyValueWriter, epoch uint64) {
 	}
 }
 
-func ExistSeedHash(db ethdb.KeyValueReader, epoch uint64) bool {
+func ExistSeedBlockHash(db ethdb.KeyValueReader, epoch uint64) bool {
 	key := seedKey(epoch)
 	exist, _ := db.Has(key)
 
