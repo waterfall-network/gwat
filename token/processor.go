@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ErrTokenAlreadyExists      = errors.New("token address already exists")
+	ErrAddressAlreadyExists    = errors.New("address already exists")
 	ErrTokenNotExists          = errors.New("token doesn't exist")
 	ErrTokenOpStandardNotValid = errors.New("token standard isn't valid for the operation")
 	ErrNotEnoughBalance        = errors.New("transfer amount exceeds token balance")
@@ -121,15 +121,15 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
 // Call performs all transaction related operations that mutates state of the token
 //
 // The only following operations can be performed using the method:
-//  * token creation of WRC-20 or WRC-721 tokens
-//  * transfer from
-//  * transfer
-//  * approve
-//  * mint
-//  * burn
-//  * set approval for all
-//	* buy
-//	* setPrice
+//   - token creation of WRC-20 or WRC-721 tokens
+//   - transfer from
+//   - transfer
+//   - approve
+//   - mint
+//   - burn
+//   - set approval for all
+//   - buy
+//   - setPrice
 //
 // It returns byte representation of the return value of an operation.
 func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op operation.Operation) (ret []byte, err error) {
@@ -140,7 +140,7 @@ func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op op
 
 		token = crypto.CreateAddress(caller.Address(), p.state.GetNonce(caller.Address()))
 		if p.state.Exist(token) {
-			return nil, ErrTokenAlreadyExists
+			return nil, ErrAddressAlreadyExists
 		}
 	}
 
@@ -176,6 +176,34 @@ func (p *Processor) Call(caller Ref, token common.Address, value *big.Int, op op
 	}
 
 	return ret, err
+}
+
+// IsToken performs check if address belongs to token
+// WRC20 and WRC721 tokens both have balance of operation,
+// so we can verify that it's token by checking its balance.
+//
+// It returns `true` if address belongs to token.
+func (p *Processor) IsToken(token common.Address) bool {
+	if !p.state.Exist(token) {
+		return false
+	}
+
+	op, err := operation.NewPropertiesOperation(token, nil)
+	if err != nil {
+		return false
+	}
+
+	props, err := p.Properties(op)
+	if err != nil {
+		return false
+	}
+
+	switch props.(type) {
+	case *WRC20PropertiesResult, *WRC721PropertiesResult:
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *Processor) tokenCreate(caller Ref, tokenAddr common.Address, op operation.Create) (_ []byte, err error) {
