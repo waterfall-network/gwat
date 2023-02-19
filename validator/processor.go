@@ -133,48 +133,18 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	if balanceFrom.Cmp(value) < 0 {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, from.Hex())
 	}
+	////todo add creator to list of creators
+	////todo update state of creator
 
+	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
+	p.eventEmmiter.Deposit(toAddr, logData)
+	p.incrDepositCount()
 	// burn value from sender balance
 	p.state.SubBalance(from, value)
 
-	////todo add creator to list of creators
-	//// predefined account of common validators info
-	//validatorsStorage, err := p.newStorage(toAddr)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	////todo update state of creator
-	//// creators account
-	//creatorAddr := op.CreatorAddress()
-	//creatorStorage, err := p.newStorage(creatorAddr)
-	//if err != nil {
-	//	return nil, err
-	//}
-
-	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
-
-	p.eventEmmiter.Deposit(toAddr, logData)
-
-	p.incrDepositCount()
-
 	log.Info("Deposit", "address", toAddr.Hex(), "from", from.Hex(), "value", value.String(), "pabkey", op.PubKey().Hex(), "creator", op.CreatorAddress().Hex())
-	//validatorsStorage.Flush()
-	//creatorStorage.Flush()
-
 	return value.FillBytes(make([]byte, 32)), nil
-
-	//todo
-	//return toAddr.Bytes(), nil
 }
-
-//func (p *Processor) newStorage(addr common.Address) (validatorStorage.Storage, error) {
-//	storage, err := validatorStorage.ReadStorage(validatorStorage.NewStorageStream(addr, p.state))
-//	if err != nil {
-//		return nil, err
-//	}
-//	return storage, nil
-//}
 
 type logEntry struct {
 	name      string

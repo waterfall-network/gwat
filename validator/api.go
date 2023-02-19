@@ -42,7 +42,7 @@ type DepositArgs struct {
 func GetAPIs(apiBackend Backend) []rpc.API {
 	return []rpc.API{
 		{
-			Namespace: "validator",
+			Namespace: "wat",
 			Version:   "1.0",
 			Service:   NewPublicValidatorAPI(apiBackend),
 			Public:    true,
@@ -51,7 +51,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 }
 
 // DepositData creates a validators deposit data for deposit tx.
-func (s *PublicValidatorAPI) DepositData(_ context.Context, args DepositArgs) (hexutil.Bytes, error) {
+func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args DepositArgs) (hexutil.Bytes, error) {
 	if args.PubKey == nil {
 		return nil, operation.ErrNoPubKey
 	}
@@ -86,7 +86,7 @@ func (s *PublicValidatorAPI) DepositData(_ context.Context, args DepositArgs) (h
 }
 
 // DepositCount returns a validators deposit count.
-func (s *PublicValidatorAPI) DepositCount(ctx context.Context, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
 	//TODO implement
 	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
 	if blockNrOrHash != nil {

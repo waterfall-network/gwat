@@ -18,21 +18,20 @@
 package web3ext
 
 var Modules = map[string]string{
-	"admin":     AdminJs,
-	"clique":    CliqueJs,
-	"ethash":    EthashJs,
-	"debug":     DebugJs,
-	"eth":       EthJs,
-	"miner":     MinerJs,
-	"net":       NetJs,
-	"personal":  PersonalJs,
-	"rpc":       RpcJs,
-	"txpool":    TxpoolJs,
-	"les":       LESJs,
-	"vflux":     VfluxJs,
-	"dag":       DagJs,
-	"wat":       WatJs,
-	"validator": ValidatorJs,
+	"admin":    AdminJs,
+	"clique":   CliqueJs,
+	"ethash":   EthashJs,
+	"debug":    DebugJs,
+	"eth":      EthJs,
+	"miner":    MinerJs,
+	"net":      NetJs,
+	"personal": PersonalJs,
+	"rpc":      RpcJs,
+	"txpool":   TxpoolJs,
+	"les":      LESJs,
+	"vflux":    VfluxJs,
+	"dag":      DagJs,
+	"wat":      WatJs,
 }
 
 const CliqueJs = `
@@ -902,6 +901,7 @@ web3._extend({
 	property: 'wat',
 	methods:
 	[
+		// TOKEN API //
 		new web3._extend.Method({
 			name: 'tokenCreate',
 			call: 'wat_tokenCreate',
@@ -922,15 +922,12 @@ web3._extend({
 				if (options.decimals) {
 					options.decimals = web3._extend.utils.toHex(options.decimals);
 				}
-
 				if (options.totalSupply) {
 					options.totalSupply = web3._extend.utils.toHex(options.totalSupply);
 				}
-
 				if (options.baseURI) {
 					options.baseURI = web3._extend.utils.fromUtf8(options.baseURI);
 				}
-
 				return options;
 			}]
 		}),
@@ -948,26 +945,21 @@ web3._extend({
 			outputFormatter: function(result) {
 				result.name = web3._extend.utils.toUtf8(result.name);
 				result.symbol = web3._extend.utils.toUtf8(result.symbol);
-
 				if (result.baseURI) {
 					result.baseURI = web3._extend.utils.toUtf8(result.baseURI);
 				}
-
 				if (result.decimals) {
 					result.decimals = web3._extend.utils.toDecimal(result.decimals);
 				}
-
 				if (result.totalSupply) {
 					result.totalSupply = web3._extend.utils.toDecimal(result.totalSupply);
 				}
-
 				if (result.byTokenId) {
 					result.byTokenId.tokenURI = web3._extend.utils.toUtf8(result.byTokenId.tokenURI);
 					result.byTokenId.ownerOf = web3._extend.utils.toAddress(result.byTokenId.ownerOf);
 					result.byTokenId.getApproved = web3._extend.utils.toAddress(result.byTokenId.getApproved);
 					result.byTokenId.metadata = web3._extend.utils.toUtf8(result.byTokenId.metadata);
 				}
-
 				return result;
 			}
 		}),
@@ -1058,18 +1050,11 @@ web3._extend({
 			params: 2,
 			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
 		}),
-	]
-});
-`
 
-const ValidatorJs = `
-web3._extend({
-	property: 'validator',
-	methods:
-	[
+		// VALIDATOR API //
 		new web3._extend.Method({
-			name: 'depositData',
-			call: 'validator_depositData',
+			name: 'validator.depositData',
+			call: 'wat_validator_DepositData',
 			params: 1,
 			inputFormatter: [function(options) {
 				function isHex (str) {
@@ -1100,8 +1085,8 @@ web3._extend({
 			}]
 		}),
 		new web3._extend.Method({
-			name: 'depositCount',
-			call: 'validator_depositCount',
+			name: 'validator.depositCount',
+			call: 'wat_validator_DepositCount',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputDefaultBlockNumberFormatter],
 			outputFormatter: web3._extend.utils.toDecimal

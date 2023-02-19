@@ -42,7 +42,7 @@ func init() {
 	}
 	processor = NewProcessor(ctx, stateDb)
 
-	to = processor.GetValidatorsStateAddress()
+	to = GetValidatorsStateAddress()
 	from = common.BytesToAddress(testutils.RandomData(20))
 	value = MinDepositVal
 	pubkey = common.HexToBlsPubKey("0x9728bc733c8fcedde0c3a33dac12da3ebbaa0eb74d813a34b600520e7976a260d85f057687e8c923d52c78715515348d")
