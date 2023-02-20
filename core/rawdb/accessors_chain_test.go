@@ -819,13 +819,13 @@ func TestWriteReadDeleteSeedHash(t *testing.T) {
 	// Test writing seed hash
 	epoch := uint64(0)
 	seed := common.HexToHash("0x1234567890abcdef")
-	WriteSeedBlockHash(db, epoch, seed)
-	if !ExistSeedBlockHash(db, epoch) {
+	WriteFirstEpochBlockHash(db, epoch, seed)
+	if !ExistFirstEpochBlockHash(db, epoch) {
 		t.Fatalf("Failed to write seed hash")
 	}
 
 	// Test reading seed hash
-	readSeed, err := ReedSeedBlockHash(db, epoch)
+	readSeed, err := ReadFirstEpochBlockHash(db, epoch)
 	if err != nil {
 		t.Fatalf("Failed to read seed hash: %v", err)
 	}
@@ -834,10 +834,10 @@ func TestWriteReadDeleteSeedHash(t *testing.T) {
 	}
 
 	// Test deleting seed hash
-	DeleteSeedBlockHash(db, epoch)
+	DeleteFirstEpochBlockHash(db, epoch)
 
 	// Test checking the existence of seed hash
-	if ExistSeedBlockHash(db, epoch) {
+	if ExistFirstEpochBlockHash(db, epoch) {
 		t.Fatalf("Seed hash should not exist")
 	}
 }

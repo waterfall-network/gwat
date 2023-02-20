@@ -250,7 +250,7 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			currentSlot := d.bc.GetSlotInfo().CurrentSlot()
 			epoch := d.bc.GetSlotInfo().SlotToEpoch(currentSlot)
 			epochSlot := currentSlot % d.bc.GetSlotInfo().SlotsPerEpoch
-			seedBlock, err := d.bc.ReedSeedBlockHash(epoch)
+			seedBlock, err := d.bc.ReadFirstEpochBlockHash(epoch)
 			if err != nil {
 				log.Error("can`t create block, epoch seed is empty", "epoch", epoch)
 				continue

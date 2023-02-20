@@ -17,10 +17,11 @@
 package vm
 
 import (
+	"math/big"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
-	"math/big"
 )
 
 // StateDB is an EVM database for full state querying.

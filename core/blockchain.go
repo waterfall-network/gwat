@@ -921,7 +921,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 		bc.RemoveTxFromPool(tx)
 	}
 
-	bc.WriteSeedBlockHash(block)
+	bc.WriteFirstEpochBlockHash(block)
 
 	return nil
 }
@@ -1345,9 +1345,9 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
 
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-	epochBlockSeed, err := rawdb.ReedSeedBlockHash(bc.db, blockEpoch)
+	epochBlockSeed, err := rawdb.ReadFirstEpochBlockHash(bc.db, blockEpoch)
 	if err == nil && epochBlockSeed == block.Root() {
-		rawdb.DeleteSeedBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
+		rawdb.DeleteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
 	}
 
 	// update finalized number cache
@@ -3515,31 +3515,27 @@ func (bc *BlockChain) HeadSynchronising() bool {
 	return bc.syncProvider.HeadSynchronising()
 }
 
-func (bc *BlockChain) WriteSeedBlockHash(block *types.Block) {
+func (bc *BlockChain) WriteFirstEpochBlockHash(block *types.Block) {
 	// check that block hash for block`s epoch was not wrote to the db.
 	// if it does not - write hash to the db
-	if !bc.SeedBlockExist(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
-		rawdb.WriteSeedBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Root())
+	if !bc.ExistFirstEpochBlockHash(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
+		rawdb.WriteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Root())
 	}
 }
 
-// ReedSeedBlockHash return first epoch block hash. Use this hash at seed for shuffle algorithm.
+// ReadFirstEpochBlockHash return first epoch block hash. Use this hash at seed for shuffle algorithm.
 // For the first two epochs, the genesis hash is used,
 // for the next, the hash of the first block that was completed two epochs ago is used.
-func (bc *BlockChain) ReedSeedBlockHash(epoch uint64) (common.Hash, error) {
-	if epoch >= 2 {
-		epoch = epoch - 2
-	}
-
-	return rawdb.ReedSeedBlockHash(bc.db, epoch)
+func (bc *BlockChain) ReadFirstEpochBlockHash(epoch uint64) (common.Hash, error) {
+	return rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
 }
 
-func (bc *BlockChain) DeleteSeedBlockHash(epoch uint64) {
-	rawdb.DeleteSeedBlockHash(bc.db, epoch)
+func (bc *BlockChain) DeleteFirstEpochBlockHash(epoch uint64) {
+	rawdb.DeleteFirstEpochBlockHash(bc.db, epoch)
 }
 
-func (bc *BlockChain) SeedBlockExist(epoch uint64) bool {
-	return rawdb.ExistSeedBlockHash(bc.db, epoch)
+func (bc *BlockChain) ExistFirstEpochBlockHash(epoch uint64) bool {
+	return rawdb.ExistFirstEpochBlockHash(bc.db, epoch)
 }
 
 func (bc *BlockChain) Consensus() validator.Consensus {

@@ -147,7 +147,7 @@ func (c *consensus) GetShuffledValidators(stateDb *state.StateDB, filter ...uint
 // Seed = hash of the first finalized block in the epoch finalized two epoch ago + epoch number represents in [32] byte
 func (c *consensus) seed(epoch uint64) (common.Hash, error) {
 	epochBytes := shuffle.Bytes8(epoch)
-	epochSeed, err := rawdb.ReedSeedBlockHash(c.db, epoch)
+	epochSeed, err := rawdb.ReadFirstEpochBlockHash(c.db, epoch)
 	if err != nil {
 		return [32]byte{}, err
 	}

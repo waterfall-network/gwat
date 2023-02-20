@@ -1,0 +1,23 @@
+package testmodels
+
+import (
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+)
+
+var (
+	Addr1  = common.BytesToAddress(testutils.RandomStringInBytes(50))
+	Addr2  = common.BytesToAddress(testutils.RandomStringInBytes(30))
+	Addr3  = common.BytesToAddress(testutils.RandomStringInBytes(20))
+	Addr4  = common.BytesToAddress(testutils.RandomStringInBytes(40))
+	Addr5  = common.BytesToAddress(testutils.RandomStringInBytes(50))
+	Addr6  = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	Addr7  = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	Addr8  = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	Addr9  = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	Addr10 = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	Addr11 = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	Addr12 = common.BytesToAddress(testutils.RandomStringInBytes(70))
+
+	InputValidators = []common.Address{Addr1, Addr2, Addr3, Addr4, Addr5, Addr6, Addr7, Addr8, Addr9, Addr10, Addr11, Addr12}
+)

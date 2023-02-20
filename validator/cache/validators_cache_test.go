@@ -1,48 +1,35 @@
 package cache
 
 import (
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 	"math"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 var (
-	addr1  = common.BytesToAddress(testutils.RandomStringInBytes(50))
-	addr2  = common.BytesToAddress(testutils.RandomStringInBytes(30))
-	addr3  = common.BytesToAddress(testutils.RandomStringInBytes(20))
-	addr4  = common.BytesToAddress(testutils.RandomStringInBytes(40))
-	addr5  = common.BytesToAddress(testutils.RandomStringInBytes(50))
-	addr6  = common.BytesToAddress(testutils.RandomStringInBytes(70))
-	addr7  = common.BytesToAddress(testutils.RandomStringInBytes(70))
-	addr8  = common.BytesToAddress(testutils.RandomStringInBytes(70))
-	addr9  = common.BytesToAddress(testutils.RandomStringInBytes(70))
-	addr10 = common.BytesToAddress(testutils.RandomStringInBytes(70))
-	addr11 = common.BytesToAddress(testutils.RandomStringInBytes(70))
-	addr12 = common.BytesToAddress(testutils.RandomStringInBytes(70))
-
-	inputValidators    = []common.Address{addr1, addr2, addr3, addr4, addr5, addr6, addr7, addr8, addr9, addr10, addr11, addr12}
 	shuffledValidators = [][]common.Address{
 		{
-			addr3,
-			addr5,
-			addr1,
+			testmodels.Addr1,
+			testmodels.Addr5,
+			testmodels.Addr1,
 		},
 		{
-			addr2,
-			addr6,
-			addr4,
+			testmodels.Addr2,
+			testmodels.Addr6,
+			testmodels.Addr4,
 		},
 		{
-			addr12,
-			addr7,
-			addr9,
+			testmodels.Addr12,
+			testmodels.Addr7,
+			testmodels.Addr9,
 		},
 		{
-			addr8,
-			addr11,
-			addr10,
+			testmodels.Addr8,
+			testmodels.Addr11,
+			testmodels.Addr10,
 		},
 	}
 
@@ -113,7 +100,7 @@ func TestGetActiveValidatorsByEpoch(t *testing.T) {
 func TestAddValidator(t *testing.T) {
 	c := New()
 	validator := Validator{
-		Address:         addr1,
+		Address:         testmodels.Addr1,
 		ActivationEpoch: 10,
 		ExitEpoch:       20,
 	}
@@ -151,9 +138,9 @@ func TestDelValidator(t *testing.T) {
 
 func TestAllValidatorsCache(t *testing.T) {
 	cache := New()
-	validatorsList := make([]Validator, len(inputValidators))
+	validatorsList := make([]Validator, len(testmodels.InputValidators))
 
-	for i, inputValidator := range inputValidators {
+	for i, inputValidator := range testmodels.InputValidators {
 		validatorsList[i] = *NewValidator(inputValidator, nil, uint64(i), 0, math.MaxUint64, nil)
 	}
 
@@ -178,16 +165,16 @@ func TestAllValidatorsCache(t *testing.T) {
 func TestSubnetValidatorsCache(t *testing.T) {
 	cache := New()
 
-	cache.AddSubnetValidators(epoch, subnet, inputValidators)
+	cache.AddSubnetValidators(epoch, subnet, testmodels.InputValidators)
 	cachedValidators, ok := cache.subnetValidatorsCache[epoch][subnet]
 	if !ok {
 		t.Fatalf("Expected validators list for epoch %d, subnet %d to be cached, but it wasn't", epoch, subnet)
 	}
-	testutils.AssertEqual(t, cachedValidators, inputValidators)
+	testutils.AssertEqual(t, cachedValidators, testmodels.InputValidators)
 
 	cachedValidators, err := cache.GetSubnetValidators(epoch, subnet)
 	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, inputValidators, cachedValidators)
+	testutils.AssertEqual(t, testmodels.InputValidators, cachedValidators)
 
 	cachedValidators, err = cache.GetSubnetValidators(epoch+1, subnet)
 	testutils.AssertError(t, err, errNoEpochValidators)
@@ -200,16 +187,16 @@ func TestSubnetValidatorsCache(t *testing.T) {
 
 func TestGetValidatorsAddresses(t *testing.T) {
 	cache := New()
-	validatorsList := make([]Validator, len(inputValidators))
+	validatorsList := make([]Validator, len(testmodels.InputValidators))
 
-	for i, inputValidator := range inputValidators {
+	for i, inputValidator := range testmodels.InputValidators {
 		validatorsList[i] = *NewValidator(inputValidator, nil, uint64(i), uint64(i), math.MaxUint64, nil)
 	}
 
 	cache.AddAllValidatorsByEpoch(epoch, validatorsList)
 
 	addresses := cache.GetValidatorsAddresses(epoch, false)
-	testutils.AssertEqual(t, inputValidators, addresses)
+	testutils.AssertEqual(t, testmodels.InputValidators, addresses)
 
 	for i := 0; i < len(validatorsList); i++ {
 		currentEpoch := uint64(i)
