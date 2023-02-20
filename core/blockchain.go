@@ -3527,7 +3527,7 @@ func (bc *BlockChain) WriteSeedBlockHash(block *types.Block) {
 // For the first two epochs, the genesis hash is used,
 // for the next, the hash of the first block that was completed two epochs ago is used.
 func (bc *BlockChain) ReedSeedBlockHash(epoch uint64) (common.Hash, error) {
-	if epoch > 2 {
+	if epoch >= 2 {
 		epoch = epoch - 2
 	}
 

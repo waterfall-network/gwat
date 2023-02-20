@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"math/rand"
+	"math"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -9,14 +9,20 @@ import (
 )
 
 var (
-	addr1 = common.BytesToAddress(testutils.RandomStringInBytes(50))
-	addr2 = common.BytesToAddress(testutils.RandomStringInBytes(30))
-	addr3 = common.BytesToAddress(testutils.RandomStringInBytes(20))
-	addr4 = common.BytesToAddress(testutils.RandomStringInBytes(40))
-	addr5 = common.BytesToAddress(testutils.RandomStringInBytes(50))
-	addr6 = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	addr1  = common.BytesToAddress(testutils.RandomStringInBytes(50))
+	addr2  = common.BytesToAddress(testutils.RandomStringInBytes(30))
+	addr3  = common.BytesToAddress(testutils.RandomStringInBytes(20))
+	addr4  = common.BytesToAddress(testutils.RandomStringInBytes(40))
+	addr5  = common.BytesToAddress(testutils.RandomStringInBytes(50))
+	addr6  = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	addr7  = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	addr8  = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	addr9  = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	addr10 = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	addr11 = common.BytesToAddress(testutils.RandomStringInBytes(70))
+	addr12 = common.BytesToAddress(testutils.RandomStringInBytes(70))
 
-	inputValidators    = []common.Address{addr1, addr2, addr3, addr4, addr5, addr6}
+	inputValidators    = []common.Address{addr1, addr2, addr3, addr4, addr5, addr6, addr7, addr8, addr9, addr10, addr11, addr12}
 	shuffledValidators = [][]common.Address{
 		{
 			addr3,
@@ -28,6 +34,16 @@ var (
 			addr6,
 			addr4,
 		},
+		{
+			addr12,
+			addr7,
+			addr9,
+		},
+		{
+			addr8,
+			addr11,
+			addr10,
+		},
 	}
 
 	subnet = uint64(2)
@@ -36,119 +52,39 @@ var (
 )
 
 func TestNewValidatorsCache(t *testing.T) {
-	validatorsCache := New()
-	if validatorsCache.allValidatorsCache == nil {
-		t.Fatal("allValidatorsCache not initialized")
-	}
-	if validatorsCache.subnetValidatorsCache == nil {
-		t.Fatal("subnetValidatorsCache not initialized")
-	}
-	if validatorsCache.shuffledValidatorsCache == nil {
-		t.Fatal("shuffledValidatorsCache not initialized")
-	}
-	if validatorsCache.shuffledSubnetValidatorsCache == nil {
-		t.Fatal("shuffledSubnetValidatorsCache not initialized")
-	}
-}
+	cache := New()
 
-func TestAllValidatorsCache(t *testing.T) {
-	c := New()
-
-	validators := make([]Validator, len(inputValidators))
-	for i, validator := range inputValidators {
-		validators[i] = *NewValidator(validator, nil, rand.Uint64(), rand.Uint64(), rand.Uint64(), nil)
+	if cache.allValidatorsCache == nil {
+		t.Fatal("Expected allValidatorsCache to be initialized, but it was nil")
 	}
 
-	c.AddAllValidatorsByEpoch(epoch, validators)
+	if cache.subnetValidatorsCache == nil {
+		t.Fatal("Expected subnetValidatorsCache to be initialized, but it was nil")
+	}
 
-	outputValidators, err := c.GetAllValidatorsByEpoch(epoch)
-	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, outputValidators, validators)
+	if cache.shuffledValidatorsCache == nil {
+		t.Fatal("Expected shuffledValidatorsCache to be initialized, but it was nil")
+	}
 
-	outputValidators, err = c.GetAllValidatorsByEpoch(epoch + 1)
-	testutils.AssertError(t, err, errNoCachedValidators)
-	testutils.AssertNil(t, outputValidators)
-}
+	if cache.shuffledSubnetValidatorsCache == nil {
+		t.Fatal("Expected shuffledSubnetValidatorsCache to be initialized, but it was nil")
+	}
 
-func TestSubnetValidatorsCache(t *testing.T) {
-	c := New()
+	if cache.allMu == nil {
+		t.Fatal("Expected allMu to be initialized, but it was nil")
+	}
 
-	validators, err := c.GetSubnetValidators(subnet)
-	testutils.AssertError(t, err, errNoSubnetValidators)
-	testutils.AssertNil(t, validators)
+	if cache.subnetMu == nil {
+		t.Fatal("Expected subnetMu to be initialized, but it was nil")
+	}
 
-	c.AddSubnetValidators(subnet, inputValidators)
-	validators, err = c.GetSubnetValidators(subnet)
-	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, inputValidators, validators)
-}
+	if cache.shuffledMu == nil {
+		t.Fatal("Expected shuffledMu to be initialized, but it was nil")
+	}
 
-func TestShuffledValidatorsCache(t *testing.T) {
-	c := New()
-
-	validators, err := c.GetShuffledValidatorsByEpoch(epoch)
-	testutils.AssertError(t, err, errNoEpochValidators)
-	testutils.AssertNil(t, validators)
-
-	validatorsBySlot, err := c.GetShuffledValidatorsBySlot(epoch, slot)
-	testutils.AssertError(t, err, errNoEpochValidators)
-	testutils.AssertNil(t, validatorsBySlot)
-
-	c.AddShuffledValidators(epoch, shuffledValidators)
-
-	validatorsBySlot, err = c.GetShuffledValidatorsBySlot(epoch, 5)
-	testutils.AssertError(t, err, errNoSlotValidators)
-	testutils.AssertNil(t, validatorsBySlot)
-
-	validators, err = c.GetShuffledValidatorsByEpoch(epoch)
-	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, [][]common.Address{{addr3, addr5, addr1}, {addr2, addr6, addr4}}, validators)
-
-	validatorsBySlot, err = c.GetShuffledValidatorsBySlot(epoch, slot)
-	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, []common.Address{addr3, addr5, addr1}, validatorsBySlot)
-}
-
-func TestShuffledSubnetValidators(t *testing.T) {
-	c := New()
-
-	c.AddShuffledSubnetValidators(subnet, epoch, shuffledValidators)
-
-	slotValidators, err := c.GetShuffledSubnetValidatorsBySlot(subnet, epoch, 5)
-	testutils.AssertError(t, err, errNoSlotValidators)
-	testutils.AssertNil(t, slotValidators)
-
-	slotValidators, err = c.GetShuffledSubnetValidatorsBySlot(subnet, 3, slot)
-	testutils.AssertError(t, err, errNoEpochValidators)
-	testutils.AssertNil(t, slotValidators)
-
-	slotValidators, err = c.GetShuffledSubnetValidatorsBySlot(3, epoch, slot)
-	testutils.AssertError(t, err, errNoSubnetValidators)
-	testutils.AssertNil(t, slotValidators)
-
-	epochValidators, err := c.GetShuffledSubnetValidatorsByEpoch(subnet, 3)
-	testutils.AssertError(t, err, errNoEpochValidators)
-	testutils.AssertNil(t, epochValidators)
-
-	epochValidators, err = c.GetShuffledSubnetValidatorsByEpoch(1, epoch)
-	testutils.AssertError(t, err, errNoSubnetValidators)
-	testutils.AssertNil(t, epochValidators)
-
-	subnetValidators, err := c.GetShuffledSubnetValidators(1)
-	testutils.AssertError(t, err, errNoSubnetValidators)
-	testutils.AssertNil(t, subnetValidators)
-
-	subnetValidators, err = c.GetShuffledSubnetValidators(subnet)
-	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, map[uint64][][]common.Address{1: shuffledValidators}, subnetValidators)
-
-	epochValidators, err = c.GetShuffledSubnetValidatorsByEpoch(subnet, epoch)
-	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, shuffledValidators, epochValidators)
-
-	slotValidators, err = c.GetShuffledSubnetValidatorsBySlot(subnet, epoch, 0)
-	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, shuffledValidators[0], slotValidators)
+	if cache.shuffledSubnetMu == nil {
+		t.Fatal("Expected shuffledSubnetMu to be initialized, but it was nil")
+	}
 }
 
 func TestGetActiveValidatorsByEpoch(t *testing.T) {
@@ -174,7 +110,7 @@ func TestGetActiveValidatorsByEpoch(t *testing.T) {
 	testutils.AssertEqual(t, []Validator{validator2}, validators)
 }
 
-func TestValidatorsCacheAddValidator(t *testing.T) {
+func TestAddValidator(t *testing.T) {
 	c := New()
 	validator := Validator{
 		Address:         addr1,
@@ -192,7 +128,7 @@ func TestValidatorsCacheAddValidator(t *testing.T) {
 	}
 }
 
-func TestValidatorsCacheDelValidator(t *testing.T) {
+func TestDelValidator(t *testing.T) {
 	c := New()
 	validator := Validator{
 		Address:         common.Address{1},
@@ -211,4 +147,141 @@ func TestValidatorsCacheDelValidator(t *testing.T) {
 	if len(validators) != 0 {
 		t.Fatalf("Expected 0 validators but got %v", len(validators))
 	}
+}
+
+func TestAllValidatorsCache(t *testing.T) {
+	cache := New()
+	validatorsList := make([]Validator, len(inputValidators))
+
+	for i, inputValidator := range inputValidators {
+		validatorsList[i] = *NewValidator(inputValidator, nil, uint64(i), 0, math.MaxUint64, nil)
+	}
+
+	cache.AddAllValidatorsByEpoch(epoch, validatorsList)
+
+	cachedValidatorsList, ok := cache.allValidatorsCache[epoch]
+	if !ok {
+		t.Errorf("Expected validators list for epoch %d to be cached, but it wasn't", epoch)
+	}
+
+	testutils.AssertEqual(t, cachedValidatorsList, validatorsList)
+
+	cachedValidatorsList, err := cache.GetAllValidatorsByEpoch(epoch)
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, cachedValidatorsList, validatorsList)
+
+	cachedValidatorsList, err = cache.GetAllValidatorsByEpoch(epoch + 1)
+	testutils.AssertError(t, err, errNoEpochValidators)
+	testutils.AssertNil(t, cachedValidatorsList)
+}
+
+func TestSubnetValidatorsCache(t *testing.T) {
+	cache := New()
+
+	cache.AddSubnetValidators(epoch, subnet, inputValidators)
+	cachedValidators, ok := cache.subnetValidatorsCache[epoch][subnet]
+	if !ok {
+		t.Fatalf("Expected validators list for epoch %d, subnet %d to be cached, but it wasn't", epoch, subnet)
+	}
+	testutils.AssertEqual(t, cachedValidators, inputValidators)
+
+	cachedValidators, err := cache.GetSubnetValidators(epoch, subnet)
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, inputValidators, cachedValidators)
+
+	cachedValidators, err = cache.GetSubnetValidators(epoch+1, subnet)
+	testutils.AssertError(t, err, errNoEpochValidators)
+	testutils.AssertNil(t, cachedValidators)
+
+	cachedValidators, err = cache.GetSubnetValidators(epoch, subnet+1)
+	testutils.AssertError(t, err, errNoSubnetValidators)
+	testutils.AssertNil(t, cachedValidators)
+}
+
+func TestGetValidatorsAddresses(t *testing.T) {
+	cache := New()
+	validatorsList := make([]Validator, len(inputValidators))
+
+	for i, inputValidator := range inputValidators {
+		validatorsList[i] = *NewValidator(inputValidator, nil, uint64(i), uint64(i), math.MaxUint64, nil)
+	}
+
+	cache.AddAllValidatorsByEpoch(epoch, validatorsList)
+
+	addresses := cache.GetValidatorsAddresses(epoch, false)
+	testutils.AssertEqual(t, inputValidators, addresses)
+
+	for i := 0; i < len(validatorsList); i++ {
+		currentEpoch := uint64(i)
+		cache.AddAllValidatorsByEpoch(currentEpoch, validatorsList)
+		addresses = cache.GetValidatorsAddresses(currentEpoch, true)
+
+		activeValidators := make([]common.Address, 0)
+		for _, v := range validatorsList {
+			if v.ActivationEpoch <= currentEpoch && v.ExitEpoch > currentEpoch {
+				activeValidators = append(activeValidators, v.Address)
+			}
+		}
+
+		testutils.AssertEqual(t, activeValidators, addresses)
+	}
+}
+
+func TestShuffledValidatorsCache(t *testing.T) {
+	cache := New()
+
+	err := cache.AddShuffledValidators(shuffledValidators, []uint64{epoch})
+	testutils.AssertNoError(t, err)
+	shuffleList, err := cache.GetShuffledValidators([]uint64{epoch, slot})
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, shuffleList, shuffledValidators[slot])
+
+	shuffleList, err = cache.GetShuffledValidators([]uint64{epoch + 1, slot})
+	testutils.AssertError(t, err, errNoEpochValidators)
+	testutils.AssertNil(t, shuffleList)
+
+	for i := uint64(0); i < cacheCapacity*2; i++ {
+		err = cache.AddShuffledValidators(shuffledValidators, []uint64{i})
+		testutils.AssertNoError(t, err)
+	}
+	err = cache.AddShuffledValidators(shuffledValidators, []uint64{epoch})
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, cacheCapacity, len(cache.shuffledValidatorsCache))
+
+	err = cache.AddShuffledValidators(shuffledValidators, []uint64{epoch, subnet})
+	testutils.AssertNoError(t, err)
+
+	shuffleList, err = cache.GetShuffledValidators([]uint64{epoch, slot, subnet})
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, shuffleList, shuffledValidators[slot])
+
+	err = cache.AddShuffledValidators(shuffledValidators, []uint64{epoch, epoch, subnet, subnet})
+	testutils.AssertError(t, err, ErrInvalidValidatorsFilter)
+
+	cache.shuffledSubnetValidatorsCache[epoch] = make(map[uint64][][]common.Address, cacheCapacity)
+	for i := uint64(0); i <= cacheCapacity; i++ {
+		err = cache.AddShuffledValidators(shuffledValidators, []uint64{epoch, subnet})
+		testutils.AssertNoError(t, err)
+		epoch = epoch + i
+	}
+
+	err = cache.AddShuffledValidators(shuffledValidators, []uint64{epoch, subnet})
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, cacheCapacity, len(cache.shuffledSubnetValidatorsCache))
+
+	shuffleList, err = cache.GetShuffledValidators([]uint64{epoch, slot, subnet})
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, shuffledValidators[slot], shuffleList)
+
+	shuffleList, err = cache.GetShuffledValidators([]uint64{epoch + 1, slot, subnet})
+	testutils.AssertError(t, err, errNoEpochValidators)
+	testutils.AssertNil(t, shuffleList)
+
+	shuffleList, err = cache.GetShuffledValidators([]uint64{epoch, slot, subnet + 1})
+	testutils.AssertError(t, err, errNoSubnetValidators)
+	testutils.AssertNil(t, shuffleList)
+
+	shuffleList, err = cache.GetShuffledValidators([]uint64{epoch, slot, subnet, epoch, subnet, slot})
+	testutils.AssertError(t, err, ErrInvalidValidatorsFilter)
+	testutils.AssertNil(t, shuffleList)
 }

@@ -70,7 +70,7 @@ func (c *ValidatorsCache) GetAllValidatorsByEpoch(epoch uint64) ([]Validator, er
 
 	validators, ok := c.allValidatorsCache[epoch]
 	if !ok {
-		return nil, errNoCachedValidators
+		return nil, errNoEpochValidators
 	}
 
 	return validators, nil
@@ -97,6 +97,11 @@ func (c *ValidatorsCache) AddSubnetValidators(epoch, subnet uint64, validators [
 	c.subnetMu.Lock()
 	defer c.subnetMu.Unlock()
 
+	_, ok := c.subnetValidatorsCache[epoch]
+	if !ok {
+		c.subnetValidatorsCache[epoch] = make(map[uint64][]common.Address)
+	}
+
 	c.subnetValidatorsCache[epoch][subnet] = validators
 }
 
@@ -106,10 +111,15 @@ func (c *ValidatorsCache) GetSubnetValidators(epoch, subnet uint64) ([]common.Ad
 
 	epochValidators, ok := c.subnetValidatorsCache[epoch]
 	if !ok {
+		return nil, errNoEpochValidators
+	}
+
+	subnetValidators, ok := epochValidators[subnet]
+	if !ok {
 		return nil, errNoSubnetValidators
 	}
 
-	return epochValidators[subnet], nil
+	return subnetValidators, nil
 }
 
 func (c *ValidatorsCache) AddValidator(validator Validator, epoch uint64) {
@@ -134,7 +144,6 @@ func (c *ValidatorsCache) DelValidator(validator Validator, epoch uint64) {
 // AddShuffledValidators set shuffled validators addresses to the cache.
 // Input parameters are array of uint64 (epoch, subnet). Sequence is required!!!
 func (c *ValidatorsCache) AddShuffledValidators(shuffledValidators [][]common.Address, filter []uint64) error {
-
 	c.shuffledMu.Lock()
 	defer c.shuffledMu.Unlock()
 
@@ -153,7 +162,7 @@ func (c *ValidatorsCache) AddShuffledValidators(shuffledValidators [][]common.Ad
 
 		c.shuffledValidatorsCache[filter[0]] = shuffledValidators
 	case 2:
-		if len(c.shuffledSubnetValidatorsCache[filter[0]]) == cacheCapacity {
+		if len(c.shuffledSubnetValidatorsCache) == cacheCapacity {
 			needDel := uint64(math.MaxUint64)
 			for e := range c.shuffledSubnetValidatorsCache {
 				if e < needDel {
@@ -161,7 +170,7 @@ func (c *ValidatorsCache) AddShuffledValidators(shuffledValidators [][]common.Ad
 				}
 			}
 
-			delete(c.shuffledSubnetValidatorsCache[filter[0]], needDel)
+			delete(c.shuffledSubnetValidatorsCache, needDel)
 		}
 		if c.shuffledSubnetValidatorsCache[filter[0]] == nil {
 			c.shuffledSubnetValidatorsCache[filter[0]] = make(map[uint64][][]common.Address)
@@ -195,17 +204,17 @@ func (c *ValidatorsCache) GetShuffledValidators(filter []uint64) ([]common.Addre
 		epoch = filter[0]
 		slot = filter[1]
 		subnet = filter[2]
-		subnetValidators, ok := c.shuffledSubnetValidatorsCache[subnet]
-		if !ok {
-			return nil, errNoSubnetValidators
-		}
-
-		epochValidators, ok := subnetValidators[epoch]
+		epochValidators, ok := c.shuffledSubnetValidatorsCache[epoch]
 		if !ok {
 			return nil, errNoEpochValidators
 		}
 
-		return epochValidators[slot], nil
+		subnetValidators, ok := epochValidators[subnet]
+		if !ok {
+			return nil, errNoSubnetValidators
+		}
+
+		return subnetValidators[slot], nil
 	default:
 		return nil, ErrInvalidValidatorsFilter
 	}
