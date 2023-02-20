@@ -4,13 +4,12 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 func TestNewValueProperties(t *testing.T) {

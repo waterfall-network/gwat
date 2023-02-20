@@ -6,9 +6,8 @@ import (
 	"math/big"
 	"testing"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 func TestApproveOperation(t *testing.T) {
