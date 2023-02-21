@@ -250,13 +250,11 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			currentSlot := d.bc.GetSlotInfo().CurrentSlot()
 			epoch := d.bc.GetSlotInfo().SlotToEpoch(currentSlot)
 			epochSlot := currentSlot % d.bc.GetSlotInfo().SlotsPerEpoch
-			seedBlock, err := d.bc.ReadFirstEpochBlockHash(epoch)
-			if err != nil {
-				log.Error("can`t create block, epoch seed is empty", "epoch", epoch)
-				continue
-			}
+			seedBlockHash := d.bc.ReadFirstEpochBlockHash(epoch)
 
-			st, err = d.bc.StateAt(seedBlock)
+			seedBlock := d.bc.GetBlock(seedBlockHash)
+
+			st, err = d.bc.StateAt(seedBlock.Root())
 			if err != nil {
 				log.Error("can`t get block state", "error", err)
 				continue
@@ -270,7 +268,7 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			//	}
 			//}else{}
 			// TODO: move this code to the else condition after subnet support.
-			creators, err = d.bc.Consensus().GetShuffledValidators(st, epoch, epochSlot)
+			creators, err = d.bc.Consensus().GetShuffledValidators(st, seedBlockHash, epoch, epochSlot)
 			if err != nil {
 				d.errChan <- err
 			}

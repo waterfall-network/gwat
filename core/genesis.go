@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
@@ -274,8 +273,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	head := &types.Header{
-		//Time:         g.Timestamp,
-		Time:         uint64(time.Now().Unix()),
+		Time:         g.Timestamp,
 		ParentHashes: g.ParentHashes,
 		Slot:         g.Slot,
 		Height:       g.Height,
@@ -328,14 +326,17 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	root := statedb.IntermediateRoot(false)
 	head.Root = root
 
-	// Use genesis root as seed for first and second epochs
-	rawdb.WriteFirstEpochBlockHash(db, 0, root)
-	rawdb.WriteFirstEpochBlockHash(db, 1, root)
-
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
 
-	return types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
+	genesisBlock := types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
+
+	// Use genesis root as seed for first and second epochs
+	genHash := genesisBlock.Hash()
+	rawdb.WriteFirstEpochBlockHash(db, 0, genHash)
+	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
+
+	return genesisBlock
 }
 
 // CreateDepositContract creates deposit contract for genesis state.

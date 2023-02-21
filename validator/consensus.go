@@ -2,7 +2,6 @@ package validator
 
 import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
@@ -16,7 +15,7 @@ const validatorsPerSlot = 6
 
 type Consensus interface {
 	GetValidators(stateDb *state.StateDB, epoch uint64, activeOnly, needAddresses bool) ([]cache.Validator, []common.Address)
-	GetShuffledValidators(stateDb *state.StateDB, filter ...uint64) ([]common.Address, error)
+	GetShuffledValidators(stateDb *state.StateDB, firstEpochBlock common.Hash, filter ...uint64) ([]common.Address, error)
 }
 
 type consensus struct {
@@ -79,7 +78,7 @@ func (c *consensus) GetValidators(stateDb *state.StateDB, epoch uint64, activeOn
 
 // GetShuffledValidators return shuffled validators addresses from cache.
 // Input parameters are array of uint64 (epoch, slot, subnet). Sequence is required!!!
-func (c *consensus) GetShuffledValidators(stateDb *state.StateDB, filter ...uint64) ([]common.Address, error) {
+func (c *consensus) GetShuffledValidators(stateDb *state.StateDB, firstEpochBlock common.Hash, filter ...uint64) ([]common.Address, error) {
 	// TODO: improve this function for subnet supporting.
 	params := make([]uint64, len(filter))
 	for i, u := range filter {
@@ -112,7 +111,7 @@ func (c *consensus) GetShuffledValidators(stateDb *state.StateDB, filter ...uint
 
 	activeEpochValidators := c.validators.GetValidatorsAddresses(params[0], true)
 
-	seed, err := c.seed(params[0])
+	seed, err := c.seed(params[0], firstEpochBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -145,14 +144,10 @@ func (c *consensus) GetShuffledValidators(stateDb *state.StateDB, filter ...uint
 
 // seed make Seed for shuffling represents in [32] byte
 // Seed = hash of the first finalized block in the epoch finalized two epoch ago + epoch number represents in [32] byte
-func (c *consensus) seed(epoch uint64) (common.Hash, error) {
+func (c *consensus) seed(epoch uint64, firstEpochBlockHash common.Hash) (common.Hash, error) {
 	epochBytes := shuffle.Bytes8(epoch)
-	epochSeed, err := rawdb.ReadFirstEpochBlockHash(c.db, epoch)
-	if err != nil {
-		return [32]byte{}, err
-	}
 
-	seed := crypto.Keccak256(append(epochSeed.Bytes(), epochBytes...))
+	seed := crypto.Keccak256(append(firstEpochBlockHash.Bytes(), epochBytes...))
 
 	seed32 := common.BytesToHash(seed)
 
