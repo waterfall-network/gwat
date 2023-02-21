@@ -331,9 +331,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	genesisBlock := types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
 
-	// Use genesis root as seed for first and second epochs
-	genHash := genesisBlock.Hash()
-	rawdb.WriteFirstEpochBlockHash(db, 0, genHash)
+	// Use genesis hash as seed for first and second epochs
+	rawdb.WriteFirstEpochBlockHash(db, 0, genesisBlock.Hash())
 	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
 
 	return genesisBlock
