@@ -17,19 +17,20 @@
 package core
 
 import (
-	"github.com/stretchr/testify/assert"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 )
 
 var (
@@ -99,25 +100,20 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, nil, value, gas, newTokenOpData(operation.CreateCode, func() []byte {
 						op, err := operation.NewWrc20CreateOperation(name, symbol, &decimals, totalSupply)
-						if err != nil {
-							panic("cannot create wrc20 token")
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							panic("cannot marshal create op")
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
 				WRC20Address.SetBytes(result.ReturnData)
-
 				balance := checkBalance(t, st.tp, WRC20Address, owner)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, totalSupply.Cmp(balance) == 0)
+				testutils.BigIntEquals(balance, totalSupply)
 			},
 		},
 		{
@@ -131,25 +127,20 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, nil, value, gas, newTokenOpData(operation.CreateCode, func() []byte {
 						op, err := operation.NewWrc721CreateOperation(name, symbol, baseURI, &percentFee)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
 				WRC721Address.SetBytes(result.ReturnData)
-
 				balance := checkBalance(t, st.tp, WRC721Address, owner)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, big.NewInt(0).Cmp(balance) == 0)
+				testutils.BigIntEquals(balance, big.NewInt(0))
 			},
 		},
 		{
@@ -162,18 +153,15 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.PropertiesCode, func() []byte {
 						op, err := operation.NewPropertiesOperation(WRC20Address, nil)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
+
 				assert.NoError(t, result.Err)
 				assert.Nil(t, result.ReturnData)
 			},
@@ -189,18 +177,15 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.PropertiesCode, func() []byte {
 						op, err := operation.NewPropertiesOperation(WRC721Address, nil)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
+
 				assert.NoError(t, result.Err)
 				assert.Nil(t, result.ReturnData)
 			},
@@ -216,18 +201,15 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BalanceOfCode, func() []byte {
 						op, err := operation.NewBalanceOfOperation(WRC20Address, owner)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
+
 				assert.NoError(t, result.Err)
 				assert.Nil(t, result.ReturnData)
 			},
@@ -243,18 +225,15 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BalanceOfCode, func() []byte {
 						op, err := operation.NewBalanceOfOperation(WRC721Address, owner)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
+
 				assert.NoError(t, result.Err)
 				assert.Nil(t, result.ReturnData)
 			},
@@ -268,17 +247,12 @@ func TestTransitionDb(t *testing.T) {
 			Errs: []error{nil},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				transferAmount := big.NewInt(10)
-				//v := c.TestData.(testutils.TestData)
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.TransferFromCode, func() []byte {
 						op, err := operation.NewTransferFromOperation(operation.StdWRC20, owner, to, transferAmount)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, func(tp *token.Processor) common.Address {
@@ -289,12 +263,11 @@ func TestTransitionDb(t *testing.T) {
 				})
 
 				result, _ := st.TransitionDb()
-				var transferred big.Int
-				transferred.SetBytes(result.ReturnData)
+				transferred := new(big.Int).SetBytes(result.ReturnData)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, transferAmount.Cmp(&transferred) == 0)
+				testutils.BigIntEquals(transferred, transferAmount)
 			},
 		},
 		{
@@ -309,13 +282,9 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.TransferFromCode, func() []byte {
 						op, err := operation.NewTransferFromOperation(operation.StdWRC721, owner, to, ID1)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, func(tp *token.Processor) common.Address {
@@ -325,12 +294,11 @@ func TestTransitionDb(t *testing.T) {
 				})
 
 				result, _ := st.TransitionDb()
-				var transferred big.Int
-				transferred.SetBytes(result.ReturnData)
+				transferred := new(big.Int).SetBytes(result.ReturnData)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.Equal(t, ID1.Text(16), transferred.Text(16))
+				testutils.BigIntEquals(transferred, ID1)
 			},
 		},
 		{
@@ -344,25 +312,19 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.TransferCode, func() []byte {
 						op, err := operation.NewTransferOperation(to, transferAmount)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
-
-				var transferred big.Int
-				transferred.SetBytes(result.ReturnData)
+				transferred := new(big.Int).SetBytes(result.ReturnData)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, transferAmount.Cmp(&transferred) == 0)
+				testutils.BigIntEquals(transferred, transferAmount)
 			},
 		},
 		{
@@ -375,24 +337,19 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.MintCode, func() []byte {
 						op, err := operation.NewMintOperation(owner, ID2, metadata)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
-				var minted big.Int
-				minted.SetBytes(result.ReturnData)
+				minted := new(big.Int).SetBytes(result.ReturnData)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, ID2.Cmp(&minted) == 0)
+				testutils.BigIntEquals(minted, ID2)
 			},
 		},
 		{
@@ -406,13 +363,9 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BurnCode, func() []byte {
 						op, err := operation.NewBurnOperation(ID3)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, func(tp *token.Processor) common.Address {
@@ -421,12 +374,11 @@ func TestTransitionDb(t *testing.T) {
 				})
 
 				result, _ := st.TransitionDb()
-				var burned big.Int
-				burned.SetBytes(result.ReturnData)
+				burned := new(big.Int).SetBytes(result.ReturnData)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, ID3.Cmp(&burned) == 0)
+				testutils.BigIntEquals(burned, ID3)
 			},
 		},
 		{
@@ -445,13 +397,9 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(spender, &token, expTotalPrice, gas, newTokenOpData(operation.BuyCode, func() []byte {
 						op, err := operation.NewBuyOperation(nil, nil)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							panic("cannot marshal create op")
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, func(tp *token.Processor) common.Address {
@@ -464,7 +412,7 @@ func TestTransitionDb(t *testing.T) {
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, expTokenCount.Cmp(spenderBalance) == 0)
+				testutils.BigIntEquals(spenderBalance, expTokenCount)
 			},
 		},
 		{
@@ -480,13 +428,9 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.BuyCode, func() []byte {
 						op, err := operation.NewBuyOperation(tokenID, nil)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							panic("cannot marshal create op")
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, func(tp *token.Processor) common.Address {
@@ -504,7 +448,7 @@ func TestTransitionDb(t *testing.T) {
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, big.NewInt(1).Cmp(spenderBalance) == 0)
+				testutils.BigIntEquals(spenderBalance, big.NewInt(1))
 			},
 		},
 		{
@@ -518,13 +462,9 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.SetPriceCode, func() []byte {
 						op, err := operation.NewSetPriceOperation(nil, newPrice)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
@@ -534,7 +474,7 @@ func TestTransitionDb(t *testing.T) {
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, currentPrice.Cmp(newPrice) == 0)
+				testutils.BigIntEquals(currentPrice, newPrice)
 			},
 		},
 		{
@@ -550,13 +490,9 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.SetPriceCode, func() []byte {
 						op, err := operation.NewSetPriceOperation(tokenID, newPrice)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, func(tp *token.Processor) common.Address {
@@ -571,7 +507,7 @@ func TestTransitionDb(t *testing.T) {
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, currentPrice.Cmp(newPrice) == 0)
+				testutils.BigIntEquals(currentPrice, newPrice)
 			},
 		},
 		{
@@ -585,24 +521,19 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.ApproveCode, func() []byte {
 						op, err := operation.NewApproveOperation(operation.StdWRC20, spender, approveAmount)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
-				var approvedAmount big.Int
-				approvedAmount.SetBytes(result.ReturnData)
+				approvedAmount := new(big.Int).SetBytes(result.ReturnData)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.True(t, approveAmount.Cmp(&approvedAmount) == 0)
+				testutils.BigIntEquals(approvedAmount, approveAmount)
 			},
 		},
 		{
@@ -616,13 +547,9 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.ApproveCode, func() []byte {
 						op, err := operation.NewApproveOperation(operation.StdWRC721, spender, tokenID)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, func(tp *token.Processor) common.Address {
@@ -633,12 +560,11 @@ func TestTransitionDb(t *testing.T) {
 				})
 
 				result, _ := st.TransitionDb()
-				var approvedID big.Int
-				approvedID.SetBytes(result.ReturnData)
+				approvedID := new(big.Int).SetBytes(result.ReturnData)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
-				assert.Equal(t, tokenID.Text(16), approvedID.Text(16))
+				testutils.BigIntEquals(approvedID, tokenID)
 			},
 		},
 		{
@@ -651,20 +577,15 @@ func TestTransitionDb(t *testing.T) {
 				st := initStateTransition(func(token common.Address) Message {
 					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.SetApprovalForAllCode, func() []byte {
 						op, err := operation.NewSetApprovalForAllOperation(spender, true)
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						binaryData, err := op.MarshalBinary()
-						if err != nil {
-							t.Fatal(err)
-						}
+						assert.NoError(t, err)
 						return binaryData
 					}))
 				}, nil)
 
 				result, _ := st.TransitionDb()
-				var approvedSpender common.Address
-				approvedSpender.SetBytes(result.ReturnData)
+				approvedSpender := common.BytesToAddress(result.ReturnData)
 
 				assert.NoError(t, result.Err)
 				assert.NotNil(t, result.ReturnData)
@@ -720,9 +641,7 @@ func newTokenOpData(opCode byte, f func() []byte) []byte {
 
 func callApprove(t *testing.T, tp *token.Processor, std operation.Std, spender, TokenAddress common.Address, Caller token.Ref, value *big.Int, Errs []error) {
 	approveOp, err := operation.NewApproveOperation(std, spender, value)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	call(t, tp, Caller, TokenAddress, nil, approveOp, Errs)
 }
@@ -738,9 +657,7 @@ func call(t *testing.T, tp *token.Processor, Caller token.Ref, TokenAddress comm
 
 func mintNewToken(t *testing.T, tp *token.Processor, owner, TokenAddress common.Address, id *big.Int, data []byte, Caller token.Ref, Errs []error) {
 	mintOp, err := operation.NewMintOperation(owner, id, data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	call(t, tp, Caller, TokenAddress, nil, mintOp, Errs)
 }
@@ -756,14 +673,10 @@ func checkCost(tp *token.Processor, tokenAddress common.Address, tokenId *big.In
 
 func checkBalance(t *testing.T, tp *token.Processor, TokenAddress, owner common.Address) *big.Int {
 	balanceOp, err := operation.NewBalanceOfOperation(TokenAddress, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	balance, err := tp.BalanceOf(balanceOp)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	return balance
 }
