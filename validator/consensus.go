@@ -16,6 +16,8 @@ const validatorsPerSlot = 6
 type Consensus interface {
 	GetValidators(stateDb *state.StateDB, epoch uint64, activeOnly, needAddresses bool) ([]cache.Validator, []common.Address)
 	GetShuffledValidators(stateDb *state.StateDB, firstEpochBlock common.Hash, filter ...uint64) ([]common.Address, error)
+
+	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot int) [][]common.Address
 }
 
 type consensus struct {

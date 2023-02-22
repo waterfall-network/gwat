@@ -1,11 +1,19 @@
 package testmodels
 
 import (
+	"math/big"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 var (
+	TestDb          ethdb.Database
+	TestChainConfig *params.ChainConfig
+
 	Addr1  = common.BytesToAddress(testutils.RandomStringInBytes(50))
 	Addr2  = common.BytesToAddress(testutils.RandomStringInBytes(30))
 	Addr3  = common.BytesToAddress(testutils.RandomStringInBytes(20))
@@ -21,3 +29,14 @@ var (
 
 	InputValidators = []common.Address{Addr1, Addr2, Addr3, Addr4, Addr5, Addr6, Addr7, Addr8, Addr9, Addr10, Addr11, Addr12}
 )
+
+func init() {
+	TestDb = rawdb.NewMemoryDatabase()
+	TestChainConfig = &params.ChainConfig{
+		ChainID:                big.NewInt(111111),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		ForkSlotSubNet1:        9999999,
+		ValidatorsStateAddress: nil,
+	}
+}

@@ -1,32 +1,14 @@
 package validator
 
 import (
-	"math/big"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 )
 
 func TestConsensus_breakByValidatorsBySlotCount(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-
-	config := &params.ChainConfig{
-		ChainID:                big.NewInt(111111),
-		SecondsPerSlot:         4,
-		SlotsPerEpoch:          32,
-		ForkSlotSubNet1:        9999999,
-		ValidatorsStateAddress: nil,
-	}
-
-	consensus := consensus{
-		db:     db,
-		config: config,
-	}
-
 	tests := []struct {
 		name              string
 		validatorsPerSlot int
@@ -72,11 +54,12 @@ func TestConsensus_breakByValidatorsBySlotCount(t *testing.T) {
 		},
 	}
 
+	consensus := NewConsensus(testmodels.TestDb, testmodels.TestChainConfig)
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			validators := consensus.breakByValidatorsBySlotCount(testmodels.InputValidators, test.validatorsPerSlot)
 			testutils.AssertEqual(t, test.want, validators)
-
 		})
 	}
 }

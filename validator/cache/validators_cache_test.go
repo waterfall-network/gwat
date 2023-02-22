@@ -1,12 +1,12 @@
 package cache
 
 import (
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 	"math"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 )
 
 var (

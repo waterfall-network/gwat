@@ -16,7 +16,7 @@ var (
 	activationEpoch   uint64
 	exitEpoch         uint64
 	balance           *big.Int
-	validator         *Validator
+	testValidator     *Validator
 )
 
 func init() {
@@ -27,11 +27,11 @@ func init() {
 	exitEpoch = uint64(testutils.RandomInt(int(activationEpoch), int(activationEpoch+999999999)))
 	balance = big.NewInt(int64(testutils.RandomInt(0, 999999999)))
 
-	validator = NewValidator(address, &withdrawalAddress, validatorIndex, activationEpoch, exitEpoch, balance)
+	testValidator = NewValidator(address, &withdrawalAddress, validatorIndex, activationEpoch, exitEpoch, balance)
 }
 
 func TestValidator_MarshalBinary(t *testing.T) {
-	data, err := validator.MarshalBinary()
+	data, err := testValidator.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
 	expectedData := make([]byte, common.AddressLength*2+uint64Size*4+len(balance.Bytes()))
@@ -47,7 +47,7 @@ func TestValidator_MarshalBinary(t *testing.T) {
 }
 
 func TestValidator_UnmarshalBinary(t *testing.T) {
-	data, err := validator.MarshalBinary()
+	data, err := testValidator.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
 	v := new(Validator)
@@ -68,7 +68,7 @@ func TestValidatorInfoGetters(t *testing.T) {
 		err     error
 	)
 
-	valInfo, err = validator.MarshalBinary()
+	valInfo, err = testValidator.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
 	valAddress := valInfo.GetAddress()
