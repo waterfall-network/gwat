@@ -1,10 +1,13 @@
 package validator
 
 import (
+	"math"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 )
 
@@ -62,4 +65,125 @@ func TestConsensus_breakByValidatorsBySlotCount(t *testing.T) {
 			testutils.AssertEqual(t, test.want, validators)
 		})
 	}
+}
+
+func TestGetValidators(t *testing.T) {
+	validatorsList := make([]cache.Validator, 0)
+
+	stateDb, _ := state.New(common.Hash{}, state.NewDatabase(testmodels.TestDb), nil)
+
+	// Create a new consensus object
+	c := NewConsensus(testmodels.TestDb, testmodels.TestChainConfig)
+
+	stateDb.AddValidatorsList(testmodels.TestChainConfig.ValidatorsStateAddress, testmodels.InputValidators)
+	for i, address := range testmodels.InputValidators {
+		validator := cache.NewValidator(address, &common.Address{0x0000000000000000000000000000000000000000}, uint64(i), uint64(i), uint64(math.MaxUint64), nil)
+		info, err := validator.MarshalBinary()
+		testutils.AssertNoError(t, err)
+
+		validatorsList = append(validatorsList, *validator)
+		stateDb.SetValidatorInfo(address, info)
+	}
+
+	tests := []struct {
+		name           string
+		epoch          int
+		activeOnly     bool
+		needAddresses  bool
+		wantValidators []cache.Validator
+		wantAddresses  []common.Address
+	}{
+		{
+			name:           "activeOnly and needAddresses are both false",
+			epoch:          testutils.RandomInt(0, len(testmodels.InputValidators)),
+			activeOnly:     false,
+			needAddresses:  false,
+			wantValidators: validatorsList,
+			wantAddresses:  nil,
+		},
+		{
+			name:           "activeOnly is false and needAddresses is true",
+			epoch:          testutils.RandomInt(0, len(testmodels.InputValidators)),
+			activeOnly:     false,
+			needAddresses:  true,
+			wantValidators: validatorsList,
+			wantAddresses:  testmodels.InputValidators,
+		},
+		{
+			name:           "activeOnly is true and needAddresses is false",
+			epoch:          testutils.RandomInt(0, len(testmodels.InputValidators)),
+			activeOnly:     true,
+			needAddresses:  false,
+			wantValidators: make([]cache.Validator, 0),
+			wantAddresses:  nil,
+		},
+		{
+			name:           "activeOnly and needAddresses are both true",
+			epoch:          testutils.RandomInt(0, len(testmodels.InputValidators)),
+			activeOnly:     true,
+			needAddresses:  true,
+			wantValidators: make([]cache.Validator, 0),
+			wantAddresses:  make([]common.Address, 0),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.activeOnly {
+				for _, validator := range validatorsList {
+					if validator.ActivationEpoch <= uint64(test.epoch) && validator.ExitEpoch > uint64(test.epoch) {
+						test.wantValidators = append(test.wantValidators, validator)
+					}
+				}
+
+				if test.needAddresses {
+					for _, val := range test.wantValidators {
+						test.wantAddresses = append(test.wantAddresses, val.Address)
+					}
+				}
+			}
+
+			validators, addresses := c.GetValidators(stateDb, uint64(test.epoch), test.activeOnly, test.needAddresses)
+			testutils.AssertEqual(t, test.wantValidators, validators)
+			testutils.AssertEqual(t, test.wantAddresses, addresses)
+
+		})
+	}
+}
+
+func TestGetShuffledValidators(t *testing.T) {
+	blockHash := common.HexToHash("0x1234")
+	epoch := uint64(len(testmodels.InputValidators))
+	slot := uint64(0)
+
+	stateDb, err := state.New(common.Hash{}, state.NewDatabase(testmodels.TestDb), nil)
+	testutils.AssertNoError(t, err)
+
+	c := NewConsensus(testmodels.TestDb, testmodels.TestChainConfig)
+
+	stateDb.AddValidatorsList(testmodels.TestChainConfig.ValidatorsStateAddress, testmodels.InputValidators)
+	for i, address := range testmodels.InputValidators {
+		validator := cache.NewValidator(address, &common.Address{0x0000000000000000000000000000000000000000}, uint64(i), uint64(i), uint64(math.MaxUint64), nil)
+		info, err := validator.MarshalBinary()
+		testutils.AssertNoError(t, err)
+
+		stateDb.SetValidatorInfo(address, info)
+	}
+
+	// Test case 1: Invalid filter error
+	filter := []uint64{epoch, slot}
+	result, err := c.GetShuffledValidators(stateDb, blockHash, filter[0:1]...)
+	testutils.AssertError(t, err, cache.ErrInvalidValidatorsFilter)
+	testutils.AssertNil(t, result)
+
+	// Test case 2: Validators available in cache
+	result, err = c.GetShuffledValidators(stateDb, blockHash, filter...)
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, result, []common.Address{
+		testmodels.Addr6,
+		testmodels.Addr12,
+		testmodels.Addr7,
+		testmodels.Addr10,
+		testmodels.Addr4,
+		testmodels.Addr3})
 }

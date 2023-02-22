@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	TestDb          ethdb.Database
-	TestChainConfig *params.ChainConfig
+	TestDb                 ethdb.Database
+	TestChainConfig        *params.ChainConfig
+	validatorsStateAddress common.Address
 
 	Addr1  = common.BytesToAddress(testutils.RandomStringInBytes(50))
 	Addr2  = common.BytesToAddress(testutils.RandomStringInBytes(30))
@@ -31,12 +32,14 @@ var (
 )
 
 func init() {
+	validatorsStateAddress = common.BytesToAddress(testutils.RandomStringInBytes(70))
+
 	TestDb = rawdb.NewMemoryDatabase()
 	TestChainConfig = &params.ChainConfig{
 		ChainID:                big.NewInt(111111),
 		SecondsPerSlot:         4,
 		SlotsPerEpoch:          32,
 		ForkSlotSubNet1:        9999999,
-		ValidatorsStateAddress: nil,
+		ValidatorsStateAddress: &validatorsStateAddress,
 	}
 }

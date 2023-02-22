@@ -141,7 +141,7 @@ func (c *consensus) GetShuffledValidators(stateDb *state.StateDB, firstEpochBloc
 		log.Error("can`t add shuffled validators to cache", "error", err)
 	}
 
-	return validators, nil
+	return c.validators.GetShuffledValidators(params)
 }
 
 // seed make Seed for shuffling represents in [32] byte
