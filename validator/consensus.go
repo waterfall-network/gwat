@@ -11,13 +11,11 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
-const validatorsPerSlot = 6
-
 type Consensus interface {
 	GetValidators(stateDb *state.StateDB, epoch uint64, activeOnly, needAddresses bool) ([]cache.Validator, []common.Address)
 	GetShuffledValidators(stateDb *state.StateDB, firstEpochBlock common.Hash, filter ...uint64) ([]common.Address, error)
 
-	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot int) [][]common.Address
+	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
 
 type consensus struct {
@@ -123,7 +121,7 @@ func (c *consensus) GetShuffledValidators(stateDb *state.StateDB, firstEpochBloc
 		return nil, err
 	}
 
-	shuffledValidatorsBySlots := c.breakByValidatorsBySlotCount(shuffledValidators, validatorsPerSlot)
+	shuffledValidatorsBySlots := c.breakByValidatorsBySlotCount(shuffledValidators, c.config.ValidatorsPerSlot)
 
 	if uint64(len(shuffledValidatorsBySlots)) < c.config.SlotsPerEpoch {
 		for uint64(len(shuffledValidatorsBySlots)) < c.config.SlotsPerEpoch {
@@ -132,7 +130,7 @@ func (c *consensus) GetShuffledValidators(stateDb *state.StateDB, firstEpochBloc
 				return nil, err
 			}
 
-			shuffledValidatorsBySlots = append(shuffledValidatorsBySlots, c.breakByValidatorsBySlotCount(shuffledValidators, validatorsPerSlot)...)
+			shuffledValidatorsBySlots = append(shuffledValidatorsBySlots, c.breakByValidatorsBySlotCount(shuffledValidators, c.config.ValidatorsPerSlot)...)
 		}
 	}
 
@@ -158,10 +156,10 @@ func (c *consensus) seed(epoch uint64, firstEpochBlockHash common.Hash) (common.
 }
 
 // breakByValidatorsBySlotCount splits the list of all validators into sublists for each slot
-func (c *consensus) breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot int) [][]common.Address {
+func (c *consensus) breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address {
 	chunks := make([][]common.Address, 0)
 
-	for i := 0; i+validatorsPerSlot <= len(validators); i += validatorsPerSlot {
+	for i := uint64(0); i+validatorsPerSlot <= uint64(len(validators)); i += validatorsPerSlot {
 		end := i + validatorsPerSlot
 		slotValidators := make([]common.Address, len(validators[i:end]))
 		copy(slotValidators, validators[i:end])
