@@ -28,7 +28,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -55,6 +57,7 @@ The state transitioning model does all the necessary work to work out a valid ne
 type StateTransition struct {
 	gp         *GasPool
 	tp         *token.Processor
+	vp         *validator.Processor
 	msg        Message
 	gas        uint64
 	gasPrice   *big.Int
@@ -158,11 +161,12 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:        gp,
 		evm:       evm,
 		tp:        tokenProcessor,
+		vp:        validatorProcessor,
 		msg:       msg,
 		gasPrice:  msg.GasPrice(),
 		gasFeeCap: msg.GasFeeCap(),
@@ -180,8 +184,8 @@ func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Messag
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, tokenProcessor, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
+	return NewStateTransition(evm, tokenProcessor, validatorProcessor, msg, gp).TransitionDb()
 }
 
 // to returns the recipient of the message.
@@ -296,12 +300,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Check if token prefix and opcode are valid in raw data
 	isTokenOp := false
-	if _, err := operation.GetOpCode(msg.Data()); err == nil {
+	if _, err := tokenOp.GetOpCode(msg.Data()); err == nil {
 		isTokenOp = true
 	}
 
+	isValidatorOp := st.vp.IsValidatorOp(msg.To())
+
 	var data []byte
-	if !isTokenOp {
+	if !isTokenOp || isValidatorOp {
 		data = st.data
 	}
 
@@ -335,11 +341,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 
 		if isTokenOp {
-			op, err := operation.DecodeBytes(msg.Data())
+			op, err := tokenOp.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
 			}
 			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
+		} else if isValidatorOp {
+			op, err := validatorOp.DecodeBytes(msg.Data())
+			if err != nil {
+				return nil, err
+			}
+			ret, vmerr = st.vp.Call(sender, st.to(), st.value, op)
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

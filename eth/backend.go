@@ -57,6 +57,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -301,6 +302,9 @@ func (s *Ethereum) APIs() []rpc.API {
 
 	// Append token APIs
 	apis = append(apis, token.GetAPIs(s.APIBackend)...)
+
+	// Append validator APIs
+	apis = append(apis, validator.GetAPIs(s.APIBackend)...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{

@@ -898,14 +898,21 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return nil, err
 	}
+	vp, vpError, err := b.GetVP(ctx, state, header)
+	if err != nil {
+		return nil, err
+	}
 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	result, err := core.ApplyMessage(evm, tp, msg, gp)
+	result, err := core.ApplyMessage(evm, tp, vp, msg, gp)
 	if err := vmError(); err != nil {
 		return nil, err
 	}
 	if err := tpError(); err != nil {
+		return nil, err
+	}
+	if err := vpError(); err != nil {
 		return nil, err
 	}
 
@@ -1561,7 +1568,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
-		res, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(msg.Gas()))
+		vp, _, err := b.GetVP(ctx, statedb, header)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		res, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
