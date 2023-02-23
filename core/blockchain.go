@@ -3552,7 +3552,7 @@ func (bc *BlockChain) ReadFirstEpochBlockHash(epoch uint64) common.Hash {
 				continue
 			}
 
-			if blockEpoch-previousBlockEpoch == 1 {
+			if blockEpoch == epoch {
 				rawdb.WriteFirstEpochBlockHash(bc.db, blockEpoch, block.Hash())
 				return block.Hash()
 			}
