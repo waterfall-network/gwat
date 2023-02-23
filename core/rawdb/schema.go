@@ -242,7 +242,7 @@ func childrenKey(hash common.Hash) []byte {
 	return append(childrenPrefix, hash.Bytes()...)
 }
 
-// seedKey = FirstEpochBlockPrefix+epoch
-func seedKey(epoch uint64) []byte {
+// firstEpochBlockKey = FirstEpochBlockPrefix+epoch
+func firstEpochBlockKey(epoch uint64) []byte {
 	return append(FirstEpochBlockPrefix, Uint64ToByteSlice(epoch)...)
 }

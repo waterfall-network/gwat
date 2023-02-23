@@ -1002,7 +1002,7 @@ func DeleteChildren(db ethdb.KeyValueWriter, parent common.Hash) {
 }
 
 func WriteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64, seed common.Hash) {
-	key := seedKey(epoch)
+	key := firstEpochBlockKey(epoch)
 
 	err := db.Put(key, seed.Bytes())
 	if err != nil {
@@ -1015,7 +1015,7 @@ func ReadFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) (common.Hash
 		epoch = epoch - 2
 	}
 
-	key := seedKey(epoch)
+	key := firstEpochBlockKey(epoch)
 	buf, err := db.Get(key)
 	if err != nil {
 		return common.Hash{}, err
@@ -1027,7 +1027,7 @@ func ReadFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) (common.Hash
 }
 
 func DeleteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64) {
-	key := seedKey(epoch)
+	key := firstEpochBlockKey(epoch)
 	err := db.Delete(key)
 	if err != nil {
 		log.Crit("Failed to delete epoch seed", "err", err, "epoch", epoch)
@@ -1035,7 +1035,7 @@ func DeleteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64) {
 }
 
 func ExistFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) bool {
-	key := seedKey(epoch)
+	key := firstEpochBlockKey(epoch)
 	exist, _ := db.Has(key)
 
 	return exist
