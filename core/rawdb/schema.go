@@ -98,7 +98,7 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
-	SeedPrefix            = []byte("seed")
+	FirstEpochBlockPrefix = []byte("FEB")
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
@@ -242,7 +242,7 @@ func childrenKey(hash common.Hash) []byte {
 	return append(childrenPrefix, hash.Bytes()...)
 }
 
-// seedKey = SeedPrefix+epoch
+// seedKey = FirstEpochBlockPrefix+epoch
 func seedKey(epoch uint64) []byte {
-	return append(SeedPrefix, Uint64ToByteSlice(epoch)...)
+	return append(FirstEpochBlockPrefix, Uint64ToByteSlice(epoch)...)
 }

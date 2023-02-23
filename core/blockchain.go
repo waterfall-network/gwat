@@ -3557,7 +3557,7 @@ func (bc *BlockChain) ReadFirstEpochBlockHash(epoch uint64) common.Hash {
 				return block.Hash()
 			}
 
-			if blockEpoch != epoch+1 {
+			if blockEpoch > epoch {
 				return firstEpochBlockHash
 			}
 		}
