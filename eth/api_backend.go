@@ -39,6 +39,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // EthAPIBackend implements ethapi.Backend for full nodes
@@ -244,6 +245,13 @@ func (b *EthAPIBackend) GetTP(ctx context.Context, state *state.StateDB, header 
 	tpError := func() error { return nil }
 	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
 	return token.NewProcessor(context, state), tpError, nil
+}
+
+// GetVP retrieves the validator processor.
+func (b *EthAPIBackend) GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error) {
+	tpError := func() error { return nil }
+	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
+	return validator.NewProcessor(context, state), tpError, nil
 }
 
 func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {

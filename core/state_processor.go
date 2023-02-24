@@ -28,6 +28,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -68,6 +69,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
+	validatorProcessor := validator.NewProcessor(blockContext, statedb)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config), header.BaseFee)
@@ -77,7 +79,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.Prepare(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockHash, tx, usedGas, vmenv, tokenProcessor)
+		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockHash, tx, usedGas, vmenv, tokenProcessor, validatorProcessor)
 		if err != nil {
 			log.Error(fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err).Error())
 			//continue
@@ -92,13 +94,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, tokenProcessor *token.Processor) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, tokenProcessor, msg, gp)
+	result, err := ApplyMessage(evm, tokenProcessor, validatorProcessor, msg, gp)
 	if err != nil {
 		return nil, err
 	}
@@ -146,5 +148,6 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
-	return applyTransaction(msg, config, bc, author, gp, statedb, header.Hash(), tx, usedGas, vmenv, tokenProcessor)
+	validatorProcessor := validator.NewProcessor(blockContext, statedb)
+	return applyTransaction(msg, config, bc, author, gp, statedb, header.Hash(), tx, usedGas, vmenv, tokenProcessor, validatorProcessor)
 }
