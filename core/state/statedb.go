@@ -33,7 +33,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
 )
 
 type revision struct {
@@ -303,10 +302,6 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 		return common.Hash{}
 	}
 
-	if len(stateObject.CodeHash()) > len(common.Hash{}) {
-		return common.Hash{}
-	}
-
 	return common.BytesToHash(stateObject.CodeHash())
 }
 
@@ -385,42 +380,6 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
-	}
-}
-
-func (s *StateDB) AddValidatorsList(key *common.Address, validators []common.Address) {
-	if key != nil {
-		stateObject := s.GetOrNewStateObject(*key)
-		if stateObject != nil {
-			stateObject.SetValidatorsList(validators)
-		}
-	}
-}
-
-func (s *StateDB) GetValidatorsList(key *common.Address) []common.Address {
-	if key != nil {
-		stateObject := s.GetOrNewStateObject(*key)
-		if stateObject != nil {
-			return stateObject.GetValidatorsList()
-		}
-	}
-
-	return nil
-}
-
-func (s *StateDB) GetValidatorInfo(validatorAddress common.Address) cache.ValidatorInfo {
-	stateObject := s.GetOrNewStateObject(validatorAddress)
-	if stateObject != nil {
-		return stateObject.ValidatorInfo()
-	}
-
-	return nil
-}
-
-func (s *StateDB) SetValidatorInfo(validatorAddress common.Address, info cache.ValidatorInfo) {
-	stateObject := s.GetOrNewStateObject(validatorAddress)
-	if stateObject != nil {
-		stateObject.SetValidatorInfo(info)
 	}
 }
 

@@ -1,4 +1,4 @@
-package cache
+package storage
 
 import (
 	"encoding/binary"
@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	address           common.Address
+	validatorAddress  common.Address
 	withdrawalAddress common.Address
 	validatorIndex    uint64
 	activationEpoch   uint64
@@ -20,14 +20,14 @@ var (
 )
 
 func init() {
-	address = common.BytesToAddress(testutils.RandomStringInBytes(20))
+	validatorAddress = common.BytesToAddress(testutils.RandomStringInBytes(20))
 	withdrawalAddress = common.BytesToAddress(testutils.RandomStringInBytes(20))
 	validatorIndex = uint64(testutils.RandomInt(0, 9999999999))
 	activationEpoch = uint64(testutils.RandomInt(0, 9999999999))
 	exitEpoch = uint64(testutils.RandomInt(int(activationEpoch), int(activationEpoch+999999999)))
 	balance = big.NewInt(int64(testutils.RandomInt(0, 999999999)))
 
-	testValidator = NewValidator(address, &withdrawalAddress, validatorIndex, activationEpoch, exitEpoch, balance)
+	testValidator = NewValidator(validatorAddress, &withdrawalAddress, validatorIndex, activationEpoch, exitEpoch, balance)
 }
 
 func TestValidator_MarshalBinary(t *testing.T) {
@@ -35,7 +35,7 @@ func TestValidator_MarshalBinary(t *testing.T) {
 	testutils.AssertNoError(t, err)
 
 	expectedData := make([]byte, common.AddressLength*2+uint64Size*4+len(balance.Bytes()))
-	copy(expectedData[:common.AddressLength], address[:])
+	copy(expectedData[:common.AddressLength], validatorAddress[:])
 	copy(expectedData[withdrawalAddressOffset:validatorIndexOffset], withdrawalAddress[:])
 	binary.BigEndian.PutUint64(expectedData[validatorIndexOffset:activationEpochOffset], validatorIndex)
 	binary.BigEndian.PutUint64(expectedData[activationEpochOffset:exitEpochOffset], activationEpoch)
@@ -54,9 +54,9 @@ func TestValidator_UnmarshalBinary(t *testing.T) {
 	err = v.UnmarshalBinary(data)
 	testutils.AssertNoError(t, err)
 
-	testutils.AssertEqual(t, v.Address, address)
+	testutils.AssertEqual(t, v.Address, validatorAddress)
 	testutils.AssertEqual(t, *v.WithdrawalAddress, withdrawalAddress)
-	testutils.AssertEqual(t, v.ValidatorIndex, validatorIndex)
+	testutils.AssertEqual(t, v.Index, validatorIndex)
 	testutils.AssertEqual(t, v.ActivationEpoch, activationEpoch)
 	testutils.AssertEqual(t, v.ExitEpoch, exitEpoch)
 	testutils.AssertEqual(t, v.Balance, balance)
@@ -72,7 +72,7 @@ func TestValidatorInfoGetters(t *testing.T) {
 	testutils.AssertNoError(t, err)
 
 	valAddress := valInfo.GetAddress()
-	testutils.AssertEqual(t, valAddress, address)
+	testutils.AssertEqual(t, valAddress, validatorAddress)
 
 	valWithdrawal := valInfo.GetWithdrawalAddress()
 	testutils.AssertEqual(t, valWithdrawal, withdrawalAddress)
@@ -94,9 +94,9 @@ func TestValidatorInfoSetters(t *testing.T) {
 	lenValInfo := balanceOffset + len(balance.Bytes())
 	val := make(ValidatorInfo, lenValInfo)
 
-	val.SetAddress(address)
+	val.SetAddress(validatorAddress)
 	valAddr := val.GetAddress()
-	testutils.AssertEqual(t, valAddr, address)
+	testutils.AssertEqual(t, valAddr, validatorAddress)
 
 	val.SetWithdrawalAddress(withdrawalAddress)
 	valWithdraw := val.GetWithdrawalAddress()

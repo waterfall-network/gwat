@@ -1,4 +1,4 @@
-package cache
+package storage
 
 import (
 	"encoding/binary"
@@ -21,7 +21,7 @@ const (
 type Validator struct {
 	Address           common.Address
 	WithdrawalAddress *common.Address
-	ValidatorIndex    uint64
+	Index             uint64
 	ActivationEpoch   uint64
 	ExitEpoch         uint64
 	Balance           *big.Int
@@ -35,7 +35,7 @@ func NewValidator(address common.Address, withdrawal *common.Address, validatorI
 	return &Validator{
 		Address:           address,
 		WithdrawalAddress: withdrawal,
-		ValidatorIndex:    validatorIndex,
+		Index:             validatorIndex,
 		ActivationEpoch:   activationEpoch,
 		ExitEpoch:         exitEpoch,
 		Balance:           balance,
@@ -59,7 +59,7 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 
 	copy(data[withdrawalAddressOffset:withdrawalAddressOffset+common.AddressLength], withdrawalAddress)
 
-	binary.BigEndian.PutUint64(data[validatorIndexOffset:validatorIndexOffset+uint64Size], v.ValidatorIndex)
+	binary.BigEndian.PutUint64(data[validatorIndexOffset:validatorIndexOffset+uint64Size], v.Index)
 
 	binary.BigEndian.PutUint64(data[activationEpochOffset:activationEpochOffset+uint64Size], v.ActivationEpoch)
 
@@ -78,7 +78,7 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 	v.WithdrawalAddress = new(common.Address)
 	copy(v.WithdrawalAddress[:], data[withdrawalAddressOffset:withdrawalAddressOffset+common.AddressLength])
 
-	v.ValidatorIndex = binary.BigEndian.Uint64(data[validatorIndexOffset : validatorIndexOffset+uint64Size])
+	v.Index = binary.BigEndian.Uint64(data[validatorIndexOffset : validatorIndexOffset+uint64Size])
 
 	v.ActivationEpoch = binary.BigEndian.Uint64(data[activationEpochOffset : activationEpochOffset+uint64Size])
 

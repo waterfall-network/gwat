@@ -21,7 +21,6 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
 )
 
 // StateDB is an EVM database for full state querying.
@@ -47,11 +46,6 @@ type StateDB interface {
 	GetCommittedState(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
-
-	AddValidatorsList(key *common.Address, validators []common.Address)
-	GetValidatorsList(key *common.Address) []common.Address
-	GetValidatorInfo(validatorAddress common.Address) cache.ValidatorInfo
-	SetValidatorInfo(validatorAddress common.Address, info cache.ValidatorInfo)
 
 	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool

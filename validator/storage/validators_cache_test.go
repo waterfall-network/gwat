@@ -1,4 +1,4 @@
-package cache
+package storage
 
 import (
 	"math"
@@ -39,7 +39,7 @@ var (
 )
 
 func TestNewValidatorsCache(t *testing.T) {
-	cache := New()
+	cache := NewCache()
 
 	if cache.allValidatorsCache == nil {
 		t.Fatal("Expected allValidatorsCache to be initialized, but it was nil")
@@ -75,7 +75,7 @@ func TestNewValidatorsCache(t *testing.T) {
 }
 
 func TestGetActiveValidatorsByEpoch(t *testing.T) {
-	cache := New()
+	cache := NewCache()
 
 	validators := cache.GetActiveValidatorsByEpoch(1)
 	if validators != nil {
@@ -98,7 +98,7 @@ func TestGetActiveValidatorsByEpoch(t *testing.T) {
 }
 
 func TestAddValidator(t *testing.T) {
-	c := New()
+	c := NewCache()
 	validator := Validator{
 		Address:         testmodels.Addr1,
 		ActivationEpoch: 10,
@@ -116,7 +116,7 @@ func TestAddValidator(t *testing.T) {
 }
 
 func TestDelValidator(t *testing.T) {
-	c := New()
+	c := NewCache()
 	validator := Validator{
 		Address:         common.Address{1},
 		ActivationEpoch: 10,
@@ -137,7 +137,7 @@ func TestDelValidator(t *testing.T) {
 }
 
 func TestAllValidatorsCache(t *testing.T) {
-	cache := New()
+	cache := NewCache()
 	validatorsList := make([]Validator, len(testmodels.InputValidators))
 
 	for i, inputValidator := range testmodels.InputValidators {
@@ -163,7 +163,7 @@ func TestAllValidatorsCache(t *testing.T) {
 }
 
 func TestSubnetValidatorsCache(t *testing.T) {
-	cache := New()
+	cache := NewCache()
 
 	cache.AddSubnetValidators(epoch, subnet, testmodels.InputValidators)
 	cachedValidators, ok := cache.subnetValidatorsCache[epoch][subnet]
@@ -186,7 +186,7 @@ func TestSubnetValidatorsCache(t *testing.T) {
 }
 
 func TestGetValidatorsAddresses(t *testing.T) {
-	cache := New()
+	cache := NewCache()
 	validatorsList := make([]Validator, len(testmodels.InputValidators))
 
 	for i, inputValidator := range testmodels.InputValidators {
@@ -215,7 +215,7 @@ func TestGetValidatorsAddresses(t *testing.T) {
 }
 
 func TestShuffledValidatorsCache(t *testing.T) {
-	cache := New()
+	cache := NewCache()
 
 	err := cache.AddShuffledValidators(shuffledValidators, []uint64{epoch})
 	testutils.AssertNoError(t, err)

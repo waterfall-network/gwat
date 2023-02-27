@@ -46,7 +46,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 var (
@@ -83,7 +83,6 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
-	errNoEpochSeed          = errors.New("there is no seed for epoch")
 )
 
 const (
@@ -205,7 +204,7 @@ type BlockChain struct {
 	txLookupCache      *lru.Cache     // Cache for the most recent transaction lookup data.
 	invalidBlocksCache *lru.Cache     // Cache for the blocks with unknown parents
 
-	consensus validator.Consensus
+	validatorStorage valStore.Storage
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -257,7 +256,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:             engine,
 		vmConfig:           vmConfig,
 		syncProvider:       nil,
-		consensus:          validator.NewConsensus(db, chainConfig),
+		validatorStorage:   valStore.NewStorage(db, chainConfig),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -1908,7 +1907,7 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	} else {
 		seedBlockHash := bc.ReadFirstEpochBlockHash(epoch)
 
-		creators, err = bc.Consensus().GetShuffledValidators(st, seedBlockHash, epoch, slotInEpoch)
+		creators, err = bc.ValidatorStorage().GetShuffledValidators(st, seedBlockHash, epoch, slotInEpoch)
 		if err != nil {
 			log.Error("can`t get shuffled validators", "error", err)
 			return false
@@ -3570,6 +3569,6 @@ func (bc *BlockChain) ExistFirstEpochBlockHash(epoch uint64) bool {
 	return rawdb.ExistFirstEpochBlockHash(bc.db, epoch)
 }
 
-func (bc *BlockChain) Consensus() validator.Consensus {
-	return bc.consensus
+func (bc *BlockChain) ValidatorStorage() valStore.Storage {
+	return bc.validatorStorage
 }

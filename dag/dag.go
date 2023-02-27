@@ -268,7 +268,7 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			//	}
 			//}else{}
 			// TODO: move this code to the else condition after subnet support.
-			creators, err = d.bc.Consensus().GetShuffledValidators(st, seedBlockHash, epoch, epochSlot)
+			creators, err = d.bc.ValidatorStorage().GetShuffledValidators(st, seedBlockHash, epoch, epochSlot)
 			if err != nil {
 				d.errChan <- err
 			}
@@ -276,7 +276,6 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			d.work(currentSlot, creators, accounts)
 		}
 	}
-
 }
 
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {

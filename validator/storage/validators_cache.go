@@ -1,4 +1,4 @@
-package cache
+package storage
 
 import (
 	"errors"
@@ -11,10 +11,8 @@ import (
 
 var (
 	ErrInvalidValidatorsFilter = errors.New("invalid validators filter")
-	errNoSlotValidators        = errors.New("there are no validators for slot")
 	errNoSubnetValidators      = errors.New("there are no validators for subnet")
 	errNoEpochValidators       = errors.New("there are no validators for epoch")
-	errNoCachedValidators      = errors.New("there are no cached validators")
 )
 
 const (
@@ -33,7 +31,7 @@ type ValidatorsCache struct {
 	shuffledSubnetMu *sync.Mutex
 }
 
-func New() *ValidatorsCache {
+func NewCache() *ValidatorsCache {
 	return &ValidatorsCache{
 		allValidatorsCache:            make(map[uint64][]Validator),
 		subnetValidatorsCache:         make(map[uint64]map[uint64][]common.Address),

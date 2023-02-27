@@ -41,5 +41,6 @@ func init() {
 		SlotsPerEpoch:          32,
 		ForkSlotSubNet1:        9999999,
 		ValidatorsStateAddress: &validatorsStateAddress,
+		ValidatorsPerSlot:      6,
 	}
 }

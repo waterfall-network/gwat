@@ -39,7 +39,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/cache"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -310,17 +310,18 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	g.CreateDepositContract(statedb, head)
 
-	statedb.AddValidatorsList(g.Config.ValidatorsStateAddress, g.Validators)
+	validatorStorage := storage.NewStorage(db, g.Config)
 
-	for i, validator := range g.Validators {
-		v := cache.NewValidator(validator, nil, uint64(i), 0, math.MaxUint64, nil)
+	validatorStorage.SetValidatorsList(statedb, g.Validators)
+	for i, val := range g.Validators {
+		v := storage.NewValidator(val, nil, uint64(i), 0, math.MaxUint64, nil)
 
 		info, err := v.MarshalBinary()
 		if err != nil {
-			log.Error("can`t add validator to the state", "address", validator, "error", err)
+			log.Error("can`t add validator to the state", "address", val, "error", err)
 		}
 
-		statedb.SetValidatorInfo(validator, info)
+		validatorStorage.SetValidatorInfo(statedb, info)
 	}
 
 	root := statedb.IntermediateRoot(false)
