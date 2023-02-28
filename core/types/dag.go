@@ -289,7 +289,9 @@ type ConsensusResult struct {
 
 type FinalizationResult struct {
 	Error   *string      `json:"error"`
-	LFSpine *common.Hash `json:"lf_spine"`
+	LFSpine *common.Hash `json:"lfSpine"`
+	cpEpoch *uint64      `json:"cpEpoch"`
+	cpRoot  *common.Hash `json:"cpRoot"`
 }
 
 type CandidatesResult struct {
