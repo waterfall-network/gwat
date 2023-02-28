@@ -1344,7 +1344,7 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
 
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-	epochBlockSeed, err := rawdb.ReadFirstEpochBlockHash(bc.db, blockEpoch)
+	epochBlockSeed, err := bc.ValidatorStorage().ReadFirstEpochBlockHash(blockEpoch)
 	if err == nil && epochBlockSeed == block.Hash() {
 		rawdb.DeleteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
 	}
@@ -1888,30 +1888,21 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 		err      error
 	)
 
-	st, err := bc.StateAt(block.Root())
-	if err != nil {
-		log.Error("can`t get block state", "error", err)
-		return false
-	}
-
-	epoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-	slotInEpoch := block.Slot() % bc.GetSlotInfo().SlotsPerEpoch
-
 	if bc.Config().IsForkSlotSubNet1(bc.GetSlotInfo().CurrentSlot()) {
-		// TODO: uncomment and transfer subnet to the function GetShuffledValidators()
-		//creators, err = bc.Consensus().GetShuffledValidators(st, epoch, slotInEpoch,subnet)
+		// TODO: uncomment and transfer subnet to the function GetCreatorsBySlot()
+		//creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot(), blockSubnet)
 		//if err != nil {
 		//	log.Error("can`t get shuffled validators", "error", err)
 		//	return false
 		//}
 	} else {
-		seedBlockHash := bc.ReadFirstEpochBlockHash(epoch)
+	}
 
-		creators, err = bc.ValidatorStorage().GetShuffledValidators(st, seedBlockHash, epoch, slotInEpoch)
-		if err != nil {
-			log.Error("can`t get shuffled validators", "error", err)
-			return false
-		}
+	// TODO: move it to the else condition after subnet support
+	creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
+	if err != nil {
+		log.Error("can`t get shuffled validators", "error", err)
+		return false
 	}
 
 	//if no record - skip (actual fo dag sync)
@@ -3524,41 +3515,41 @@ func (bc *BlockChain) WriteFirstEpochBlockHash(block *types.Block) {
 // For the first two epochs, the genesis hash is used,
 // for the next, the hash of the first block that was completed two epochs ago is used.
 func (bc *BlockChain) ReadFirstEpochBlockHash(epoch uint64) common.Hash {
-	firstEpochBlock, err := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
-	if err != nil {
-		previousEpoch := epoch - 1
-		firstEpochBlockHash := bc.ReadFirstEpochBlockHash(previousEpoch)
-
-		previousEpochBlock := bc.GetBlock(firstEpochBlockHash)
-
-		previousBlockEpoch := bc.GetSlotInfo().SlotToEpoch(previousEpochBlock.Slot())
-
-		number := *previousEpochBlock.Number() + 1
-
-		for {
-			block := bc.GetBlockByNumber(number)
-			if block == nil {
-				return firstEpochBlockHash
-			}
-
-			blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-			if blockEpoch == previousBlockEpoch {
-				number++
-				continue
-			}
-
-			if blockEpoch == epoch {
-				rawdb.WriteFirstEpochBlockHash(bc.db, blockEpoch, block.Hash())
-				return block.Hash()
-			}
-
-			if blockEpoch > epoch {
-				return firstEpochBlockHash
-			}
-		}
+	firstEpochBlock, err := bc.ValidatorStorage().ReadFirstEpochBlockHash(epoch)
+	if err == nil {
+		return firstEpochBlock
 	}
 
-	return firstEpochBlock
+	previousEpoch := epoch - 1
+	firstEpochBlockHash := bc.ReadFirstEpochBlockHash(previousEpoch)
+
+	previousEpochBlock := bc.GetBlock(firstEpochBlockHash)
+
+	previousBlockEpoch := bc.GetSlotInfo().SlotToEpoch(previousEpochBlock.Slot())
+
+	number := *previousEpochBlock.Number() + 1
+
+	for {
+		block := bc.GetBlockByNumber(number)
+		if block == nil {
+			return firstEpochBlockHash
+		}
+
+		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+		if blockEpoch == previousBlockEpoch {
+			number++
+			continue
+		}
+
+		if blockEpoch == epoch {
+			bc.WriteFirstEpochBlockHash(block)
+			return block.Hash()
+		}
+
+		if blockEpoch > epoch {
+			return firstEpochBlockHash
+		}
+	}
 }
 
 func (bc *BlockChain) DeleteFirstEpochBlockHash(epoch uint64) {

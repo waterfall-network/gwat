@@ -13,7 +13,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
@@ -232,43 +231,32 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			close(d.exitChan)
 			close(d.errChan)
 			ticker.Stop()
+
 			return
 		case err := <-d.errChan:
 			close(d.errChan)
 			close(d.exitChan)
 			ticker.Stop()
-
 			log.Error("dag worker has error", "error", err)
+
 			return
 		case <-ticker.C:
 			var (
 				err      error
 				creators []common.Address
-				st       *state.StateDB
 			)
 
 			currentSlot := d.bc.GetSlotInfo().CurrentSlot()
-			epoch := d.bc.GetSlotInfo().SlotToEpoch(currentSlot)
-			epochSlot := currentSlot % d.bc.GetSlotInfo().SlotsPerEpoch
-			seedBlockHash := d.bc.ReadFirstEpochBlockHash(epoch)
 
-			seedBlock := d.bc.GetBlock(seedBlockHash)
-
-			st, err = d.bc.StateAt(seedBlock.Root())
-			if err != nil {
-				log.Error("can`t get block state", "error", err)
-				continue
-			}
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
-
-			//if d.bc.Config().IsForkSlotSubNet1(slot) {
-			//	creators, err = d.bc.Consensus().GetShuffledValidators(st,epoch,slot, subnet)
+			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
+			//	creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, currentSlot,subnet)
 			//	if err != nil {
 			//		d.errChan <- err
 			//	}
-			//}else{}
-			// TODO: move this code to the else condition after subnet support.
-			creators, err = d.bc.ValidatorStorage().GetShuffledValidators(st, seedBlockHash, epoch, epochSlot)
+			//} else {}
+			// TODO: move it to else condition
+			creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, currentSlot)
 			if err != nil {
 				d.errChan <- err
 			}

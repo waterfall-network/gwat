@@ -210,11 +210,14 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, ForkSlotSubNet1: %v}",
+	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, ForkSlotSubNet1: %v, "+
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
 		c.ForkSlotSubNet1,
+		c.ValidatorsPerSlot,
+		c.ValidatorsStateAddress,
 	)
 }
 
@@ -264,6 +267,26 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			lastFork = cur
 		}
 	}
+	return nil
+}
+
+func (c *ChainConfig) Validate() error {
+	if c.SecondsPerSlot == 0 {
+		return fmt.Errorf("no seconds per slot parameter")
+	}
+
+	if c.SlotsPerEpoch == 0 {
+		return fmt.Errorf("no slots per epoch parameter")
+	}
+
+	if c.ForkSlotSubNet1 == 0 {
+		return fmt.Errorf("no ForkSlotSubNet parameter")
+	}
+
+	if c.ValidatorsPerSlot == 0 {
+		return fmt.Errorf("no validators per slot parameter")
+	}
+
 	return nil
 }
 

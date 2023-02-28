@@ -191,9 +191,18 @@ func initGenesis(ctx *cli.Context) error {
 	defer file.Close()
 
 	genesis := new(core.Genesis)
-	if err := json.NewDecoder(file).Decode(genesis); err != nil {
+	if err = json.NewDecoder(file).Decode(genesis); err != nil {
 		utils.Fatalf("invalid genesis file: %v", err)
 	}
+
+	if genesis.Validators == nil {
+		utils.Fatalf("invalid genesis file: no validators")
+	}
+
+	if err = genesis.Config.Validate(); err != nil {
+		utils.Fatalf("invalid config: %s", err.Error())
+	}
+
 	// Open and initialise both full and light databases
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()

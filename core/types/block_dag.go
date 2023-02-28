@@ -680,6 +680,10 @@ func (si *SlotInfo) SlotToEpoch(slot uint64) uint64 {
 	return val
 }
 
+func (si *SlotInfo) SlotInEpoch(slot uint64) uint64 {
+	return slot % si.SlotsPerEpoch
+}
+
 // SlotOfEpochStart returns the first slot number of the
 // current epoch.
 func (si *SlotInfo) SlotOfEpochStart(epoch uint64) (uint64, error) {

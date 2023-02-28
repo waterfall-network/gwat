@@ -2,7 +2,9 @@ package storage
 
 import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -10,15 +12,25 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
+type blockchain interface {
+	StateAt(root common.Hash) (*state.StateDB, error)
+	GetBlock(hash common.Hash) *types.Block
+	GetSlotInfo() *types.SlotInfo
+	ReadFirstEpochBlockHash(epoch uint64) common.Hash
+}
+
 type Storage interface {
-	GetValidators(stateDb *state.StateDB, epoch uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address)
-	GetShuffledValidators(stateDb *state.StateDB, firstEpochBlock common.Hash, filter ...uint64) ([]common.Address, error)
+	GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address)
+	GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error)
 
 	SetValidatorInfo(stateDb *state.StateDB, info ValidatorInfo)
 	GetValidatorInfo(stateDb *state.StateDB, address common.Address) ValidatorInfo
 
 	SetValidatorsList(stateDb *state.StateDB, list []common.Address)
 	GetValidatorsList(stateDb *state.StateDB) []common.Address
+
+	WriteFirstEpochBlockHash(epoch uint64, hash common.Hash)
+	ReadFirstEpochBlockHash(epoch uint64) (common.Hash, error)
 
 	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
@@ -73,12 +85,20 @@ func (s *storage) GetValidatorsList(stateDb *state.StateDB) []common.Address {
 // GetValidators return two values: array of Validator and array of Validators addresses.
 // If parameter needAddresses is false it return array of Validator and nil value for validators addresses.
 // Use parameter activeOnly true if you need only active validators.
-func (s *storage) GetValidators(stateDb *state.StateDB, epoch uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address) {
+func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address) {
 	var err error
 	validators := make([]Validator, 0)
 
-	validators, err = s.validatorsCache.GetAllValidatorsByEpoch(epoch)
+	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
+
+	validators, err = s.validatorsCache.getAllValidatorsByEpoch(epoch)
 	if err != nil {
+		firstEpochBlockHash := bc.ReadFirstEpochBlockHash(epoch)
+
+		firstEpochBlock := bc.GetBlock(firstEpochBlockHash)
+
+		stateDb, err := bc.StateAt(firstEpochBlock.Root())
+
 		valList := s.GetValidatorsList(stateDb)
 		for _, valAddress := range valList {
 			var validator Validator
@@ -92,60 +112,60 @@ func (s *storage) GetValidators(stateDb *state.StateDB, epoch uint64, activeOnly
 			validators = append(validators, validator)
 		}
 
-		s.validatorsCache.AddAllValidatorsByEpoch(epoch, validators)
-
+		s.validatorsCache.addAllValidatorsByEpoch(epoch, validators)
 	}
 
 	switch {
 	case !activeOnly && !needAddresses:
 		return validators, nil
 	case !activeOnly && needAddresses:
-		return validators, s.validatorsCache.GetValidatorsAddresses(epoch, false)
+		return validators, s.validatorsCache.getValidatorsAddresses(epoch, false)
 	case activeOnly && !needAddresses:
-		return s.validatorsCache.GetActiveValidatorsByEpoch(epoch), nil
+		return s.validatorsCache.getActiveValidatorsByEpoch(epoch), nil
 	case activeOnly && needAddresses:
-		return s.validatorsCache.GetActiveValidatorsByEpoch(epoch), s.validatorsCache.GetValidatorsAddresses(epoch, true)
+		return s.validatorsCache.getActiveValidatorsByEpoch(epoch), s.validatorsCache.getValidatorsAddresses(epoch, true)
 	}
 
 	return nil, nil
 }
 
-// GetShuffledValidators return shuffled validators addresses from cache.
-// Input parameters are array of uint64 (epoch, slot, subnet). Sequence is required!!!
-func (s *storage) GetShuffledValidators(stateDb *state.StateDB, firstEpochBlock common.Hash, filter ...uint64) ([]common.Address, error) {
+// GetCreatorsBySlot return shuffled validators addresses from cache.
+// Input parameters are list of uint64 (slot, subnet). Sequence is required!!!
+func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error) {
 	// TODO: improve this function for subnet supporting.
-	params := make([]uint64, len(filter))
-	for i, u := range filter {
-		params[i] = u
+	if len(filter) > 2 {
+		return nil, ErrInvalidValidatorsFilter
 	}
 
-	validators, err := s.validatorsCache.GetShuffledValidators(params)
+	slot := filter[0]
+
+	params := make([]uint64, 0)
+	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	params = append(params, epoch)
+
+	slotInEpoch := bc.GetSlotInfo().SlotInEpoch(slot)
+	params = append(params, slotInEpoch)
+
+	if len(filter) == 2 {
+		params = append(params, filter[1])
+	}
+
+	validators, err := s.validatorsCache.getShuffledValidators(params)
 	if err != nil && err == ErrInvalidValidatorsFilter {
 		return nil, err
 	} else if err == nil {
 		return validators, nil
 	}
 
-	valList := make([]Validator, 0)
+	allValidators, _ := s.GetValidators(bc, slot, false, false)
 
-	stateValidators := s.GetValidatorsList(stateDb)
-	for _, valAddress := range stateValidators {
-		var validator Validator
-		valInfo := s.GetValidatorInfo(stateDb, valAddress)
-		err = validator.UnmarshalBinary(valInfo)
-		if err != nil {
-			log.Error("can`t get validators info from state", "error", err)
-			continue
-		}
+	s.validatorsCache.addAllValidatorsByEpoch(epoch, allValidators)
 
-		valList = append(valList, validator)
-	}
+	activeEpochValidators := s.validatorsCache.getValidatorsAddresses(epoch, true)
 
-	s.validatorsCache.AddAllValidatorsByEpoch(params[0], valList)
+	seedBlockHash := bc.ReadFirstEpochBlockHash(epoch)
 
-	activeEpochValidators := s.validatorsCache.GetValidatorsAddresses(params[0], true)
-
-	seed, err := s.seed(params[0], firstEpochBlock)
+	seed, err := s.seed(epoch, seedBlockHash)
 	if err != nil {
 		return nil, err
 	}
@@ -168,13 +188,25 @@ func (s *storage) GetShuffledValidators(stateDb *state.StateDB, firstEpochBlock 
 		}
 	}
 
-	err = s.validatorsCache.AddShuffledValidators(shuffledValidatorsBySlots, params[0:1])
+	err = s.validatorsCache.addShuffledValidators(shuffledValidatorsBySlots, params[0:1])
 	if err != nil {
 		log.Error("can`t add shuffled validators to cache", "error", err)
 		return nil, err
 	}
 
-	return s.validatorsCache.GetShuffledValidators(params)
+	return s.validatorsCache.getShuffledValidators(params)
+}
+
+func (s *storage) WriteFirstEpochBlockHash(epoch uint64, hash common.Hash) {
+	rawdb.WriteFirstEpochBlockHash(s.db, epoch, hash)
+}
+
+func (s *storage) ReadFirstEpochBlockHash(epoch uint64) (common.Hash, error) {
+	if epoch >= 2 {
+		epoch = epoch - 2
+	}
+
+	return rawdb.ReadFirstEpochBlockHash(s.db, epoch)
 }
 
 // seed make Seed for shuffling represents in [32] byte

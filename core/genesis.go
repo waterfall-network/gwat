@@ -287,14 +287,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		head.GasLimit = params.GenesisGasLimit
 	}
 
-	buf := make([]byte, len(g.Validators)*common.AddressLength)
-	for i, validator := range g.Validators {
-		beginning := i * common.AddressLength
-		end := beginning + common.AddressLength
-		copy(buf[beginning:end], validator[:])
-	}
-
-	validatorsStateAddress := crypto.Keccak256Address(buf)
+	validatorsStateAddress := g.GenerateValidatorStateAddress()
 
 	if g.Config != nil {
 		if g.BaseFee != nil {
@@ -303,9 +296,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 
-		g.Config.ValidatorsStateAddress = &validatorsStateAddress
+		g.Config.ValidatorsStateAddress = validatorsStateAddress
 	} else {
-		g.Config = &params.ChainConfig{ValidatorsStateAddress: &validatorsStateAddress}
+		g.Config = &params.ChainConfig{ValidatorsStateAddress: validatorsStateAddress}
 	}
 
 	g.CreateDepositContract(statedb, head)
@@ -333,8 +326,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	genesisBlock := types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
 
 	// Use genesis hash as seed for first and second epochs
-	rawdb.WriteFirstEpochBlockHash(db, 0, genesisBlock.Hash())
-	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
+	validatorStorage.WriteFirstEpochBlockHash(0, genesisBlock.Hash())
+	validatorStorage.WriteFirstEpochBlockHash(1, genesisBlock.Hash())
 
 	return genesisBlock
 }
@@ -394,6 +387,20 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 	return block
+}
+
+func (g *Genesis) GenerateValidatorStateAddress() *common.Address {
+	buf := make([]byte, len(g.Validators)*common.AddressLength)
+	for i, validator := range g.Validators {
+		beginning := i * common.AddressLength
+		end := beginning + common.AddressLength
+		copy(buf[beginning:end], validator[:])
+	}
+
+	validatorsStateAddress := crypto.Keccak256Address(buf)
+	log.Info("Validators state address", "address", validatorsStateAddress)
+
+	return &validatorsStateAddress
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
