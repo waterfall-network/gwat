@@ -46,6 +46,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 var (
@@ -90,9 +91,7 @@ const (
 	receiptsCacheLimit  = 32
 	txLookupCacheLimit  = 1024
 	TriesInMemory       = 128
-	creatorsCacheLimit  = 64
 	invBlocksCacheLimit = 512
-
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
 	// Changelog:
@@ -203,8 +202,9 @@ type BlockChain struct {
 	receiptsCache      *lru.Cache     // Cache for the most recent receipts per block
 	blockCache         *lru.Cache     // Cache for the most recent entire blocks
 	txLookupCache      *lru.Cache     // Cache for the most recent transaction lookup data.
-	creatorsCache      *lru.Cache     // Cache for the assigned creators
 	invalidBlocksCache *lru.Cache     // Cache for the blocks with unknown parents
+
+	validatorStorage valStore.Storage
 
 	insBlockCache []*types.Block // Cache for blocks to insert late
 
@@ -233,7 +233,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
-	creatorsCache, _ := lru.New(creatorsCacheLimit)
 	invBlocksCache, _ := lru.New(invBlocksCacheLimit)
 
 	bc := &BlockChain{
@@ -253,11 +252,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		receiptsCache:      receiptsCache,
 		blockCache:         blockCache,
 		txLookupCache:      txLookupCache,
-		creatorsCache:      creatorsCache,
 		invalidBlocksCache: invBlocksCache,
 		engine:             engine,
 		vmConfig:           vmConfig,
 		syncProvider:       nil,
+		validatorStorage:   valStore.NewStorage(db, chainConfig),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -272,6 +271,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
 	}
+
 	if bc.GetBlockFinalizedNumber(bc.genesisBlock.Hash()) == nil {
 		rawdb.WriteLastFinalizedHash(db, bc.genesisBlock.Hash())
 		rawdb.WriteFinalizedHashNumber(db, bc.genesisBlock.Hash(), uint64(0))
@@ -920,6 +920,10 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 		bc.RemoveTxFromPool(tx)
 	}
 
+	if !bc.ExistFirstEpochBlockHash(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
+		rawdb.WriteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
+	}
+
 	return nil
 }
 
@@ -1341,6 +1345,11 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
 
+	epochBlockSeed := rawdb.ReadFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
+	if epochBlockSeed == block.Hash() {
+		rawdb.DeleteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
+	}
+
 	// update finalized number cache
 	bc.hc.numberCache.Remove(block.Hash())
 
@@ -1511,10 +1520,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
-}
-
-func (bc *BlockChain) WriteCreators(slot uint64, creators []common.Address) {
-	rawdb.WriteCreators(bc.db, slot, creators)
 }
 
 func (bc *BlockChain) WriteLastCoordinatedHash(hash common.Hash) {
@@ -1878,13 +1883,35 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	if true {
 		return true
 	}
-	creators := bc.GetCreators(block.Slot())
+
+	var (
+		creators []common.Address
+		err      error
+	)
+
+	if bc.Config().IsForkSlotSubNet1(bc.GetSlotInfo().CurrentSlot()) {
+		// TODO: uncomment and transfer subnet to the function GetCreatorsBySlot()
+		//creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot(), blockSubnet)
+		//if err != nil {
+		//	log.Error("can`t get shuffled validators", "error", err)
+		//	return false
+		//}
+	} else {
+	}
+
+	// TODO: move it to the else condition after subnet support
+	creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
+	if err != nil {
+		log.Error("can`t get shuffled validators", "error", err)
+		return false
+	}
+
 	//if no record - skip (actual fo dag sync)
 	if creators == nil {
-		return true
+		return false
 	}
 	blockCreator := block.Header().Coinbase
-	contains, index := common.Contains(*creators, blockCreator)
+	contains, index := common.Contains(creators, blockCreator)
 	if !contains {
 		log.Warn("Block verification: creator assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators)
 		return false
@@ -1896,7 +1923,7 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 			addrMap[from] = true
 		}
 		for txFrom := range addrMap {
-			if !IsAddressAssigned(txFrom, *creators, int64(index)) {
+			if !IsAddressAssigned(txFrom, creators, int64(index)) {
 				log.Warn("Block verification: creator txs assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators, "txFrom", txFrom)
 				return false
 			}
@@ -3475,4 +3502,63 @@ func (bc *BlockChain) HeadSynchronising() bool {
 		return false
 	}
 	return bc.syncProvider.HeadSynchronising()
+}
+
+// SearchFirstEpochBlockHashRecursive return first epoch block hash and true if hash is saved in database.
+// Use this hash at seed for shuffle algorithm.
+func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash, isSaved bool) {
+	firstEpochBlock := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
+	if firstEpochBlock != (common.Hash{}) {
+		return firstEpochBlock, true
+	}
+
+	previousEpoch := epoch - 1
+	firstEpochBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(previousEpoch)
+
+	previousEpochBlock := bc.GetBlock(firstEpochBlockHash)
+
+	previousBlockEpoch := bc.GetSlotInfo().SlotToEpoch(previousEpochBlock.Slot())
+
+	number := *previousEpochBlock.Number() + 1
+
+	for {
+		block := bc.GetBlockByNumber(number)
+		if block == nil {
+			return firstEpochBlockHash, ok
+		}
+
+		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+		if blockEpoch == previousBlockEpoch {
+			number++
+			continue
+		}
+
+		if blockEpoch == epoch {
+			return block.Hash(), false
+		}
+
+		if blockEpoch > epoch {
+			return firstEpochBlockHash, true
+		}
+	}
+}
+
+func (bc *BlockChain) DeleteFirstEpochBlockHash(epoch uint64) {
+	rawdb.DeleteFirstEpochBlockHash(bc.db, epoch)
+}
+
+func (bc *BlockChain) ExistFirstEpochBlockHash(epoch uint64) bool {
+	return rawdb.ExistFirstEpochBlockHash(bc.db, epoch)
+}
+
+func (bc *BlockChain) ValidatorStorage() valStore.Storage {
+	return bc.validatorStorage
+}
+
+func (bc *BlockChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
+	if epoch >= 2 {
+		epoch = epoch - 2
+	}
+
+	return epoch
 }

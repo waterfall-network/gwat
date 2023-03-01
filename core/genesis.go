@@ -39,6 +39,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -49,12 +50,13 @@ var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
-	Config    *params.ChainConfig `json:"config"`
-	Timestamp uint64              `json:"timestamp"`
-	ExtraData []byte              `json:"extraData"`
-	GasLimit  uint64              `json:"gasLimit"   gencodec:"required"`
-	Coinbase  common.Address      `json:"coinbase"`
-	Alloc     GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Config     *params.ChainConfig `json:"config"`
+	Timestamp  uint64              `json:"timestamp"`
+	ExtraData  []byte              `json:"extraData"`
+	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
+	Coinbase   common.Address      `json:"coinbase"`
+	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Validators []common.Address    `json:"validators"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -91,14 +93,16 @@ type GenesisAccount struct {
 
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
-	Nonce     math.HexOrDecimal64
-	Timestamp math.HexOrDecimal64
-	ExtraData hexutil.Bytes
-	GasLimit  math.HexOrDecimal64
-	GasUsed   math.HexOrDecimal64
-	Number    math.HexOrDecimal64
-	BaseFee   *math.HexOrDecimal256
-	Alloc     map[common.UnprefixedAddress]GenesisAccount
+	Timestamp    math.HexOrDecimal64
+	ExtraData    hexutil.Bytes
+	GasLimit     math.HexOrDecimal64
+	GasUsed      math.HexOrDecimal64
+	BaseFee      *math.HexOrDecimal256
+	Alloc        map[common.UnprefixedAddress]GenesisAccount
+	Validators   []common.Address
+	ParentHashes []common.Hash
+	Slot         math.HexOrDecimal64
+	Height       math.HexOrDecimal64
 }
 
 type genesisAccountMarshaling struct {
@@ -282,15 +286,36 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
+
+	validatorsStateAddress := g.GenerateValidatorStateAddress()
+
 	if g.Config != nil {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
 		} else {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
+
+		g.Config.ValidatorsStateAddress = validatorsStateAddress
+	} else {
+		g.Config = &params.ChainConfig{ValidatorsStateAddress: validatorsStateAddress}
 	}
 
 	g.CreateDepositContract(statedb, head)
+
+	validatorStorage := valStore.NewStorage(db, g.Config)
+
+	validatorStorage.SetValidatorsList(statedb, g.Validators)
+	for i, val := range g.Validators {
+		v := valStore.NewValidator(val, nil, uint64(i), 0, math.MaxUint64, nil)
+
+		info, err := v.MarshalBinary()
+		if err != nil {
+			log.Error("can`t add validator to the state", "address", val, "error", err)
+		}
+
+		validatorStorage.SetValidatorInfo(statedb, info)
+	}
 
 	root := statedb.IntermediateRoot(false)
 	head.Root = root
@@ -298,7 +323,13 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
 
-	return types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
+	genesisBlock := types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
+
+	// Use genesis hash as seed for first and second epochs
+	rawdb.WriteFirstEpochBlockHash(db, 0, genesisBlock.Hash())
+	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
+
+	return genesisBlock
 }
 
 // CreateDepositContract creates deposit contract for genesis state.
@@ -356,6 +387,20 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 	return block
+}
+
+func (g *Genesis) GenerateValidatorStateAddress() *common.Address {
+	buf := make([]byte, len(g.Validators)*common.AddressLength)
+	for i, validator := range g.Validators {
+		beginning := i * common.AddressLength
+		end := beginning + common.AddressLength
+		copy(buf[beginning:end], validator[:])
+	}
+
+	validatorsStateAddress := crypto.Keccak256Address(buf)
+	log.Info("Validators state address", "address", validatorsStateAddress)
+
+	return &validatorsStateAddress
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.

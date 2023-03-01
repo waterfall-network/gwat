@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
@@ -235,10 +236,16 @@ func (st *StateTransition) preCheck() error {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
 				st.msg.From().Hex(), msgNonce, stNonce)
 		}
-		// Make sure the sender is an EOA
-		if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
-			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
-				st.msg.From().Hex(), codeHash)
+
+		if !bytes.Equal(st.evm.ChainConfig().ValidatorsStateAddress.Bytes(), st.msg.To().Bytes()) {
+			// Check the sender is validator or not.
+			if !st.state.IsValidatorAddress(st.msg.From()) {
+				// Make sure the sender is an EOA
+				if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+					return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+						st.msg.From().Hex(), codeHash)
+				}
+			}
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
