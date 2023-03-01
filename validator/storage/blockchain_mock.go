@@ -50,6 +50,20 @@ func (mr *MockblockchainMockRecorder) GetBlock(hash interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*Mockblockchain)(nil).GetBlock), hash)
 }
 
+// GetCoordinatedCheckpointEpoch mocks base method.
+func (m *Mockblockchain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCoordinatedCheckpointEpoch", epoch)
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// GetCoordinatedCheckpointEpoch indicates an expected call of GetCoordinatedCheckpointEpoch.
+func (mr *MockblockchainMockRecorder) GetCoordinatedCheckpointEpoch(epoch interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCoordinatedCheckpointEpoch", reflect.TypeOf((*Mockblockchain)(nil).GetCoordinatedCheckpointEpoch), epoch)
+}
+
 // GetSlotInfo mocks base method.
 func (m *Mockblockchain) GetSlotInfo() *types.SlotInfo {
 	m.ctrl.T.Helper()
@@ -64,18 +78,19 @@ func (mr *MockblockchainMockRecorder) GetSlotInfo() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlotInfo", reflect.TypeOf((*Mockblockchain)(nil).GetSlotInfo))
 }
 
-// ReadFirstEpochBlockHash mocks base method.
-func (m *Mockblockchain) ReadFirstEpochBlockHash(epoch uint64) common.Hash {
+// SearchFirstEpochBlockHashRecursive mocks base method.
+func (m *Mockblockchain) SearchFirstEpochBlockHashRecursive(epoch uint64) (common.Hash, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadFirstEpochBlockHash", epoch)
+	ret := m.ctrl.Call(m, "SearchFirstEpochBlockHashRecursive", epoch)
 	ret0, _ := ret[0].(common.Hash)
-	return ret0
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
 }
 
-// ReadFirstEpochBlockHash indicates an expected call of ReadFirstEpochBlockHash.
-func (mr *MockblockchainMockRecorder) ReadFirstEpochBlockHash(epoch interface{}) *gomock.Call {
+// SearchFirstEpochBlockHashRecursive indicates an expected call of SearchFirstEpochBlockHashRecursive.
+func (mr *MockblockchainMockRecorder) SearchFirstEpochBlockHashRecursive(epoch interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFirstEpochBlockHash", reflect.TypeOf((*Mockblockchain)(nil).ReadFirstEpochBlockHash), epoch)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchFirstEpochBlockHashRecursive", reflect.TypeOf((*Mockblockchain)(nil).SearchFirstEpochBlockHashRecursive), epoch)
 }
 
 // StateAt mocks base method.
