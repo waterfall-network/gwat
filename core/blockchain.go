@@ -920,7 +920,9 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 		bc.RemoveTxFromPool(tx)
 	}
 
-	bc.WriteFirstEpochBlockHash(block)
+	if !bc.ExistFirstEpochBlockHash(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
+		rawdb.WriteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
+	}
 
 	return nil
 }
@@ -1343,8 +1345,7 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
 
-	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-	epochBlockSeed, err := bc.ValidatorStorage().ReadFirstEpochBlockHash(blockEpoch)
+	epochBlockSeed, err := rawdb.ReadFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
 	if err == nil && epochBlockSeed == block.Hash() {
 		rawdb.DeleteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
 	}
@@ -3503,25 +3504,16 @@ func (bc *BlockChain) HeadSynchronising() bool {
 	return bc.syncProvider.HeadSynchronising()
 }
 
-func (bc *BlockChain) WriteFirstEpochBlockHash(block *types.Block) {
-	// check that block hash for block`s epoch was not wrote to the db.
-	// if it does not - write hash to the db
-	if !bc.ExistFirstEpochBlockHash(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
-		rawdb.WriteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
-	}
-}
-
-// ReadFirstEpochBlockHash return first epoch block hash. Use this hash at seed for shuffle algorithm.
-// For the first two epochs, the genesis hash is used,
-// for the next, the hash of the first block that was completed two epochs ago is used.
-func (bc *BlockChain) ReadFirstEpochBlockHash(epoch uint64) common.Hash {
-	firstEpochBlock, err := bc.ValidatorStorage().ReadFirstEpochBlockHash(epoch)
+// SearchFirstEpochBlockHashRecursive return first epoch block hash and true if hash is saved in database.
+// Use this hash at seed for shuffle algorithm.
+func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash, isSaved bool) {
+	firstEpochBlock, err := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
 	if err == nil {
-		return firstEpochBlock
+		return firstEpochBlock, true
 	}
 
 	previousEpoch := epoch - 1
-	firstEpochBlockHash := bc.ReadFirstEpochBlockHash(previousEpoch)
+	firstEpochBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(previousEpoch)
 
 	previousEpochBlock := bc.GetBlock(firstEpochBlockHash)
 
@@ -3532,7 +3524,7 @@ func (bc *BlockChain) ReadFirstEpochBlockHash(epoch uint64) common.Hash {
 	for {
 		block := bc.GetBlockByNumber(number)
 		if block == nil {
-			return firstEpochBlockHash
+			return firstEpochBlockHash, ok
 		}
 
 		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
@@ -3542,12 +3534,11 @@ func (bc *BlockChain) ReadFirstEpochBlockHash(epoch uint64) common.Hash {
 		}
 
 		if blockEpoch == epoch {
-			bc.WriteFirstEpochBlockHash(block)
-			return block.Hash()
+			return block.Hash(), false
 		}
 
 		if blockEpoch > epoch {
-			return firstEpochBlockHash
+			return firstEpochBlockHash, true
 		}
 	}
 }
@@ -3562,4 +3553,12 @@ func (bc *BlockChain) ExistFirstEpochBlockHash(epoch uint64) bool {
 
 func (bc *BlockChain) ValidatorStorage() valStore.Storage {
 	return bc.validatorStorage
+}
+
+func (bc *BlockChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
+	if epoch >= 2 {
+		epoch = epoch - 2
+	}
+
+	return epoch
 }

@@ -326,8 +326,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	genesisBlock := types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
 
 	// Use genesis hash as seed for first and second epochs
-	validatorStorage.WriteFirstEpochBlockHash(0, genesisBlock.Hash())
-	validatorStorage.WriteFirstEpochBlockHash(1, genesisBlock.Hash())
+	rawdb.WriteFirstEpochBlockHash(db, 0, genesisBlock.Hash())
+	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
 
 	return genesisBlock
 }

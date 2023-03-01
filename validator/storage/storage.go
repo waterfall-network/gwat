@@ -16,7 +16,8 @@ type blockchain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
-	ReadFirstEpochBlockHash(epoch uint64) common.Hash
+	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
+	SearchFirstEpochBlockHashRecursive(epoch uint64) (common.Hash, bool)
 }
 
 type Storage interface {
@@ -28,9 +29,6 @@ type Storage interface {
 
 	SetValidatorsList(stateDb *state.StateDB, list []common.Address)
 	GetValidatorsList(stateDb *state.StateDB) []common.Address
-
-	WriteFirstEpochBlockHash(epoch uint64, hash common.Hash)
-	ReadFirstEpochBlockHash(epoch uint64) (common.Hash, error)
 
 	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
@@ -89,11 +87,16 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 	var err error
 	validators := make([]Validator, 0)
 
-	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 
-	validators, err = s.validatorsCache.getAllValidatorsByEpoch(epoch)
+	checkpointEpoch := bc.GetCoordinatedCheckpointEpoch(currentEpoch)
+
+	validators, err = s.validatorsCache.getAllValidatorsByEpoch(checkpointEpoch)
 	if err != nil {
-		firstEpochBlockHash := bc.ReadFirstEpochBlockHash(epoch)
+		firstEpochBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(checkpointEpoch)
+		if !ok {
+			rawdb.WriteFirstEpochBlockHash(s.db, checkpointEpoch, firstEpochBlockHash)
+		}
 
 		firstEpochBlock := bc.GetBlock(firstEpochBlockHash)
 
@@ -112,18 +115,18 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 			validators = append(validators, validator)
 		}
 
-		s.validatorsCache.addAllValidatorsByEpoch(epoch, validators)
+		s.validatorsCache.addAllValidatorsByEpoch(currentEpoch, validators)
 	}
 
 	switch {
 	case !activeOnly && !needAddresses:
 		return validators, nil
 	case !activeOnly && needAddresses:
-		return validators, s.validatorsCache.getValidatorsAddresses(epoch, false)
+		return validators, s.validatorsCache.getValidatorsAddresses(currentEpoch, false)
 	case activeOnly && !needAddresses:
-		return s.validatorsCache.getActiveValidatorsByEpoch(epoch), nil
+		return s.validatorsCache.getActiveValidatorsByEpoch(currentEpoch), nil
 	case activeOnly && needAddresses:
-		return s.validatorsCache.getActiveValidatorsByEpoch(epoch), s.validatorsCache.getValidatorsAddresses(epoch, true)
+		return s.validatorsCache.getActiveValidatorsByEpoch(currentEpoch), s.validatorsCache.getValidatorsAddresses(currentEpoch, true)
 	}
 
 	return nil, nil
@@ -163,7 +166,11 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 
 	activeEpochValidators := s.validatorsCache.getValidatorsAddresses(epoch, true)
 
-	seedBlockHash := bc.ReadFirstEpochBlockHash(epoch)
+	checkpointEpoch := bc.GetCoordinatedCheckpointEpoch(epoch)
+	seedBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(checkpointEpoch)
+	if !ok {
+		rawdb.WriteFirstEpochBlockHash(s.db, checkpointEpoch, seedBlockHash)
+	}
 
 	seed, err := s.seed(epoch, seedBlockHash)
 	if err != nil {
@@ -195,18 +202,6 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 	}
 
 	return s.validatorsCache.getShuffledValidators(params)
-}
-
-func (s *storage) WriteFirstEpochBlockHash(epoch uint64, hash common.Hash) {
-	rawdb.WriteFirstEpochBlockHash(s.db, epoch, hash)
-}
-
-func (s *storage) ReadFirstEpochBlockHash(epoch uint64) (common.Hash, error) {
-	if epoch >= 2 {
-		epoch = epoch - 2
-	}
-
-	return rawdb.ReadFirstEpochBlockHash(s.db, epoch)
 }
 
 // seed make Seed for shuffling represents in [32] byte
