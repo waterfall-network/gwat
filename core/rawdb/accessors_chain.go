@@ -1010,16 +1010,16 @@ func WriteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64, hash common
 	}
 }
 
-func ReadFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) (common.Hash, error) {
+func ReadFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) common.Hash {
 	key := firstEpochBlockKey(epoch)
 	buf, err := db.Get(key)
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}
 	}
 
 	seed := common.BytesToHash(buf)
 
-	return seed, nil
+	return seed
 }
 
 func DeleteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64) {

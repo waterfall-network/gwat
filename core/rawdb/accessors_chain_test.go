@@ -825,10 +825,8 @@ func TestWriteReadDeleteSeedHash(t *testing.T) {
 	}
 
 	// Test reading seed hash
-	readSeed, err := ReadFirstEpochBlockHash(db, epoch)
-	if err != nil {
-		t.Fatalf("Failed to read seed hash: %v", err)
-	}
+	readSeed := ReadFirstEpochBlockHash(db, epoch)
+
 	if readSeed != seed {
 		t.Fatalf("Incorrect seed hash read: expected %x, got %x", seed, readSeed)
 	}

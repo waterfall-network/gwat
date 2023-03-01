@@ -1345,8 +1345,8 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
 
-	epochBlockSeed, err := rawdb.ReadFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
-	if err == nil && epochBlockSeed == block.Hash() {
+	epochBlockSeed := rawdb.ReadFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
+	if epochBlockSeed == block.Hash() {
 		rawdb.DeleteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
 	}
 
@@ -3507,8 +3507,8 @@ func (bc *BlockChain) HeadSynchronising() bool {
 // SearchFirstEpochBlockHashRecursive return first epoch block hash and true if hash is saved in database.
 // Use this hash at seed for shuffle algorithm.
 func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash, isSaved bool) {
-	firstEpochBlock, err := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
-	if err == nil {
+	firstEpochBlock := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
+	if firstEpochBlock != (common.Hash{}) {
 		return firstEpochBlock, true
 	}
 
