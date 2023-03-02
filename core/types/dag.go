@@ -233,7 +233,7 @@ type FinalizationParams struct {
 	Spines      common.HashArray `json:"spines"`
 	BaseSpine   *common.Hash     `json:"baseSpine"`
 	Checkpoint  *Checkpoint      `json:"checkpoint"`
-	ValSyncData []*ValidatorSync `json:"validatorSync"`
+	ValSyncData []*ValidatorSync `json:"valSyncData"`
 }
 
 // Copy duplicates the current storage.

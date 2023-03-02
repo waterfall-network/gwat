@@ -345,7 +345,7 @@ func TestFinalizationParams_MarshalJSON(t *testing.T) {
 		"\"epoch\":\"0xb24d\"," +
 		"\"root\":\"0x1111111111111111110000000000000000000000000000000000000000000000\"," +
 		"\"spine\":\"0x2222222222222222220000000000000000000000000000000000000000000000\"}," +
-		"\"validatorSync\":[{\"opType\":\"0x2\",\"procEpoch\":\"0xb24d\",\"index\":\"0xb24d\"," +
+		"\"valSyncData\":[{\"opType\":\"0x2\",\"procEpoch\":\"0xb24d\",\"index\":\"0xb24d\"," +
 		"\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"amount\":\"0x1dd263e09400\"}]}"
 
 	tests := []struct {
