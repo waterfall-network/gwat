@@ -34,6 +34,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 const (
@@ -162,6 +163,7 @@ type blockChain interface {
 	DagSynchronising() bool
 	// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
 	HeadSynchronising() bool
+	ValidatorStorage() valStore.Storage
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -1463,7 +1465,9 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		pool.demoteUnexecutables()
 		//if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).SetUint64(reset.newHead.Height+1)) {
 		if reset.newHead != nil {
-			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+			// Get active validators number
+			validators := pool.chain.ValidatorStorage().GetValidatorsList(pool.currentState)
+			pendingBaseFee := misc.CalcDAGBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.GetBlockByNumber(0).GasLimit()) // does `reset.newHead` eq current block ???
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}

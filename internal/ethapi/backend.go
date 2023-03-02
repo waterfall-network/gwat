@@ -102,6 +102,7 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
+	GetBlockChain() *core.BlockChain
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

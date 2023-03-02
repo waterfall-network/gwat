@@ -318,7 +318,8 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		//Number:   parent.Height() + 1,
 		Time: time,
 	}
-	header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
+	// This base fee calculation is for testing
+	header.BaseFee = misc.CalcDAGBaseFee(chain.Config(), header, 2048, 100000000)
 	return header
 }
 

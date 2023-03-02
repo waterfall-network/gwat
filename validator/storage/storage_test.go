@@ -59,11 +59,9 @@ func TestConsensus_breakByValidatorsBySlotCount(t *testing.T) {
 		},
 	}
 
-	store := NewStorage(testmodels.TestDb, testmodels.TestChainConfig)
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			validators := store.breakByValidatorsBySlotCount(testmodels.InputValidators, test.validatorsPerSlot)
+			validators := breakByValidatorsBySlotCount(testmodels.InputValidators, test.validatorsPerSlot, testmodels.TestChainConfig.SlotsPerEpoch)
 			testutils.AssertEqual(t, test.want, validators)
 		})
 	}

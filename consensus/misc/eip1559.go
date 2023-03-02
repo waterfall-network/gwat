@@ -29,7 +29,7 @@ import (
 // VerifyEip1559Header verifies some header attributes which were changed in EIP-1559,
 // - gas limit check
 // - basefee check
-func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
+func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header, validatorsNum uint64, maxGasPerBlock uint64) error {
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
@@ -40,7 +40,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 		return fmt.Errorf("header is missing baseFee")
 	}
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcBaseFee(config, parent)
+	expectedBaseFee := CalcDAGBaseFee(config, header, validatorsNum, maxGasPerBlock)
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 			expectedBaseFee, header.BaseFee, parent.BaseFee, parent.GasUsed)
@@ -82,4 +82,29 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 			common.Big0,
 		)
 	}
+}
+
+// CalcDAGBaseFee calculates the basefee of the DAG header.
+func CalcDAGBaseFee(config *params.ChainConfig, current *types.Header, validatorsNum uint64, maxGasPerBlock uint64) *big.Int {
+	var (
+		txGasBig                  = new(big.Float).SetUint64(current.GasUsed) // should ve use target gas -> current.GasLimit / params.ElasticityMultiplier ???
+		blocksPerSlotBig          = new(big.Float).SetUint64(config.ValidatorsPerSlot)
+		secondsPerSlotBig         = new(big.Float).SetUint64(config.SecondsPerSlot)
+		secondsInYear             = new(big.Float).SetUint64(60 * 60 * 24 * 365.25)
+		maxAnnualizedReturnRate   = new(big.Float).SetFloat64(params.MaxAnnualizedReturnRate)
+		coordinatorStake          = new(big.Float).SetUint64(params.ValidatorStakeAmount)
+		optCoordinatorNumBig      = new(big.Float).SetUint64(params.OptCoordinatorsNum)
+		validatorsNumBig          = new(big.Float).SetUint64(validatorsNum)
+		totalAllowableGasPerBlock = new(big.Float).SetUint64(maxGasPerBlock)
+	)
+
+	numOfBlocksPerYear := new(big.Float).Quo(new(big.Float).Mul(secondsInYear, blocksPerSlotBig), secondsPerSlotBig)
+	x := new(big.Float).Sqrt(new(big.Float).Mul(optCoordinatorNumBig, validatorsNumBig))
+	y := new(big.Float).Mul(maxAnnualizedReturnRate, coordinatorStake)
+	annualMintedTokens := new(big.Float).Mul(y, x)
+	rewardPerBlock := new(big.Float).Quo(annualMintedTokens, numOfBlocksPerYear)
+	baseFee := new(big.Float).Mul(new(big.Float).Mul(new(big.Float).Quo(txGasBig, totalAllowableGasPerBlock), rewardPerBlock), big.NewFloat(params.PriceMultiplier))
+	baseFeeWei := new(big.Int)
+	new(big.Float).Mul(baseFee, big.NewFloat(1e9)).Int(baseFeeWei) // wei or water or division of water ???
+	return baseFeeWei
 }

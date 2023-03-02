@@ -88,7 +88,9 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	if bf.results.baseFee = bf.header.BaseFee; bf.results.baseFee == nil {
 		bf.results.baseFee = new(big.Int)
 	}
-	bf.results.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
+	// Get active validators number
+	validators, _ := oracle.chain.ValidatorStorage().GetValidators(oracle.chain, bf.header.Slot, true, false)
+	bf.results.nextBaseFee = misc.CalcDAGBaseFee(chainconfig, bf.header, uint64(len(validators)), oracle.chain.Genesis().GasLimit())
 	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null

@@ -121,6 +121,13 @@ const (
 	ElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
 	InitialBaseFee           = 1000000000 // Initial base fee for EIP-1559 blocks.
 
+	// DAG BaseFee constants
+	BurnMultiplier          = 1
+	PriceMultiplier         = 2
+	OptCoordinatorsNum      = 300000
+	ValidatorStakeAmount    = 32000
+	MaxAnnualizedReturnRate = 0.2
+
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 
 	// Precompiled contract gas prices

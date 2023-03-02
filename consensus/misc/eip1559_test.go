@@ -29,10 +29,11 @@ import (
 // do not use e.g. SetInt() on the numbers. For testing only
 func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 	return &params.ChainConfig{
-		ChainID:         original.ChainID,
-		SecondsPerSlot:  4,
-		SlotsPerEpoch:   32,
-		ForkSlotSubNet1: math.MaxUint64,
+		ChainID:           original.ChainID,
+		SecondsPerSlot:    4,
+		SlotsPerEpoch:     32,
+		ForkSlotSubNet1:   math.MaxUint64,
+		ValidatorsPerSlot: 4,
 	}
 }
 
@@ -84,7 +85,7 @@ func TestBlockGasLimits(t *testing.T) {
 			BaseFee:  initial,
 			Number:   &nrHd,
 		}
-		err := VerifyEip1559Header(config(), parent, header)
+		err := VerifyEip1559Header(config(), parent, header, 2048, 100000000)
 		if tc.ok && err != nil {
 			t.Errorf("test %d: Expected valid header: %s", i, err)
 		}
@@ -114,6 +115,29 @@ func TestCalcBaseFee(t *testing.T) {
 			BaseFee:  big.NewInt(test.parentBaseFee),
 		}
 		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+			t.Errorf("test %d: have %d  want %d, ", i, have, want)
+		}
+	}
+}
+
+// TestCalcDAGBaseFee assumes all blocks are 1559-blocks
+func TestCalcDAGBaseFee(t *testing.T) {
+	tests := []struct {
+		gasUsed         uint64
+		validatorsNum   uint64
+		maxGasPerBlock  uint64
+		expectedBaseFee int64
+	}{
+		{10000, 2048, 210000000, 478753},
+		{90000, 2048, 100000000, 9048448},
+		{110000, 2048, 100000000, 11059214},
+	}
+	for i, test := range tests {
+		current := &types.Header{
+			Number:  new(uint64),
+			GasUsed: test.gasUsed,
+		}
+		if have, want := CalcDAGBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}

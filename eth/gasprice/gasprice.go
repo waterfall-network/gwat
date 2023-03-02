@@ -69,6 +69,7 @@ type Oracle struct {
 	ignorePrice *big.Int
 	cacheLock   sync.RWMutex
 	fetchLock   sync.Mutex
+	chain       *core.BlockChain
 
 	checkBlocks, percentile           int
 	maxHeaderHistory, maxBlockHistory int
@@ -77,7 +78,7 @@ type Oracle struct {
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
 // gasprice for newly created transaction.
-func NewOracle(backend OracleBackend, params Config) *Oracle {
+func NewOracle(backend OracleBackend, params Config, chain *core.BlockChain) *Oracle {
 	blocks := params.Blocks
 	if blocks < 1 {
 		blocks = 1
@@ -128,6 +129,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		maxHeaderHistory: params.MaxHeaderHistory,
 		maxBlockHistory:  params.MaxBlockHistory,
 		historyCache:     cache,
+		chain:            chain,
 	}
 }
 
@@ -278,6 +280,10 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 	case result <- results{prices, nil}:
 	case <-quit:
 	}
+}
+
+func (oracle *Oracle) BlockChain() *core.BlockChain {
+	return oracle.chain
 }
 
 type bigIntArray []*big.Int

@@ -72,6 +72,31 @@ type LightChain struct {
 	disableCheckFreq int32 // disables header verification
 }
 
+func (lc *LightChain) Synchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) FinSynchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) DagSynchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) HeadSynchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) IsRollbackActive() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (lc *LightChain) CurrentHeader() *types.Header {
 	//TODO implement me
 	panic("implement me")
