@@ -230,10 +230,10 @@ func (vs *ValidatorSync) UnmarshalJSON(input []byte) error {
 
 // FinalizationParams represents params of finalization request
 type FinalizationParams struct {
-	Spines        common.HashArray `json:"spines"`
-	BaseSpine     *common.Hash     `json:"baseSpine"`
-	Checkpoint    *Checkpoint      `json:"checkpoint"`
-	ValidatorSync *ValidatorSync   `json:"validatorSync"`
+	Spines      common.HashArray `json:"spines"`
+	BaseSpine   *common.Hash     `json:"baseSpine"`
+	Checkpoint  *Checkpoint      `json:"checkpoint"`
+	ValSyncData []*ValidatorSync `json:"validatorSync"`
 }
 
 // Copy duplicates the current storage.
@@ -248,8 +248,11 @@ func (fp *FinalizationParams) Copy() *FinalizationParams {
 	if fp.Checkpoint != nil {
 		cpy.Checkpoint = fp.Checkpoint.Copy()
 	}
-	if fp.ValidatorSync != nil {
-		cpy.ValidatorSync = fp.ValidatorSync.Copy()
+	if fp.ValSyncData != nil {
+		cpy.ValSyncData = make([]*ValidatorSync, len(fp.ValSyncData))
+		for i, vs := range fp.ValSyncData {
+			cpy.ValSyncData[i] = vs.Copy()
+		}
 	}
 	return cpy
 }
@@ -274,8 +277,8 @@ func (fp *FinalizationParams) UnmarshalJSON(input []byte) error {
 	if dec.Checkpoint != nil {
 		fp.Checkpoint = dec.Checkpoint
 	}
-	if dec.ValidatorSync != nil {
-		fp.ValidatorSync = dec.ValidatorSync
+	if dec.ValSyncData != nil {
+		fp.ValSyncData = dec.ValSyncData
 	}
 	return nil
 }

@@ -284,15 +284,15 @@ func TestFinalizationParams_Copy(t *testing.T) {
 			Root:  common.Hash{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11},
 			Spine: common.Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22},
 		},
-		ValidatorSync: &ValidatorSync{
+		ValSyncData: []*ValidatorSync{&ValidatorSync{
 			OpType:    2,
 			ProcEpoch: 45645,
 			Index:     45645,
 			Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 			Amount:    new(big.Int),
-		},
+		}},
 	}
-	src_1.ValidatorSync.Amount.SetString("32789456000000", 10)
+	src_1.ValSyncData[0].Amount.SetString("32789456000000", 10)
 
 	tests := []struct {
 		name string
@@ -327,15 +327,15 @@ func TestFinalizationParams_MarshalJSON(t *testing.T) {
 			Root:  common.Hash{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11},
 			Spine: common.Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22},
 		},
-		ValidatorSync: &ValidatorSync{
+		ValSyncData: []*ValidatorSync{&ValidatorSync{
 			OpType:    2,
 			ProcEpoch: 45645,
 			Index:     45645,
 			Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 			Amount:    new(big.Int),
-		},
+		}},
 	}
-	src_1.ValidatorSync.Amount.SetString("32789456000000", 10)
+	src_1.ValSyncData[0].Amount.SetString("32789456000000", 10)
 
 	//fmt.Println()
 	exp := "{\"spines\":[\"0x2222000000000000000000000000000000000000000000000000000000000000\"," +
@@ -345,13 +345,8 @@ func TestFinalizationParams_MarshalJSON(t *testing.T) {
 		"\"epoch\":\"0xb24d\"," +
 		"\"root\":\"0x1111111111111111110000000000000000000000000000000000000000000000\"," +
 		"\"spine\":\"0x2222222222222222220000000000000000000000000000000000000000000000\"}," +
-		"\"validatorSync\":{" +
-		"\"opType\":\"0x2\"," +
-		"\"procEpoch\":\"0xb24d\"," +
-		"\"index\":\"0xb24d\"," +
-		"\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\"," +
-		"\"amount\":\"0x1dd263e09400\"}" +
-		"}"
+		"\"validatorSync\":[{\"opType\":\"0x2\",\"procEpoch\":\"0xb24d\",\"index\":\"0xb24d\"," +
+		"\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"amount\":\"0x1dd263e09400\"}]}"
 
 	tests := []struct {
 		name string
@@ -387,15 +382,15 @@ func TestFinalizationParams_UnMarshalJSON(t *testing.T) {
 			Root:  common.Hash{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11},
 			Spine: common.Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22},
 		},
-		ValidatorSync: &ValidatorSync{
+		ValSyncData: []*ValidatorSync{&ValidatorSync{
 			OpType:    2,
 			ProcEpoch: 45645,
 			Index:     45645,
 			Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 			Amount:    new(big.Int),
-		},
+		}},
 	}
-	src_1.ValidatorSync.Amount.SetString("32789456000000", 10)
+	src_1.ValSyncData[0].Amount.SetString("32789456000000", 10)
 
 	input, _ := src_1.MarshalJSON()
 	tests := []struct {

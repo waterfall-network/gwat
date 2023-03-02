@@ -199,9 +199,23 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	defer d.bc.DagMu.Unlock()
 
 	if data.BaseSpine != nil {
-		log.Info("Handle Finalize: start", "baseSpine", (*data.BaseSpine).Hex(), "spines", data.Spines, "\u2692", params.BuildId)
+		log.Info("Handle Finalize: start",
+			"baseSpine", (*data.BaseSpine).Hex(),
+			"spines", data.Spines,
+			"cp.Epoch", data.Checkpoint.Epoch,
+			"cp.Spine", data.Checkpoint.Spine.Hex(),
+			"cp.Spine", data.Checkpoint.Spine.Hex(),
+			"ValSyncData", data.ValSyncData,
+			"\u2692", params.BuildId)
 	} else {
-		log.Info("Handle Finalize: start", "baseSpine", nil, "spines", data.Spines, "\u2692", params.BuildId)
+		log.Info("Handle Finalize: start",
+			"baseSpine", nil,
+			"spines", data.Spines,
+			"cp.Epoch", data.Checkpoint.Epoch,
+			"cp.Spine", data.Checkpoint.Spine.Hex(),
+			"cp.Spine", data.Checkpoint.Spine.Hex(),
+			"ValSyncData", data.ValSyncData,
+			"\u2692", params.BuildId)
 	}
 	res := &types.FinalizationResult{
 		Error: nil,
