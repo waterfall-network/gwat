@@ -168,6 +168,7 @@ type ValidatorSync struct {
 	Index     uint64
 	Creator   common.Address
 	Amount    *big.Int
+	TxHash    *common.Hash
 }
 
 type validatorSyncMarshaling struct {
@@ -176,6 +177,7 @@ type validatorSyncMarshaling struct {
 	Index     *hexutil.Uint64 `json:"index"`
 	Creator   *common.Address `json:"creator"`
 	Amount    *hexutil.Big    `json:"amount"`
+	TxHash    *common.Hash    `json:"txHash"`
 }
 
 func (vs *ValidatorSync) Copy() *ValidatorSync {
@@ -188,6 +190,9 @@ func (vs *ValidatorSync) Copy() *ValidatorSync {
 	if vs.Amount != nil {
 		cpy.Amount = new(big.Int).Set(vs.Amount)
 	}
+	if vs.TxHash != nil {
+		copy(cpy.TxHash[:], vs.TxHash[:])
+	}
 	return cpy
 }
 
@@ -198,6 +203,7 @@ func (vs *ValidatorSync) MarshalJSON() ([]byte, error) {
 		Index:     (*hexutil.Uint64)(&vs.Index),
 		Creator:   &vs.Creator,
 		Amount:    nil,
+		TxHash:    vs.TxHash,
 	}
 	if vs.Amount != nil {
 		out.Amount = (*hexutil.Big)(vs.Amount)
@@ -224,6 +230,9 @@ func (vs *ValidatorSync) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Amount != nil {
 		vs.Amount = (*big.Int)(dec.Amount)
+	}
+	if dec.TxHash != nil {
+		vs.TxHash = dec.TxHash
 	}
 	return nil
 }

@@ -48,6 +48,7 @@ func TestValidatorSync_MarshalJSON(t *testing.T) {
 		Index:     45645,
 		Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 		Amount:    new(big.Int),
+		TxHash:    nil,
 	}
 	src_1.Amount.SetString("32789456000000", 10)
 
@@ -56,7 +57,7 @@ func TestValidatorSync_MarshalJSON(t *testing.T) {
 		"\"procEpoch\":\"0xb24d\"," +
 		"\"index\":\"0xb24d\"," +
 		"\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\"," +
-		"\"amount\":\"0x1dd263e09400\"}"
+		"\"amount\":\"0x1dd263e09400\",\"txHash\":null}"
 	tests := []struct {
 		name string
 		src  *ValidatorSync

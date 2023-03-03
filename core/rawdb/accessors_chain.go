@@ -966,6 +966,104 @@ func WriteLastCoordinatedHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadLastCoordinatedCheckpoint retrieves the last Coordinated checkpoint.
+func ReadLastCoordinatedCheckpoint(db ethdb.KeyValueReader) *types.Checkpoint {
+	data, err := db.Get(lastCoordCp)
+	if err != nil {
+		return nil
+	}
+	cp, err := types.BytesToCheckpoint(data)
+	if err != nil {
+		return nil
+	}
+	return cp
+}
+
+// WriteLastCoordinatedCheckpoint stores the last Coordinated checkpoint.
+func WriteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
+	if checkpoint == nil {
+		DeleteLastCoordinatedCheckpoint(db)
+	}
+	if err := db.Put(lastCoordCp, checkpoint.Bytes()); err != nil {
+		log.Crit("Failed to store the Last Coordinated Checkpoint", "err", err)
+	}
+}
+
+// DeleteLastCoordinatedCheckpoint rm the last Coordinated checkpoint.
+func DeleteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter) {
+	if err := db.Delete(lastCoordCp); err != nil {
+		log.Warn("Failed to delete Last Coordinated Checkpoint", "err", err)
+	}
+}
+
+/**** ValidatorSync ***/
+
+func decodeValidatorSync(creator common.Address, op types.ValidatorSyncOp, data []byte) *types.ValidatorSync {
+	// <procEpoch><index><txHash><amountBigInt>`
+	minSize := 8 + 8 + common.HashLength
+	if len(data) < minSize {
+		return nil
+	}
+	res := &types.ValidatorSync{
+		Index:     binary.BigEndian.Uint64(data[0:8]),
+		ProcEpoch: binary.BigEndian.Uint64(data[8:16]),
+		TxHash:    nil,
+		Amount:    nil,
+		OpType:    op,
+		Creator:   creator,
+	}
+	txh := common.BytesToHash(data[16:minSize])
+	if txh != (common.Hash{}) {
+		res.TxHash = &txh
+	}
+	if len(data[minSize:]) > 0 {
+		res.Amount = new(big.Int).SetBytes(data[minSize:])
+	}
+	return res
+}
+
+func encodeValidatorSync(vs types.ValidatorSync) []byte {
+	// <procEpoch><index><txHash><amountBigInt>`
+	var data []byte
+	data = append(data, encodeBlockNumber(vs.Index)...)
+	data = append(data, encodeBlockNumber(vs.ProcEpoch)...)
+	txh := vs.TxHash
+	if txh == nil {
+		txh = &common.Hash{}
+	}
+	data = append(data, txh.Bytes()...)
+	if vs.Amount != nil {
+		data = append(data, vs.Amount.Bytes()...)
+	}
+	return data
+}
+
+// ReadValidatorSync retrieves the ValidatorSync data.
+func ReadValidatorSync(db ethdb.KeyValueReader, creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
+	data, _ := db.Get(validatorSyncKey(creator, uint64(op)))
+	return decodeValidatorSync(creator, op, data)
+}
+
+// WriteValidatorSync stores the ValidatorSync data.
+func WriteValidatorSync(db ethdb.KeyValueWriter, vs *types.ValidatorSync) {
+	if vs == nil {
+		return
+	}
+	key := validatorSyncKey(vs.Creator, uint64(vs.OpType))
+	enc := encodeValidatorSync(*vs)
+	if err := db.Put(key, enc); err != nil {
+		log.Crit("Failed to store ValidatorSync data", "err", err)
+	}
+}
+
+// DeleteValidatorSync delete the ValidatorSync data..
+func DeleteValidatorSync(db ethdb.KeyValueWriter, creator common.Address, op types.ValidatorSyncOp) {
+	key := validatorSyncKey(creator, uint64(op))
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete BlockDAG", "err", err)
+	}
+}
+
 /**** BlockDag ***/
 
 // ReadBlockDag retrieves the BlockDag structure by hash.

@@ -20,7 +20,6 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 )
@@ -37,7 +36,11 @@ var (
 	lastCanonicalHashKey = []byte("LCHash")
 
 	// lastCoordHashKey tracks the latest known hash from coordinator.
+	// TODO replace usage by lastCoordCp
 	lastCoordHashKey = []byte("LCoordHash")
+
+	// lastCoordCp tracks the latest known hash from coordinator.
+	lastCoordCp = []byte("LCoordCp")
 
 	// tipsHashesKey tracks the latest known tips hashes.
 	tipsHashesKey = []byte("TipsHashes")
@@ -89,6 +92,8 @@ var (
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
 	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
+	//todo
+	validatorSyncPrefix = []byte("vs") // validatorSyncPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -255,4 +260,9 @@ func blockDagKey(hash common.Hash) []byte {
 // childrenKey = childrenPrefix + hash
 func childrenKey(hash common.Hash) []byte {
 	return append(childrenPrefix, hash.Bytes()...)
+}
+
+// validatorSyncKey = validatorSyncPrefix + opType + creatorAddr
+func validatorSyncKey(creator common.Address, op uint64) []byte {
+	return append(append(validatorSyncPrefix, encodeBlockNumber(op)...), creator.Bytes()...)
 }
