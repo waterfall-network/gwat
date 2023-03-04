@@ -196,6 +196,18 @@ func (vs *ValidatorSync) Copy() *ValidatorSync {
 	return cpy
 }
 
+func (vs *ValidatorSync) Key() [40]byte {
+	var key [40]byte
+	if vs == nil {
+		return key
+	}
+	enc := make([]byte, 8)
+	binary.BigEndian.PutUint64(enc, uint64(vs.OpType))
+	enc = append(enc, vs.Creator.Bytes()...)
+	copy(key[:], enc)
+	return key
+}
+
 func (vs *ValidatorSync) MarshalJSON() ([]byte, error) {
 	out := validatorSyncMarshaling{
 		OpType:    (*hexutil.Uint64)(&vs.OpType),

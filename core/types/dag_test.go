@@ -41,6 +41,44 @@ func TestValidatorSync_Copy(t *testing.T) {
 	}
 }
 
+func TestValidatorSync_Key(t *testing.T) {
+	src_1 := &ValidatorSync{
+		OpType:    2,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:    new(big.Int),
+	}
+	src_1.Amount.SetString("32789456000000", 10)
+
+	want := [40]byte{
+		// OpType
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+		// creator
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	}
+
+	tests := []struct {
+		name string
+		src  *ValidatorSync
+		want driver.Value
+	}{
+		{
+			name: "Copy-1",
+			src:  src_1,
+			want: want,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.src.Key()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got:  %v\nwant: %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidatorSync_MarshalJSON(t *testing.T) {
 	src_1 := &ValidatorSync{
 		OpType:    2,

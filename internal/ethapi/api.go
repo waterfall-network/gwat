@@ -2202,6 +2202,11 @@ func (api *PublicDagAPI) Finalize(ctx context.Context, data *types.FinalizationP
 	return api.b.Dag().HandleFinalize(data), nil
 }
 
+// CoordinatedState returns current coordinated state.
+func (api *PublicDagAPI) CoordinatedState(ctx context.Context) (*types.FinalizationResult, error) {
+	return api.b.Dag().HandleCoordinatedState(), nil
+}
+
 // GetCandidates retrieves finalization candidates.
 func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types.CandidatesResult, error) {
 	return api.b.Dag().HandleGetCandidates(slot), nil

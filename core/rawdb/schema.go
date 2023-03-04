@@ -36,11 +36,11 @@ var (
 	lastCanonicalHashKey = []byte("LCHash")
 
 	// lastCoordHashKey tracks the latest known hash from coordinator.
-	// TODO replace usage by lastCoordCp
+	// TODO replace usage by lastCoordCpKey
 	lastCoordHashKey = []byte("LCoordHash")
 
-	// lastCoordCp tracks the latest known hash from coordinator.
-	lastCoordCp = []byte("LCoordCp")
+	// lastCoordCpKey tracks the latest known hash from coordinator.
+	lastCoordCpKey = []byte("LCoordCp")
 
 	// tipsHashesKey tracks the latest known tips hashes.
 	tipsHashesKey = []byte("TipsHashes")
@@ -92,8 +92,10 @@ var (
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
 	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
-	//todo
-	validatorSyncPrefix = []byte("vs") // validatorSyncPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
+
+	// validator sync data
+	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
+	valSyncNotProcKey = []byte("vsnprockeys") // tracks the not processed validators' sync operation.
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -262,7 +264,7 @@ func childrenKey(hash common.Hash) []byte {
 	return append(childrenPrefix, hash.Bytes()...)
 }
 
-// validatorSyncKey = validatorSyncPrefix + opType + creatorAddr
+// validatorSyncKey = valSyncOpPrefix + opType + creatorAddr
 func validatorSyncKey(creator common.Address, op uint64) []byte {
-	return append(append(validatorSyncPrefix, encodeBlockNumber(op)...), creator.Bytes()...)
+	return append(append(valSyncOpPrefix, encodeBlockNumber(op)...), creator.Bytes()...)
 }

@@ -184,8 +184,7 @@ func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Addre
 	return res
 }
 
-// HandleFinalize handles consensus data
-// 1. blocks finalization
+// HandleFinalize run blocks finalization procedure
 func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
@@ -217,6 +216,19 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			"ValSyncData", data.ValSyncData,
 			"\u2692", params.BuildId)
 	}
+
+	if data.ValSyncData != nil {
+		for _, vs := range data.ValSyncData {
+			log.Info("received validator sync",
+				"OpType", vs.OpType,
+				"Index", vs.Index,
+				"Creator", vs.Creator.Hash(),
+				"ProcEpoch", vs.ProcEpoch,
+				"Amount", vs.Amount,
+			)
+		}
+	}
+
 	res := &types.FinalizationResult{
 		Error: nil,
 	}
@@ -225,8 +237,14 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
 			e := err.Error()
 			res.Error = &e
+		} else {
+			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 		}
 	}
+
+	// handle validator sync data
+	d.bc.AppendNotProcessedValidatorSyncData(data.ValSyncData)
+
 	lfHeader := d.bc.GetLastFinalizedHeader()
 	if lfHeader.Height != lfHeader.Nr() {
 		err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
@@ -242,7 +260,39 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash
 
+	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
+		res.CpEpoch = &cp.Epoch
+		res.CpRoot = &cp.Root
+	}
+
 	log.Info("Handle Finalize: response", "result", res)
+	return res
+}
+
+// HandleCoordinatedState return coordinated state
+func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
+	//skip if synchronising
+	if d.eth.Downloader().Synchronising() {
+		errStr := creator.ErrSynchronization.Error()
+		return &types.FinalizationResult{
+			Error: &errStr,
+		}
+	}
+
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+
+	lfHeader := d.bc.GetLastFinalizedHeader()
+	lfHash := lfHeader.Hash()
+	res := &types.FinalizationResult{
+		Error:   nil,
+		LFSpine: &lfHash,
+	}
+	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
+		res.CpEpoch = &cp.Epoch
+		res.CpRoot = &cp.Root
+	}
+	log.Info("Handle CoordinatedState: response", "result", res)
 	return res
 }
 

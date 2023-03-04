@@ -868,6 +868,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'coordinatedState',
+			call: 'dag_coordinatedState',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'getCandidates',
 			call: 'dag_getCandidates',
 			params: 1
