@@ -36,6 +36,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 var (
@@ -172,6 +173,10 @@ func (bc *testBlockChain) SubscribeProcessing(ch chan<- *types.Transaction) even
 
 func (bc *testBlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription {
 	return bc.removeTxFromPoolFeed.Subscribe(ch)
+}
+
+func (bc *testBlockChain) ValidatorStorage() valStore.Storage {
+	return valStore.NewStorage(rawdb.NewMemoryDatabase(), &params.ChainConfig{})
 }
 
 func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Transaction {

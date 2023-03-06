@@ -12,7 +12,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
-type BlockChain interface {
+type blockchain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
@@ -21,14 +21,16 @@ type BlockChain interface {
 }
 
 type Storage interface {
-	GetValidators(bc BlockChain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address)
-	GetCreatorsBySlot(bc BlockChain, filter ...uint64) ([]common.Address, error)
+	GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address)
+	GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error)
 
 	SetValidatorInfo(stateDb *state.StateDB, info ValidatorInfo)
 	GetValidatorInfo(stateDb *state.StateDB, address common.Address) ValidatorInfo
 
 	SetValidatorsList(stateDb *state.StateDB, list []common.Address)
 	GetValidatorsList(stateDb *state.StateDB) []common.Address
+
+	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
 
 type storage struct {
@@ -81,7 +83,7 @@ func (s *storage) GetValidatorsList(stateDb *state.StateDB) []common.Address {
 // GetValidators return two values: array of Validator and array of Validators addresses.
 // If parameter needAddresses is false it return array of Validator and nil value for validators addresses.
 // Use parameter activeOnly true if you need only active validators.
-func (s *storage) GetValidators(bc BlockChain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address) {
+func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address) {
 	var err error
 	validators := make([]Validator, 0)
 
@@ -132,7 +134,7 @@ func (s *storage) GetValidators(bc BlockChain, slot uint64, activeOnly, needAddr
 
 // GetCreatorsBySlot return shuffled validators addresses from cache.
 // Input parameters are list of uint64 (slot, subnet). Sequence is required!!!
-func (s *storage) GetCreatorsBySlot(bc BlockChain, filter ...uint64) ([]common.Address, error) {
+func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error) {
 	// TODO: improve this function for subnet supporting.
 	if len(filter) > 2 {
 		return nil, ErrInvalidValidatorsFilter
@@ -180,7 +182,7 @@ func (s *storage) GetCreatorsBySlot(bc BlockChain, filter ...uint64) ([]common.A
 		return nil, err
 	}
 
-	shuffledValidatorsBySlots := breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot, s.config.SlotsPerEpoch)
+	shuffledValidatorsBySlots := s.breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot)
 
 	if uint64(len(shuffledValidatorsBySlots)) < s.config.SlotsPerEpoch {
 		for uint64(len(shuffledValidatorsBySlots)) < s.config.SlotsPerEpoch {
@@ -189,7 +191,7 @@ func (s *storage) GetCreatorsBySlot(bc BlockChain, filter ...uint64) ([]common.A
 				return nil, err
 			}
 
-			shuffledValidatorsBySlots = append(shuffledValidatorsBySlots, breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot, s.config.SlotsPerEpoch)...)
+			shuffledValidatorsBySlots = append(shuffledValidatorsBySlots, s.breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot)...)
 		}
 	}
 
@@ -225,22 +227,6 @@ func (s *storage) breakByValidatorsBySlotCount(validators []common.Address, vali
 		copy(slotValidators, validators[i:end])
 		chunks = append(chunks, slotValidators)
 		if len(chunks) == int(s.config.SlotsPerEpoch) {
-			return chunks
-		}
-	}
-
-	return chunks
-}
-
-func breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64, slotsPerEpoch uint64) [][]common.Address {
-	chunks := make([][]common.Address, 0)
-
-	for i := uint64(0); i+validatorsPerSlot <= uint64(len(validators)); i += validatorsPerSlot {
-		end := i + validatorsPerSlot
-		slotValidators := make([]common.Address, len(validators[i:end]))
-		copy(slotValidators, validators[i:end])
-		chunks = append(chunks, slotValidators)
-		if len(chunks) == int(slotsPerEpoch) {
 			return chunks
 		}
 	}

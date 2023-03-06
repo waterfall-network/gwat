@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -59,9 +60,11 @@ func TestConsensus_breakByValidatorsBySlotCount(t *testing.T) {
 		},
 	}
 
+	store := NewStorage(testmodels.TestDb, testmodels.TestChainConfig)
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			validators := breakByValidatorsBySlotCount(testmodels.InputValidators, test.validatorsPerSlot, testmodels.TestChainConfig.SlotsPerEpoch)
+			validators := store.breakByValidatorsBySlotCount(testmodels.InputValidators, test.validatorsPerSlot)
 			testutils.AssertEqual(t, test.want, validators)
 		})
 	}
