@@ -1444,7 +1444,7 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 	var baseFee *big.Int
 	if current != nil {
 		validators, _ := bc.ValidatorStorage().GetValidators(bc, current.Slot, true, false)
-		baseFee = misc.CalcDAGBaseFee(config, current, uint64(len(validators)), bc.Genesis().GasLimit())
+		baseFee = misc.CalcDAGBaseFee(config, current, uint64(len(validators)), bc.Genesis().GasLimit(), params.BurnMultiplier)
 	}
 	return newRPCTransaction(tx, common.Hash{}, nil, 0, baseFee, config)
 }

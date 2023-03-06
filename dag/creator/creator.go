@@ -840,7 +840,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	// Get active validators number
 	validators, _ := c.chain.ValidatorStorage().GetValidators(c.chain, header.Slot, true, false)
-	header.BaseFee = misc.CalcDAGBaseFee(c.chainConfig, header, uint64(len(validators)), c.chain.Genesis().GasLimit())
+	header.BaseFee = misc.CalcDAGBaseFee(c.chainConfig, header, uint64(len(validators)), c.chain.Genesis().GasLimit(), params.BurnMultiplier)
 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if c.IsRunning() {

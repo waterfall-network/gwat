@@ -126,18 +126,30 @@ func TestCalcDAGBaseFee(t *testing.T) {
 		gasUsed         uint64
 		validatorsNum   uint64
 		maxGasPerBlock  uint64
+		burnMultiplier  float64
 		expectedBaseFee int64
 	}{
-		{10000, 2048, 210000000, 478753},
-		{90000, 2048, 100000000, 9048448},
-		{110000, 2048, 100000000, 11059214},
+		{10000, 2048, 210000000, 1, 478753},
+		{10000, 4096, 210000000, 1, 677060},
+		{10000, 32000, 210000000, 1, 1892440},
+		{10000, 300000, 210000000, 1, 5794393},
+		{2100000, 2048, 210000000, 1, 100538315},
+		{2100000, 300000, 210000000, 1, 1216822572},
+		{2100000, 300000, 210000000, 0.75, 912616929},
+		{10000, 2048, 210000000, 1, 478753},
+		{10000, 2048, 210000000, 0.25, 119688},
+		{90000, 2048, 100000000, 1, 9048448},
+		{110000, 2048, 100000000, 1, 11059214},
+		{110000, 2048, 100000000, 0.25, 2764803},
+		{110000, 2048, 100000000, 0.5, 5529607},
+		{110000, 2048, 100000000, 0.75, 8294411},
 	}
 	for i, test := range tests {
 		current := &types.Header{
 			Number:  new(uint64),
 			GasUsed: test.gasUsed,
 		}
-		if have, want := CalcDAGBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcDAGBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock, test.burnMultiplier), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}

@@ -1467,7 +1467,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		if reset.newHead != nil {
 			// Get active validators number
 			validators := pool.chain.ValidatorStorage().GetValidatorsList(pool.currentState)
-			pendingBaseFee := misc.CalcDAGBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.GetBlockByNumber(0).GasLimit()) // does `reset.newHead` eq current block ???
+			pendingBaseFee := misc.CalcDAGBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.GetBlockByNumber(0).GasLimit(), params.BurnMultiplier) // does `reset.newHead` eq current block ???
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}
