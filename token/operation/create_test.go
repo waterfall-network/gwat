@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"testing"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 func TestCreateOperationOperation(t *testing.T) {

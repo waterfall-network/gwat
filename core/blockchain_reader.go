@@ -430,23 +430,6 @@ func (bc *BlockChain) GetTxBlockHash(txHash common.Hash) common.Hash {
 	return rawdb.ReadTxLookupEntry(bc.db, txHash)
 }
 
-func (bc *BlockChain) GetCreators(slot uint64) *[]common.Address {
-	if val, ok := bc.creatorsCache.Get(slot); ok {
-		creators := val.(*[]common.Address)
-		if creators != nil {
-			return creators
-		}
-		bc.creatorsCache.Remove(slot)
-	}
-	creators := rawdb.ReadCreators(bc.db, slot)
-	if creators == nil {
-		return nil
-	}
-	// Cache the found block for next time and return
-	bc.creatorsCache.Add(slot, creators)
-	return creators
-}
-
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
 func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch))
