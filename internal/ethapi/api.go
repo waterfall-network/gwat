@@ -26,7 +26,6 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/tyler-smith/go-bip39"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
