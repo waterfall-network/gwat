@@ -88,6 +88,10 @@ type testBlockChain struct {
 	genesisBlock       *types.Block
 }
 
+func (bc *testBlockChain) Genesis() *types.Block {
+	return bc.genesisBlock
+}
+
 func (bc *testBlockChain) Synchronising() bool {
 	return false
 }

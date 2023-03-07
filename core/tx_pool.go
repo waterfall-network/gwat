@@ -151,6 +151,7 @@ type blockChain interface {
 	GetBlockByNumber(number uint64) *types.Block
 	GetDagHashes() *common.HashArray
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
+	Genesis() *types.Block
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription
@@ -1467,7 +1468,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		if reset.newHead != nil {
 			// Get active validators number
 			validators := pool.chain.ValidatorStorage().GetValidatorsList(pool.currentState)
-			pendingBaseFee := misc.CalcDAGBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.GetBlockByNumber(0).GasLimit(), params.BurnMultiplier) // does `reset.newHead` eq current block ???
+			pendingBaseFee := misc.CalcSlotBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.Genesis().GasLimit(), params.BurnMultiplier) // does `reset.newHead` eq current block ???
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}

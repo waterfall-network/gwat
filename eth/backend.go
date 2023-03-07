@@ -563,7 +563,3 @@ func (s *Ethereum) Stop() error {
 
 	return nil
 }
-
-func (s *Ethereum) GetBlockChain() *core.BlockChain {
-	return s.blockchain
-}

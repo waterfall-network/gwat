@@ -120,8 +120,8 @@ func TestCalcBaseFee(t *testing.T) {
 	}
 }
 
-// TestCalcDAGBaseFee assumes all blocks are 1559-blocks
-func TestCalcDAGBaseFee(t *testing.T) {
+// TestCalcSlotBaseFee assumes all blocks are 1559-blocks
+func TestCalcSlotBaseFee(t *testing.T) {
 	tests := []struct {
 		gasUsed         uint64
 		validatorsNum   uint64
@@ -149,7 +149,7 @@ func TestCalcDAGBaseFee(t *testing.T) {
 			Number:  new(uint64),
 			GasUsed: test.gasUsed,
 		}
-		if have, want := CalcDAGBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock, test.burnMultiplier), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcSlotBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock, test.burnMultiplier), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}

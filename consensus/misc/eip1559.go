@@ -40,7 +40,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 		return fmt.Errorf("header is missing baseFee")
 	}
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcDAGBaseFee(config, header, validatorsNum, maxGasPerBlock, params.BurnMultiplier)
+	expectedBaseFee := CalcSlotBaseFee(config, header, validatorsNum, maxGasPerBlock, params.BurnMultiplier)
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 			expectedBaseFee, header.BaseFee, parent.BaseFee, parent.GasUsed)
@@ -84,8 +84,8 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	}
 }
 
-// CalcDAGBaseFee calculates the basefee of the DAG header.
-func CalcDAGBaseFee(config *params.ChainConfig, current *types.Header, validatorsNum uint64, maxGasPerBlock uint64, burnFactor float64) *big.Int {
+// CalcSlotBaseFee calculates the base fee of the slot.
+func CalcSlotBaseFee(config *params.ChainConfig, current *types.Header, validatorsNum uint64, maxGasPerBlock uint64, burnFactor float64) *big.Int {
 	var (
 		txGasBig                  = new(big.Float).SetUint64(current.GasUsed) // should ve use target gas -> current.GasLimit / params.ElasticityMultiplier ???
 		blocksPerSlotBig          = new(big.Float).SetUint64(config.ValidatorsPerSlot)
@@ -101,8 +101,8 @@ func CalcDAGBaseFee(config *params.ChainConfig, current *types.Header, validator
 	numOfBlocksPerYear := new(big.Float).Quo(new(big.Float).Mul(secondsInYear, blocksPerSlotBig), secondsPerSlotBig)
 	x := new(big.Float).Sqrt(new(big.Float).Mul(optCoordinatorNumBig, validatorsNumBig))
 	y := new(big.Float).Mul(maxAnnualizedReturnRate, coordinatorStakeWei)
-	annualMintedTokens := new(big.Float).Mul(y, x)
-	rewardPerBlock := new(big.Float).Quo(annualMintedTokens, numOfBlocksPerYear)
+	annualMintedCoins := new(big.Float).Mul(y, x)
+	rewardPerBlock := new(big.Float).Quo(annualMintedCoins, numOfBlocksPerYear)
 	baseFee := new(big.Float).Mul(new(big.Float).Mul(new(big.Float).Quo(txGasBig, totalAllowableGasPerBlock), rewardPerBlock), big.NewFloat(params.PriceMultiplier))
 	baseFeeWithBurnFactor := new(big.Int)
 	new(big.Float).Mul(baseFee, new(big.Float).SetFloat64(burnFactor)).Int(baseFeeWithBurnFactor)
