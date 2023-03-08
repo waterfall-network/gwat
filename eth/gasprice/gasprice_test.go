@@ -32,6 +32,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 const testHead = 32
@@ -39,6 +40,21 @@ const testHead = 32
 type testBackend struct {
 	chain   *core.BlockChain
 	pending bool // pending block available
+}
+
+func (b *testBackend) ValidatorsStorage() valStore.Storage {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *testBackend) Genesis() *types.Block {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *testBackend) BlockChain() *core.BlockChain {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
@@ -106,7 +122,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	config.LondonBlock = londonBlock
+	//config.LondonBlock = londonBlock
 	db := rawdb.NewMemoryDatabase()
 	engine := sealer.New(db)
 	genesis, _ := gspec.Commit(db)

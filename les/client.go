@@ -30,7 +30,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/bloombits"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/filters"
@@ -171,11 +170,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Creator.GasPrice
 	}
-	chain, err := core.NewBlockChain(chainDb, nil, chainConfig, engine, vm.Config{}, &config.TxLookupLimit)
-	if err != nil {
-		return nil, err
-	}
-	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams, chain)
+	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
 	leth.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, checkpoint, leth)
 	if leth.handler.ulc != nil {

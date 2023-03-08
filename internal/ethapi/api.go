@@ -163,8 +163,8 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	}
 	pending, queue, processing := s.b.TxPoolContent()
 	curHeader := s.b.GetLastFinalizedHeader()
-	bc := s.b.GetBlockChain()
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false)
+	bc := s.b.BlockChain()
+	validators, _ := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot)
 	numValidators := uint64(len(validators))
 	genesisGasLimit := bc.Genesis().GasLimit()
 	// Flatten the pending transactions
@@ -198,8 +198,8 @@ func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string
 	content := make(map[string]map[string]*RPCTransaction, 2)
 	pending, queue, processing := s.b.TxPoolContentFrom(addr)
 	curHeader := s.b.GetLastFinalizedHeader()
-	bc := s.b.GetBlockChain()
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false)
+	bc := s.b.BlockChain()
+	validators, _ := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot)
 	numValidators := uint64(len(validators))
 	genesisGasLimit := bc.Genesis().GasLimit()
 
@@ -1695,8 +1695,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
 		curHeader := s.b.GetLastFinalizedHeader()
-		bc := s.b.GetBlockChain()
-		validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false)
+		bc := s.b.BlockChain()
+		validators, _ := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot)
 		numValidators := uint64(len(validators))
 		genesisGasLimit := bc.Genesis().GasLimit()
 		return newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig(), numValidators, genesisGasLimit), nil
@@ -1963,8 +1963,8 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	}
 	curHeader := s.b.GetLastFinalizedHeader()
 	transactions := make([]*RPCTransaction, 0, len(pending))
-	bc := s.b.GetBlockChain()
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false)
+	bc := s.b.BlockChain()
+	validators, _ := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot)
 	numValidators := uint64(len(validators))
 	genesisGasLimit := bc.Genesis().GasLimit()
 	for _, tx := range pending {

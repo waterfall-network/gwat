@@ -38,6 +38,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 // Backend interface provides the common API services (that are provided by
@@ -102,7 +103,8 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
-	GetBlockChain() *core.BlockChain
+	ValidatorsStorage() valStore.Storage
+	BlockChain() *core.BlockChain
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

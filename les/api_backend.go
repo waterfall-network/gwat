@@ -41,6 +41,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 type LesApiBackend struct {
@@ -376,6 +377,15 @@ func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
 
-func (b *LesApiBackend) GetBlockChain() *core.BlockChain {
-	return b.gpo.BlockChain()
+func (b *LesApiBackend) ValidatorsStorage() valStore.Storage {
+	return b.eth.blockchain.ValidatorStorage()
+}
+
+func (b *LesApiBackend) Genesis() *types.Block {
+	return b.eth.blockchain.Genesis()
+}
+
+func (b *LesApiBackend) BlockChain() *core.BlockChain {
+	//TODO implement me
+	panic("implement me")
 }
