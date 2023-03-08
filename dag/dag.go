@@ -17,6 +17,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/headsync"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/slotticker"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -286,31 +287,69 @@ func (d *Dag) SubscribeConsensusInfoEvent(ch chan<- types.Tips) event.Subscripti
 }
 
 func (d *Dag) StartWork(accounts []common.Address) {
-	slotTime := d.bc.GetSlotInfo().SecondsPerSlot
-	ticker := time.NewTicker(time.Duration(slotTime) * time.Second)
+	startTicker := time.NewTicker(500 * time.Millisecond)
+
+	tickSec := 0
+	for {
+		currentTime := time.Now()
+		genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
+
+		if currentTime.Before(genesisTime) {
+			if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
+				timeRemaining := genesisTime.Sub(currentTime)
+				log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+			}
+		} else {
+			log.Info("Chain genesis time reached")
+			startTicker.Stop()
+			go d.workLoop(accounts)
+		}
+		tickSec = currentTime.Second()
+
+		select {
+		case <-d.exitChan:
+			close(d.exitChan)
+			close(d.errChan)
+			startTicker.Stop()
+			return
+		case err := <-d.errChan:
+			close(d.errChan)
+			close(d.exitChan)
+			startTicker.Stop()
+			log.Error("dag worker has error", "error", err)
+			return
+		case <-startTicker.C:
+		}
+	}
+}
+
+func (d *Dag) workLoop(accounts []common.Address) {
+	secPerSlot := d.bc.GetSlotInfo().SecondsPerSlot
+	genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
+	slotTicker := slotticker.NewSlotTicker(genesisTime, secPerSlot)
 
 	for {
 		select {
 		case <-d.exitChan:
 			close(d.exitChan)
 			close(d.errChan)
-			ticker.Stop()
-
+			slotTicker.Done()
 			return
 		case err := <-d.errChan:
 			close(d.errChan)
 			close(d.exitChan)
-			ticker.Stop()
+			slotTicker.Done()
 			log.Error("dag worker has error", "error", err)
-
 			return
-		case <-ticker.C:
+		case slot := <-slotTicker.C():
+			if slot == 0 {
+				continue
+			}
 			var (
 				err      error
 				creators []common.Address
 			)
-
-			currentSlot := d.bc.GetSlotInfo().CurrentSlot()
+			log.Info("New slot", "slot", slot)
 
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
@@ -320,12 +359,13 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			//	}
 			//} else {}
 			// TODO: move it to else condition
-			creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, currentSlot)
+
+			creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, slot)
 			if err != nil {
 				d.errChan <- err
 			}
 
-			d.work(currentSlot, creators, accounts)
+			d.work(slot, creators, accounts)
 		}
 	}
 }
@@ -346,9 +386,8 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	)
 	// create block
 	tips := d.bc.GetTips()
-	//tips, unloaded := d.bc.ReviseTips()
 	dagSlots := d.countDagSlots(&tips)
-	log.Info("Handle Consensus: create condition",
+	log.Info("Creator processing: create condition",
 		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
@@ -400,7 +439,7 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 			if block != nil {
 				crtInfo["newBlock"] = block.Hash().Hex()
 			}
-			log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+			log.Info("Creator processing: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 		}
 	}
 }
