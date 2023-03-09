@@ -53,6 +53,7 @@ var (
 		ChainID:         big.NewInt(111000111),
 		SecondsPerSlot:  4,
 		SlotsPerEpoch:   32,
+		EpochsPerEra:    8,
 		ForkSlotSubNet1: math.MaxUint64,
 	}
 
@@ -82,6 +83,7 @@ var (
 		ChainID:         big.NewInt(333777555),
 		SecondsPerSlot:  4,
 		SlotsPerEpoch:   32,
+		EpochsPerEra:    8,
 		ForkSlotSubNet1: math.MaxUint64,
 	}
 
@@ -111,16 +113,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64, nil, 6}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, math.MaxUint64, nil, 6}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64, nil, 6}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, math.MaxUint64, nil, 6}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, math.MaxUint64, nil, 6}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, math.MaxUint64, nil, 6}
 	TestRules       = TestChainConfig.Rules()
 )
 
@@ -182,6 +184,7 @@ type ChainConfig struct {
 	// coordinator slot settings
 	SecondsPerSlot uint64 `json:"secondsPerSlot"`
 	SlotsPerEpoch  uint64 `json:"slotsPerEpoch"`
+	EpochsPerEra   uint64 `json:"epochsPerEra"`
 
 	// Fork slots
 	ForkSlotSubNet1 uint64 `json:"forkSlotSubNet1,omitempty"`
@@ -210,11 +213,12 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, ForkSlotSubNet1: %v, "+
+	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, ForkSlotSubNet1: %v, "+
 		"ValidatorsPerSlot %v, ValidatorsStateAddress %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
+		c.EpochsPerEra,
 		c.ForkSlotSubNet1,
 		c.ValidatorsPerSlot,
 		c.ValidatorsStateAddress,
@@ -277,6 +281,10 @@ func (c *ChainConfig) Validate() error {
 
 	if c.SlotsPerEpoch == 0 {
 		return fmt.Errorf("no slots per epoch parameter")
+	}
+
+	if c.EpochsPerEra == 0 {
+		return fmt.Errorf("no epochs per era parameter")
 	}
 
 	if c.ForkSlotSubNet1 == 0 {
