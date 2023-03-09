@@ -286,8 +286,8 @@ func (c *Sealer) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	//	return err
 	//}
 	// Get active validators number
-	/// TODO: pass number of validators and max gas per block, when code will become reachable
-	if err := misc.VerifyEip1559Header(chain.Config(), parent, header, 0, 0); err != nil {
+	/// TODO: pass number of validators, max gas per block and creators per slot, when code will become reachable
+	if err := misc.VerifyEip1559Header(chain.Config(), parent, header, 0, 0, 0); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}

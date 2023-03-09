@@ -34,6 +34,7 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		SlotsPerEpoch:     32,
 		ForkSlotSubNet1:   math.MaxUint64,
 		ValidatorsPerSlot: 4,
+		EffectiveBalance:  big.NewInt(32000),
 	}
 }
 
@@ -85,7 +86,7 @@ func TestBlockGasLimits(t *testing.T) {
 			BaseFee:  initial,
 			Number:   &nrHd,
 		}
-		err := VerifyEip1559Header(config(), parent, header, 2048, 100000000)
+		err := VerifyEip1559Header(config(), parent, header, 2048, 100000000, 4)
 		if tc.ok && err != nil {
 			t.Errorf("test %d: Expected valid header: %s", i, err)
 		}
@@ -127,29 +128,42 @@ func TestCalcSlotBaseFee(t *testing.T) {
 		validatorsNum   uint64
 		maxGasPerBlock  uint64
 		burnMultiplier  float64
+		creatorsPerSlot uint64
 		expectedBaseFee int64
 	}{
-		{10000, 2048, 210000000, 1, 478753},
-		{10000, 4096, 210000000, 1, 677060},
-		{10000, 32000, 210000000, 1, 1892440},
-		{10000, 300000, 210000000, 1, 5794393},
-		{2100000, 2048, 210000000, 1, 100538315},
-		{2100000, 300000, 210000000, 1, 1216822572},
-		{2100000, 300000, 210000000, 0.75, 912616929},
-		{10000, 2048, 210000000, 1, 478753},
-		{10000, 2048, 210000000, 0.25, 119688},
-		{90000, 2048, 100000000, 1, 9048448},
-		{110000, 2048, 100000000, 1, 11059214},
-		{110000, 2048, 100000000, 0.25, 2764803},
-		{110000, 2048, 100000000, 0.5, 5529607},
-		{110000, 2048, 100000000, 0.75, 8294411},
+		{10000, 2048, 210000000, 1, 1, 1915015},
+		{10000, 2048, 210000000, 1, 4, 478753},
+		{10000, 2048, 210000000, 1, 8, 239376},
+		{10000, 2048, 210000000, 1, 16, 119688},
+		{10000, 2048, 210000000, 1, 32, 59844},
+		{10000, 4096, 210000000, 1, 4, 677060},
+		{10000, 32000, 210000000, 1, 4, 1892440},
+		{10000, 300000, 210000000, 1, 4, 5794393},
+		{2100000, 2048, 210000000, 1, 4, 100538315},
+		{2100000, 300000, 210000000, 1, 4, 1216822572},
+		{2100000, 300000, 210000000, 0.75, 4, 912616929},
+		{10000, 2048, 210000000, 1, 4, 478753},
+		{10000, 2048, 210000000, 0.25, 4, 119688},
+		{90000, 2048, 100000000, 1, 4, 9048448},
+		{110000, 2048, 100000000, 1, 1, 44236858},
+		{110000, 2048, 100000000, 0.25, 1, 11059214},
+		{110000, 2048, 100000000, 0.5, 1, 22118429},
+		{110000, 2048, 100000000, 0.75, 1, 33177644},
+		{110000, 2048, 100000000, 1, 4, 11059214},
+		{110000, 2048, 100000000, 0.25, 4, 2764803},
+		{110000, 2048, 100000000, 0.5, 4, 5529607},
+		{110000, 2048, 100000000, 0.75, 4, 8294411},
+		{110000, 2048, 100000000, 1, 32, 1382401},
+		{110000, 2048, 100000000, 0.25, 32, 345600},
+		{110000, 2048, 100000000, 0.5, 32, 691200},
+		{110000, 2048, 100000000, 0.75, 32, 1036801},
 	}
 	for i, test := range tests {
 		current := &types.Header{
 			Number:  new(uint64),
 			GasUsed: test.gasUsed,
 		}
-		if have, want := CalcSlotBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock, test.burnMultiplier), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcSlotBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock, test.burnMultiplier, test.creatorsPerSlot), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}

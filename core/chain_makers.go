@@ -319,7 +319,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		Time: time,
 	}
 	// This base fee calculation is for testing
-	header.BaseFee = misc.CalcSlotBaseFee(chain.Config(), header, 2048, 100000000, params.BurnMultiplier)
+	header.BaseFee = misc.CalcSlotBaseFee(chain.Config(), header, 2048, 100000000, params.BurnMultiplier, chain.Config().ValidatorsPerSlot)
 	return header
 }
 
