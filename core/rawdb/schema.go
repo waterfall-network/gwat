@@ -89,6 +89,7 @@ var (
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
 	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
+	eraPrefix                   = []byte("era-")
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -245,4 +246,9 @@ func childrenKey(hash common.Hash) []byte {
 // firstEpochBlockKey = firstEpochBlockPrefix + epoch
 func firstEpochBlockKey(epoch uint64) []byte {
 	return append(firstEpochBlockPrefix, Uint64ToByteSlice(epoch)...)
+}
+
+// eraKey = eraKey + era
+func eraKey(era uint64) []byte {
+	return append(eraPrefix, Uint64ToByteSlice(era)...)
 }

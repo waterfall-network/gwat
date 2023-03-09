@@ -285,7 +285,11 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				err      error
 				creators []common.Address
 			)
+
 			log.Info("New slot", "slot", slot)
+
+			era := types.NewEra(0, 0)
+			log.Info("New era", "num", 0, "begin:", era.Begin(), "end:", era.End())
 
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {

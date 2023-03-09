@@ -1036,3 +1036,31 @@ func ExistFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) bool {
 
 	return exist
 }
+
+func WriteEra(db ethdb.KeyValueWriter, count uint64, era types.Era) error {
+	key := eraKey(count)
+
+	encoded, err := rlp.EncodeToBytes(era)
+	if err != nil {
+		log.Crit("Failed to encode era", "err", err, "key:", key, "era:", count)
+		return err
+	}
+
+	return db.Put(key, encoded)
+}
+
+func GetEra(db ethdb.KeyValueReader, count uint64) (*types.Era, error) {
+	key := firstEpochBlockKey(count)
+	encoded, err := db.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	var era types.Era
+	err = rlp.DecodeBytes(encoded, &era)
+	if err != nil {
+		return nil, err
+	}
+
+	return &era, nil
+}

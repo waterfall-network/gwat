@@ -630,6 +630,27 @@ type SlotInfo struct {
 	GenesisTime    uint64 `json:"genesisTime"`
 	SecondsPerSlot uint64 `json:"secondsPerSlot"`
 	SlotsPerEpoch  uint64 `json:"slotsPerEpoch"`
+	EpochsPerEra   uint64 `json:"epochsPerEra"`
+}
+
+type Era struct {
+	begin uint64
+	end   uint64
+}
+
+func NewEra(begin, end uint64) Era {
+	return Era{
+		begin: begin,
+		end:   end,
+	}
+}
+
+func (e *Era) Begin() uint64 {
+	return e.begin
+}
+
+func (e *Era) End() uint64 {
+	return e.end
 }
 
 // StartSlotTime takes the given slot to determine the start time of the slot.
@@ -673,6 +694,15 @@ func (si *SlotInfo) IsEpochEnd(slot uint64) bool {
 
 // SlotToEpoch returns the epoch number of the input slot.
 func (si *SlotInfo) SlotToEpoch(slot uint64) uint64 {
+	if si.SlotsPerEpoch == 0 {
+		panic("integer divide by zero")
+	}
+	val, _ := bits.Div64(0, slot, si.SlotsPerEpoch)
+	return val
+}
+
+// SlotToEra returns the epoch number of the input slot.
+func (si *SlotInfo) SlotToEra(slot uint64) uint64 {
 	if si.SlotsPerEpoch == 0 {
 		panic("integer divide by zero")
 	}
