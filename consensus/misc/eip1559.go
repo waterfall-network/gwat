@@ -93,13 +93,13 @@ func CalcSlotBaseFee(config *params.ChainConfig, current *types.Header, validato
 		secondsInYear             = new(big.Float).SetUint64(60 * 60 * 24 * 365.25)
 		maxAnnualizedReturnRate   = new(big.Float).SetFloat64(params.MaxAnnualizedReturnRate)                             // R0 in the formula - the maximum annualized return rate with Nopt
 		coordinatorStakeWei       = new(big.Float).Mul(new(big.Float).SetInt(config.EffectiveBalance), big.NewFloat(1e9)) // s in the formula - 1 coordinator stake
-		optCoordinatorNumBig      = new(big.Float).SetUint64(params.OptCoordinatorsNum)                                   // Nopt in the formula - eq 300000, the optimal number of validators
+		optValidatorsNumBig       = new(big.Float).SetUint64(params.OptValidatorsNum)                                     // Nopt in the formula - eq 300000, the optimal number of validators
 		validatorsNumBig          = new(big.Float).SetUint64(validatorsNum)                                               // N in the formula - the current number of validators
 		totalAllowableGasPerBlock = new(big.Float).SetUint64(maxGasPerBlock)                                              // Gmax in the formula - the total allowable gas amount per block, eq genesis gas limit
 	)
 
 	numOfBlocksPerYear := new(big.Float).Quo(new(big.Float).Mul(secondsInYear, blocksPerSlotBig), secondsPerSlotBig)
-	x := new(big.Float).Sqrt(new(big.Float).Mul(optCoordinatorNumBig, validatorsNumBig))
+	x := new(big.Float).Sqrt(new(big.Float).Mul(optValidatorsNumBig, validatorsNumBig))
 	y := new(big.Float).Mul(maxAnnualizedReturnRate, coordinatorStakeWei)
 	annualMintedCoins := new(big.Float).Mul(y, x)
 	rewardPerBlock := new(big.Float).Quo(annualMintedCoins, numOfBlocksPerYear)
