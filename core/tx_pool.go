@@ -1467,7 +1467,12 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		//if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).SetUint64(reset.newHead.Height+1)) {
 		if reset.newHead != nil {
 			// Get active validators number
-			validators := pool.chain.ValidatorStorage().GetValidatorsList(pool.currentState)
+			statedb, err := pool.chain.StateAt(reset.newHead.Root)
+			if err != nil {
+				log.Error("Failed to reset txpool state", "new.Nr", reset.newHead.Nr(), "new.Height", reset.newHead.Height, "new.Hash", reset.newHead.Hash(), "err", err)
+				statedb = pool.currentState
+			}
+			validators := pool.chain.ValidatorStorage().GetValidatorsList(statedb)
 			pendingBaseFee := misc.CalcSlotBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.Genesis().GasLimit(), params.BurnMultiplier, pool.chainconfig.ValidatorsPerSlot)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}

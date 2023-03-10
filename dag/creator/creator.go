@@ -839,9 +839,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	// Get active validators number
-	creatorsPerSlot, _ := c.chain.ValidatorStorage().GetCreatorsBySlot(c.chain, header.Slot)
+	creatorsPerSlotCount := c.chainConfig.ValidatorsPerSlot
+	if creatorsPerSlot, err := c.chain.ValidatorStorage().GetCreatorsBySlot(c.chain, header.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
 	validators, _ := c.chain.ValidatorStorage().GetValidators(c.chain, header.Slot, true, false)
-	header.BaseFee = misc.CalcSlotBaseFee(c.chainConfig, header, uint64(len(validators)), c.chain.Genesis().GasLimit(), params.BurnMultiplier, uint64(len(creatorsPerSlot)))
+	header.BaseFee = misc.CalcSlotBaseFee(c.chainConfig, header, uint64(len(validators)), c.chain.Genesis().GasLimit(), params.BurnMultiplier, creatorsPerSlotCount)
 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if c.IsRunning() {
