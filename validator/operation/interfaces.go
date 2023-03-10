@@ -15,7 +15,6 @@ type Deposit interface {
 	CreatorAddress() common.Address
 	WithdrawalAddress() common.Address
 	Signature() common.BlsSignature
-	DepositDataRoot() common.Hash
 }
 
 // Deposit contains all attributes for validator deposit

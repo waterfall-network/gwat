@@ -35,7 +35,6 @@ type DepositArgs struct {
 	CreatorAddress    *common.Address      `json:"creator_address"`    // attached creator account
 	WithdrawalAddress *common.Address      `json:"withdrawal_address"` // attached withdrawal credentials
 	Signature         *common.BlsSignature `json:"signature"`
-	DepositDataRoot   *common.Hash         `json:"deposit_data_root"`
 }
 
 // GetAPIs provides api access
@@ -64,16 +63,13 @@ func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args Depos
 	if args.Signature == nil {
 		return nil, operation.ErrNoSignature
 	}
-	if args.DepositDataRoot == nil {
-		return nil, operation.ErrNoDepositDataRoot
-	}
 
 	var (
 		op  operation.Operation
 		err error
 	)
 
-	if op, err = operation.NewDepositOperation(*args.PubKey, *args.CreatorAddress, *args.WithdrawalAddress, *args.Signature, *args.DepositDataRoot); err != nil {
+	if op, err = operation.NewDepositOperation(*args.PubKey, *args.CreatorAddress, *args.WithdrawalAddress, *args.Signature); err != nil {
 		return nil, err
 	}
 

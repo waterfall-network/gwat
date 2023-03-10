@@ -11,7 +11,6 @@ var (
 	ErrNoCreatorAddress    = errors.New("creator_address is required")
 	ErrNoWithdrawalAddress = errors.New("withdrawal_address is required")
 	ErrNoSignature         = errors.New("signature is required")
-	ErrNoDepositDataRoot   = errors.New("deposit_data_root is required")
 	ErrNoAmount            = errors.New("amount is required")
 	ErrNoValue             = errors.New("value is required")
 	ErrNegativeCost        = errors.New("cost is negative")
