@@ -89,7 +89,7 @@ var (
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
 	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
-	eraPrefix                   = []byte("era-")
+	eraPrefix                   = []byte("era")
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
