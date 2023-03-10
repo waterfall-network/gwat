@@ -1049,8 +1049,8 @@ func WriteEra(db ethdb.KeyValueWriter, number uint64, era types.Era) error {
 	return db.Put(key, encoded)
 }
 
-func GetEra(db ethdb.KeyValueReader, count uint64) (*types.Era, error) {
-	key := firstEpochBlockKey(count)
+func GetEra(db ethdb.KeyValueReader, number uint64) (*types.Era, error) {
+	key := eraKey(number)
 	encoded, err := db.Get(key)
 	if err != nil {
 		return nil, err

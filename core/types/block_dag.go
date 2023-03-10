@@ -721,8 +721,6 @@ type EraInfo struct {
 	number    uint64
 	fromEpoch uint64
 	toEpoch   uint64
-
-	nextEra Era // Set next era in transition period
 }
 
 func SetNewEraInfo(number uint64, era Era) EraInfo {
@@ -745,18 +743,10 @@ func (ei *EraInfo) FromEpoch() uint64 {
 	return ei.fromEpoch
 }
 
-func (ei *EraInfo) NextEra() *Era {
-	return &ei.nextEra
-}
-
 func (ei *EraInfo) SetNewEraInfo(number uint64, era Era) {
 	ei.number = number
 	ei.fromEpoch = era.BeginEpoch()
 	ei.toEpoch = era.EndEpoch()
-}
-
-func (ei *EraInfo) SetNextEra(era Era) {
-	ei.nextEra = era
 }
 
 func (ei *EraInfo) EpochsPerEra() uint64 {
