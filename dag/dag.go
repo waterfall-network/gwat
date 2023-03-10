@@ -279,6 +279,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
+				era := types.NewEra(0, d.bc.Config().EpochsPerEra)
+				d.bc.SetNewEraInfo(0, era)
 				continue
 			}
 			var (
@@ -288,8 +290,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 			log.Info("New slot", "slot", slot)
 
-			era := types.NewEra(0, 0)
-			log.Info("New era", "num", 0, "begin:", era.Begin(), "end:", era.End())
+			d.handleEra(slot)
 
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
@@ -392,4 +393,9 @@ func (d *Dag) countDagSlots(tips *types.Tips) int {
 		return -1
 	}
 	return len(candidates)
+}
+
+// handleEra
+func (d *Dag) handleEra(slot uint64) {
+	d.bc.HandleEra(slot)
 }

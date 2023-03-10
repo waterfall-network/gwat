@@ -630,27 +630,6 @@ type SlotInfo struct {
 	GenesisTime    uint64 `json:"genesisTime"`
 	SecondsPerSlot uint64 `json:"secondsPerSlot"`
 	SlotsPerEpoch  uint64 `json:"slotsPerEpoch"`
-	EpochsPerEra   uint64 `json:"epochsPerEra"`
-}
-
-type Era struct {
-	begin uint64
-	end   uint64
-}
-
-func NewEra(begin, end uint64) Era {
-	return Era{
-		begin: begin,
-		end:   end,
-	}
-}
-
-func (e *Era) Begin() uint64 {
-	return e.begin
-}
-
-func (e *Era) End() uint64 {
-	return e.end
 }
 
 // StartSlotTime takes the given slot to determine the start time of the slot.
@@ -701,15 +680,6 @@ func (si *SlotInfo) SlotToEpoch(slot uint64) uint64 {
 	return val
 }
 
-// SlotToEra returns the epoch number of the input slot.
-func (si *SlotInfo) SlotToEra(slot uint64) uint64 {
-	if si.SlotsPerEpoch == 0 {
-		panic("integer divide by zero")
-	}
-	val, _ := bits.Div64(0, slot, si.SlotsPerEpoch)
-	return val
-}
-
 func (si *SlotInfo) SlotInEpoch(slot uint64) uint64 {
 	return slot % si.SlotsPerEpoch
 }
@@ -743,4 +713,72 @@ func (si *SlotInfo) Copy() *SlotInfo {
 		SecondsPerSlot: si.SecondsPerSlot,
 		SlotsPerEpoch:  si.SlotsPerEpoch,
 	}
+}
+
+/********** EraInfo **********/
+
+type EraInfo struct {
+	number    uint64
+	fromEpoch uint64
+	toEpoch   uint64
+
+	nextEra Era // Set next era in transition period
+}
+
+func SetNewEraInfo(number uint64, era Era) EraInfo {
+	return EraInfo{
+		number:    number,
+		fromEpoch: era.BeginEpoch(),
+		toEpoch:   era.EndEpoch(),
+	}
+}
+
+func (ei *EraInfo) Number() uint64 {
+	return ei.number
+}
+
+func (ei *EraInfo) ToEpoch() uint64 {
+	return ei.toEpoch
+}
+
+func (ei *EraInfo) FromEpoch() uint64 {
+	return ei.fromEpoch
+}
+
+func (ei *EraInfo) NextEra() *Era {
+	return &ei.nextEra
+}
+
+func (ei *EraInfo) SetNewEraInfo(number uint64, era Era) {
+	ei.number = number
+	ei.fromEpoch = era.BeginEpoch()
+	ei.toEpoch = era.EndEpoch()
+}
+
+func (ei *EraInfo) SetNextEra(era Era) {
+	ei.nextEra = era
+}
+
+func (ei *EraInfo) EpochsPerEra() uint64 {
+	return ei.toEpoch - ei.fromEpoch
+}
+
+type Era struct {
+	begin uint64
+	end   uint64
+}
+
+func NewEra(begin, end uint64) Era {
+	return Era{
+		begin: begin,
+		end:   end,
+	}
+}
+
+func (e *Era) BeginEpoch() uint64 {
+	return e.begin
+}
+
+func (e *Era) EndEpoch() uint64 {
+	return e.end
 }

@@ -92,6 +92,7 @@ const (
 	txLookupCacheLimit  = 1024
 	TriesInMemory       = 128
 	invBlocksCacheLimit = 512
+	transitionPeriod    = 2 // The number of epochs in the transition period
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
 	// Changelog:
@@ -192,9 +193,10 @@ type BlockChain struct {
 	// Readers don't need to take it, they can just read the database.
 	chainmu *syncx.ClosableMutex
 
-	lastFinalizedBlock     atomic.Value // Current last finalized block of the blockchain
-	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
-	lastCoordinatedSlot    uint64       // Last slot received from coordinating network
+	lastFinalizedBlock     atomic.Value  // Current last finalized block of the blockchain
+	lastFinalizedFastBlock atomic.Value  // Current last finalized block of the fast-sync chain (may be above the blockchain!)
+	lastCoordinatedSlot    uint64        // Last slot received from coordinating network
+	eraInfo                types.EraInfo // Current Era
 
 	stateCache         state.Database // State database to reuse between imports (contains state cache)
 	bodyCache          *lru.Cache     // Cache for the most recent block bodies
@@ -3561,4 +3563,76 @@ func (bc *BlockChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
 	}
 
 	return epoch
+}
+
+func (bc *BlockChain) GetEraInfo() *types.EraInfo {
+	return &bc.eraInfo
+}
+
+// SetNewEraInfo sets new era info.
+func (bc *BlockChain) SetNewEraInfo(number uint64, era types.Era) {
+	log.Info("New era", "num", 0, "begin:", era.BeginEpoch(), "end:", era.EndEpoch())
+	bc.eraInfo.SetNewEraInfo(number, era)
+}
+
+// SetCurrentEra sets era.
+func (bc *BlockChain) SetEraInfoNext(era types.Era) {
+	bc.eraInfo.SetNextEra(era)
+}
+
+// IsTransitionPeriod checks if the given slot falls in the transition period between the current era and the next era.
+func (bc *BlockChain) IsTransitionPeriod(slot uint64) bool {
+	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	lastEpoch := bc.eraInfo.ToEpoch()
+
+	// Check if the current epoch is in the transition period (i.e., the last two epochs of the current era)
+	return currentEpoch >= lastEpoch-transitionPeriod && currentEpoch <= lastEpoch
+}
+
+func (bc *BlockChain) estimateNextEraLength() (epochsPerEra uint64) {
+	var (
+		currentEpochsPerEra = bc.chainConfig.EpochsPerEra
+		slotsPerEpoch       = bc.chainConfig.SlotsPerEpoch
+		_, validators       = bc.ValidatorStorage().GetValidators(bc, bc.GetSlotInfo().CurrentSlot(), true, true)
+		numberOfValidators  = uint64(len(validators))
+	)
+
+	currentEpochsPerEra = bc.GetEraInfo().EpochsPerEra()
+
+	epochsPerEra = currentEpochsPerEra * (1 + numberOfValidators/(currentEpochsPerEra*slotsPerEpoch))
+
+	return
+}
+
+func (bc *BlockChain) HandleEra(slot uint64) error {
+	newEpoch := bc.GetSlotInfo().IsEpochStart(slot)
+	if newEpoch {
+		// New era
+		if bc.GetEraInfo().NextEra().EndEpoch() == bc.GetSlotInfo().SlotToEpoch(slot) {
+			nextEra := bc.GetEraInfo().NextEra()
+			nextEraNumber := bc.GetEraInfo().Number() + 1
+			err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
+			if err != nil {
+				return err
+			}
+
+			currentEra, err := rawdb.GetEra(bc.db, nextEraNumber)
+			if err != nil {
+				return err
+			}
+
+			bc.SetNewEraInfo(nextEraNumber, *currentEra)
+		}
+
+		// Transition period
+		if bc.IsTransitionPeriod(slot) {
+			nextEraLength := bc.estimateNextEraLength()
+
+			nextEra := types.NewEra(bc.GetEraInfo().ToEpoch(), nextEraLength)
+
+			bc.GetEraInfo().SetNextEra(nextEra)
+		}
+	}
+
+	return nil
 }
