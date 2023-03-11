@@ -34,6 +34,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 const (
@@ -150,6 +151,7 @@ type blockChain interface {
 	GetBlockByNumber(number uint64) *types.Block
 	GetDagHashes() *common.HashArray
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
+	Genesis() *types.Block
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription
@@ -162,6 +164,7 @@ type blockChain interface {
 	DagSynchronising() bool
 	// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
 	HeadSynchronising() bool
+	ValidatorStorage() valStore.Storage
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -1463,7 +1466,14 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		pool.demoteUnexecutables()
 		//if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).SetUint64(reset.newHead.Height+1)) {
 		if reset.newHead != nil {
-			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+			// Get active validators number
+			statedb, err := pool.chain.StateAt(reset.newHead.Root)
+			if err != nil {
+				log.Error("Failed to reset txpool state", "new.Nr", reset.newHead.Nr(), "new.Height", reset.newHead.Height, "new.Hash", reset.newHead.Hash(), "err", err)
+				statedb = pool.currentState
+			}
+			validators := pool.chain.ValidatorStorage().GetValidatorsList(statedb)
+			pendingBaseFee := misc.CalcSlotBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.Genesis().GasLimit(), params.BurnMultiplier, pool.chainconfig.ValidatorsPerSlot)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}

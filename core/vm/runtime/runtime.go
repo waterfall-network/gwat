@@ -53,10 +53,11 @@ type Config struct {
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
 		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:         big.NewInt(1),
-			SecondsPerSlot:  4,
-			SlotsPerEpoch:   32,
-			ForkSlotSubNet1: math.MaxUint64,
+			ChainID:          big.NewInt(1),
+			SecondsPerSlot:   4,
+			SlotsPerEpoch:    32,
+			ForkSlotSubNet1:  math.MaxUint64,
+			EffectiveBalance: big.NewInt(32000),
 		}
 	}
 
