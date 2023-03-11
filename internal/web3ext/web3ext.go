@@ -1085,7 +1085,6 @@ web3._extend({
 				handleHexField('creator_address', AddressLength)
 				handleHexField('withdrawal_address', AddressLength)
 				handleHexField('signature', BlsSigLength)
-				handleHexField('deposit_data_root', HashLength)
 				return options;
 			}]
 		}),

@@ -11,7 +11,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
@@ -53,7 +52,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	validatorData := bc.ValidatorStorage().GetValidatorInfo(stateDb, valSyncOp.Creator)
 
 	// get tx.To address
-	valStateAddr := validator.GetValidatorsStateAddress()
+	valStateAddr := bc.ValidatorStorage().GetValidatorsStateAddress()
 
 	// validate nonce
 	nonceFrom := stateDb.GetNonce(from)
@@ -68,7 +67,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 
 	al := types.AccessList{}
 	txData := &types.DynamicFeeTx{
-		To:         &valStateAddr,
+		To:         valStateAddr,
 		ChainID:    (*backend.BlockChain()).Config().ChainID,
 		Nonce:      nonce,
 		Gas:        0,

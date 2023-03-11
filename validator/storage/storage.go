@@ -5,6 +5,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -24,11 +25,14 @@ type Storage interface {
 	GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address)
 	GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error)
 
-	SetValidatorInfo(stateDb *state.StateDB, info ValidatorInfo)
-	GetValidatorInfo(stateDb *state.StateDB, address common.Address) ValidatorInfo
+	SetValidatorInfo(stateDb vm.StateDB, info ValidatorInfo)
+	GetValidatorInfo(stateDb vm.StateDB, address common.Address) ValidatorInfo
 
-	SetValidatorsList(stateDb *state.StateDB, list []common.Address)
-	GetValidatorsList(stateDb *state.StateDB) []common.Address
+	SetValidatorsList(stateDb vm.StateDB, list []common.Address)
+	GetValidatorsList(stateDb vm.StateDB) []common.Address
+	AddValidatorToList(validator *Validator, stateDB vm.StateDB) (uint64, bool)
+
+	GetValidatorsStateAddress() *common.Address
 
 	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
@@ -50,15 +54,15 @@ func (s *storage) ValidatorsStateAddress() *common.Address {
 	return s.config.ValidatorsStateAddress
 }
 
-func (s *storage) SetValidatorInfo(stateDb *state.StateDB, info ValidatorInfo) {
+func (s *storage) SetValidatorInfo(stateDb vm.StateDB, info ValidatorInfo) {
 	stateDb.SetCode(info.GetAddress(), info)
 }
 
-func (s *storage) GetValidatorInfo(stateDb *state.StateDB, address common.Address) ValidatorInfo {
+func (s *storage) GetValidatorInfo(stateDb vm.StateDB, address common.Address) ValidatorInfo {
 	return stateDb.GetCode(address)
 }
 
-func (s *storage) SetValidatorsList(stateDb *state.StateDB, list []common.Address) {
+func (s *storage) SetValidatorsList(stateDb vm.StateDB, list []common.Address) {
 	buf := make([]byte, len(list)*common.AddressLength)
 	for i, validator := range list {
 		beginning := i * common.AddressLength
@@ -69,7 +73,7 @@ func (s *storage) SetValidatorsList(stateDb *state.StateDB, list []common.Addres
 	stateDb.SetCode(*s.ValidatorsStateAddress(), buf)
 }
 
-func (s *storage) GetValidatorsList(stateDb *state.StateDB) []common.Address {
+func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
 	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
 
 	validators := make([]common.Address, 0)
@@ -232,4 +236,22 @@ func (s *storage) breakByValidatorsBySlotCount(validators []common.Address, vali
 	}
 
 	return chunks
+}
+
+func (s *storage) GetValidatorsStateAddress() *common.Address {
+	return s.config.ValidatorsStateAddress
+}
+
+func (s *storage) AddValidatorToList(validator *Validator, stateDb vm.StateDB) (uint64, bool) {
+	list := s.GetValidatorsList(stateDb)
+	for i, address := range list {
+		if address == validator.Address {
+			return uint64(i), true
+		}
+	}
+
+	list = append(list, validator.Address)
+	s.SetValidatorsList(stateDb, list)
+
+	return uint64(len(list) - 1), false
 }

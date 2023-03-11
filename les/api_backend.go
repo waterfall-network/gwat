@@ -232,7 +232,7 @@ func (b *LesApiBackend) GetTP(ctx context.Context, state *state.StateDB, header 
 
 func (b *LesApiBackend) GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error) {
 	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
-	return validator.NewProcessor(context, state), state.Error, nil
+	return validator.NewProcessor(context, b.ChainDb(), state, b.ChainConfig()), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {

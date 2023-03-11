@@ -520,7 +520,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			txContext = core.NewEVMTxContext(msg)
 			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 			tp        = token.NewProcessor(vmctx, statedb)
-			vp        = validator.NewProcessor(vmctx, statedb)
+			vp        = validator.NewProcessor(vmctx, api.backend.ChainDb(), statedb, api.backend.ChainConfig())
 		)
 		statedb.Prepare(tx.Hash(), i)
 		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
@@ -617,7 +617,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		statedb.Prepare(tx.Hash(), i)
 		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
 		tp := token.NewProcessor(blockCtx, statedb)
-		vp := validator.NewProcessor(blockCtx, statedb)
+		vp := validator.NewProcessor(blockCtx, api.backend.ChainDb(), statedb, api.backend.ChainConfig())
 		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			failed = err
 			break
@@ -743,7 +743,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		tp := token.NewProcessor(vmctx, statedb)
-		vp := validator.NewProcessor(vmctx, statedb)
+		vp := validator.NewProcessor(vmctx, api.backend.ChainDb(), statedb, api.backend.ChainConfig())
 		statedb.Prepare(tx.Hash(), i)
 		_, err = core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if writer != nil {
@@ -910,7 +910,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	tp := token.NewProcessor(vmctx, statedb)
-	vp := validator.NewProcessor(vmctx, statedb)
+	vp := validator.NewProcessor(vmctx, api.backend.ChainDb(), statedb, api.backend.ChainConfig())
 
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)

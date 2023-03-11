@@ -161,7 +161,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		snapshot := statedb.Snapshot()
 		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
 		tp := token.NewProcessor(vmContext, statedb)
-		vp := validator.NewProcessor(vmContext, statedb)
+		vp := validator.NewProcessor(vmContext, rawdb.NewMemoryDatabase(), statedb, chainConfig)
 
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, tp, vp, msg, gaspool)

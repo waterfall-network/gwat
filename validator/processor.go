@@ -3,6 +3,10 @@ package validator
 import (
 	"errors"
 	"fmt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
+	"math"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -54,30 +58,44 @@ type Processor struct {
 	state        vm.StateDB
 	ctx          vm.BlockContext
 	eventEmmiter *EventEmmiter
+	storage      valStore.Storage
 }
 
 // NewProcessor creates new validator processor
-func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB) *Processor {
+func NewProcessor(blockCtx vm.BlockContext, db ethdb.Database, stateDb vm.StateDB, config *params.ChainConfig) *Processor {
 	return &Processor{
 		ctx:          blockCtx,
 		state:        stateDb,
 		eventEmmiter: NewEventEmmiter(stateDb),
+		storage:      valStore.NewStorage(db, config),
 	}
 }
 
-// TODO correct implementation required !!!
-func (p *Processor) getDepositCount() uint64 {
-	count := p.state.GetBalance(GetValidatorsStateAddress())
-	return count.Uint64()
-}
-func (p *Processor) incrDepositCount() {
-	p.state.AddBalance(GetValidatorsStateAddress(), big.NewInt(1))
+// TODO: maybe drop this function????
+func (p *Processor) getDepositCount(address common.Address) uint64 {
+	valInfo := p.Storage().GetValidatorInfo(p.state, address)
+
+	return valInfo.GetDepositCount()
 }
 
-//todo get the address from genesis config
-// IsValidatorOp returns true if tx is validator operation
-func GetValidatorsStateAddress() common.Address {
-	return common.HexToAddress("0x1111111111111111111111111111111111111111")
+// TODO: maybe drop this function????
+func (p *Processor) incrDepositCount(address common.Address) {
+	valInfo := p.Storage().GetValidatorInfo(p.state, address)
+
+	valInfo.UpdateDepositCount(valInfo.GetDepositCount() + 1)
+}
+
+func (p *Processor) GetValidatorsStateAddress() common.Address {
+	valAddress := p.Storage().GetValidatorsStateAddress()
+	if valAddress == nil {
+		return common.Address{}
+	}
+
+	return *valAddress
+}
+
+func (p *Processor) Storage() valStore.Storage {
+	return p.storage
 }
 
 // IsValidatorOp returns true if tx is validator operation
@@ -85,16 +103,18 @@ func (p *Processor) IsValidatorOp(addrTo *common.Address) bool {
 	if addrTo == nil {
 		return false
 	}
-	return *addrTo == GetValidatorsStateAddress()
+
+	return *addrTo == p.GetValidatorsStateAddress()
 }
 
 // Call performs all transaction related operations that mutates state of the validator and validators state
 //
 // The only following operations can be performed using the method:
-//  * validator: Deposit
-//  * coordinating node: Activation
-//  * validator: RequestExit
-//  * coordinating node: Exit
+//   - validator: Deposit
+//   - coordinating node: Activation
+//   - validator: RequestExit
+//   - coordinating node: Exit
+//
 // It returns byte representation of the return value of an operation.
 func (p *Processor) Call(caller Ref, toAddrs common.Address, value *big.Int, op operation.Operation) (ret []byte, err error) {
 	nonce := p.state.GetNonce(caller.Address())
@@ -133,14 +153,39 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	if balanceFrom.Cmp(value) < 0 {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, from.Hex())
 	}
-	////todo add creator to list of creators
-	////todo update state of creator
 
-	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
+	withdrawalAddress := op.WithdrawalAddress()
+
+	validator := valStore.NewValidator(op.CreatorAddress(), &withdrawalAddress, 0, math.MaxUint64, math.MaxUint64, value)
+
+	var valInfo valStore.ValidatorInfo
+	valIndex, ok := p.Storage().AddValidatorToList(validator, p.state)
+	if ok {
+		log.Info("validator already exist")
+
+		valInfo = p.Storage().GetValidatorInfo(p.state, validator.Address)
+		currentBalance := valInfo.GetValidatorBalance()
+		validator.Balance = currentBalance.Add(currentBalance, value)
+		validator.DepositCount = valInfo.GetDepositCount()
+	}
+
+	validator.Index = valIndex
+	validator.DepositCount++
+
+	valInfo, err = validator.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	p.Storage().SetValidatorInfo(p.state, valInfo)
+
+	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), validator.DepositCount)
 	p.eventEmmiter.Deposit(toAddr, logData)
-	p.incrDepositCount()
+
 	// burn value from sender balance
 	p.state.SubBalance(from, value)
+
+	// TODO: need update state
 
 	log.Info("Deposit", "address", toAddr.Hex(), "from", from.Hex(), "value", value.String(), "pabkey", op.PubKey().Hex(), "creator", op.CreatorAddress().Hex())
 	return value.FillBytes(make([]byte, 32)), nil

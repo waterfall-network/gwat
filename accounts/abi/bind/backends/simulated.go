@@ -633,7 +633,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// about the transaction and calling mechanisms.
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	tp := token.NewProcessor(evmContext, stateDB)
-	vp := validator.NewProcessor(evmContext, stateDB)
+	vp := validator.NewProcessor(evmContext, b.blockchain.Database(), stateDB, b.blockchain.Config())
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	return core.NewStateTransition(vmEnv, tp, vp, msg, gasPool).TransitionDb()

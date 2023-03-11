@@ -88,10 +88,16 @@ func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNr
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, bNrOrHash)
-	if state == nil || err != nil {
+	stateDb, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, bNrOrHash)
+	if stateDb == nil || err != nil {
 		return 0, err
 	}
-	count := state.GetBalance(GetValidatorsStateAddress())
-	return hexutil.Uint64(count.Uint64()), state.Error()
+
+	validatorProcessor, _, err := s.b.GetVP(ctx, stateDb, header)
+	if err != nil {
+		return 0, err
+	}
+
+	count := stateDb.GetBalance(validatorProcessor.GetValidatorsStateAddress())
+	return hexutil.Uint64(count.Uint64()), stateDb.Error()
 }

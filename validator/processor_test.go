@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 	"math/big"
 	"testing"
 
@@ -31,6 +32,7 @@ var (
 
 func init() {
 	stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	db := rawdb.NewMemoryDatabase()
 	ctx := vm.BlockContext{
 		CanTransfer: nil,
 		Transfer:    nil,
@@ -40,7 +42,7 @@ func init() {
 		Difficulty:  big.NewInt(0x30000),
 		GasLimit:    uint64(6000000),
 	}
-	processor = NewProcessor(ctx, stateDb)
+	processor = NewProcessor(ctx, db, stateDb, testmodels.TestChainConfig)
 
 	to = GetValidatorsStateAddress()
 	from = common.BytesToAddress(testutils.RandomData(20))
@@ -51,11 +53,10 @@ func init() {
 	signature = common.HexToBlsSig("0xb9221f2308c1e1655a8e1977f32241384fa77efedbb3079bcc9a95930152ee87" +
 		"f341134a4e59c3e312ee5c2197732ea30d9aac2993cc4aad75335009815d07a8735f96c6dde443ba3a10f5523c4d00f6b3a7b48af" +
 		"5a42795183ab5aa2f1b2dd1")
-	deposit_data_root = common.HexToHash("0xb4cb40679413e0a38f670a4d19b21871f830f955ce41dace0926f19aad0d434b")
 }
 
 func TestProcessorDeposit(t *testing.T) {
-	depositOperation, err := operation.NewDepositOperation(pubkey, creator_address, withdrawal_address, signature, deposit_data_root)
+	depositOperation, err := operation.NewDepositOperation(pubkey, creator_address, withdrawal_address, signature)
 	if err != nil {
 		t.Fatal(err)
 	}

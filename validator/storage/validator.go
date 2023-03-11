@@ -13,7 +13,8 @@ const (
 	validatorIndexOffset    = withdrawalAddressOffset + common.AddressLength
 	activationEpochOffset   = validatorIndexOffset + uint64Size
 	exitEpochOffset         = activationEpochOffset + uint64Size
-	balanceLengthOffset     = exitEpochOffset + uint64Size
+	depositCountOffset      = exitEpochOffset + uint64Size
+	balanceLengthOffset     = depositCountOffset + uint64Size
 	balanceOffset           = balanceLengthOffset + uint64Size
 	metricOffset            = balanceOffset // TODO: add balance length to calculate offset
 )
@@ -24,6 +25,7 @@ type Validator struct {
 	Index             uint64
 	ActivationEpoch   uint64
 	ExitEpoch         uint64
+	DepositCount      uint64
 	Balance           *big.Int
 }
 
@@ -53,7 +55,7 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 
 	balance := v.Balance.Bytes()
 
-	data := make([]byte, common.AddressLength*2+uint64Size*4+len(balance))
+	data := make([]byte, common.AddressLength*2+uint64Size*5+len(balance))
 
 	copy(data[:common.AddressLength], address)
 
@@ -64,6 +66,8 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 	binary.BigEndian.PutUint64(data[activationEpochOffset:activationEpochOffset+uint64Size], v.ActivationEpoch)
 
 	binary.BigEndian.PutUint64(data[exitEpochOffset:exitEpochOffset+uint64Size], v.ExitEpoch)
+
+	binary.BigEndian.PutUint64(data[depositCountOffset:depositCountOffset+uint64Size], v.DepositCount)
 
 	binary.BigEndian.PutUint64(data[balanceLengthOffset:balanceOffset], uint64(len(balance)))
 
@@ -83,6 +87,8 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 	v.ActivationEpoch = binary.BigEndian.Uint64(data[activationEpochOffset : activationEpochOffset+uint64Size])
 
 	v.ExitEpoch = binary.BigEndian.Uint64(data[exitEpochOffset : exitEpochOffset+uint64Size])
+
+	v.DepositCount = binary.BigEndian.Uint64(data[depositCountOffset : depositCountOffset+uint64Size])
 
 	balanceLen := binary.BigEndian.Uint64(data[balanceLengthOffset:balanceOffset])
 
@@ -126,11 +132,11 @@ func (vi ValidatorInfo) SetActivationEpoch(epoch uint64) {
 }
 
 func (vi ValidatorInfo) GetExitEpoch() uint64 {
-	return binary.BigEndian.Uint64(vi[exitEpochOffset:balanceOffset])
+	return binary.BigEndian.Uint64(vi[exitEpochOffset:depositCountOffset])
 }
 
 func (vi ValidatorInfo) SetExitEpoch(epoch uint64) {
-	binary.BigEndian.PutUint64(vi[exitEpochOffset:balanceOffset], epoch)
+	binary.BigEndian.PutUint64(vi[exitEpochOffset:depositCountOffset], epoch)
 }
 
 func (vi ValidatorInfo) GetValidatorBalance() *big.Int {
@@ -147,4 +153,12 @@ func (vi ValidatorInfo) SetValidatorBalance(balance *big.Int) {
 	binary.BigEndian.PutUint64(vi[balanceLengthOffset:balanceOffset], uint64(newLen))
 
 	copy(vi[balanceOffset:balanceOffset+newLen], balance.Bytes())
+}
+
+func (vi ValidatorInfo) GetDepositCount() uint64 {
+	return binary.BigEndian.Uint64(vi[depositCountOffset:balanceLengthOffset])
+}
+
+func (vi ValidatorInfo) UpdateDepositCount(count uint64) {
+	binary.BigEndian.PutUint64(vi[depositCountOffset:balanceLengthOffset], count)
 }

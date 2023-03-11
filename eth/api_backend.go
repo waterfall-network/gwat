@@ -251,7 +251,7 @@ func (b *EthAPIBackend) GetTP(ctx context.Context, state *state.StateDB, header 
 func (b *EthAPIBackend) GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error) {
 	tpError := func() error { return nil }
 	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
-	return validator.NewProcessor(context, state), tpError, nil
+	return validator.NewProcessor(context, b.ChainDb(), state, b.ChainConfig()), tpError, nil
 }
 
 func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {

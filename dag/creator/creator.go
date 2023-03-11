@@ -614,7 +614,16 @@ func (c *Creator) updateSnapshot() {
 func (c *Creator) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := c.current.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(c.chainConfig, c.chain, &coinbase, c.current.gasPool, c.current.state, c.current.header, tx, &c.current.header.GasUsed, *c.chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(c.chainConfig,
+		c.chain, &coinbase,
+		c.current.gasPool,
+		c.current.state,
+		c.current.header,
+		tx,
+		&c.current.header.GasUsed,
+		*c.chain.GetVMConfig(),
+		c.chain.Database(),
+	)
 	if err != nil {
 		c.current.state.RevertToSnapshot(snap)
 		return nil, err
