@@ -754,21 +754,21 @@ func (ei *EraInfo) EpochsPerEra() uint64 {
 }
 
 type Era struct {
-	begin uint64
-	end   uint64
+	Begin uint64
+	End   uint64
 }
 
 func NewEra(begin, end uint64) Era {
 	return Era{
-		begin: begin,
-		end:   end,
+		Begin: begin,
+		End:   end,
 	}
 }
 
 func (e *Era) BeginEpoch() uint64 {
-	return e.begin
+	return e.Begin
 }
 
 func (e *Era) EndEpoch() uint64 {
-	return e.end
+	return e.End
 }

@@ -839,3 +839,34 @@ func TestWriteReadDeleteSeedHash(t *testing.T) {
 		t.Fatalf("Seed hash should not exist")
 	}
 }
+
+func TestWriteAndGetEra1(t *testing.T) {
+	// Create an in-memory database for testing
+	db := NewMemoryDatabase()
+
+	// Define a test era
+	testEra := types.NewEra(1000, 2000)
+
+	// Test writing the era to the database
+	err := WriteEra(db, 1, testEra)
+	if err != nil {
+		t.Errorf("WriteEra returned an error: %v", err)
+	}
+
+	// Test reading the era from the database
+	era, err := GetEra(db, 1)
+	if err != nil {
+		t.Errorf("GetEra returned an error: %v", err)
+	}
+
+	// Verify that the era read from the database is equal to the test era
+	if testEra.EndEpoch() != era.EndEpoch() {
+		t.Errorf("GetEra returned incorrect end epoch: expected %d, got %d", testEra.EndEpoch(), era.EndEpoch())
+	}
+	if testEra.BeginEpoch() != era.BeginEpoch() {
+		t.Errorf("GetEra returned incorrect begin epoch: expected %d, got %d", testEra.BeginEpoch(), era.BeginEpoch())
+	}
+	if !reflect.DeepEqual(testEra, *era) {
+		t.Errorf("GetEra returned incorrect era: expected %+v, got %+v", testEra, *era)
+	}
+}
