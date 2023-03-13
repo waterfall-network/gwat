@@ -3571,7 +3571,7 @@ func (bc *BlockChain) GetEraInfo() *types.EraInfo {
 
 // SetNewEraInfo sets new era info.
 func (bc *BlockChain) SetNewEraInfo(number uint64, era types.Era) {
-	log.Info("New era", "num", number, "begin:", era.BeginEpoch(), "end:", era.EndEpoch())
+	log.Info("New era", "num", number, "begin:", era.Begin, "end:", era.End)
 	bc.eraInfo.SetNewEraInfo(number, era)
 }
 
@@ -3621,7 +3621,7 @@ func (bc *BlockChain) HandleEra(slot uint64) error {
 		// Transition period
 		if bc.IsEraTransitionPeriodStart(slot) { // use first slot in epoch
 			nextEraLength := bc.estimateNextEraLength()
-			nextEra := types.NewEra(bc.GetEraInfo().ToEpoch(), bc.GetEraInfo().ToEpoch()+nextEraLength)
+			nextEra := types.Era{bc.GetEraInfo().ToEpoch(), bc.GetEraInfo().ToEpoch() + nextEraLength}
 			nextEraNumber := bc.GetEraInfo().Number() + 1
 
 			err := rawdb.WriteEra(bc.db, nextEraNumber, nextEra)

@@ -845,7 +845,7 @@ func TestWriteAndGetEra1(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	// Define a test era
-	testEra := types.NewEra(1000, 2000)
+	testEra := types.Era{1000, 2000}
 
 	// Test writing the era to the database
 	err := WriteEra(db, 1, testEra)
@@ -860,11 +860,11 @@ func TestWriteAndGetEra1(t *testing.T) {
 	}
 
 	// Verify that the era read from the database is equal to the test era
-	if testEra.EndEpoch() != era.EndEpoch() {
-		t.Errorf("GetEra returned incorrect end epoch: expected %d, got %d", testEra.EndEpoch(), era.EndEpoch())
+	if testEra.End != era.End {
+		t.Errorf("GetEra returned incorrect end epoch: expected %d, got %d", testEra.End, era.End)
 	}
-	if testEra.BeginEpoch() != era.BeginEpoch() {
-		t.Errorf("GetEra returned incorrect begin epoch: expected %d, got %d", testEra.BeginEpoch(), era.BeginEpoch())
+	if testEra.Begin != era.Begin {
+		t.Errorf("GetEra returned incorrect begin epoch: expected %d, got %d", testEra.Begin, era.Begin)
 	}
 	if !reflect.DeepEqual(testEra, *era) {
 		t.Errorf("GetEra returned incorrect era: expected %+v, got %+v", testEra, *era)

@@ -726,8 +726,8 @@ type EraInfo struct {
 func SetNewEraInfo(number uint64, era Era) EraInfo {
 	return EraInfo{
 		number:    number,
-		fromEpoch: era.BeginEpoch(),
-		toEpoch:   era.EndEpoch(),
+		fromEpoch: era.Begin,
+		toEpoch:   era.End,
 	}
 }
 
@@ -745,8 +745,8 @@ func (ei *EraInfo) FromEpoch() uint64 {
 
 func (ei *EraInfo) SetNewEraInfo(number uint64, era Era) {
 	ei.number = number
-	ei.fromEpoch = era.BeginEpoch()
-	ei.toEpoch = era.EndEpoch()
+	ei.fromEpoch = era.Begin
+	ei.toEpoch = era.End
 }
 
 func (ei *EraInfo) EpochsPerEra() uint64 {
@@ -758,17 +758,17 @@ type Era struct {
 	End   uint64
 }
 
-func NewEra(begin, end uint64) Era {
-	return Era{
-		Begin: begin,
-		End:   end,
-	}
-}
-
-func (e *Era) BeginEpoch() uint64 {
-	return e.Begin
-}
-
-func (e *Era) EndEpoch() uint64 {
-	return e.End
-}
+//func NewEra(begin, end uint64) Era {
+//	return Era{
+//		Begin: begin,
+//		End:   end,
+//	}
+//}
+//
+//func (e *Era) BeginEpoch() uint64 {
+//	return e.Begin
+//}
+//
+//func (e *Era) EndEpoch() uint64 {
+//	return e.End
+//}

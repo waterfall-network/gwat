@@ -329,9 +329,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteFirstEpochBlockHash(db, 0, genesisBlock.Hash())
 	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
 
-	genesisEra := types.NewEra(0, g.Config.EpochsPerEra)
+	genesisEra := types.Era{0, g.Config.EpochsPerEra - 1}
 	rawdb.WriteEra(db, 0, genesisEra)
-	log.Info("Era", "begin:", genesisEra.BeginEpoch(), "end:", genesisEra.EndEpoch())
+	log.Info("Era", "begin:", genesisEra.Begin, "end:", genesisEra.End)
 
 	return genesisBlock
 }
