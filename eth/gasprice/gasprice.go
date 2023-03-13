@@ -30,6 +30,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block
@@ -57,6 +58,9 @@ type OracleBackend interface {
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	ChainConfig() *params.ChainConfig
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	ValidatorsStorage() valStore.Storage
+	Genesis() *types.Block
+	BlockChain() *core.BlockChain
 }
 
 // Oracle recommends gas prices based on the content of recent

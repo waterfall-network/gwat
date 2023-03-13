@@ -50,11 +50,12 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:         big.NewInt(111000111),
-		SecondsPerSlot:  4,
-		SlotsPerEpoch:   32,
-		EpochsPerEra:    8,
-		ForkSlotSubNet1: math.MaxUint64,
+		ChainID:          big.NewInt(111000111),
+		SecondsPerSlot:   4,
+		SlotsPerEpoch:    32,
+		EpochsPerEra:     8,
+		ForkSlotSubNet1:  math.MaxUint64,
+		EffectiveBalance: big.NewInt(32000),
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -80,11 +81,12 @@ var (
 
 	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
 	DevNetChainConfig = &ChainConfig{
-		ChainID:         big.NewInt(333777555),
-		SecondsPerSlot:  4,
-		SlotsPerEpoch:   32,
-		EpochsPerEra:    8,
-		ForkSlotSubNet1: math.MaxUint64,
+		ChainID:          big.NewInt(333777555),
+		SecondsPerSlot:   4,
+		SlotsPerEpoch:    32,
+		EpochsPerEra:     8,
+		ForkSlotSubNet1:  math.MaxUint64,
+		EffectiveBalance: big.NewInt(32000),
 	}
 
 	// DevNetTrustedCheckpoint contains the light client trusted checkpoint for the DevNet.
@@ -113,16 +115,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, math.MaxUint64, nil, 6}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, math.MaxUint64, nil, 6, big.NewInt(32000)}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, math.MaxUint64, nil, 6}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, math.MaxUint64, nil, 6, big.NewInt(32000)}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, math.MaxUint64, nil, 6}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, math.MaxUint64, nil, 6, big.NewInt(32000)}
 	TestRules       = TestChainConfig.Rules()
 )
 
@@ -191,6 +193,8 @@ type ChainConfig struct {
 
 	ValidatorsStateAddress *common.Address
 	ValidatorsPerSlot      uint64 `json:"validatorsPerSlot"`
+
+	EffectiveBalance *big.Int `json:"effectiveBalance"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -214,7 +218,7 @@ func (c *CliqueConfig) String() string {
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, ForkSlotSubNet1: %v, "+
-		"ValidatorsPerSlot %v, ValidatorsStateAddress %v}",
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
@@ -222,6 +226,7 @@ func (c *ChainConfig) String() string {
 		c.ForkSlotSubNet1,
 		c.ValidatorsPerSlot,
 		c.ValidatorsStateAddress,
+		c.EffectiveBalance,
 	)
 }
 
@@ -293,6 +298,10 @@ func (c *ChainConfig) Validate() error {
 
 	if c.ValidatorsPerSlot == 0 {
 		return fmt.Errorf("no validators per slot parameter")
+	}
+
+	if c.EffectiveBalance == nil || c.EffectiveBalance.Cmp(big.NewInt(0)) == 0 {
+		return fmt.Errorf("no effective balance parameter")
 	}
 
 	return nil
