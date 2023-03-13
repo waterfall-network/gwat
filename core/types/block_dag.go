@@ -743,14 +743,8 @@ func (ei *EraInfo) FromEpoch() uint64 {
 	return ei.fromEpoch
 }
 
-func (ei *EraInfo) SetEraInfo(number uint64, era Era) {
-	ei.number = number
-	ei.fromEpoch = era.Begin
-	ei.toEpoch = era.End
-}
-
 func (ei *EraInfo) EpochsPerEra() uint64 {
-	return ei.toEpoch - ei.fromEpoch
+	return ei.toEpoch - ei.fromEpoch + 1
 }
 
 type Era struct {
