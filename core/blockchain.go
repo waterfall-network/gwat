@@ -3592,9 +3592,8 @@ func (bc *BlockChain) estimateNextEraLength() (epochsPerEra uint64) {
 	var (
 		currentEpochsPerEra = bc.chainConfig.EpochsPerEra
 		slotsPerEpoch       = bc.chainConfig.SlotsPerEpoch
-		//_, validators       = bc.ValidatorStorage().GetValidators(bc, bc.GetSlotInfo().CurrentSlot(), true, true)
-		//numberOfValidators  = uint64(len(validators))
-		numberOfValidators = uint64(8) // temp
+		_, validators       = bc.ValidatorStorage().GetValidators(bc, bc.GetSlotInfo().CurrentSlot(), true, true)
+		numberOfValidators  = uint64(len(validators))
 	)
 
 	currentEpochsPerEra = bc.GetEraInfo().EpochsPerEra()
