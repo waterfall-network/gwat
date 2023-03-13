@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -27,6 +28,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
@@ -868,5 +871,79 @@ func TestWriteAndGetEra1(t *testing.T) {
 	}
 	if !reflect.DeepEqual(testEra, *era) {
 		t.Errorf("GetEra returned incorrect era: expected %+v, got %+v", testEra, *era)
+	}
+}
+
+func TestGetEraByEpoch(t *testing.T) {
+	// Create an in-memory database for testing
+	db := NewMemoryDatabase()
+
+	// Define some eras
+	era0 := types.Era{Begin: 0, End: 100}
+	era1 := types.Era{Begin: 100, End: 200}
+	era2 := types.Era{Begin: 200, End: 300}
+	era3 := types.Era{Begin: 300, End: 400}
+
+	// Write the eras to the database
+	err := WriteEra(db, 0, era0)
+	require.NoError(t, err)
+	err = WriteEra(db, 1, era1)
+	require.NoError(t, err)
+	err = WriteEra(db, 2, era2)
+	require.NoError(t, err)
+	err = WriteEra(db, 3, era3)
+	require.NoError(t, err)
+
+	// Test the function with various inputs
+	tests := []struct {
+		name          string
+		epoch         uint64
+		lastEraNumber uint64
+		expectedEra   *types.Era
+		expectedError error
+	}{
+		{
+			name:          "epoch in era0",
+			epoch:         50,
+			lastEraNumber: 3,
+			expectedEra:   &era0,
+			expectedError: nil,
+		},
+		{
+			name:          "epoch in era1",
+			epoch:         150,
+			lastEraNumber: 3,
+			expectedEra:   &era1,
+			expectedError: nil,
+		},
+		{
+			name:          "epoch in era2",
+			epoch:         250,
+			lastEraNumber: 3,
+			expectedEra:   &era2,
+			expectedError: nil,
+		},
+		{
+			name:          "epoch in era3",
+			epoch:         350,
+			lastEraNumber: 3,
+			expectedEra:   &era3,
+			expectedError: nil,
+		},
+		{
+			name:          "epoch after last era",
+			epoch:         500,
+			lastEraNumber: 3,
+			expectedEra:   nil,
+			expectedError: errors.New("epoch not found in any era"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			era, err := GetEraByEpoch(db, test.epoch, test.lastEraNumber)
+			assert.Equal(t, test.expectedEra, era)
+			assert.Equal(t, test.expectedError, err)
+		})
 	}
 }

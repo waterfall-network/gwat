@@ -723,7 +723,7 @@ type EraInfo struct {
 	toEpoch   uint64
 }
 
-func SetNewEraInfo(number uint64, era Era) EraInfo {
+func NewEraInfo(number uint64, era Era) EraInfo {
 	return EraInfo{
 		number:    number,
 		fromEpoch: era.Begin,
@@ -757,18 +757,3 @@ type Era struct {
 	Begin uint64
 	End   uint64
 }
-
-//func NewEra(begin, end uint64) Era {
-//	return Era{
-//		Begin: begin,
-//		End:   end,
-//	}
-//}
-//
-//func (e *Era) BeginEpoch() uint64 {
-//	return e.Begin
-//}
-//
-//func (e *Era) EndEpoch() uint64 {
-//	return e.End
-//}

@@ -1064,3 +1064,49 @@ func GetEra(db ethdb.KeyValueReader, number uint64) (*types.Era, error) {
 
 	return &era, nil
 }
+
+func GetEraByEpoch(db ethdb.KeyValueReader, epoch uint64, lastEraNumber uint64) (*types.Era, error) {
+	// The number of eras
+	numEras := lastEraNumber
+
+	// Get the last era
+	lastEra, err := GetEra(db, lastEraNumber)
+	if err != nil {
+		return nil, errors.New("last era not found")
+	}
+
+	if lastEra.End < epoch {
+		return nil, errors.New("epoch is after last era")
+	}
+
+	middleEpoch := (lastEra.End) / 2
+
+	// Determine which half of the eras to search
+	var startEra uint64
+	if epoch < middleEpoch {
+		startEra = 0
+	} else {
+		startEra = lastEraNumber / 2
+	}
+
+	// Loop through the relevant eras until we find one that contains the epoch
+	var currentEra *types.Era
+	for i := startEra; i <= numEras; i++ {
+		era, err := GetEra(db, i)
+		if err != nil {
+			return nil, err
+		}
+
+		if era.Begin <= epoch && epoch < era.End {
+			currentEra = era
+			break
+		}
+	}
+
+	// If no epoch in eras was found, return an error
+	if currentEra == nil {
+		return nil, errors.New("epoch not found in any era")
+	}
+
+	return currentEra, nil
+}
