@@ -2,6 +2,7 @@ package operation
 
 import (
 	"encoding/binary"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 

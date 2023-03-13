@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
-	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 	"math"
 	"math/big"
 
@@ -14,8 +11,11 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 var (
@@ -126,9 +126,9 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, op o
 	case operation.Deposit:
 		ret, err = p.validatorDeposit(caller, toAddr, value, v)
 
-		//	todo implement
-		//case operation.Activation:
-		//	ret, err = p.activation(caller, toAddr, v)
+	//	todo implement
+	case operation.ValidatorSync:
+		p.validatorActivate(caller, toAddr, v)
 	case operation.ExitRequest:
 		err = p.validatorExitRequest(caller, toAddr, v)
 		//case operation.Exit:
@@ -209,6 +209,32 @@ func (p *Processor) validatorExitRequest(caller Ref, toAddr common.Address, op o
 	p.eventEmmiter.ExitRequest(toAddr, logData)
 
 	return nil
+}
+
+func (p *Processor) syncOpProcessing(caller Ref, toAddr common.Address, op operation.ValidatorSync) {
+	switch op.OpCode() {
+	case operation.ActivationCode:
+		p.validatorActivate(caller, toAddr, op)
+	case operation.ExitCode:
+		// TODO implement me
+	case operation.WithdrawalCode:
+		// TODO implement me
+	}
+
+}
+
+func (p *Processor) validatorActivate(caller Ref, toAddr common.Address, op operation.ValidatorSync) {
+	from := caller.Address()
+
+	valInfo := p.Storage().GetValidatorInfo(p.state, op.Creator())
+	valInfo.SetActivationEpoch(op.ProcEpoch())
+	p.Storage().SetValidatorInfo(p.state, valInfo)
+
+	logData := PackActivateLogData(op.Creator(), *op.WithdrawalAddress(), op.Index(), op.ProcEpoch())
+
+	p.eventEmmiter.Deposit(toAddr, logData)
+
+	log.Info("Activate", "address", toAddr.Hex(), "from", from.Hex(), "creator", op.Creator().Hex(), "activationEpoch", op.ProcEpoch())
 }
 
 type logEntry struct {

@@ -12,6 +12,7 @@ const Uint64Length = 8
 const (
 	DepositLogDataLength     = common.BlsPubKeyLength + common.AddressLength + common.AddressLength + Uint64Length + common.BlsSigLength + Uint64Length
 	ExitRequestLogDataLength = common.BlsPubKeyLength + common.AddressLength + Uint64Length
+	ActivateLogDataLength    = common.AddressLength*2 + Uint64Length*2
 )
 
 // PackDepositLogData packs the deposit log.
@@ -114,4 +115,20 @@ func UnpackExitRequestLogData(data []byte) (
 	common.BytesToUint64(data[offset:])
 
 	return
+}
+
+func PackActivateLogData(
+	validatorAddress common.Address,
+	withdrawalAddress common.Address,
+	validatorIndex uint64,
+	activationEpoch uint64,
+) []byte {
+	data := make([]byte, 0, ActivateLogDataLength)
+	data = append(data, validatorAddress.Bytes()...)
+	data = append(data, withdrawalAddress.Bytes()...)
+
+	data = append(data, common.Uint64ToBytes(validatorIndex)...)
+	data = append(data, common.Uint64ToBytes(activationEpoch)...)
+
+	return data
 }
