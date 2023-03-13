@@ -7,8 +7,11 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
+const Uint64Length = 8
+
 const (
-	DepositLogDataLength = common.BlsPubKeyLength + common.AddressLength + common.AddressLength + 8 + common.BlsSigLength + 8
+	DepositLogDataLength     = common.BlsPubKeyLength + common.AddressLength + common.AddressLength + Uint64Length + common.BlsSigLength + Uint64Length
+	ExitRequestLogDataLength = common.BlsPubKeyLength + common.AddressLength + Uint64Length
 )
 
 // PackDepositLogData packs the deposit log.
@@ -74,6 +77,41 @@ func UnpackDepositLogData(data []byte) (
 	startOffset = endOffset
 	endOffset = startOffset + 8
 	depositIndex = common.BytesToUint64(data[startOffset:endOffset])
+
+	return
+}
+
+func PackExitRequestLogData(
+	pubkey common.BlsPubKey,
+	creatorAddress common.Address,
+	exitEpoch uint64,
+) []byte {
+	data := make([]byte, 0, ExitRequestLogDataLength)
+	data = append(data, pubkey.Bytes()...)
+	data = append(data, creatorAddress.Bytes()...)
+
+	data = append(data, common.Uint64ToBytes(exitEpoch)...)
+	return data
+}
+
+func UnpackExitRequestLogData(data []byte) (
+	pubkey common.BlsPubKey,
+	creatorAddress common.Address,
+	exitEpoch uint64,
+	err error,
+) {
+	if len(data) != ExitRequestLogDataLength {
+		err = operation.ErrBadDataLen
+		return
+	}
+
+	pubkey = common.BytesToBlsPubKey(data[:common.BlsPubKeyLength])
+	offset := common.BlsPubKeyLength
+
+	creatorAddress = common.BytesToAddress(data[offset : offset+common.AddressLength])
+	offset += common.AddressLength
+
+	common.BytesToUint64(data[offset:])
 
 	return
 }

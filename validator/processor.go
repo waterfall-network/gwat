@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
@@ -23,6 +24,9 @@ var (
 	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
 	// have enough funds for transfer(topmost call only).
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
+	ErrMismatchAddresses            = errors.New("withdrawal and sender addresses are mismatch")
+	ErrToLowExitEpoch               = errors.New("exit epoch is less than activation epoch")
+	ErrUnknownValidator             = errors.New("unknown validator")
 )
 
 const (
@@ -43,7 +47,8 @@ var (
 
 	//Events signatures.
 	// todo add creator_address
-	depositEventSignature = crypto.Keccak256Hash([]byte("DepositEvent(bytes,bytes,bytes,bytes,bytes)"))
+	depositEventSignature     = crypto.Keccak256Hash([]byte("DepositEvent(bytes,bytes,bytes,bytes,bytes)"))
+	exitRequestEventSignature = crypto.Keccak256Hash([]byte("ExitRequestEvent(bytes,bytes,bytes,bytes,bytes)"))
 )
 
 // Ref represents caller of the validator processor
@@ -71,18 +76,12 @@ func NewProcessor(blockCtx vm.BlockContext, db ethdb.Database, stateDb vm.StateD
 	}
 }
 
-// TODO: maybe drop this function????
-func (p *Processor) getDepositCount(address common.Address) uint64 {
-	valInfo := p.Storage().GetValidatorInfo(p.state, address)
-
-	return valInfo.GetDepositCount()
+func (p *Processor) getDepositCount() uint64 {
+	return p.Storage().GetDepositCount(p.state)
 }
 
-// TODO: maybe drop this function????
-func (p *Processor) incrDepositCount(address common.Address) {
-	valInfo := p.Storage().GetValidatorInfo(p.state, address)
-
-	valInfo.UpdateDepositCount(valInfo.GetDepositCount() + 1)
+func (p *Processor) incrDepositCount() {
+	p.Storage().IncrementDepositCount(p.state)
 }
 
 func (p *Processor) GetValidatorsStateAddress() common.Address {
@@ -116,7 +115,7 @@ func (p *Processor) IsValidatorOp(addrTo *common.Address) bool {
 //   - coordinating node: Exit
 //
 // It returns byte representation of the return value of an operation.
-func (p *Processor) Call(caller Ref, toAddrs common.Address, value *big.Int, op operation.Operation) (ret []byte, err error) {
+func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, op operation.Operation) (ret []byte, err error) {
 	nonce := p.state.GetNonce(caller.Address())
 	p.state.SetNonce(caller.Address(), nonce+1)
 
@@ -125,13 +124,13 @@ func (p *Processor) Call(caller Ref, toAddrs common.Address, value *big.Int, op 
 	ret = nil
 	switch v := op.(type) {
 	case operation.Deposit:
-		ret, err = p.validatorDeposit(caller, toAddrs, value, v)
+		ret, err = p.validatorDeposit(caller, toAddr, value, v)
 
 		//	todo implement
 		//case operation.Activation:
 		//	ret, err = p.activation(caller, toAddr, v)
-		//case operation.RequestExit:
-		//	ret, err = p.requestExitFrom(caller, toAddr, v)
+	case operation.ExitRequest:
+		err = p.validatorExitRequest(caller, toAddr, v)
 		//case operation.Exit:
 		//	ret, err = p.exitFrom(caller, toAddr, v)
 	}
@@ -166,11 +165,9 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		valInfo = p.Storage().GetValidatorInfo(p.state, validator.Address)
 		currentBalance := valInfo.GetValidatorBalance()
 		validator.Balance = currentBalance.Add(currentBalance, value)
-		validator.DepositCount = valInfo.GetDepositCount()
 	}
 
 	validator.Index = valIndex
-	validator.DepositCount++
 
 	valInfo, err = validator.MarshalBinary()
 	if err != nil {
@@ -178,17 +175,40 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	}
 
 	p.Storage().SetValidatorInfo(p.state, valInfo)
+	p.incrDepositCount()
 
-	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), validator.DepositCount)
+	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
 	p.eventEmmiter.Deposit(toAddr, logData)
 
 	// burn value from sender balance
 	p.state.SubBalance(from, value)
 
-	// TODO: need update state
-
 	log.Info("Deposit", "address", toAddr.Hex(), "from", from.Hex(), "value", value.String(), "pabkey", op.PubKey().Hex(), "creator", op.CreatorAddress().Hex())
 	return value.FillBytes(make([]byte, 32)), nil
+}
+
+func (p *Processor) validatorExitRequest(caller Ref, toAddr common.Address, op operation.ExitRequest) error {
+	from := caller.Address()
+	validator := p.Storage().GetValidatorInfo(p.state, op.ValidatorAddress())
+	if validator == nil {
+		return ErrUnknownValidator
+	}
+
+	if !bytes.Equal(from.Bytes(), validator.GetWithdrawalAddress().Bytes()) {
+		return ErrMismatchAddresses
+	}
+
+	if op.ExitEpoch() < validator.GetActivationEpoch() {
+		return ErrToLowExitEpoch
+	}
+
+	validator.SetExitEpoch(op.ExitEpoch())
+	p.Storage().SetValidatorInfo(p.state, validator)
+
+	logData := PackExitRequestLogData(op.PubKey(), op.ValidatorAddress(), op.ExitEpoch())
+	p.eventEmmiter.ExitRequest(toAddr, logData)
+
+	return nil
 }
 
 type logEntry struct {
@@ -263,6 +283,10 @@ func (e *EventEmmiter) Deposit(evtAddr common.Address, data []byte) {
 		depositEventSignature,
 		data,
 	)
+}
+
+func (e *EventEmmiter) ExitRequest(evtAddr common.Address, data []byte) {
+	e.addLog(evtAddr, exitRequestEventSignature, data)
 }
 
 func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, data []byte, logsEntries ...logEntry) {

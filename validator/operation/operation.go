@@ -64,9 +64,8 @@ func DecodeBytes(b []byte) (Operation, error) {
 		op = &validatorSyncOperation{}
 	case WithdrawalCode:
 		op = &validatorSyncOperation{}
-	// todo implement
-	//case RequestExitCode:
-	//	op = &RequestExitOperation{}
+	case RequestExitCode:
+		op = &exitRequestOperation{}
 
 	default:
 		return nil, ErrOpNotValid
@@ -99,9 +98,8 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 		}
 		buf[1] = byte(vs.OpCode())
 
-		// todo implement
-		//case *requestExitOperation:
-		//	buf[1] = RequestExitCode
+	case *exitRequestOperation:
+		buf[1] = RequestExitCode
 	}
 
 	buf = append(buf, b...)

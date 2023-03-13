@@ -28,3 +28,10 @@ type ValidatorSync interface {
 	Amount() *big.Int
 	WithdrawalAddress() *common.Address
 }
+
+type ExitRequest interface {
+	Operation
+	PubKey() common.BlsPubKey
+	ValidatorAddress() common.Address
+	ExitEpoch() uint64
+}

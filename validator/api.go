@@ -101,3 +101,47 @@ func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNr
 	count := stateDb.GetBalance(validatorProcessor.GetValidatorsStateAddress())
 	return hexutil.Uint64(count.Uint64()), stateDb.Error()
 }
+
+type ExitRequestArgs struct {
+	PubKey           *common.BlsPubKey `json:"pub_key"`
+	ValidatorAddress *common.Address   `json:"validator_address"`
+	ExitEpoch        uint64            `json:"exit_epoch"`
+}
+
+func (s *PublicValidatorAPI) ValidatorExitData(_ context.Context, args ExitRequestArgs) (hexutil.Bytes, error) {
+	if args.PubKey == nil {
+		return nil, operation.ErrNoPubKey
+	}
+	if args.ValidatorAddress == nil {
+		return nil, operation.ErrNoCreatorAddress
+	}
+
+	var (
+		op  operation.Operation
+		err error
+	)
+
+	if op, err = operation.NewExitRequestOperation(
+		*args.PubKey,
+		*args.ValidatorAddress,
+		args.ExitEpoch,
+	); err != nil {
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Warn("Failed to encode validator activate operation", "err", err)
+		return nil, err
+	}
+
+	return b, nil
+}
+
+func (s *PublicValidatorAPI) ExitData() {
+
+}
+
+func (s *PublicValidatorAPI) WithdrawalData() {
+
+}

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/binary"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -33,6 +34,8 @@ type Storage interface {
 	AddValidatorToList(validator *Validator, stateDB vm.StateDB) (uint64, bool)
 
 	GetValidatorsStateAddress() *common.Address
+	GetDepositCount(stateDb vm.StateDB) uint64
+	IncrementDepositCount(stateDb vm.StateDB)
 
 	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
@@ -63,9 +66,9 @@ func (s *storage) GetValidatorInfo(stateDb vm.StateDB, address common.Address) V
 }
 
 func (s *storage) SetValidatorsList(stateDb vm.StateDB, list []common.Address) {
-	buf := make([]byte, len(list)*common.AddressLength)
+	buf := make([]byte, len(list)*common.AddressLength+uint64Size)
 	for i, validator := range list {
-		beginning := i * common.AddressLength
+		beginning := i*common.AddressLength + uint64Size
 		end := beginning + common.AddressLength
 		copy(buf[beginning:end], validator[:])
 	}
@@ -77,11 +80,25 @@ func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
 	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
 
 	validators := make([]common.Address, 0)
-	for i := 0; i+common.AddressLength <= len(buf); i += common.AddressLength {
+	for i := uint64Size; i+common.AddressLength <= len(buf); i += common.AddressLength {
 		validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
 	}
 
 	return validators
+}
+
+func (s *storage) GetDepositCount(stateDb vm.StateDB) uint64 {
+	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
+	return binary.BigEndian.Uint64(buf[:uint64Size])
+}
+
+func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
+	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
+
+	currentCount := binary.BigEndian.Uint64(buf[:uint64Size])
+	currentCount++
+
+	binary.BigEndian.PutUint64(buf[:uint64Size], currentCount)
 }
 
 // GetValidators return two values: array of Validator and array of Validators addresses.
