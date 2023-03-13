@@ -279,7 +279,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
-				era := types.NewEra(0, d.bc.Config().EpochsPerEra)
+				era := types.Era{0, d.bc.Config().EpochsPerEra - 1}
 				d.bc.SetNewEraInfo(0, era)
 				continue
 			}
