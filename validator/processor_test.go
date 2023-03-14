@@ -32,7 +32,6 @@ var (
 
 func init() {
 	stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	db := rawdb.NewMemoryDatabase()
 	ctx := vm.BlockContext{
 		CanTransfer: nil,
 		Transfer:    nil,
@@ -42,9 +41,9 @@ func init() {
 		Difficulty:  big.NewInt(0x30000),
 		GasLimit:    uint64(6000000),
 	}
-	processor = NewProcessor(ctx, db, stateDb, testmodels.TestChainConfig)
+	processor = NewProcessor(ctx, stateDb, testmodels.TestChainConfig)
 
-	to = GetValidatorsStateAddress()
+	to = processor.GetValidatorsStateAddress()
 	from = common.BytesToAddress(testutils.RandomData(20))
 	value = MinDepositVal
 	pubkey = common.HexToBlsPubKey("0x9728bc733c8fcedde0c3a33dac12da3ebbaa0eb74d813a34b600520e7976a260d85f057687e8c923d52c78715515348d")

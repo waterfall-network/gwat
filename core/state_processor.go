@@ -70,7 +70,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
-	validatorProcessor := validator.NewProcessor(blockContext, p.bc.Database(), statedb, p.bc.Config())
+	validatorProcessor := validator.NewProcessor(blockContext, statedb, p.bc.Config())
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config), header.BaseFee)
@@ -159,6 +159,6 @@ func ApplyTransaction(config *params.ChainConfig,
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
-	validatorProcessor := validator.NewProcessor(blockContext, db, statedb, config)
+	validatorProcessor := validator.NewProcessor(blockContext, statedb, config)
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Hash(), tx, usedGas, vmenv, tokenProcessor, validatorProcessor)
 }

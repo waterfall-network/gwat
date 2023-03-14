@@ -262,7 +262,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:             engine,
 		vmConfig:           vmConfig,
 		syncProvider:       nil,
-		validatorStorage:   valStore.NewStorage(db, chainConfig),
+		validatorStorage:   valStore.NewStorage(chainConfig),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -3604,16 +3604,16 @@ func (bc *BlockChain) HeadSynchronising() bool {
 	return bc.syncProvider.HeadSynchronising()
 }
 
-// SearchFirstEpochBlockHashRecursive return first epoch block hash and true if hash is saved in database.
+// SearchFirstEpochBlockHashRecursive return first epoch block hash.
 // Use this hash at seed for shuffle algorithm.
-func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash, isSaved bool) {
+func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash) {
 	firstEpochBlock := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
 	if firstEpochBlock != (common.Hash{}) {
-		return firstEpochBlock, true
+		return firstEpochBlock
 	}
 
 	previousEpoch := epoch - 1
-	firstEpochBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(previousEpoch)
+	firstEpochBlockHash := bc.SearchFirstEpochBlockHashRecursive(previousEpoch)
 
 	previousEpochBlock := bc.GetBlock(firstEpochBlockHash)
 
@@ -3624,7 +3624,7 @@ func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash com
 	for {
 		block := bc.GetBlockByNumber(number)
 		if block == nil {
-			return firstEpochBlockHash, ok
+			return firstEpochBlockHash
 		}
 
 		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
@@ -3634,11 +3634,11 @@ func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash com
 		}
 
 		if blockEpoch == epoch {
-			return block.Hash(), false
+			return block.Hash()
 		}
 
 		if blockEpoch > epoch {
-			return firstEpochBlockHash, true
+			return firstEpochBlockHash
 		}
 	}
 }

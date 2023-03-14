@@ -11,7 +11,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
@@ -68,12 +67,12 @@ type Processor struct {
 }
 
 // NewProcessor creates new validator processor
-func NewProcessor(blockCtx vm.BlockContext, db ethdb.Database, stateDb vm.StateDB, config *params.ChainConfig) *Processor {
+func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, config *params.ChainConfig) *Processor {
 	return &Processor{
 		ctx:          blockCtx,
 		state:        stateDb,
 		eventEmmiter: NewEventEmmiter(stateDb),
-		storage:      valStore.NewStorage(db, config),
+		storage:      valStore.NewStorage(config),
 	}
 }
 

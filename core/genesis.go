@@ -303,7 +303,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	g.CreateDepositContract(statedb, head)
 
-	validatorStorage := valStore.NewStorage(db, g.Config)
+	validatorStorage := valStore.NewStorage(g.Config)
 
 	validatorStorage.SetValidatorsList(statedb, g.Validators)
 	for i, val := range g.Validators {

@@ -3,12 +3,10 @@ package storage
 import (
 	"encoding/binary"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
@@ -19,7 +17,7 @@ type blockchain interface {
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
-	SearchFirstEpochBlockHashRecursive(epoch uint64) (common.Hash, bool)
+	SearchFirstEpochBlockHashRecursive(epoch uint64) common.Hash
 }
 
 type Storage interface {
@@ -42,14 +40,12 @@ type Storage interface {
 
 type storage struct {
 	validatorsCache *ValidatorsCache
-	db              ethdb.Database
 	config          *params.ChainConfig
 }
 
-func NewStorage(db ethdb.Database, config *params.ChainConfig) Storage {
+func NewStorage(config *params.ChainConfig) Storage {
 	return &storage{
 		validatorsCache: NewCache(),
-		db:              db,
 		config:          config,
 	}
 }
@@ -114,10 +110,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 
 	validators, err = s.validatorsCache.getAllValidatorsByEpoch(checkpointEpoch)
 	if err != nil {
-		firstEpochBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(checkpointEpoch)
-		if !ok {
-			rawdb.WriteFirstEpochBlockHash(s.db, checkpointEpoch, firstEpochBlockHash)
-		}
+		firstEpochBlockHash := bc.SearchFirstEpochBlockHashRecursive(checkpointEpoch)
 
 		firstEpochBlock := bc.GetBlock(firstEpochBlockHash)
 
@@ -188,10 +181,7 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 	activeEpochValidators := s.validatorsCache.getValidatorsAddresses(epoch, true)
 
 	checkpointEpoch := bc.GetCoordinatedCheckpointEpoch(epoch)
-	seedBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(checkpointEpoch)
-	if !ok {
-		rawdb.WriteFirstEpochBlockHash(s.db, checkpointEpoch, seedBlockHash)
-	}
+	seedBlockHash := bc.SearchFirstEpochBlockHashRecursive(checkpointEpoch)
 
 	seed, err := s.seed(epoch, seedBlockHash)
 	if err != nil {
