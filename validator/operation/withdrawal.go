@@ -5,12 +5,12 @@ import (
 	"math/big"
 )
 
-type withdrawalOperation struct {
+type withdrawalRequestOperation struct {
 	creatorAddress common.Address
 	amount         *big.Int
 }
 
-func (op *withdrawalOperation) init(
+func (op *withdrawalRequestOperation) init(
 	creatorAddress common.Address,
 	amount *big.Int,
 ) error {
@@ -32,7 +32,7 @@ func NewWithdrawalOperation(
 	validatorAddress common.Address,
 	amount *big.Int,
 ) (WithdrawalRequest, error) {
-	op := &withdrawalOperation{}
+	op := &withdrawalRequestOperation{}
 	if err := op.init(validatorAddress, amount); err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func NewWithdrawalOperation(
 
 }
 
-func (op *withdrawalOperation) MarshalBinary() ([]byte, error) {
+func (op *withdrawalRequestOperation) MarshalBinary() ([]byte, error) {
 	data := make([]byte, 0)
 
 	data = append(data, op.creatorAddress.Bytes()...)
@@ -51,7 +51,7 @@ func (op *withdrawalOperation) MarshalBinary() ([]byte, error) {
 	return data, nil
 }
 
-func (op *withdrawalOperation) UnmarshalBinary(data []byte) error {
+func (op *withdrawalRequestOperation) UnmarshalBinary(data []byte) error {
 	validatorAddress := common.BytesToAddress(data[:common.AddressLength])
 
 	amount := new(big.Int).SetBytes(data[common.AddressLength:])
@@ -59,14 +59,14 @@ func (op *withdrawalOperation) UnmarshalBinary(data []byte) error {
 	return op.init(validatorAddress, amount)
 }
 
-func (op *withdrawalOperation) OpCode() Code {
+func (op *withdrawalRequestOperation) OpCode() Code {
 	return WithdrawalRequestCode
 }
 
-func (op *withdrawalOperation) CreatorAddress() common.Address {
+func (op *withdrawalRequestOperation) CreatorAddress() common.Address {
 	return op.creatorAddress
 }
 
-func (op *withdrawalOperation) Amount() *big.Int {
+func (op *withdrawalRequestOperation) Amount() *big.Int {
 	return op.amount
 }
