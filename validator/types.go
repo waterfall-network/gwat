@@ -117,18 +117,13 @@ func UnpackExitRequestLogData(data []byte) (
 	return
 }
 
-func PackActivateLogData(
-	validatorAddress common.Address,
-	withdrawalAddress common.Address,
-	validatorIndex uint64,
-	activationEpoch uint64,
+func PackWithdrawalRequestLogData(
+	creatorAddress common.Address,
+	amount *big.Int,
 ) []byte {
-	data := make([]byte, 0, ActivateLogDataLength)
-	data = append(data, validatorAddress.Bytes()...)
-	data = append(data, withdrawalAddress.Bytes()...)
+	data := make([]byte, 0)
+	data = append(data, creatorAddress.Bytes()...)
 
-	data = append(data, common.Uint64ToBytes(validatorIndex)...)
-	data = append(data, common.Uint64ToBytes(activationEpoch)...)
-
+	data = append(data, amount.Bytes()...)
 	return data
 }

@@ -13,13 +13,13 @@ const (
 type exitRequestOperation struct {
 	pubKey           common.BlsPubKey
 	validatorAddress common.Address
-	exitEpoch        uint64
+	exitAfterEpoch   uint64
 }
 
 func (op *exitRequestOperation) init(
 	pubKey common.BlsPubKey,
 	validatorAddress common.Address,
-	exitEpoch uint64,
+	exitAfterEpoch uint64,
 ) error {
 	if pubKey == (common.BlsPubKey{}) {
 		return ErrNoPubKey
@@ -31,7 +31,7 @@ func (op *exitRequestOperation) init(
 
 	op.pubKey = pubKey
 	op.validatorAddress = validatorAddress
-	op.exitEpoch = exitEpoch
+	op.exitAfterEpoch = exitAfterEpoch
 
 	return nil
 }
@@ -39,10 +39,10 @@ func (op *exitRequestOperation) init(
 func NewExitRequestOperation(
 	pubKey common.BlsPubKey,
 	validatorAddress common.Address,
-	exitEpoch uint64,
+	exitAfterEpoch uint64,
 ) (ExitRequest, error) {
 	op := &exitRequestOperation{}
-	if err := op.init(pubKey, validatorAddress, exitEpoch); err != nil {
+	if err := op.init(pubKey, validatorAddress, exitAfterEpoch); err != nil {
 		return nil, err
 	}
 
@@ -60,7 +60,7 @@ func (op *exitRequestOperation) MarshalBinary() ([]byte, error) {
 	copy(data[offset:offset+common.AddressLength], op.validatorAddress.Bytes())
 	offset += common.AddressLength
 
-	binary.BigEndian.PutUint64(data[offset:], op.exitEpoch)
+	binary.BigEndian.PutUint64(data[offset:], op.exitAfterEpoch)
 
 	return data, nil
 }
@@ -95,5 +95,5 @@ func (op *exitRequestOperation) ValidatorAddress() common.Address {
 }
 
 func (op *exitRequestOperation) ExitEpoch() uint64 {
-	return op.exitEpoch
+	return op.exitAfterEpoch
 }

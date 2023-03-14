@@ -49,6 +49,7 @@ var (
 	// todo add creator_address
 	depositEventSignature     = crypto.Keccak256Hash([]byte("DepositEvent(bytes,bytes,bytes,bytes,bytes)"))
 	exitRequestEventSignature = crypto.Keccak256Hash([]byte("ExitRequestEvent(bytes,bytes,bytes,bytes,bytes)"))
+	withdrawalEventSignature  = crypto.Keccak256Hash([]byte("WithdrawalEvent(bytes,bytes,bytes,bytes,bytes)"))
 )
 
 // Ref represents caller of the validator processor
@@ -125,14 +126,10 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, op o
 	switch v := op.(type) {
 	case operation.Deposit:
 		ret, err = p.validatorDeposit(caller, toAddr, value, v)
-
-	//	todo implement
 	case operation.ValidatorSync:
-		p.validatorActivate(caller, toAddr, v)
+		p.syncOpProcessing(caller, toAddr, v)
 	case operation.ExitRequest:
 		err = p.validatorExitRequest(caller, toAddr, v)
-		//case operation.Exit:
-		//	ret, err = p.exitFrom(caller, toAddr, v)
 	}
 
 	if err != nil {
@@ -211,16 +208,30 @@ func (p *Processor) validatorExitRequest(caller Ref, toAddr common.Address, op o
 	return nil
 }
 
+func (p *Processor) validatorWithdrawalRequest(caller Ref, toAddr common.Address, op operation.WithdrawalRequest) error {
+	from := caller.Address()
+	valInfo := p.Storage().GetValidatorInfo(p.state, op.ValidatorAddress())
+
+	if !bytes.Equal(from.Bytes(), valInfo.GetWithdrawalAddress().Bytes()) {
+		return ErrMismatchAddresses
+	}
+
+	valInfo.SetValidatorBalance(new(big.Int).Div(valInfo.GetValidatorBalance(), op.Amount()))
+	p.Storage().SetValidatorInfo(p.state, valInfo)
+
+	logData := PackWithdrawalRequestLogData(op.ValidatorAddress(), op.Amount())
+	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
+
+	return nil
+}
+
 func (p *Processor) syncOpProcessing(caller Ref, toAddr common.Address, op operation.ValidatorSync) {
 	switch op.OpCode() {
 	case operation.ActivationCode:
 		p.validatorActivate(caller, toAddr, op)
 	case operation.ExitCode:
-		// TODO implement me
-	case operation.WithdrawalCode:
-		// TODO implement me
+		p.validatorExit(caller, toAddr, op)
 	}
-
 }
 
 func (p *Processor) validatorActivate(caller Ref, toAddr common.Address, op operation.ValidatorSync) {
@@ -230,11 +241,22 @@ func (p *Processor) validatorActivate(caller Ref, toAddr common.Address, op oper
 	valInfo.SetActivationEpoch(op.ProcEpoch())
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
-	logData := PackActivateLogData(op.Creator(), *op.WithdrawalAddress(), op.Index(), op.ProcEpoch())
-
-	p.eventEmmiter.Deposit(toAddr, logData)
-
 	log.Info("Activate", "address", toAddr.Hex(), "from", from.Hex(), "creator", op.Creator().Hex(), "activationEpoch", op.ProcEpoch())
+}
+
+func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operation.ValidatorSync) {
+	from := caller.Address()
+
+	valList := p.Storage().GetValidatorsList(p.state)
+	for i, address := range valList {
+		if bytes.Equal(address.Bytes(), op.Creator().Bytes()) {
+			valList = append(valList[:i], valList[i+1:]...)
+		}
+	}
+
+	p.Storage().SetValidatorsList(p.state, valList)
+
+	log.Info("Exit", "address", toAddr.Hex(), "from", from.Hex(), "creator", op.Creator().Hex(), "ExitEpoch", op.ProcEpoch())
 }
 
 type logEntry struct {
@@ -313,6 +335,10 @@ func (e *EventEmmiter) Deposit(evtAddr common.Address, data []byte) {
 
 func (e *EventEmmiter) ExitRequest(evtAddr common.Address, data []byte) {
 	e.addLog(evtAddr, exitRequestEventSignature, data)
+}
+
+func (e *EventEmmiter) WithdrawalRequest(evtAddr common.Address, data []byte) {
+	e.addLog(evtAddr, withdrawalEventSignature, data)
 }
 
 func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, data []byte, logsEntries ...logEntry) {

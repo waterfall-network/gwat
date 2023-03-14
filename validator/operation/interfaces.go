@@ -35,3 +35,9 @@ type ExitRequest interface {
 	ValidatorAddress() common.Address
 	ExitEpoch() uint64
 }
+
+type WithdrawalRequest interface {
+	Operation
+	ValidatorAddress() common.Address
+	Amount() *big.Int
+}

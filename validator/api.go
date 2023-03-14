@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"math/big"
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -131,17 +132,44 @@ func (s *PublicValidatorAPI) ValidatorExitData(_ context.Context, args ExitReque
 
 	b, err := operation.EncodeToBytes(op)
 	if err != nil {
-		log.Warn("Failed to encode validator activate operation", "err", err)
+		log.Warn("Failed to encode validator exit operation", "err", err)
 		return nil, err
 	}
 
 	return b, nil
 }
 
-func (s *PublicValidatorAPI) ExitData() {
-
+type WithdrawalArgs struct {
+	ValidatorAddress *common.Address
+	Amount           *big.Int
 }
 
-func (s *PublicValidatorAPI) WithdrawalData() {
+func (s *PublicValidatorAPI) ValidatorWithdrawalData(args WithdrawalArgs) (hexutil.Bytes, error) {
+	if args.ValidatorAddress == nil {
+		return nil, operation.ErrNoCreatorAddress
+	}
 
+	if args.Amount == nil {
+		return nil, operation.ErrNoAmount
+	}
+
+	var (
+		op  operation.Operation
+		err error
+	)
+
+	if op, err = operation.NewWithdrawalOperation(
+		*args.ValidatorAddress,
+		args.Amount,
+	); err != nil {
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Warn("Failed to encode validator withdrawal operation", "err", err)
+		return nil, err
+	}
+
+	return b, nil
 }
