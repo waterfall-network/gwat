@@ -1078,13 +1078,66 @@ web3._extend({
 				}
 				var BlsPubKeyLength = 48 * 2
 				var BlsSigLength = 96 * 2
-				var HashLength = 32 * 2
 				var AddressLength = 20 * 2
 
 				handleHexField('pubkey', BlsPubKeyLength)
 				handleHexField('creator_address', AddressLength)
 				handleHexField('withdrawal_address', AddressLength)
 				handleHexField('signature', BlsSigLength)
+				return options;
+			}]
+		}),
+		new web3._extend.Method({
+			name: 'validator.exitData',
+			call: 'wat_validator_ExitData',
+			params: 1,
+			inputFormatter: [function(options) {
+				function isHex (str) {
+					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
+				}
+				function handleHexField (key, valLen) {
+					val = options[key]
+					if (val) {
+						val = val.replace('0x', '')
+						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
+						if (!isHex(val)) throw new Error(key +': invalid hex.');
+						options[key] = '0x' + val;
+					} else {
+						throw new Error(key +': field is required.');
+					}
+				}
+				var BlsPubKeyLength = 48 * 2
+				var AddressLength = 20 * 2
+				handleHexField('pubkey', BlsPubKeyLength)
+				handleHexField('creator_address', AddressLength)
+				if (options.exit_epoch) {
+					options.exit_epoch = web3._extend.utils.toDecimal(options.exit_epoch);
+				}
+				return options;
+			}]
+		}),
+		new web3._extend.Method({
+			name: 'validator.withdrawalData',
+			call: 'wat_validator_WithdrawalData',
+			params: 1,
+			inputFormatter: [function(options) {
+				function isHex (str) {
+					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
+				}
+				function handleHexField (key, valLen) {
+					val = options[key]
+					if (val) {
+						val = val.replace('0x', '')
+						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
+						if (!isHex(val)) throw new Error(key +': invalid hex.');
+						options[key] = '0x' + val;
+					} else {
+						throw new Error(key +': field is required.');
+					}
+				}
+				var AddressLength = 20 * 2
+				handleHexField('creator_address', AddressLength)
+				options.amount = web3._extend.utils.toHex(options.amount);
 				return options;
 			}]
 		}),
