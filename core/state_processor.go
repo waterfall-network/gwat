@@ -18,7 +18,6 @@ package core
 
 import (
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
@@ -148,7 +147,6 @@ func ApplyTransaction(config *params.ChainConfig,
 	tx *types.Transaction,
 	usedGas *uint64,
 	cfg vm.Config,
-	db ethdb.Database,
 ) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config), header.BaseFee)
 	if err != nil {

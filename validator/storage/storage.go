@@ -225,7 +225,6 @@ func (s *storage) seed(epoch uint64, firstEpochBlockHash common.Hash) (common.Ha
 	seed32 := common.BytesToHash(seed)
 
 	return seed32, nil
-
 }
 
 // breakByValidatorsBySlotCount splits the list of all validators into sublists for each slot

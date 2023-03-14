@@ -2,35 +2,34 @@ package operation
 
 import (
 	"encoding/binary"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 const (
-	exitRequestLen = common.BlsPubKeyLength + common.AddressLength + 8
+	minExitRequestLen = common.BlsPubKeyLength + common.AddressLength
 )
 
 type exitRequestOperation struct {
-	pubKey           common.BlsPubKey
-	validatorAddress common.Address
-	exitAfterEpoch   uint64
+	pubKey         common.BlsPubKey
+	creatorAddress common.Address
+	exitAfterEpoch *uint64
 }
 
 func (op *exitRequestOperation) init(
 	pubKey common.BlsPubKey,
-	validatorAddress common.Address,
-	exitAfterEpoch uint64,
+	creatorAddress common.Address,
+	exitAfterEpoch *uint64,
 ) error {
 	if pubKey == (common.BlsPubKey{}) {
 		return ErrNoPubKey
 	}
 
-	if validatorAddress == (common.Address{}) {
+	if creatorAddress == (common.Address{}) {
 		return ErrNoCreatorAddress
 	}
 
 	op.pubKey = pubKey
-	op.validatorAddress = validatorAddress
+	op.creatorAddress = creatorAddress
 	op.exitAfterEpoch = exitAfterEpoch
 
 	return nil
@@ -38,11 +37,11 @@ func (op *exitRequestOperation) init(
 
 func NewExitRequestOperation(
 	pubKey common.BlsPubKey,
-	validatorAddress common.Address,
-	exitAfterEpoch uint64,
+	creatorAddress common.Address,
+	exitAfterEpoch *uint64,
 ) (ExitRequest, error) {
 	op := &exitRequestOperation{}
-	if err := op.init(pubKey, validatorAddress, exitAfterEpoch); err != nil {
+	if err := op.init(pubKey, creatorAddress, exitAfterEpoch); err != nil {
 		return nil, err
 	}
 
@@ -52,21 +51,28 @@ func NewExitRequestOperation(
 
 func (op *exitRequestOperation) MarshalBinary() ([]byte, error) {
 	var offset int
-	data := make([]byte, exitRequestLen)
+	dataLen := minExitRequestLen
+	if op.exitAfterEpoch != nil {
+		dataLen += 8
+	}
+
+	data := make([]byte, dataLen)
 
 	copy(data[:common.BlsPubKeyLength], op.pubKey.Bytes())
 	offset += common.BlsPubKeyLength
 
-	copy(data[offset:offset+common.AddressLength], op.validatorAddress.Bytes())
+	copy(data[offset:offset+common.AddressLength], op.creatorAddress.Bytes())
 	offset += common.AddressLength
 
-	binary.BigEndian.PutUint64(data[offset:], op.exitAfterEpoch)
+	if op.exitAfterEpoch != nil {
+		binary.BigEndian.PutUint64(data[offset:], *op.exitAfterEpoch)
+	}
 
 	return data, nil
 }
 
 func (op *exitRequestOperation) UnmarshalBinary(data []byte) error {
-	if len(data) != exitRequestLen {
+	if len(data) < minExitRequestLen {
 		return ErrBadDataLen
 	}
 
@@ -74,12 +80,15 @@ func (op *exitRequestOperation) UnmarshalBinary(data []byte) error {
 	pubKey := common.BytesToBlsPubKey(data[:common.BlsPubKeyLength])
 	offset += common.BlsPubKeyLength
 
-	validatorAddress := common.BytesToAddress(data[offset : offset+common.AddressLength])
+	creatorAddress := common.BytesToAddress(data[offset : offset+common.AddressLength])
 	offset += common.AddressLength
 
-	exitEpoch := binary.BigEndian.Uint64(data[offset:])
-
-	return op.init(pubKey, validatorAddress, exitEpoch)
+	if len(data) > minExitRequestLen {
+		exitAfterEpoch := binary.BigEndian.Uint64(data[offset:])
+		return op.init(pubKey, creatorAddress, &exitAfterEpoch)
+	} else {
+		return op.init(pubKey, creatorAddress, nil)
+	}
 }
 
 func (op *exitRequestOperation) OpCode() Code {
@@ -90,10 +99,10 @@ func (op *exitRequestOperation) PubKey() common.BlsPubKey {
 	return op.pubKey
 }
 
-func (op *exitRequestOperation) ValidatorAddress() common.Address {
-	return op.validatorAddress
+func (op *exitRequestOperation) CreatorAddress() common.Address {
+	return op.creatorAddress
 }
 
-func (op *exitRequestOperation) ExitEpoch() uint64 {
+func (op *exitRequestOperation) ExitAfterEpoch() *uint64 {
 	return op.exitAfterEpoch
 }

@@ -6,15 +6,15 @@ import (
 )
 
 type withdrawalOperation struct {
-	validatorAddress common.Address
-	amount           *big.Int
+	creatorAddress common.Address
+	amount         *big.Int
 }
 
 func (op *withdrawalOperation) init(
-	validatorAddress common.Address,
+	creatorAddress common.Address,
 	amount *big.Int,
 ) error {
-	if validatorAddress == (common.Address{}) {
+	if creatorAddress == (common.Address{}) {
 		return ErrNoCreatorAddress
 	}
 
@@ -22,7 +22,7 @@ func (op *withdrawalOperation) init(
 		return ErrNoAmount
 	}
 
-	op.validatorAddress = validatorAddress
+	op.creatorAddress = creatorAddress
 	op.amount = amount
 
 	return nil
@@ -44,7 +44,7 @@ func NewWithdrawalOperation(
 func (op *withdrawalOperation) MarshalBinary() ([]byte, error) {
 	data := make([]byte, 0)
 
-	data = append(data, op.ValidatorAddress().Bytes()...)
+	data = append(data, op.creatorAddress.Bytes()...)
 
 	data = append(data, op.amount.Bytes()...)
 
@@ -60,11 +60,11 @@ func (op *withdrawalOperation) UnmarshalBinary(data []byte) error {
 }
 
 func (op *withdrawalOperation) OpCode() Code {
-	return WithdrawalCode
+	return WithdrawalRequestCode
 }
 
-func (op *withdrawalOperation) ValidatorAddress() common.Address {
-	return op.validatorAddress
+func (op *withdrawalOperation) CreatorAddress() common.Address {
+	return op.creatorAddress
 }
 
 func (op *withdrawalOperation) Amount() *big.Int {

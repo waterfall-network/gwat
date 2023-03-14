@@ -104,16 +104,16 @@ func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNr
 }
 
 type ExitRequestArgs struct {
-	PubKey           *common.BlsPubKey `json:"pubkey"`
-	ValidatorAddress *common.Address   `json:"creator_address"`
-	ExitEpoch        *uint64           `json:"exit_epoch"`
+	PubKey         *common.BlsPubKey `json:"pubkey"`
+	CreatorAddress *common.Address   `json:"creator_address"`
+	ExitEpoch      *uint64           `json:"exit_epoch"`
 }
 
 func (s *PublicValidatorAPI) Validator_ExitData(_ context.Context, args ExitRequestArgs) (hexutil.Bytes, error) {
 	if args.PubKey == nil {
 		return nil, operation.ErrNoPubKey
 	}
-	if args.ValidatorAddress == nil {
+	if args.CreatorAddress == nil {
 		return nil, operation.ErrNoCreatorAddress
 	}
 
@@ -124,8 +124,8 @@ func (s *PublicValidatorAPI) Validator_ExitData(_ context.Context, args ExitRequ
 
 	if op, err = operation.NewExitRequestOperation(
 		*args.PubKey,
-		*args.ValidatorAddress,
-		*args.ExitEpoch,
+		*args.CreatorAddress,
+		args.ExitEpoch,
 	); err != nil {
 		return nil, err
 	}
@@ -140,12 +140,12 @@ func (s *PublicValidatorAPI) Validator_ExitData(_ context.Context, args ExitRequ
 }
 
 type WithdrawalArgs struct {
-	ValidatorAddress *common.Address `json:"creator_address"`
-	Amount           *hexutil.Big    `json:"amount"`
+	CreatorAddress *common.Address `json:"creator_address"`
+	Amount         *hexutil.Big    `json:"amount"`
 }
 
 func (s *PublicValidatorAPI) Validator_WithdrawalData(args WithdrawalArgs) (hexutil.Bytes, error) {
-	if args.ValidatorAddress == nil {
+	if args.CreatorAddress == nil {
 		return nil, operation.ErrNoCreatorAddress
 	}
 
@@ -159,7 +159,7 @@ func (s *PublicValidatorAPI) Validator_WithdrawalData(args WithdrawalArgs) (hexu
 	)
 
 	if op, err = operation.NewWithdrawalOperation(
-		*args.ValidatorAddress,
+		*args.CreatorAddress,
 		(*big.Int)(args.Amount),
 	); err != nil {
 		return nil, err

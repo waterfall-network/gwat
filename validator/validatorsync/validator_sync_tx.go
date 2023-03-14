@@ -52,7 +52,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	validatorData := bc.ValidatorStorage().GetValidatorInfo(stateDb, valSyncOp.Creator)
 
 	// get tx.To address
-	valStateAddr := bc.ValidatorStorage().GetValidatorsStateAddress()
+	valStateAddr := bc.Config().ValidatorsStateAddress
 
 	// validate nonce
 	nonceFrom := stateDb.GetNonce(from)

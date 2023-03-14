@@ -32,12 +32,12 @@ type ValidatorSync interface {
 type ExitRequest interface {
 	Operation
 	PubKey() common.BlsPubKey
-	ValidatorAddress() common.Address
-	ExitEpoch() uint64
+	CreatorAddress() common.Address
+	ExitAfterEpoch() *uint64
 }
 
 type WithdrawalRequest interface {
 	Operation
-	ValidatorAddress() common.Address
+	CreatorAddress() common.Address
 	Amount() *big.Int
 }

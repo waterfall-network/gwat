@@ -10,9 +10,8 @@ import (
 const Uint64Length = 8
 
 const (
-	DepositLogDataLength     = common.BlsPubKeyLength + common.AddressLength + common.AddressLength + Uint64Length + common.BlsSigLength + Uint64Length
-	ExitRequestLogDataLength = common.BlsPubKeyLength + common.AddressLength + Uint64Length
-	ActivateLogDataLength    = common.AddressLength*2 + Uint64Length*2
+	DepositLogDataLength        = common.BlsPubKeyLength + common.AddressLength + common.AddressLength + Uint64Length + common.BlsSigLength + Uint64Length
+	MinExitRequestLogDataLength = common.BlsPubKeyLength + common.AddressLength + Uint64Length
 )
 
 // PackDepositLogData packs the deposit log.
@@ -85,13 +84,18 @@ func UnpackDepositLogData(data []byte) (
 func PackExitRequestLogData(
 	pubkey common.BlsPubKey,
 	creatorAddress common.Address,
-	exitEpoch uint64,
+	valIndex uint64,
+	exitAfterEpoch *uint64,
 ) []byte {
-	data := make([]byte, 0, ExitRequestLogDataLength)
+	data := make([]byte, 0, MinExitRequestLogDataLength)
 	data = append(data, pubkey.Bytes()...)
 	data = append(data, creatorAddress.Bytes()...)
+	data = append(data, common.Uint64ToBytes(valIndex)...)
 
-	data = append(data, common.Uint64ToBytes(exitEpoch)...)
+	if exitAfterEpoch != nil {
+		data = append(data, common.Uint64ToBytes(*exitAfterEpoch)...)
+	}
+
 	return data
 }
 
@@ -101,7 +105,7 @@ func UnpackExitRequestLogData(data []byte) (
 	exitEpoch uint64,
 	err error,
 ) {
-	if len(data) != ExitRequestLogDataLength {
+	if len(data) != MinExitRequestLogDataLength {
 		err = operation.ErrBadDataLen
 		return
 	}

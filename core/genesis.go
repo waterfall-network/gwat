@@ -28,11 +28,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/contracts/deposit"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -301,8 +299,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		g.Config = &params.ChainConfig{ValidatorsStateAddress: validatorsStateAddress}
 	}
 
-	g.CreateDepositContract(statedb, head)
-
 	validatorStorage := valStore.NewStorage(g.Config)
 
 	validatorStorage.SetValidatorsList(statedb, g.Validators)
@@ -330,16 +326,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
 
 	return genesisBlock
-}
-
-// CreateDepositContract creates deposit contract for genesis state.
-func (g *Genesis) CreateDepositContract(statedb *state.StateDB, preHead *types.Header) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	context := NewEVMBlockContext(preHead, nil, &common.Address{})
-	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, g.configOrDefault(common.Hash{}), vm.Config{})
-	//create deposit address from contract data
-	depositAddr := crypto.Keccak256Address(common.FromHex(deposit.DepositContractBin))
-	log.Info("Deposit contract address", "address", depositAddr)
-	return vmenv.CreateGenesisContract(depositAddr, common.FromHex(deposit.DepositContractBin))
 }
 
 // Commit writes the block and state of a genesis specification to the database.

@@ -622,7 +622,6 @@ func (c *Creator) commitTransaction(tx *types.Transaction, coinbase common.Addre
 		tx,
 		&c.current.header.GasUsed,
 		*c.chain.GetVMConfig(),
-		c.chain.Database(),
 	)
 	if err != nil {
 		c.current.state.RevertToSnapshot(snap)
