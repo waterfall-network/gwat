@@ -13,6 +13,7 @@ const (
 	ActivationCode  = 0x02
 	RequestExitCode = 0x03
 	ExitCode        = 0x04
+	WithdrawalCode  = 0x05
 )
 
 // Prefix for the encoded data field of a validator operation
@@ -57,15 +58,15 @@ func DecodeBytes(b []byte) (Operation, error) {
 	switch opCode {
 	case DepositCode:
 		op = &depositOperation{}
-	// todo implement
-	//case ActivationCode:
-	//	op = &ActivationOperation{}
+	case ActivationCode:
+		op = &validatorSyncOperation{}
+	case ExitCode:
+		op = &validatorSyncOperation{}
+	case WithdrawalCode:
+		op = &validatorSyncOperation{}
 	// todo implement
 	//case RequestExitCode:
 	//	op = &RequestExitOperation{}
-	// todo implement
-	//case ExitCode:
-	//	op = &ExitOperation{}
 
 	default:
 		return nil, ErrOpNotValid
@@ -90,16 +91,17 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 	switch op.(type) {
 	case *depositOperation:
 		buf[1] = DepositCode
+	case *validatorSyncOperation:
+		vs := new(validatorSyncOperation)
+		err := vs.UnmarshalBinary(b)
+		if err != nil {
+			return nil, err
+		}
+		buf[1] = byte(vs.OpCode())
 
-		// todo implement
-		//case *activationCodeOperation:
-		//	buf[1] = ActivationCode
 		// todo implement
 		//case *requestExitOperation:
 		//	buf[1] = RequestExitCode
-		// todo implement
-		//case *exitCodeOperation:
-		//	buf[1] = ExitCode
 	}
 
 	buf = append(buf, b...)

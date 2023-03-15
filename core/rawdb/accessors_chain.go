@@ -905,6 +905,8 @@ func ReadLastFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 	return *height
 }
 
+/**** Coordinated state ***/
+
 // ReadLastCoordinatedHash retrieves the hash of the last Coordinated block.
 func ReadLastCoordinatedHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(lastCoordHashKey)
@@ -915,6 +917,152 @@ func ReadLastCoordinatedHash(db ethdb.KeyValueReader) common.Hash {
 func WriteLastCoordinatedHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(lastCoordHashKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store the Last Coordinated Hash", "err", err)
+	}
+}
+
+// ReadLastCoordinatedCheckpoint retrieves the last Coordinated checkpoint.
+func ReadLastCoordinatedCheckpoint(db ethdb.KeyValueReader) *types.Checkpoint {
+	data, err := db.Get(lastCoordCpKey)
+	if err != nil {
+		return nil
+	}
+	cp, err := types.BytesToCheckpoint(data)
+	if err != nil {
+		return nil
+	}
+	return cp
+}
+
+// WriteLastCoordinatedCheckpoint stores the last Coordinated checkpoint.
+func WriteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
+	if checkpoint == nil {
+		DeleteLastCoordinatedCheckpoint(db)
+	}
+	if err := db.Put(lastCoordCpKey, checkpoint.Bytes()); err != nil {
+		log.Crit("Failed to store the Last Coordinated Checkpoint", "err", err)
+	}
+}
+
+// DeleteLastCoordinatedCheckpoint rm the last Coordinated checkpoint.
+func DeleteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter) {
+	if err := db.Delete(lastCoordCpKey); err != nil {
+		log.Warn("Failed to delete Last Coordinated Checkpoint", "err", err)
+	}
+}
+
+/**** ValidatorSync ***/
+
+func parseValidatorSyncKey(validatorSyncKey []byte) (creator common.Address, op uint64) {
+	start := len(valSyncOpPrefix)
+	end := start + 8
+	op = binary.BigEndian.Uint64(validatorSyncKey[start:end])
+	start = end
+	end = start + common.AddressLength
+	creator = common.BytesToAddress(validatorSyncKey[start:end])
+	return creator, op
+}
+
+func decodeValidatorSync(creator common.Address, op types.ValidatorSyncOp, data []byte) *types.ValidatorSync {
+	// <procEpoch><index><txHash><amountBigInt>`
+	minSize := 8 + 8 + common.HashLength
+	if len(data) < minSize {
+		return nil
+	}
+	res := &types.ValidatorSync{
+		Index:     binary.BigEndian.Uint64(data[0:8]),
+		ProcEpoch: binary.BigEndian.Uint64(data[8:16]),
+		TxHash:    nil,
+		Amount:    nil,
+		OpType:    op,
+		Creator:   creator,
+	}
+	txh := common.BytesToHash(data[16:minSize])
+	if txh != (common.Hash{}) {
+		res.TxHash = &txh
+	}
+	if len(data[minSize:]) > 0 {
+		res.Amount = new(big.Int).SetBytes(data[minSize:])
+	}
+	return res
+}
+
+func encodeValidatorSync(vs types.ValidatorSync) []byte {
+	// <procEpoch><index><txHash><amountBigInt>`
+	var data []byte
+	data = append(data, encodeBlockNumber(vs.Index)...)
+	data = append(data, encodeBlockNumber(vs.ProcEpoch)...)
+	txh := vs.TxHash
+	if txh == nil {
+		txh = &common.Hash{}
+	}
+	data = append(data, txh.Bytes()...)
+	if vs.Amount != nil {
+		data = append(data, vs.Amount.Bytes()...)
+	}
+	return data
+}
+
+// ReadValidatorSync retrieves the ValidatorSync data.
+func ReadValidatorSync(db ethdb.KeyValueReader, creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
+	data, _ := db.Get(validatorSyncKey(creator, uint64(op)))
+	return decodeValidatorSync(creator, op, data)
+}
+
+// WriteValidatorSync stores the ValidatorSync data.
+func WriteValidatorSync(db ethdb.KeyValueWriter, vs *types.ValidatorSync) {
+	if vs == nil {
+		return
+	}
+	key := validatorSyncKey(vs.Creator, uint64(vs.OpType))
+	enc := encodeValidatorSync(*vs)
+	if err := db.Put(key, enc); err != nil {
+		log.Crit("Failed to store ValidatorSync data", "err", err)
+	}
+}
+
+// DeleteValidatorSync delete the ValidatorSync data..
+func DeleteValidatorSync(db ethdb.KeyValueWriter, creator common.Address, op types.ValidatorSyncOp) {
+	key := validatorSyncKey(creator, uint64(op))
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete BlockDAG", "err", err)
+	}
+}
+
+// ReadNotProcessedValidatorSyncOps retrieves the not processed validator sync operations.
+func ReadNotProcessedValidatorSyncOps(db ethdb.KeyValueReader) []*types.ValidatorSync {
+	data, err := db.Get(valSyncNotProcKey)
+	if err != nil {
+		return nil
+	}
+	keyLen := len(validatorSyncKey(common.Address{}, uint64(0)))
+	if len(data)%keyLen != 0 {
+		// alternate return nil
+		log.Crit("Failed to read the not processed validator sync operations: bad data length", "err", err)
+	}
+	resLen := len(data) / keyLen
+	res := make([]*types.ValidatorSync, resLen)
+	for i := range res {
+		start := i * keyLen
+		end := start + keyLen
+		opKey := data[start:end]
+		creator, op := parseValidatorSyncKey(opKey)
+		res[i] = ReadValidatorSync(db, creator, types.ValidatorSyncOp(op))
+	}
+	return res
+}
+
+// WriteNotProcessedValidatorSyncOps stores the not processed validator sync operations.
+func WriteNotProcessedValidatorSyncOps(db ethdb.KeyValueWriter, valSyncOps []*types.ValidatorSync) {
+	keyLen := len(validatorSyncKey(common.Address{}, uint64(0)))
+	dataLen := keyLen * len(valSyncOps)
+	data := make([]byte, 0, dataLen)
+	for _, vs := range valSyncOps {
+		key := validatorSyncKey(vs.Creator, uint64(vs.OpType))
+		WriteValidatorSync(db, vs)
+		data = append(data, key...)
+	}
+	if err := db.Put(valSyncNotProcKey, data); err != nil {
+		log.Crit("Failed to store the not processed validator sync operations", "err", err)
 	}
 }
 

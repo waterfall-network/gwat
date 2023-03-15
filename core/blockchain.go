@@ -87,6 +87,7 @@ var (
 )
 
 const (
+	valSyncCacheLimit   = 128
 	bodyCacheLimit      = 256
 	blockCacheLimit     = 256
 	receiptsCacheLimit  = 32
@@ -197,6 +198,9 @@ type BlockChain struct {
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
 	lastCoordinatedSlot    uint64       // Last slot received from coordinating network
 	eraInfo                era.EraInfo  // Current Era
+	lastCoordinatedCp      atomic.Value // Current last coordinated checkpoint
+	notProcValSyncOps      map[[40]byte]*types.ValidatorSync
+	valSyncCache           *lru.Cache
 
 	stateCache         state.Database // State database to reuse between imports (contains state cache)
 	bodyCache          *lru.Cache     // Cache for the most recent block bodies
@@ -230,6 +234,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
+	valSyncCache, _ := lru.New(valSyncCacheLimit)
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
@@ -249,6 +254,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}),
 		quit:               make(chan struct{}),
 		chainmu:            syncx.NewClosableMutex(),
+		valSyncCache:       valSyncCache,
 		bodyCache:          bodyCache,
 		bodyRLPCache:       bodyRLPCache,
 		receiptsCache:      receiptsCache,
@@ -440,6 +446,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
 	})
 
+	bc.notProcValSyncOps = bc.GetNotProcessedValidatorSyncData()
+
 	return bc, nil
 }
 
@@ -548,6 +556,97 @@ func (bc *BlockChain) SetSlotInfo(si *types.SlotInfo) error {
 // GetSlotInfo get current slot info.
 func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 	return bc.slotInfo.Copy()
+}
+
+// SetLastCoordinatedCheckpoint set last coordinated checkpoint.
+func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
+	currCp := bc.GetLastCoordinatedCheckpoint()
+	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch {
+		bc.lastCoordinatedCp.Store(cp.Copy())
+		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
+	}
+}
+
+// GetLastCoordinatedCheckpoint retrieves the latest coordinated checkpoint.
+func (bc *BlockChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
+	if bc.lastCoordinatedCp.Load() == nil {
+		cp := rawdb.ReadLastCoordinatedCheckpoint(bc.db)
+		if cp == nil {
+			return nil
+		}
+		bc.lastCoordinatedCp.Store(cp.Copy())
+	}
+	return bc.lastCoordinatedCp.Load().(*types.Checkpoint)
+}
+
+// GetValidatorSyncData retrieves a validator sync data from the database by
+// creator addr and op, caching it if found.
+func (bc *BlockChain) GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
+	// Short circuit if the body's already in the cache, retrieve otherwise
+	key := (&types.ValidatorSync{OpType: op, Creator: creator}).Key()
+	if cached, ok := bc.valSyncCache.Get(key); ok {
+		vs := cached.(*types.ValidatorSync)
+		return vs
+	}
+	vs := rawdb.ReadValidatorSync(bc.db, creator, op)
+	if vs == nil {
+		return nil
+	}
+	// Cache the found data for next time and return
+	bc.valSyncCache.Add(key, vs)
+	return vs
+}
+
+func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
+	key := validatorSync.Key()
+	if _, ok := bc.valSyncCache.Get(key); ok {
+		bc.valSyncCache.Remove(key)
+	}
+	bc.valSyncCache.Add(key, validatorSync)
+	rawdb.WriteValidatorSync(bc.db, validatorSync)
+}
+
+// AppendNotProcessedValidatorSyncData append to not processed validators sync data.
+// skips currently existed items
+func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync) {
+	currOps := bc.GetNotProcessedValidatorSyncData()
+	isUpdated := false
+	for _, vs := range valSyncData {
+		if currOps[vs.Key()] == nil {
+			bc.notProcValSyncOps[vs.Key()] = vs
+			isUpdated = true
+		}
+	}
+	// rm handled operations
+	for k, vs := range bc.notProcValSyncOps {
+		if vs.TxHash != nil {
+			delete(bc.notProcValSyncOps, k)
+		}
+	}
+
+	if isUpdated {
+		vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
+		for _, vs := range bc.notProcValSyncOps {
+			vsArr = append(vsArr, vs)
+		}
+		rawdb.WriteNotProcessedValidatorSyncOps(bc.db, vsArr)
+	}
+}
+
+// GetNotProcessedValidatorSyncData get current not processed validator sync data.
+func (bc *BlockChain) GetNotProcessedValidatorSyncData() map[[40]byte]*types.ValidatorSync {
+	if bc.notProcValSyncOps == nil {
+		ops := rawdb.ReadNotProcessedValidatorSyncOps(bc.db)
+		bc.notProcValSyncOps = make(map[[40]byte]*types.ValidatorSync, len(ops))
+		for _, op := range ops {
+			if op == nil {
+				log.Warn("GetNotProcessedValidatorSyncData: nil data detected")
+				continue
+			}
+			bc.notProcValSyncOps[op.Key()] = op
+		}
+	}
+	return bc.notProcValSyncOps
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node
@@ -758,6 +857,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		bc.hc.SetHead(head, updateFn, delFn)
 	}
 	// Clear out any stale content from the caches
+	bc.valSyncCache.Purge()
 	bc.bodyCache.Purge()
 	bc.bodyRLPCache.Purge()
 	bc.receiptsCache.Purge()
