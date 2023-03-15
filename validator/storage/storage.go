@@ -236,17 +236,15 @@ func (s *storage) breakByValidatorsBySlotCount(validators []common.Address, vali
 	return chunks
 }
 
-func (s *storage) EstimateEraLength(bc blockchain, slot uint64) (epochsPerEra uint64) {
+func (s *storage) EstimateEraLength(bc blockchain, slot uint64) (eraLength uint64) {
 	var (
-		//currentEpochsPerEra = bc.chainConfig.EpochsPerEra
+		epochsPerEra       = s.config.EpochsPerEra
 		slotsPerEpoch      = bc.GetSlotInfo().SlotsPerEpoch
-		_, validators      = s.GetValidators(bc, bc.GetSlotInfo().CurrentSlot(), true, true)
+		validators, _      = s.GetValidators(bc, slot, true, false)
 		numberOfValidators = uint64(len(validators))
 	)
 
-	currentEpochsPerEra := s.config.EpochsPerEra
-
-	epochsPerEra = currentEpochsPerEra * (1 + (numberOfValidators / (currentEpochsPerEra * slotsPerEpoch)))
+	eraLength = epochsPerEra * (1 + (numberOfValidators / (epochsPerEra * slotsPerEpoch)))
 
 	return
 }

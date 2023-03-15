@@ -3696,9 +3696,10 @@ func (bc *BlockChain) HandleEra(slot uint64) error {
 			nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
 			nextEraNumber := bc.GetEraInfo().Number() + 1
 
-			checkpointer_spine_root := common.Hash{}
+			checkpoint := bc.GetLastCoordinatedCheckpoint()
+			header := bc.GetHeaderByHash(checkpoint.Spine)
 
-			nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, checkpointer_spine_root)
+			nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, header.Root)
 
 			err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
 			if err != nil {

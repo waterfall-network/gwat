@@ -19,7 +19,6 @@ package rawdb
 import (
 	"bytes"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -28,9 +27,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
@@ -843,107 +841,61 @@ func TestWriteReadDeleteSeedHash(t *testing.T) {
 	}
 }
 
-func TestWriteAndGetEra1(t *testing.T) {
+func TestWriteAndReadEra(t *testing.T) {
 	// Create an in-memory database for testing
 	db := NewMemoryDatabase()
 
 	// Define a test era
-	testEra := types.Era{1000, 2000}
+	testEra := era.NewEra(0, 1000, 2000, common.Hash{})
 
 	// Test writing the era to the database
-	err := WriteEra(db, 1, testEra)
+	err := WriteEra(db, 1, *testEra)
 	if err != nil {
 		t.Errorf("WriteEra returned an error: %v", err)
 	}
 
 	// Test reading the era from the database
-	era, err := GetEra(db, 1)
+	readEra, err := ReadEra(db, 1)
 	if err != nil {
 		t.Errorf("GetEra returned an error: %v", err)
 	}
 
 	// Verify that the era read from the database is equal to the test era
-	if testEra.End != era.End {
-		t.Errorf("GetEra returned incorrect end epoch: expected %d, got %d", testEra.End, era.End)
+	if testEra.To != readEra.To {
+		t.Errorf("GetEra returned incorrect end epoch: expected %d, got %d", testEra.To, readEra.To)
 	}
-	if testEra.Begin != era.Begin {
-		t.Errorf("GetEra returned incorrect begin epoch: expected %d, got %d", testEra.Begin, era.Begin)
+	if testEra.From != readEra.From {
+		t.Errorf("GetEra returned incorrect begin epoch: expected %d, got %d", testEra.From, readEra.From)
 	}
-	if !reflect.DeepEqual(testEra, *era) {
-		t.Errorf("GetEra returned incorrect era: expected %+v, got %+v", testEra, *era)
+	if !reflect.DeepEqual(testEra, readEra) {
+		t.Errorf("GetEra returned incorrect era: expected %+v, got %+v", testEra, readEra)
 	}
 }
 
-func TestGetEraByEpoch(t *testing.T) {
-	// Create an in-memory database for testing
+func TestReadWriteCurrentEra(t *testing.T) {
+	// Create an in-memory key-value database for testing
 	db := NewMemoryDatabase()
 
-	// Define some eras
-	era0 := types.Era{Begin: 0, End: 100}
-	era1 := types.Era{Begin: 100, End: 200}
-	era2 := types.Era{Begin: 200, End: 300}
-	era3 := types.Era{Begin: 300, End: 400}
-
-	// Write the eras to the database
-	err := WriteEra(db, 0, era0)
-	require.NoError(t, err)
-	err = WriteEra(db, 1, era1)
-	require.NoError(t, err)
-	err = WriteEra(db, 2, era2)
-	require.NoError(t, err)
-	err = WriteEra(db, 3, era3)
-	require.NoError(t, err)
-
-	// Test the function with various inputs
-	tests := []struct {
-		name          string
-		epoch         uint64
-		lastEraNumber uint64
-		expectedEra   *types.Era
-		expectedError error
-	}{
-		{
-			name:          "epoch in era0",
-			epoch:         50,
-			lastEraNumber: 3,
-			expectedEra:   &era0,
-			expectedError: nil,
-		},
-		{
-			name:          "epoch in era1",
-			epoch:         150,
-			lastEraNumber: 3,
-			expectedEra:   &era1,
-			expectedError: nil,
-		},
-		{
-			name:          "epoch in era2",
-			epoch:         250,
-			lastEraNumber: 3,
-			expectedEra:   &era2,
-			expectedError: nil,
-		},
-		{
-			name:          "epoch in era3",
-			epoch:         350,
-			lastEraNumber: 3,
-			expectedEra:   &era3,
-			expectedError: nil,
-		},
-		{
-			name:          "epoch after last era",
-			epoch:         500,
-			lastEraNumber: 3,
-			expectedEra:   nil,
-			expectedError: errors.New("epoch not found in any era"),
-		},
+	// Test case 1: write current era number to database and verify it was written correctly
+	eraNumber1 := uint64(1234567890)
+	WriteCurrentEra(db, eraNumber1)
+	eraNumber1Read := ReadCurrentEra(db)
+	if eraNumber1Read != eraNumber1 {
+		t.Errorf("Expected era number %d but got %d", eraNumber1, eraNumber1Read)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			era, err := GetEraByEpoch(db, test.epoch, test.lastEraNumber)
-			assert.Equal(t, test.expectedEra, era)
-			assert.Equal(t, test.expectedError, err)
-		})
+	// Test case 2: overwrite current era number in database and verify it was updated correctly
+	eraNumber2 := uint64(9876543210)
+	WriteCurrentEra(db, eraNumber2)
+	eraNumber2Read := ReadCurrentEra(db)
+	if eraNumber2Read != eraNumber2 {
+		t.Errorf("Expected era number %d but got %d", eraNumber2, eraNumber2Read)
+	}
+
+	// Test case 3: read non-existent current era number from database and verify it returns zero
+	db.Delete(append(currentEraPrefix))
+	eraNumber3 := ReadCurrentEra(db)
+	if eraNumber3 != 0 {
+		t.Errorf("Expected era number 0 but got %d", eraNumber3)
 	}
 }
