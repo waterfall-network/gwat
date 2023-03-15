@@ -39,6 +39,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -329,9 +330,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteFirstEpochBlockHash(db, 0, genesisBlock.Hash())
 	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
 
-	genesisEra := types.Era{0, g.Config.EpochsPerEra - 1}
+	genesisEra := era.Era{0, 0, g.Config.EpochsPerEra - 1, genesisBlock.Root()}
 	rawdb.WriteEra(db, 0, genesisEra)
-	log.Info("Era", "begin:", genesisEra.Begin, "end:", genesisEra.End)
+	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root)
 
 	return genesisBlock
 }

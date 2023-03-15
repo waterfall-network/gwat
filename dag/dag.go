@@ -22,6 +22,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // Backend wraps all methods required for block creation.
@@ -279,8 +280,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
-				era := types.Era{0, d.bc.Config().EpochsPerEra - 1}
-				d.bc.SetNewEraInfo(0, era)
+				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, common.Hash{})
+				d.bc.SetNewEraInfo(*newEra)
 				continue
 			}
 			var (

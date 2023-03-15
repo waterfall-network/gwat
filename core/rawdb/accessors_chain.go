@@ -30,6 +30,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
@@ -1037,7 +1038,7 @@ func ExistFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) bool {
 	return exist
 }
 
-func WriteEra(db ethdb.KeyValueWriter, number uint64, era types.Era) error {
+func WriteEra(db ethdb.KeyValueWriter, number uint64, era era.Era) error {
 	key := eraKey(number)
 
 	encoded, err := rlp.EncodeToBytes(era)
@@ -1049,64 +1050,18 @@ func WriteEra(db ethdb.KeyValueWriter, number uint64, era types.Era) error {
 	return db.Put(key, encoded)
 }
 
-func GetEra(db ethdb.KeyValueReader, number uint64) (*types.Era, error) {
+func ReadEra(db ethdb.KeyValueReader, number uint64) (*era.Era, error) {
 	key := eraKey(number)
 	encoded, err := db.Get(key)
 	if err != nil {
 		return nil, err
 	}
 
-	var era types.Era
-	err = rlp.DecodeBytes(encoded, &era)
+	var decoded era.Era
+	err = rlp.DecodeBytes(encoded, &decoded)
 	if err != nil {
 		return nil, err
 	}
 
-	return &era, nil
-}
-
-func GetEraByEpoch(db ethdb.KeyValueReader, epoch uint64, lastEraNumber uint64) (*types.Era, error) {
-	// The number of eras
-	numEras := lastEraNumber
-
-	// Get the last era
-	lastEra, err := GetEra(db, lastEraNumber)
-	if err != nil {
-		return nil, errors.New("last era not found")
-	}
-
-	if lastEra.End < epoch {
-		return nil, errors.New("epoch is after last era")
-	}
-
-	middleEpoch := (lastEra.End) / 2
-
-	// Determine which half of the eras to search
-	var startEra uint64
-	if epoch < middleEpoch {
-		startEra = 0
-	} else {
-		startEra = lastEraNumber / 2
-	}
-
-	// Loop through the relevant eras until we find one that contains the epoch
-	var currentEra *types.Era
-	for i := startEra; i <= numEras; i++ {
-		era, err := GetEra(db, i)
-		if err != nil {
-			return nil, err
-		}
-
-		if era.Begin <= epoch && epoch < era.End {
-			currentEra = era
-			break
-		}
-	}
-
-	// If no epoch in eras was found, return an error
-	if currentEra == nil {
-		return nil, errors.New("epoch not found in any era")
-	}
-
-	return currentEra, nil
+	return &decoded, nil
 }
