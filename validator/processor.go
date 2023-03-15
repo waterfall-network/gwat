@@ -45,9 +45,9 @@ var (
 
 	//Events signatures.
 	// todo add creator_address
-	depositEventSignature     = crypto.Keccak256Hash([]byte("DepositEvent(bytes,bytes,bytes,bytes,bytes)"))
-	exitRequestEventSignature = crypto.Keccak256Hash([]byte("ExitRequestEvent(bytes,bytes,bytes,bytes,bytes)"))
-	withdrawalEventSignature  = crypto.Keccak256Hash([]byte("WithdrawalEvent(bytes,bytes,bytes,bytes,bytes)"))
+	depositEventSignature     = crypto.Keccak256Hash([]byte("DepositEvent"))
+	exitRequestEventSignature = crypto.Keccak256Hash([]byte("ExitRequestEvent"))
+	withdrawalEventSignature  = crypto.Keccak256Hash([]byte("WithdrawalEvent"))
 )
 
 // Ref represents caller of the validator processor

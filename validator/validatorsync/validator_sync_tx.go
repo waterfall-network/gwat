@@ -7,28 +7,16 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
-
-type blockchain interface {
-	StateAt(root common.Hash) (*state.StateDB, error)
-	GetSlotInfo() *types.SlotInfo
-	GetNotProcessedValidatorSyncData() map[[40]byte]*types.ValidatorSync
-	ValidatorStorage() storage.Storage
-	Config() *params.ChainConfig
-	GetHeaderByHash(hash common.Hash) *types.Header
-	//GetBlock(hash common.Hash) *types.Block
-}
 
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
-	BlockChain() *blockchain
+	BlockChain() *core.BlockChain
 	Etherbase() (eb common.Address, err error)
 	CreatorAuthorize(creator common.Address) error
 	AccountManager() *accounts.Manager
@@ -38,7 +26,7 @@ type Backend interface {
 
 // GetPendingValidatorSyncData retrieves currently processable validators sync operations.
 func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from common.Address, valSyncOp *types.ValidatorSync, nonce uint64) (*types.Transaction, error) {
-	bc := *backend.BlockChain()
+	bc := backend.BlockChain()
 	_, err := ValidateValidatorSyncOp(bc, stateBlockHash, valSyncOp)
 	if err != nil {
 		return nil, err
@@ -68,7 +56,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	al := types.AccessList{}
 	txData := &types.DynamicFeeTx{
 		To:         valStateAddr,
-		ChainID:    (*backend.BlockChain()).Config().ChainID,
+		ChainID:    (backend.BlockChain()).Config().ChainID,
 		Nonce:      nonce,
 		Gas:        0,
 		GasFeeCap:  new(big.Int).SetUint64(0),
@@ -86,7 +74,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	return signed, nil
 }
 
-func ValidateValidatorSyncOp(bc blockchain, stateBlockHash common.Hash, valSyncOp *types.ValidatorSync) (bool, error) {
+func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, valSyncOp *types.ValidatorSync) (bool, error) {
 	if valSyncOp == nil {
 		return false, fmt.Errorf("validate validator sync operation failed: nil data")
 	}
@@ -158,16 +146,16 @@ func signTx(backend Backend, addr common.Address, tx *types.Transaction) (*types
 		return nil, err
 	}
 	// Request the wallet to sign the transaction
-	return wallet.SignTx(account, tx, (*backend.BlockChain()).Config().ChainID)
+	return wallet.SignTx(account, tx, (backend.BlockChain()).Config().ChainID)
 }
 
 // GetPendingValidatorSyncData retrieves currently processable validators sync operations.
-func GetPendingValidatorSyncData(bc blockchain) map[[40]byte]*types.ValidatorSync {
+func GetPendingValidatorSyncData(bc *core.BlockChain) map[[28]byte]*types.ValidatorSync {
 	si := bc.GetSlotInfo()
 	currEpoch := si.SlotToEpoch(si.CurrentSlot())
 
 	valSyncOps := bc.GetNotProcessedValidatorSyncData()
-	vsPending := make(map[[40]byte]*types.ValidatorSync, len(valSyncOps))
+	vsPending := make(map[[28]byte]*types.ValidatorSync, len(valSyncOps))
 	for k, vs := range valSyncOps {
 		if vs.ProcEpoch == currEpoch && vs.TxHash == nil {
 			vsPending[k] = vs
@@ -175,9 +163,3 @@ func GetPendingValidatorSyncData(bc blockchain) map[[40]byte]*types.ValidatorSyn
 	}
 	return vsPending
 }
-
-//// IsAssignedToValidatorSync returns true if creator assigned
-//// to processing validators sync operations.
-//func IsAssignedToValidatorSync() bool {
-//	return c.isAddressAssigned(c.GetValidatorsStateAddress())
-//}

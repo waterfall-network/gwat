@@ -84,7 +84,6 @@ func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args Depos
 
 // DepositCount returns a validators deposit count.
 func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	//TODO implement
 	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
@@ -99,8 +98,8 @@ func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNr
 		return 0, err
 	}
 
-	count := stateDb.GetBalance(validatorProcessor.GetValidatorsStateAddress())
-	return hexutil.Uint64(count.Uint64()), stateDb.Error()
+	count := validatorProcessor.getDepositCount()
+	return hexutil.Uint64(count), stateDb.Error()
 }
 
 type ExitRequestArgs struct {

@@ -196,8 +196,8 @@ func (vs *ValidatorSync) Copy() *ValidatorSync {
 	return cpy
 }
 
-func (vs *ValidatorSync) Key() [40]byte {
-	var key [40]byte
+func (vs *ValidatorSync) Key() [28]byte {
+	var key [28]byte
 	if vs == nil {
 		return key
 	}

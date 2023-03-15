@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
@@ -20,6 +21,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/validatorsync"
 )
 
 const (
@@ -39,6 +41,9 @@ type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 	Downloader() *downloader.Downloader
+	Etherbase() (eb common.Address, err error)
+	CreatorAuthorize(creator common.Address) error
+	AccountManager() *accounts.Manager
 }
 
 // Config is the configuration parameters of block creation.
@@ -877,6 +882,32 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	for _, bl := range c.current.recommitBlocks {
 		c.chain.RecommitBlockTransactions(bl, c.current.state)
+	}
+
+	if c.isAddressAssigned(c.coinbase) {
+		valSyncTxs := make(map[common.Address]types.Transactions)
+		syncData := c.chain.GetNotProcessedValidatorSyncData()
+		for _, validatorSync := range syncData {
+			nonce := state.GetNonce(c.coinbase)
+
+			if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
+				valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, stateBlock.Hash(), c.coinbase, validatorSync, nonce)
+				if err != nil {
+					log.Error("Failed to create validator sync tx", "error", err)
+					continue
+				}
+				txHash := valSyncTx.Hash()
+				validatorSync.TxHash = &txHash
+				if valSyncTxs[validatorSync.Creator] == nil {
+					valSyncTxs[validatorSync.Creator] = make(types.Transactions, 0)
+				}
+				valSyncTxs[c.coinbase] = append(valSyncTxs[validatorSync.Creator], valSyncTx)
+			}
+		}
+		if len(valSyncTxs) > 0 {
+			txs := types.NewTransactionsByPriceAndNonce(c.current.signer, valSyncTxs, header.BaseFee)
+			c.commitTransactions(txs, c.coinbase)
+		}
 	}
 
 	// Fill the block with all available pending transactions.

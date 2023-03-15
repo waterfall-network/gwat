@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
@@ -33,6 +34,7 @@ type Backend interface {
 	SetEtherbase(etherbase common.Address)
 	CreatorAuthorize(creator common.Address) error
 	IsDevMode() bool
+	AccountManager() *accounts.Manager
 }
 
 type Dag struct {

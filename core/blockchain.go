@@ -46,6 +46,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	valOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -197,7 +198,7 @@ type BlockChain struct {
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
 	lastCoordinatedSlot    uint64       // Last slot received from coordinating network
 	lastCoordinatedCp      atomic.Value // Current last coordinated checkpoint
-	notProcValSyncOps      map[[40]byte]*types.ValidatorSync
+	notProcValSyncOps      map[[28]byte]*types.ValidatorSync
 	valSyncCache           *lru.Cache
 
 	stateCache         state.Database // State database to reuse between imports (contains state cache)
@@ -632,10 +633,10 @@ func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.V
 }
 
 // GetNotProcessedValidatorSyncData get current not processed validator sync data.
-func (bc *BlockChain) GetNotProcessedValidatorSyncData() map[[40]byte]*types.ValidatorSync {
+func (bc *BlockChain) GetNotProcessedValidatorSyncData() map[[28]byte]*types.ValidatorSync {
 	if bc.notProcValSyncOps == nil {
 		ops := rawdb.ReadNotProcessedValidatorSyncOps(bc.db)
-		bc.notProcValSyncOps = make(map[[40]byte]*types.ValidatorSync, len(ops))
+		bc.notProcValSyncOps = make(map[[28]byte]*types.ValidatorSync, len(ops))
 		for _, op := range ops {
 			if op == nil {
 				log.Warn("GetNotProcessedValidatorSyncData: nil data detected")
@@ -2078,12 +2079,17 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			err     error
 		)
 		isTokenOp := false
+		isValOp := false
 		if _, err = operation.GetOpCode(tx.Data()); err == nil {
 			isTokenOp = true
+		} else {
+			if _, err = valOp.GetOpCode(tx.Data()); err == nil {
+				isValOp = true
+			}
 		}
 
 		var txData []byte
-		if !isTokenOp {
+		if !isTokenOp && !isValOp {
 			txData = tx.Data()
 		}
 
