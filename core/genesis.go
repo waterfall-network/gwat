@@ -332,7 +332,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
 
 	genesisEra := era.Era{0, 0, g.Config.EpochsPerEra - 1, genesisBlock.Root()}
-	rawdb.WriteEra(db, 0, genesisEra)
+	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
+	rawdb.WriteCurrentEra(db, genesisEra.Number)
 
 	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root)
 
