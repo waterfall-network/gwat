@@ -9,6 +9,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
@@ -18,6 +19,7 @@ type blockchain interface {
 	GetSlotInfo() *types.SlotInfo
 	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
 	SearchFirstEpochBlockHashRecursive(epoch uint64) (common.Hash, bool)
+	GetEraInfo() *era.EraInfo
 }
 
 type Storage interface {
@@ -240,7 +242,7 @@ func (s *storage) EstimateEraLength(bc blockchain, slot uint64) (eraLength uint6
 	var (
 		epochsPerEra       = s.config.EpochsPerEra
 		slotsPerEpoch      = bc.GetSlotInfo().SlotsPerEpoch
-		validators, _      = s.GetValidators(bc, slot, true, false)
+		validators, _      = s.GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
 		numberOfValidators = uint64(len(validators))
 	)
 

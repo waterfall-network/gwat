@@ -70,28 +70,42 @@ func (ei *EraInfo) EpochsPerEra() uint64 {
 func (ei *EraInfo) FirstEpoch() uint64 {
 	return ei.FromEpoch()
 }
-func (e *EraInfo) FirstSlot() uint64 {
-	return 0
+func (ei *EraInfo) FirstSlot(bc blockchain) uint64 {
+	slot, err := bc.GetSlotInfo().SlotOfEpochStart(ei.FirstEpoch())
+	if err != nil {
+		return 0
+	}
+
+	return slot
 }
 
 func (ei *EraInfo) LastEpoch() uint64 {
 	return ei.ToEpoch()
 }
 
-func (ei *EraInfo) LastSlot() uint64 {
-	return ei.LastEpoch()
+func (ei *EraInfo) LastSlot(bc blockchain) uint64 {
+	slot, err := bc.GetSlotInfo().SlotOfEpochEnd(ei.LastEpoch())
+	if err != nil {
+		return 0
+	}
+
+	return slot
 }
 func (ei *EraInfo) IsTransitionEpoch(epoch uint64) bool {
 	if epoch == (ei.ToEpoch() - transitionPeriod) {
 		return true
 	}
+
 	return false
 }
 
-func (ei *EraInfo) IsTransitionSlot(slot uint64) bool {
+func (ei *EraInfo) IsTransitionSlot(bc blockchain, slot uint64) bool {
 	if slot == (ei.ToEpoch() - transitionPeriod) {
-		return true
+		if bc.GetSlotInfo().IsEpochStart(slot) == true {
+			return true
+		}
 	}
+	
 	return false
 }
 
@@ -99,10 +113,14 @@ func (ei *EraInfo) NextEraFirstEpoch() uint64 {
 	return ei.ToEpoch() + 1
 }
 
-// to_epoch + 1
-func (ei *EraInfo) NextEraFirstSlot() uint64 {
-	return ei.NextEraFirstEpoch()
-} // NextEraFirstEpoch() first slot
+func (ei *EraInfo) NextEraFirstSlot(bc blockchain) uint64 {
+	slot, err := bc.GetSlotInfo().SlotOfEpochStart(ei.NextEraFirstEpoch())
+	if err != nil {
+		return 0
+	}
+
+	return slot
+}
 
 func (ei *EraInfo) LenEpochs() uint64 {
 	return ei.length
