@@ -830,6 +830,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	header := &types.Header{
 		ParentHashes: parentHashes,
 		Slot:         slotInfo.Slot,
+		Era:          c.chain.GetEraInfo().Number(),
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
 		Extra:        c.extra,

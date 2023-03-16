@@ -3,15 +3,14 @@ package era
 import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
-
-const transitionPeriod = 2 // The number of epochs in the transition period
 
 type blockchain interface {
 	GetSlotInfo() *types.SlotInfo
 	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
 	GetEraInfo() *EraInfo
-	//ValidatorStorage() valStore.Storage
+	GetConfig() *params.ChainConfig
 }
 
 type Era struct {
@@ -91,8 +90,8 @@ func (ei *EraInfo) LastSlot(bc blockchain) uint64 {
 
 	return slot
 }
-func (ei *EraInfo) IsTransitionEpoch(epoch uint64) bool {
-	if epoch == (ei.ToEpoch() - transitionPeriod) {
+func (ei *EraInfo) IsTransitionEpoch(bc blockchain, epoch uint64) bool {
+	if epoch == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
 		return true
 	}
 
@@ -100,12 +99,12 @@ func (ei *EraInfo) IsTransitionEpoch(epoch uint64) bool {
 }
 
 func (ei *EraInfo) IsTransitionSlot(bc blockchain, slot uint64) bool {
-	if slot == (ei.ToEpoch() - transitionPeriod) {
+	if slot == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
 		if bc.GetSlotInfo().IsEpochStart(slot) == true {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -136,7 +135,7 @@ func IsEraTransitionPeriodStart(bc blockchain, slot uint64) bool {
 	lastEpoch := bc.GetEraInfo().ToEpoch()
 
 	// Check if the current epoch is in the transition period (i.e., the last two epochs of the current era)
-	if currentEpoch == lastEpoch-transitionPeriod {
+	if currentEpoch == lastEpoch-bc.GetConfig().TransitionPeriod {
 		return bc.GetSlotInfo().IsEpochStart(slot)
 	} else {
 		return false

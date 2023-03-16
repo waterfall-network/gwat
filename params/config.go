@@ -54,6 +54,7 @@ var (
 		SecondsPerSlot:   4,
 		SlotsPerEpoch:    32,
 		EpochsPerEra:     8,
+		TransitionPeriod: 2,
 		ForkSlotSubNet1:  math.MaxUint64,
 		EffectiveBalance: big.NewInt(32000),
 	}
@@ -85,6 +86,7 @@ var (
 		SecondsPerSlot:   4,
 		SlotsPerEpoch:    32,
 		EpochsPerEra:     8,
+		TransitionPeriod: 2,
 		ForkSlotSubNet1:  math.MaxUint64,
 		EffectiveBalance: big.NewInt(32000),
 	}
@@ -115,16 +117,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, math.MaxUint64, nil, 6, big.NewInt(32000)}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, math.MaxUint64, nil, 6, big.NewInt(32000)}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, math.MaxUint64, nil, 6, big.NewInt(32000)}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
 	TestRules       = TestChainConfig.Rules()
 )
 
@@ -184,9 +186,10 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// coordinator slot settings
-	SecondsPerSlot uint64 `json:"secondsPerSlot"`
-	SlotsPerEpoch  uint64 `json:"slotsPerEpoch"`
-	EpochsPerEra   uint64 `json:"epochsPerEra"`
+	SecondsPerSlot   uint64 `json:"secondsPerSlot"`
+	SlotsPerEpoch    uint64 `json:"slotsPerEpoch"`
+	EpochsPerEra     uint64 `json:"epochsPerEra"`
+	TransitionPeriod uint64 `json:"transitionPeriod"` // The number of epochs before new era starts
 
 	// Fork slots
 	ForkSlotSubNet1 uint64 `json:"forkSlotSubNet1,omitempty"`
@@ -217,12 +220,13 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, ForkSlotSubNet1: %v, "+
+	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, ForkSlotSubNet1: %v, "+
 		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
 		c.EpochsPerEra,
+		c.TransitionPeriod,
 		c.ForkSlotSubNet1,
 		c.ValidatorsPerSlot,
 		c.ValidatorsStateAddress,

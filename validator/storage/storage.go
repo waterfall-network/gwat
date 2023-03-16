@@ -20,6 +20,7 @@ type blockchain interface {
 	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
 	SearchFirstEpochBlockHashRecursive(epoch uint64) (common.Hash, bool)
 	GetEraInfo() *era.EraInfo
+	GetConfig() *params.ChainConfig
 }
 
 type Storage interface {

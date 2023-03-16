@@ -320,6 +320,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	root := statedb.IntermediateRoot(false)
 	head.Root = root
+	head.Era = 0
 
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
@@ -332,6 +333,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	genesisEra := era.Era{0, 0, g.Config.EpochsPerEra - 1, genesisBlock.Root()}
 	rawdb.WriteEra(db, 0, genesisEra)
+
 	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root)
 
 	return genesisBlock
