@@ -305,23 +305,12 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			log.Info("Chain genesis time reached")
 			startTicker.Stop()
 			go d.workLoop(accounts)
+
+			return
 		}
 		tickSec = currentTime.Second()
 
-		select {
-		case <-d.exitChan:
-			close(d.exitChan)
-			close(d.errChan)
-			startTicker.Stop()
-			return
-		case err := <-d.errChan:
-			close(d.errChan)
-			close(d.exitChan)
-			startTicker.Stop()
-			log.Error("dag worker has error", "error", err)
-			return
-		case <-startTicker.C:
-		}
+		<-startTicker.C
 	}
 }
 

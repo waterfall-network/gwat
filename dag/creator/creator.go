@@ -619,6 +619,10 @@ func (c *Creator) updateSnapshot() {
 func (c *Creator) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := c.current.state.Snapshot()
 
+	if c.current.gasPool == nil {
+		c.current.gasPool = new(core.GasPool).AddGas(c.current.header.GasLimit)
+	}
+
 	receipt, err := core.ApplyTransaction(c.chainConfig,
 		c.chain, &coinbase,
 		c.current.gasPool,
@@ -884,45 +888,52 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		c.chain.RecommitBlockTransactions(bl, c.current.state)
 	}
 
-	if c.isAddressAssigned(c.coinbase) {
-		valSyncTxs := make(map[common.Address]types.Transactions)
-		syncData := c.chain.GetNotProcessedValidatorSyncData()
-		for _, validatorSync := range syncData {
-			nonce := state.GetNonce(c.coinbase)
-
-			if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
-				valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, stateBlock.Hash(), c.coinbase, validatorSync, nonce)
-				if err != nil {
-					log.Error("Failed to create validator sync tx", "error", err)
-					continue
-				}
-				txHash := valSyncTx.Hash()
-				validatorSync.TxHash = &txHash
-				if valSyncTxs[validatorSync.Creator] == nil {
-					valSyncTxs[validatorSync.Creator] = make(types.Transactions, 0)
-				}
-				valSyncTxs[c.coinbase] = append(valSyncTxs[validatorSync.Creator], valSyncTx)
-			}
-		}
-		if len(valSyncTxs) > 0 {
-			txs := types.NewTransactionsByPriceAndNonce(c.current.signer, valSyncTxs, header.BaseFee)
-			c.commitTransactions(txs, c.coinbase)
-		}
-	}
-
 	// Fill the block with all available pending transactions.
 	pending := c.getPending()
 
+	filterPending, nonce, err := c.filterPendingAndCalculateNonce(pending)
+	if err != nil {
+		log.Error("can`t filter pending transactions", "error", err)
+		return
+	}
+
+	if c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
+		syncData := c.chain.GetNotProcessedValidatorSyncData()
+		if len(syncData) > 0 {
+			for _, validatorSync := range syncData {
+				if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
+					valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, stateBlock.Hash(), c.coinbase, validatorSync, nonce)
+					if err != nil {
+						log.Error("Failed to create validator sync tx", "error", err)
+						continue
+					}
+
+					_, err = c.commitTransaction(valSyncTx, c.coinbase)
+					if err != nil {
+						log.Error("Error", "error", err)
+					} else {
+						c.chain.RemoveSyncOpData(validatorSync)
+					}
+				}
+			}
+
+			if len(filterPending) == 0 {
+				c.commit(tips, c.fullTaskHook, true, tstart)
+				return
+			}
+		}
+	}
+
 	// Short circuit if no pending transactions
-	if len(pending) == 0 {
+	if len(filterPending) == 0 {
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		c.errWorkCh <- &ErrNoTxs
 		return
 	}
 
-	if len(pending) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pending, header.BaseFee)
+	if len(filterPending) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
 		if c.commitTransactions(txs, c.coinbase) {
 			pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 			log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
@@ -1088,4 +1099,39 @@ func (c *Creator) getAssignment() Assignment {
 // setAssignment
 func (c *Creator) setAssignment(assigned *Assignment) {
 	c.cacheAssignment = assigned
+}
+
+func (c *Creator) filterPendingAndCalculateNonce(pending map[common.Address]types.Transactions) (map[common.Address]types.Transactions, uint64, error) {
+	var nonce uint64
+
+	if len(pending) > 0 {
+		slotCreators, err := c.chain.ValidatorStorage().GetCreatorsBySlot(c.chain, c.chain.GetSlotInfo().CurrentSlot())
+		if err != nil {
+			return nil, 0, err
+		}
+
+		for address, transactions := range pending {
+			for _, creator := range slotCreators {
+				if address == creator && creator != c.coinbase {
+					delete(pending, address)
+				}
+
+				if creator == c.coinbase && len(transactions) > 0 {
+					for _, transaction := range transactions {
+						if transaction.Nonce() > nonce {
+							nonce = transaction.Nonce()
+						}
+					}
+
+					nonce++
+				} else if address == c.coinbase && len(transactions) == 0 {
+					nonce = c.eth.TxPool().Nonce(c.coinbase)
+				}
+			}
+		}
+	} else {
+		nonce = c.eth.TxPool().Nonce(c.coinbase)
+	}
+
+	return pending, nonce, nil
 }

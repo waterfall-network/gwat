@@ -34,6 +34,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	valOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 const (
@@ -716,9 +717,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Check if token prefix and opcode are valid in raw data
-	isTokenOp := false
+	var isTokenOp, isValidatorOp bool
 	if _, err := operation.GetOpCode(tx.Data()); err == nil {
 		isTokenOp = true
+	} else if _, err := valOp.GetOpCode(tx.Data()); err == nil {
+		isValidatorOp = true
 	}
 
 	var txData []byte
@@ -726,13 +729,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		txData = tx.Data()
 	}
 
-	contractCreation := tx.To() == nil && !isTokenOp
+	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
 	// Ensure the transaction has more gas than the basic tx fee.
 	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation)
 	if err != nil {
 		return err
 	}
-	if tx.Gas() < intrGas {
+	if tx.Gas() < intrGas && !isValidatorOp {
 		return ErrIntrinsicGas
 	}
 	return nil

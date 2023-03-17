@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -125,7 +124,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, op o
 	case operation.Deposit:
 		ret, err = p.validatorDeposit(caller, toAddr, value, v)
 	case operation.ValidatorSync:
-		p.syncOpProcessing(caller, toAddr, v)
+		ret, err = p.syncOpProcessing(caller, v)
 	case operation.ExitRequest:
 		ret, err = p.validatorExitRequest(caller, toAddr, v)
 	case operation.WithdrawalRequest:
@@ -155,16 +154,12 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	validator := valStore.NewValidator(op.CreatorAddress(), &withdrawalAddress, math.MaxUint64, math.MaxUint64, math.MaxUint64, value)
 
 	var valInfo valStore.ValidatorInfo
-	valIndex, ok := p.Storage().AddValidatorToList(validator, p.state)
-	if ok {
-		log.Info("validator already exist")
-
-		valInfo = p.Storage().GetValidatorInfo(p.state, validator.Address)
+	p.Storage().AddValidatorToList(p.state, validator.Address)
+	valInfo = p.Storage().GetValidatorInfo(p.state, validator.Address)
+	if valInfo != nil {
 		currentBalance := valInfo.GetValidatorBalance()
 		validator.Balance = currentBalance.Add(currentBalance, value)
 	}
-
-	validator.Index = valIndex
 
 	valInfo, err = validator.MarshalBinary()
 	if err != nil {
@@ -218,47 +213,73 @@ func (p *Processor) validatorWithdrawalRequest(caller Ref, toAddr common.Address
 	valInfo.SetValidatorBalance(new(big.Int).Div(currentBalance, op.Amount()))
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
-	p.state.SubBalance(from, op.Amount())
-
 	logData := PackWithdrawalRequestLogData(op.CreatorAddress(), op.Amount())
 	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
 
 	return from.Bytes(), nil
 }
 
-func (p *Processor) syncOpProcessing(caller Ref, toAddr common.Address, op operation.ValidatorSync) {
+func (p *Processor) syncOpProcessing(caller Ref, op operation.ValidatorSync) (ret []byte, err error) {
 	switch op.OpCode() {
 	case operation.ActivationCode:
-		p.validatorActivate(caller, toAddr, op)
+		ret, err = p.validatorActivate(caller, op)
 	case operation.ExitCode:
-		p.validatorExit(caller, toAddr, op)
+		ret, err = p.validatorExit(caller, op)
+	case operation.WithdrawalCode:
+		ret, err = p.validatorWithdrawal(caller, op)
 	}
+
+	return ret, err
 }
 
-func (p *Processor) validatorActivate(caller Ref, toAddr common.Address, op operation.ValidatorSync) {
+func (p *Processor) validatorActivate(caller Ref, op operation.ValidatorSync) ([]byte, error) {
 	from := caller.Address()
 
 	valInfo := p.Storage().GetValidatorInfo(p.state, op.Creator())
-	valInfo.SetActivationEpoch(op.ProcEpoch())
-	valInfo.SetValidatorIndex(op.Index())
-	p.Storage().SetValidatorInfo(p.state, valInfo)
 
-	log.Info("Activate", "address", toAddr.Hex(), "from", from.Hex(), "creator", op.Creator().Hex(), "activationEpoch", op.ProcEpoch())
-}
-
-func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operation.ValidatorSync) {
-	from := caller.Address()
-
-	valList := p.Storage().GetValidatorsList(p.state)
-	for i, address := range valList {
-		if bytes.Equal(address.Bytes(), op.Creator().Bytes()) {
-			valList = append(valList[:i], valList[i+1:]...)
+	if valInfo == nil {
+		validator := valStore.NewValidator(op.Creator(), op.WithdrawalAddress(), op.Index(), math.MaxUint64, math.MaxUint64, op.Amount())
+		valInfo, err := validator.MarshalBinary()
+		if err != nil {
+			return nil, err
 		}
+		// TODO: calculate activation era and set to valInfo
+		//valInfo.SetActivationEpoch(era)
+		p.Storage().SetValidatorInfo(p.state, valInfo)
+	} else {
+		// TODO: calculate activation era and set to valInfo
+		//valInfo.SetActivationEpoch(era)
+		valInfo.SetValidatorIndex(op.Index())
+		p.Storage().SetValidatorInfo(p.state, valInfo)
 	}
 
-	p.Storage().SetValidatorsList(p.state, valList)
+	p.Storage().AddValidatorToList(p.state, op.Creator())
 
-	log.Info("Exit", "address", toAddr.Hex(), "from", from.Hex(), "creator", op.Creator().Hex(), "ExitEpoch", op.ProcEpoch())
+	log.Info("Activate", "from", from.Hex(), "creator", op.Creator().Hex(), "activationEpoch", op.ProcEpoch())
+
+	return op.Creator().Bytes(), nil
+}
+
+func (p *Processor) validatorExit(caller Ref, op operation.ValidatorSync) ([]byte, error) {
+	from := caller.Address()
+
+	valInfo := p.Storage().GetValidatorInfo(p.state, op.Creator())
+	// TODO calculate exit era and set to valInfo
+	//valInfo.SetExitEpoch(era)
+	p.Storage().SetValidatorInfo(p.state, valInfo)
+
+	log.Info("Exit", "from", from.Hex(), "creator", op.Creator().Hex(), "ExitEpoch", op.ProcEpoch())
+
+	return op.Creator().Bytes(), nil
+}
+
+func (p *Processor) validatorWithdrawal(caller Ref, op operation.ValidatorSync) ([]byte, error) {
+	from := caller.Address()
+
+	p.state.AddBalance(from, op.Amount())
+
+	log.Info("Withdrawal", "from", from.Hex(), "creator", op.Creator().Hex(), "amount", op.Amount())
+	return op.Creator().Bytes(), nil
 }
 
 type logEntry struct {

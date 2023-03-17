@@ -44,7 +44,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 
 	// validate nonce
 	nonceFrom := stateDb.GetNonce(from)
-	if nonceFrom >= nonce {
+	if nonceFrom > nonce {
 		return nil, fmt.Errorf("nonce is too low:  fromAddr=%s fromNonce=%d txNonce=%d", from.Hex(), nonceFrom, nonce)
 	}
 	var withdrawalAddress *common.Address
@@ -53,7 +53,6 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	}
 	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress)
 
-	al := types.AccessList{}
 	txData := &types.DynamicFeeTx{
 		To:         valStateAddr,
 		ChainID:    (backend.BlockChain()).Config().ChainID,
@@ -63,7 +62,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 		GasTipCap:  new(big.Int).SetUint64(0),
 		Value:      new(big.Int).SetUint64(0),
 		Data:       valSyncTxData,
-		AccessList: al,
+		AccessList: types.AccessList{},
 	}
 	tx := types.NewTx(txData)
 

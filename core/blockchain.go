@@ -605,6 +605,13 @@ func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
 	rawdb.WriteValidatorSync(bc.db, validatorSync)
 }
 
+func (bc *BlockChain) RemoveSyncOpData(opData *types.ValidatorSync) {
+	key := opData.Key()
+
+	delete(bc.notProcValSyncOps, key)
+	bc.valSyncCache.Remove(key)
+}
+
 // AppendNotProcessedValidatorSyncData append to not processed validators sync data.
 // skips currently existed items
 func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync) {
@@ -2078,8 +2085,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			intrGas uint64
 			err     error
 		)
-		isTokenOp := false
-		isValOp := false
+		var isTokenOp, isValOp bool
 		if _, err = operation.GetOpCode(tx.Data()); err == nil {
 			isTokenOp = true
 		} else {
@@ -2093,7 +2099,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			txData = tx.Data()
 		}
 
-		contractCreation := tx.To() == nil && !isTokenOp
+		contractCreation := tx.To() == nil && !isTokenOp && !isValOp
 		if len(tx.Data()) > 0 {
 			intrGas, err = bc.TxEstimateGas(tx, nil)
 			if err != nil {
@@ -2715,7 +2721,6 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 
 // RecommitBlockTransactions recommits transactions of red blocks.
 func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *state.StateDB) *state.StateDB {
-
 	log.Info("Recommit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
