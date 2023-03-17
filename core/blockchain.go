@@ -987,6 +987,28 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 
 	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 
+	// Handle era
+	if bc.GetEraInfo().Number() < block.Era() {
+		nextEraLength := bc.validatorStorage.EstimateEraLength(bc, block.Slot())
+		nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
+		nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
+		nextEraNumber := bc.GetEraInfo().Number() + 1
+
+		nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, block.Root())
+
+		rawdb.WriteCurrentEra(bc.db, nextEraNumber)
+		err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
+		if err != nil {
+			log.Error("Handle new era error", "current era number", bc.eraInfo.Number(),
+				"from", bc.eraInfo.FromEpoch(),
+				"to", bc.eraInfo.ToEpoch(),
+				block.Hash().Hex(), "block era", block.Era(), "err", err)
+		}
+
+		bc.SetNewEraInfo(*nextEra)
+		log.Info("New era", "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "root", nextEra.Root)
+	}
+
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
 		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "hash", block.Hash().Hex())
 	}
@@ -2227,28 +2249,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		if BadHashes[block.Hash()] {
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
-		}
-
-		// Handle era
-		if bc.GetEraInfo().Number() != block.Era() {
-			nextEraLength := bc.validatorStorage.EstimateEraLength(bc, block.Slot())
-			nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
-			nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
-			nextEraNumber := bc.GetEraInfo().Number() + 1
-
-			nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, block.Root())
-
-			rawdb.WriteCurrentEra(bc.db, nextEraNumber)
-			err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
-			if err != nil {
-				log.Error("Handle new era error", "current era number", bc.eraInfo.Number(),
-					"from", bc.eraInfo.FromEpoch(),
-					"to", bc.eraInfo.ToEpoch(),
-					block.Hash().Hex(), "block era", block.Era(), "err", err)
-			}
-
-			bc.SetNewEraInfo(*nextEra)
-			log.Info("New era", "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "root", nextEra.Root)
 		}
 
 		if ok, err := bc.VerifyBlock(block); !ok {
@@ -3702,15 +3702,19 @@ func (bc *BlockChain) SetNewEraInfo(newEra era.Era) {
 	bc.eraInfo = era.NewEraInfo(newEra)
 }
 
-func (bc *BlockChain) HandleEra(slot uint64) error {
+func (bc *BlockChain) HandleEra(slot uint64) {
 	newEpoch := bc.GetSlotInfo().IsEpochStart(slot)
+	if !newEpoch {
+		return
+	}
+
 	if newEpoch {
 		// New era
 		if bc.GetEraInfo().ToEpoch()+1 == bc.GetSlotInfo().SlotToEpoch(slot) {
 			nextEraNumber := bc.GetEraInfo().Number() + 1
 			nextEra, err := rawdb.ReadEra(bc.db, nextEraNumber)
 			if err != nil {
-				return err
+				log.Error("Handle era: read era error", err)
 			}
 
 			rawdb.WriteCurrentEra(bc.db, nextEraNumber)
@@ -3731,11 +3735,9 @@ func (bc *BlockChain) HandleEra(slot uint64) error {
 
 			err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
 			if err != nil {
-				return err
+				log.Error("Handle era: write new era error", err)
 			}
 			log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEraNumber, "begin", nextEra.From, "end", nextEra.To, "length", nextEraLength)
 		}
 	}
-
-	return nil
 }
