@@ -34,7 +34,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
-	valOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 const (
@@ -720,7 +719,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	var isTokenOp, isValidatorOp bool
 	if _, err := operation.GetOpCode(tx.Data()); err == nil {
 		isTokenOp = true
-	} else if _, err := valOp.GetOpCode(tx.Data()); err == nil {
+	} else if tx.To() != nil && pool.chainconfig.ValidatorsStateAddress != nil && *tx.To() == *pool.chainconfig.ValidatorsStateAddress {
 		isValidatorOp = true
 	}
 

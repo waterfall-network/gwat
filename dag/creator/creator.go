@@ -1104,33 +1104,34 @@ func (c *Creator) setAssignment(assigned *Assignment) {
 func (c *Creator) filterPendingAndCalculateNonce(pending map[common.Address]types.Transactions) (map[common.Address]types.Transactions, uint64, error) {
 	var nonce uint64
 
-	if len(pending) > 0 {
-		slotCreators, err := c.chain.ValidatorStorage().GetCreatorsBySlot(c.chain, c.chain.GetSlotInfo().CurrentSlot())
-		if err != nil {
-			return nil, 0, err
-		}
+	if len(pending) <= 0 {
+		nonce = c.eth.TxPool().Nonce(c.coinbase)
+		return pending, nonce, nil
+	}
 
-		for address, transactions := range pending {
-			for _, creator := range slotCreators {
-				if address == creator && creator != c.coinbase {
-					delete(pending, address)
-				}
+	slotCreators, err := c.chain.ValidatorStorage().GetCreatorsBySlot(c.chain, c.chain.GetSlotInfo().CurrentSlot())
+	if err != nil {
+		return nil, 0, err
+	}
 
-				if creator == c.coinbase && len(transactions) > 0 {
-					for _, transaction := range transactions {
-						if transaction.Nonce() > nonce {
-							nonce = transaction.Nonce()
-						}
+	for address, transactions := range pending {
+		for _, creator := range slotCreators {
+			if address == creator && creator != c.coinbase {
+				delete(pending, address)
+			}
+
+			if address == creator && creator == c.coinbase && len(transactions) > 0 {
+				for _, transaction := range transactions {
+					if transaction.Nonce() > nonce {
+						nonce = transaction.Nonce()
 					}
-
-					nonce++
-				} else if address == c.coinbase && len(transactions) == 0 {
-					nonce = c.eth.TxPool().Nonce(c.coinbase)
 				}
+
+				nonce++
+			} else if address == creator && creator == c.coinbase && len(transactions) == 0 {
+				nonce = c.eth.TxPool().Nonce(c.coinbase)
 			}
 		}
-	} else {
-		nonce = c.eth.TxPool().Nonce(c.coinbase)
 	}
 
 	return pending, nonce, nil

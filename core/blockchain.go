@@ -46,7 +46,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
-	valOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -2089,7 +2088,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		if _, err = operation.GetOpCode(tx.Data()); err == nil {
 			isTokenOp = true
 		} else {
-			if _, err = valOp.GetOpCode(tx.Data()); err == nil {
+			if tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress {
 				isValOp = true
 			}
 		}
