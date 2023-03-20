@@ -93,7 +93,9 @@ func TestDepositData(t *testing.T) {
 			o.withdrawal_address,
 			o.signature,
 		)
-		testutils.AssertNoError(t, err)
+		if err != nil {
+			return err
+		}
 
 		return equalOpBytes(createOp, b)
 	}
