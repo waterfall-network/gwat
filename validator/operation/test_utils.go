@@ -3,8 +3,9 @@ package operation
 import (
 	"bytes"
 	"fmt"
-	"math/big"
 	"testing"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 type operationTestCase struct {
@@ -45,7 +46,7 @@ func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, ope
 		var err error
 		t.Run("encoding"+" "+c.caseName, func(t *testing.T) {
 			err = operationEncode(c.encoded, c.decoded)
-			if !CheckError(err, c.errs) {
+			if !testutils.CheckError(err, c.errs) {
 				t.Errorf("operationEncode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 			}
 		})
@@ -54,35 +55,9 @@ func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, ope
 		}
 		t.Run("decoding"+" "+c.caseName, func(t *testing.T) {
 			err = operationDecode(c.encoded, c.decoded)
-			if !CheckError(err, c.errs) {
+			if !testutils.CheckError(err, c.errs) {
 				t.Errorf("operationDecode: invalid test case %s\nwant errors: %s\nhave errors: %s", c.caseName, c.errs, err)
 			}
 		})
 	}
-}
-
-func BigIntEquals(haveValue, wantValue *big.Int) bool {
-	if haveValue == nil && wantValue == nil {
-		return true
-	}
-
-	if wantValue == nil {
-		wantValue = big.NewInt(0)
-	}
-
-	return haveValue.Cmp(wantValue) == 0
-}
-
-func CheckError(e error, arr []error) bool {
-	if e == nil && len(arr) == 0 {
-		return true
-	}
-
-	for _, err := range arr {
-		if e == err {
-			return true
-		}
-	}
-
-	return false
 }

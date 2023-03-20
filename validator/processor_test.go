@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 	"math/big"
 	"testing"
 
@@ -9,7 +8,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	commonTestUtils "gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testutils"
 )
 
@@ -24,7 +25,6 @@ var (
 	creator_address    common.Address   // attached creator account
 	withdrawal_address common.Address   // attached withdrawal credentials
 	signature          common.BlsSignature
-	deposit_data_root  common.Hash
 
 	depositAddress common.Address
 	address        common.Address
@@ -44,7 +44,7 @@ func init() {
 	processor = NewProcessor(ctx, stateDb, testmodels.TestChainConfig)
 
 	to = processor.GetValidatorsStateAddress()
-	from = common.BytesToAddress(testutils.RandomData(20))
+	from = common.BytesToAddress(commonTestUtils.RandomData(20))
 	value = MinDepositVal
 	pubkey = common.HexToBlsPubKey("0x9728bc733c8fcedde0c3a33dac12da3ebbaa0eb74d813a34b600520e7976a260d85f057687e8c923d52c78715515348d")
 	creator_address = common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
@@ -56,9 +56,7 @@ func init() {
 
 func TestProcessorDeposit(t *testing.T) {
 	depositOperation, err := operation.NewDepositOperation(pubkey, creator_address, withdrawal_address, signature)
-	if err != nil {
-		t.Fatal(err)
-	}
+	commonTestUtils.AssertNoError(t, err)
 	cases := []testutils.TestCase{
 		{
 			CaseName: "Deposit: OK",
@@ -107,8 +105,8 @@ func TestProcessorDeposit(t *testing.T) {
 			Errs: []error{ErrTooLowDepositValue},
 			Fn: func(c *testutils.TestCase, a *common.Address) {
 				v := c.TestData.(testutils.TestData)
-				val_1, _ := new(big.Int).SetString("1000000000000000000", 10)
-				call(t, v.Caller, v.AddrTo, val_1, depositOperation, c.Errs)
+				val1, _ := new(big.Int).SetString("1000000000000000000", 10)
+				call(t, v.Caller, v.AddrTo, val1, depositOperation, c.Errs)
 			},
 		},
 	}
@@ -122,9 +120,7 @@ func TestProcessorDeposit(t *testing.T) {
 
 func call(t *testing.T, Caller Ref, addrTo common.Address, value *big.Int, op operation.Operation, Errs []error) []byte {
 	res, err := processor.Call(Caller, addrTo, value, op)
-	if !testutils.CheckError(err, Errs) {
-		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", Errs, err)
-	}
+	commonTestUtils.AssertNoError(t, err)
 
 	return res
 }
