@@ -891,56 +891,38 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	// Fill the block with all available pending transactions.
 	pending := c.getPending()
 
-	filterPending, nonce, err := c.filterPendingAndCalculateNonce(pending)
+	filterPending, err := c.filterPendingTxs(pending)
 	if err != nil {
 		log.Error("can`t filter pending transactions", "error", err)
 		return
 	}
 
-	if c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-		syncData := c.chain.GetNotProcessedValidatorSyncData()
-		if len(syncData) > 0 {
-			for _, validatorSync := range syncData {
-				if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
-					valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, stateBlock.Hash(), c.coinbase, validatorSync, nonce)
-					if err != nil {
-						log.Error("Failed to create validator sync tx", "error", err)
-						continue
-					}
-
-					_, err = c.commitTransaction(valSyncTx, c.coinbase)
-					if err != nil {
-						log.Error("Error", "error", err)
-					} else {
-						c.chain.RemoveSyncOpData(validatorSync)
-					}
-				}
-			}
-
-			if len(filterPending) == 0 {
-				c.commit(tips, c.fullTaskHook, true, tstart)
-				return
-			}
-		}
-	}
+	syncData := c.chain.GetNotProcessedValidatorSyncData()
 
 	// Short circuit if no pending transactions
-	if len(filterPending) == 0 {
+	if len(filterPending) == 0 && len(syncData) == 0 {
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		c.errWorkCh <- &ErrNoTxs
 		return
 	}
 
-	if len(filterPending) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
-		if c.commitTransactions(txs, c.coinbase) {
-			pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
-			log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
-			c.errWorkCh <- &ErrNoTxs
+	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
+	if c.commitTransactions(txs, c.coinbase) {
+		if len(syncData) > 0 {
+			c.processValidatorTxs(stateBlock.Hash(), syncData)
+			c.commit(tips, c.fullTaskHook, true, tstart)
+
 			return
 		}
+		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
+		c.errWorkCh <- &ErrNoTxs
+		return
 	}
+
+	c.processValidatorTxs(stateBlock.Hash(), syncData)
+
 	c.commit(tips, c.fullTaskHook, true, tstart)
 }
 
@@ -1101,38 +1083,41 @@ func (c *Creator) setAssignment(assigned *Assignment) {
 	c.cacheAssignment = assigned
 }
 
-func (c *Creator) filterPendingAndCalculateNonce(pending map[common.Address]types.Transactions) (map[common.Address]types.Transactions, uint64, error) {
-	var nonce uint64
-
-	if len(pending) <= 0 {
-		nonce = c.eth.TxPool().Nonce(c.coinbase)
-		return pending, nonce, nil
-	}
-
+func (c *Creator) filterPendingTxs(pending map[common.Address]types.Transactions) (map[common.Address]types.Transactions, error) {
 	slotCreators, err := c.chain.ValidatorStorage().GetCreatorsBySlot(c.chain, c.chain.GetSlotInfo().CurrentSlot())
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	for address, transactions := range pending {
+	for address := range pending {
 		for _, creator := range slotCreators {
 			if address == creator && creator != c.coinbase {
 				delete(pending, address)
 			}
-
-			if address == creator && creator == c.coinbase && len(transactions) > 0 {
-				for _, transaction := range transactions {
-					if transaction.Nonce() > nonce {
-						nonce = transaction.Nonce()
-					}
-				}
-
-				nonce++
-			} else if address == creator && creator == c.coinbase && len(transactions) == 0 {
-				nonce = c.eth.TxPool().Nonce(c.coinbase)
-			}
 		}
 	}
 
-	return pending, nonce, nil
+	return pending, nil
+}
+
+func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync) {
+	if c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
+		nonce := c.eth.TxPool().Nonce(c.coinbase)
+		for _, validatorSync := range syncData {
+			if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
+				valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, blockHash, c.coinbase, validatorSync, nonce)
+				if err != nil {
+					log.Error("Failed to create validator sync tx", "error", err)
+					continue
+				}
+
+				_, err = c.commitTransaction(valSyncTx, c.coinbase)
+				if err != nil {
+					log.Error("Error", "error", err)
+				} else {
+					c.chain.RemoveSyncOpData(validatorSync)
+				}
+			}
+		}
+	}
 }

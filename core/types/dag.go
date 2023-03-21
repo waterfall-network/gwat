@@ -155,9 +155,9 @@ func (cp *Checkpoint) UnmarshalJSON(input []byte) error {
 type ValidatorSyncOp uint64
 
 const (
-	Activation ValidatorSyncOp = iota
-	Exit
-	Withdrawal
+	Activate ValidatorSyncOp = iota
+	Deactivate
+	UpdateBalance
 )
 
 // ValidatorSync represents a data to perform operation of validators synchronization

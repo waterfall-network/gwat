@@ -30,7 +30,7 @@ func (op *validatorSyncOperation) init(
 	if creator == (common.Address{}) {
 		return ErrNoCreatorAddress
 	}
-	if opType == types.Withdrawal {
+	if opType == types.UpdateBalance {
 		if amount == nil {
 			return ErrNoAmount
 		}
@@ -87,7 +87,7 @@ func (op *validatorSyncOperation) UnmarshalBinary(b []byte) error {
 		amount     *big.Int
 		withdrawal common.Address
 	)
-	if opType == types.Withdrawal {
+	if opType == types.UpdateBalance {
 		startOffset = endOffset
 		endOffset = startOffset + common.AddressLength
 		withdrawal = common.BytesToAddress(b[startOffset:endOffset])
@@ -129,12 +129,12 @@ func (op *validatorSyncOperation) MarshalBinary() ([]byte, error) {
 func (op *validatorSyncOperation) OpCode() Code {
 	var code Code
 	switch op.opType {
-	case types.Activation:
-		code = ActivationCode
-	case types.Exit:
-		code = ExitCode
-	case types.Withdrawal:
-		code = WithdrawalCode
+	case types.Activate:
+		code = ActivateCode
+	case types.Deactivate:
+		code = DeactivateCode
+	case types.UpdateBalance:
+		code = UpdateBalanceCode
 	}
 	return code
 }

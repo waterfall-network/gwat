@@ -719,8 +719,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	var isTokenOp, isValidatorOp bool
 	if _, err := operation.GetOpCode(tx.Data()); err == nil {
 		isTokenOp = true
-	} else if tx.To() != nil && pool.chainconfig.ValidatorsStateAddress != nil && *tx.To() == *pool.chainconfig.ValidatorsStateAddress {
-		isValidatorOp = true
+	} else {
+		isValidatorOp = tx.To() != nil && pool.chainconfig.ValidatorsStateAddress != nil && *tx.To() == *pool.chainconfig.ValidatorsStateAddress
 	}
 
 	var txData []byte
@@ -730,7 +730,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation)
+	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
 	if err != nil {
 		return err
 	}

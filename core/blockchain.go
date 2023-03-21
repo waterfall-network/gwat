@@ -2084,21 +2084,19 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			intrGas uint64
 			err     error
 		)
-		var isTokenOp, isValOp bool
+		var isTokenOp, isValidatorOp bool
 		if _, err = operation.GetOpCode(tx.Data()); err == nil {
 			isTokenOp = true
 		} else {
-			if tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress {
-				isValOp = true
-			}
+			isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
 		}
 
 		var txData []byte
-		if !isTokenOp && !isValOp {
+		if !isTokenOp && !isValidatorOp {
 			txData = tx.Data()
 		}
 
-		contractCreation := tx.To() == nil && !isTokenOp && !isValOp
+		contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
 		if len(tx.Data()) > 0 {
 			intrGas, err = bc.TxEstimateGas(tx, nil)
 			if err != nil {
@@ -2106,7 +2104,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 				return false, err
 			}
 		} else {
-			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation)
+			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
 		}
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)

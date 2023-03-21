@@ -8,10 +8,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	commonTestUtils "gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	testUtils "gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testutils"
 )
 
 var (
@@ -44,7 +43,7 @@ func init() {
 	processor = NewProcessor(ctx, stateDb, testmodels.TestChainConfig)
 
 	to = processor.GetValidatorsStateAddress()
-	from = common.BytesToAddress(commonTestUtils.RandomData(20))
+	from = common.BytesToAddress(testUtils.RandomData(20))
 	value = MinDepositVal
 	pubkey = common.HexToBlsPubKey("0x9728bc733c8fcedde0c3a33dac12da3ebbaa0eb74d813a34b600520e7976a260d85f057687e8c923d52c78715515348d")
 	creator_address = common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
@@ -56,17 +55,17 @@ func init() {
 
 func TestProcessorDeposit(t *testing.T) {
 	depositOperation, err := operation.NewDepositOperation(pubkey, creator_address, withdrawal_address, signature)
-	commonTestUtils.AssertNoError(t, err)
-	cases := []testutils.TestCase{
+	testUtils.AssertNoError(t, err)
+	cases := []testmodels.TestCase{
 		{
 			CaseName: "Deposit: OK",
-			TestData: testutils.TestData{
+			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
 				AddrTo: common.Address{},
 			},
 			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				v := c.TestData.(testutils.TestData)
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
+				v := c.TestData.(testmodels.TestData)
 
 				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
 				processor.state.AddBalance(from, bal)
@@ -86,25 +85,25 @@ func TestProcessorDeposit(t *testing.T) {
 		},
 		{
 			CaseName: "Deposit: ErrTooLowDepositValue (val = nil)",
-			TestData: testutils.TestData{
+			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
 				AddrTo: address,
 			},
 			Errs: []error{ErrTooLowDepositValue},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				v := c.TestData.(testutils.TestData)
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
+				v := c.TestData.(testmodels.TestData)
 				call(t, v.Caller, v.AddrTo, nil, depositOperation, c.Errs)
 			},
 		},
 		{
 			CaseName: "Deposit: ErrTooLowDepositValue (val = 1 wat)",
-			TestData: testutils.TestData{
+			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
 				AddrTo: address,
 			},
 			Errs: []error{ErrTooLowDepositValue},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				v := c.TestData.(testutils.TestData)
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
+				v := c.TestData.(testmodels.TestData)
 				val1, _ := new(big.Int).SetString("1000000000000000000", 10)
 				call(t, v.Caller, v.AddrTo, val1, depositOperation, c.Errs)
 			},
@@ -120,7 +119,9 @@ func TestProcessorDeposit(t *testing.T) {
 
 func call(t *testing.T, Caller Ref, addrTo common.Address, value *big.Int, op operation.Operation, Errs []error) []byte {
 	res, err := processor.Call(Caller, addrTo, value, op)
-	commonTestUtils.AssertNoError(t, err)
+	if !testUtils.CheckError(err, Errs) {
+		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", Errs, err)
+	}
 
 	return res
 }

@@ -34,7 +34,7 @@ func TestValidatorSync(t *testing.T) {
 		{
 			caseName: "activation OK",
 			decoded: decodedOp{
-				opType:    types.Activation,
+				opType:    types.Activate,
 				procEpoch: procEpoch,
 				index:     index,
 				creator:   creator,
@@ -50,7 +50,7 @@ func TestValidatorSync(t *testing.T) {
 		{
 			caseName: "activation: creator_address is required",
 			decoded: decodedOp{
-				opType:    types.Activation,
+				opType:    types.Activate,
 				procEpoch: procEpoch,
 				index:     index,
 			},
@@ -60,7 +60,7 @@ func TestValidatorSync(t *testing.T) {
 		{
 			caseName: "exit OK",
 			decoded: decodedOp{
-				opType:    types.Exit,
+				opType:    types.Deactivate,
 				procEpoch: procEpoch,
 				index:     index,
 				creator:   creator,
@@ -77,7 +77,7 @@ func TestValidatorSync(t *testing.T) {
 		{
 			caseName: "withdrawal OK",
 			decoded: decodedOp{
-				opType:            types.Withdrawal,
+				opType:            types.UpdateBalance,
 				procEpoch:         procEpoch,
 				index:             index,
 				creator:           creator,
@@ -139,7 +139,7 @@ func TestValidatorSync(t *testing.T) {
 		if !bytes.Equal(opDecoded.Creator().Bytes(), o.creator.Bytes()) {
 			return fmt.Errorf("creator do not match:\nwant: %#x\nhave: %#x", o.creator, opDecoded.Creator())
 		}
-		if o.opType == types.Withdrawal {
+		if o.opType == types.UpdateBalance {
 			if !bytes.Equal(opDecoded.WithdrawalAddress().Bytes(), o.withdrawalAddress.Bytes()) {
 				return fmt.Errorf("withdrawalAddress do not match:\nwant: %#x\nhave: %#x", o.withdrawalAddress, opDecoded.WithdrawalAddress())
 			}

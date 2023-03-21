@@ -124,12 +124,12 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isValidatorOp bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation {
 		gas = params.TxGasContractCreation
-	} else if _, err := validatorOp.GetOpCode(data); err == nil {
+	} else if isValidatorOp {
 		gas = 0
 	} else {
 		gas = params.TxGas
@@ -318,7 +318,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	isContractCreation := msg.To() == nil && !isTokenCreation
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation, isValidatorOp)
 	if err != nil {
 		return nil, err
 	}

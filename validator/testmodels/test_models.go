@@ -5,6 +5,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
@@ -43,4 +44,16 @@ func init() {
 		ValidatorsStateAddress: &validatorsStateAddress,
 		ValidatorsPerSlot:      6,
 	}
+}
+
+type TestCase struct {
+	CaseName string
+	TestData interface{}
+	Errs     []error
+	Fn       func(c *TestCase, a *common.Address)
+}
+
+type TestData struct {
+	Caller vm.AccountRef
+	AddrTo common.Address
 }

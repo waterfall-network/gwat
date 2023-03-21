@@ -29,7 +29,7 @@ type Storage interface {
 
 	SetValidatorsList(stateDb vm.StateDB, list []common.Address)
 	GetValidatorsList(stateDb vm.StateDB) []common.Address
-	AddValidatorToList(stateDB vm.StateDB, validator common.Address)
+	AddValidatorToList(stateDB vm.StateDB, index uint64, validator common.Address)
 
 	GetValidatorsStateAddress() *common.Address
 	GetDepositCount(stateDb vm.StateDB) uint64
@@ -248,7 +248,7 @@ func (s *storage) GetValidatorsStateAddress() *common.Address {
 	return s.config.ValidatorsStateAddress
 }
 
-func (s *storage) AddValidatorToList(stateDb vm.StateDB, validator common.Address) {
+func (s *storage) AddValidatorToList(stateDb vm.StateDB, index uint64, validator common.Address) {
 	list := s.GetValidatorsList(stateDb)
 	for _, address := range list {
 		if address == validator {
@@ -256,6 +256,12 @@ func (s *storage) AddValidatorToList(stateDb vm.StateDB, validator common.Addres
 		}
 	}
 
-	list = append(list, validator)
+	if uint64(len(list)) < index {
+		for uint64(len(list)) <= index {
+			list = append(list, common.Address{})
+		}
+	}
+
+	list[index] = validator
 	s.SetValidatorsList(stateDb, list)
 }

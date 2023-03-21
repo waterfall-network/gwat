@@ -60,7 +60,7 @@ func (op *withdrawalRequestOperation) UnmarshalBinary(data []byte) error {
 }
 
 func (op *withdrawalRequestOperation) OpCode() Code {
-	return WithdrawalRequestCode
+	return WithdrawalCode
 }
 
 func (op *withdrawalRequestOperation) CreatorAddress() common.Address {

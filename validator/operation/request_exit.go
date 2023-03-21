@@ -92,7 +92,7 @@ func (op *exitRequestOperation) UnmarshalBinary(data []byte) error {
 }
 
 func (op *exitRequestOperation) OpCode() Code {
-	return RequestExitCode
+	return ExitCode
 }
 
 func (op *exitRequestOperation) PubKey() common.BlsPubKey {
