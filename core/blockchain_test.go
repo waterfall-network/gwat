@@ -5,9 +5,11 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // This test checks that if there are no blocks in the epoch,
@@ -98,5 +100,53 @@ func TestFirstEpochBlockHash(t *testing.T) {
 	bc.DeleteFirstEpochBlockHash(thirdEpoch)
 	if bc.ExistFirstEpochBlockHash(thirdEpoch) {
 		t.Fatal()
+	}
+}
+
+func TestFindEra(t *testing.T) {
+	// Create a mock database
+	db := rawdb.NewMemoryDatabase()
+	// Create a new blockchain instance
+	bc := &BlockChain{db: db}
+
+	// Test case 0: There are no eras in the database
+	lastEra := bc.findEra(5)
+	if lastEra != nil {
+		t.Errorf("Expected nil, got %v", lastEra)
+	}
+
+	// Create some eras and add them to the database
+	era0 := era.NewEra(0, 0, 10, common.Hash{})
+	err := rawdb.WriteEra(db, era0.Number, *era0)
+	if err != nil {
+		t.Errorf("Failed to write era 0: %v", err)
+	}
+
+	era1 := era.NewEra(1, 11, 20, common.Hash{})
+	err = rawdb.WriteEra(db, era1.Number, *era1)
+	if err != nil {
+		t.Errorf("Failed to write era 1: %v", err)
+	}
+
+	era2 := era.NewEra(2, 21, 30, common.Hash{})
+	err = rawdb.WriteEra(db, era2.Number, *era2)
+	if err != nil {
+		t.Errorf("Failed to write era 2: %v", err)
+	}
+
+	// Test case 1: Return exact era
+	lastEra = bc.findEra(1)
+	if lastEra == nil {
+		t.Error("Expected an era, got nil")
+	} else if lastEra.Number != 1 {
+		t.Errorf("Expected era 2, got era %d", lastEra.Number)
+	}
+
+	// Test case 2: The last era exists
+	lastEra = bc.findEra(5)
+	if lastEra == nil {
+		t.Error("Expected an era, got nil")
+	} else if lastEra.Number != 2 {
+		t.Errorf("Expected era 2, got era %d", lastEra.Number)
 	}
 }

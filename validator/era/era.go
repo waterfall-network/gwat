@@ -129,6 +129,13 @@ func (ei *EraInfo) LenSlots() uint64 {
 	return ei.length * 32
 }
 
+func (ei *EraInfo) IsContainsEpoch(epoch uint64) bool {
+	if epoch >= ei.FromEpoch() && epoch <= ei.ToEpoch() {
+		return true
+	}
+	return false
+}
+
 // IsTransitionPeriod checks if the given slot falls in the transition period between the current era and the next era.
 func IsEraTransitionPeriodStart(bc blockchain, slot uint64) bool {
 	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
