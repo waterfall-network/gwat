@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/binary"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -9,6 +10,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
@@ -17,6 +19,8 @@ type blockchain interface {
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
+	GetEraInfo() *era.EraInfo
+	GetConfig() *params.ChainConfig
 	SearchFirstEpochBlockHashRecursive(epoch uint64) common.Hash
 }
 
@@ -34,6 +38,8 @@ type Storage interface {
 	GetValidatorsStateAddress() *common.Address
 	GetDepositCount(stateDb vm.StateDB) uint64
 	IncrementDepositCount(stateDb vm.StateDB)
+
+	EstimateEraLength(bc blockchain, slot uint64) (epochsPerEra uint64)
 
 	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
@@ -271,4 +277,17 @@ func (s *storage) AddValidatorToList(stateDb vm.StateDB, index uint64, validator
 
 	list[index] = validator
 	s.SetValidatorsList(stateDb, list)
+}
+
+func (s *storage) EstimateEraLength(bc blockchain, slot uint64) (eraLength uint64) {
+	var (
+		epochsPerEra       = s.config.EpochsPerEra
+		slotsPerEpoch      = bc.GetSlotInfo().SlotsPerEpoch
+		validators, _      = s.GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
+		numberOfValidators = uint64(len(validators))
+	)
+
+	eraLength = epochsPerEra * (1 + (numberOfValidators / (epochsPerEra * slotsPerEpoch)))
+
+	return
 }

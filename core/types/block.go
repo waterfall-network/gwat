@@ -69,6 +69,7 @@ type Header struct {
 	//Base fields (set while create)
 	ParentHashes common.HashArray `json:"parentHashes"     gencodec:"required"`
 	Slot         uint64           `json:"slot"             gencodec:"required"`
+	Era          uint64           `json:"era"              gencodec:"required"`
 	Height       uint64           `json:"height"           gencodec:"required"`
 	LFHash       common.Hash      `json:"lfHash"           gencodec:"required"`
 	LFNumber     uint64           `json:"lfNumber"         gencodec:"required"`
@@ -123,6 +124,7 @@ func (h *Header) Copy() *Header {
 		cpy = &Header{
 			ParentHashes: h.ParentHashes,
 			Slot:         h.Slot,
+			Era:          h.Era,
 			Height:       h.Height,
 			LFHash:       h.LFHash,
 			LFNumber:     h.LFNumber,
@@ -324,6 +326,7 @@ func (b *Block) Coinbase() common.Address       { return b.header.Coinbase }
 func (b *Block) Root() common.Hash              { return b.header.Root }
 func (b *Block) ParentHashes() common.HashArray { return b.header.ParentHashes }
 func (b *Block) Slot() uint64                   { return b.header.Slot }
+func (b *Block) Era() uint64                    { return b.header.Era }
 func (b *Block) Height() uint64                 { return b.header.Height }
 func (b *Block) TxHash() common.Hash            { return b.header.TxHash }
 func (b *Block) BodyHash() common.Hash          { return b.header.BodyHash }

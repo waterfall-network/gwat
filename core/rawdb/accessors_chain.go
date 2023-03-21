@@ -30,6 +30,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
@@ -1183,4 +1184,64 @@ func ExistFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) bool {
 	exist, _ := db.Has(key)
 
 	return exist
+}
+
+// WriteEra writes an era to a key-value database.
+func WriteEra(db ethdb.KeyValueWriter, number uint64, era era.Era) error {
+	key := eraKey(number)
+
+	encoded, err := rlp.EncodeToBytes(era)
+	if err != nil {
+		log.Crit("Failed to encode era", "err", err, "key:", key, "era:", number)
+		return err
+	}
+
+	return db.Put(key, encoded)
+}
+
+// ReadEra reads an era from a key-value database.
+func ReadEra(db ethdb.KeyValueReader, number uint64) (*era.Era, error) {
+	key := eraKey(number)
+	encoded, err := db.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	var decoded era.Era
+	err = rlp.DecodeBytes(encoded, &decoded)
+	if err != nil {
+		return nil, err
+	}
+
+	return &decoded, nil
+}
+
+// ReadCurrentEra reads the current era number from the database.
+func ReadCurrentEra(db ethdb.KeyValueReader) uint64 {
+	key := append(currentEraPrefix)
+	valueBytes, err := db.Get(key)
+	if err != nil {
+		log.Crit("Failed to read current era", "err", err)
+	}
+	return binary.BigEndian.Uint64(valueBytes)
+}
+
+// WriteCurrentEra writes the current era number to the database.
+func WriteCurrentEra(db ethdb.KeyValueWriter, number uint64) {
+	key := append(currentEraPrefix)
+	valueBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(valueBytes, number)
+	err := db.Put(key, valueBytes)
+	if err != nil {
+		log.Crit("Failed to write current era", "err", err, "era", number)
+	}
+}
+
+// DeleteCurrentEra deletes the current era number from the database.
+func DeleteCurrentEra(db ethdb.KeyValueWriter) {
+	key := append(currentEraPrefix)
+	err := db.Delete(key)
+	if err != nil {
+		log.Crit("Failed to delete current era", "err", err)
+	}
 }

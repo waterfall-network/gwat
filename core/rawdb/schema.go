@@ -93,6 +93,8 @@ var (
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
 	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
+	eraPrefix                   = []byte("era")
+	currentEraPrefix            = []byte("currentera")
 
 	// validator sync data
 	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
@@ -253,6 +255,11 @@ func childrenKey(hash common.Hash) []byte {
 // firstEpochBlockKey = firstEpochBlockPrefix + epoch
 func firstEpochBlockKey(epoch uint64) []byte {
 	return append(firstEpochBlockPrefix, Uint64ToByteSlice(epoch)...)
+}
+
+// eraKey = eraKey + era
+func eraKey(era uint64) []byte {
+	return append(eraPrefix, Uint64ToByteSlice(era)...)
 }
 
 // validatorSyncKey = valSyncOpPrefix + opType + creatorAddr

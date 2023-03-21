@@ -23,6 +23,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // Backend wraps all methods required for block creation.
@@ -334,13 +335,18 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
+				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, common.Hash{})
+				d.bc.SetNewEraInfo(*newEra)
 				continue
 			}
 			var (
 				err      error
 				creators []common.Address
 			)
+
 			log.Info("New slot", "slot", slot)
+
+			d.handleEra(slot)
 
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
@@ -443,4 +449,9 @@ func (d *Dag) countDagSlots(tips *types.Tips) int {
 		return -1
 	}
 	return len(candidates)
+}
+
+// handleEra
+func (d *Dag) handleEra(slot uint64) {
+	d.bc.HandleEra(slot)
 }

@@ -46,6 +46,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -196,6 +197,7 @@ type BlockChain struct {
 	lastFinalizedBlock     atomic.Value // Current last finalized block of the blockchain
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
 	lastCoordinatedSlot    uint64       // Last slot received from coordinating network
+	eraInfo                era.EraInfo  // Current Era
 	lastCoordinatedCp      atomic.Value // Current last coordinated checkpoint
 	notProcValSyncOps      map[[28]byte]*types.ValidatorSync
 	valSyncCache           *lru.Cache
@@ -554,6 +556,11 @@ func (bc *BlockChain) SetSlotInfo(si *types.SlotInfo) error {
 // GetSlotInfo get current slot info.
 func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 	return bc.slotInfo.Copy()
+}
+
+// GetSlotInfo get current slot info.
+func (bc *BlockChain) GetConfig() *params.ChainConfig {
+	return bc.chainConfig
 }
 
 // SetLastCoordinatedCheckpoint set last coordinated checkpoint.
@@ -986,6 +993,28 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	batch := bc.db.NewBatch()
 
 	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
+
+	// Handle era
+	if bc.GetEraInfo().Number() < block.Era() {
+		nextEraLength := bc.validatorStorage.EstimateEraLength(bc, block.Slot())
+		nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
+		nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
+		nextEraNumber := bc.GetEraInfo().Number() + 1
+
+		nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, block.Root())
+
+		rawdb.WriteCurrentEra(bc.db, nextEraNumber)
+		err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
+		if err != nil {
+			log.Error("Handle new era error", "current era number", bc.eraInfo.Number(),
+				"from", bc.eraInfo.FromEpoch(),
+				"to", bc.eraInfo.ToEpoch(),
+				block.Hash().Hex(), "block era", block.Era(), "err", err)
+		}
+
+		bc.SetNewEraInfo(*nextEra)
+		log.Info("New era", "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "root", nextEra.Root)
+	}
 
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
 		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "hash", block.Hash().Hex())
@@ -3669,4 +3698,54 @@ func (bc *BlockChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
 	}
 
 	return epoch
+}
+
+func (bc *BlockChain) GetEraInfo() *era.EraInfo {
+	return &bc.eraInfo
+}
+
+// SetNewEraInfo sets new era info.
+func (bc *BlockChain) SetNewEraInfo(newEra era.Era) {
+	log.Info("New era", "num", newEra.Number, "begin", newEra.From, "end", newEra.To, "root", newEra.Root)
+	bc.eraInfo = era.NewEraInfo(newEra)
+}
+
+func (bc *BlockChain) HandleEra(slot uint64) {
+	newEpoch := bc.GetSlotInfo().IsEpochStart(slot)
+	if !newEpoch {
+		return
+	}
+
+	if newEpoch {
+		// New era
+		if bc.GetEraInfo().ToEpoch()+1 == bc.GetSlotInfo().SlotToEpoch(slot) {
+			nextEraNumber := bc.GetEraInfo().Number() + 1
+			nextEra, err := rawdb.ReadEra(bc.db, nextEraNumber)
+			if err != nil {
+				log.Error("Handle era: read era error", err)
+			}
+
+			rawdb.WriteCurrentEra(bc.db, nextEraNumber)
+			bc.SetNewEraInfo(*nextEra)
+		}
+
+		// Transition period
+		if era.IsEraTransitionPeriodStart(bc, slot) { // use first slot in epoch
+			nextEraLength := bc.validatorStorage.EstimateEraLength(bc, slot)
+			nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
+			nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
+			nextEraNumber := bc.GetEraInfo().Number() + 1
+
+			checkpoint := bc.GetLastCoordinatedCheckpoint()
+			header := bc.GetHeaderByHash(checkpoint.Spine)
+
+			nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, header.Root)
+
+			err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
+			if err != nil {
+				log.Error("Handle era: write new era error", err)
+			}
+			log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEraNumber, "begin", nextEra.From, "end", nextEra.To, "length", nextEraLength)
+		}
+	}
 }
