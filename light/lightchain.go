@@ -159,7 +159,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		}
 	}
 
-	bc.validatorStorage = valStore.NewStorage(chainDB, config)
+	bc.validatorStorage = valStore.NewStorage(config)
 
 	bc.SetSlotInfo(&types.SlotInfo{
 		GenesisTime:    bc.genesisBlock.Time(),
