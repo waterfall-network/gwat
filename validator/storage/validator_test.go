@@ -27,7 +27,11 @@ func init() {
 	exitEpoch = uint64(testutils.RandomInt(int(activationEpoch), int(activationEpoch+999999999)))
 	balance = big.NewInt(int64(testutils.RandomInt(0, 999999999)))
 
-	testValidator = NewValidator(validatorAddress, &withdrawalAddress, validatorIndex, activationEpoch, exitEpoch, balance)
+	testValidator = NewValidator(validatorAddress, &withdrawalAddress)
+	testValidator.Index = validatorIndex
+	testValidator.ExitEpoch = exitEpoch
+	testValidator.ActivationEpoch = activationEpoch
+	testValidator.Balance = balance
 }
 
 func TestValidator_MarshalBinary(t *testing.T) {

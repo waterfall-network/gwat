@@ -1,16 +1,17 @@
 package operation
 
 import (
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"math/big"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
-type withdrawalRequestOperation struct {
+type withdrawalOperation struct {
 	creatorAddress common.Address
 	amount         *big.Int
 }
 
-func (op *withdrawalRequestOperation) init(
+func (op *withdrawalOperation) init(
 	creatorAddress common.Address,
 	amount *big.Int,
 ) error {
@@ -31,8 +32,8 @@ func (op *withdrawalRequestOperation) init(
 func NewWithdrawalOperation(
 	validatorAddress common.Address,
 	amount *big.Int,
-) (WithdrawalRequest, error) {
-	op := &withdrawalRequestOperation{}
+) (Withdrawal, error) {
+	op := &withdrawalOperation{}
 	if err := op.init(validatorAddress, amount); err != nil {
 		return nil, err
 	}
@@ -41,7 +42,7 @@ func NewWithdrawalOperation(
 
 }
 
-func (op *withdrawalRequestOperation) MarshalBinary() ([]byte, error) {
+func (op *withdrawalOperation) MarshalBinary() ([]byte, error) {
 	data := make([]byte, 0)
 
 	data = append(data, op.creatorAddress.Bytes()...)
@@ -51,7 +52,7 @@ func (op *withdrawalRequestOperation) MarshalBinary() ([]byte, error) {
 	return data, nil
 }
 
-func (op *withdrawalRequestOperation) UnmarshalBinary(data []byte) error {
+func (op *withdrawalOperation) UnmarshalBinary(data []byte) error {
 	validatorAddress := common.BytesToAddress(data[:common.AddressLength])
 
 	amount := new(big.Int).SetBytes(data[common.AddressLength:])
@@ -59,14 +60,14 @@ func (op *withdrawalRequestOperation) UnmarshalBinary(data []byte) error {
 	return op.init(validatorAddress, amount)
 }
 
-func (op *withdrawalRequestOperation) OpCode() Code {
+func (op *withdrawalOperation) OpCode() Code {
 	return WithdrawalCode
 }
 
-func (op *withdrawalRequestOperation) CreatorAddress() common.Address {
+func (op *withdrawalOperation) CreatorAddress() common.Address {
 	return op.creatorAddress
 }
 
-func (op *withdrawalRequestOperation) Amount() *big.Int {
+func (op *withdrawalOperation) Amount() *big.Int {
 	return op.amount
 }

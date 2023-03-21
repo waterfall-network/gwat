@@ -9,7 +9,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
-func TestRequestExitData(t *testing.T) {
+func TestExitData(t *testing.T) {
 	var (
 		pubKey         = common.HexToBlsPubKey("0x9728bc733c8fcedde0c3a33dac12da3ebbaa0eb74d813a34b600520e7976a260d85f057687e8c923d52c78715515348d")
 		creatorAddress = common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
@@ -58,7 +58,7 @@ func TestRequestExitData(t *testing.T) {
 
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
-		createOp, err := NewExitRequestOperation(
+		createOp, err := NewExitOperation(
 			o.pubkey,
 			o.creator_address,
 			o.exitAfterEpoch,
@@ -75,7 +75,7 @@ func TestRequestExitData(t *testing.T) {
 		testutils.AssertNoError(t, err)
 
 		o := i.(decodedOp)
-		opDecoded, ok := op.(ExitRequest)
+		opDecoded, ok := op.(Exit)
 		if !ok {
 			return errors.New("invalid operation type")
 		}

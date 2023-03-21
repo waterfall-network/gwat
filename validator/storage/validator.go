@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/binary"
+	"math"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -27,18 +28,14 @@ type Validator struct {
 	Balance           *big.Int
 }
 
-func NewValidator(address common.Address, withdrawal *common.Address, validatorIndex, activationEpoch, exitEpoch uint64, balance *big.Int) *Validator {
-	if balance == nil {
-		balance = new(big.Int)
-	}
-
+func NewValidator(address common.Address, withdrawal *common.Address) *Validator {
 	return &Validator{
 		Address:           address,
 		WithdrawalAddress: withdrawal,
-		Index:             validatorIndex,
-		ActivationEpoch:   activationEpoch,
-		ExitEpoch:         exitEpoch,
-		Balance:           balance,
+		Index:             math.MaxUint64,
+		ActivationEpoch:   math.MaxUint64,
+		ExitEpoch:         math.MaxUint64,
+		Balance:           new(big.Int),
 	}
 }
 

@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"math"
 	"testing"
 	"time"
 
@@ -59,7 +58,7 @@ func TestConsensus_breakByValidatorsBySlotCount(t *testing.T) {
 		},
 	}
 
-	store := NewStorage(testmodels.TestDb, testmodels.TestChainConfig)
+	store := NewStorage(testmodels.TestChainConfig)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -82,11 +81,11 @@ func TestGetValidators(t *testing.T) {
 	stateDb, _ := state.New(common.Hash{}, state.NewDatabase(testmodels.TestDb), nil)
 
 	// Create a new storage object
-	store := NewStorage(testmodels.TestDb, testmodels.TestChainConfig)
+	store := NewStorage(testmodels.TestChainConfig)
 	store.SetValidatorsList(stateDb, testmodels.InputValidators)
 
-	for i, address := range testmodels.InputValidators {
-		validator := NewValidator(address, &common.Address{0x0000000000000000000000000000000000000000}, uint64(i), uint64(i), uint64(math.MaxUint64), nil)
+	for _, address := range testmodels.InputValidators {
+		validator := NewValidator(address, &common.Address{0x0000000000000000000000000000000000000000})
 		info, err := validator.MarshalBinary()
 		testutils.AssertNoError(t, err)
 
@@ -157,7 +156,7 @@ func TestGetValidators(t *testing.T) {
 				SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
 				SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
 			})
-			bc.EXPECT().SearchFirstEpochBlockHashRecursive(gomock.AssignableToTypeOf(test.slot)).AnyTimes().Return(blockHash, true)
+			bc.EXPECT().SearchFirstEpochBlockHashRecursive(gomock.AssignableToTypeOf(test.slot)).AnyTimes().Return(blockHash)
 			bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
 			bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
 			bc.EXPECT().GetCoordinatedCheckpointEpoch(gomock.AssignableToTypeOf(test.slot)).AnyTimes().Return(epoch)
@@ -186,17 +185,18 @@ func TestGetShuffledValidators(t *testing.T) {
 		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
 		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
 	})
-	bc.EXPECT().SearchFirstEpochBlockHashRecursive(gomock.AssignableToTypeOf(slot)).AnyTimes().Return(blockHash, true)
+	bc.EXPECT().SearchFirstEpochBlockHashRecursive(gomock.AssignableToTypeOf(slot)).AnyTimes().Return(blockHash)
 	bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
 	bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
 	bc.EXPECT().GetCoordinatedCheckpointEpoch(gomock.AssignableToTypeOf(slot)).AnyTimes().Return(epoch)
 
-	store := NewStorage(testmodels.TestDb, testmodels.TestChainConfig)
+	store := NewStorage(testmodels.TestChainConfig)
 	store.SetValidatorsList(stateDb, testmodels.InputValidators)
 
 	validatorList := make([]Validator, len(testmodels.InputValidators))
 	for i, address := range testmodels.InputValidators {
-		validator := NewValidator(address, &common.Address{0x0000000000000000000000000000000000000000}, uint64(i), uint64(i), uint64(math.MaxUint64), nil)
+		validator := NewValidator(address, &common.Address{0x0000000000000000000000000000000000000000})
+		validator.ActivationEpoch = uint64(i)
 		info, err := validator.MarshalBinary()
 		testutils.AssertNoError(t, err)
 		validatorList[i] = *validator

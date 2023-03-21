@@ -66,9 +66,9 @@ func DecodeBytes(b []byte) (Operation, error) {
 	case UpdateBalanceCode:
 		op = &validatorSyncOperation{}
 	case ExitCode:
-		op = &exitRequestOperation{}
+		op = &exitOperation{}
 	case WithdrawalCode:
-		op = &withdrawalRequestOperation{}
+		op = &withdrawalOperation{}
 	default:
 		return nil, ErrOpNotValid
 	}
@@ -99,9 +99,9 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 			return nil, err
 		}
 		buf[1] = byte(vs.OpCode())
-	case *exitRequestOperation:
+	case *exitOperation:
 		buf[1] = ExitCode
-	case *withdrawalRequestOperation:
+	case *withdrawalOperation:
 		buf[1] = WithdrawalCode
 	}
 

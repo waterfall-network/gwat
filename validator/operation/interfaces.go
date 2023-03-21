@@ -29,14 +29,14 @@ type ValidatorSync interface {
 	WithdrawalAddress() *common.Address
 }
 
-type ExitRequest interface {
+type Exit interface {
 	Operation
 	PubKey() common.BlsPubKey
 	CreatorAddress() common.Address
 	ExitAfterEpoch() *uint64
 }
 
-type WithdrawalRequest interface {
+type Withdrawal interface {
 	Operation
 	CreatorAddress() common.Address
 	Amount() *big.Int

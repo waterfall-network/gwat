@@ -125,7 +125,7 @@ func (s *PublicValidatorAPI) Validator_ExitData(_ context.Context, args ExitRequ
 		err error
 	)
 
-	if op, err = operation.NewExitRequestOperation(
+	if op, err = operation.NewExitOperation(
 		*args.PubKey,
 		*args.CreatorAddress,
 		args.ExitEpoch,

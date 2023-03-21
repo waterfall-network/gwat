@@ -22,11 +22,12 @@ var (
 	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
 	// have enough funds for transfer(topmost call only).
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
-	ErrMismatchAddresses            = errors.New("withdrawal and sender addresses are mismatch")
+	ErrInvalidFromAddresses         = errors.New("withdrawal and sender addresses are mismatch")
 	ErrUnknownValidator             = errors.New("unknown validator")
 	ErrNotActivatedValidator        = errors.New("validator not activated yet")
 	ErrValidatorIsOut               = errors.New("validator is out")
 	ErrInvalidToAddress             = errors.New("address to must be validators state address")
+	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
 )
 
 const (
@@ -127,9 +128,9 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, op o
 		ret, err = p.validatorDeposit(caller, toAddr, value, v)
 	case operation.ValidatorSync:
 		ret, err = p.syncOpProcessing(v)
-	case operation.ExitRequest:
+	case operation.Exit:
 		ret, err = p.validatorExit(caller, toAddr, v)
-	case operation.WithdrawalRequest:
+	case operation.Withdrawal:
 		ret, err = p.validatorWithdrawal(caller, toAddr, v)
 	}
 
@@ -141,7 +142,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, op o
 }
 
 func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *big.Int, op operation.Deposit) (_ []byte, err error) {
-	if p.storage.GetValidatorsStateAddress() != nil && toAddr != *p.storage.GetValidatorsStateAddress() {
+	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
 
@@ -157,7 +158,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	withdrawalAddress := op.WithdrawalAddress()
 
-	validator := valStore.NewValidator(op.CreatorAddress(), &withdrawalAddress, math.MaxUint64, math.MaxUint64, math.MaxUint64, nil)
+	validator := valStore.NewValidator(op.CreatorAddress(), &withdrawalAddress)
 
 	valInfo, err := validator.MarshalBinary()
 	if err != nil {
@@ -177,8 +178,8 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operation.ExitRequest) ([]byte, error) {
-	if p.storage.GetValidatorsStateAddress() != nil && toAddr != *p.storage.GetValidatorsStateAddress() {
+func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operation.Exit) ([]byte, error) {
+	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
 
@@ -197,7 +198,7 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 	}
 
 	if from != validator.GetWithdrawalAddress() {
-		return nil, ErrMismatchAddresses
+		return nil, ErrInvalidFromAddresses
 	}
 
 	logData := PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetValidatorIndex(), op.ExitAfterEpoch())
@@ -206,8 +207,8 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 	return op.CreatorAddress().Bytes(), nil
 }
 
-func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op operation.WithdrawalRequest) ([]byte, error) {
-	if p.storage.GetValidatorsStateAddress() != nil && toAddr != *p.storage.GetValidatorsStateAddress() {
+func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op operation.Withdrawal) ([]byte, error) {
+	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
 
@@ -215,7 +216,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	valInfo := p.Storage().GetValidatorInfo(p.state, op.CreatorAddress())
 
 	if from != valInfo.GetWithdrawalAddress() {
-		return nil, ErrMismatchAddresses
+		return nil, ErrInvalidFromAddresses
 	}
 
 	if valInfo.GetActivationEpoch() == math.MaxUint64 {
@@ -256,7 +257,7 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 	}
 
 	// TODO: calculate activation era and set to valInfo
-	//valInfo.SetActivationEpoch(era)
+	valInfo.SetActivationEpoch(op.ProcEpoch() + 1)
 	valInfo.SetValidatorIndex(op.Index())
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
@@ -269,8 +270,20 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 
 func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, error) {
 	valInfo := p.Storage().GetValidatorInfo(p.state, op.Creator())
+	if valInfo == nil {
+		return nil, ErrUnknownValidator
+	}
+
+	if valInfo.GetActivationEpoch() > op.ProcEpoch() {
+		return nil, ErrNotActivatedValidator
+	}
+
+	if valInfo.GetExitEpoch() != math.MaxUint64 {
+		return nil, ErrValidatorIsOut
+	}
+
 	// TODO calculate exit era and set to valInfo
-	//valInfo.SetExitEpoch(era)
+	valInfo.SetActivationEpoch(op.ProcEpoch() + 1)
 
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
@@ -283,6 +296,18 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	valAddress := op.Creator()
 
 	valInfo := p.Storage().GetValidatorInfo(p.state, valAddress)
+	if valInfo == nil {
+		return nil, ErrUnknownValidator
+	}
+
+	if valInfo.GetActivationEpoch() > op.ProcEpoch() {
+		return nil, ErrNotActivatedValidator
+	}
+
+	if valInfo.GetExitEpoch() == math.MaxUint64 {
+		return nil, ErrNoExitRequest
+	}
+
 	valInfo.SetValidatorBalance(op.Amount())
 
 	p.Storage().SetValidatorInfo(p.state, valInfo)

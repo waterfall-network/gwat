@@ -50,7 +50,7 @@ type TestCase struct {
 	CaseName string
 	TestData interface{}
 	Errs     []error
-	Fn       func(c *TestCase, a *common.Address)
+	Fn       func(c *TestCase)
 }
 
 type TestData struct {

@@ -69,7 +69,7 @@ func TestWithdrawalData(t *testing.T) {
 		testutils.AssertNoError(t, err)
 
 		o := i.(decodedOp)
-		opDecoded, ok := op.(WithdrawalRequest)
+		opDecoded, ok := op.(Withdrawal)
 		if !ok {
 			return errors.New("invalid operation type")
 		}

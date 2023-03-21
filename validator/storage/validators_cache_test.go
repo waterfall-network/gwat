@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"math"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -141,7 +140,7 @@ func TestAllValidatorsCache(t *testing.T) {
 	validatorsList := make([]Validator, len(testmodels.InputValidators))
 
 	for i, inputValidator := range testmodels.InputValidators {
-		validatorsList[i] = *NewValidator(inputValidator, nil, uint64(i), 0, math.MaxUint64, nil)
+		validatorsList[i] = *NewValidator(inputValidator, nil)
 	}
 
 	cache.addAllValidatorsByEpoch(epoch, validatorsList)
@@ -190,7 +189,7 @@ func TestGetValidatorsAddresses(t *testing.T) {
 	validatorsList := make([]Validator, len(testmodels.InputValidators))
 
 	for i, inputValidator := range testmodels.InputValidators {
-		validatorsList[i] = *NewValidator(inputValidator, nil, uint64(i), uint64(i), math.MaxUint64, nil)
+		validatorsList[i] = *NewValidator(inputValidator, nil)
 	}
 
 	cache.addAllValidatorsByEpoch(epoch, validatorsList)

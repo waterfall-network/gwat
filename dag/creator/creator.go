@@ -909,7 +909,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
 	if c.commitTransactions(txs, c.coinbase) {
-		if len(syncData) > 0 {
+		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
 			c.processValidatorTxs(stateBlock.Hash(), syncData)
 			c.commit(tips, c.fullTaskHook, true, tstart)
 
@@ -921,7 +921,9 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		return
 	}
 
-	c.processValidatorTxs(stateBlock.Hash(), syncData)
+	if c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
+		c.processValidatorTxs(stateBlock.Hash(), syncData)
+	}
 
 	c.commit(tips, c.fullTaskHook, true, tstart)
 }
@@ -1101,22 +1103,20 @@ func (c *Creator) filterPendingTxs(pending map[common.Address]types.Transactions
 }
 
 func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync) {
-	if c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-		nonce := c.eth.TxPool().Nonce(c.coinbase)
-		for _, validatorSync := range syncData {
-			if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
-				valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, blockHash, c.coinbase, validatorSync, nonce)
-				if err != nil {
-					log.Error("Failed to create validator sync tx", "error", err)
-					continue
-				}
+	nonce := c.eth.TxPool().Nonce(c.coinbase)
+	for _, validatorSync := range syncData {
+		if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
+			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, blockHash, c.coinbase, validatorSync, nonce)
+			if err != nil {
+				log.Error("Failed to create validator sync tx", "error", err)
+				continue
+			}
 
-				_, err = c.commitTransaction(valSyncTx, c.coinbase)
-				if err != nil {
-					log.Error("Error", "error", err)
-				} else {
-					c.chain.RemoveSyncOpData(validatorSync)
-				}
+			_, err = c.commitTransaction(valSyncTx, c.coinbase)
+			if err != nil {
+				log.Error("Error", "error", err)
+			} else {
+				c.chain.RemoveSyncOpData(validatorSync)
 			}
 		}
 	}

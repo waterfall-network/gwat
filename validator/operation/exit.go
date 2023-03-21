@@ -9,13 +9,13 @@ const (
 	minExitRequestLen = common.BlsPubKeyLength + common.AddressLength
 )
 
-type exitRequestOperation struct {
+type exitOperation struct {
 	pubKey         common.BlsPubKey
 	creatorAddress common.Address
 	exitAfterEpoch *uint64
 }
 
-func (op *exitRequestOperation) init(
+func (op *exitOperation) init(
 	pubKey common.BlsPubKey,
 	creatorAddress common.Address,
 	exitAfterEpoch *uint64,
@@ -35,12 +35,12 @@ func (op *exitRequestOperation) init(
 	return nil
 }
 
-func NewExitRequestOperation(
+func NewExitOperation(
 	pubKey common.BlsPubKey,
 	creatorAddress common.Address,
 	exitAfterEpoch *uint64,
-) (ExitRequest, error) {
-	op := &exitRequestOperation{}
+) (Exit, error) {
+	op := &exitOperation{}
 	if err := op.init(pubKey, creatorAddress, exitAfterEpoch); err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func NewExitRequestOperation(
 
 }
 
-func (op *exitRequestOperation) MarshalBinary() ([]byte, error) {
+func (op *exitOperation) MarshalBinary() ([]byte, error) {
 	var offset int
 	dataLen := minExitRequestLen
 	if op.exitAfterEpoch != nil {
@@ -71,7 +71,7 @@ func (op *exitRequestOperation) MarshalBinary() ([]byte, error) {
 	return data, nil
 }
 
-func (op *exitRequestOperation) UnmarshalBinary(data []byte) error {
+func (op *exitOperation) UnmarshalBinary(data []byte) error {
 	if len(data) < minExitRequestLen {
 		return ErrBadDataLen
 	}
@@ -91,18 +91,18 @@ func (op *exitRequestOperation) UnmarshalBinary(data []byte) error {
 	}
 }
 
-func (op *exitRequestOperation) OpCode() Code {
+func (op *exitOperation) OpCode() Code {
 	return ExitCode
 }
 
-func (op *exitRequestOperation) PubKey() common.BlsPubKey {
+func (op *exitOperation) PubKey() common.BlsPubKey {
 	return op.pubKey
 }
 
-func (op *exitRequestOperation) CreatorAddress() common.Address {
+func (op *exitOperation) CreatorAddress() common.Address {
 	return op.creatorAddress
 }
 
-func (op *exitRequestOperation) ExitAfterEpoch() *uint64 {
+func (op *exitOperation) ExitAfterEpoch() *uint64 {
 	return op.exitAfterEpoch
 }

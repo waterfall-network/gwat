@@ -85,12 +85,19 @@ func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
 
 func (s *storage) GetDepositCount(stateDb vm.StateDB) uint64 {
 	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
+	if buf == nil {
+		return 0
+	}
+
 	return binary.BigEndian.Uint64(buf[:uint64Size])
 }
 
 func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
 	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
 
+	if buf == nil {
+		buf = make([]byte, uint64Size)
+	}
 	currentCount := binary.BigEndian.Uint64(buf[:uint64Size])
 	currentCount++
 
@@ -256,7 +263,7 @@ func (s *storage) AddValidatorToList(stateDb vm.StateDB, index uint64, validator
 		}
 	}
 
-	if uint64(len(list)) < index {
+	if uint64(len(list)) <= index {
 		for uint64(len(list)) <= index {
 			list = append(list, common.Address{})
 		}

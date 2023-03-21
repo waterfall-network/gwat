@@ -120,14 +120,3 @@ func UnpackExitRequestLogData(data []byte) (
 
 	return
 }
-
-func PackWithdrawalRequestLogData(
-	creatorAddress common.Address,
-	amount *big.Int,
-) []byte {
-	data := make([]byte, 0)
-	data = append(data, creatorAddress.Bytes()...)
-
-	data = append(data, amount.Bytes()...)
-	return data
-}
