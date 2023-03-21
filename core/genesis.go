@@ -305,7 +305,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	validatorStorage.SetValidatorsList(statedb, g.Validators)
 	for _, val := range g.Validators {
 		v := valStore.NewValidator(val, &val)
-
+		v.ActivationEpoch = 0
 		info, err := v.MarshalBinary()
 		if err != nil {
 			log.Error("can`t add validator to the state", "address", val, "error", err)
