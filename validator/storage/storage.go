@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/binary"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -22,6 +23,7 @@ type blockchain interface {
 	GetEraInfo() *era.EraInfo
 	GetConfig() *params.ChainConfig
 	SearchFirstEpochBlockHashRecursive(epoch uint64) common.Hash
+	Database() ethdb.Database
 }
 
 type Storage interface {

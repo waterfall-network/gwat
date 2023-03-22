@@ -3,6 +3,7 @@ package validator
 import (
 	"errors"
 	"fmt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"math"
 	"math/big"
 
@@ -265,7 +266,12 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 	if !eraInfo.IsTransitionEpoch(p.blockchain, op.ProcEpoch()) {
 		startEpoch = eraInfo.NextEraFirstEpoch()
 	} else {
-		// TODO: need calculating last epoch of next era
+		nextEra, err := rawdb.ReadEra(p.blockchain.Database(), eraInfo.Number()+1)
+		if err != nil {
+			return nil, err
+		}
+
+		startEpoch = nextEra.From
 	}
 
 	valInfo.SetActivationEpoch(startEpoch)
@@ -298,7 +304,12 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 	if !eraInfo.IsTransitionEpoch(p.blockchain, op.ProcEpoch()) {
 		exitEpoch = eraInfo.NextEraFirstEpoch()
 	} else {
-		// TODO: need calculating last epoch of next era
+		nextEra, err := rawdb.ReadEra(p.blockchain.Database(), eraInfo.Number()+1)
+		if err != nil {
+			return nil, err
+		}
+
+		exitEpoch = nextEra.From
 	}
 
 	valInfo.SetExitEpoch(exitEpoch)

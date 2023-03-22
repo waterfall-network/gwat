@@ -3,6 +3,7 @@ package era
 import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
@@ -11,6 +12,7 @@ type Blockchain interface {
 	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
 	GetEraInfo() *EraInfo
 	GetConfig() *params.ChainConfig
+	Database() ethdb.Database
 }
 
 type Era struct {
@@ -91,21 +93,13 @@ func (ei *EraInfo) LastSlot(bc Blockchain) uint64 {
 	return slot
 }
 func (ei *EraInfo) IsTransitionEpoch(bc Blockchain, epoch uint64) bool {
-	if epoch == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
-		return true
-	}
-
-	return false
+	return epoch >= (ei.ToEpoch()-bc.GetConfig().TransitionPeriod) && epoch <= ei.ToEpoch()
 }
 
 func (ei *EraInfo) IsTransitionSlot(bc Blockchain, slot uint64) bool {
-	if slot == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
-		if bc.GetSlotInfo().IsEpochStart(slot) == true {
-			return true
-		}
-	}
+	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 
-	return false
+	return ei.IsTransitionEpoch(bc, slotEpoch) && bc.GetSlotInfo().IsEpochStart(slot)
 }
 
 func (ei *EraInfo) NextEraFirstEpoch() uint64 {

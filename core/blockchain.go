@@ -3749,3 +3749,7 @@ func (bc *BlockChain) HandleEra(slot uint64) {
 		}
 	}
 }
+
+func (bc *BlockChain) Database() ethdb.Database {
+	return bc.db
+}
