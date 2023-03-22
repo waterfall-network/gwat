@@ -90,7 +90,7 @@ func (ei *EraInfo) LastSlot(bc blockchain) uint64 {
 
 	return slot
 }
-func (ei *EraInfo) IsTransitionEpoch(bc blockchain, epoch uint64) bool {
+func (ei *EraInfo) IsTransitionPeriodEpoch(bc blockchain, epoch uint64) bool {
 	if epoch == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
 		return true
 	}
@@ -98,7 +98,7 @@ func (ei *EraInfo) IsTransitionEpoch(bc blockchain, epoch uint64) bool {
 	return false
 }
 
-func (ei *EraInfo) IsTransitionSlot(bc blockchain, slot uint64) bool {
+func (ei *EraInfo) IsTransitionPeriodStartSlot(bc blockchain, slot uint64) bool {
 	if slot == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
 		if bc.GetSlotInfo().IsEpochStart(slot) == true {
 			return true
@@ -136,15 +136,9 @@ func (ei *EraInfo) IsContainsEpoch(epoch uint64) bool {
 	return false
 }
 
-// IsTransitionPeriod checks if the given slot falls in the transition period between the current era and the next era.
-func IsEraTransitionPeriodStart(bc blockchain, slot uint64) bool {
-	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-	lastEpoch := bc.GetEraInfo().ToEpoch()
-
-	// Check if the current epoch is in the transition period (i.e., the last two epochs of the current era)
-	if currentEpoch == lastEpoch-bc.GetConfig().TransitionPeriod {
-		return bc.GetSlotInfo().IsEpochStart(slot)
-	} else {
-		return false
+func (e *Era) IsContainsEpoch(epoch uint64) bool {
+	if epoch >= e.From && epoch <= e.To {
+		return true
 	}
+	return false
 }
