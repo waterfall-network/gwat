@@ -5,6 +5,7 @@
 package finalizer
 
 import (
+	"fmt"
 	"sort"
 	"sync/atomic"
 
@@ -330,11 +331,11 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	spineBlock := bc.GetBlock(*spineHash)
 
 	if spineBlock == nil {
-		log.Error("Set spine state: spine not found", "spineHash", spineHash)
+		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash))
 		return ErrSpineNotFound
 	}
 	if spineBlock.Height() != spineBlock.Nr() {
-		log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", spineHash)
+		log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
 		return ErrSpineNotFound
 	}
 

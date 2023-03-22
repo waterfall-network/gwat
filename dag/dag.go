@@ -98,11 +98,11 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	if data.BaseSpine != nil {
 		log.Info("Handle Finalize: start",
-			"baseSpine", (*data.BaseSpine).Hex(),
+			"baseSpine", fmt.Sprintf("%#x", data.BaseSpine),
 			"spines", data.Spines,
 			"cp.Epoch", data.Checkpoint.Epoch,
-			"cp.Spine", data.Checkpoint.Spine.Hex(),
-			"cp.Spine", data.Checkpoint.Spine.Hex(),
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.Roor", fmt.Sprintf("%#x", data.Checkpoint.Root),
 			"ValSyncData", data.ValSyncData,
 			"\u2692", params.BuildId)
 	} else {
@@ -110,8 +110,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			"baseSpine", nil,
 			"spines", data.Spines,
 			"cp.Epoch", data.Checkpoint.Epoch,
-			"cp.Spine", data.Checkpoint.Spine.Hex(),
-			"cp.Spine", data.Checkpoint.Spine.Hex(),
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
 			"ValSyncData", data.ValSyncData,
 			"\u2692", params.BuildId)
 	}
@@ -139,6 +139,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 		}
+	} else {
+		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 	}
 
 	// handle validator sync data
@@ -187,11 +189,13 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 		Error:   nil,
 		LFSpine: &lfHash,
 	}
+	var cpepoch uint64
 	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
 		res.CpEpoch = &cp.Epoch
 		res.CpRoot = &cp.Root
+		cpepoch = cp.Epoch
 	}
-	log.Info("Handle CoordinatedState: response", "result", res)
+	log.Info("Handle CoordinatedState: response", "epoch", cpepoch, "result", res)
 	return res
 }
 
@@ -373,7 +377,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
-		d.errChan <- creator.ErrSynchronization
+		return
+		//d.errChan <- creator.ErrSynchronization
 	}
 
 	d.bc.DagMu.Lock()
