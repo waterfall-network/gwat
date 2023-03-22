@@ -2060,7 +2060,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	// Validate block era
 	bc.syncEra(block.Slot())
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-	isValidEra := bc.eraInfo.IsContainsEpoch(blockEpoch)
+	isValidEra := bc.eraInfo.GetEra().IsContainsEpoch(blockEpoch)
 	if !isValidEra {
 		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era(), "current era", bc.GetEraInfo().GetEra())
 		return false, nil
@@ -3748,7 +3748,7 @@ func (bc *BlockChain) HandleEra(slot uint64) {
 func (bc *BlockChain) syncEra(slot uint64) {
 	toEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	// Sync era from current epoch to slot
-	for !bc.GetEraInfo().IsContainsEpoch(toEpoch) {
+	for !bc.GetEraInfo().GetEra().IsContainsEpoch(toEpoch) {
 		validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
 		// Calculate next era
 		nextEraNumber := bc.GetEraInfo().Number() + 1

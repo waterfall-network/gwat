@@ -129,13 +129,6 @@ func (ei *EraInfo) LenSlots() uint64 {
 	return ei.length * 32
 }
 
-func (ei *EraInfo) IsContainsEpoch(epoch uint64) bool {
-	if epoch >= ei.FromEpoch() && epoch <= ei.ToEpoch() {
-		return true
-	}
-	return false
-}
-
 func (e *Era) IsContainsEpoch(epoch uint64) bool {
 	if epoch >= e.From && epoch <= e.To {
 		return true
