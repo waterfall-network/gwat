@@ -41,8 +41,6 @@ type Storage interface {
 	GetDepositCount(stateDb vm.StateDB) uint64
 	IncrementDepositCount(stateDb vm.StateDB)
 
-	EstimateEraLength(bc blockchain, slot uint64) (epochsPerEra uint64)
-
 	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
 
@@ -281,15 +279,3 @@ func (s *storage) AddValidatorToList(stateDb vm.StateDB, index uint64, validator
 	s.SetValidatorsList(stateDb, list)
 }
 
-func (s *storage) EstimateEraLength(bc blockchain, slot uint64) (eraLength uint64) {
-	var (
-		epochsPerEra       = s.config.EpochsPerEra
-		slotsPerEpoch      = bc.GetSlotInfo().SlotsPerEpoch
-		validators, _      = s.GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
-		numberOfValidators = uint64(len(validators))
-	)
-
-	eraLength = epochsPerEra * (1 + (numberOfValidators / (epochsPerEra * slotsPerEpoch)))
-
-	return
-}
