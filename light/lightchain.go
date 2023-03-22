@@ -36,6 +36,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -65,6 +66,7 @@ type LightChain struct {
 
 	slotInfo         *types.SlotInfo // coordinator slot settings
 	validatorStorage valStore.Storage
+	eraInfo          *era.EraInfo
 
 	chainmu sync.RWMutex // protects header inserts
 	quit    chan struct{}
@@ -74,6 +76,14 @@ type LightChain struct {
 	running          int32 // whether LightChain is running or stopped
 	procInterrupt    int32 // interrupts chain insert
 	disableCheckFreq int32 // disables header verification
+}
+
+func (lc *LightChain) GetConfig() *params.ChainConfig {
+	return lc.Config()
+}
+
+func (lc *LightChain) GetEraInfo() *era.EraInfo {
+	return lc.eraInfo
 }
 
 func (lc *LightChain) Synchronising() bool {

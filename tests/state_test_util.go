@@ -221,7 +221,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.BaseFee = baseFee
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 	tp := token.NewProcessor(context, statedb)
-	vp := validator.NewProcessor(context, statedb, config)
+	vp := validator.NewProcessor(context, statedb, config, nil)
 
 	// Execute the message.
 	snapshot := statedb.Snapshot()

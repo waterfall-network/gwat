@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -17,11 +18,8 @@ import (
 )
 
 var (
-	stateDb   *state.StateDB
-	processor *Processor
-
+	stateDb           *state.StateDB
 	from              common.Address
-	to                common.Address
 	pubKey            common.BlsPubKey // validator public key
 	creatorAddress    common.Address   // attached creator account
 	creatorAddress2   common.Address   // attached creator account
@@ -31,14 +29,11 @@ var (
 	creatorAddress6   common.Address   // attached creator account
 	withdrawalAddress common.Address   // attached withdrawal credentials
 	signature         common.BlsSignature
+	ctrl              *gomock.Controller
 
 	value     = MinDepositVal
 	procEpoch = uint64(100)
-)
-
-func init() {
-	stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	ctx := vm.BlockContext{
+	ctx       = vm.BlockContext{
 		CanTransfer: nil,
 		Transfer:    nil,
 		Coinbase:    common.Address{},
@@ -47,9 +42,11 @@ func init() {
 		Difficulty:  big.NewInt(0x30000),
 		GasLimit:    uint64(6000000),
 	}
-	processor = NewProcessor(ctx, stateDb, testmodels.TestChainConfig)
+)
 
-	to = processor.GetValidatorsStateAddress()
+func init() {
+	stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+
 	from = common.BytesToAddress(testutils.RandomData(20))
 	pubKey = common.BytesToBlsPubKey(testutils.RandomData(48))
 	creatorAddress = common.BytesToAddress(testutils.RandomData(20))
@@ -63,6 +60,13 @@ func init() {
 }
 
 func TestProcessorDeposit(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	bc := NewMockBlockchain(ctrl)
+	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	to := processor.GetValidatorsStateAddress()
+
 	depositOperation, err := operation.NewDepositOperation(pubKey, creatorAddress, withdrawalAddress, signature)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
@@ -81,7 +85,7 @@ func TestProcessorDeposit(t *testing.T) {
 
 				balanceFromBfr := processor.state.GetBalance(from)
 
-				call(t, v.Caller, v.AddrTo, value, depositOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, depositOperation, c.Errs)
 
 				balanceFromAft := processor.state.GetBalance(from)
 				balDif := new(big.Int).Sub(balanceFromBfr, balanceFromAft)
@@ -99,7 +103,7 @@ func TestProcessorDeposit(t *testing.T) {
 			Errs: []error{ErrTooLowDepositValue},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				call(t, v.Caller, v.AddrTo, nil, depositOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, depositOperation, c.Errs)
 			},
 		},
 		{
@@ -112,7 +116,7 @@ func TestProcessorDeposit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				val1, _ := new(big.Int).SetString("1000000000000000000", 10)
-				call(t, v.Caller, v.AddrTo, val1, depositOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, val1, depositOperation, c.Errs)
 			},
 		},
 		{
@@ -124,7 +128,7 @@ func TestProcessorDeposit(t *testing.T) {
 			Errs: []error{ErrInvalidToAddress},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				call(t, v.Caller, v.AddrTo, nil, depositOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, depositOperation, c.Errs)
 			},
 		},
 	}
@@ -137,6 +141,12 @@ func TestProcessorDeposit(t *testing.T) {
 }
 
 func TestProcessorActivate(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	bc := NewMockBlockchain(ctrl)
+	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	to := processor.GetValidatorsStateAddress()
 	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, procEpoch, 0, creatorAddress2, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
@@ -149,7 +159,7 @@ func TestProcessorActivate(t *testing.T) {
 			Errs: []error{ErrUnknownValidator},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				call(t, v.Caller, v.AddrTo, nil, activateOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, activateOperation, c.Errs)
 			},
 		},
 		{
@@ -176,7 +186,7 @@ func TestProcessorActivate(t *testing.T) {
 					t.Fatal()
 				}
 
-				call(t, v.Caller, v.AddrTo, value, activateOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, activateOperation, c.Errs)
 
 				valInfo = processor.storage.GetValidatorInfo(processor.state, creatorAddress2)
 
@@ -201,6 +211,13 @@ func TestProcessorActivate(t *testing.T) {
 }
 
 func TestProcessorExit(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	bc := NewMockBlockchain(ctrl)
+	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	to := processor.GetValidatorsStateAddress()
+
 	exitOperation, err := operation.NewExitOperation(pubKey, creatorAddress3, &procEpoch)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
@@ -213,7 +230,7 @@ func TestProcessorExit(t *testing.T) {
 			Errs: []error{ErrUnknownValidator},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				call(t, v.Caller, v.AddrTo, nil, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, exitOperation, c.Errs)
 			},
 		},
 		{
@@ -225,7 +242,7 @@ func TestProcessorExit(t *testing.T) {
 			Errs: []error{ErrInvalidToAddress},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				call(t, v.Caller, v.AddrTo, nil, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, exitOperation, c.Errs)
 			},
 		},
 		{
@@ -244,7 +261,7 @@ func TestProcessorExit(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
 		},
 		{
@@ -265,7 +282,7 @@ func TestProcessorExit(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
 		},
 		{
@@ -285,7 +302,7 @@ func TestProcessorExit(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
 		},
 		{
@@ -305,7 +322,7 @@ func TestProcessorExit(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
 		},
 	}
@@ -318,6 +335,13 @@ func TestProcessorExit(t *testing.T) {
 }
 
 func TestProcessorDeactivate(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	bc := NewMockBlockchain(ctrl)
+	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	to := processor.GetValidatorsStateAddress()
+
 	exitOperation, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, creatorAddress4, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
@@ -330,7 +354,7 @@ func TestProcessorDeactivate(t *testing.T) {
 			Errs: []error{ErrUnknownValidator},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				call(t, v.Caller, v.AddrTo, nil, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, exitOperation, c.Errs)
 			},
 		},
 		{
@@ -349,7 +373,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
 		},
 		{
@@ -370,7 +394,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
 		},
 		{
@@ -390,7 +414,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
 		},
 	}
@@ -403,6 +427,13 @@ func TestProcessorDeactivate(t *testing.T) {
 }
 
 func TestProcessorWithdrawal(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	bc := NewMockBlockchain(ctrl)
+	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	to := processor.GetValidatorsStateAddress()
+
 	withdrawalOperation, err := operation.NewWithdrawalOperation(creatorAddress5, value)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
@@ -415,7 +446,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Errs: []error{ErrInvalidToAddress},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				call(t, v.Caller, v.AddrTo, nil, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, withdrawalOperation, c.Errs)
 			},
 		},
 		{
@@ -434,7 +465,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 
 				processor.Storage().SetValidatorInfo(processor.state, valInfo)
 
-				call(t, v.Caller, v.AddrTo, nil, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, withdrawalOperation, c.Errs)
 			},
 		},
 		{
@@ -453,7 +484,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 			},
 		},
 		{
@@ -473,7 +504,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 			},
 		},
 		{
@@ -495,7 +526,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 
 				valInfo := processor.Storage().GetValidatorInfo(processor.state, creatorAddress5)
 				balanceDif := new(big.Int).Sub(valBalance, valInfo.GetValidatorBalance())
@@ -515,6 +546,13 @@ func TestProcessorWithdrawal(t *testing.T) {
 }
 
 func TestProcessorUpdateBalance(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	bc := NewMockBlockchain(ctrl)
+	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	to := processor.GetValidatorsStateAddress()
+
 	withdrawalOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, procEpoch, 0, creatorAddress6, value, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
@@ -527,7 +565,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Errs: []error{ErrUnknownValidator},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				call(t, v.Caller, v.AddrTo, nil, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, nil, withdrawalOperation, c.Errs)
 			},
 		},
 		{
@@ -546,7 +584,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 			},
 		},
 		{
@@ -566,7 +604,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 			},
 		},
 		{
@@ -589,7 +627,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				call(t, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
+				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 
 				valInfo := processor.Storage().GetValidatorInfo(processor.state, creatorAddress6)
 
@@ -607,7 +645,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 	}
 }
 
-func call(t *testing.T, Caller Ref, addrTo common.Address, value *big.Int, op operation.Operation, Errs []error) []byte {
+func call(t *testing.T, processor *Processor, Caller Ref, addrTo common.Address, value *big.Int, op operation.Operation, Errs []error) []byte {
 	res, err := processor.Call(Caller, addrTo, value, op)
 	if !testutils.CheckError(err, Errs) {
 		t.Fatalf("Case failed\nwant errors: %s\nhave errors: %s", Errs, err)

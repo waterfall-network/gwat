@@ -81,10 +81,10 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 	if stateHead == nil {
 		return false, fmt.Errorf("validate validator sync operation failed: state block not found heash=%s", stateBlockHash.Hex())
 	}
-	stateEpoch := bc.GetSlotInfo().SlotToEpoch(stateHead.Slot)
-	if valSyncOp.ProcEpoch < stateEpoch {
-		return false, fmt.Errorf("validate validator sync operation failed: outdated epoch ProcEpoch=%d stateEpoch=%d", valSyncOp.ProcEpoch, stateEpoch)
-	}
+	//stateEpoch := bc.GetSlotInfo().SlotToEpoch(stateHead.Slot)
+	//if valSyncOp.ProcEpoch < stateEpoch {
+	//	return false, fmt.Errorf("validate validator sync operation failed: outdated epoch ProcEpoch=%d stateEpoch=%d", valSyncOp.ProcEpoch, stateEpoch)
+	//}
 
 	stateDb, err := bc.StateAt(stateHead.Root)
 	if err != nil {

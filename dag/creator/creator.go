@@ -631,6 +631,7 @@ func (c *Creator) commitTransaction(tx *types.Transaction, coinbase common.Addre
 		tx,
 		&c.current.header.GasUsed,
 		*c.chain.GetVMConfig(),
+		c.chain,
 	)
 	if err != nil {
 		c.current.state.RevertToSnapshot(snap)
@@ -900,6 +901,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	filterPending, err := c.filterPendingTxs(pending)
 	if err != nil {
 		log.Error("can`t filter pending transactions", "error", err)
+
 		return
 	}
 
@@ -910,13 +912,17 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		c.errWorkCh <- &ErrNoTxs
+
 		return
 	}
 
 	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
 	if c.commitTransactions(txs, c.coinbase) {
 		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-			c.processValidatorTxs(stateBlock.Hash(), syncData)
+			if err := c.processValidatorTxs(stateBlock.Hash(), syncData); err != nil {
+				return
+			}
+
 			c.commit(tips, c.fullTaskHook, true, tstart)
 
 			return
@@ -924,6 +930,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		c.errWorkCh <- &ErrNoTxs
+
 		return
 	}
 
@@ -1108,22 +1115,25 @@ func (c *Creator) filterPendingTxs(pending map[common.Address]types.Transactions
 	return pending, nil
 }
 
-func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync) {
+func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync) error {
 	nonce := c.eth.TxPool().Nonce(c.coinbase)
 	for _, validatorSync := range syncData {
 		if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
 			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, blockHash, c.coinbase, validatorSync, nonce)
 			if err != nil {
-				log.Error("Failed to create validator sync tx", "error", err)
+				log.Error("failed to create validator sync tx", "error", err)
 				continue
 			}
 
 			_, err = c.commitTransaction(valSyncTx, c.coinbase)
 			if err != nil {
-				log.Error("Error", "error", err)
+				log.Error("can`t commit validator sync tx", "error", err)
+				return err
 			} else {
 				c.chain.RemoveSyncOpData(validatorSync)
 			}
 		}
 	}
+
+	return nil
 }

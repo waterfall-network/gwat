@@ -6,7 +6,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
-type blockchain interface {
+type Blockchain interface {
 	GetSlotInfo() *types.SlotInfo
 	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
 	GetEraInfo() *EraInfo
@@ -69,7 +69,7 @@ func (ei *EraInfo) EpochsPerEra() uint64 {
 func (ei *EraInfo) FirstEpoch() uint64 {
 	return ei.FromEpoch()
 }
-func (ei *EraInfo) FirstSlot(bc blockchain) uint64 {
+func (ei *EraInfo) FirstSlot(bc Blockchain) uint64 {
 	slot, err := bc.GetSlotInfo().SlotOfEpochStart(ei.FirstEpoch())
 	if err != nil {
 		return 0
@@ -82,7 +82,7 @@ func (ei *EraInfo) LastEpoch() uint64 {
 	return ei.ToEpoch()
 }
 
-func (ei *EraInfo) LastSlot(bc blockchain) uint64 {
+func (ei *EraInfo) LastSlot(bc Blockchain) uint64 {
 	slot, err := bc.GetSlotInfo().SlotOfEpochEnd(ei.LastEpoch())
 	if err != nil {
 		return 0
@@ -90,7 +90,7 @@ func (ei *EraInfo) LastSlot(bc blockchain) uint64 {
 
 	return slot
 }
-func (ei *EraInfo) IsTransitionEpoch(bc blockchain, epoch uint64) bool {
+func (ei *EraInfo) IsTransitionEpoch(bc Blockchain, epoch uint64) bool {
 	if epoch == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
 		return true
 	}
@@ -98,7 +98,7 @@ func (ei *EraInfo) IsTransitionEpoch(bc blockchain, epoch uint64) bool {
 	return false
 }
 
-func (ei *EraInfo) IsTransitionSlot(bc blockchain, slot uint64) bool {
+func (ei *EraInfo) IsTransitionSlot(bc Blockchain, slot uint64) bool {
 	if slot == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
 		if bc.GetSlotInfo().IsEpochStart(slot) == true {
 			return true
@@ -112,7 +112,7 @@ func (ei *EraInfo) NextEraFirstEpoch() uint64 {
 	return ei.ToEpoch() + 1
 }
 
-func (ei *EraInfo) NextEraFirstSlot(bc blockchain) uint64 {
+func (ei *EraInfo) NextEraFirstSlot(bc Blockchain) uint64 {
 	slot, err := bc.GetSlotInfo().SlotOfEpochStart(ei.NextEraFirstEpoch())
 	if err != nil {
 		return 0
@@ -130,7 +130,7 @@ func (ei *EraInfo) LenSlots() uint64 {
 }
 
 // IsTransitionPeriod checks if the given slot falls in the transition period between the current era and the next era.
-func IsEraTransitionPeriodStart(bc blockchain, slot uint64) bool {
+func IsEraTransitionPeriodStart(bc Blockchain, slot uint64) bool {
 	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	lastEpoch := bc.GetEraInfo().ToEpoch()
 

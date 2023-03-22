@@ -12,6 +12,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
@@ -65,15 +66,17 @@ type Processor struct {
 	ctx          vm.BlockContext
 	eventEmmiter *EventEmmiter
 	storage      valStore.Storage
+	blockchain   era.Blockchain
 }
 
 // NewProcessor creates new validator processor
-func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, config *params.ChainConfig) *Processor {
+func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, config *params.ChainConfig, bc era.Blockchain) *Processor {
 	return &Processor{
 		ctx:          blockCtx,
 		state:        stateDb,
 		eventEmmiter: NewEventEmmiter(stateDb),
 		storage:      valStore.NewStorage(config),
+		blockchain:   bc,
 	}
 }
 
@@ -256,8 +259,16 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 		return nil, ErrUnknownValidator
 	}
 
-	// TODO: calculate activation era and set to valInfo
-	valInfo.SetActivationEpoch(op.ProcEpoch() + 1)
+	var startEpoch uint64
+	eraInfo := p.blockchain.GetEraInfo()
+
+	if !eraInfo.IsTransitionEpoch(p.blockchain, op.ProcEpoch()) {
+		startEpoch = eraInfo.NextEraFirstEpoch()
+	} else {
+		// TODO: need calculating last epoch of next era
+	}
+
+	valInfo.SetActivationEpoch(startEpoch)
 	valInfo.SetValidatorIndex(op.Index())
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
@@ -277,14 +288,20 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 	if valInfo.GetActivationEpoch() > op.ProcEpoch() {
 		return nil, ErrNotActivatedValidator
 	}
-
 	if valInfo.GetExitEpoch() != math.MaxUint64 {
 		return nil, ErrValidatorIsOut
 	}
 
-	// TODO calculate exit era and set to valInfo
-	valInfo.SetActivationEpoch(op.ProcEpoch() + 1)
+	var exitEpoch uint64
+	eraInfo := p.blockchain.GetEraInfo()
 
+	if !eraInfo.IsTransitionEpoch(p.blockchain, op.ProcEpoch()) {
+		exitEpoch = eraInfo.NextEraFirstEpoch()
+	} else {
+		// TODO: need calculating last epoch of next era
+	}
+
+	valInfo.SetExitEpoch(exitEpoch)
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
 	log.Info("Deactivate", "creator", op.Creator().Hex(), "ExitEpoch", op.ProcEpoch())
