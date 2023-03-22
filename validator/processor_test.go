@@ -22,12 +22,6 @@ var (
 	stateDb           *state.StateDB
 	from              common.Address
 	pubKey            common.BlsPubKey // validator public key
-	creatorAddress    common.Address   // attached creator account
-	creatorAddress2   common.Address   // attached creator account
-	creatorAddress3   common.Address   // attached creator account
-	creatorAddress4   common.Address   // attached creator account
-	creatorAddress5   common.Address   // attached creator account
-	creatorAddress6   common.Address   // attached creator account
 	withdrawalAddress common.Address   // attached withdrawal credentials
 	signature         common.BlsSignature
 	ctrl              *gomock.Controller
@@ -51,12 +45,6 @@ func init() {
 
 	from = common.BytesToAddress(testutils.RandomData(20))
 	pubKey = common.BytesToBlsPubKey(testutils.RandomData(48))
-	creatorAddress = common.BytesToAddress(testutils.RandomData(20))
-	creatorAddress2 = common.BytesToAddress(testutils.RandomData(20))
-	creatorAddress3 = common.BytesToAddress(testutils.RandomData(20))
-	creatorAddress4 = common.BytesToAddress(testutils.RandomData(20))
-	creatorAddress5 = common.BytesToAddress(testutils.RandomData(20))
-	creatorAddress6 = common.BytesToAddress(testutils.RandomData(20))
 	withdrawalAddress = common.BytesToAddress(testutils.RandomData(20))
 	signature = common.BytesToBlsSig(testutils.RandomData(96))
 
@@ -71,7 +59,7 @@ func TestProcessorDeposit(t *testing.T) {
 	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	depositOperation, err := operation.NewDepositOperation(pubKey, creatorAddress, withdrawalAddress, signature)
+	depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
 		{
@@ -151,7 +139,7 @@ func TestProcessorActivate(t *testing.T) {
 	bc := NewMockBlockchain(ctrl)
 	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
 	to := processor.GetValidatorsStateAddress()
-	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, procEpoch, 0, creatorAddress2, nil, &withdrawalAddress)
+	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
 		{
@@ -179,13 +167,13 @@ func TestProcessorActivate(t *testing.T) {
 
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress2, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr2, &withdrawalAddress)
 
 				buf, err := validator.MarshalBinary()
 				testutils.AssertNoError(t, err)
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				valInfo := processor.storage.GetValidatorInfo(processor.state, creatorAddress2)
+				valInfo := processor.storage.GetValidatorInfo(processor.state, testmodels.Addr2)
 				if valInfo.GetValidatorIndex() != math.MaxUint64 {
 					t.Fatal()
 				}
@@ -195,7 +183,7 @@ func TestProcessorActivate(t *testing.T) {
 
 				call(t, processor, v.Caller, v.AddrTo, value, activateOperation, c.Errs)
 
-				valInfo = processor.storage.GetValidatorInfo(processor.state, creatorAddress2)
+				valInfo = processor.storage.GetValidatorInfo(processor.state, testmodels.Addr2)
 
 				testutils.AssertEqual(t, valInfo.GetActivationEpoch(), testmodels.TestEra.To+1)
 				testutils.AssertEqual(t, valInfo.GetValidatorIndex(), activateOperation.Index())
@@ -225,7 +213,7 @@ func TestProcessorExit(t *testing.T) {
 	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	exitOperation, err := operation.NewExitOperation(pubKey, creatorAddress3, &procEpoch)
+	exitOperation, err := operation.NewExitOperation(pubKey, testmodels.Addr3, &procEpoch)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
 		{
@@ -244,7 +232,7 @@ func TestProcessorExit(t *testing.T) {
 			CaseName: "Exit: invalid to address",
 			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
-				AddrTo: creatorAddress,
+				AddrTo: testmodels.Addr1,
 			},
 			Errs: []error{ErrInvalidToAddress},
 			Fn: func(c *testmodels.TestCase) {
@@ -262,7 +250,7 @@ func TestProcessorExit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress3, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr3, &withdrawalAddress)
 
 				buf, err := validator.MarshalBinary()
 				testutils.AssertNoError(t, err)
@@ -281,7 +269,7 @@ func TestProcessorExit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress3, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr3, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 				validator.ExitEpoch = procEpoch
 
@@ -302,7 +290,7 @@ func TestProcessorExit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress3, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr3, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 
 				buf, err := validator.MarshalBinary()
@@ -322,7 +310,7 @@ func TestProcessorExit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress3, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr3, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 
 				buf, err := validator.MarshalBinary()
@@ -349,7 +337,7 @@ func TestProcessorDeactivate(t *testing.T) {
 	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	exitOperation, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, creatorAddress4, nil, &withdrawalAddress)
+	exitOperation, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
 		{
@@ -374,7 +362,7 @@ func TestProcessorDeactivate(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress4, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr4, &withdrawalAddress)
 
 				buf, err := validator.MarshalBinary()
 				testutils.AssertNoError(t, err)
@@ -393,7 +381,7 @@ func TestProcessorDeactivate(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress4, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr4, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 				validator.ExitEpoch = procEpoch
 
@@ -417,7 +405,7 @@ func TestProcessorDeactivate(t *testing.T) {
 
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress4, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr4, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 
 				buf, err := validator.MarshalBinary()
@@ -426,7 +414,7 @@ func TestProcessorDeactivate(t *testing.T) {
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 
-				valInfo := processor.storage.GetValidatorInfo(processor.state, creatorAddress4)
+				valInfo := processor.storage.GetValidatorInfo(processor.state, testmodels.Addr4)
 
 				testutils.AssertEqual(t, valInfo.GetExitEpoch(), testmodels.TestEra.To+1)
 			},
@@ -448,14 +436,14 @@ func TestProcessorWithdrawal(t *testing.T) {
 	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	withdrawalOperation, err := operation.NewWithdrawalOperation(creatorAddress5, value)
+	withdrawalOperation, err := operation.NewWithdrawalOperation(testmodels.Addr5, value)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
 		{
 			CaseName: "Withdrawal: invalid address to",
 			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
-				AddrTo: creatorAddress,
+				AddrTo: testmodels.Addr1,
 			},
 			Errs: []error{ErrInvalidToAddress},
 			Fn: func(c *testmodels.TestCase) {
@@ -473,7 +461,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress5, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr5, &withdrawalAddress)
 				valInfo, err := validator.MarshalBinary()
 				testutils.AssertNoError(t, err)
 
@@ -492,7 +480,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress5, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr5, &withdrawalAddress)
 				buf, err := validator.MarshalBinary()
 				testutils.AssertNoError(t, err)
 
@@ -511,7 +499,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress5, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr5, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 				buf, err := validator.MarshalBinary()
 				testutils.AssertNoError(t, err)
@@ -533,7 +521,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress5, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr5, &withdrawalAddress)
 				validator.Balance = valBalance
 				validator.ActivationEpoch = 0
 				buf, err := validator.MarshalBinary()
@@ -542,7 +530,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 
-				valInfo := processor.Storage().GetValidatorInfo(processor.state, creatorAddress5)
+				valInfo := processor.Storage().GetValidatorInfo(processor.state, testmodels.Addr5)
 				balanceDif := new(big.Int).Sub(valBalance, valInfo.GetValidatorBalance())
 
 				if !testutils.BigIntEquals(value, balanceDif) {
@@ -567,7 +555,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	withdrawalOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, procEpoch, 0, creatorAddress6, value, &withdrawalAddress)
+	withdrawalOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 	cases := []*testmodels.TestCase{
 		{
@@ -592,7 +580,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress6, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr6, &withdrawalAddress)
 				buf, err := validator.MarshalBinary()
 				testutils.AssertNoError(t, err)
 
@@ -611,7 +599,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress6, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr6, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 				buf, err := validator.MarshalBinary()
 				testutils.AssertNoError(t, err)
@@ -633,7 +621,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(creatorAddress6, &withdrawalAddress)
+				validator := storage.NewValidator(testmodels.Addr6, &withdrawalAddress)
 				validator.Balance = valBalance
 				validator.ActivationEpoch = 0
 				validator.ExitEpoch = procEpoch
@@ -643,7 +631,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 
-				valInfo := processor.Storage().GetValidatorInfo(processor.state, creatorAddress6)
+				valInfo := processor.Storage().GetValidatorInfo(processor.state, testmodels.Addr6)
 
 				if !testutils.BigIntEquals(value, valInfo.GetValidatorBalance()) {
 					t.Fatalf("mismatch balance value, have %+v, want %+v", valInfo.GetValidatorBalance(), value)
