@@ -9,6 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	ethdb "gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	params "gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	era "gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
@@ -34,6 +35,20 @@ func NewMockBlockchain(ctrl *gomock.Controller) *MockBlockchain {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockBlockchain) EXPECT() *MockBlockchainMockRecorder {
 	return m.recorder
+}
+
+// Database mocks base method.
+func (m *MockBlockchain) Database() ethdb.Database {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Database")
+	ret0, _ := ret[0].(ethdb.Database)
+	return ret0
+}
+
+// Database indicates an expected call of Database.
+func (mr *MockBlockchainMockRecorder) Database() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Database", reflect.TypeOf((*MockBlockchain)(nil).Database))
 }
 
 // GetConfig mocks base method.

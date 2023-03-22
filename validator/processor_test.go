@@ -12,6 +12,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
@@ -30,6 +31,7 @@ var (
 	withdrawalAddress common.Address   // attached withdrawal credentials
 	signature         common.BlsSignature
 	ctrl              *gomock.Controller
+	eraInfo           era.EraInfo
 
 	value     = MinDepositVal
 	procEpoch = uint64(100)
@@ -57,6 +59,8 @@ func init() {
 	creatorAddress6 = common.BytesToAddress(testutils.RandomData(20))
 	withdrawalAddress = common.BytesToAddress(testutils.RandomData(20))
 	signature = common.BytesToBlsSig(testutils.RandomData(96))
+
+	eraInfo = era.NewEraInfo(testmodels.TestEra)
 }
 
 func TestProcessorDeposit(t *testing.T) {
@@ -170,6 +174,9 @@ func TestProcessorActivate(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
+				bc.EXPECT().GetEraInfo().Return(&eraInfo)
+				bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(creatorAddress2, &withdrawalAddress)
@@ -190,7 +197,7 @@ func TestProcessorActivate(t *testing.T) {
 
 				valInfo = processor.storage.GetValidatorInfo(processor.state, creatorAddress2)
 
-				testutils.AssertEqual(t, valInfo.GetActivationEpoch(), activateOperation.ProcEpoch()+1)
+				testutils.AssertEqual(t, valInfo.GetActivationEpoch(), testmodels.TestEra.To+1)
 				testutils.AssertEqual(t, valInfo.GetValidatorIndex(), activateOperation.Index())
 
 				valList := processor.Storage().GetValidatorsList(processor.state)
@@ -405,6 +412,9 @@ func TestProcessorDeactivate(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
+				bc.EXPECT().GetEraInfo().Return(&eraInfo)
+				bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(creatorAddress4, &withdrawalAddress)
@@ -415,6 +425,10 @@ func TestProcessorDeactivate(t *testing.T) {
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
+
+				valInfo := processor.storage.GetValidatorInfo(processor.state, creatorAddress4)
+
+				testutils.AssertEqual(t, valInfo.GetExitEpoch(), testmodels.TestEra.To+1)
 			},
 		},
 	}

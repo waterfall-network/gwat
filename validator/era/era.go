@@ -93,11 +93,7 @@ func (ei *EraInfo) LastSlot(bc Blockchain) uint64 {
 	return slot
 }
 func (ei *EraInfo) IsTransitionPeriodEpoch(bc Blockchain, epoch uint64) bool {
-	if epoch == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
-		return true
-	}
-
-	return false
+	return epoch >= ei.ToEpoch()-bc.GetConfig().TransitionPeriod && epoch <= ei.ToEpoch()
 }
 
 func (ei *EraInfo) IsTransitionPeriodStartSlot(bc Blockchain, slot uint64) bool {
@@ -133,13 +129,6 @@ func (ei *EraInfo) LenSlots() uint64 {
 
 func (ei *EraInfo) IsContainsEpoch(epoch uint64) bool {
 	if epoch >= ei.FromEpoch() && epoch <= ei.ToEpoch() {
-		return true
-	}
-	return false
-}
-
-func (e *Era) IsContainsEpoch(epoch uint64) bool {
-	if epoch >= e.From && epoch <= e.To {
 		return true
 	}
 	return false
