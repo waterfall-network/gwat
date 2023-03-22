@@ -28,11 +28,11 @@ import (
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -897,5 +897,51 @@ func TestReadWriteCurrentEra(t *testing.T) {
 	eraNumber3 := ReadCurrentEra(db)
 	if eraNumber3 != 0 {
 		t.Errorf("Expected era number 0 but got %d", eraNumber3)
+	}
+}
+
+func TestFindEra(t *testing.T) {
+	// Create a mock database
+	db := NewMemoryDatabase()
+
+	// Test case 0: There are no eras in the database
+	lastEra := FindEra(db, 5)
+	if lastEra != nil {
+		t.Errorf("Expected nil, got %v", lastEra)
+	}
+
+	// Create some eras and add them to the database
+	era0 := era.NewEra(0, 0, 10, common.Hash{})
+	err := WriteEra(db, era0.Number, *era0)
+	if err != nil {
+		t.Errorf("Failed to write era 0: %v", err)
+	}
+
+	era1 := era.NewEra(1, 11, 20, common.Hash{})
+	err = WriteEra(db, era1.Number, *era1)
+	if err != nil {
+		t.Errorf("Failed to write era 1: %v", err)
+	}
+
+	era2 := era.NewEra(2, 21, 30, common.Hash{})
+	err = WriteEra(db, era2.Number, *era2)
+	if err != nil {
+		t.Errorf("Failed to write era 2: %v", err)
+	}
+
+	// Test case 1: Return exact era
+	lastEra = FindEra(db, 1)
+	if lastEra == nil {
+		t.Error("Expected an era, got nil")
+	} else if lastEra.Number != 1 {
+		t.Errorf("Expected era 2, got era %d", lastEra.Number)
+	}
+
+	// Test case 2: The last era exists
+	lastEra = FindEra(db, 5)
+	if lastEra == nil {
+		t.Error("Expected an era, got nil")
+	} else if lastEra.Number != 2 {
+		t.Errorf("Expected era 2, got era %d", lastEra.Number)
 	}
 }

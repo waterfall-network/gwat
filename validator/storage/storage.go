@@ -33,8 +33,6 @@ type Storage interface {
 	SetValidatorsList(stateDb *state.StateDB, list []common.Address)
 	GetValidatorsList(stateDb *state.StateDB) []common.Address
 
-	EstimateEraLength(bc blockchain) (epochsPerEra uint64)
-
 	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
 
@@ -237,17 +235,4 @@ func (s *storage) breakByValidatorsBySlotCount(validators []common.Address, vali
 	}
 
 	return chunks
-}
-
-func (s *storage) EstimateEraLength(bc blockchain) (eraLength uint64) {
-	var (
-		epochsPerEra       = s.config.EpochsPerEra
-		slotsPerEpoch      = bc.GetSlotInfo().SlotsPerEpoch
-		validators, _      = s.GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
-		numberOfValidators = uint64(len(validators))
-	)
-
-	eraLength = epochsPerEra * (1 + (numberOfValidators / (epochsPerEra * slotsPerEpoch)))
-
-	return
 }

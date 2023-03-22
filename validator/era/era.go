@@ -142,3 +142,14 @@ func (e *Era) IsContainsEpoch(epoch uint64) bool {
 	}
 	return false
 }
+
+func EstimateEraLength(bc blockchain, numberOfValidators uint64) (eraLength uint64) {
+	var (
+		epochsPerEra  = bc.GetConfig().EpochsPerEra
+		slotsPerEpoch = bc.GetSlotInfo().SlotsPerEpoch
+	)
+
+	eraLength = epochsPerEra * (1 + (numberOfValidators / (epochsPerEra * slotsPerEpoch)))
+
+	return
+}
