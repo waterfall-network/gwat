@@ -988,26 +988,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 
 	// Handle era
-	if bc.GetEraInfo().Number() < block.Era() {
-		nextEraLength := bc.validatorStorage.EstimateEraLength(bc)
-		nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
-		nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
-		nextEraNumber := bc.GetEraInfo().Number() + 1
-
-		nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, block.Root())
-
-		rawdb.WriteCurrentEra(bc.db, nextEraNumber)
-		err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
-		if err != nil {
-			log.Error("Handle new era error", "current era number", bc.eraInfo.Number(),
-				"from", bc.eraInfo.FromEpoch(),
-				"to", bc.eraInfo.ToEpoch(),
-				block.Hash().Hex(), "block era", block.Era(), "err", err)
-		}
-
-		bc.SetNewEraInfo(*nextEra)
-		log.Info("New era", "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "root", nextEra.Root)
-	}
+	bc.syncEra(block.Slot())
 
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
 		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "hash", block.Hash().Hex())
@@ -3809,5 +3790,4 @@ func (bc *BlockChain) syncEra(slot uint64) {
 		rawdb.WriteCurrentEra(bc.db, nextEraNumber)
 		bc.SetNewEraInfo(*nextEra)
 	}
-
 }
