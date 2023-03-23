@@ -78,6 +78,10 @@ type LightChain struct {
 	disableCheckFreq int32 // disables header verification
 }
 
+func (lc *LightChain) Database() ethdb.Database {
+	return lc.chainDb
+}
+
 func (lc *LightChain) GetConfig() *params.ChainConfig {
 	return lc.Config()
 }

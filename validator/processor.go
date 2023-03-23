@@ -3,16 +3,15 @@ package validator
 import (
 	"errors"
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"math"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
@@ -71,12 +70,12 @@ type Processor struct {
 }
 
 // NewProcessor creates new validator processor
-func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, config *params.ChainConfig, bc era.Blockchain) *Processor {
+func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, bc era.Blockchain) *Processor {
 	return &Processor{
 		ctx:          blockCtx,
 		state:        stateDb,
 		eventEmmiter: NewEventEmmiter(stateDb),
-		storage:      valStore.NewStorage(config),
+		storage:      valStore.NewStorage(bc.GetConfig()),
 		blockchain:   bc,
 	}
 }

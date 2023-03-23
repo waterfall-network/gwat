@@ -56,7 +56,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		blockContext       = NewEVMBlockContext(header, p.bc, nil)
 		evm                = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 		tokenProcessor     = token.NewProcessor(blockContext, statedb)
-		validatorProcessor = validator.NewProcessor(blockContext, statedb, p.bc.Config(), p.bc)
+		validatorProcessor = validator.NewProcessor(blockContext, statedb, p.bc)
 		signer             = types.MakeSigner(p.config)
 	)
 	// Iterate over and process the individual transactions
