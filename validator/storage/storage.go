@@ -115,7 +115,7 @@ func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
 // Use parameter activeOnly true if you need only active validators.
 func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address) {
 	var err error
-	validators := make([]Validator, 0)
+	var validators []Validator
 
 	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 
@@ -127,7 +127,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 
 		firstEpochBlock := bc.GetBlock(firstEpochBlockHash)
 
-		stateDb, err := bc.StateAt(firstEpochBlock.Root())
+		stateDb, _ := bc.StateAt(firstEpochBlock.Root())
 
 		valList := s.GetValidatorsList(stateDb)
 		for _, valAddress := range valList {
@@ -278,4 +278,3 @@ func (s *storage) AddValidatorToList(stateDb vm.StateDB, index uint64, validator
 	list[index] = validator
 	s.SetValidatorsList(stateDb, list)
 }
-
