@@ -263,7 +263,7 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 	var startEpoch uint64
 	eraInfo := p.blockchain.GetEraInfo()
 
-	if !eraInfo.IsTransitionEpoch(p.blockchain, op.ProcEpoch()) {
+	if !eraInfo.IsTransitionPeriodEpoch(p.blockchain, op.ProcEpoch()) {
 		startEpoch = eraInfo.NextEraFirstEpoch()
 	} else {
 		nextEra, err := rawdb.ReadEra(p.blockchain.Database(), eraInfo.Number()+1)
@@ -301,7 +301,7 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 	var exitEpoch uint64
 	eraInfo := p.blockchain.GetEraInfo()
 
-	if !eraInfo.IsTransitionEpoch(p.blockchain, op.ProcEpoch()) {
+	if !eraInfo.IsTransitionPeriodEpoch(p.blockchain, op.ProcEpoch()) {
 		exitEpoch = eraInfo.NextEraFirstEpoch()
 	} else {
 		nextEra, err := rawdb.ReadEra(p.blockchain.Database(), eraInfo.Number()+1)

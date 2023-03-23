@@ -1245,3 +1245,23 @@ func DeleteCurrentEra(db ethdb.KeyValueWriter) {
 		log.Crit("Failed to delete current era", "err", err)
 	}
 }
+
+func FindEra(db ethdb.KeyValueReader, curEra uint64) *era.Era {
+	var lastEra *era.Era
+	for curEra > 0 {
+		log.Info("Try to read era", "number", curEra)
+		dbEra, err := ReadEra(db, curEra)
+		if err != nil {
+			log.Info("Era not found", "number", curEra)
+			curEra--
+			continue
+		}
+
+		if dbEra != nil {
+			log.Info("Found era", "number", dbEra.Number, "from", dbEra.From, "to", dbEra.To, "root", dbEra.Root)
+			lastEra = dbEra
+			return lastEra
+		}
+	}
+	return lastEra
+}
