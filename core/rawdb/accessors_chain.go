@@ -933,6 +933,29 @@ func ReadLastCoordinatedCheckpoint(db ethdb.KeyValueReader) *types.Checkpoint {
 	return cp
 }
 
+// WriteCoordinatedCheckpoint writes a Coordinated Checkpoint to a key-value database.
+func WriteCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
+	key := coordCpKey(checkpoint.Epoch)
+
+	if err := db.Put(key, checkpoint.Bytes()); err != nil {
+		log.Crit("Failed to store the Coordinated Checkpoint", "err", err, "epoch", checkpoint.Epoch)
+	}
+}
+
+// ReadCoordinatedCheckpoint retrieves the Coordinated checkpoint by epoch.
+func ReadCoordinatedCheckpoint(db ethdb.KeyValueReader, epoch uint64) *types.Checkpoint {
+	key := coordCpKey(epoch)
+	data, err := db.Get(key)
+	if err != nil {
+		return nil
+	}
+	cp, err := types.BytesToCheckpoint(data)
+	if err != nil {
+		return nil
+	}
+	return cp
+}
+
 // WriteLastCoordinatedCheckpoint stores the last Coordinated checkpoint.
 func WriteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
 	if checkpoint == nil {
@@ -1187,33 +1210,34 @@ func ExistFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) bool {
 }
 
 // WriteEra writes an era to a key-value database.
-func WriteEra(db ethdb.KeyValueWriter, number uint64, era era.Era) error {
+func WriteEra(db ethdb.KeyValueWriter, number uint64, era era.Era) {
 	key := eraKey(number)
 
 	encoded, err := rlp.EncodeToBytes(era)
 	if err != nil {
 		log.Crit("Failed to encode era", "err", err, "key:", key, "era:", number)
-		return err
 	}
 
-	return db.Put(key, encoded)
+	db.Put(key, encoded)
 }
 
 // ReadEra reads an era from a key-value database.
-func ReadEra(db ethdb.KeyValueReader, number uint64) (*era.Era, error) {
+func ReadEra(db ethdb.KeyValueReader, number uint64) *era.Era {
 	key := eraKey(number)
 	encoded, err := db.Get(key)
 	if err != nil {
-		return nil, err
+		log.Crit("Failed to read era", "err", err, "number", number)
+		return nil
 	}
 
 	var decoded era.Era
 	err = rlp.DecodeBytes(encoded, &decoded)
 	if err != nil {
-		return nil, err
+		log.Crit("Failed to read era", "err", err, "number", number)
+		return nil
 	}
 
-	return &decoded, nil
+	return &decoded
 }
 
 // ReadCurrentEra reads the current era number from the database.
@@ -1250,17 +1274,16 @@ func FindEra(db ethdb.KeyValueReader, curEra uint64) *era.Era {
 	var lastEra *era.Era
 	for curEra > 0 {
 		log.Info("Try to read era", "number", curEra)
-		dbEra, err := ReadEra(db, curEra)
-		if err != nil {
-			log.Info("Era not found", "number", curEra)
-			curEra--
-			continue
-		}
+		dbEra := ReadEra(db, curEra)
 
 		if dbEra != nil {
 			log.Info("Found era", "number", dbEra.Number, "from", dbEra.From, "to", dbEra.To, "root", dbEra.Root)
 			lastEra = dbEra
 			return lastEra
+		} else {
+			log.Info("Era not found", "number", curEra)
+			curEra--
+			continue
 		}
 	}
 	return lastEra
