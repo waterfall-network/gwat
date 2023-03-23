@@ -2063,7 +2063,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	}
 
 	// Verify block era
-	isValidEra := era.VerifyBlockEra(bc, bc.db, block)
+	isValidEra := bc.verifyBlockEra(block)
 	if !isValidEra {
 		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
 		return false, nil
@@ -3775,4 +3775,20 @@ func (bc *BlockChain) syncEra(slot uint64) {
 		rawdb.WriteCurrentEra(bc.db, nextEraNumber)
 		bc.SetNewEraInfo(*nextEra)
 	}
+}
+
+func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
+	// Get the epoch of the block
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+
+	// Get the era that the block belongs to
+	var valEra *era.Era
+	if bc.GetEraInfo().GetEra().Number == block.Era() {
+		valEra = bc.GetEraInfo().GetEra()
+	} else {
+		valEra = rawdb.ReadEra(bc.db, block.Era())
+	}
+
+	// Check if the block epoch is within the era
+	return valEra != nil && valEra.IsContainsEpoch(blockEpoch)
 }
