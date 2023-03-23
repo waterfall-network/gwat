@@ -29,6 +29,8 @@ var (
 	ErrValidatorIsOut               = errors.New("validator is out")
 	ErrInvalidToAddress             = errors.New("address to must be validators state address")
 	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
+	ErrCtxEraNotFound               = errors.New("context block era not found")
+	ErrTargetEraNotFound            = errors.New("target era not found")
 )
 
 const (
@@ -256,30 +258,53 @@ func (p *Processor) syncOpProcessing(op operation.ValidatorSync) (ret []byte, er
 func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error) {
 	valInfo := p.Storage().GetValidatorInfo(p.state, op.Creator())
 	if valInfo == nil {
+		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
 
-	var startEpoch uint64
+	//retrieve block eraInfo
 	eraInfo := p.blockchain.GetEraInfo()
-
-	if !eraInfo.IsTransitionPeriodEpoch(p.blockchain, op.ProcEpoch()) {
-		startEpoch = eraInfo.NextEraFirstEpoch()
+	var blkEraInfo *era.EraInfo
+	if eraInfo.Number() == p.ctx.Era {
+		blkEraInfo = eraInfo
 	} else {
-		nextEra, err := rawdb.ReadEra(p.blockchain.Database(), eraInfo.Number()+1)
-		if err != nil {
-			return nil, err
+		blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era)
+		if blkEra == nil {
+			log.Error("Validator sync: block era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
+			return nil, ErrCtxEraNotFound
 		}
-
-		startEpoch = nextEra.From
+		bei := era.NewEraInfo(*blkEra)
+		blkEraInfo = &bei
 	}
 
-	valInfo.SetActivationEpoch(startEpoch)
+	// calculate activation epoch
+	var targetEpoch uint64
+	blkEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
+	if blkEraInfo.IsTransitionPeriodEpoch(p.blockchain, blkEpoch) {
+		var nextEraInfo *era.EraInfo
+		if eraInfo.Number() == p.ctx.Era+1 {
+			nextEraInfo = eraInfo
+		} else {
+			blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era+1)
+			if blkEra == nil {
+				log.Error("Validator sync: target era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
+				return nil, ErrTargetEraNotFound
+			}
+			bei := era.NewEraInfo(*blkEra)
+			nextEraInfo = &bei
+		}
+		targetEpoch = nextEraInfo.NextEraFirstEpoch()
+	} else {
+		targetEpoch = blkEraInfo.NextEraFirstEpoch()
+	}
+
+	valInfo.SetActivationEpoch(targetEpoch)
 	valInfo.SetValidatorIndex(op.Index())
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
 	p.Storage().AddValidatorToList(p.state, op.Index(), op.Creator())
 
-	log.Info("Activate", "creator", op.Creator().Hex(), "activationEpoch", op.ProcEpoch())
+	log.Info("Validator sync: activate", "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "targetEpoch", targetEpoch)
 
 	return op.Creator().Bytes(), nil
 }
@@ -287,34 +312,59 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, error) {
 	valInfo := p.Storage().GetValidatorInfo(p.state, op.Creator())
 	if valInfo == nil {
+		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
 
 	if valInfo.GetActivationEpoch() > op.ProcEpoch() {
+		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrNotActivatedValidator)
 		return nil, ErrNotActivatedValidator
 	}
 	if valInfo.GetExitEpoch() != math.MaxUint64 {
+		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrValidatorIsOut)
 		return nil, ErrValidatorIsOut
 	}
 
-	var exitEpoch uint64
+	//retrieve block eraInfo
 	eraInfo := p.blockchain.GetEraInfo()
-
-	if !eraInfo.IsTransitionPeriodEpoch(p.blockchain, op.ProcEpoch()) {
-		exitEpoch = eraInfo.NextEraFirstEpoch()
+	var blkEraInfo *era.EraInfo
+	if eraInfo.Number() == p.ctx.Era {
+		blkEraInfo = eraInfo
 	} else {
-		nextEra, err := rawdb.ReadEra(p.blockchain.Database(), eraInfo.Number()+1)
-		if err != nil {
-			return nil, err
+		blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era)
+		if blkEra == nil {
+			log.Error("Validator sync: block era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
+			return nil, ErrCtxEraNotFound
 		}
-
-		exitEpoch = nextEra.From
+		bei := era.NewEraInfo(*blkEra)
+		blkEraInfo = &bei
 	}
 
-	valInfo.SetExitEpoch(exitEpoch)
+	// calculate deactivation epoch
+	var targetEpoch uint64
+	blkEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
+	if blkEraInfo.IsTransitionPeriodEpoch(p.blockchain, blkEpoch) {
+		var nextEraInfo *era.EraInfo
+		if eraInfo.Number() == p.ctx.Era+1 {
+			nextEraInfo = eraInfo
+		} else {
+			blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era+1)
+			if blkEra == nil {
+				log.Error("Validator sync: target era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
+				return nil, ErrTargetEraNotFound
+			}
+			bei := era.NewEraInfo(*blkEra)
+			nextEraInfo = &bei
+		}
+		targetEpoch = nextEraInfo.NextEraFirstEpoch()
+	} else {
+		targetEpoch = blkEraInfo.NextEraFirstEpoch()
+	}
+
+	valInfo.SetExitEpoch(targetEpoch)
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
-	log.Info("Deactivate", "creator", op.Creator().Hex(), "ExitEpoch", op.ProcEpoch())
+	log.Info("Validator sync: deactivate", "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "targetEpoch", targetEpoch)
 
 	return op.Creator().Bytes(), nil
 }
@@ -324,14 +374,17 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 
 	valInfo := p.Storage().GetValidatorInfo(p.state, valAddress)
 	if valInfo == nil {
+		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
 
 	if valInfo.GetActivationEpoch() > op.ProcEpoch() {
+		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrNotActivatedValidator)
 		return nil, ErrNotActivatedValidator
 	}
 
 	if valInfo.GetExitEpoch() == math.MaxUint64 {
+		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrNoExitRequest)
 		return nil, ErrNoExitRequest
 	}
 
@@ -339,7 +392,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
-	log.Info("UpdateBalance", "creator", op.Creator().Hex(), "amount", op.Amount())
+	log.Info("Validator sync: update balance", "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "amount", op.Amount())
 	return op.Creator().Bytes(), nil
 }
 

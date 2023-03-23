@@ -37,6 +37,8 @@ type Config struct {
 	Coinbase    common.Address
 	BlockHeight *big.Int
 	BlockNumber *big.Int
+	Slot        uint64
+	Era         uint64
 	Time        *big.Int
 	GasLimit    uint64
 	GasPrice    *big.Int
