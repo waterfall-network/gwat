@@ -43,6 +43,9 @@ var (
 	// lastCoordCpKey tracks the latest known hash from coordinator.
 	lastCoordCpKey = []byte("LCoordCp")
 
+	// coordCpPrefix + epoch.
+	coordCpPrefix = []byte("CoordCp")
+
 	// tipsHashesKey tracks the latest known tips hashes.
 	tipsHashesKey = []byte("TipsHashes")
 
@@ -265,4 +268,9 @@ func eraKey(era uint64) []byte {
 // validatorSyncKey = valSyncOpPrefix + opType + creatorAddr
 func validatorSyncKey(creator common.Address, op uint64) []byte {
 	return append(append(valSyncOpPrefix, encodeBlockNumber(op)...), creator.Bytes()...)
+}
+
+// coordCpKey = coordCpPrefix + epoch
+func coordCpKey(epoch uint64) []byte {
+	return append(coordCpPrefix, Uint64ToByteSlice(epoch)...)
 }

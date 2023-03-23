@@ -34,6 +34,10 @@ func (e *Era) Length() uint64 {
 	return e.To - e.From
 }
 
+func (e *Era) IsContainsEpoch(epoch uint64) bool {
+	return epoch >= e.From && epoch <= e.To
+}
+
 type EraInfo struct {
 	currentEra *Era
 	length     uint64
@@ -90,12 +94,13 @@ func (ei *EraInfo) LastSlot(bc blockchain) uint64 {
 
 	return slot
 }
-func (ei *EraInfo) IsTransitionPeriodEpoch(bc blockchain, epoch uint64) bool {
-	if epoch == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
-		return true
-	}
 
-	return false
+func (ei *EraInfo) IsTransitionPeriodEpoch(bc blockchain, epoch uint64) bool {
+	return epoch >= ei.ToEpoch()-bc.GetConfig().TransitionPeriod && epoch <= ei.ToEpoch()
+}
+
+func (ei *EraInfo) IsTransitionPeriodStartEpoch(bc blockchain, epoch uint64) bool {
+	return epoch == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod)
 }
 
 func (ei *EraInfo) IsTransitionPeriodStartSlot(bc blockchain, slot uint64) bool {
@@ -127,13 +132,6 @@ func (ei *EraInfo) LenEpochs() uint64 {
 
 func (ei *EraInfo) LenSlots() uint64 {
 	return ei.length * 32
-}
-
-func (e *Era) IsContainsEpoch(epoch uint64) bool {
-	if epoch >= e.From && epoch <= e.To {
-		return true
-	}
-	return false
 }
 
 func EstimateEraLength(bc blockchain, numberOfValidators uint64) (eraLength uint64) {

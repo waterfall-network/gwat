@@ -849,15 +849,12 @@ func TestWriteAndReadEra(t *testing.T) {
 	testEra := era.NewEra(0, 1000, 2000, common.Hash{})
 
 	// Test writing the era to the database
-	err := WriteEra(db, 1, *testEra)
-	if err != nil {
-		t.Errorf("WriteEra returned an error: %v", err)
-	}
+	WriteEra(db, 1, *testEra)
 
 	// Test reading the era from the database
-	readEra, err := ReadEra(db, 1)
-	if err != nil {
-		t.Errorf("GetEra returned an error: %v", err)
+	readEra := ReadEra(db, 1)
+	if readEra == nil {
+		t.Errorf("ReadEra error")
 	}
 
 	// Verify that the era read from the database is equal to the test era
@@ -912,22 +909,13 @@ func TestFindEra(t *testing.T) {
 
 	// Create some eras and add them to the database
 	era0 := era.NewEra(0, 0, 10, common.Hash{})
-	err := WriteEra(db, era0.Number, *era0)
-	if err != nil {
-		t.Errorf("Failed to write era 0: %v", err)
-	}
+	WriteEra(db, era0.Number, *era0)
 
 	era1 := era.NewEra(1, 11, 20, common.Hash{})
-	err = WriteEra(db, era1.Number, *era1)
-	if err != nil {
-		t.Errorf("Failed to write era 1: %v", err)
-	}
+	WriteEra(db, era1.Number, *era1)
 
 	era2 := era.NewEra(2, 21, 30, common.Hash{})
-	err = WriteEra(db, era2.Number, *era2)
-	if err != nil {
-		t.Errorf("Failed to write era 2: %v", err)
-	}
+	WriteEra(db, era2.Number, *era2)
 
 	// Test case 1: Return exact era
 	lastEra = FindEra(db, 1)
@@ -943,5 +931,37 @@ func TestFindEra(t *testing.T) {
 		t.Error("Expected an era, got nil")
 	} else if lastEra.Number != 2 {
 		t.Errorf("Expected era 2, got era %d", lastEra.Number)
+	}
+}
+
+func TestWriteAndReadCoordinatedCheckpoint(t *testing.T) {
+	// Create an in-memory database for testing
+	memDB := NewMemoryDatabase()
+
+	// Create a checkpoint to write to the database
+	checkpoint := &types.Checkpoint{
+		Epoch: 1,
+		Root:  common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+		Spine: common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
+	}
+
+	// Write the checkpoint to the database
+	WriteCoordinatedCheckpoint(memDB, checkpoint)
+
+	// Read the checkpoint back from the database
+	readCheckpoint := ReadCoordinatedCheckpoint(memDB, checkpoint.Epoch)
+
+	// Ensure the read checkpoint matches the original checkpoint
+	if !bytes.Equal(checkpoint.Bytes(), readCheckpoint.Bytes()) {
+		t.Errorf("Expected checkpoint bytes to be %v, but got %v", checkpoint.Bytes(), readCheckpoint.Bytes())
+	}
+	if checkpoint.Epoch != readCheckpoint.Epoch {
+		t.Errorf("Expected checkpoint epoch to be %v, but got %v", checkpoint.Epoch, readCheckpoint.Epoch)
+	}
+	if checkpoint.Root != readCheckpoint.Root {
+		t.Errorf("Expected checkpoint root to be %v, but got %v", checkpoint.Root, readCheckpoint.Root)
+	}
+	if checkpoint.Spine != readCheckpoint.Spine {
+		t.Errorf("Expected checkpoint spine to be %v, but got %v", checkpoint.Spine, readCheckpoint.Spine)
 	}
 }

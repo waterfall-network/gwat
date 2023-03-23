@@ -569,6 +569,7 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
+		rawdb.WriteCoordinatedCheckpoint(bc.db, cp)
 	}
 }
 
@@ -3707,9 +3708,9 @@ func (bc *BlockChain) HandleEra(slot uint64) {
 	// New era
 	if bc.GetEraInfo().ToEpoch()+1 == bc.GetSlotInfo().SlotToEpoch(slot) {
 		nextEraNumber := bc.GetEraInfo().Number() + 1
-		nextEra, err := rawdb.ReadEra(bc.db, nextEraNumber)
-		if err != nil {
-			log.Error("Handle era: read era error", err)
+		nextEra := rawdb.ReadEra(bc.db, nextEraNumber)
+		if nextEra == nil {
+			log.Error("Handle era: read era error", "era number", nextEra)
 		}
 
 		rawdb.WriteCurrentEra(bc.db, nextEraNumber)
@@ -3728,7 +3729,7 @@ func (bc *BlockChain) HandleEra(slot uint64) {
 		// Checkpoint
 		checkpoint := bc.GetLastCoordinatedCheckpoint()
 		spineRoot := common.Hash{}
-		if checkpoint != nil { // TODO: handle no GetLastCoordinatedCheckpoint
+		if checkpoint != nil {
 			header := bc.GetHeaderByHash(checkpoint.Spine)
 			spineRoot = header.Root
 		} else {
@@ -3737,10 +3738,8 @@ func (bc *BlockChain) HandleEra(slot uint64) {
 
 		nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, spineRoot)
 
-		err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
-		if err != nil {
-			log.Error("Handle era: write new era error", err)
-		}
+		rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
+
 		log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEraNumber, "begin", nextEra.From, "end", nextEra.To, "length", nextEraLength)
 	}
 }
@@ -3748,7 +3747,7 @@ func (bc *BlockChain) HandleEra(slot uint64) {
 func (bc *BlockChain) syncEra(slot uint64) {
 	toEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	// Sync era from current epoch to slot
-	for !bc.GetEraInfo().GetEra().IsContainsEpoch(toEpoch) {
+	for !bc.GetEraInfo().GetEra().IsContainsEpoch(toEpoch) && bc.GetEraInfo().GetEra().To < toEpoch {
 		validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
 		// Calculate next era
 		nextEraNumber := bc.GetEraInfo().Number() + 1
@@ -3757,9 +3756,9 @@ func (bc *BlockChain) syncEra(slot uint64) {
 		nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
 
 		// Checkpoint
-		checkpoint := bc.GetLastCoordinatedCheckpoint()
+		checkpoint := rawdb.ReadCoordinatedCheckpoint(bc.db, bc.GetSlotInfo().SlotToEpoch(slot))
 		spineRoot := common.Hash{}
-		if checkpoint != nil { // TODO: handle no GetLastCoordinatedCheckpoint
+		if checkpoint != nil {
 			header := bc.GetHeaderByHash(checkpoint.Spine)
 			spineRoot = header.Root
 		} else {
@@ -3768,10 +3767,7 @@ func (bc *BlockChain) syncEra(slot uint64) {
 
 		nextEra := era.NewEra(nextEraNumber, nextEraBegin, nextEraEnd, spineRoot)
 
-		err := rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
-		if err != nil {
-			log.Error("Handle era: write new era error", err)
-		}
+		rawdb.WriteEra(bc.db, nextEraNumber, *nextEra)
 
 		rawdb.WriteCurrentEra(bc.db, nextEraNumber)
 		bc.SetNewEraInfo(*nextEra)

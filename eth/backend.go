@@ -230,12 +230,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.dag.Creator().SetExtra(makeExtraData(config.Creator.ExtraData))
 
 	currentEraNumber := rawdb.ReadCurrentEra(chainDb)
-	eraInfo, err := rawdb.ReadEra(chainDb, currentEraNumber)
-	if err != nil {
-		return nil, err
+	if eraInfo := rawdb.ReadEra(chainDb, currentEraNumber); eraInfo != nil {
+		eth.blockchain.SetNewEraInfo(*eraInfo)
 	}
-
-	eth.blockchain.SetNewEraInfo(*eraInfo)
 
 	go eth.dag.StartWork(eth.accountManager.Accounts())
 
