@@ -905,7 +905,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		return
 	}
 
-	syncData := c.chain.GetNotProcessedValidatorSyncData()
+	syncData := validatorsync.GetPendingValidatorSyncData(c.chain)
 
 	// Short circuit if no pending transactions
 	if len(filterPending) == 0 && len(syncData) == 0 {
@@ -934,7 +934,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		return
 	}
 
-	if c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
+	if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
 		c.processValidatorTxs(stateBlock.Hash(), syncData)
 	}
 

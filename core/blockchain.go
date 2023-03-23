@@ -624,6 +624,7 @@ func (bc *BlockChain) RemoveSyncOpData(opData *types.ValidatorSync) {
 
 	delete(bc.notProcValSyncOps, key)
 	bc.valSyncCache.Remove(key)
+	rawdb.WriteValidatorSync(bc.db, opData)
 }
 
 // AppendNotProcessedValidatorSyncData append to not processed validators sync data.

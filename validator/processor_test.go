@@ -56,7 +56,9 @@ func TestProcessorDeposit(t *testing.T) {
 	defer ctrl.Finish()
 
 	bc := NewMockBlockchain(ctrl)
-	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
 	depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature)
@@ -137,7 +139,9 @@ func TestProcessorActivate(t *testing.T) {
 	defer ctrl.Finish()
 
 	bc := NewMockBlockchain(ctrl)
-	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
@@ -210,7 +214,9 @@ func TestProcessorExit(t *testing.T) {
 	defer ctrl.Finish()
 
 	bc := NewMockBlockchain(ctrl)
-	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
 	exitOperation, err := operation.NewExitOperation(pubKey, testmodels.Addr3, &procEpoch)
@@ -334,7 +340,9 @@ func TestProcessorDeactivate(t *testing.T) {
 	defer ctrl.Finish()
 
 	bc := NewMockBlockchain(ctrl)
-	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
 	exitOperation, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
@@ -433,7 +441,9 @@ func TestProcessorWithdrawal(t *testing.T) {
 	defer ctrl.Finish()
 
 	bc := NewMockBlockchain(ctrl)
-	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
 	withdrawalOperation, err := operation.NewWithdrawalOperation(testmodels.Addr5, value)
@@ -552,7 +562,9 @@ func TestProcessorUpdateBalance(t *testing.T) {
 	defer ctrl.Finish()
 
 	bc := NewMockBlockchain(ctrl)
-	processor := NewProcessor(ctx, stateDb, testmodels.TestChainConfig, bc)
+	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
 	withdrawalOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress)
