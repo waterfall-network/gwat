@@ -570,6 +570,13 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
 		rawdb.WriteCoordinatedCheckpoint(bc.db, cp)
+
+		// Handle era
+		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(currCp.Epoch)
+		if err != nil {
+			log.Error("Handle sync era to checkpoint epoch", "toEpoch", currCp.Epoch)
+		}
+		bc.syncEra(epochStartSlot)
 	}
 }
 
@@ -987,9 +994,6 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	batch := bc.db.NewBatch()
 
 	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
-
-	// Handle era
-	bc.syncEra(block.Slot())
 
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
 		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "hash", block.Hash().Hex())
@@ -2058,6 +2062,13 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	// Verify block era
+	isValidEra := era.VerifyBlockEra(bc, bc.db, block)
+	if !isValidEra {
+		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
+		return false, nil
+	}
+
 	unknownParent := false
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetBlockByHash(parentHash)
@@ -2132,16 +2143,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"hash", block.Hash().Hex(),
 			"stateBlock", stateBlock,
 		)
-		return false, nil
-	}
-
-	// Validate block era
-	// sync era to block slot then compare block era vs calculated era
-	bc.syncEra(block.Slot())
-	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-	isValidEra := bc.eraInfo.GetEra().IsContainsEpoch(blockEpoch)
-	if !isValidEra {
-		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era(), "current era", bc.GetEraInfo().GetEra())
 		return false, nil
 	}
 
@@ -3699,7 +3700,7 @@ func (bc *BlockChain) HandleEra(slot uint64) {
 	// Sync era to current slot
 	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	if currentEpoch > bc.GetEraInfo().ToEpoch() && !bc.GetEraInfo().IsTransitionPeriodStartSlot(bc, slot) {
-		bc.syncEra(currentEpoch)
+		bc.syncEra(slot)
 	}
 
 	newEpoch := bc.GetSlotInfo().IsEpochStart(slot)

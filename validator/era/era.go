@@ -2,7 +2,9 @@ package era
 
 import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
@@ -143,4 +145,20 @@ func EstimateEraLength(bc blockchain, numberOfValidators uint64) (eraLength uint
 	eraLength = epochsPerEra * (1 + (numberOfValidators / (epochsPerEra * slotsPerEpoch)))
 
 	return
+}
+
+func VerifyBlockEra(bc blockchain, db ethdb.Database, block *types.Block) bool {
+	// Get the epoch of the block
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+
+	// Get the era that the block belongs to
+	var era *Era
+	if bc.GetEraInfo().GetEra().Number == block.Era() {
+		era = bc.GetEraInfo().GetEra()
+	} else {
+		era = rawdb.ReadEra(db, block.Era())
+	}
+
+	// Check if the block epoch is within the era
+	return era != nil && era.IsContainsEpoch(blockEpoch)
 }
