@@ -572,9 +572,9 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		rawdb.WriteCoordinatedCheckpoint(bc.db, cp)
 
 		// Handle era
-		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(currCp.Epoch)
+		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
 		if err != nil {
-			log.Error("Handle sync era to checkpoint epoch", "toEpoch", currCp.Epoch)
+			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
 		}
 		bc.syncEra(epochStartSlot)
 	}
