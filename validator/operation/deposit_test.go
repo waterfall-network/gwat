@@ -2,9 +2,9 @@ package operation
 
 import (
 	"errors"
-	"github.com/status-im/keycard-go/hexutils"
 	"testing"
 
+	"github.com/status-im/keycard-go/hexutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )

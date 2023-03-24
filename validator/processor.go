@@ -50,9 +50,8 @@ var (
 	MinDepositVal, _ = new(big.Int).SetString("1000000000000000000000", 10)
 
 	//Events signatures.
-	// todo add creator_address
-	depositEventSignature     = crypto.Keccak256Hash([]byte("DepositEvent"))
-	exitRequestEventSignature = crypto.Keccak256Hash([]byte("ExitRequestEvent"))
+	EvtDepositLogSignature = crypto.Keccak256Hash([]byte("DepositLog"))
+	EvtExitReqLogSignature = crypto.Keccak256Hash([]byte("ExitRequestLog"))
 )
 
 // Ref represents caller of the validator processor
@@ -465,13 +464,13 @@ func NewEventEmmiter(state vm.StateDB) *EventEmmiter {
 func (e *EventEmmiter) Deposit(evtAddr common.Address, data []byte) {
 	e.addLog(
 		evtAddr,
-		depositEventSignature,
+		EvtDepositLogSignature,
 		data,
 	)
 }
 
 func (e *EventEmmiter) ExitRequest(evtAddr common.Address, data []byte) {
-	e.addLog(evtAddr, exitRequestEventSignature, data)
+	e.addLog(evtAddr, EvtExitReqLogSignature, data)
 }
 
 func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, data []byte, logsEntries ...logEntry) {
