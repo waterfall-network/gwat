@@ -40,8 +40,6 @@ type Storage interface {
 	GetValidatorsStateAddress() *common.Address
 	GetDepositCount(stateDb vm.StateDB) uint64
 	IncrementDepositCount(stateDb vm.StateDB)
-
-	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
 }
 
 type storage struct {
@@ -207,7 +205,7 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		return nil, err
 	}
 
-	shuffledValidatorsBySlots := s.breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot)
+	shuffledValidatorsBySlots := breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot, s.config.SlotsPerEpoch)
 
 	if uint64(len(shuffledValidatorsBySlots)) < s.config.SlotsPerEpoch {
 		for uint64(len(shuffledValidatorsBySlots)) < s.config.SlotsPerEpoch {
@@ -216,7 +214,7 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 				return nil, err
 			}
 
-			shuffledValidatorsBySlots = append(shuffledValidatorsBySlots, s.breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot)...)
+			shuffledValidatorsBySlots = append(shuffledValidatorsBySlots, breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot, s.config.SlotsPerEpoch)...)
 		}
 	}
 
@@ -242,7 +240,7 @@ func (s *storage) seed(epoch uint64, firstEpochBlockHash common.Hash) (common.Ha
 }
 
 // breakByValidatorsBySlotCount splits the list of all validators into sublists for each slot
-func (s *storage) breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address {
+func breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot, slotsPerEpoch uint64) [][]common.Address {
 	chunks := make([][]common.Address, 0)
 
 	for i := uint64(0); i+validatorsPerSlot <= uint64(len(validators)); i += validatorsPerSlot {
@@ -250,7 +248,7 @@ func (s *storage) breakByValidatorsBySlotCount(validators []common.Address, vali
 		slotValidators := make([]common.Address, len(validators[i:end]))
 		copy(slotValidators, validators[i:end])
 		chunks = append(chunks, slotValidators)
-		if len(chunks) == int(s.config.SlotsPerEpoch) {
+		if len(chunks) == int(slotsPerEpoch) {
 			return chunks
 		}
 	}
