@@ -108,6 +108,7 @@ func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
 	currentCount++
 
 	binary.BigEndian.PutUint64(buf[:uint64Size], currentCount)
+	stateDb.SetCode(*s.ValidatorsStateAddress(), buf)
 }
 
 // GetValidators return two values: array of Validator and array of Validators addresses.
