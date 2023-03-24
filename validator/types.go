@@ -106,7 +106,8 @@ func UnpackExitRequestLogData(data []byte) (
 	exitAfterEpoch *uint64,
 	err error,
 ) {
-	if len(data) != MinExitRequestLogDataLength {
+	uint64Len := len(common.Uint64ToBytes(0))
+	if len(data) != MinExitRequestLogDataLength && len(data) != MinExitRequestLogDataLength+uint64Len {
 		err = operation.ErrBadDataLen
 		return
 	}
@@ -116,8 +117,6 @@ func UnpackExitRequestLogData(data []byte) (
 
 	creatorAddress = common.BytesToAddress(data[offset : offset+common.AddressLength])
 	offset += common.AddressLength
-
-	uint64Len := len(common.Uint64ToBytes(0))
 
 	valIndex = common.BytesToUint64(data[offset:uint64Len])
 	offset += uint64Len
