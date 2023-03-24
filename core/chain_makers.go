@@ -93,7 +93,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, bc)
 	if err != nil {
 		panic(err)
 	}
@@ -318,7 +318,8 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		//Number:   parent.Height() + 1,
 		Time: time,
 	}
-	header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
+	// This base fee calculation is for testing
+	header.BaseFee = misc.CalcSlotBaseFee(chain.Config(), header, 2048, 100000000, params.BurnMultiplier, chain.Config().ValidatorsPerSlot)
 	return header
 }
 

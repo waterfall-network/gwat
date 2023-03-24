@@ -851,6 +851,7 @@ web3._extend({
 	]
 });
 `
+
 const DagJs = `
 web3._extend({
 	property: 'dag',
@@ -865,6 +866,11 @@ web3._extend({
 			name: 'finalize',
 			call: 'dag_finalize',
 			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'coordinatedState',
+			call: 'dag_coordinatedState',
+			params: 0
 		}),
 		new web3._extend.Method({
 			name: 'getCandidates',
@@ -900,6 +906,7 @@ web3._extend({
 	property: 'wat',
 	methods:
 	[
+		// TOKEN API //
 		new web3._extend.Method({
 			name: 'tokenCreate',
 			call: 'wat_tokenCreate',
@@ -920,15 +927,12 @@ web3._extend({
 				if (options.decimals) {
 					options.decimals = web3._extend.utils.toHex(options.decimals);
 				}
-
 				if (options.totalSupply) {
 					options.totalSupply = web3._extend.utils.toHex(options.totalSupply);
 				}
-
 				if (options.baseURI) {
 					options.baseURI = web3._extend.utils.fromUtf8(options.baseURI);
 				}
-
 				return options;
 			}]
 		}),
@@ -946,26 +950,21 @@ web3._extend({
 			outputFormatter: function(result) {
 				result.name = web3._extend.utils.toUtf8(result.name);
 				result.symbol = web3._extend.utils.toUtf8(result.symbol);
-
 				if (result.baseURI) {
 					result.baseURI = web3._extend.utils.toUtf8(result.baseURI);
 				}
-
 				if (result.decimals) {
 					result.decimals = web3._extend.utils.toDecimal(result.decimals);
 				}
-
 				if (result.totalSupply) {
 					result.totalSupply = web3._extend.utils.toDecimal(result.totalSupply);
 				}
-
 				if (result.byTokenId) {
 					result.byTokenId.tokenURI = web3._extend.utils.toUtf8(result.byTokenId.tokenURI);
 					result.byTokenId.ownerOf = web3._extend.utils.toAddress(result.byTokenId.ownerOf);
 					result.byTokenId.getApproved = web3._extend.utils.toAddress(result.byTokenId.getApproved);
 					result.byTokenId.metadata = web3._extend.utils.toUtf8(result.byTokenId.metadata);
 				}
-
 				return result;
 			}
 		}),
@@ -1055,6 +1054,99 @@ web3._extend({
 			call: 'wat_buy',
 			params: 2,
 			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
+		}),
+
+		// VALIDATOR API //
+		new web3._extend.Method({
+			name: 'validator.depositData',
+			call: 'wat_validator_DepositData',
+			params: 1,
+			inputFormatter: [function(options) {
+				function isHex (str) {
+					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
+				}
+				function handleHexField (key, valLen) {
+					val = options[key]
+					if (val) {
+						val = val.replace('0x', '')
+						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
+						if (!isHex(val)) throw new Error(key +': invalid hex.');
+						options[key] = '0x' + val;
+					} else {
+						throw new Error(key +': field is required.');
+					}
+				}
+				var BlsPubKeyLength = 48 * 2
+				var BlsSigLength = 96 * 2
+				var AddressLength = 20 * 2
+
+				handleHexField('pubkey', BlsPubKeyLength)
+				handleHexField('creator_address', AddressLength)
+				handleHexField('withdrawal_address', AddressLength)
+				handleHexField('signature', BlsSigLength)
+				return options;
+			}]
+		}),
+		new web3._extend.Method({
+			name: 'validator.exitData',
+			call: 'wat_validator_ExitData',
+			params: 1,
+			inputFormatter: [function(options) {
+				function isHex (str) {
+					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
+				}
+				function handleHexField (key, valLen) {
+					val = options[key]
+					if (val) {
+						val = val.replace('0x', '')
+						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
+						if (!isHex(val)) throw new Error(key +': invalid hex.');
+						options[key] = '0x' + val;
+					} else {
+						throw new Error(key +': field is required.');
+					}
+				}
+				var BlsPubKeyLength = 48 * 2
+				var AddressLength = 20 * 2
+				handleHexField('pubkey', BlsPubKeyLength)
+				handleHexField('creator_address', AddressLength)
+				if (options.exit_epoch) {
+					options.exit_epoch = web3._extend.utils.toDecimal(options.exit_epoch);
+				}
+				return options;
+			}]
+		}),
+		new web3._extend.Method({
+			name: 'validator.withdrawalData',
+			call: 'wat_validator_WithdrawalData',
+			params: 1,
+			inputFormatter: [function(options) {
+				function isHex (str) {
+					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
+				}
+				function handleHexField (key, valLen) {
+					val = options[key]
+					if (val) {
+						val = val.replace('0x', '')
+						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
+						if (!isHex(val)) throw new Error(key +': invalid hex.');
+						options[key] = '0x' + val;
+					} else {
+						throw new Error(key +': field is required.');
+					}
+				}
+				var AddressLength = 20 * 2
+				handleHexField('creator_address', AddressLength)
+				options.amount = web3._extend.utils.toHex(options.amount);
+				return options;
+			}]
+		}),
+		new web3._extend.Method({
+			name: 'validator.depositCount',
+			call: 'wat_validator_DepositCount',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: web3._extend.utils.toDecimal
 		}),
 	]
 });

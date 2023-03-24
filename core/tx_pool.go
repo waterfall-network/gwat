@@ -34,6 +34,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 const (
@@ -150,6 +151,7 @@ type blockChain interface {
 	GetBlockByNumber(number uint64) *types.Block
 	GetDagHashes() *common.HashArray
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
+	Genesis() *types.Block
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription
@@ -162,6 +164,7 @@ type blockChain interface {
 	DagSynchronising() bool
 	// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
 	HeadSynchronising() bool
+	ValidatorStorage() valStore.Storage
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -716,9 +719,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Check if token prefix and opcode are valid in raw data
-	isTokenOp := false
+	var isTokenOp, isValidatorOp bool
 	if _, err := operation.GetOpCode(tx.Data()); err == nil {
 		isTokenOp = true
+	} else {
+		isValidatorOp = tx.To() != nil && pool.chainconfig.ValidatorsStateAddress != nil && *tx.To() == *pool.chainconfig.ValidatorsStateAddress
 	}
 
 	var txData []byte
@@ -726,13 +731,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		txData = tx.Data()
 	}
 
-	contractCreation := tx.To() == nil && !isTokenOp
+	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation)
+	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
 	if err != nil {
 		return err
 	}
-	if tx.Gas() < intrGas {
+	if tx.Gas() < intrGas && !isValidatorOp {
 		return ErrIntrinsicGas
 	}
 	return nil
@@ -1463,7 +1468,14 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		pool.demoteUnexecutables()
 		//if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).SetUint64(reset.newHead.Height+1)) {
 		if reset.newHead != nil {
-			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+			// Get active validators number
+			statedb, err := pool.chain.StateAt(reset.newHead.Root)
+			if err != nil {
+				log.Error("Failed to reset txpool state", "new.Nr", reset.newHead.Nr(), "new.Height", reset.newHead.Height, "new.Hash", reset.newHead.Hash(), "err", err)
+				statedb = pool.currentState
+			}
+			validators := pool.chain.ValidatorStorage().GetValidatorsList(statedb)
+			pendingBaseFee := misc.CalcSlotBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.Genesis().GasLimit(), params.BurnMultiplier, pool.chainconfig.ValidatorsPerSlot)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}
@@ -1510,7 +1522,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	oldNum := pool.chain.ReadFinalizedNumberByHash(oldHead.Hash())
 	newNum := pool.chain.ReadFinalizedNumberByHash(newHead.Hash())
 
-	if oldHead != nil && oldNum != newNum {
+	if oldHead != nil && oldNum != nil && newNum != nil && oldNum != newNum {
 		// If the reorg is too deep, avoid doing it (will happen during fast sync)
 		if depth := uint64(math.Abs(float64(*oldNum) - float64(*newNum))); depth > 64 {
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
@@ -1575,7 +1587,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		}
 	}
 	// Initialize the internal state to the current head
-	if newHead == nil {
+	if newHead == nil || newNum == nil {
 		bl := pool.chain.GetLastFinalizedBlock()
 		newHead = bl.Header() // Special case during testing
 	}

@@ -18,6 +18,8 @@ package rawdb
 
 import (
 	"fmt"
+	"math/big"
+	"reflect"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -141,5 +143,66 @@ func TestBlockDAGWf(t *testing.T) {
 	DeleteBlockDag(db, blockDag.Hash)
 	if entry := ReadBlockDag(db, finBlock.Hash()); entry != nil {
 		t.Fatalf("BlockDag D-R failed:  %#v != nil", entry)
+	}
+}
+
+func TestValidatorSyncWf(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	src_1 := &types.ValidatorSync{
+		OpType:    2,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:    new(big.Int),
+		TxHash:    nil,
+	}
+	src_1.Amount.SetString("32789456000000", 10)
+
+	WriteValidatorSync(db, src_1)
+	if entry := ReadValidatorSync(db, src_1.Creator, src_1.OpType); fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
+		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, src_1)
+	}
+
+	DeleteValidatorSync(db, src_1.Creator, src_1.OpType)
+	if entry := ReadValidatorSync(db, src_1.Creator, src_1.OpType); entry != nil {
+		t.Fatalf("ValidatorSync D-R failed:  %#v != nil", entry)
+	}
+}
+
+func TestNotProcessedValidatorSyncWf(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	src_1 := &types.ValidatorSync{
+		OpType:    types.Activate,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0x11, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:    new(big.Int),
+		TxHash:    nil,
+	}
+	src_2 := &types.ValidatorSync{
+		OpType:    types.Deactivate,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0x22, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:    new(big.Int),
+		TxHash:    nil,
+	}
+	src_3 := &types.ValidatorSync{
+		OpType:    types.UpdateBalance,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0x33, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:    new(big.Int),
+		TxHash:    nil,
+	}
+	src_3.Amount.SetString("32789456000000", 10)
+
+	valSyncOps := []*types.ValidatorSync{src_1, src_2, src_3}
+
+	WriteNotProcessedValidatorSyncOps(db, valSyncOps)
+	if entry := ReadNotProcessedValidatorSyncOps(db); reflect.DeepEqual(entry, valSyncOps) {
+		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, valSyncOps)
 	}
 }

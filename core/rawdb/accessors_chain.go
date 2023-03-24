@@ -30,6 +30,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
@@ -210,18 +211,6 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
-func ReadCreatorsRlp(db ethdb.Reader, slot uint64) rlp.RawValue {
-	var data []byte
-
-	// Try to look up the data in leveldb.
-	data, _ = db.Get(creatorKey(slot))
-	if len(data) > 0 {
-		return data
-	}
-
-	return nil // Can't find the data anywhere.
-}
-
 // HasHeader verifies the existence of a block header corresponding to the hash.
 func HasHeader(db ethdb.Reader, hash common.Hash) bool {
 	number := ReadFinalizedNumberByHash(db, hash)
@@ -257,37 +246,6 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	return header
 }
 
-func ReadCreators(db ethdb.Reader, slot uint64) *[]common.Address {
-	data := ReadCreatorsRlp(db, slot)
-	if data == nil {
-		return nil
-	}
-	if len(data) == 0 {
-		return new([]common.Address)
-	}
-	addrsCount := len(data) / common.AddressLength
-	addresses := make([]common.Address, 0, addrsCount)
-	for i := 0; i < addrsCount; i++ {
-		addr := common.Address{}
-		copy(addr[:], data[i*common.AddressLength:(i+1)*common.AddressLength])
-		addresses = append(addresses, addr)
-	}
-	return &addresses
-}
-
-func WriteCreators(db ethdb.KeyValueWriter, slot uint64, addrs []common.Address) {
-	key := creatorKey(slot)
-
-	data := make([]byte, 0, len(addrs)*20)
-	for _, addr := range addrs {
-		data = append(data, addr[:]...)
-	}
-
-	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store creators", "err", err)
-	}
-}
-
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
@@ -312,12 +270,6 @@ func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, finNr *uint64) {
 	deleteHeaderWithoutNumber(db, hash)
 	if finNr != nil {
 		DeleteFinalizedHashNumber(db, hash, *finNr)
-	}
-}
-
-func DeleteCreators(db ethdb.KeyValueWriter, slot uint64) {
-	if err := db.Delete(creatorKey(slot)); err != nil {
-		log.Crit("Failed to delete creators", "err", err)
 	}
 }
 
@@ -953,6 +905,8 @@ func ReadLastFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 	return *height
 }
 
+/**** Coordinated state ***/
+
 // ReadLastCoordinatedHash retrieves the hash of the last Coordinated block.
 func ReadLastCoordinatedHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(lastCoordHashKey)
@@ -963,6 +917,175 @@ func ReadLastCoordinatedHash(db ethdb.KeyValueReader) common.Hash {
 func WriteLastCoordinatedHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(lastCoordHashKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store the Last Coordinated Hash", "err", err)
+	}
+}
+
+// ReadLastCoordinatedCheckpoint retrieves the last Coordinated checkpoint.
+func ReadLastCoordinatedCheckpoint(db ethdb.KeyValueReader) *types.Checkpoint {
+	data, err := db.Get(lastCoordCpKey)
+	if err != nil {
+		return nil
+	}
+	cp, err := types.BytesToCheckpoint(data)
+	if err != nil {
+		return nil
+	}
+	return cp
+}
+
+// WriteCoordinatedCheckpoint writes a Coordinated Checkpoint to a key-value database.
+func WriteCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
+	key := coordCpKey(checkpoint.Epoch)
+
+	if err := db.Put(key, checkpoint.Bytes()); err != nil {
+		log.Crit("Failed to store the Coordinated Checkpoint", "err", err, "epoch", checkpoint.Epoch)
+	}
+}
+
+// ReadCoordinatedCheckpoint retrieves the Coordinated checkpoint by epoch.
+func ReadCoordinatedCheckpoint(db ethdb.KeyValueReader, epoch uint64) *types.Checkpoint {
+	key := coordCpKey(epoch)
+	data, err := db.Get(key)
+	if err != nil {
+		return nil
+	}
+	cp, err := types.BytesToCheckpoint(data)
+	if err != nil {
+		return nil
+	}
+	return cp
+}
+
+// WriteLastCoordinatedCheckpoint stores the last Coordinated checkpoint.
+func WriteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
+	if checkpoint == nil {
+		DeleteLastCoordinatedCheckpoint(db)
+	}
+	if err := db.Put(lastCoordCpKey, checkpoint.Bytes()); err != nil {
+		log.Crit("Failed to store the Last Coordinated Checkpoint", "err", err)
+	}
+}
+
+// DeleteLastCoordinatedCheckpoint rm the last Coordinated checkpoint.
+func DeleteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter) {
+	if err := db.Delete(lastCoordCpKey); err != nil {
+		log.Warn("Failed to delete Last Coordinated Checkpoint", "err", err)
+	}
+}
+
+/**** ValidatorSync ***/
+
+func parseValidatorSyncKey(validatorSyncKey []byte) (creator common.Address, op uint64) {
+	start := len(valSyncOpPrefix)
+	end := start + 8
+	op = binary.BigEndian.Uint64(validatorSyncKey[start:end])
+	start = end
+	end = start + common.AddressLength
+	creator = common.BytesToAddress(validatorSyncKey[start:end])
+	return creator, op
+}
+
+func decodeValidatorSync(creator common.Address, op types.ValidatorSyncOp, data []byte) *types.ValidatorSync {
+	// <procEpoch><index><txHash><amountBigInt>`
+	minSize := 8 + 8 + common.HashLength
+	if len(data) < minSize {
+		return nil
+	}
+	res := &types.ValidatorSync{
+		Index:     binary.BigEndian.Uint64(data[0:8]),
+		ProcEpoch: binary.BigEndian.Uint64(data[8:16]),
+		TxHash:    nil,
+		Amount:    nil,
+		OpType:    op,
+		Creator:   creator,
+	}
+	txh := common.BytesToHash(data[16:minSize])
+	if txh != (common.Hash{}) {
+		res.TxHash = &txh
+	}
+	if len(data[minSize:]) > 0 {
+		res.Amount = new(big.Int).SetBytes(data[minSize:])
+	}
+	return res
+}
+
+func encodeValidatorSync(vs types.ValidatorSync) []byte {
+	// <procEpoch><index><txHash><amountBigInt>`
+	var data []byte
+	data = append(data, encodeBlockNumber(vs.Index)...)
+	data = append(data, encodeBlockNumber(vs.ProcEpoch)...)
+	txh := vs.TxHash
+	if txh == nil {
+		txh = &common.Hash{}
+	}
+	data = append(data, txh.Bytes()...)
+	if vs.Amount != nil {
+		data = append(data, vs.Amount.Bytes()...)
+	}
+	return data
+}
+
+// ReadValidatorSync retrieves the ValidatorSync data.
+func ReadValidatorSync(db ethdb.KeyValueReader, creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
+	data, _ := db.Get(validatorSyncKey(creator, uint64(op)))
+	return decodeValidatorSync(creator, op, data)
+}
+
+// WriteValidatorSync stores the ValidatorSync data.
+func WriteValidatorSync(db ethdb.KeyValueWriter, vs *types.ValidatorSync) {
+	if vs == nil {
+		return
+	}
+	key := validatorSyncKey(vs.Creator, uint64(vs.OpType))
+	enc := encodeValidatorSync(*vs)
+	if err := db.Put(key, enc); err != nil {
+		log.Crit("Failed to store ValidatorSync data", "err", err)
+	}
+}
+
+// DeleteValidatorSync delete the ValidatorSync data..
+func DeleteValidatorSync(db ethdb.KeyValueWriter, creator common.Address, op types.ValidatorSyncOp) {
+	key := validatorSyncKey(creator, uint64(op))
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete BlockDAG", "err", err)
+	}
+}
+
+// ReadNotProcessedValidatorSyncOps retrieves the not processed validator sync operations.
+func ReadNotProcessedValidatorSyncOps(db ethdb.KeyValueReader) []*types.ValidatorSync {
+	data, err := db.Get(valSyncNotProcKey)
+	if err != nil {
+		return nil
+	}
+	keyLen := len(validatorSyncKey(common.Address{}, uint64(0)))
+	if len(data)%keyLen != 0 {
+		// alternate return nil
+		log.Crit("Failed to read the not processed validator sync operations: bad data length", "err", err)
+	}
+	resLen := len(data) / keyLen
+	res := make([]*types.ValidatorSync, resLen)
+	for i := range res {
+		start := i * keyLen
+		end := start + keyLen
+		opKey := data[start:end]
+		creator, op := parseValidatorSyncKey(opKey)
+		res[i] = ReadValidatorSync(db, creator, types.ValidatorSyncOp(op))
+	}
+	return res
+}
+
+// WriteNotProcessedValidatorSyncOps stores the not processed validator sync operations.
+func WriteNotProcessedValidatorSyncOps(db ethdb.KeyValueWriter, valSyncOps []*types.ValidatorSync) {
+	keyLen := len(validatorSyncKey(common.Address{}, uint64(0)))
+	dataLen := keyLen * len(valSyncOps)
+	data := make([]byte, 0, dataLen)
+	for _, vs := range valSyncOps {
+		key := validatorSyncKey(vs.Creator, uint64(vs.OpType))
+		WriteValidatorSync(db, vs)
+		data = append(data, key...)
+	}
+	if err := db.Put(valSyncNotProcKey, data); err != nil {
+		log.Crit("Failed to store the not processed validator sync operations", "err", err)
 	}
 }
 
@@ -1048,4 +1171,120 @@ func DeleteChildren(db ethdb.KeyValueWriter, parent common.Hash) {
 	if err := db.Delete(key); err != nil {
 		log.Crit("Failed to delete Children", "err", err)
 	}
+}
+
+func WriteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64, hash common.Hash) {
+	key := firstEpochBlockKey(epoch)
+
+	err := db.Put(key, hash.Bytes())
+	if err != nil {
+		log.Crit("Failed to store epoch seed", "err", err, "epoch", epoch)
+	}
+}
+
+func ReadFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) common.Hash {
+	key := firstEpochBlockKey(epoch)
+	buf, err := db.Get(key)
+	if err != nil {
+		return common.Hash{}
+	}
+
+	seed := common.BytesToHash(buf)
+
+	return seed
+}
+
+func DeleteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64) {
+	key := firstEpochBlockKey(epoch)
+	err := db.Delete(key)
+	if err != nil {
+		log.Crit("Failed to delete epoch seed", "err", err, "epoch", epoch)
+	}
+}
+
+func ExistFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) bool {
+	key := firstEpochBlockKey(epoch)
+	exist, _ := db.Has(key)
+
+	return exist
+}
+
+// WriteEra writes an era to a key-value database.
+func WriteEra(db ethdb.KeyValueWriter, number uint64, era era.Era) {
+	key := eraKey(number)
+
+	encoded, err := rlp.EncodeToBytes(era)
+	if err != nil {
+		log.Crit("Failed to encode era", "err", err, "key:", key, "era:", number)
+	}
+
+	db.Put(key, encoded)
+}
+
+// ReadEra reads an era from a key-value database.
+func ReadEra(db ethdb.KeyValueReader, number uint64) *era.Era {
+	key := eraKey(number)
+	encoded, err := db.Get(key)
+	if err != nil {
+		log.Crit("Failed to read era", "err", err, "number", number)
+		return nil
+	}
+
+	var decoded era.Era
+	err = rlp.DecodeBytes(encoded, &decoded)
+	if err != nil {
+		log.Crit("Failed to read era", "err", err, "number", number)
+		return nil
+	}
+
+	return &decoded
+}
+
+// ReadCurrentEra reads the current era number from the database.
+func ReadCurrentEra(db ethdb.KeyValueReader) uint64 {
+	key := append(currentEraPrefix)
+	valueBytes, err := db.Get(key)
+	if err != nil {
+		log.Crit("Failed to read current era", "err", err)
+	}
+	return binary.BigEndian.Uint64(valueBytes)
+}
+
+// WriteCurrentEra writes the current era number to the database.
+func WriteCurrentEra(db ethdb.KeyValueWriter, number uint64) {
+	key := append(currentEraPrefix)
+	valueBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(valueBytes, number)
+	err := db.Put(key, valueBytes)
+	if err != nil {
+		log.Crit("Failed to write current era", "err", err, "era", number)
+	}
+}
+
+// DeleteCurrentEra deletes the current era number from the database.
+func DeleteCurrentEra(db ethdb.KeyValueWriter) {
+	key := append(currentEraPrefix)
+	err := db.Delete(key)
+	if err != nil {
+		log.Crit("Failed to delete current era", "err", err)
+	}
+}
+
+func FindEra(db ethdb.KeyValueReader, curEra uint64) *era.Era {
+	var lastEra *era.Era
+	for curEra > 0 {
+		log.Info("Try to read era", "number", curEra)
+		dbEra := ReadEra(db, curEra)
+
+		if dbEra != nil {
+			log.Info("Found era", "number", dbEra.Number, "from", dbEra.From, "to", dbEra.To, "root", dbEra.Root)
+			lastEra = dbEra
+			return lastEra
+		} else {
+			log.Info("Era not found", "number", curEra)
+			curEra--
+			continue
+		}
+	}
+	return lastEra
 }

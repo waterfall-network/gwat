@@ -38,6 +38,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 var (
@@ -200,8 +201,9 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		context := core.NewEVMBlockContext(header, chain, nil)
 		vmenv := vm.NewEVM(context, txContext, st, config, vm.Config{NoBaseFee: true})
 		tp := token.NewProcessor(context, st)
+		vp := validator.NewProcessor(context, st, bc)
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
-		result, _ := core.ApplyMessage(vmenv, tp, msg, gp)
+		result, _ := core.ApplyMessage(vmenv, tp, vp, msg, gp)
 		res = append(res, result.Return()...)
 		if st.Error() != nil {
 			return res, st.Error()

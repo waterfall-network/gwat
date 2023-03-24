@@ -6,10 +6,11 @@
 package dag
 
 import (
-	"encoding/json"
+	"fmt"
 	"sync/atomic"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
@@ -17,10 +18,12 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/headsync"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/slotticker"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // Backend wraps all methods required for block creation.
@@ -32,6 +35,7 @@ type Backend interface {
 	SetEtherbase(etherbase common.Address)
 	CreatorAuthorize(creator common.Address) error
 	IsDevMode() bool
+	AccountManager() *accounts.Manager
 }
 
 type Dag struct {
@@ -54,6 +58,9 @@ type Dag struct {
 	headsync *headsync.Headsync
 
 	busy int32
+
+	exitChan chan struct{}
+	errChan  chan error
 }
 
 // New creates new instance of Dag
@@ -67,6 +74,8 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
 		finalizer:   fin,
 		headsync:    headsync.New(chainConfig, eth, mux, fin),
+		exitChan:    make(chan struct{}),
+		errChan:     make(chan error),
 	}
 	atomic.StoreInt32(&d.busy, 0)
 	return d
@@ -77,115 +86,8 @@ func (d *Dag) Creator() *creator.Creator {
 	return d.creator
 }
 
-// HandleConsensus handles consensus data
-// 3. new block creation
-// 4. return result
-// depracated
-func (d *Dag) HandleConsensus(data *types.ConsensusInfo, accounts []common.Address) *types.ConsensusResult {
-	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
-		errStr := creator.ErrSynchronization.Error()
-		return &types.ConsensusResult{
-			Error: &errStr,
-		}
-	}
-
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
-
-	errs := map[string]string{}
-	info := map[string]string{}
-	tstart := time.Now()
-
-	d.setConsensusInfo(data)
-
-	log.Info("Handle Consensus: start", "data", data, "\u2692", params.BuildId)
-
-	var (
-		err        error
-		candidates = common.HashArray{}
-	)
-	// create block
-	tips := d.bc.GetTips()
-	//tips, unloaded := d.bc.ReviseTips()
-	dagSlots := d.countDagSlots(&tips)
-	log.Info("Handle Consensus: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
-		"IsRunning", d.creator.IsRunning(),
-		"errs", errs,
-		"dagSlots", dagSlots,
-	)
-
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
-		assigned := &creator.Assignment{
-			Slot:     data.Slot,
-			Creators: data.Creators,
-		}
-
-		go func() {
-			crtStart := time.Now()
-			crtInfo := map[string]string{}
-			for _, creator := range assigned.Creators {
-				// if received next slot
-				if d.consensusInfo.Slot > assigned.Slot {
-					break
-				}
-
-				func() {
-					d.eth.BlockChain().DagMu.Lock()
-					defer d.eth.BlockChain().DagMu.Unlock()
-
-					coinbase := common.Address{}
-					for _, acc := range accounts {
-						if creator == acc {
-							coinbase = creator
-							break
-						}
-					}
-					if coinbase == (common.Address{}) {
-						return
-					}
-
-					d.eth.SetEtherbase(coinbase)
-					if err = d.eth.CreatorAuthorize(coinbase); err != nil {
-						log.Error("Creator authorize err", "err", err, "creator", coinbase)
-						return
-					}
-					log.Info("Creator assigned", "creator", coinbase)
-
-					block, crtErr := d.creator.CreateBlock(assigned, &tips)
-					if crtErr != nil {
-						crtInfo["error"] = crtErr.Error()
-					}
-					if block != nil {
-						crtInfo["newBlock"] = block.Hash().Hex()
-					}
-					log.Info("HandleConsensus: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
-				}()
-			}
-		}()
-	}
-
-	d.bc.WriteCreators(data.Slot, data.Creators)
-
-	info["elapsed"] = common.PrettyDuration(time.Since(tstart)).String()
-	res := &types.ConsensusResult{
-		Error:      nil,
-		Info:       &info,
-		Candidates: candidates,
-	}
-	if len(errs) > 0 {
-		strBuf, _ := json.Marshal(errs)
-		estr := string(strBuf)
-		res.Error = &estr
-	}
-	log.Info("Handle Consensus: response", "result", res)
-	return res
-}
-
-// HandleFinalize handles consensus data
-// 1. blocks finalization
-func (d *Dag) HandleFinalize(spines common.HashArray) *types.FinalizationResult {
+// HandleFinalize run blocks finalization procedure
+func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
@@ -197,19 +99,106 @@ func (d *Dag) HandleFinalize(spines common.HashArray) *types.FinalizationResult 
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 
-	log.Info("Handle Finalize: start", "spines", spines, "\u2692", params.BuildId)
+	if data.BaseSpine != nil {
+		log.Info("Handle Finalize: start",
+			"baseSpine", fmt.Sprintf("%#x", data.BaseSpine),
+			"spines", data.Spines,
+			"cp.Epoch", data.Checkpoint.Epoch,
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.Roor", fmt.Sprintf("%#x", data.Checkpoint.Root),
+			"ValSyncData", data.ValSyncData,
+			"\u2692", params.BuildId)
+	} else {
+		log.Info("Handle Finalize: start",
+			"baseSpine", nil,
+			"spines", data.Spines,
+			"cp.Epoch", data.Checkpoint.Epoch,
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"ValSyncData", data.ValSyncData,
+			"\u2692", params.BuildId)
+	}
+
+	if data.ValSyncData != nil {
+		for _, vs := range data.ValSyncData {
+			log.Info("received validator sync",
+				"OpType", vs.OpType,
+				"Index", vs.Index,
+				"Creator", vs.Creator.Hash(),
+				"ProcEpoch", vs.ProcEpoch,
+				"Amount", vs.Amount,
+			)
+		}
+	}
+
 	res := &types.FinalizationResult{
 		Error: nil,
 	}
 	// finalization
-	if len(spines) > 0 {
-		if err := d.finalizer.Finalize(&spines, false); err != nil {
+	if len(data.Spines) > 0 {
+		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
 			e := err.Error()
 			res.Error = &e
+		} else {
+			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 		}
-		d.bc.WriteLastCoordinatedHash(spines[len(spines)-1])
+	} else {
+		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 	}
+
+	// handle validator sync data
+	d.bc.AppendNotProcessedValidatorSyncData(data.ValSyncData)
+
+	lfHeader := d.bc.GetLastFinalizedHeader()
+	if lfHeader.Height != lfHeader.Nr() {
+		err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
+		if res.Error == nil {
+			res.Error = &err
+		} else {
+			mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
+			res.Error = &mrg
+		}
+	} else {
+		d.bc.WriteLastCoordinatedHash(lfHeader.Hash())
+	}
+	lfHash := lfHeader.Hash()
+	res.LFSpine = &lfHash
+
+	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
+		res.CpEpoch = &cp.Epoch
+		res.CpRoot = &cp.Root
+	}
+
 	log.Info("Handle Finalize: response", "result", res)
+	return res
+}
+
+// HandleCoordinatedState return coordinated state
+func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
+	//skip if synchronising
+	if d.eth.Downloader().Synchronising() {
+		errStr := creator.ErrSynchronization.Error()
+		return &types.FinalizationResult{
+			Error: &errStr,
+		}
+	}
+
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+
+	lfHeader := d.bc.GetLastFinalizedHeader()
+	lfHash := lfHeader.Hash()
+	res := &types.FinalizationResult{
+		Error:   nil,
+		LFSpine: &lfHash,
+	}
+	var cpepoch uint64
+	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
+		res.CpEpoch = &cp.Epoch
+		res.CpRoot = &cp.Root
+		cpepoch = cp.Epoch
+	}
+	log.Info("Handle CoordinatedState: response", "epoch", cpepoch, "result", res)
 	return res
 }
 
@@ -299,25 +288,162 @@ func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
 	return d.consensusInfo.Copy()
 }
 
-// SetConsensusInfo set info received from the coordinating network
-func (d *Dag) setConsensusInfo(dsi *types.ConsensusInfo) {
-	d.consensusInfo = dsi
-	d.emitDagSyncInfo()
-	d.bc.SetLastCoordinatedSlot(dsi.Slot)
-}
-
 // SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
 func (d *Dag) SubscribeConsensusInfoEvent(ch chan<- types.Tips) event.Subscription {
 	return d.consensusInfoFeed.Subscribe(ch)
 }
 
-// emitDagSyncInfo emit consensusInfo updated event
-func (d *Dag) emitDagSyncInfo() bool {
-	if dsi := d.GetConsensusInfo(); dsi != nil {
-		d.consensusInfoFeed.Send(*dsi)
-		return true
+func (d *Dag) StartWork(accounts []common.Address) {
+	startTicker := time.NewTicker(500 * time.Millisecond)
+
+	tickSec := 0
+	for {
+		currentTime := time.Now()
+		genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
+
+		if currentTime.Before(genesisTime) {
+			if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
+				timeRemaining := genesisTime.Sub(currentTime)
+				log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+			}
+		} else {
+			log.Info("Chain genesis time reached")
+			startTicker.Stop()
+			go d.workLoop(accounts)
+
+			return
+		}
+		tickSec = currentTime.Second()
+
+		<-startTicker.C
 	}
-	return false
+}
+
+func (d *Dag) workLoop(accounts []common.Address) {
+	secPerSlot := d.bc.GetSlotInfo().SecondsPerSlot
+	genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
+	slotTicker := slotticker.NewSlotTicker(genesisTime, secPerSlot)
+
+	for {
+		select {
+		case <-d.exitChan:
+			close(d.exitChan)
+			close(d.errChan)
+			slotTicker.Done()
+			return
+		case err := <-d.errChan:
+			close(d.errChan)
+			close(d.exitChan)
+			slotTicker.Done()
+			log.Error("dag worker has error", "error", err)
+			return
+		case slot := <-slotTicker.C():
+			if slot == 0 {
+				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, common.Hash{})
+				d.bc.SetNewEraInfo(*newEra)
+				continue
+			}
+			var (
+				err      error
+				creators []common.Address
+			)
+
+			log.Info("New slot", "slot", slot)
+
+			d.handleEra(slot)
+
+			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
+			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
+			//	creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, currentSlot,subnet)
+			//	if err != nil {
+			//		d.errChan <- err
+			//	}
+			//} else {}
+			// TODO: move it to else condition
+
+			creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, slot)
+			if err != nil {
+				d.errChan <- err
+			}
+
+			d.work(slot, creators, accounts)
+		}
+	}
+}
+
+func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
+	//skip if synchronising
+	if d.eth.Downloader().Synchronising() {
+		return
+		//d.errChan <- creator.ErrSynchronization
+	}
+
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+
+	errs := map[string]string{}
+
+	var (
+		err error
+	)
+	// create block
+	tips := d.bc.GetTips()
+	dagSlots := d.countDagSlots(&tips)
+	log.Info("Creator processing: create condition",
+		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
+		"IsRunning", d.creator.IsRunning(),
+		"errs", errs,
+		"dagSlots", dagSlots,
+	)
+
+	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
+		assigned := &creator.Assignment{
+			Slot:     slot,
+			Creators: creators,
+		}
+
+		crtStart := time.Now()
+		crtInfo := map[string]string{}
+		for _, creator := range assigned.Creators {
+			// if received next slot
+
+			// TODO: may be drop consensusInfo field from blockchain because we don`t write value to it
+			if d.consensusInfo != nil && d.consensusInfo.Slot > assigned.Slot {
+				break
+			}
+
+			//d.eth.BlockChain().DagMu.Lock()
+			//defer d.eth.BlockChain().DagMu.Unlock()
+
+			coinbase := common.Address{}
+			for _, acc := range accounts {
+				if creator == acc {
+					coinbase = creator
+					break
+				}
+			}
+			if coinbase == (common.Address{}) {
+				return
+			}
+
+			d.eth.SetEtherbase(coinbase)
+			if err = d.eth.CreatorAuthorize(coinbase); err != nil {
+				log.Error("Creator authorize err", "err", err, "creator", coinbase)
+				return
+			}
+			log.Info("Creator assigned", "creator", coinbase)
+
+			block, crtErr := d.creator.CreateBlock(assigned, &tips)
+			if crtErr != nil {
+				crtInfo["error"] = crtErr.Error()
+			}
+
+			if block != nil {
+				crtInfo["newBlock"] = block.Hash().Hex()
+			}
+			log.Info("Creator processing: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+		}
+	}
 }
 
 // countDagSlots count number of slots in dag chain
@@ -328,4 +454,9 @@ func (d *Dag) countDagSlots(tips *types.Tips) int {
 		return -1
 	}
 	return len(candidates)
+}
+
+// handleEra
+func (d *Dag) handleEra(slot uint64) {
+	d.bc.HandleEra(slot)
 }

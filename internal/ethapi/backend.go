@@ -37,6 +37,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 // Backend interface provides the common API services (that are provided by
@@ -72,6 +74,7 @@ type Backend interface {
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	GetTP(ctx context.Context, state *state.StateDB, header *types.Header) (*token.Processor, func() error, error)
+	GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
@@ -100,6 +103,8 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
+	ValidatorsStorage() valStore.Storage
+	BlockChain() *core.BlockChain
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

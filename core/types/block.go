@@ -18,6 +18,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -68,9 +69,11 @@ type Header struct {
 	//Base fields (set while create)
 	ParentHashes common.HashArray `json:"parentHashes"     gencodec:"required"`
 	Slot         uint64           `json:"slot"             gencodec:"required"`
+	Era          uint64           `json:"era"              gencodec:"required"`
 	Height       uint64           `json:"height"           gencodec:"required"`
 	Coinbase     common.Address   `json:"miner"            gencodec:"required"`
 	TxHash       common.Hash      `json:"transactionsRoot" gencodec:"required"`
+	BodyHash     common.Hash      `json:"bodyRoot"         gencodec:"required"`
 	GasLimit     uint64           `json:"gasLimit"         gencodec:"required"`
 	Time         uint64           `json:"timestamp"        gencodec:"required"`
 	Extra        []byte           `json:"extraData"        gencodec:"required"`
@@ -116,7 +119,6 @@ func (h *Header) Hash() common.Hash {
 		cpy.BaseFee = nil
 		cpy.GasUsed = 0
 		cpy.Bloom = Bloom{}
-		//todo use EmptyRootHash?
 		cpy.ReceiptHash = common.Hash{}
 		cpy.Root = common.Hash{}
 	}
@@ -130,6 +132,7 @@ func (h *Header) Copy() *Header {
 		cpy = &Header{
 			ParentHashes:  h.ParentHashes,
 			Slot:          h.Slot,
+			Era:           h.Era,
 			Height:        h.Height,
 			LFHash:        h.LFHash,
 			LFNumber:      h.LFNumber,
@@ -141,6 +144,7 @@ func (h *Header) Copy() *Header {
 			Coinbase:      h.Coinbase,
 			Root:          h.Root,
 			TxHash:        h.TxHash,
+			BodyHash:      h.BodyHash,
 			ReceiptHash:   h.ReceiptHash,
 			Bloom:         h.Bloom,
 			GasLimit:      h.GasLimit,
@@ -243,7 +247,6 @@ type extblock struct {
 func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher TrieHasher) *Block {
 	b := &Block{header: CopyHeader(header)}
 
-	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
 		b.header.TxHash = EmptyRootHash
 	} else {
@@ -258,6 +261,8 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher Tr
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
 		b.header.Bloom = CreateBloom(receipts)
 	}
+	// calc BodyHash
+	b.header.BodyHash = CalcBlockBodyHash(txs, hasher)
 	return b
 }
 
@@ -355,8 +360,10 @@ func (b *Block) Coinbase() common.Address       { return b.header.Coinbase }
 func (b *Block) Root() common.Hash              { return b.header.Root }
 func (b *Block) ParentHashes() common.HashArray { return b.header.ParentHashes }
 func (b *Block) Slot() uint64                   { return b.header.Slot }
+func (b *Block) Era() uint64                    { return b.header.Era }
 func (b *Block) Height() uint64                 { return b.header.Height }
 func (b *Block) TxHash() common.Hash            { return b.header.TxHash }
+func (b *Block) BodyHash() common.Hash          { return b.header.BodyHash }
 func (b *Block) ReceiptHash() common.Hash       { return b.header.ReceiptHash }
 func (b *Block) Extra() []byte                  { return common.CopyBytes(b.header.Extra) }
 func (b *Block) Number() *uint64                { return b.header.Number }
@@ -618,4 +625,33 @@ func (bs *Blocks) GetHashes() *common.HashArray {
 		hashes = append(hashes, block.Hash())
 	}
 	return &hashes
+}
+
+// BlockDerivableBody implements BodyHash functionality
+type BlockDerivableBody struct {
+	transactions Transactions
+}
+
+func NewBlockDerivableBody(txs []*Transaction) BlockDerivableBody {
+	return BlockDerivableBody{
+		transactions: Transactions(txs),
+	}
+}
+
+func (b BlockDerivableBody) Len() int {
+	return len(b.transactions)
+}
+
+func (b BlockDerivableBody) EncodeIndex(i int, buffer *bytes.Buffer) {
+	if i < len(b.transactions) {
+		b.transactions.EncodeIndex(i, buffer)
+	}
+}
+
+func CalcBlockBodyHash(txs []*Transaction, hasher TrieHasher) common.Hash {
+	if len(txs) == 0 {
+		return EmptyRootHash
+	}
+	body := NewBlockDerivableBody(txs)
+	return DeriveSha(body, hasher)
 }

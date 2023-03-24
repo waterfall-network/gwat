@@ -19,13 +19,16 @@ package core
 import (
 	"math/big"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 func TestDefaultGenesisBlock(t *testing.T) {
@@ -157,4 +160,53 @@ func TestGenesisHashes(t *testing.T) {
 			t.Errorf("case: %d, want: %s, got: %s", i, c.hash.Hex(), got.Hex())
 		}
 	}
+}
+
+func TestSetupGenesisWithValidators(t *testing.T) {
+	expectedHash := common.HexToHash("0x0dbc388cfc8dd97f1f505c911935fdbb0ad2c3e860836ccbbbcc5fe59ec29fd4")
+
+	validators := make([]common.Address, 50)
+
+	for i := 0; i < 50; i++ {
+		validators[i] = common.HexToAddress(strconv.Itoa(i))
+	}
+
+	genesis := Genesis{
+		Config: &params.ChainConfig{
+			ChainID:                big.NewInt(333777222),
+			SecondsPerSlot:         4,
+			SlotsPerEpoch:          32,
+			ForkSlotSubNet1:        1000,
+			ValidatorsStateAddress: nil,
+			EffectiveBalance:       big.NewInt(32000),
+		},
+		Timestamp:    0,
+		ExtraData:    nil,
+		GasLimit:     0,
+		Coinbase:     common.Address{},
+		Alloc:        nil,
+		Validators:   validators,
+		GasUsed:      0,
+		ParentHashes: nil,
+		Slot:         0,
+		Height:       0,
+		BaseFee:      nil,
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	config, hash, err := SetupGenesisBlock(db, &genesis)
+	testutils.AssertNoError(t, err)
+
+	testutils.AssertEqual(t, hash, expectedHash)
+
+	buf := make([]byte, len(genesis.Validators)*common.AddressLength)
+	for i, validator := range genesis.Validators {
+		beginning := i * common.AddressLength
+		end := beginning + common.AddressLength
+		copy(buf[beginning:end], validator[:])
+	}
+
+	validatorsStateAddress := crypto.Keccak256Address(buf)
+
+	testutils.AssertEqual(t, *config.ValidatorsStateAddress, validatorsStateAddress)
 }

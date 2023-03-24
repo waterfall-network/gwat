@@ -16,28 +16,29 @@ var _ = (*headerMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (h Header) MarshalJSON() ([]byte, error) {
 	type Header struct {
-		ParentHashes  []common.Hash    `json:"parentHashes"     gencodec:"required"`
-		Slot          hexutil.Uint64   `json:"slot"             gencodec:"required"`
-		Height        hexutil.Uint64   `json:"height"           gencodec:"required"`
-		Coinbase      common.Address   `json:"miner"            gencodec:"required"`
-		TxHash        common.Hash      `json:"transactionsRoot" gencodec:"required"`
-		GasLimit      hexutil.Uint64   `json:"gasLimit"         gencodec:"required"`
-		Time          hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
-		Extra         hexutil.Bytes    `json:"extraData"        gencodec:"required"`
-		LFHash        common.Hash      `json:"lfHash"           gencodec:"required"`
-		LFNumber      uint64           `json:"lfNumber"         gencodec:"required"`
+		ParentHashes []common.Hash   `json:"parentHashes"     gencodec:"required"`
+		Slot         hexutil.Uint64  `json:"slot"             gencodec:"required"`
+		Height       hexutil.Uint64  `json:"height"           gencodec:"required"`
+		LFNumber     uint64          `json:"lfNumber"         gencodec:"required"`
+		LFHash       common.Hash     `json:"lfHash"           gencodec:"required"`
 		LFBaseFee     *hexutil.Big     `json:"lfBaseFeePerGas"  gencodec:"required"`
 		LFRoot        common.Hash      `json:"lfStateRoot"      gencodec:"required"`
 		LFReceiptHash common.Hash      `json:"lfReceiptsRoot"   gencodec:"required"`
 		LFGasUsed     hexutil.Uint64   `json:"lfGasUsed"        gencodec:"required"`
 		LFBloom       Bloom            `json:"lfLogsBloom"      gencodec:"required"`
-		BaseFee       *hexutil.Big     `json:"baseFeePerGas" rlp:"optional"`
-		Number        *hexutil.Uint64   `json:"number"        rlp:"optional"`
-		Root          common.Hash      `json:"stateRoot"     rlp:"optional"`
-		ReceiptHash   common.Hash      `json:"receiptsRoot"  rlp:"optional"`
-		GasUsed       hexutil.Uint64   `json:"gasUsed"       rlp:"optional"`
-		Bloom         Bloom            `json:"logsBloom"     rlp:"optional"`
-		Hash          common.Hash      `json:"hash"`
+		Coinbase     common.Address  `json:"miner"            gencodec:"required"`
+		TxHash       common.Hash     `json:"transactionsRoot" gencodec:"required"`
+		BodyHash     common.Hash     `json:"bodyRoot" 		  gencodec:"required"`
+		GasLimit     hexutil.Uint64  `json:"gasLimit"         gencodec:"required"`
+		Time         hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
+		Extra        hexutil.Bytes   `json:"extraData"        gencodec:"required"`
+		BaseFee      *hexutil.Big    `json:"baseFeePerGas"    rlp:"optional"`
+		Number       *hexutil.Uint64 `json:"number"           rlp:"optional"`
+		Root         common.Hash     `json:"stateRoot"        rlp:"optional"`
+		ReceiptHash  common.Hash     `json:"receiptsRoot"     rlp:"optional"`
+		Bloom        Bloom           `json:"logsBloom"        rlp:"optional"`
+		GasUsed      hexutil.Uint64  `json:"gasUsed"          rlp:"optional"`
+		Hash         common.Hash     `json:"hash"`
 	}
 	var enc Header
 	enc.ParentHashes = h.ParentHashes
@@ -45,6 +46,9 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.Height = hexutil.Uint64(h.Height)
 	enc.Coinbase = h.Coinbase
 	enc.TxHash = h.TxHash
+	enc.BodyHash = h.BodyHash
+	enc.ReceiptHash = h.ReceiptHash
+	enc.Bloom = h.Bloom
 	enc.GasLimit = hexutil.Uint64(h.GasLimit)
 	enc.Time = hexutil.Uint64(h.Time)
 	enc.Extra = h.Extra
@@ -71,27 +75,28 @@ func (h Header) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (h *Header) UnmarshalJSON(input []byte) error {
 	type Header struct {
-		ParentHashes  *[]common.Hash     `json:"parentHashes"     gencodec:"required"`
-		Slot          *hexutil.Uint64    `json:"slot"             gencodec:"required"`
-		Height        *hexutil.Uint64    `json:"height"           gencodec:"required"`
-		Coinbase      *common.Address   `json:"miner"            gencodec:"required"`
-		TxHash        *common.Hash      `json:"transactionsRoot" gencodec:"required"`
-		GasLimit      *hexutil.Uint64   `json:"gasLimit"         gencodec:"required"`
-		Time          *hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
-		Extra         *hexutil.Bytes    `json:"extraData"        gencodec:"required"`
-		LFHash        *common.Hash      `json:"lfHash"           gencodec:"required"`
-		LFNumber      *hexutil.Uint64   `json:"lfNumber"         gencodec:"required"`
+		ParentHashes *[]common.Hash  `json:"parentHashes"     gencodec:"required"`
+		Slot         *hexutil.Uint64 `json:"slot"             gencodec:"required"`
+		Height       *hexutil.Uint64 `json:"height"           gencodec:"required"`
+		LFHash       *common.Hash    `json:"lfHash"           gencodec:"required"`
+		LFNumber     *hexutil.Uint64 `json:"lfNumber"         gencodec:"required"`
 		LFBaseFee     *hexutil.Big      `json:"lfBaseFeePerGas"  gencodec:"required"`
 		LFRoot        *common.Hash      `json:"lfStateRoot"      gencodec:"required"`
 		LFReceiptHash *common.Hash      `json:"lfReceiptsRoot"   gencodec:"required"`
 		LFGasUsed     *hexutil.Uint64   `json:"lfGasUsed"        gencodec:"required"`
 		LFBloom       *Bloom            `json:"lfLogsBloom"      gencodec:"required"`
-		BaseFee       *hexutil.Big      `json:"baseFeePerGas" rlp:"optional"`
-		Number        *hexutil.Uint64   `json:"number"        rlp:"optional"`
-		Root          *common.Hash      `json:"stateRoot"     rlp:"optional"`
-		ReceiptHash   *common.Hash      `json:"receiptsRoot"  rlp:"optional"`
-		GasUsed       *hexutil.Uint64   `json:"gasUsed"       rlp:"optional"`
-		Bloom         *Bloom            `json:"logsBloom"     rlp:"optional"`
+		Coinbase     *common.Address `json:"miner"            gencodec:"required"`
+		TxHash       *common.Hash    `json:"transactionsRoot" gencodec:"required"`
+		BodyHash     *common.Hash    `json:"bodyRoot" 		  gencodec:"required"`
+		GasLimit     *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
+		Time         *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
+		Extra        *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
+		BaseFee      *hexutil.Big    `json:"baseFeePerGas"    rlp:"optional"`
+		Number       *hexutil.Uint64 `json:"number"           rlp:"optional"`
+		Root         *common.Hash    `json:"stateRoot"        rlp:"optional"`
+		ReceiptHash  *common.Hash    `json:"receiptsRoot"     rlp:"optional"`
+		Bloom        *Bloom          `json:"logsBloom"        rlp:"optional"`
+		GasUsed      *hexutil.Uint64 `json:"gasUsed"          rlp:"optional"`
 	}
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -120,6 +125,18 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'transactionsRoot' for Header")
 	}
 	h.TxHash = *dec.TxHash
+	if dec.BodyHash == nil {
+		return errors.New("missing required field 'bodyRoot' for Header")
+	}
+	h.BodyHash = *dec.BodyHash
+	if dec.ReceiptHash == nil {
+		return errors.New("missing required field 'receiptsRoot' for Header")
+	}
+	h.ReceiptHash = *dec.ReceiptHash
+	if dec.Bloom == nil {
+		return errors.New("missing required field 'logsBloom' for Header")
+	}
+	h.Bloom = *dec.Bloom
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for Header")
 	}

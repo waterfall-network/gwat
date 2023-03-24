@@ -43,6 +43,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 const (
@@ -70,6 +71,7 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error)
+	Blockchain() *core.BlockChain
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -519,9 +521,10 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			txContext = core.NewEVMTxContext(msg)
 			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 			tp        = token.NewProcessor(vmctx, statedb)
+			vp        = validator.NewProcessor(vmctx, statedb, api.backend.Blockchain())
 		)
 		statedb.Prepare(tx.Hash(), i)
-		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
 			// We intentionally don't return the error here: if we do, then the RPC server will not
 			// return the roots. Most likely, the caller already knows that a certain transaction fails to
@@ -615,7 +618,8 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		statedb.Prepare(tx.Hash(), i)
 		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
 		tp := token.NewProcessor(blockCtx, statedb)
-		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+		vp := validator.NewProcessor(blockCtx, statedb, api.backend.Blockchain())
+		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			failed = err
 			break
 		}
@@ -740,8 +744,9 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		tp := token.NewProcessor(vmctx, statedb)
+		vp := validator.NewProcessor(vmctx, statedb, api.backend.Blockchain())
 		statedb.Prepare(tx.Hash(), i)
-		_, err = core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(msg.Gas()))
+		_, err = core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if writer != nil {
 			writer.Flush()
 		}
@@ -906,11 +911,12 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	tp := token.NewProcessor(vmctx, statedb)
+	vp := validator.NewProcessor(vmctx, statedb, api.backend.Blockchain())
 
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
 
-	result, err := core.ApplyMessage(vmenv, tp, message, new(core.GasPool).AddGas(message.Gas()))
+	result, err := core.ApplyMessage(vmenv, tp, vp, message, new(core.GasPool).AddGas(message.Gas()))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}

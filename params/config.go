@@ -28,9 +28,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xa645b86a27d2fe68737d18013e24855d758a1e165dae0aab689b0279a4e20bd6")
+	MainnetGenesisHash = common.HexToHash("0x2d5a825666a4b49059a39c608e5fa1f4949b46ab7793853fc58307a54857743e")
 	// DevNetGenesisHash  waterfall test net
-	DevNetGenesisHash = common.HexToHash("0xe6e0f3cc76502a94cdb3e1365e75bb2c72dd7db996b5a96580688ef64de1269c")
+	DevNetGenesisHash = common.HexToHash("0x733a3d6e8e0800197423933a03593b235d8a7af19049782af792775c378f25f1")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -50,10 +50,13 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:         big.NewInt(111000111),
-		SecondsPerSlot:  4,
-		SlotsPerEpoch:   32,
-		ForkSlotSubNet1: math.MaxUint64,
+		ChainID:          big.NewInt(111000111),
+		SecondsPerSlot:   4,
+		SlotsPerEpoch:    32,
+		EpochsPerEra:     8,
+		TransitionPeriod: 2,
+		ForkSlotSubNet1:  math.MaxUint64,
+		EffectiveBalance: big.NewInt(32000),
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -79,10 +82,13 @@ var (
 
 	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
 	DevNetChainConfig = &ChainConfig{
-		ChainID:         big.NewInt(333777555),
-		SecondsPerSlot:  4,
-		SlotsPerEpoch:   32,
-		ForkSlotSubNet1: math.MaxUint64,
+		ChainID:          big.NewInt(333777555),
+		SecondsPerSlot:   4,
+		SlotsPerEpoch:    32,
+		EpochsPerEra:     8,
+		TransitionPeriod: 2,
+		ForkSlotSubNet1:  math.MaxUint64,
+		EffectiveBalance: big.NewInt(32000),
 	}
 
 	// DevNetTrustedCheckpoint contains the light client trusted checkpoint for the DevNet.
@@ -111,16 +117,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, math.MaxUint64}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, math.MaxUint64}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
 	TestRules       = TestChainConfig.Rules()
 )
 
@@ -180,11 +186,18 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// coordinator slot settings
-	SecondsPerSlot uint64 `json:"secondsPerSlot"`
-	SlotsPerEpoch  uint64 `json:"slotsPerEpoch"`
+	SecondsPerSlot   uint64 `json:"secondsPerSlot"`
+	SlotsPerEpoch    uint64 `json:"slotsPerEpoch"`
+	EpochsPerEra     uint64 `json:"epochsPerEra"`
+	TransitionPeriod uint64 `json:"transitionPeriod"` // The number of epochs before new era starts
 
 	// Fork slots
 	ForkSlotSubNet1 uint64 `json:"forkSlotSubNet1,omitempty"`
+
+	ValidatorsStateAddress *common.Address
+	ValidatorsPerSlot      uint64 `json:"validatorsPerSlot"`
+
+	EffectiveBalance *big.Int `json:"effectiveBalance"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -207,11 +220,17 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, ForkSlotSubNet1: %v}",
+	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, ForkSlotSubNet1: %v, "+
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
+		c.EpochsPerEra,
+		c.TransitionPeriod,
 		c.ForkSlotSubNet1,
+		c.ValidatorsPerSlot,
+		c.ValidatorsStateAddress,
+		c.EffectiveBalance,
 	)
 }
 
@@ -261,6 +280,34 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			lastFork = cur
 		}
 	}
+	return nil
+}
+
+func (c *ChainConfig) Validate() error {
+	if c.SecondsPerSlot == 0 {
+		return fmt.Errorf("no seconds per slot parameter")
+	}
+
+	if c.SlotsPerEpoch == 0 {
+		return fmt.Errorf("no slots per epoch parameter")
+	}
+
+	if c.EpochsPerEra == 0 {
+		return fmt.Errorf("no epochs per era parameter")
+	}
+
+	if c.ForkSlotSubNet1 == 0 {
+		return fmt.Errorf("no ForkSlotSubNet parameter")
+	}
+
+	if c.ValidatorsPerSlot == 0 {
+		return fmt.Errorf("no validators per slot parameter")
+	}
+
+	if c.EffectiveBalance == nil || c.EffectiveBalance.Cmp(big.NewInt(0)) == 0 {
+		return fmt.Errorf("no effective balance parameter")
+	}
+
 	return nil
 }
 

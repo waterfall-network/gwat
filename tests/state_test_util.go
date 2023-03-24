@@ -38,6 +38,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -184,7 +185,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 	vmconfig.ExtraEips = eips
 	block := t.genesis(config).ToBlock(nil)
-	snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
+	db := rawdb.NewMemoryDatabase()
+	snaps, statedb := MakePreState(db, t.json.Pre, snapshotter)
 
 	var baseFee *big.Int
 	baseFee = t.json.Env.BaseFee
@@ -219,12 +221,13 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.BaseFee = baseFee
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 	tp := token.NewProcessor(context, statedb)
+	vp := validator.NewProcessor(context, statedb, nil)
 
 	// Execute the message.
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
-	if _, err := core.ApplyMessage(evm, tp, msg, gaspool); err != nil {
+	if _, err := core.ApplyMessage(evm, tp, vp, msg, gaspool); err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
 

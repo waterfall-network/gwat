@@ -11,6 +11,7 @@ type BlockChain interface {
 	GetBlockByHash(hash common.Hash) *Block
 	GetBlocksByHashes(hashes common.HashArray) BlockMap
 	GetLastFinalizedBlock() *Block
+	GetBlockFinalizedNumber(hash common.Hash) *uint64
 }
 
 // SpineSortBlocks sorts hashes by order of finalization
@@ -140,7 +141,8 @@ func spineProcessBlock(bc BlockChain, block *Block, candidatesInChain map[common
 
 	candidatesInChain[block.Hash()] = struct{}{}
 	for _, parent := range sortedParents {
-		if _, wasProcessed := candidatesInChain[parent.Hash()]; !wasProcessed && parent.Number() == nil {
+		nr := bc.GetBlockFinalizedNumber(parent.Hash())
+		if _, wasProcessed := candidatesInChain[parent.Hash()]; !wasProcessed && nr == nil {
 			if chainPart := spineCalculateChain(bc, parent, candidatesInChain); len(chainPart) != 0 {
 				*chain = append(*chain, chainPart...)
 			}

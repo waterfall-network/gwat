@@ -57,6 +57,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -228,6 +229,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	eth.dag.Creator().SetExtra(makeExtraData(config.Creator.ExtraData))
 
+	currentEraNumber := rawdb.ReadCurrentEra(chainDb)
+	if eraInfo := rawdb.ReadEra(chainDb, currentEraNumber); eraInfo != nil {
+		eth.blockchain.SetNewEraInfo(*eraInfo)
+	}
+
+	go eth.dag.StartWork(eth.accountManager.Accounts())
+
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
@@ -299,6 +307,9 @@ func (s *Ethereum) APIs() []rpc.API {
 
 	// Append token APIs
 	apis = append(apis, token.GetAPIs(s.APIBackend)...)
+
+	// Append validator APIs
+	apis = append(apis, validator.GetAPIs(s.APIBackend)...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{

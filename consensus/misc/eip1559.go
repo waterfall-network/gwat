@@ -29,7 +29,7 @@ import (
 // VerifyEip1559Header verifies some header attributes which were changed in EIP-1559,
 // - gas limit check
 // - basefee check
-func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
+func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header, validatorsNum uint64, maxGasPerBlock uint64, creatorsPerSlot uint64) error {
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
@@ -40,7 +40,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 		return fmt.Errorf("header is missing baseFee")
 	}
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcBaseFee(config, parent)
+	expectedBaseFee := CalcSlotBaseFee(config, header, validatorsNum, maxGasPerBlock, params.BurnMultiplier, creatorsPerSlot)
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 			expectedBaseFee, header.BaseFee, parent.BaseFee, parent.GasUsed)
@@ -82,4 +82,29 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 			common.Big0,
 		)
 	}
+}
+
+// CalcSlotBaseFee calculates the base fee of the slot.
+func CalcSlotBaseFee(config *params.ChainConfig, current *types.Header, validatorsNum uint64, maxGasPerBlock uint64, burnFactor float64, creatorsPerSlot uint64) *big.Int {
+	var (
+		gasUsedBig                = new(big.Float).SetUint64(current.GasUsed)       // G normal transaction gas used
+		blocksPerSlotBig          = new(big.Float).SetUint64(creatorsPerSlot)       // b i-th in the formula - eq the number of creators\blocks for i-th slot
+		secondsPerSlotBig         = new(big.Float).SetUint64(config.SecondsPerSlot) // t i-th in the formula - the time of i-th slot
+		secondsInYear             = new(big.Float).SetUint64(60 * 60 * 24 * 365.25)
+		maxAnnualizedReturnRate   = new(big.Float).SetFloat64(params.MaxAnnualizedReturnRate)                             // R0 in the formula - the maximum annualized return rate with Nopt
+		coordinatorStakeWei       = new(big.Float).Mul(new(big.Float).SetInt(config.EffectiveBalance), big.NewFloat(1e9)) // s in the formula - 1 coordinator stake
+		optValidatorsNumBig       = new(big.Float).SetUint64(params.OptValidatorsNum)                                     // Nopt in the formula - eq 300000, the optimal number of validators
+		validatorsNumBig          = new(big.Float).SetUint64(validatorsNum)                                               // N in the formula - the current number of validators
+		totalAllowableGasPerBlock = new(big.Float).SetUint64(maxGasPerBlock)                                              // Gmax in the formula - the total allowable gas amount per block, eq genesis gas limit
+	)
+
+	numOfBlocksPerYear := new(big.Float).Quo(new(big.Float).Mul(secondsInYear, blocksPerSlotBig), secondsPerSlotBig)
+	x := new(big.Float).Sqrt(new(big.Float).Mul(optValidatorsNumBig, validatorsNumBig))
+	y := new(big.Float).Mul(maxAnnualizedReturnRate, coordinatorStakeWei)
+	annualMintedCoins := new(big.Float).Mul(y, x)
+	rewardPerBlock := new(big.Float).Quo(annualMintedCoins, numOfBlocksPerYear)
+	baseFee := new(big.Float).Mul(new(big.Float).Mul(new(big.Float).Quo(gasUsedBig, totalAllowableGasPerBlock), rewardPerBlock), big.NewFloat(params.PriceMultiplier))
+	baseFeeWithBurnFactor := new(big.Int)
+	new(big.Float).Mul(baseFee, new(big.Float).SetFloat64(burnFactor)).Int(baseFeeWithBurnFactor)
+	return baseFeeWithBurnFactor
 }

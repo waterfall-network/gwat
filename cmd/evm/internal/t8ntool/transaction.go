@@ -135,8 +135,11 @@ func Transaction(ctx *cli.Context) error {
 		} else {
 			r.Address = sender
 		}
+
+		isValidatorOp := tx.To() != nil && chainConfig.ValidatorsStateAddress != nil && *tx.To() == *chainConfig.ValidatorsStateAddress
+
 		// Check intrinsic gas
-		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil); err != nil {
+		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, isValidatorOp); err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue

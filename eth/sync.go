@@ -124,11 +124,12 @@ func (cs *chainSyncer) loop() {
 	for {
 		var op *chainSyncOp
 		if pevt.kind == evtBroadcast {
-			// if no finalization while defined slots number - start resync
-			if cs.isResync() {
-				op = cs.getResyncOp()
-				log.Warn("Resync required", "op", op)
-			}
+			//TODO rm deprecated
+			//// if no finalization while defined slots number - start resync
+			//if cs.isResync() {
+			//	op = cs.getResyncOp()
+			//	log.Warn("Resync required", "op", op)
+			//}
 		} else {
 			op = cs.nextSyncOp()
 			// check sync is busy
@@ -170,6 +171,7 @@ func (cs *chainSyncer) loop() {
 	}
 }
 
+// TODO rm deprecated
 func (cs *chainSyncer) isResync() bool {
 	if cs.handler.downloader.Synchronising() {
 		return false
@@ -180,7 +182,7 @@ func (cs *chainSyncer) isResync() bool {
 	mapSlot := make(map[uint64]int, 0)
 	dagHeshCount := 0
 	for _, b := range blocks {
-		if b.Nr() == 0 && b.Height() > 0 {
+		if b != nil && b.Nr() == 0 && b.Height() > 0 {
 			mapSlot[b.Slot()]++
 			dagHeshCount++
 		}

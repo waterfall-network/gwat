@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 func TestTransferOperation(t *testing.T) {

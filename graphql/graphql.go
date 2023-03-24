@@ -659,6 +659,14 @@ func (b *Block) ReceiptsRoot(ctx context.Context) (common.Hash, error) {
 	return header.ReceiptHash, nil
 }
 
+func (b *Block) BodyRoot(ctx context.Context) (common.Hash, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return header.BodyHash, nil
+}
+
 func (b *Block) OmmerHash(ctx context.Context) (common.Hash, error) {
 	return common.Hash{}, nil
 }

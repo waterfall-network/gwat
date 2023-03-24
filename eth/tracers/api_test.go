@@ -44,6 +44,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 var (
@@ -57,6 +58,10 @@ type testBackend struct {
 	engine      consensus.Engine
 	chaindb     ethdb.Database
 	chain       *core.BlockChain
+}
+
+func (b *testBackend) Blockchain() *core.BlockChain {
+	return b.chain
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
@@ -171,7 +176,8 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		}
 		vmenv := vm.NewEVM(context, txContext, statedb, b.chainConfig, vm.Config{})
 		tp := token.NewProcessor(context, statedb)
-		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		vp := validator.NewProcessor(context, statedb, b.chain)
+		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		statedb.Finalise(true)

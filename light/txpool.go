@@ -391,8 +391,10 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		return core.ErrInsufficientFunds
 	}
 
+	isValidatorOp := tx.To() != nil && pool.config.ValidatorsStateAddress != nil && *tx.To() == *pool.config.ValidatorsStateAddress
+
 	// Should supply enough intrinsic gas
-	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil)
+	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, isValidatorOp)
 	if err != nil {
 		return err
 	}
@@ -500,7 +502,7 @@ func (pool *TxPool) GetTransactions() (txs types.Transactions, err error) {
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and nonce.
-func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
@@ -512,12 +514,13 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	}
 	// There are no queued transactions in a light pool, just return an empty map
 	queued := make(map[common.Address]types.Transactions)
-	return pending, queued
+	processing := make(map[common.Address]types.Transactions)
+	return pending, queued, processing
 }
 
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
-func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions, types.Transactions) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
@@ -531,7 +534,7 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 		pending = append(pending, tx)
 	}
 	// There are no queued transactions in a light pool, just return an empty map
-	return pending, types.Transactions{}
+	return pending, types.Transactions{}, types.Transactions{}
 }
 
 // RemoveTransactions removes all given transactions from the pool.

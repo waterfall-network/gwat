@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
@@ -28,7 +29,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -55,6 +58,7 @@ The state transitioning model does all the necessary work to work out a valid ne
 type StateTransition struct {
 	gp         *GasPool
 	tp         *token.Processor
+	vp         *validator.Processor
 	msg        Message
 	gas        uint64
 	gasPrice   *big.Int
@@ -120,11 +124,13 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isValidatorOp bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation {
 		gas = params.TxGasContractCreation
+	} else if isValidatorOp {
+		gas = 0
 	} else {
 		gas = params.TxGas
 	}
@@ -158,11 +164,12 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:        gp,
 		evm:       evm,
 		tp:        tokenProcessor,
+		vp:        validatorProcessor,
 		msg:       msg,
 		gasPrice:  msg.GasPrice(),
 		gasFeeCap: msg.GasFeeCap(),
@@ -180,8 +187,8 @@ func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Messag
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, tokenProcessor, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
+	return NewStateTransition(evm, tokenProcessor, validatorProcessor, msg, gp).TransitionDb()
 }
 
 // to returns the recipient of the message.
@@ -221,6 +228,8 @@ func (st *StateTransition) PreCheck() error {
 
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
+	var isValOp bool
+
 	if !st.msg.IsFake() {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(st.msg.From())
@@ -231,12 +240,17 @@ func (st *StateTransition) preCheck() error {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
 				st.msg.From().Hex(), msgNonce, stNonce)
 		}
-		// Make sure the sender is an EOA
-		if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
-			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
-				st.msg.From().Hex(), codeHash)
+
+		if bytes.Equal(st.evm.ChainConfig().ValidatorsStateAddress.Bytes(), st.msg.To().Bytes()) && st.state.IsValidatorAddress(st.msg.From()) {
+			isValOp = true
+		} else {
+			if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) && !st.state.IsValidatorAddress(st.msg.From()) {
+				return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+					st.msg.From().Hex(), codeHash)
+			}
 		}
 	}
+
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
 
 	// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
@@ -255,7 +269,7 @@ func (st *StateTransition) preCheck() error {
 		}
 		// This will panic if baseFee is nil, but basefee presence is verified
 		// as part of header validation.
-		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
+		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 && !isValOp {
 			return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
 				st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
 		}
@@ -294,28 +308,27 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
 
-	// Check if token prefix and opcode are valid in raw data
-	isTokenOp := false
-	if _, err := operation.GetOpCode(msg.Data()); err == nil {
-		isTokenOp = true
+	// Check if it's token related operations
+	isTokenCreation := false
+	if msg.To() == nil {
+		opCode, err := tokenOp.GetOpCode(msg.Data())
+		isTokenCreation = err == nil && opCode == tokenOp.CreateCode
 	}
-
-	var data []byte
-	if !isTokenOp {
-		data = st.data
-	}
-
-	contractCreation := msg.To() == nil && !isTokenOp
+	isValidatorOp := st.vp.IsValidatorOp(msg.To())
+	isContractCreation := msg.To() == nil && !isTokenCreation
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(data, st.msg.AccessList(), contractCreation)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation, isValidatorOp)
 	if err != nil {
 		return nil, err
 	}
-	if st.gas < gas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+
+	if !isValidatorOp {
+		if st.gas < gas {
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+		}
+		st.gas -= gas
 	}
-	st.gas -= gas
 
 	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
@@ -330,16 +343,23 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
-	if contractCreation {
+	if isContractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
-
-		if isTokenOp {
-			op, err := operation.DecodeBytes(msg.Data())
+		// check if "to" address belongs to token, otherwise it's a contract
+		if isTokenCreation || st.tp.IsToken(st.to()) {
+			// perform token operation if its valid op code
+			op, err := tokenOp.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
 			}
 			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
+		} else if isValidatorOp {
+			op, err := validatorOp.DecodeBytes(msg.Data())
+			if err != nil {
+				return nil, err
+			}
+			ret, vmerr = st.vp.Call(sender, st.to(), st.value, op)
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

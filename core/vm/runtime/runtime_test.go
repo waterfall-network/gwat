@@ -171,15 +171,7 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		BlockHeight: new(big.Int).SetUint64(1),
 		BlockNumber: new(big.Int).SetUint64(1),
 		ChainConfig: &params.ChainConfig{
-			ChainID:             big.NewInt(1),
-			HomesteadBlock:      new(big.Int),
-			ByzantiumBlock:      new(big.Int),
-			ConstantinopleBlock: new(big.Int),
-			DAOForkBlock:        new(big.Int),
-			DAOForkSupport:      false,
-			EIP150Block:         new(big.Int),
-			EIP155Block:         new(big.Int),
-			EIP158Block:         new(big.Int),
+			ChainID: big.NewInt(1),
 		},
 		EVMConfig: vm.Config{},
 	}
@@ -300,6 +292,8 @@ func TestBlockhash(t *testing.T) {
 		GetHashFn:   core.GetHashFn(header, chain),
 		BlockHeight: new(big.Int).SetUint64(header.Height),
 		BlockNumber: new(big.Int).SetUint64(header.Nr()),
+		Slot:        header.Slot,
+		Era:         header.Era,
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
