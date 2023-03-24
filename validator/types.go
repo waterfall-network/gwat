@@ -86,7 +86,6 @@ func PackExitRequestLogData(
 	creatorAddress common.Address,
 	valIndex uint64,
 	exitAfterEpoch *uint64,
-	depositIndex uint64,
 ) []byte {
 	data := make([]byte, 0, MinExitRequestLogDataLength)
 	data = append(data, pubkey.Bytes()...)
@@ -96,8 +95,6 @@ func PackExitRequestLogData(
 	if exitAfterEpoch != nil {
 		data = append(data, common.Uint64ToBytes(*exitAfterEpoch)...)
 	}
-
-	data = append(data, common.Uint64ToBytes(depositIndex)...)
 
 	return data
 }
