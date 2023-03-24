@@ -170,11 +170,10 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	}
 
 	p.Storage().SetValidatorInfo(p.state, valInfo)
-	p.incrDepositCount()
 
 	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
 	p.eventEmmiter.Deposit(toAddr, logData)
-
+	p.incrDepositCount()
 	// burn value from sender balance
 	p.state.SubBalance(from, value)
 
