@@ -106,3 +106,7 @@ func (op *exitOperation) CreatorAddress() common.Address {
 func (op *exitOperation) ExitAfterEpoch() *uint64 {
 	return op.exitAfterEpoch
 }
+
+func (op *exitOperation) SetExitAfterEpoch(epoch *uint64) {
+	op.exitAfterEpoch = epoch
+}
