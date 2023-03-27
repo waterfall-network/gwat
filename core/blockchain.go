@@ -2109,8 +2109,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			err     error
 		)
 		var isTokenOp, isValidatorOp bool
-		if _, err = operation.GetOpCode(tx.Data()); err == nil {
-			isTokenOp = true
+		if tx.To() == nil {
+			if _, err = operation.GetOpCode(tx.Data()); err == nil {
+				isTokenOp = true
+			}
 		} else {
 			isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
 		}
