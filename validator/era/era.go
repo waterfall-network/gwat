@@ -104,8 +104,11 @@ func (ei *EraInfo) IsTransitionPeriodStartEpoch(bc blockchain, epoch uint64) boo
 }
 
 func (ei *EraInfo) IsTransitionPeriodStartSlot(bc blockchain, slot uint64) bool {
-	if slot == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
-		if bc.GetSlotInfo().IsEpochStart(slot) == true {
+	transitionEpoch := (ei.ToEpoch() - bc.GetConfig().TransitionPeriod)
+	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+
+	if currentEpoch == transitionEpoch {
+		if bc.GetSlotInfo().IsEpochStart(slot) {
 			return true
 		}
 	}
