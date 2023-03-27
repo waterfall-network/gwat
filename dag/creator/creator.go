@@ -1129,8 +1129,6 @@ func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]by
 			if err != nil {
 				log.Error("can`t commit validator sync tx", "error", err)
 				return err
-			} else {
-				c.chain.RemoveSyncOpData(validatorSync)
 			}
 		}
 	}
