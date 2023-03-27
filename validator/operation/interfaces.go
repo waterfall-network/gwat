@@ -34,6 +34,7 @@ type Exit interface {
 	PubKey() common.BlsPubKey
 	CreatorAddress() common.Address
 	ExitAfterEpoch() *uint64
+	SetExitAfterEpoch(*uint64)
 }
 
 type Withdrawal interface {

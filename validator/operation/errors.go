@@ -17,7 +17,6 @@ var (
 	ErrNoTo                = errors.New("to address is required")
 	ErrNoFrom              = errors.New("from address is required")
 	ErrRawDataShort        = errors.New("binary data for validator operation is short")
-	ErrNoExitEpoch         = errors.New("exit epoch is required for exit request")
 
 	ErrNoOperator     = errors.New("operator address is required")
 	ErrPrefixNotValid = errors.New("not valid value for prefix")
