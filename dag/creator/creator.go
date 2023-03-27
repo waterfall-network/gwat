@@ -575,7 +575,12 @@ func (c *Creator) updateSnapshot() {
 	)
 }
 
-func (c *Creator) appendTransaction(tx *types.Transaction, lfNumber *uint64) error {
+func (c *Creator) appendTransaction(tx *types.Transaction, lfNumber *uint64, isValidatorOp bool) error {
+	if isValidatorOp {
+		c.current.txs = append(c.current.txs, tx)
+		return nil
+	}
+
 	gas, err := c.chain.TxEstimateGas(tx, lfNumber)
 	if err != nil {
 		log.Error("Failed to estimate gas for the transaction", "err", err)
@@ -620,7 +625,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(c.current.signer, tx)
 
-		err := c.appendTransaction(tx, lfNumber)
+		err := c.appendTransaction(tx, lfNumber, false)
 
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
@@ -1065,7 +1070,7 @@ func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]by
 				continue
 			}
 
-			err = c.appendTransaction(valSyncTx, &lfNumber)
+			err = c.appendTransaction(valSyncTx, &lfNumber, true)
 			if err != nil {
 				log.Error("can`t commit validator sync tx", "error", err)
 				return err
