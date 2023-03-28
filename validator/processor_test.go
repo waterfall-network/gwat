@@ -178,7 +178,7 @@ func TestProcessorActivate(t *testing.T) {
 				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				valInfo := processor.storage.GetValidatorInfo(processor.state, testmodels.Addr2)
-				if valInfo.GetValidatorIndex() != math.MaxUint64 {
+				if valInfo.GetIndex() != math.MaxUint64 {
 					t.Fatal()
 				}
 				if valInfo.GetActivationEpoch() != math.MaxUint64 {
@@ -190,7 +190,7 @@ func TestProcessorActivate(t *testing.T) {
 				valInfo = processor.storage.GetValidatorInfo(processor.state, testmodels.Addr2)
 
 				testutils.AssertEqual(t, valInfo.GetActivationEpoch(), testmodels.TestEra.To+1)
-				testutils.AssertEqual(t, valInfo.GetValidatorIndex(), activateOperation.Index())
+				testutils.AssertEqual(t, valInfo.GetIndex(), activateOperation.Index())
 
 				valList := processor.Storage().GetValidatorsList(processor.state)
 				if len(valList) > 1 {
@@ -266,7 +266,7 @@ func TestProcessorExit(t *testing.T) {
 			},
 		},
 		{
-			CaseName: "Exit: validator is out",
+			CaseName: "Exit: validator is exited",
 			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
 				AddrTo: to,
@@ -380,7 +380,7 @@ func TestProcessorDeactivate(t *testing.T) {
 			},
 		},
 		{
-			CaseName: "Deactivate: validator is out",
+			CaseName: "Deactivate: validator is exited",
 			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
 				AddrTo: to,
@@ -541,7 +541,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 
 				valInfo := processor.Storage().GetValidatorInfo(processor.state, testmodels.Addr5)
-				balanceDif := new(big.Int).Sub(valBalance, valInfo.GetValidatorBalance())
+				balanceDif := new(big.Int).Sub(valBalance, valInfo.GetBalance())
 
 				if !testutils.BigIntEquals(value, balanceDif) {
 					t.Fatalf("mismatch balance value, have %+v, want %+v", balanceDif, value)
@@ -645,8 +645,8 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				valInfo := processor.Storage().GetValidatorInfo(processor.state, testmodels.Addr6)
 
-				if !testutils.BigIntEquals(value, valInfo.GetValidatorBalance()) {
-					t.Fatalf("mismatch balance value, have %+v, want %+v", valInfo.GetValidatorBalance(), value)
+				if !testutils.BigIntEquals(value, valInfo.GetBalance()) {
+					t.Fatalf("mismatch balance value, have %+v, want %+v", valInfo.GetBalance(), value)
 				}
 			},
 		},

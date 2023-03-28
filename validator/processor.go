@@ -26,7 +26,7 @@ var (
 	ErrInvalidFromAddresses         = errors.New("withdrawal and sender addresses are mismatch")
 	ErrUnknownValidator             = errors.New("unknown validator")
 	ErrNotActivatedValidator        = errors.New("validator not activated yet")
-	ErrValidatorIsOut               = errors.New("validator is out")
+	ErrValidatorIsOut               = errors.New("validator is exited")
 	ErrInvalidToAddress             = errors.New("address to must be validators state address")
 	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
 	ErrCtxEraNotFound               = errors.New("context block era not found")
@@ -164,6 +164,19 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	validator := valStore.NewValidator(op.CreatorAddress(), &withdrawalAddress)
 
+	// if validator already exist
+	currValidator := p.Storage().GetValidatorInfo(p.state, op.CreatorAddress())
+	if currValidator != nil {
+		if validator.ActivationEpoch < math.MaxUint64 {
+			return nil, errors.New("validator deposit failed (validator already activated)")
+		}
+		//// todo add condition: val.PubKey must be equal
+		//if validator.PubKey != op.PubKey() {
+		//	return nil, errors.New("validator deposit failed (missmatch public key)")
+		//}
+
+	}
+
 	valInfo, err := validator.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -209,7 +222,7 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		return nil, ErrInvalidFromAddresses
 	}
 
-	logData := PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetValidatorIndex(), op.ExitAfterEpoch())
+	logData := PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
 	p.eventEmmiter.ExitRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
@@ -231,13 +244,13 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrNotActivatedValidator
 	}
 
-	currentBalance := valInfo.GetValidatorBalance()
+	currentBalance := valInfo.GetBalance()
 
 	if currentBalance.Cmp(op.Amount()) == -1 {
 		return nil, ErrInsufficientFundsForTransfer
 	}
 
-	valInfo.SetValidatorBalance(new(big.Int).Sub(currentBalance, op.Amount()))
+	valInfo.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
 	p.state.AddBalance(from, op.Amount())
@@ -302,7 +315,7 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 	}
 
 	valInfo.SetActivationEpoch(targetEpoch)
-	valInfo.SetValidatorIndex(op.Index())
+	valInfo.SetIndex(op.Index())
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
 	p.Storage().AddValidatorToList(p.state, op.Index(), op.Creator())
@@ -391,11 +404,17 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		return nil, ErrNoExitRequest
 	}
 
-	valInfo.SetValidatorBalance(op.Amount())
+	valInfo.SetBalance(op.Amount())
 
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
-	log.Info("Validator sync: update balance", "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "amount", op.Amount())
+	log.Info("Validator sync: update balance",
+		"opCode", op.OpCode(),
+		"creator", op.Creator().Hex(),
+		"procEpoch", op.ProcEpoch(),
+		"amount", op.Amount(),
+		"balance", valInfo.GetBalance().String(),
+	)
 	return op.Creator().Bytes(), nil
 }
 

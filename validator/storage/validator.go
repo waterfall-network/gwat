@@ -17,6 +17,7 @@ const (
 	balanceLengthOffset     = exitEpochOffset + uint64Size
 	balanceOffset           = balanceLengthOffset + uint64Size
 	metricOffset            = balanceOffset // TODO: add balance length to calculate offset
+	balanceMaxLen           = 20
 )
 
 type Validator struct {
@@ -50,7 +51,7 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 
 	balance := v.Balance.Bytes()
 
-	data := make([]byte, common.AddressLength*2+uint64Size*4+len(balance))
+	data := make([]byte, common.AddressLength*2+uint64Size*4+balanceMaxLen)
 
 	copy(data[:common.AddressLength], address)
 
@@ -106,11 +107,11 @@ func (vi ValidatorInfo) SetWithdrawalAddress(address common.Address) {
 	copy(vi[withdrawalAddressOffset:validatorIndexOffset], address[:])
 }
 
-func (vi ValidatorInfo) GetValidatorIndex() uint64 {
+func (vi ValidatorInfo) GetIndex() uint64 {
 	return binary.BigEndian.Uint64(vi[validatorIndexOffset:activationEpochOffset])
 }
 
-func (vi ValidatorInfo) SetValidatorIndex(index uint64) {
+func (vi ValidatorInfo) SetIndex(index uint64) {
 	binary.BigEndian.PutUint64(vi[validatorIndexOffset:activationEpochOffset], index)
 }
 
@@ -130,7 +131,7 @@ func (vi ValidatorInfo) SetExitEpoch(epoch uint64) {
 	binary.BigEndian.PutUint64(vi[exitEpochOffset:balanceLengthOffset], epoch)
 }
 
-func (vi ValidatorInfo) GetValidatorBalance() *big.Int {
+func (vi ValidatorInfo) GetBalance() *big.Int {
 	balanceLength := binary.BigEndian.Uint64(vi[balanceLengthOffset:balanceOffset])
 
 	bal := vi[balanceOffset : balanceOffset+balanceLength]
@@ -138,10 +139,15 @@ func (vi ValidatorInfo) GetValidatorBalance() *big.Int {
 	return new(big.Int).SetBytes(bal)
 }
 
-func (vi ValidatorInfo) SetValidatorBalance(balance *big.Int) {
+func (vi ValidatorInfo) SetBalance(balance *big.Int) {
+	vi.resetBalance()
 	newLen := len(balance.Bytes())
-
 	binary.BigEndian.PutUint64(vi[balanceLengthOffset:balanceOffset], uint64(newLen))
-
 	copy(vi[balanceOffset:balanceOffset+newLen], balance.Bytes())
+}
+
+func (vi ValidatorInfo) resetBalance() {
+	resetVal := make([]byte, uint64Size+balanceMaxLen)
+	binary.BigEndian.PutUint64(vi[balanceLengthOffset:balanceOffset], uint64(len(new(big.Int).Bytes())))
+	copy(vi[balanceOffset:], resetVal)
 }

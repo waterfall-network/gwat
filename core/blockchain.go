@@ -3592,13 +3592,22 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 
 	for _, tx := range txs {
 		if tx.To() != nil && tx.To() == bc.Config().ValidatorsStateAddress {
-			log.Info("find validator tx in the block", "txHash", tx.Hash())
+			log.Info("Validator sync tx in the block", "txHash", tx.Hash().Hex())
 			var txValSyncOp *types.ValidatorSync
 			err := txValSyncOp.UnmarshalJSON(tx.Data())
 			if err != nil {
-				log.Error("can`t marshal validator sync operation from tx data")
+				log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
 				continue
 			}
+
+			log.Info("Validator sync tx",
+				"OpType", txValSyncOp.OpType,
+				"ProcEpoch", txValSyncOp.ProcEpoch,
+				"Index", txValSyncOp.Index,
+				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
+				"amount", txValSyncOp.Amount,
+				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+			)
 
 			*txValSyncOp.TxHash = tx.Hash()
 			bc.UpdateValidatorSyncOpData(txValSyncOp)
