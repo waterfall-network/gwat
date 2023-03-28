@@ -30,6 +30,15 @@ func NewEra(number, from, to uint64, root common.Hash) *Era {
 	}
 }
 
+func NextEra(bc blockchain, root common.Hash, numValidators uint64) *Era {
+	nextEraNumber := bc.GetEraInfo().Number() + 1
+	nextEraLength := EstimateEraLength(bc, numValidators)
+	nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
+	nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
+
+	return NewEra(nextEraNumber, nextEraBegin, nextEraEnd, root)
+}
+
 func (e *Era) Length() uint64 {
 	return e.To - e.From
 }
