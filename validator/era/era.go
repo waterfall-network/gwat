@@ -32,6 +32,15 @@ func NewEra(number, from, to uint64, root common.Hash) *Era {
 	}
 }
 
+func NextEra(bc Blockchain, root common.Hash, numValidators uint64) *Era {
+	nextEraNumber := bc.GetEraInfo().Number() + 1
+	nextEraLength := EstimateEraLength(bc, numValidators)
+	nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
+	nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
+
+	return NewEra(nextEraNumber, nextEraBegin, nextEraEnd, root)
+}
+
 func (e *Era) Length() uint64 {
 	return e.To - e.From
 }
@@ -106,8 +115,11 @@ func (ei *EraInfo) IsTransitionPeriodStartEpoch(bc Blockchain, epoch uint64) boo
 }
 
 func (ei *EraInfo) IsTransitionPeriodStartSlot(bc Blockchain, slot uint64) bool {
-	if slot == (ei.ToEpoch() - bc.GetConfig().TransitionPeriod) {
-		if bc.GetSlotInfo().IsEpochStart(slot) == true {
+	transitionEpoch := (ei.ToEpoch() - bc.GetConfig().TransitionPeriod)
+	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+
+	if currentEpoch == transitionEpoch {
+		if bc.GetSlotInfo().IsEpochStart(slot) {
 			return true
 		}
 	}

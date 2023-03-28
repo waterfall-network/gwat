@@ -6,6 +6,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
@@ -14,6 +15,7 @@ type mockBlockchain struct {
 	eraInfo                    *EraInfo
 	coordinatedCheckpointEpoch uint64
 	slotInfo                   types.SlotInfo
+	db                         ethdb.Database
 }
 
 func (m mockBlockchain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
@@ -22,6 +24,10 @@ func (m mockBlockchain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
 
 func (m mockBlockchain) GetEraInfo() *EraInfo {
 	return m.eraInfo
+}
+
+func (m mockBlockchain) Database() ethdb.Database {
+	return m.db
 }
 
 func (m mockBlockchain) GetConfig() *params.ChainConfig {

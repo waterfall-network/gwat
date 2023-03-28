@@ -1215,7 +1215,7 @@ func WriteEra(db ethdb.KeyValueWriter, number uint64, era era.Era) {
 
 	encoded, err := rlp.EncodeToBytes(era)
 	if err != nil {
-		log.Crit("Failed to encode era", "err", err, "key:", key, "era:", number)
+		log.Warn("Failed to encode era", "err", err, "key:", key, "era:", number)
 	}
 
 	db.Put(key, encoded)
@@ -1226,14 +1226,14 @@ func ReadEra(db ethdb.KeyValueReader, number uint64) *era.Era {
 	key := eraKey(number)
 	encoded, err := db.Get(key)
 	if err != nil {
-		log.Crit("Failed to read era", "err", err, "number", number)
+		log.Warn("Failed to read era", "err", err, "number", number)
 		return nil
 	}
 
 	var decoded era.Era
 	err = rlp.DecodeBytes(encoded, &decoded)
 	if err != nil {
-		log.Crit("Failed to read era", "err", err, "number", number)
+		log.Warn("Failed to decode era", "err", err, "number", number)
 		return nil
 	}
 
@@ -1245,7 +1245,7 @@ func ReadCurrentEra(db ethdb.KeyValueReader) uint64 {
 	key := append(currentEraPrefix)
 	valueBytes, err := db.Get(key)
 	if err != nil {
-		log.Crit("Failed to read current era", "err", err)
+		log.Warn("Failed to read current era", "err", err)
 	}
 	return binary.BigEndian.Uint64(valueBytes)
 }
@@ -1257,7 +1257,7 @@ func WriteCurrentEra(db ethdb.KeyValueWriter, number uint64) {
 	binary.BigEndian.PutUint64(valueBytes, number)
 	err := db.Put(key, valueBytes)
 	if err != nil {
-		log.Crit("Failed to write current era", "err", err, "era", number)
+		log.Warn("Failed to write current era", "err", err, "era", number)
 	}
 }
 
@@ -1266,7 +1266,7 @@ func DeleteCurrentEra(db ethdb.KeyValueWriter) {
 	key := append(currentEraPrefix)
 	err := db.Delete(key)
 	if err != nil {
-		log.Crit("Failed to delete current era", "err", err)
+		log.Warn("Failed to delete current era", "err", err)
 	}
 }
 

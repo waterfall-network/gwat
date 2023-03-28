@@ -26,7 +26,7 @@ var (
 	ErrInvalidFromAddresses         = errors.New("withdrawal and sender addresses are mismatch")
 	ErrUnknownValidator             = errors.New("unknown validator")
 	ErrNotActivatedValidator        = errors.New("validator not activated yet")
-	ErrValidatorIsOut               = errors.New("validator is out")
+	ErrValidatorIsOut               = errors.New("validator is exited")
 	ErrInvalidToAddress             = errors.New("address to must be validators state address")
 	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
 	ErrCtxEraNotFound               = errors.New("context block era not found")
@@ -50,9 +50,8 @@ var (
 	MinDepositVal, _ = new(big.Int).SetString("1000000000000000000000", 10)
 
 	//Events signatures.
-	// todo add creator_address
-	depositEventSignature     = crypto.Keccak256Hash([]byte("DepositEvent"))
-	exitRequestEventSignature = crypto.Keccak256Hash([]byte("ExitRequestEvent"))
+	EvtDepositLogSignature = crypto.Keccak256Hash([]byte("DepositLog"))
+	EvtExitReqLogSignature = crypto.Keccak256Hash([]byte("ExitRequestLog"))
 )
 
 // Ref represents caller of the validator processor
@@ -165,17 +164,29 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	validator := valStore.NewValidator(op.CreatorAddress(), &withdrawalAddress)
 
+	// if validator already exist
+	currValidator := p.Storage().GetValidatorInfo(p.state, op.CreatorAddress())
+	if currValidator != nil {
+		if validator.ActivationEpoch < math.MaxUint64 {
+			return nil, errors.New("validator deposit failed (validator already activated)")
+		}
+		//// todo add condition: val.PubKey must be equal
+		//if validator.PubKey != op.PubKey() {
+		//	return nil, errors.New("validator deposit failed (missmatch public key)")
+		//}
+
+	}
+
 	valInfo, err := validator.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
 	p.Storage().SetValidatorInfo(p.state, valInfo)
-	p.incrDepositCount()
 
 	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
 	p.eventEmmiter.Deposit(toAddr, logData)
-
+	p.incrDepositCount()
 	// burn value from sender balance
 	p.state.SubBalance(from, value)
 
@@ -194,6 +205,11 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		return nil, ErrUnknownValidator
 	}
 
+	if op.ExitAfterEpoch() == nil {
+		exitAftEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.blockchain.GetSlotInfo().CurrentSlot()) + 1
+		op.SetExitAfterEpoch(&exitAftEpoch)
+	}
+
 	if validator.GetActivationEpoch() > *op.ExitAfterEpoch() {
 		return nil, ErrNotActivatedValidator
 	}
@@ -206,7 +222,7 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		return nil, ErrInvalidFromAddresses
 	}
 
-	logData := PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetValidatorIndex(), op.ExitAfterEpoch())
+	logData := PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
 	p.eventEmmiter.ExitRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
@@ -228,13 +244,13 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrNotActivatedValidator
 	}
 
-	currentBalance := valInfo.GetValidatorBalance()
+	currentBalance := valInfo.GetBalance()
 
 	if currentBalance.Cmp(op.Amount()) == -1 {
 		return nil, ErrInsufficientFundsForTransfer
 	}
 
-	valInfo.SetValidatorBalance(new(big.Int).Sub(currentBalance, op.Amount()))
+	valInfo.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
 	p.state.AddBalance(from, op.Amount())
@@ -299,7 +315,7 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 	}
 
 	valInfo.SetActivationEpoch(targetEpoch)
-	valInfo.SetValidatorIndex(op.Index())
+	valInfo.SetIndex(op.Index())
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
 	p.Storage().AddValidatorToList(p.state, op.Index(), op.Creator())
@@ -388,11 +404,17 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		return nil, ErrNoExitRequest
 	}
 
-	valInfo.SetValidatorBalance(op.Amount())
+	valInfo.SetBalance(op.Amount())
 
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
-	log.Info("Validator sync: update balance", "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "amount", op.Amount())
+	log.Info("Validator sync: update balance",
+		"opCode", op.OpCode(),
+		"creator", op.Creator().Hex(),
+		"procEpoch", op.ProcEpoch(),
+		"amount", op.Amount(),
+		"balance", valInfo.GetBalance().String(),
+	)
 	return op.Creator().Bytes(), nil
 }
 
@@ -465,13 +487,13 @@ func NewEventEmmiter(state vm.StateDB) *EventEmmiter {
 func (e *EventEmmiter) Deposit(evtAddr common.Address, data []byte) {
 	e.addLog(
 		evtAddr,
-		depositEventSignature,
+		EvtDepositLogSignature,
 		data,
 	)
 }
 
 func (e *EventEmmiter) ExitRequest(evtAddr common.Address, data []byte) {
-	e.addLog(evtAddr, exitRequestEventSignature, data)
+	e.addLog(evtAddr, EvtExitReqLogSignature, data)
 }
 
 func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, data []byte, logsEntries ...logEntry) {

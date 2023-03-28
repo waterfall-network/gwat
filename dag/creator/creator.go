@@ -851,6 +851,22 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	syncData := validatorsync.GetPendingValidatorSyncData(c.chain)
 
+	//syncData log
+	for _, sd := range syncData {
+		amt := new(big.Int)
+		if sd.Amount != nil {
+			amt.Set(sd.Amount)
+		}
+		log.Info("Creator: validator sync data",
+			"OpType", sd.OpType,
+			"ProcEpoch", sd.ProcEpoch,
+			"Index", sd.Index,
+			"Creator", fmt.Sprintf("%#x", sd.Creator),
+			"amount", amt.String(),
+			"TxHash", fmt.Sprintf("%#x", sd.TxHash),
+		)
+	}
+
 	// Short circuit if no pending transactions
 	if len(filterPending) == 0 && len(syncData) == 0 {
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
@@ -1074,8 +1090,6 @@ func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]by
 			if err != nil {
 				log.Error("can`t commit validator sync tx", "error", err)
 				return err
-			} else {
-				c.chain.RemoveSyncOpData(validatorSync)
 			}
 		}
 	}

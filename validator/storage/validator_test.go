@@ -25,7 +25,8 @@ func init() {
 	validatorIndex = uint64(testutils.RandomInt(0, 9999999999))
 	activationEpoch = uint64(testutils.RandomInt(0, 9999999999))
 	exitEpoch = uint64(testutils.RandomInt(int(activationEpoch), int(activationEpoch+999999999)))
-	balance = big.NewInt(int64(testutils.RandomInt(0, 999999999)))
+	balance = new(big.Int)
+	balance.SetString("319992450932200 000 000 000 000 000 000 000 000", 10)
 
 	testValidator = NewValidator(validatorAddress, &withdrawalAddress)
 	testValidator.Index = validatorIndex
@@ -81,7 +82,7 @@ func TestValidatorInfoGetters(t *testing.T) {
 	valWithdrawal := valInfo.GetWithdrawalAddress()
 	testutils.AssertEqual(t, valWithdrawal, withdrawalAddress)
 
-	valIndex := valInfo.GetValidatorIndex()
+	valIndex := valInfo.GetIndex()
 	testutils.AssertEqual(t, valIndex, validatorIndex)
 
 	valActiveEpoch := valInfo.GetActivationEpoch()
@@ -90,7 +91,7 @@ func TestValidatorInfoGetters(t *testing.T) {
 	valExitEpoch := valInfo.GetExitEpoch()
 	testutils.AssertEqual(t, valExitEpoch, exitEpoch)
 
-	valBalance := valInfo.GetValidatorBalance()
+	valBalance := valInfo.GetBalance()
 	testutils.AssertEqual(t, valBalance, balance)
 }
 
@@ -106,8 +107,8 @@ func TestValidatorInfoSetters(t *testing.T) {
 	valWithdraw := val.GetWithdrawalAddress()
 	testutils.AssertEqual(t, valWithdraw, withdrawalAddress)
 
-	val.SetValidatorIndex(validatorIndex)
-	valIndex := val.GetValidatorIndex()
+	val.SetIndex(validatorIndex)
+	valIndex := val.GetIndex()
 	testutils.AssertEqual(t, valIndex, validatorIndex)
 
 	val.SetActivationEpoch(activationEpoch)
@@ -118,7 +119,11 @@ func TestValidatorInfoSetters(t *testing.T) {
 	valExit := val.GetExitEpoch()
 	testutils.AssertEqual(t, valExit, exitEpoch)
 
-	val.SetValidatorBalance(balance)
-	valBalance := val.GetValidatorBalance()
-	testutils.AssertEqual(t, valBalance, balance)
+	val.SetBalance(balance)
+	valBalance := val.GetBalance()
+	testutils.AssertEqual(t, balance, valBalance)
+
+	val.resetBalance()
+	valReset := val.GetBalance()
+	testutils.AssertEqual(t, new(big.Int).SetUint64(0), valReset)
 }

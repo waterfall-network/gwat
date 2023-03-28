@@ -49,8 +49,18 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	}
 	var withdrawalAddress *common.Address
 	if valSyncOp.OpType == types.UpdateBalance {
-		*withdrawalAddress = validatorData.GetWithdrawalAddress()
+		wa := validatorData.GetWithdrawalAddress()
+		withdrawalAddress = &wa
 	}
+
+	log.Info("Validator sync tx data",
+		"Creator", valSyncOp.Creator.Hex(),
+		"ProcEpoch", valSyncOp.ProcEpoch,
+		"OpType", valSyncOp.OpType,
+		"Amount", valSyncOp.Amount.String(),
+		"Index", valSyncOp.Index,
+	)
+
 	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress)
 
 	txData := &types.DynamicFeeTx{
@@ -75,15 +85,15 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 
 func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, valSyncOp *types.ValidatorSync) (bool, error) {
 	if valSyncOp == nil {
-		return false, fmt.Errorf("validate validator sync operation failed: nil data")
+		return false, fmt.Errorf("validator sync operation failed: nil data")
 	}
 	stateHead := bc.GetHeaderByHash(stateBlockHash)
 	if stateHead == nil {
-		return false, fmt.Errorf("validate validator sync operation failed: state block not found heash=%s", stateBlockHash.Hex())
+		return false, fmt.Errorf("validator sync operation failed: state block not found heash=%s", stateBlockHash.Hex())
 	}
 	stateEpoch := bc.GetSlotInfo().SlotToEpoch(stateHead.Slot)
 	if valSyncOp.ProcEpoch < stateEpoch {
-		return false, fmt.Errorf("validate validator sync operation failed: outdated epoch ProcEpoch=%d stateEpoch=%d", valSyncOp.ProcEpoch, stateEpoch)
+		return false, fmt.Errorf("validator sync operation failed: outdated epoch ProcEpoch=%d stateEpoch=%d", valSyncOp.ProcEpoch, stateEpoch)
 	}
 
 	stateDb, err := bc.StateAt(stateHead.Root)
@@ -91,31 +101,37 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 		return false, err
 	}
 	if !stateDb.IsValidatorAddress(valSyncOp.Creator) {
-		return false, fmt.Errorf("validate validator sync operation failed: address is not validator: %s", valSyncOp.Creator.Hex())
+		return false, fmt.Errorf("validator sync operation failed: address is not validator: %s", valSyncOp.Creator.Hex())
 	}
 	validatorData := bc.ValidatorStorage().GetValidatorInfo(stateDb, valSyncOp.Creator)
 
 	switch valSyncOp.OpType {
 	case types.Activate:
 		if validatorData.GetActivationEpoch() < math.MaxUint64 {
-			return false, fmt.Errorf("validate validator sync operation failed: validator already activated")
+			return false, fmt.Errorf("validator sync operation failed: validator already activated")
 		}
 	case types.Deactivate:
 		if validatorData.GetExitEpoch() < math.MaxUint64 {
-			return false, fmt.Errorf("validate validator sync operation failed: validator already exited")
+			return false, fmt.Errorf("validator sync operation failed: validator already deactivated")
 		}
 		if validatorData.GetActivationEpoch() >= valSyncOp.ProcEpoch {
-			return false, fmt.Errorf("validate validator sync operation failed: exit epoche is too low")
+			return false, fmt.Errorf("validator sync operation failed: exit epoche is too low")
 		}
 	case types.UpdateBalance:
-		if valSyncOp.Amount == nil {
-			return false, fmt.Errorf("validate validator sync operation failed: withdrawal amount is required")
+		if valSyncOp.Amount == nil || valSyncOp.Amount.Sign() == 0 {
+			return false, fmt.Errorf("validator sync operation failed: withdrawal amount is required")
 		}
-		if validatorData.GetActivationEpoch() >= valSyncOp.ProcEpoch || validatorData.GetExitEpoch() >= valSyncOp.ProcEpoch {
-			return false, fmt.Errorf("validate validator sync operation failed: withdrowal epoche is too low")
+		if valSyncOp.Amount.Sign() == -1 {
+			return false, fmt.Errorf("validator sync operation failed: withdrawal amount is negative")
+		}
+		if validatorData.GetActivationEpoch() >= valSyncOp.ProcEpoch {
+			return false, fmt.Errorf("validator sync operation failed: withdrawal epoche is too low")
+		}
+		if validatorData.GetExitEpoch() == math.MaxUint64 {
+			return false, fmt.Errorf("validator sync operation failed: withdrawal operation require initialized exit procedure")
 		}
 	default:
-		return false, fmt.Errorf("validate validator sync operation failed: unknown oparation type %d", valSyncOp.OpType)
+		return false, fmt.Errorf("validator sync operation failed: unknown oparation type %d", valSyncOp.OpType)
 	}
 	return true, nil
 }

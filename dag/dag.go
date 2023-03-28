@@ -348,7 +348,18 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				creators []common.Address
 			)
 
-			log.Info("New slot", "slot", slot)
+			transitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(d.bc.GetEraInfo().ToEpoch() - d.chainConfig.TransitionPeriod)
+			if err != nil {
+				log.Error("Error calculating transition slot", "error", err)
+				return
+			}
+
+			log.Info("New slot",
+				"slot", slot,
+				"epoch", d.bc.GetSlotInfo().SlotToEpoch(slot),
+				"era", d.bc.GetEraInfo().Number(),
+				"transEpoch", d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod,
+				"transSlot", transitionSlot)
 
 			d.handleEra(slot)
 
@@ -456,7 +467,36 @@ func (d *Dag) countDagSlots(tips *types.Tips) int {
 	return len(candidates)
 }
 
-// handleEra
 func (d *Dag) handleEra(slot uint64) {
-	d.bc.HandleEra(slot)
+	currentEpoch := d.bc.GetSlotInfo().SlotToEpoch(slot)
+	newEpoch := d.bc.GetSlotInfo().IsEpochStart(slot)
+
+	if newEpoch {
+		// New era
+		if d.bc.GetEraInfo().ToEpoch()+1 == currentEpoch {
+			// Checkpoint
+			checkpoint := d.bc.GetLastCoordinatedCheckpoint()
+			spineRoot := common.Hash{}
+			if checkpoint != nil {
+				header := d.bc.GetHeaderByHash(checkpoint.Spine)
+				spineRoot = header.Root
+			} else {
+				log.Error("Invalid checkpoint: write new era error")
+			}
+
+			d.bc.EnterNextEra(spineRoot)
+
+			return
+		}
+
+		// Transition period
+		if d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
+			d.bc.StartTransitionPeriod()
+		}
+	}
+
+	// Sync era to current slot
+	if currentEpoch > (d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod) && !d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
+		d.bc.SyncEraToSlot(slot)
+	}
 }

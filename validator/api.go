@@ -116,10 +116,6 @@ func (s *PublicValidatorAPI) Validator_ExitData(_ context.Context, args ExitRequ
 		return nil, operation.ErrNoCreatorAddress
 	}
 
-	if args.ExitEpoch == nil {
-		return nil, operation.ErrNoExitEpoch
-	}
-
 	var (
 		op  operation.Operation
 		err error
