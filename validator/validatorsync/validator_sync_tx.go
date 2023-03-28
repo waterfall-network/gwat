@@ -49,8 +49,18 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	}
 	var withdrawalAddress *common.Address
 	if valSyncOp.OpType == types.UpdateBalance {
-		*withdrawalAddress = validatorData.GetWithdrawalAddress()
+		wa := validatorData.GetWithdrawalAddress()
+		withdrawalAddress = &wa
 	}
+
+	log.Info("Validator sync tx data",
+		"Creator", valSyncOp.Creator.Hex(),
+		"ProcEpoch", valSyncOp.ProcEpoch,
+		"OpType", valSyncOp.OpType,
+		"Amount", valSyncOp.Amount.String(),
+		"Index", valSyncOp.Index,
+	)
+
 	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress)
 
 	txData := &types.DynamicFeeTx{
@@ -102,7 +112,7 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 		}
 	case types.Deactivate:
 		if validatorData.GetExitEpoch() < math.MaxUint64 {
-			return false, fmt.Errorf("validate validator sync operation failed: validator already exited")
+			return false, fmt.Errorf("validate validator sync operation failed: validator already deactivated")
 		}
 		if validatorData.GetActivationEpoch() >= valSyncOp.ProcEpoch {
 			return false, fmt.Errorf("validate validator sync operation failed: exit epoche is too low")
@@ -111,7 +121,7 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 		if valSyncOp.Amount == nil {
 			return false, fmt.Errorf("validate validator sync operation failed: withdrawal amount is required")
 		}
-		if validatorData.GetActivationEpoch() >= valSyncOp.ProcEpoch || validatorData.GetExitEpoch() >= valSyncOp.ProcEpoch {
+		if validatorData.GetActivationEpoch() >= valSyncOp.ProcEpoch || validatorData.GetExitEpoch() > valSyncOp.ProcEpoch {
 			return false, fmt.Errorf("validate validator sync operation failed: withdrowal epoche is too low")
 		}
 	default:
