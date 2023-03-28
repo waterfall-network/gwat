@@ -619,7 +619,8 @@ func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
 	rawdb.WriteValidatorSync(bc.db, validatorSync)
 }
 
-func (bc *BlockChain) RemoveSyncOpData(opData *types.ValidatorSync) {
+func (bc *BlockChain) UpdateValidatorSyncOpData(opData *types.ValidatorSync) {
+	log.Info("update validator sync data", "creator", opData.Creator, "txHash", opData.TxHash)
 	key := opData.Key()
 
 	delete(bc.notProcValSyncOps, key)
@@ -2108,8 +2109,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			err     error
 		)
 		var isTokenOp, isValidatorOp bool
-		if _, err = operation.GetOpCode(tx.Data()); err == nil {
-			isTokenOp = true
+		if tx.To() == nil {
+			if _, err = operation.GetOpCode(tx.Data()); err == nil {
+				isTokenOp = true
+			}
 		} else {
 			isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
 		}
@@ -3583,14 +3586,33 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 		}
 		txs = append(txs, block.Transactions()...)
 	}
-
 	sort.Slice(txs, func(i, j int) bool {
 		return txs[i].Nonce() < txs[j].Nonce()
 	})
 
 	for _, tx := range txs {
+		if tx.To() != nil && tx.To() == bc.Config().ValidatorsStateAddress {
+			log.Info("find validator tx in the block", "txHash", tx.Hash())
+			var txValSyncOp *types.ValidatorSync
+			err := txValSyncOp.UnmarshalJSON(tx.Data())
+			if err != nil {
+				log.Error("can`t marshal validator sync operation from tx data")
+				continue
+			}
+
+			*txValSyncOp.TxHash = tx.Hash()
+			bc.UpdateValidatorSyncOpData(txValSyncOp)
+		}
+
 		bc.moveTxToProcessing(tx)
 	}
+
+	vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
+	for _, vs := range bc.notProcValSyncOps {
+		vsArr = append(vsArr, vs)
+	}
+
+	rawdb.WriteNotProcessedValidatorSyncOps(bc.db, vsArr)
 }
 
 func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
