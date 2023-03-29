@@ -10,17 +10,18 @@ import (
 
 const (
 	uint64Size              = 8
-	withdrawalAddressOffset = common.AddressLength
+	creatorAddressOffset    = common.BlsPubKeyLength
+	withdrawalAddressOffset = creatorAddressOffset + common.AddressLength
 	validatorIndexOffset    = withdrawalAddressOffset + common.AddressLength
 	activationEpochOffset   = validatorIndexOffset + uint64Size
 	exitEpochOffset         = activationEpochOffset + uint64Size
 	balanceLengthOffset     = exitEpochOffset + uint64Size
 	balanceOffset           = balanceLengthOffset + uint64Size
 	metricOffset            = balanceOffset // TODO: add balance length to calculate offset
-	balanceMaxLen           = 20
 )
 
 type Validator struct {
+	PubKey            common.BlsPubKey
 	Address           common.Address
 	WithdrawalAddress *common.Address
 	Index             uint64
@@ -29,8 +30,9 @@ type Validator struct {
 	Balance           *big.Int
 }
 
-func NewValidator(address common.Address, withdrawal *common.Address) *Validator {
+func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {
 	return &Validator{
+		PubKey:            pubKey,
 		Address:           address,
 		WithdrawalAddress: withdrawal,
 		Index:             math.MaxUint64,
@@ -41,20 +43,23 @@ func NewValidator(address common.Address, withdrawal *common.Address) *Validator
 }
 
 func (v *Validator) MarshalBinary() ([]byte, error) {
+	pubKey := make([]byte, common.BlsPubKeyLength)
+	copy(pubKey, v.PubKey[:])
+
 	address := make([]byte, common.AddressLength)
-	withdrawalAddress := make([]byte, common.AddressLength)
 	copy(address, v.Address[:])
 
+	withdrawalAddress := make([]byte, common.AddressLength)
 	if v.WithdrawalAddress != nil {
 		copy(withdrawalAddress, v.WithdrawalAddress[:])
 	}
 
 	balance := v.Balance.Bytes()
 
-	data := make([]byte, common.AddressLength*2+uint64Size*4+balanceMaxLen)
+	data := make([]byte, common.BlsPubKeyLength+common.AddressLength*2+uint64Size*4+len(balance))
 
-	copy(data[:common.AddressLength], address)
-
+	copy(data[:common.BlsPubKeyLength], pubKey)
+	copy(data[creatorAddressOffset:creatorAddressOffset+common.AddressLength], address)
 	copy(data[withdrawalAddressOffset:withdrawalAddressOffset+common.AddressLength], withdrawalAddress)
 
 	binary.BigEndian.PutUint64(data[validatorIndexOffset:validatorIndexOffset+uint64Size], v.Index)
@@ -70,8 +75,11 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 }
 
 func (v *Validator) UnmarshalBinary(data []byte) error {
+	v.PubKey = common.BlsPubKey{}
+	copy(v.PubKey[:], data[:common.BlsPubKeyLength])
+
 	v.Address = common.Address{}
-	copy(v.Address[:], data[:common.AddressLength])
+	copy(v.Address[:], data[creatorAddressOffset:creatorAddressOffset+common.AddressLength])
 
 	v.WithdrawalAddress = new(common.Address)
 	copy(v.WithdrawalAddress[:], data[withdrawalAddressOffset:withdrawalAddressOffset+common.AddressLength])
@@ -91,12 +99,20 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 // ValidatorInfo is a Validator represented as an array of bytes.
 type ValidatorInfo []byte
 
+func (vi ValidatorInfo) GetPubKey() common.BlsPubKey {
+	return common.BytesToBlsPubKey(vi[:common.BlsPubKeyLength])
+}
+
+func (vi ValidatorInfo) SetPubKey(key common.BlsPubKey) {
+	copy(vi[:common.BlsPubKeyLength], key[:])
+}
+
 func (vi ValidatorInfo) GetAddress() common.Address {
-	return common.BytesToAddress(vi[:common.AddressLength])
+	return common.BytesToAddress(vi[creatorAddressOffset : creatorAddressOffset+common.AddressLength])
 }
 
 func (vi ValidatorInfo) SetAddress(address common.Address) {
-	copy(vi[:common.AddressLength], address[:])
+	copy(vi[creatorAddressOffset:creatorAddressOffset+common.AddressLength], address[:])
 }
 
 func (vi ValidatorInfo) GetWithdrawalAddress() common.Address {
@@ -139,15 +155,13 @@ func (vi ValidatorInfo) GetBalance() *big.Int {
 	return new(big.Int).SetBytes(bal)
 }
 
-func (vi ValidatorInfo) SetBalance(balance *big.Int) {
-	vi.resetBalance()
-	newLen := len(balance.Bytes())
-	binary.BigEndian.PutUint64(vi[balanceLengthOffset:balanceOffset], uint64(newLen))
-	copy(vi[balanceOffset:balanceOffset+newLen], balance.Bytes())
-}
+func SetValidatorBalance(valInfo ValidatorInfo, balance *big.Int) ValidatorInfo {
+	balanceLen := len(balance.Bytes())
+	binary.BigEndian.PutUint64(valInfo[balanceLengthOffset:balanceOffset], uint64(balanceLen))
 
-func (vi ValidatorInfo) resetBalance() {
-	resetVal := make([]byte, uint64Size+balanceMaxLen)
-	binary.BigEndian.PutUint64(vi[balanceLengthOffset:balanceOffset], uint64(len(new(big.Int).Bytes())))
-	copy(vi[balanceOffset:], resetVal)
+	newVi := make(ValidatorInfo, len(valInfo)+balanceLen)
+	copy(newVi, valInfo[:balanceOffset])
+	copy(newVi[balanceOffset:], balance.Bytes())
+
+	return newVi
 }

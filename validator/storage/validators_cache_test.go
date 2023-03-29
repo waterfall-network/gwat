@@ -140,7 +140,7 @@ func TestAllValidatorsCache(t *testing.T) {
 	validatorsList := make([]Validator, len(testmodels.InputValidators))
 
 	for i, inputValidator := range testmodels.InputValidators {
-		validatorsList[i] = *NewValidator(inputValidator, nil)
+		validatorsList[i] = *NewValidator(common.BlsPubKey{}, inputValidator, nil)
 	}
 
 	cache.addAllValidatorsByEpoch(epoch, validatorsList)
@@ -189,7 +189,7 @@ func TestGetValidatorsAddresses(t *testing.T) {
 	validatorsList := make([]Validator, len(testmodels.InputValidators))
 
 	for i, inputValidator := range testmodels.InputValidators {
-		validatorsList[i] = *NewValidator(inputValidator, nil)
+		validatorsList[i] = *NewValidator(common.BlsPubKey{}, inputValidator, nil)
 	}
 
 	cache.addAllValidatorsByEpoch(epoch, validatorsList)

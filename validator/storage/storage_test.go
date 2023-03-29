@@ -83,7 +83,7 @@ func TestGetValidators(t *testing.T) {
 	store.SetValidatorsList(stateDb, testmodels.InputValidators)
 
 	for _, address := range testmodels.InputValidators {
-		validator := NewValidator(address, &common.Address{0x0000000000000000000000000000000000000000})
+		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
 		info, err := validator.MarshalBinary()
 		testutils.AssertNoError(t, err)
 
@@ -193,7 +193,7 @@ func TestGetShuffledValidators(t *testing.T) {
 
 	validatorList := make([]Validator, len(testmodels.InputValidators))
 	for i, address := range testmodels.InputValidators {
-		validator := NewValidator(address, &common.Address{0x0000000000000000000000000000000000000000})
+		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
 		validator.ActivationEpoch = uint64(i)
 		info, err := validator.MarshalBinary()
 		testutils.AssertNoError(t, err)

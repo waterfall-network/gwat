@@ -162,7 +162,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	withdrawalAddress := op.WithdrawalAddress()
 
-	validator := valStore.NewValidator(op.CreatorAddress(), &withdrawalAddress)
+	validator := valStore.NewValidator(op.PubKey(), op.CreatorAddress(), &withdrawalAddress)
 
 	// if validator already exist
 	currValidator := p.Storage().GetValidatorInfo(p.state, op.CreatorAddress())
@@ -170,11 +170,10 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		if validator.ActivationEpoch < math.MaxUint64 {
 			return nil, errors.New("validator deposit failed (validator already activated)")
 		}
-		//// todo add condition: val.PubKey must be equal
-		//if validator.PubKey != op.PubKey() {
-		//	return nil, errors.New("validator deposit failed (missmatch public key)")
-		//}
 
+		if validator.PubKey != op.PubKey() {
+			return nil, errors.New("validator deposit failed (mismatch public key)")
+		}
 	}
 
 	valInfo, err := validator.MarshalBinary()
@@ -250,7 +249,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrInsufficientFundsForTransfer
 	}
 
-	valInfo.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
+	valInfo = valStore.SetValidatorBalance(valInfo, new(big.Int).Sub(currentBalance, op.Amount()))
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
 	p.state.AddBalance(from, op.Amount())
@@ -404,8 +403,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		return nil, ErrNoExitRequest
 	}
 
-	valInfo.SetBalance(op.Amount())
-
+	valInfo = valStore.SetValidatorBalance(valInfo, op.Amount())
 	p.Storage().SetValidatorInfo(p.state, valInfo)
 
 	log.Info("Validator sync: update balance",
