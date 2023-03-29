@@ -168,11 +168,11 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	currValidator, _ := p.Storage().GetValidator(p.state, op.CreatorAddress())
 
 	if currValidator != nil {
-		if validator.ActivationEpoch < math.MaxUint64 {
+		if currValidator.ActivationEpoch < math.MaxUint64 {
 			return nil, errors.New("validator deposit failed (validator already activated)")
 		}
 
-		if validator.PubKey != op.PubKey() {
+		if currValidator.PubKey != op.PubKey() {
 			return nil, errors.New("validator deposit failed (mismatch public key)")
 		}
 	}
