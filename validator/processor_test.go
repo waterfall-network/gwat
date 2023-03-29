@@ -171,26 +171,28 @@ func TestProcessorActivate(t *testing.T) {
 
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr2, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
 
-				buf, err := validator.MarshalBinary()
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
-				valInfo := processor.storage.GetValidatorInfo(processor.state, testmodels.Addr2)
-				if valInfo.GetIndex() != math.MaxUint64 {
+				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr2)
+				testutils.AssertNoError(t, err)
+
+				if val.GetIndex() != math.MaxUint64 {
 					t.Fatal()
 				}
-				if valInfo.GetActivationEpoch() != math.MaxUint64 {
+				if val.GetActivationEpoch() != math.MaxUint64 {
 					t.Fatal()
 				}
 
 				call(t, processor, v.Caller, v.AddrTo, value, activateOperation, c.Errs)
 
-				valInfo = processor.storage.GetValidatorInfo(processor.state, testmodels.Addr2)
+				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr2)
+				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, valInfo.GetActivationEpoch(), testmodels.TestEra.To+1)
-				testutils.AssertEqual(t, valInfo.GetIndex(), activateOperation.Index())
+				testutils.AssertEqual(t, val.GetActivationEpoch(), testmodels.TestEra.To+1)
+				testutils.AssertEqual(t, val.GetIndex(), activateOperation.Index())
 
 				valList := processor.Storage().GetValidatorsList(processor.state)
 				if len(valList) > 1 {
@@ -256,11 +258,10 @@ func TestProcessorExit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr3, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr3, &withdrawalAddress)
 
-				buf, err := validator.MarshalBinary()
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
@@ -275,13 +276,12 @@ func TestProcessorExit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr3, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr3, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 				validator.ExitEpoch = procEpoch
 
-				buf, err := validator.MarshalBinary()
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
@@ -296,12 +296,11 @@ func TestProcessorExit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr3, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr3, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 
-				buf, err := validator.MarshalBinary()
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
@@ -316,12 +315,11 @@ func TestProcessorExit(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr3, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr3, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 
-				buf, err := validator.MarshalBinary()
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
@@ -370,11 +368,10 @@ func TestProcessorDeactivate(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr4, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
 
-				buf, err := validator.MarshalBinary()
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
@@ -389,13 +386,12 @@ func TestProcessorDeactivate(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr4, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 				validator.ExitEpoch = procEpoch
 
-				buf, err := validator.MarshalBinary()
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 			},
@@ -413,18 +409,18 @@ func TestProcessorDeactivate(t *testing.T) {
 
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr4, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
 				validator.ActivationEpoch = 0
 
-				buf, err := validator.MarshalBinary()
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, exitOperation, c.Errs)
 
-				valInfo := processor.storage.GetValidatorInfo(processor.state, testmodels.Addr4)
+				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
+				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, valInfo.GetExitEpoch(), testmodels.TestEra.To+1)
+				testutils.AssertEqual(t, val.GetExitEpoch(), testmodels.TestEra.To+1)
 			},
 		},
 	}
@@ -471,11 +467,10 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr5, &withdrawalAddress)
-				valInfo, err := validator.MarshalBinary()
-				testutils.AssertNoError(t, err)
+				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
 
-				processor.Storage().SetValidatorInfo(processor.state, valInfo)
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
 
 				call(t, processor, v.Caller, v.AddrTo, nil, withdrawalOperation, c.Errs)
 			},
@@ -490,11 +485,10 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr5, &withdrawalAddress)
-				buf, err := validator.MarshalBinary()
-				testutils.AssertNoError(t, err)
+				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
 
-				processor.Storage().SetValidatorInfo(processor.state, buf)
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
 
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 			},
@@ -509,12 +503,11 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr5, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
 				validator.ActivationEpoch = 0
-				buf, err := validator.MarshalBinary()
-				testutils.AssertNoError(t, err)
 
-				processor.Storage().SetValidatorInfo(processor.state, buf)
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
 
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 			},
@@ -531,17 +524,19 @@ func TestProcessorWithdrawal(t *testing.T) {
 
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr5, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
 				validator.Balance = valBalance
 				validator.ActivationEpoch = 0
-				buf, err := validator.MarshalBinary()
+
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 
-				valInfo := processor.Storage().GetValidatorInfo(processor.state, testmodels.Addr5)
-				balanceDif := new(big.Int).Sub(valBalance, valInfo.GetBalance())
+				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr5)
+				testutils.AssertNoError(t, err)
+
+				balanceDif := new(big.Int).Sub(valBalance, val.GetBalance())
 
 				if !testutils.BigIntEquals(value, balanceDif) {
 					t.Fatalf("mismatch balance value, have %+v, want %+v", balanceDif, value)
@@ -592,11 +587,10 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr6, &withdrawalAddress)
-				buf, err := validator.MarshalBinary()
-				testutils.AssertNoError(t, err)
+				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
 
-				processor.Storage().SetValidatorInfo(processor.state, buf)
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
 
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 			},
@@ -611,12 +605,11 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr6, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
 				validator.ActivationEpoch = 0
-				buf, err := validator.MarshalBinary()
-				testutils.AssertNoError(t, err)
 
-				processor.Storage().SetValidatorInfo(processor.state, buf)
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
 
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 			},
@@ -633,20 +626,21 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				v := c.TestData.(testmodels.TestData)
 
-				validator := storage.NewValidator(testmodels.Addr6, &withdrawalAddress)
+				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
 				validator.Balance = valBalance
 				validator.ActivationEpoch = 0
 				validator.ExitEpoch = procEpoch
-				buf, err := validator.MarshalBinary()
+
+				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				processor.Storage().SetValidatorInfo(processor.state, buf)
 
 				call(t, processor, v.Caller, v.AddrTo, value, withdrawalOperation, c.Errs)
 
-				valInfo := processor.Storage().GetValidatorInfo(processor.state, testmodels.Addr6)
+				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr6)
+				testutils.AssertNoError(t, err)
 
-				if !testutils.BigIntEquals(value, valInfo.GetBalance()) {
-					t.Fatalf("mismatch balance value, have %+v, want %+v", valInfo.GetBalance(), value)
+				if !testutils.BigIntEquals(value, val.GetBalance()) {
+					t.Fatalf("mismatch balance value, have %+v, want %+v", val.GetBalance(), value)
 				}
 			},
 		},

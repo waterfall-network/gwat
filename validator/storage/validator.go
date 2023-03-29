@@ -96,72 +96,71 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// ValidatorInfo is a Validator represented as an array of bytes.
-type ValidatorInfo []byte
-
-func (vi ValidatorInfo) GetPubKey() common.BlsPubKey {
-	return common.BytesToBlsPubKey(vi[:common.BlsPubKeyLength])
+func (v *Validator) GetPubKey() common.BlsPubKey {
+	return v.PubKey
 }
 
-func (vi ValidatorInfo) SetPubKey(key common.BlsPubKey) {
-	copy(vi[:common.BlsPubKeyLength], key[:])
+func (v *Validator) SetPubKey(key common.BlsPubKey) {
+	v.PubKey = key
 }
 
-func (vi ValidatorInfo) GetAddress() common.Address {
-	return common.BytesToAddress(vi[creatorAddressOffset : creatorAddressOffset+common.AddressLength])
+func (v *Validator) GetAddress() common.Address {
+	return v.Address
 }
 
-func (vi ValidatorInfo) SetAddress(address common.Address) {
-	copy(vi[creatorAddressOffset:creatorAddressOffset+common.AddressLength], address[:])
+func (v *Validator) SetAddress(address common.Address) {
+	v.Address = address
 }
 
-func (vi ValidatorInfo) GetWithdrawalAddress() common.Address {
-	return common.BytesToAddress(vi[withdrawalAddressOffset:validatorIndexOffset])
+func (v *Validator) GetWithdrawalAddress() *common.Address {
+	return v.WithdrawalAddress
 }
 
-func (vi ValidatorInfo) SetWithdrawalAddress(address common.Address) {
-	copy(vi[withdrawalAddressOffset:validatorIndexOffset], address[:])
+func (v *Validator) SetWithdrawalAddress(address *common.Address) {
+	v.WithdrawalAddress = address
 }
 
-func (vi ValidatorInfo) GetIndex() uint64 {
-	return binary.BigEndian.Uint64(vi[validatorIndexOffset:activationEpochOffset])
+func (v *Validator) GetIndex() uint64 {
+	return v.Index
 }
 
-func (vi ValidatorInfo) SetIndex(index uint64) {
-	binary.BigEndian.PutUint64(vi[validatorIndexOffset:activationEpochOffset], index)
+func (v *Validator) SetIndex(index uint64) {
+	v.Index = index
 }
 
-func (vi ValidatorInfo) GetActivationEpoch() uint64 {
-	return binary.BigEndian.Uint64(vi[activationEpochOffset:exitEpochOffset])
+func (v *Validator) GetActivationEpoch() uint64 {
+	return v.ActivationEpoch
 }
 
-func (vi ValidatorInfo) SetActivationEpoch(epoch uint64) {
-	binary.BigEndian.PutUint64(vi[activationEpochOffset:exitEpochOffset], epoch)
+func (v *Validator) SetActivationEpoch(epoch uint64) {
+	v.ActivationEpoch = epoch
 }
 
-func (vi ValidatorInfo) GetExitEpoch() uint64 {
-	return binary.BigEndian.Uint64(vi[exitEpochOffset:balanceLengthOffset])
+func (v *Validator) GetExitEpoch() uint64 {
+	return v.ExitEpoch
 }
 
-func (vi ValidatorInfo) SetExitEpoch(epoch uint64) {
-	binary.BigEndian.PutUint64(vi[exitEpochOffset:balanceLengthOffset], epoch)
+func (v *Validator) SetExitEpoch(epoch uint64) {
+	v.ExitEpoch = epoch
 }
 
-func (vi ValidatorInfo) GetBalance() *big.Int {
-	balanceLength := binary.BigEndian.Uint64(vi[balanceLengthOffset:balanceOffset])
-
-	bal := vi[balanceOffset : balanceOffset+balanceLength]
-
-	return new(big.Int).SetBytes(bal)
+func (v *Validator) GetBalance() *big.Int {
+	return v.Balance
 }
 
-func SetValidatorBalance(valInfo ValidatorInfo, balance *big.Int) ValidatorInfo {
-	balanceLen := len(balance.Bytes())
-	binary.BigEndian.PutUint64(valInfo[balanceLengthOffset:balanceOffset], uint64(balanceLen))
+func (v *Validator) SetBalance(balance *big.Int) {
+	v.Balance = balance
+}
 
-	newVi := make(ValidatorInfo, len(valInfo)+balanceLen)
-	copy(newVi, valInfo[:balanceOffset])
-	copy(newVi[balanceOffset:], balance.Bytes())
+// ValidatorBinary is a Validator represented as an array of bytes.
+type ValidatorBinary []byte
 
-	return newVi
+func (vb ValidatorBinary) ToValidator() (*Validator, error) {
+	validator := new(Validator)
+	err := validator.UnmarshalBinary(vb)
+	if err != nil {
+		return nil, err
+	}
+
+	return validator, nil
 }
