@@ -18,6 +18,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -47,6 +48,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
+	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -617,6 +619,14 @@ func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
 	}
 	bc.valSyncCache.Add(key, validatorSync)
 	rawdb.WriteValidatorSync(bc.db, validatorSync)
+	if validatorSync.TxHash != nil {
+		delete(bc.notProcValSyncOps, key)
+		vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
+		for _, vs := range bc.notProcValSyncOps {
+			vsArr = append(vsArr, vs)
+		}
+		rawdb.WriteNotProcessedValidatorSyncOps(bc.db, vsArr)
+	}
 }
 
 func (bc *BlockChain) UpdateValidatorSyncOpData(opData *types.ValidatorSync) {
@@ -643,6 +653,7 @@ func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.V
 	for k, vs := range bc.notProcValSyncOps {
 		if vs.TxHash != nil {
 			delete(bc.notProcValSyncOps, k)
+			isUpdated = true
 		}
 	}
 
@@ -3589,39 +3600,39 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 	sort.Slice(txs, func(i, j int) bool {
 		return txs[i].Nonce() < txs[j].Nonce()
 	})
-
 	for _, tx := range txs {
-		if tx.To() != nil && tx.To() == bc.Config().ValidatorsStateAddress {
-			log.Info("Validator sync tx in the block", "txHash", tx.Hash().Hex())
-			var txValSyncOp *types.ValidatorSync
-			err := txValSyncOp.UnmarshalJSON(tx.Data())
+		if tx.To() != nil && bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()) {
+			op, err := validatorOp.DecodeBytes(tx.Data())
 			if err != nil {
 				log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
 				continue
 			}
-
-			log.Info("Validator sync tx",
-				"OpType", txValSyncOp.OpType,
-				"ProcEpoch", txValSyncOp.ProcEpoch,
-				"Index", txValSyncOp.Index,
-				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
-				"amount", txValSyncOp.Amount,
-				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
-			)
-
-			*txValSyncOp.TxHash = tx.Hash()
-			bc.UpdateValidatorSyncOpData(txValSyncOp)
+			switch v := op.(type) {
+			case validatorOp.ValidatorSync:
+				txOp := validatorOp.ValidatorSync(v)
+				txHash := tx.Hash()
+				txValSyncOp := &types.ValidatorSync{
+					OpType:    txOp.OpType(),
+					ProcEpoch: txOp.ProcEpoch(),
+					Index:     txOp.Index(),
+					Creator:   txOp.Creator(),
+					Amount:    txOp.Amount(),
+					TxHash:    &txHash,
+				}
+				log.Info("Validator sync tx",
+					"OpType", txValSyncOp.OpType,
+					"ProcEpoch", txValSyncOp.ProcEpoch,
+					"Index", txValSyncOp.Index,
+					"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
+					"amount", txValSyncOp.Amount,
+					"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+				)
+				bc.SetValidatorSyncData(txValSyncOp)
+			}
 		}
 
 		bc.moveTxToProcessing(tx)
 	}
-
-	vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
-	for _, vs := range bc.notProcValSyncOps {
-		vsArr = append(vsArr, vs)
-	}
-
-	rawdb.WriteNotProcessedValidatorSyncOps(bc.db, vsArr)
 }
 
 func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
