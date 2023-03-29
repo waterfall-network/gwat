@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -37,6 +38,7 @@ var (
 		Time:        new(big.Int).SetUint64(5),
 		Difficulty:  big.NewInt(0x30000),
 		GasLimit:    uint64(6000000),
+		Era:         5,
 	}
 )
 
@@ -138,8 +140,17 @@ func TestProcessorActivate(t *testing.T) {
 	ctrl = gomock.NewController(t)
 	defer ctrl.Finish()
 
+	db := rawdb.NewMemoryDatabase()
+	rawdb.WriteEra(db, eraInfo.Number(), *eraInfo.GetEra())
 	bc := NewMockBlockchain(ctrl)
-	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+	bc.EXPECT().GetConfig().AnyTimes().Return(testmodels.TestChainConfig)
+	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+		GenesisTime:    uint64(time.Now().Unix()),
+		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
+		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
+	})
+	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
+	bc.EXPECT().Database().AnyTimes().Return(db)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -166,9 +177,6 @@ func TestProcessorActivate(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
-				bc.EXPECT().GetEraInfo().Return(&eraInfo)
-				bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
-
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
@@ -337,8 +345,17 @@ func TestProcessorDeactivate(t *testing.T) {
 	ctrl = gomock.NewController(t)
 	defer ctrl.Finish()
 
+	db := rawdb.NewMemoryDatabase()
+	rawdb.WriteEra(db, eraInfo.Number(), *eraInfo.GetEra())
 	bc := NewMockBlockchain(ctrl)
-	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+	bc.EXPECT().GetConfig().AnyTimes().Return(testmodels.TestChainConfig)
+	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+		GenesisTime:    uint64(time.Now().Unix()),
+		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
+		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
+	})
+	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
+	bc.EXPECT().Database().AnyTimes().Return(db)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -404,9 +421,6 @@ func TestProcessorDeactivate(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
-				bc.EXPECT().GetEraInfo().Return(&eraInfo)
-				bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
-
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
