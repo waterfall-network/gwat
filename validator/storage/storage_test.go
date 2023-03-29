@@ -84,11 +84,10 @@ func TestGetValidators(t *testing.T) {
 
 	for _, address := range testmodels.InputValidators {
 		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
-		info, err := validator.MarshalBinary()
-		testutils.AssertNoError(t, err)
 
 		validatorsList = append(validatorsList, *validator)
-		store.SetValidatorInfo(stateDb, info)
+		err := store.SetValidator(stateDb, validator)
+		testutils.AssertNoError(t, err)
 	}
 
 	tests := []struct {
@@ -195,10 +194,9 @@ func TestGetShuffledValidators(t *testing.T) {
 	for i, address := range testmodels.InputValidators {
 		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
 		validator.ActivationEpoch = uint64(i)
-		info, err := validator.MarshalBinary()
-		testutils.AssertNoError(t, err)
 		validatorList[i] = *validator
-		store.SetValidatorInfo(stateDb, info)
+		store.SetValidator(stateDb, validator)
+		testutils.AssertNoError(t, err)
 	}
 
 	// Test case 1: Invalid filter error

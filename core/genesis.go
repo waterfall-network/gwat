@@ -305,13 +305,12 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	validatorStorage.SetValidatorsList(statedb, g.Validators)
 	for _, val := range g.Validators {
 		v := valStore.NewValidator(common.BlsPubKey{}, val, &val)
-		v.ActivationEpoch = 0
-		info, err := v.MarshalBinary()
-		if err != nil {
-			log.Error("can`t add validator to the state", "address", val, "error", err)
-		}
+		v.SetActivationEpoch(uint64(0))
 
-		validatorStorage.SetValidatorInfo(statedb, info)
+		err := validatorStorage.SetValidator(statedb, v)
+		if err != nil {
+			log.Error("can`t set validator from genesis", "error", err)
+		}
 	}
 
 	root := statedb.IntermediateRoot(false)

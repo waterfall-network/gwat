@@ -37,7 +37,10 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	if err != nil {
 		return nil, err
 	}
-	validatorData := bc.ValidatorStorage().GetValidatorInfo(stateDb, valSyncOp.Creator)
+	validator, err := bc.ValidatorStorage().GetValidator(stateDb, valSyncOp.Creator)
+	if err != nil {
+		return nil, err
+	}
 
 	// get tx.To address
 	valStateAddr := bc.Config().ValidatorsStateAddress
@@ -49,8 +52,8 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	}
 	var withdrawalAddress *common.Address
 	if valSyncOp.OpType == types.UpdateBalance {
-		wa := validatorData.GetWithdrawalAddress()
-		withdrawalAddress = &wa
+		wa := validator.GetWithdrawalAddress()
+		withdrawalAddress = wa
 	}
 
 	log.Info("Validator sync tx data",
@@ -103,18 +106,21 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 	if !stateDb.IsValidatorAddress(valSyncOp.Creator) {
 		return false, fmt.Errorf("validator sync operation failed: address is not validator: %s", valSyncOp.Creator.Hex())
 	}
-	validatorData := bc.ValidatorStorage().GetValidatorInfo(stateDb, valSyncOp.Creator)
+	validator, err := bc.ValidatorStorage().GetValidator(stateDb, valSyncOp.Creator)
+	if err != nil {
+		return false, err
+	}
 
 	switch valSyncOp.OpType {
 	case types.Activate:
-		if validatorData.GetActivationEpoch() < math.MaxUint64 {
+		if validator.GetActivationEpoch() < math.MaxUint64 {
 			return false, fmt.Errorf("validator sync operation failed: validator already activated")
 		}
 	case types.Deactivate:
-		if validatorData.GetExitEpoch() < math.MaxUint64 {
+		if validator.GetExitEpoch() < math.MaxUint64 {
 			return false, fmt.Errorf("validator sync operation failed: validator already deactivated")
 		}
-		if validatorData.GetActivationEpoch() >= valSyncOp.ProcEpoch {
+		if validator.GetActivationEpoch() >= valSyncOp.ProcEpoch {
 			return false, fmt.Errorf("validator sync operation failed: exit epoche is too low")
 		}
 	case types.UpdateBalance:
@@ -124,10 +130,10 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 		if valSyncOp.Amount.Sign() == -1 {
 			return false, fmt.Errorf("validator sync operation failed: withdrawal amount is negative")
 		}
-		if validatorData.GetActivationEpoch() >= valSyncOp.ProcEpoch {
+		if validator.GetActivationEpoch() >= valSyncOp.ProcEpoch {
 			return false, fmt.Errorf("validator sync operation failed: withdrawal epoche is too low")
 		}
-		if validatorData.GetExitEpoch() == math.MaxUint64 {
+		if validator.GetExitEpoch() == math.MaxUint64 {
 			return false, fmt.Errorf("validator sync operation failed: withdrawal operation require initialized exit procedure")
 		}
 	default:
