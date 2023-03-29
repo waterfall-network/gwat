@@ -30,8 +30,8 @@ type Storage interface {
 	GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address)
 	GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error)
 
-	SetValidatorInfo(stateDb vm.StateDB, info ValidatorInfo)
-	GetValidatorInfo(stateDb vm.StateDB, address common.Address) ValidatorInfo
+	SetValidator(stateDb vm.StateDB, val *Validator) error
+	GetValidator(stateDb vm.StateDB, address common.Address) (*Validator, error)
 
 	SetValidatorsList(stateDb vm.StateDB, list []common.Address)
 	GetValidatorsList(stateDb vm.StateDB) []common.Address
@@ -57,12 +57,25 @@ func (s *storage) ValidatorsStateAddress() *common.Address {
 	return s.config.ValidatorsStateAddress
 }
 
-func (s *storage) SetValidatorInfo(stateDb vm.StateDB, info ValidatorInfo) {
-	stateDb.SetCode(info.GetAddress(), info)
+func (s *storage) SetValidator(stateDb vm.StateDB, val *Validator) error {
+	valData, err := val.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	stateDb.SetCode(val.Address, valData)
+	return nil
 }
 
-func (s *storage) GetValidatorInfo(stateDb vm.StateDB, address common.Address) ValidatorInfo {
-	return stateDb.GetCode(address)
+func (s *storage) GetValidator(stateDb vm.StateDB, address common.Address) (*Validator, error) {
+	var valData ValidatorBinary
+
+	valData = stateDb.GetCode(address)
+	if valData == nil {
+		return nil, nil
+	}
+
+	return valData.ToValidator()
 }
 
 func (s *storage) SetValidatorsList(stateDb vm.StateDB, list []common.Address) {
@@ -130,15 +143,12 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 
 		valList := s.GetValidatorsList(stateDb)
 		for _, valAddress := range valList {
-			var validator Validator
-			valInfo := s.GetValidatorInfo(stateDb, valAddress)
-			err = validator.UnmarshalBinary(valInfo)
+			val, err := s.GetValidator(stateDb, valAddress)
 			if err != nil {
-				log.Error("can`t get validators info from state", "error", err)
+				log.Error("can`t get validator from state", "error", err)
 				continue
 			}
-
-			validators = append(validators, validator)
+			validators = append(validators, *val)
 		}
 
 		s.validatorsCache.addAllValidatorsByEpoch(currentEpoch, validators)
