@@ -3721,14 +3721,6 @@ func (bc *BlockChain) ValidatorStorage() valStore.Storage {
 	return bc.validatorStorage
 }
 
-func (bc *BlockChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
-	if epoch >= 2 {
-		epoch = epoch - 2
-	}
-
-	return epoch
-}
-
 func (bc *BlockChain) GetEraInfo() *era.EraInfo {
 	return &bc.eraInfo
 }

@@ -70,6 +70,7 @@ type blockchain interface {
 	GetConfig() *params.ChainConfig
 	Database() ethdb.Database
 	GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync
+	GetLastCoordinatedCheckpoint() *types.Checkpoint
 }
 
 // Processor is a processor of all validator related operations.
