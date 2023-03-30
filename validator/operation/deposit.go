@@ -116,11 +116,3 @@ func (op *depositOperation) WithdrawalAddress() common.Address {
 func (op *depositOperation) Signature() common.BlsSignature {
 	return common.BytesToBlsSig(makeCopy(op.signature[:]))
 }
-
-func (op *depositOperation) Hash() *common.Hash {
-	return nil
-}
-
-func (op *depositOperation) SetHash(hash *common.Hash) {
-	panic("only validator sync op has hash")
-}
