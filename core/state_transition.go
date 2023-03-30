@@ -31,7 +31,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
-	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -86,6 +85,8 @@ type Message interface {
 	IsFake() bool
 	Data() []byte
 	AccessList() types.AccessList
+
+	TxHash() *common.Hash
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -355,11 +356,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			}
 			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
 		} else if isValidatorOp {
-			op, err := validatorOp.DecodeBytes(msg.Data())
-			if err != nil {
-				return nil, err
-			}
-			ret, vmerr = st.vp.Call(sender, st.to(), st.value, op)
+			ret, vmerr = st.vp.Call(sender, st.to(), st.value, st.msg)
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

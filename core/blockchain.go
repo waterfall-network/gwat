@@ -18,6 +18,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -48,6 +49,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
+	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -618,15 +620,14 @@ func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
 	}
 	bc.valSyncCache.Add(key, validatorSync)
 	rawdb.WriteValidatorSync(bc.db, validatorSync)
-}
-
-func (bc *BlockChain) UpdateValidatorSyncOpData(opData *types.ValidatorSync) {
-	log.Info("update validator sync data", "creator", opData.Creator, "txHash", opData.TxHash)
-	key := opData.Key()
-
-	delete(bc.notProcValSyncOps, key)
-	bc.valSyncCache.Remove(key)
-	rawdb.WriteValidatorSync(bc.db, opData)
+	if validatorSync.TxHash != nil && bc.notProcValSyncOps[key] != nil {
+		delete(bc.notProcValSyncOps, key)
+		vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
+		for _, vs := range bc.notProcValSyncOps {
+			vsArr = append(vsArr, vs)
+		}
+		rawdb.WriteNotProcessedValidatorSyncOps(bc.db, vsArr)
+	}
 }
 
 // AppendNotProcessedValidatorSyncData append to not processed validators sync data.
@@ -644,6 +645,7 @@ func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.V
 	for k, vs := range bc.notProcValSyncOps {
 		if vs.TxHash != nil {
 			delete(bc.notProcValSyncOps, k)
+			isUpdated = true
 		}
 	}
 
@@ -3913,37 +3915,38 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 	})
 
 	for _, tx := range txs {
-		if tx.To() != nil && tx.To() == bc.Config().ValidatorsStateAddress {
-			log.Info("Validator sync tx in the block", "txHash", tx.Hash().Hex())
-			var txValSyncOp *types.ValidatorSync
-			err := txValSyncOp.UnmarshalJSON(tx.Data())
+		if tx.To() != nil && bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()) {
+			op, err := validatorOp.DecodeBytes(tx.Data())
 			if err != nil {
 				log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
 				continue
 			}
 
-			log.Info("Validator sync tx",
-				"OpType", txValSyncOp.OpType,
-				"ProcEpoch", txValSyncOp.ProcEpoch,
-				"Index", txValSyncOp.Index,
-				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
-				"amount", txValSyncOp.Amount,
-				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
-			)
-
-			*txValSyncOp.TxHash = tx.Hash()
-			bc.UpdateValidatorSyncOpData(txValSyncOp)
+			switch v := op.(type) {
+			case validatorOp.ValidatorSync:
+				txHash := tx.Hash()
+				txValSyncOp := &types.ValidatorSync{
+					OpType:    v.OpType(),
+					ProcEpoch: v.ProcEpoch(),
+					Index:     v.Index(),
+					Creator:   v.Creator(),
+					Amount:    v.Amount(),
+					TxHash:    &txHash,
+				}
+				log.Info("Validator sync tx",
+					"OpType", txValSyncOp.OpType,
+					"ProcEpoch", txValSyncOp.ProcEpoch,
+					"Index", txValSyncOp.Index,
+					"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
+					"amount", txValSyncOp.Amount,
+					"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+				)
+				bc.SetValidatorSyncData(txValSyncOp)
+			}
 		}
 
 		bc.moveTxToProcessing(tx)
 	}
-
-	vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
-	for _, vs := range bc.notProcValSyncOps {
-		vsArr = append(vsArr, vs)
-	}
-
-	rawdb.WriteNotProcessedValidatorSyncOps(bc.db, vsArr)
 }
 
 func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
@@ -4038,14 +4041,6 @@ func (bc *BlockChain) ExistFirstEpochBlockHash(epoch uint64) bool {
 
 func (bc *BlockChain) ValidatorStorage() valStore.Storage {
 	return bc.validatorStorage
-}
-
-func (bc *BlockChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
-	if epoch >= 2 {
-		epoch = epoch - 2
-	}
-
-	return epoch
 }
 
 func (bc *BlockChain) GetEraInfo() *era.EraInfo {

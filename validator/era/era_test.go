@@ -18,16 +18,8 @@ type mockBlockchain struct {
 	db                         ethdb.Database
 }
 
-func (m mockBlockchain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
-	return m.coordinatedCheckpointEpoch
-}
-
 func (m mockBlockchain) GetEraInfo() *EraInfo {
 	return m.eraInfo
-}
-
-func (m mockBlockchain) Database() ethdb.Database {
-	return m.db
 }
 
 func (m mockBlockchain) GetConfig() *params.ChainConfig {
