@@ -15,7 +15,6 @@ type Deposit interface {
 	CreatorAddress() common.Address
 	WithdrawalAddress() common.Address
 	Signature() common.BlsSignature
-	Hash() *common.Hash
 }
 
 // Deposit contains all attributes for validator deposit
@@ -28,7 +27,6 @@ type ValidatorSync interface {
 	Creator() common.Address
 	Amount() *big.Int
 	WithdrawalAddress() *common.Address
-	Hash() *common.Hash
 }
 
 type Exit interface {
@@ -37,12 +35,10 @@ type Exit interface {
 	CreatorAddress() common.Address
 	ExitAfterEpoch() *uint64
 	SetExitAfterEpoch(*uint64)
-	Hash() *common.Hash
 }
 
 type Withdrawal interface {
 	Operation
 	CreatorAddress() common.Address
 	Amount() *big.Int
-	Hash() *common.Hash
 }

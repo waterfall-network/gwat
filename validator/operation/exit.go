@@ -110,10 +110,3 @@ func (op *exitOperation) ExitAfterEpoch() *uint64 {
 func (op *exitOperation) SetExitAfterEpoch(epoch *uint64) {
 	op.exitAfterEpoch = epoch
 }
-
-func (op *exitOperation) Hash() *common.Hash {
-	return nil
-}
-func (op *exitOperation) SetHash(hash *common.Hash) {
-	panic("only validator sync op has hash")
-}

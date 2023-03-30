@@ -35,7 +35,8 @@ var (
 	ErrTargetEraNotFound            = errors.New("target era not found")
 	ErrNoSavedValSyncOp             = errors.New("there is no validator sync op in the cache and database")
 	ErrMismatchHashes               = errors.New("tx hash from memory is different from tx hash passed for processing ")
-	ErrNotExitedValidator           = errors.New("validator not exited yet")
+	ErrMismatchValSyncOp            = errors.New("input validator sync op is different from saved sync op")
+	ErrInvalidOpEpoch               = errors.New("block epoch is greater than operation epoch")
 )
 
 const (
@@ -70,6 +71,12 @@ type blockchain interface {
 	GetConfig() *params.ChainConfig
 	Database() ethdb.Database
 	GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync
+	GetLastCoordinatedCheckpoint() *types.Checkpoint
+}
+
+type message interface {
+	TxHash() *common.Hash
+	Data() []byte
 }
 
 // Processor is a processor of all validator related operations.
@@ -133,7 +140,12 @@ func (p *Processor) IsValidatorOp(addrTo *common.Address) bool {
 //   - coordinating node: Deactivate
 //
 // It returns byte representation of the return value of an operation.
-func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, op operation.Operation) (ret []byte, err error) {
+func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg message) (ret []byte, err error) {
+	op, err := operation.DecodeBytes(msg.Data())
+	if err != nil {
+		return nil, err
+	}
+
 	nonce := p.state.GetNonce(caller.Address())
 	p.state.SetNonce(caller.Address(), nonce+1)
 
@@ -144,7 +156,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, op o
 	case operation.Deposit:
 		ret, err = p.validatorDeposit(caller, toAddr, value, v)
 	case operation.ValidatorSync:
-		ret, err = p.syncOpProcessing(v)
+		ret, err = p.syncOpProcessing(v, msg)
 	case operation.Exit:
 		ret, err = p.validatorExit(caller, toAddr, v)
 	case operation.Withdrawal:
@@ -262,10 +274,6 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrNotActivatedValidator
 	}
 
-	if validator.GetExitEpoch() > p.blockchain.GetSlotInfo().SlotToEpoch(p.blockchain.GetSlotInfo().CurrentSlot()) {
-		return nil, ErrNotExitedValidator
-	}
-
 	currentBalance := validator.GetBalance()
 
 	if currentBalance.Cmp(op.Amount()) == -1 {
@@ -283,9 +291,11 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	return from.Bytes(), nil
 }
 
-func (p *Processor) syncOpProcessing(op operation.ValidatorSync) (ret []byte, err error) {
-	if err = p.validateValSyncOp(op); op != nil {
-		return nil, err
+func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {
+	if msg.TxHash() != nil {
+		if err = p.validateValSyncOp(op, msg); op != nil {
+			return nil, err
+		}
 	}
 
 	switch op.OpCode() {
@@ -300,21 +310,54 @@ func (p *Processor) syncOpProcessing(op operation.ValidatorSync) (ret []byte, er
 	return ret, err
 }
 
-func (p *Processor) validateValSyncOp(op operation.ValidatorSync) error {
+func (p *Processor) validateValSyncOp(op operation.ValidatorSync, msg message) error {
 	savedValSync := p.blockchain.GetValidatorSyncData(op.Creator(), op.OpType())
 	if savedValSync == nil {
 		return ErrNoSavedValSyncOp
 	}
 
-	if savedValSync.TxHash != nil && op.Hash() != nil && *savedValSync.TxHash != *op.Hash() {
+	if savedValSync.TxHash != nil && *savedValSync.TxHash != *msg.TxHash() {
 		return ErrMismatchHashes
 	}
 
-	if savedValSync.TxHash == nil && op.Hash() != nil || savedValSync.TxHash != nil && op.Hash() == nil {
-		return ErrMismatchHashes
+	if !compareValSync(savedValSync, op) {
+		return ErrMismatchValSyncOp
+	}
+
+	blockEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
+	if blockEpoch > op.ProcEpoch() {
+		return ErrInvalidOpEpoch
 	}
 
 	return nil
+}
+
+func compareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
+	if saved.OpType != input.OpType() {
+		return false
+	}
+
+	if saved.Creator != input.Creator() {
+		return false
+	}
+
+	if saved.Index != input.Index() {
+		return false
+	}
+
+	if saved.ProcEpoch != input.ProcEpoch() {
+		return false
+	}
+
+	if saved.ProcEpoch != input.ProcEpoch() {
+		return false
+	}
+
+	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
+		return false
+	}
+
+	return true
 }
 
 func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error) {

@@ -8,6 +8,7 @@ import (
 
 type blockchain interface {
 	GetSlotInfo() *types.SlotInfo
+	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	GetEraInfo() *EraInfo
 	GetConfig() *params.ChainConfig
 }
