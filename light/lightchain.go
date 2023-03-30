@@ -661,49 +661,6 @@ func (lc *LightChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
 	return epoch
 }
 
-// SearchFirstEpochBlockHashRecursive return first epoch block hash and true if hash is saved in database.
-// Use this hash at seed for shuffle algorithm.
-func (lc *LightChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash, isSaved bool) {
-	firstEpochBlock := rawdb.ReadFirstEpochBlockHash(lc.chainDb, epoch)
-	if firstEpochBlock != (common.Hash{}) {
-		return firstEpochBlock, true
-	}
-
-	previousEpoch := epoch - 1
-	firstEpochBlockHash, ok := lc.SearchFirstEpochBlockHashRecursive(previousEpoch)
-
-	ctx := context.Background()
-	previousEpochBlock, _ := lc.GetBlock(ctx, firstEpochBlockHash)
-	if previousEpochBlock == nil {
-		return firstEpochBlockHash, ok
-	}
-
-	previousBlockEpoch := lc.GetSlotInfo().SlotToEpoch(previousEpochBlock.Slot())
-
-	number := *previousEpochBlock.Number() + 1
-
-	for {
-		block, _ := lc.GetBlockByNumber(ctx, number)
-		if block == nil {
-			return firstEpochBlockHash, ok
-		}
-
-		blockEpoch := lc.GetSlotInfo().SlotToEpoch(block.Slot())
-		if blockEpoch == previousBlockEpoch {
-			number++
-			continue
-		}
-
-		if blockEpoch == epoch {
-			return block.Hash(), false
-		}
-
-		if blockEpoch > epoch {
-			return firstEpochBlockHash, true
-		}
-	}
-}
-
 // StateAt returns a new mutable state based on a particular point in time.
 func (lc *LightChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	//TODO implement me

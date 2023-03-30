@@ -1173,42 +1173,6 @@ func DeleteChildren(db ethdb.KeyValueWriter, parent common.Hash) {
 	}
 }
 
-func WriteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64, hash common.Hash) {
-	key := firstEpochBlockKey(epoch)
-
-	err := db.Put(key, hash.Bytes())
-	if err != nil {
-		log.Crit("Failed to store epoch seed", "err", err, "epoch", epoch)
-	}
-}
-
-func ReadFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) common.Hash {
-	key := firstEpochBlockKey(epoch)
-	buf, err := db.Get(key)
-	if err != nil {
-		return common.Hash{}
-	}
-
-	seed := common.BytesToHash(buf)
-
-	return seed
-}
-
-func DeleteFirstEpochBlockHash(db ethdb.KeyValueWriter, epoch uint64) {
-	key := firstEpochBlockKey(epoch)
-	err := db.Delete(key)
-	if err != nil {
-		log.Crit("Failed to delete epoch seed", "err", err, "epoch", epoch)
-	}
-}
-
-func ExistFirstEpochBlockHash(db ethdb.KeyValueReader, epoch uint64) bool {
-	key := firstEpochBlockKey(epoch)
-	exist, _ := db.Has(key)
-
-	return exist
-}
-
 // WriteEra writes an era to a key-value database.
 func WriteEra(db ethdb.KeyValueWriter, number uint64, era era.Era) {
 	key := eraKey(number)

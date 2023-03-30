@@ -1046,10 +1046,6 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 		bc.RemoveTxFromPool(tx)
 	}
 
-	if !bc.ExistFirstEpochBlockHash(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
-		rawdb.WriteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
-	}
-
 	return nil
 }
 
@@ -1470,11 +1466,6 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
-
-	epochBlockSeed := rawdb.ReadFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
-	if epochBlockSeed == block.Hash() {
-		rawdb.DeleteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
-	}
 
 	// update finalized number cache
 	bc.hc.numberCache.Remove(block.Hash())
@@ -3668,53 +3659,6 @@ func (bc *BlockChain) HeadSynchronising() bool {
 		return false
 	}
 	return bc.syncProvider.HeadSynchronising()
-}
-
-// SearchFirstEpochBlockHashRecursive return first epoch block hash.
-// Use this hash at seed for shuffle algorithm.
-func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash) {
-	firstEpochBlock := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
-	if firstEpochBlock != (common.Hash{}) {
-		return firstEpochBlock
-	}
-
-	previousEpoch := epoch - 1
-	firstEpochBlockHash := bc.SearchFirstEpochBlockHashRecursive(previousEpoch)
-
-	previousEpochBlock := bc.GetBlock(firstEpochBlockHash)
-
-	previousBlockEpoch := bc.GetSlotInfo().SlotToEpoch(previousEpochBlock.Slot())
-
-	number := *previousEpochBlock.Number() + 1
-
-	for {
-		block := bc.GetBlockByNumber(number)
-		if block == nil {
-			return firstEpochBlockHash
-		}
-
-		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-		if blockEpoch == previousBlockEpoch {
-			number++
-			continue
-		}
-
-		if blockEpoch == epoch {
-			return block.Hash()
-		}
-
-		if blockEpoch > epoch {
-			return firstEpochBlockHash
-		}
-	}
-}
-
-func (bc *BlockChain) DeleteFirstEpochBlockHash(epoch uint64) {
-	rawdb.DeleteFirstEpochBlockHash(bc.db, epoch)
-}
-
-func (bc *BlockChain) ExistFirstEpochBlockHash(epoch uint64) bool {
-	return rawdb.ExistFirstEpochBlockHash(bc.db, epoch)
 }
 
 func (bc *BlockChain) ValidatorStorage() valStore.Storage {
