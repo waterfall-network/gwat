@@ -11,7 +11,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
@@ -31,6 +33,9 @@ var (
 	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
 	ErrCtxEraNotFound               = errors.New("context block era not found")
 	ErrTargetEraNotFound            = errors.New("target era not found")
+	ErrNoSavedValSyncOp             = errors.New("there is no validator sync op in the cache and database")
+	ErrMismatchHashes               = errors.New("tx hash from memory is different from tx hash passed for processing ")
+	ErrNotExitedValidator           = errors.New("validator not exited yet")
 )
 
 const (
@@ -59,6 +64,14 @@ type Ref interface {
 	Address() common.Address
 }
 
+type blockchain interface {
+	GetSlotInfo() *types.SlotInfo
+	GetEraInfo() *era.EraInfo
+	GetConfig() *params.ChainConfig
+	Database() ethdb.Database
+	GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync
+}
+
 // Processor is a processor of all validator related operations.
 // All transaction related operations that mutates state of the validator are called using Call method.
 // Methods of the operation name are used for getting state of the validator.
@@ -67,11 +80,11 @@ type Processor struct {
 	ctx          vm.BlockContext
 	eventEmmiter *EventEmmiter
 	storage      valStore.Storage
-	blockchain   era.Blockchain
+	blockchain   blockchain
 }
 
 // NewProcessor creates new validator processor
-func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, bc era.Blockchain) *Processor {
+func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, bc blockchain) *Processor {
 	return &Processor{
 		ctx:          blockCtx,
 		state:        stateDb,
@@ -249,6 +262,10 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrNotActivatedValidator
 	}
 
+	if validator.GetExitEpoch() > p.blockchain.GetSlotInfo().SlotToEpoch(p.blockchain.GetSlotInfo().CurrentSlot()) {
+		return nil, ErrNotExitedValidator
+	}
+
 	currentBalance := validator.GetBalance()
 
 	if currentBalance.Cmp(op.Amount()) == -1 {
@@ -267,6 +284,10 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 }
 
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync) (ret []byte, err error) {
+	if err = p.validateValSyncOp(op); op != nil {
+		return nil, err
+	}
+
 	switch op.OpCode() {
 	case operation.ActivateCode:
 		ret, err = p.validatorActivate(op)
@@ -277,6 +298,23 @@ func (p *Processor) syncOpProcessing(op operation.ValidatorSync) (ret []byte, er
 	}
 
 	return ret, err
+}
+
+func (p *Processor) validateValSyncOp(op operation.ValidatorSync) error {
+	savedValSync := p.blockchain.GetValidatorSyncData(op.Creator(), op.OpType())
+	if savedValSync == nil {
+		return ErrNoSavedValSyncOp
+	}
+
+	if savedValSync.TxHash != nil && op.Hash() != nil && *savedValSync.TxHash != *op.Hash() {
+		return ErrMismatchHashes
+	}
+
+	if savedValSync.TxHash == nil && op.Hash() != nil || savedValSync.TxHash != nil && op.Hash() == nil {
+		return ErrMismatchHashes
+	}
+
+	return nil
 }
 
 func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error) {

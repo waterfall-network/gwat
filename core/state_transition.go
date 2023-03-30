@@ -86,6 +86,8 @@ type Message interface {
 	IsFake() bool
 	Data() []byte
 	AccessList() types.AccessList
+
+	Hash() *common.Hash
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -359,6 +361,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			if err != nil {
 				return nil, err
 			}
+
+			if op.OpCode() == validatorOp.ActivateCode || op.OpCode() == validatorOp.DeactivateCode || op.OpCode() == validatorOp.UpdateBalanceCode {
+				op.SetHash(msg.Hash())
+			}
+
 			ret, vmerr = st.vp.Call(sender, st.to(), st.value, op)
 		} else {
 			// Increment the nonce for the next transaction

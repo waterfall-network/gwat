@@ -2,6 +2,8 @@ package operation
 
 import (
 	"encoding"
+
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
 // Validator operation code
@@ -26,6 +28,8 @@ const (
 // Every specific operation should implement this interface
 type Operation interface {
 	OpCode() Code
+	Hash() *common.Hash
+	SetHash(hash *common.Hash)
 
 	encoding.BinaryUnmarshaler
 	encoding.BinaryMarshaler
