@@ -17,6 +17,7 @@ type validatorSyncOperation struct {
 	creator           common.Address
 	amount            *big.Int
 	withdrawalAddress *common.Address
+	hash              *common.Hash
 }
 
 func (op *validatorSyncOperation) init(
@@ -174,4 +175,12 @@ func (op *validatorSyncOperation) WithdrawalAddress() *common.Address {
 	}
 	cpy := common.BytesToAddress(op.withdrawalAddress.Bytes())
 	return &cpy
+}
+
+func (op *validatorSyncOperation) Hash() *common.Hash {
+	return op.hash
+}
+
+func (op *validatorSyncOperation) SetHash(hash *common.Hash) {
+	op.hash = hash
 }

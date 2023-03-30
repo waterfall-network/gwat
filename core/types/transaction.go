@@ -574,6 +574,7 @@ type Message struct {
 	data       []byte
 	accessList AccessList
 	isFake     bool
+	hash       *common.Hash
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
@@ -606,6 +607,14 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		accessList: tx.AccessList(),
 		isFake:     false,
 	}
+
+	var txHash common.Hash
+	value := tx.hash.Load()
+	if value != nil {
+		txHash = value.(common.Hash)
+	}
+	msg.hash = &txHash
+
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
@@ -626,6 +635,7 @@ func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) IsFake() bool           { return m.isFake }
+func (m Message) Hash() *common.Hash     { return m.hash }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {

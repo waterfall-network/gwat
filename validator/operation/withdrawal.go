@@ -71,3 +71,11 @@ func (op *withdrawalOperation) CreatorAddress() common.Address {
 func (op *withdrawalOperation) Amount() *big.Int {
 	return op.amount
 }
+
+func (op *withdrawalOperation) Hash() *common.Hash {
+	return nil
+}
+
+func (op *withdrawalOperation) SetHash(hash *common.Hash) {
+	panic("only validator sync op has hash")
+}
