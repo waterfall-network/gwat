@@ -22,7 +22,6 @@ type blockchain interface {
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	GetEraInfo() *era.EraInfo
 	GetConfig() *params.ChainConfig
-	SearchFirstEpochBlockHashRecursive(epoch uint64) common.Hash
 	Database() ethdb.Database
 }
 

@@ -349,11 +349,11 @@ func compareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) b
 		return false
 	}
 
-	if saved.ProcEpoch != input.ProcEpoch() {
+	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
 		return false
 	}
 
-	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
+	if saved.Amount != nil && input.Amount() == nil || saved.Amount == nil && input.Amount() != nil {
 		return false
 	}
 
