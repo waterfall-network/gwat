@@ -81,20 +81,6 @@ func (mr *MockblockchainMockRecorder) GetConfig() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*Mockblockchain)(nil).GetConfig))
 }
 
-// GetCoordinatedCheckpointEpoch mocks base method.
-func (m *Mockblockchain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCoordinatedCheckpointEpoch", epoch)
-	ret0, _ := ret[0].(uint64)
-	return ret0
-}
-
-// GetCoordinatedCheckpointEpoch indicates an expected call of GetCoordinatedCheckpointEpoch.
-func (mr *MockblockchainMockRecorder) GetCoordinatedCheckpointEpoch(epoch interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCoordinatedCheckpointEpoch", reflect.TypeOf((*Mockblockchain)(nil).GetCoordinatedCheckpointEpoch), epoch)
-}
-
 // GetEraInfo mocks base method.
 func (m *Mockblockchain) GetEraInfo() *era.EraInfo {
 	m.ctrl.T.Helper()
@@ -109,6 +95,20 @@ func (mr *MockblockchainMockRecorder) GetEraInfo() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEraInfo", reflect.TypeOf((*Mockblockchain)(nil).GetEraInfo))
 }
 
+// GetLastCoordinatedCheckpoint mocks base method.
+func (m *Mockblockchain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLastCoordinatedCheckpoint")
+	ret0, _ := ret[0].(*types.Checkpoint)
+	return ret0
+}
+
+// GetLastCoordinatedCheckpoint indicates an expected call of GetLastCoordinatedCheckpoint.
+func (mr *MockblockchainMockRecorder) GetLastCoordinatedCheckpoint() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastCoordinatedCheckpoint", reflect.TypeOf((*Mockblockchain)(nil).GetLastCoordinatedCheckpoint))
+}
+
 // GetSlotInfo mocks base method.
 func (m *Mockblockchain) GetSlotInfo() *types.SlotInfo {
 	m.ctrl.T.Helper()
@@ -121,20 +121,6 @@ func (m *Mockblockchain) GetSlotInfo() *types.SlotInfo {
 func (mr *MockblockchainMockRecorder) GetSlotInfo() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlotInfo", reflect.TypeOf((*Mockblockchain)(nil).GetSlotInfo))
-}
-
-// SearchFirstEpochBlockHashRecursive mocks base method.
-func (m *Mockblockchain) SearchFirstEpochBlockHashRecursive(epoch uint64) common.Hash {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SearchFirstEpochBlockHashRecursive", epoch)
-	ret0, _ := ret[0].(common.Hash)
-	return ret0
-}
-
-// SearchFirstEpochBlockHashRecursive indicates an expected call of SearchFirstEpochBlockHashRecursive.
-func (mr *MockblockchainMockRecorder) SearchFirstEpochBlockHashRecursive(epoch interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchFirstEpochBlockHashRecursive", reflect.TypeOf((*Mockblockchain)(nil).SearchFirstEpochBlockHashRecursive), epoch)
 }
 
 // StateAt mocks base method.

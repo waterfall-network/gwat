@@ -1047,10 +1047,6 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 		bc.RemoveTxFromPool(tx)
 	}
 
-	if !bc.ExistFirstEpochBlockHash(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
-		rawdb.WriteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
-	}
-
 	return nil
 }
 
@@ -1471,11 +1467,6 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
-
-	epochBlockSeed := rawdb.ReadFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
-	if epochBlockSeed == block.Hash() {
-		rawdb.DeleteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
-	}
 
 	// update finalized number cache
 	bc.hc.numberCache.Remove(block.Hash())
@@ -3908,6 +3899,16 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 		if block == nil {
 			continue
 		}
+
+		receipts := bc.GetReceiptsByHash(block.Hash())
+		for _, tx := range block.Transactions() {
+			for _, receipt := range receipts {
+				if tx.Hash() == receipt.TxHash && tx.To() != nil && bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()) {
+					bc.CheckValidatorSyncTx(tx, receipt)
+				}
+			}
+		}
+
 		txs = append(txs, block.Transactions()...)
 	}
 	sort.Slice(txs, func(i, j int) bool {
@@ -3915,36 +3916,6 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 	})
 
 	for _, tx := range txs {
-		if tx.To() != nil && bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()) {
-			op, err := validatorOp.DecodeBytes(tx.Data())
-			if err != nil {
-				log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
-				continue
-			}
-
-			switch v := op.(type) {
-			case validatorOp.ValidatorSync:
-				txHash := tx.Hash()
-				txValSyncOp := &types.ValidatorSync{
-					OpType:    v.OpType(),
-					ProcEpoch: v.ProcEpoch(),
-					Index:     v.Index(),
-					Creator:   v.Creator(),
-					Amount:    v.Amount(),
-					TxHash:    &txHash,
-				}
-				log.Info("Validator sync tx",
-					"OpType", txValSyncOp.OpType,
-					"ProcEpoch", txValSyncOp.ProcEpoch,
-					"Index", txValSyncOp.Index,
-					"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
-					"amount", txValSyncOp.Amount,
-					"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
-				)
-				bc.SetValidatorSyncData(txValSyncOp)
-			}
-		}
-
 		bc.moveTxToProcessing(tx)
 	}
 }
@@ -3990,53 +3961,6 @@ func (bc *BlockChain) HeadSynchronising() bool {
 		return false
 	}
 	return bc.syncProvider.HeadSynchronising()
-}
-
-// SearchFirstEpochBlockHashRecursive return first epoch block hash.
-// Use this hash at seed for shuffle algorithm.
-func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash) {
-	firstEpochBlock := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
-	if firstEpochBlock != (common.Hash{}) {
-		return firstEpochBlock
-	}
-
-	previousEpoch := epoch - 1
-	firstEpochBlockHash := bc.SearchFirstEpochBlockHashRecursive(previousEpoch)
-
-	previousEpochBlock := bc.GetBlock(firstEpochBlockHash)
-
-	previousBlockEpoch := bc.GetSlotInfo().SlotToEpoch(previousEpochBlock.Slot())
-
-	number := *previousEpochBlock.Number() + 1
-
-	for {
-		block := bc.GetBlockByNumber(number)
-		if block == nil {
-			return firstEpochBlockHash
-		}
-
-		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-		if blockEpoch == previousBlockEpoch {
-			number++
-			continue
-		}
-
-		if blockEpoch == epoch {
-			return block.Hash()
-		}
-
-		if blockEpoch > epoch {
-			return firstEpochBlockHash
-		}
-	}
-}
-
-func (bc *BlockChain) DeleteFirstEpochBlockHash(epoch uint64) {
-	rawdb.DeleteFirstEpochBlockHash(bc.db, epoch)
-}
-
-func (bc *BlockChain) ExistFirstEpochBlockHash(epoch uint64) bool {
-	return rawdb.ExistFirstEpochBlockHash(bc.db, epoch)
 }
 
 func (bc *BlockChain) ValidatorStorage() valStore.Storage {
@@ -4124,4 +4048,39 @@ func (bc *BlockChain) StartTransitionPeriod() {
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 
 	log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
+}
+
+func (bc *BlockChain) CheckValidatorSyncTx(tx *types.Transaction, receipt *types.Receipt) {
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return
+	}
+
+	op, err := validatorOp.DecodeBytes(tx.Data())
+	if err != nil {
+		log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+		return
+	}
+
+	switch v := op.(type) {
+	case validatorOp.ValidatorSync:
+		txHash := tx.Hash()
+		txValSyncOp := &types.ValidatorSync{
+			OpType:    v.OpType(),
+			ProcEpoch: v.ProcEpoch(),
+			Index:     v.Index(),
+			Creator:   v.Creator(),
+			Amount:    v.Amount(),
+			TxHash:    &txHash,
+		}
+		log.Info("Validator sync tx",
+			"OpType", txValSyncOp.OpType,
+			"ProcEpoch", txValSyncOp.ProcEpoch,
+			"Index", txValSyncOp.Index,
+			"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
+			"amount", txValSyncOp.Amount,
+			"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+		)
+
+		bc.SetValidatorSyncData(txValSyncOp)
+	}
 }

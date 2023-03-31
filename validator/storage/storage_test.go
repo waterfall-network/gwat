@@ -153,10 +153,9 @@ func TestGetValidators(t *testing.T) {
 				SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
 				SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
 			})
-			bc.EXPECT().SearchFirstEpochBlockHashRecursive(gomock.AssignableToTypeOf(test.slot)).AnyTimes().Return(blockHash)
+
 			bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
 			bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
-			bc.EXPECT().GetCoordinatedCheckpointEpoch(gomock.AssignableToTypeOf(test.slot)).AnyTimes().Return(epoch)
 
 			validators, addresses := store.GetValidators(bc, test.slot, test.activeOnly, test.needAddresses)
 			testutils.AssertEqual(t, test.wantValidators, validators)
@@ -182,10 +181,8 @@ func TestGetShuffledValidators(t *testing.T) {
 		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
 		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
 	})
-	bc.EXPECT().SearchFirstEpochBlockHashRecursive(gomock.AssignableToTypeOf(slot)).AnyTimes().Return(blockHash)
 	bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
 	bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
-	bc.EXPECT().GetCoordinatedCheckpointEpoch(gomock.AssignableToTypeOf(slot)).AnyTimes().Return(epoch)
 
 	store := NewStorage(testmodels.TestChainConfig)
 	store.SetValidatorsList(stateDb, testmodels.InputValidators)

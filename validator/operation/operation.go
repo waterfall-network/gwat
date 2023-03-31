@@ -1,8 +1,6 @@
 package operation
 
-import (
-	"encoding"
-)
+import "encoding"
 
 // Validator operation code
 type Code byte
