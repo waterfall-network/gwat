@@ -78,14 +78,19 @@ func (s *storage) GetValidator(stateDb vm.StateDB, address common.Address) (*Val
 }
 
 func (s *storage) SetValidatorsList(stateDb vm.StateDB, list []common.Address) {
-	buf := make([]byte, len(list)*common.AddressLength+uint64Size)
+	newList := make([]byte, len(list)*common.AddressLength+uint64Size)
+
+	currentList := stateDb.GetCode(*s.ValidatorsStateAddress())
+	depositCount := binary.BigEndian.Uint64(currentList[:uint64Size])
+	binary.BigEndian.PutUint64(newList[:uint64Size], depositCount)
+
 	for i, validator := range list {
 		beginning := i*common.AddressLength + uint64Size
 		end := beginning + common.AddressLength
-		copy(buf[beginning:end], validator[:])
+		copy(newList[beginning:end], validator[:])
 	}
 
-	stateDb.SetCode(*s.ValidatorsStateAddress(), buf)
+	stateDb.SetCode(*s.ValidatorsStateAddress(), newList)
 }
 
 func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
