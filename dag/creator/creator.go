@@ -764,8 +764,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
 	}
 
-	/// MERGE ADD
-
 	parentHashes := tipsBlocks.Hashes().Sort()
 
 	//calc new block height
@@ -782,21 +780,29 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		"baseHash", stateBlock.Hash(),
 	)
 
+	// Use checkpoint spine as LFBlock
+	checkpoint := c.chain.GetLastCoordinatedCheckpoint()
+	checkpointBlock := c.chain.GetBlock(checkpoint.Spine)
+	if stateBlock == nil {
+		log.Error("Error while get checkpoint spine block", "epoch", checkpoint.Epoch, "root", checkpoint.Root, "spine", checkpoint.Spine)
+	}
+
 	header := &types.Header{
-		ParentHashes:  parentHashes,
-		Slot:          slotInfo.Slot,
-		Era:           c.chain.GetEraInfo().Number(),
-		Height:        newHeight,
-		GasLimit:      core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
-		Extra:         c.extra,
-		Time:          uint64(timestamp),
-		LFHash:        lastFinBlock.FinalizedHash(),
-		LFNumber:      lastFinBlock.Nr(),
-		LFBaseFee:     lastFinBlock.BaseFee(),
-		LFBloom:       lastFinBlock.Bloom(),
-		LFGasUsed:     lastFinBlock.GasUsed(),
-		LFReceiptHash: lastFinBlock.ReceiptHash(),
-		LFRoot:        lastFinBlock.Root(),
+		ParentHashes: parentHashes,
+		Slot:         slotInfo.Slot,
+		Era:          c.chain.GetEraInfo().Number(),
+		Height:       newHeight,
+		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
+		Extra:        c.extra,
+		Time:         uint64(timestamp),
+		// Checkpoint spine block
+		LFHash:        checkpointBlock.FinalizedHash(),
+		LFNumber:      checkpointBlock.Nr(),
+		LFBaseFee:     checkpointBlock.BaseFee(),
+		LFBloom:       checkpointBlock.Bloom(),
+		LFGasUsed:     checkpointBlock.GasUsed(),
+		LFReceiptHash: checkpointBlock.ReceiptHash(),
+		LFRoot:        checkpointBlock.Root(),
 	}
 
 	// Get active validators number
