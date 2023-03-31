@@ -75,7 +75,7 @@ type blockchain interface {
 }
 
 type message interface {
-	TxHash() *common.Hash
+	TxHash() common.Hash
 	Data() []byte
 }
 
@@ -292,11 +292,9 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 }
 
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {
-	if msg.TxHash() != nil {
-		if err = p.validateValSyncOp(op, msg); op != nil {
-			log.Error("Invalid validator sync op", "op", op, "error", err)
-			return nil, err
-		}
+	if err = p.validateValSyncOp(op, msg); err != nil {
+		log.Error("Invalid validator sync op", "op", op, "error", err)
+		return nil, err
 	}
 
 	switch op.OpCode() {
@@ -317,7 +315,7 @@ func (p *Processor) validateValSyncOp(op operation.ValidatorSync, msg message) e
 		return ErrNoSavedValSyncOp
 	}
 
-	if savedValSync.TxHash != nil && *savedValSync.TxHash != *msg.TxHash() {
+	if savedValSync.TxHash != nil && *savedValSync.TxHash != msg.TxHash() {
 		return ErrMismatchHashes
 	}
 
