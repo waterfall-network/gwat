@@ -294,6 +294,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {
 	if msg.TxHash() != nil {
 		if err = p.validateValSyncOp(op, msg); op != nil {
+			log.Error("Invalid validator sync op", "op", op, "error", err)
 			return nil, err
 		}
 	}

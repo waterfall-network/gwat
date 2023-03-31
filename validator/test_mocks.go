@@ -15,43 +15,6 @@ import (
 	era "gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
-// MockRef is a mock of Ref interface.
-type MockRef struct {
-	ctrl     *gomock.Controller
-	recorder *MockRefMockRecorder
-}
-
-// MockRefMockRecorder is the mock recorder for MockRef.
-type MockRefMockRecorder struct {
-	mock *MockRef
-}
-
-// NewMockRef creates a new mock instance.
-func NewMockRef(ctrl *gomock.Controller) *MockRef {
-	mock := &MockRef{ctrl: ctrl}
-	mock.recorder = &MockRefMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockRef) EXPECT() *MockRefMockRecorder {
-	return m.recorder
-}
-
-// Address mocks base method.
-func (m *MockRef) Address() common.Address {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Address")
-	ret0, _ := ret[0].(common.Address)
-	return ret0
-}
-
-// Address indicates an expected call of Address.
-func (mr *MockRefMockRecorder) Address() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Address", reflect.TypeOf((*MockRef)(nil).Address))
-}
-
 // Mockblockchain is a mock of blockchain interface.
 type Mockblockchain struct {
 	ctrl     *gomock.Controller
@@ -117,6 +80,20 @@ func (mr *MockblockchainMockRecorder) GetEraInfo() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEraInfo", reflect.TypeOf((*Mockblockchain)(nil).GetEraInfo))
 }
 
+// GetLastCoordinatedCheckpoint mocks base method.
+func (m *Mockblockchain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLastCoordinatedCheckpoint")
+	ret0, _ := ret[0].(*types.Checkpoint)
+	return ret0
+}
+
+// GetLastCoordinatedCheckpoint indicates an expected call of GetLastCoordinatedCheckpoint.
+func (mr *MockblockchainMockRecorder) GetLastCoordinatedCheckpoint() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastCoordinatedCheckpoint", reflect.TypeOf((*Mockblockchain)(nil).GetLastCoordinatedCheckpoint))
+}
+
 // GetSlotInfo mocks base method.
 func (m *Mockblockchain) GetSlotInfo() *types.SlotInfo {
 	m.ctrl.T.Helper()
@@ -143,4 +120,55 @@ func (m *Mockblockchain) GetValidatorSyncData(creator common.Address, op types.V
 func (mr *MockblockchainMockRecorder) GetValidatorSyncData(creator, op interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidatorSyncData", reflect.TypeOf((*Mockblockchain)(nil).GetValidatorSyncData), creator, op)
+}
+
+// Mockmessage is a mock of message interface.
+type Mockmessage struct {
+	ctrl     *gomock.Controller
+	recorder *MockmessageMockRecorder
+}
+
+// MockmessageMockRecorder is the mock recorder for Mockmessage.
+type MockmessageMockRecorder struct {
+	mock *Mockmessage
+}
+
+// NewMockmessage creates a new mock instance.
+func NewMockmessage(ctrl *gomock.Controller) *Mockmessage {
+	mock := &Mockmessage{ctrl: ctrl}
+	mock.recorder = &MockmessageMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockmessage) EXPECT() *MockmessageMockRecorder {
+	return m.recorder
+}
+
+// Data mocks base method.
+func (m *Mockmessage) Data() []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Data")
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// Data indicates an expected call of Data.
+func (mr *MockmessageMockRecorder) Data() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Data", reflect.TypeOf((*Mockmessage)(nil).Data))
+}
+
+// TxHash mocks base method.
+func (m *Mockmessage) TxHash() *common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TxHash")
+	ret0, _ := ret[0].(*common.Hash)
+	return ret0
+}
+
+// TxHash indicates an expected call of TxHash.
+func (mr *MockmessageMockRecorder) TxHash() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxHash", reflect.TypeOf((*Mockmessage)(nil).TxHash))
 }

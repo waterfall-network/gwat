@@ -607,8 +607,13 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		accessList: tx.AccessList(),
 		isFake:     false,
 	}
-	txHash := tx.Hash()
-	msg.txHash = &txHash
+
+	var txHash *common.Hash
+	value := tx.hash.Load()
+	if value != nil {
+		txHash = value.(*common.Hash)
+	}
+	msg.txHash = txHash
 
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
