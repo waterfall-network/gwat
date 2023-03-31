@@ -227,6 +227,133 @@ func TestProcessorActivate(t *testing.T) {
 				testutils.AssertEqual(t, validator.Address, valList[0])
 			},
 		},
+		{
+			CaseName: "Activate: ErrCtxEraNotFound",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{ErrCtxEraNotFound},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
+
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				msg.EXPECT().TxHash().Return(nil)
+				processor.ctx.Era = 3
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+			},
+		},
+		{
+			CaseName: "Activate: read era from db",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
+
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr2)
+				testutils.AssertNoError(t, err)
+
+				if val.GetIndex() != math.MaxUint64 {
+					t.Fatal()
+				}
+				if val.GetActivationEpoch() != math.MaxUint64 {
+					t.Fatal()
+				}
+
+				msg.EXPECT().TxHash().Return(nil)
+				processor.ctx.Era = 3
+				rawdb.WriteEra(db, 3, era.Era{
+					Number: 3,
+					From:   50,
+					To:     80,
+					Root:   common.BytesToHash(testutils.RandomStringInBytes(32)),
+				})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr2)
+				testutils.AssertNoError(t, err)
+
+				testutils.AssertEqual(t, val.GetActivationEpoch(), uint64(81))
+				testutils.AssertEqual(t, val.GetIndex(), activateOperation.Index())
+
+				valList := processor.Storage().GetValidatorsList(processor.state)
+				if len(valList) > 1 {
+					t.Fatal()
+				}
+
+				testutils.AssertEqual(t, validator.Address, valList[0])
+			},
+		},
+		{
+			CaseName: "Activate: epoch in transition period",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
+
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr2)
+				testutils.AssertNoError(t, err)
+
+				if val.GetIndex() != math.MaxUint64 {
+					t.Fatal()
+				}
+				if val.GetActivationEpoch() != math.MaxUint64 {
+					t.Fatal()
+				}
+
+				msg.EXPECT().TxHash().Return(nil)
+				processor.ctx.Slot = 2790
+				processor.ctx.Era = 4
+				rawdb.WriteEra(db, 3, era.Era{
+					Number: 3,
+					From:   44,
+					To:     66,
+					Root:   common.BytesToHash(testutils.RandomStringInBytes(32)),
+				})
+				rawdb.WriteEra(db, 4, era.Era{
+					Number: 4,
+					From:   66,
+					To:     88,
+					Root:   common.BytesToHash(testutils.RandomStringInBytes(32)),
+				})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr2)
+				testutils.AssertNoError(t, err)
+
+				testutils.AssertEqual(t, val.GetActivationEpoch(), testmodels.TestEra.To+1)
+				testutils.AssertEqual(t, val.GetIndex(), activateOperation.Index())
+
+				valList := processor.Storage().GetValidatorsList(processor.state)
+				if len(valList) > 1 {
+					t.Fatal()
+				}
+
+				testutils.AssertEqual(t, validator.Address, valList[0])
+			},
+		},
 	}
 
 	for _, c := range cases {
@@ -386,10 +513,10 @@ func TestProcessorDeactivate(t *testing.T) {
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	exitOperation, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
+	deactivateOp, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 
-	opData, err := operation.EncodeToBytes(exitOperation)
+	opData, err := operation.EncodeToBytes(deactivateOp)
 	testutils.AssertNoError(t, err)
 	msg.EXPECT().Data().AnyTimes().Return(opData)
 
@@ -469,7 +596,85 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, val.GetExitEpoch(), testmodels.TestEra.To+1)
+				testutils.AssertEqual(t, testmodels.TestEra.To+1, val.GetExitEpoch())
+			},
+		},
+		{
+			CaseName: "Deactivate: read era from db",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
+				validator.ActivationEpoch = 0
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
+				testutils.AssertNoError(t, err)
+
+				msg.EXPECT().TxHash().Return(nil)
+				processor.ctx.Era = 3
+				rawdb.WriteEra(db, 3, era.Era{
+					Number: 3,
+					From:   50,
+					To:     80,
+					Root:   common.BytesToHash(testutils.RandomStringInBytes(32)),
+				})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr4)
+				testutils.AssertNoError(t, err)
+
+				testutils.AssertEqual(t, uint64(81), val.GetExitEpoch())
+			},
+		},
+		{
+			CaseName: "Deactivate: epoch in transition period",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
+				validator.ActivationEpoch = 0
+				validator.ExitEpoch = math.MaxUint64
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
+				testutils.AssertNoError(t, err)
+
+				msg.EXPECT().TxHash().Return(nil)
+				processor.ctx.Slot = 2790
+				processor.ctx.Era = 3
+				rawdb.WriteEra(db, 3, era.Era{
+					Number: 3,
+					From:   44,
+					To:     66,
+					Root:   common.BytesToHash(testutils.RandomStringInBytes(32)),
+				})
+				rawdb.WriteEra(db, 4, era.Era{
+					Number: 4,
+					From:   66,
+					To:     88,
+					Root:   common.BytesToHash(testutils.RandomStringInBytes(32)),
+				})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr4)
+				testutils.AssertNoError(t, err)
+
+				testutils.AssertEqual(t, uint64(67), val.GetExitEpoch())
 			},
 		},
 	}
