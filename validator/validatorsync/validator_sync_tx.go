@@ -20,8 +20,6 @@ type Backend interface {
 	Etherbase() (eb common.Address, err error)
 	CreatorAuthorize(creator common.Address) error
 	AccountManager() *accounts.Manager
-
-	//Downloader() *downloader.Downloader
 }
 
 // GetPendingValidatorSyncData retrieves currently processable validators sync operations.

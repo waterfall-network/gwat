@@ -33,10 +33,10 @@ var (
 	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
 	ErrCtxEraNotFound               = errors.New("context block era not found")
 	ErrTargetEraNotFound            = errors.New("target era not found")
-	ErrNoSavedValSyncOp             = errors.New("there is no validator sync op in the cache and database")
-	ErrMismatchHashes               = errors.New("tx hash from memory is different from tx hash passed for processing ")
-	ErrMismatchValSyncOp            = errors.New("input validator sync op is different from saved sync op")
-	ErrInvalidOpEpoch               = errors.New("block epoch is greater than operation epoch")
+	ErrNoSavedValSyncOp             = errors.New("no coordinated confirmation of validator sync data")
+	ErrMismatchHashes               = errors.New("validator sync tx already exist")
+	ErrMismatchValSyncOp            = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
+	ErrInvalidOpEpoch               = errors.New("epoch to apply tx is not acceptable")
 )
 
 const (
