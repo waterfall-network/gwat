@@ -34,7 +34,7 @@ var (
 	ErrCtxEraNotFound               = errors.New("context block era not found")
 	ErrTargetEraNotFound            = errors.New("target era not found")
 	ErrNoSavedValSyncOp             = errors.New("no coordinated confirmation of validator sync data")
-	ErrMismatchHashes               = errors.New("validator sync tx already exist")
+	ErrMismatchTxHashes             = errors.New("validator sync tx already exists")
 	ErrMismatchValSyncOp            = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
 	ErrInvalidOpEpoch               = errors.New("epoch to apply tx is not acceptable")
 )
@@ -315,44 +315,52 @@ func (p *Processor) validateValSyncOp(op operation.ValidatorSync, msg message) e
 		return ErrNoSavedValSyncOp
 	}
 
-	if savedValSync.TxHash != nil && *savedValSync.TxHash != msg.TxHash() {
-		return ErrMismatchHashes
-	}
-
-	if !compareValSync(savedValSync, op) {
-		return ErrMismatchValSyncOp
-	}
-
 	blockEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
 	if blockEpoch > op.ProcEpoch() {
 		return ErrInvalidOpEpoch
 	}
 
+	if !CompareValSync(savedValSync, op) {
+		return ErrMismatchValSyncOp
+	}
+
+	if savedValSync.TxHash != nil && *savedValSync.TxHash != msg.TxHash() {
+		return ErrMismatchTxHashes
+	}
+
 	return nil
 }
 
-func compareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
+func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
 	if saved.OpType != input.OpType() {
+		log.Warn("check validator sync failed: OpType", "s.OpType", saved.OpType, "i.OpType", input.OpType())
 		return false
 	}
 
 	if saved.Creator != input.Creator() {
+		log.Warn("check validator sync failed: Creator",
+			"s.Creator", fmt.Sprintf("%#x", saved.Creator),
+			"i.Creator", fmt.Sprintf("%#x", input.Creator()))
 		return false
 	}
 
 	if saved.Index != input.Index() {
+		log.Warn("check validator sync failed: Index", "s.Index", saved.Index, "i.Index", input.Index())
 		return false
 	}
 
 	if saved.ProcEpoch != input.ProcEpoch() {
+		log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
 		return false
 	}
 
 	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
+		log.Warn("check validator sync failed: Amount", "s.Amount", saved.Amount.String(), "i.Amount", input.Amount().String())
 		return false
 	}
 
 	if saved.Amount != nil && input.Amount() == nil || saved.Amount == nil && input.Amount() != nil {
+		log.Warn("check validator sync failed: Amount nil", "s.Amount", saved.Amount, "i.Amount", input.Amount())
 		return false
 	}
 

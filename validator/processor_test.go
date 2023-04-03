@@ -989,12 +989,12 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			},
 		},
 		{
-			CaseName: "ErrMismatchHashes",
+			CaseName: "ErrMismatchTxHashes",
 			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
 				AddrTo: processor.GetValidatorsStateAddress(),
 			},
-			Errs: []error{ErrMismatchHashes},
+			Errs: []error{ErrMismatchTxHashes},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				hash := common.BytesToHash(testutils.RandomStringInBytes(32))

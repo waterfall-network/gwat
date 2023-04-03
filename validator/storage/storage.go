@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -81,8 +82,10 @@ func (s *storage) SetValidatorsList(stateDb vm.StateDB, list []common.Address) {
 	newList := make([]byte, len(list)*common.AddressLength+uint64Size)
 
 	currentList := stateDb.GetCode(*s.ValidatorsStateAddress())
-	depositCount := binary.BigEndian.Uint64(currentList[:uint64Size])
-	binary.BigEndian.PutUint64(newList[:uint64Size], depositCount)
+	if len(currentList) > 0 {
+		depositCount := binary.BigEndian.Uint64(currentList[:uint64Size])
+		binary.BigEndian.PutUint64(newList[:uint64Size], depositCount)
+	}
 
 	for i, validator := range list {
 		beginning := i*common.AddressLength + uint64Size
@@ -140,6 +143,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 	validators, err = s.validatorsCache.getAllValidatorsByEpoch(checkpoint.Epoch)
 
 	if err != nil {
+		log.Error("get validators", "error", err, "cp.Epoch", checkpoint.Epoch, "cp.Spine", fmt.Sprintf("%#x", checkpoint.Spine))
 		firstEpochBlockHash := checkpoint.Spine
 
 		firstEpochBlock := bc.GetBlock(firstEpochBlockHash)

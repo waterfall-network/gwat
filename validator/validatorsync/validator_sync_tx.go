@@ -176,7 +176,14 @@ func GetPendingValidatorSyncData(bc *core.BlockChain) map[[28]byte]*types.Valida
 	valSyncOps := bc.GetNotProcessedValidatorSyncData()
 	vsPending := make(map[[28]byte]*types.ValidatorSync, len(valSyncOps))
 	for k, vs := range valSyncOps {
-		if vs.ProcEpoch == currEpoch && vs.TxHash == nil {
+		if vs.TxHash != nil {
+			continue
+		}
+		saved := bc.GetValidatorSyncData(vs.Creator, vs.OpType)
+		if saved.TxHash != nil {
+			continue
+		}
+		if vs.ProcEpoch == currEpoch {
 			vsPending[k] = vs
 		}
 	}
