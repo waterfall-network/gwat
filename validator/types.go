@@ -7,8 +7,11 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
+const Uint64Length = 8
+
 const (
-	DepositLogDataLength = common.BlsPubKeyLength + common.AddressLength + common.AddressLength + 8 + common.BlsSigLength + 8
+	DepositLogDataLength        = common.BlsPubKeyLength + common.AddressLength + common.AddressLength + Uint64Length + common.BlsSigLength + Uint64Length
+	MinExitRequestLogDataLength = common.BlsPubKeyLength + common.AddressLength + Uint64Length
 )
 
 // PackDepositLogData packs the deposit log.
@@ -75,5 +78,52 @@ func UnpackDepositLogData(data []byte) (
 	endOffset = startOffset + 8
 	depositIndex = common.BytesToUint64(data[startOffset:endOffset])
 
+	return
+}
+
+func PackExitRequestLogData(
+	pubkey common.BlsPubKey,
+	creatorAddress common.Address,
+	valIndex uint64,
+	exitAfterEpoch *uint64,
+) []byte {
+	data := make([]byte, 0, MinExitRequestLogDataLength)
+	data = append(data, pubkey.Bytes()...)
+	data = append(data, creatorAddress.Bytes()...)
+	data = append(data, common.Uint64ToBytes(valIndex)...)
+
+	if exitAfterEpoch != nil {
+		data = append(data, common.Uint64ToBytes(*exitAfterEpoch)...)
+	}
+
+	return data
+}
+
+func UnpackExitRequestLogData(data []byte) (
+	pubkey common.BlsPubKey,
+	creatorAddress common.Address,
+	valIndex uint64,
+	exitAfterEpoch *uint64,
+	err error,
+) {
+	if len(data) != MinExitRequestLogDataLength && len(data) != MinExitRequestLogDataLength+Uint64Length {
+		err = operation.ErrBadDataLen
+		return
+	}
+
+	pubkey = common.BytesToBlsPubKey(data[:common.BlsPubKeyLength])
+	offset := common.BlsPubKeyLength
+
+	creatorAddress = common.BytesToAddress(data[offset : offset+common.AddressLength])
+	offset += common.AddressLength
+
+	valIndex = common.BytesToUint64(data[offset : offset+Uint64Length])
+	offset += Uint64Length
+
+	rawExitEpoch := data[offset:]
+	if len(rawExitEpoch) == Uint64Length {
+		exitEpoch := common.BytesToUint64(rawExitEpoch)
+		exitAfterEpoch = &exitEpoch
+	}
 	return
 }

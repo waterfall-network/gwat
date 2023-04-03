@@ -5,15 +5,18 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 var (
 	TestDb                 ethdb.Database
 	TestChainConfig        *params.ChainConfig
 	validatorsStateAddress common.Address
+	TestEra                era.Era
 
 	Addr1  = common.BytesToAddress(testutils.RandomStringInBytes(50))
 	Addr2  = common.BytesToAddress(testutils.RandomStringInBytes(30))
@@ -42,5 +45,26 @@ func init() {
 		ForkSlotSubNet1:        9999999,
 		ValidatorsStateAddress: &validatorsStateAddress,
 		ValidatorsPerSlot:      6,
+		EpochsPerEra:           22,
+		TransitionPeriod:       2,
 	}
+
+	TestEra = era.Era{
+		Number: 5,
+		From:   89,
+		To:     110,
+		Root:   common.BytesToHash(testutils.RandomData(32)),
+	}
+}
+
+type TestCase struct {
+	CaseName string
+	TestData interface{}
+	Errs     []error
+	Fn       func(c *TestCase)
+}
+
+type TestData struct {
+	Caller vm.AccountRef
+	AddrTo common.Address
 }

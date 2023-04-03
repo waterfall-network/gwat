@@ -185,7 +185,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 	vmconfig.ExtraEips = eips
 	block := t.genesis(config).ToBlock(nil)
-	snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
+	db := rawdb.NewMemoryDatabase()
+	snaps, statedb := MakePreState(db, t.json.Pre, snapshotter)
 
 	var baseFee *big.Int
 	baseFee = t.json.Env.BaseFee
@@ -220,7 +221,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.BaseFee = baseFee
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 	tp := token.NewProcessor(context, statedb)
-	vp := validator.NewProcessor(context, statedb)
+	vp := validator.NewProcessor(context, statedb, nil)
 
 	// Execute the message.
 	snapshot := statedb.Snapshot()

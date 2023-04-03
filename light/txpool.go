@@ -391,8 +391,10 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		return core.ErrInsufficientFunds
 	}
 
+	isValidatorOp := tx.To() != nil && pool.config.ValidatorsStateAddress != nil && *tx.To() == *pool.config.ValidatorsStateAddress
+
 	// Should supply enough intrinsic gas
-	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil)
+	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, isValidatorOp)
 	if err != nil {
 		return err
 	}

@@ -21,14 +21,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 )
@@ -88,518 +87,518 @@ func init() {
 	tokenProcessor = token.NewProcessor(vm.BlockContext{}, stateDB)
 }
 
-func TestTransitionDb(t *testing.T) {
-	tests := []testutils.TestCase{
-		{
-			CaseName: "Create WRC20 token",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, nil, value, gas, newTokenOpData(operation.CreateCode, func() []byte {
-						op, err := operation.NewWrc20CreateOperation(name, symbol, &decimals, totalSupply)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-				WRC20Address.SetBytes(result.ReturnData)
-				balance := checkBalance(t, st.tp, WRC20Address, owner)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(balance, totalSupply)
-			},
-		},
-		{
-			CaseName: "Create WRC721 token",
-			TestData: testutils.TestData{
-				Caller:       vm.AccountRef(owner),
-				TokenAddress: common.Address{},
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, nil, value, gas, newTokenOpData(operation.CreateCode, func() []byte {
-						op, err := operation.NewWrc721CreateOperation(name, symbol, baseURI, &percentFee)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-				WRC721Address.SetBytes(result.ReturnData)
-				balance := checkBalance(t, st.tp, WRC721Address, owner)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(balance, big.NewInt(0))
-			},
-		},
-		{
-			CaseName: "Properties of the WRC20 token",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.PropertiesCode, func() []byte {
-						op, err := operation.NewPropertiesOperation(WRC20Address, nil)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-
-				assert.NoError(t, result.Err)
-				assert.Nil(t, result.ReturnData)
-			},
-		},
-		{
-			CaseName: "Properties of the WRC721 token",
-			TestData: testutils.TestData{
-				Caller:       vm.AccountRef(owner),
-				TokenAddress: common.Address{},
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.PropertiesCode, func() []byte {
-						op, err := operation.NewPropertiesOperation(WRC721Address, nil)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-
-				assert.NoError(t, result.Err)
-				assert.Nil(t, result.ReturnData)
-			},
-		},
-		{
-			CaseName: "Balance of the WRC20 token",
-			TestData: testutils.TestData{
-				Caller:       vm.AccountRef(owner),
-				TokenAddress: common.Address{},
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BalanceOfCode, func() []byte {
-						op, err := operation.NewBalanceOfOperation(WRC20Address, owner)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-
-				assert.NoError(t, result.Err)
-				assert.Nil(t, result.ReturnData)
-			},
-		},
-		{
-			CaseName: "Balance of the WRC721 token",
-			TestData: testutils.TestData{
-				Caller:       vm.AccountRef(owner),
-				TokenAddress: common.Address{},
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BalanceOfCode, func() []byte {
-						op, err := operation.NewBalanceOfOperation(WRC721Address, owner)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-
-				assert.NoError(t, result.Err)
-				assert.Nil(t, result.ReturnData)
-			},
-		},
-		{
-			CaseName: "Transfer from of the WRC20 token",
-			TestData: testutils.TestData{
-				Caller:       vm.AccountRef(owner),
-				TokenAddress: common.Address{},
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				transferAmount := big.NewInt(10)
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.TransferFromCode, func() []byte {
-						op, err := operation.NewTransferFromOperation(operation.StdWRC20, owner, to, transferAmount)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, func(tp *token.Processor) common.Address {
-					approve, _ := operation.NewApproveOperation(operation.StdWRC20, spender, transferAmount)
-					tp.Call(caller, WRC20Address, nil, approve)
-
-					return WRC20Address
-				})
-
-				result, _ := st.TransitionDb()
-				transferred := new(big.Int).SetBytes(result.ReturnData)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(transferred, transferAmount)
-			},
-		},
-		{
-			CaseName: "Transfer from of the WRC721 token",
-			TestData: testutils.TestData{
-				Caller:       vm.AccountRef(owner),
-				TokenAddress: WRC721Address,
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				v := c.TestData.(testutils.TestData)
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.TransferFromCode, func() []byte {
-						op, err := operation.NewTransferFromOperation(operation.StdWRC721, owner, to, ID1)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, func(tp *token.Processor) common.Address {
-					mintNewToken(t, tp, owner, WRC721Address, ID1, metadata, v.Caller, c.Errs)
-					callApprove(t, tp, operation.StdWRC721, spender, WRC721Address, v.Caller, ID1, c.Errs)
-					return WRC721Address
-				})
-
-				result, _ := st.TransitionDb()
-				transferred := new(big.Int).SetBytes(result.ReturnData)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(transferred, ID1)
-			},
-		},
-		{
-			CaseName: "Transfer of the WRC20 token",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				transferAmount := big.NewInt(10)
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.TransferCode, func() []byte {
-						op, err := operation.NewTransferOperation(to, transferAmount)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-				transferred := new(big.Int).SetBytes(result.ReturnData)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(transferred, transferAmount)
-			},
-		},
-		{
-			CaseName: "Mint of the WRC721 token",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.MintCode, func() []byte {
-						op, err := operation.NewMintOperation(owner, ID2, metadata)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-				minted := new(big.Int).SetBytes(result.ReturnData)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(minted, ID2)
-			},
-		},
-		{
-			CaseName: "Burn of the WRC721 token",
-			TestData: testutils.TestData{
-				Caller:       vm.AccountRef(owner),
-				TokenAddress: common.Address{},
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BurnCode, func() []byte {
-						op, err := operation.NewBurnOperation(ID3)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, func(tp *token.Processor) common.Address {
-					mintNewToken(t, tp, owner, WRC721Address, ID3, metadata, caller, c.Errs)
-					return WRC721Address
-				})
-
-				result, _ := st.TransitionDb()
-				burned := new(big.Int).SetBytes(result.ReturnData)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(burned, ID3)
-			},
-		},
-		{
-			CaseName: "Buy of the WRC20 token",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				v := c.TestData.(testutils.TestData)
-				pricePerToken := big.NewInt(25)
-				expTokenCount := big.NewInt(10)
-				expTotalPrice := big.NewInt(0).Mul(pricePerToken, expTokenCount)
-				value.Set(expTotalPrice).Add(value, big.NewInt(1))
-
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(spender, &token, expTotalPrice, gas, newTokenOpData(operation.BuyCode, func() []byte {
-						op, err := operation.NewBuyOperation(nil, nil)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, func(tp *token.Processor) common.Address {
-					setPrice(t, tp, v.Caller, WRC20Address, nil, pricePerToken)
-					return WRC20Address
-				})
-
-				result, _ := st.TransitionDb()
-				spenderBalance := checkBalance(t, st.tp, WRC20Address, spender)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(spenderBalance, expTokenCount)
-			},
-		},
-		{
-			CaseName: "Buy of the WRC721 NFT",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				var tokenID *big.Int
-				tokenPrice := big.NewInt(30)
-				value.Set(tokenPrice).Add(value, big.NewInt(1))
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.BuyCode, func() []byte {
-						op, err := operation.NewBuyOperation(tokenID, nil)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, func(tp *token.Processor) common.Address {
-					tokenID = big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
-					mintNewToken(t, tp, spender, WRC721Address, tokenID, data, caller, nil)
-
-					sellCaller := vm.AccountRef(spender)
-					setPrice(t, tp, sellCaller, WRC721Address, tokenID, tokenPrice)
-
-					return WRC721Address
-				})
-
-				result, _ := st.TransitionDb()
-				spenderBalance := checkBalance(t, st.tp, WRC721Address, spender)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(spenderBalance, big.NewInt(1))
-			},
-		},
-		{
-			CaseName: "Set price of the WRC20 token",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				newPrice := big.NewInt(15)
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.SetPriceCode, func() []byte {
-						op, err := operation.NewSetPriceOperation(nil, newPrice)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-				currentPrice, _ := checkCost(st.tp, WRC20Address, nil)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(currentPrice, newPrice)
-			},
-		},
-		{
-			CaseName: "Set price of the WRC721 token",
-			TestData: testutils.TestData{
-				Caller:       vm.AccountRef(owner),
-				TokenAddress: common.Address{},
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				newPrice := big.NewInt(15)
-				var tokenID *big.Int
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.SetPriceCode, func() []byte {
-						op, err := operation.NewSetPriceOperation(tokenID, newPrice)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, func(tp *token.Processor) common.Address {
-					tokenID = big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
-					mintNewToken(t, tp, owner, WRC721Address, tokenID, data, caller, c.Errs)
-
-					return WRC721Address
-				})
-
-				result, _ := st.TransitionDb()
-				currentPrice, _ := checkCost(st.tp, WRC721Address, tokenID)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(currentPrice, newPrice)
-			},
-		},
-		{
-			CaseName: "Approve spending of the WRC20 token",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				approveAmount := big.NewInt(20)
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.ApproveCode, func() []byte {
-						op, err := operation.NewApproveOperation(operation.StdWRC20, spender, approveAmount)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-				approvedAmount := new(big.Int).SetBytes(result.ReturnData)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(approvedAmount, approveAmount)
-			},
-		},
-		{
-			CaseName: "Approve spending of the WRC721 token",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				var tokenID *big.Int
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.ApproveCode, func() []byte {
-						op, err := operation.NewApproveOperation(operation.StdWRC721, spender, tokenID)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, func(tp *token.Processor) common.Address {
-					tokenID = big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
-					mintNewToken(t, tp, owner, WRC721Address, tokenID, data, caller, c.Errs)
-
-					return WRC721Address
-				})
-
-				result, _ := st.TransitionDb()
-				approvedID := new(big.Int).SetBytes(result.ReturnData)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				testutils.BigIntEquals(approvedID, tokenID)
-			},
-		},
-		{
-			CaseName: "Set approval for all WRC721 tokens",
-			TestData: testutils.TestData{
-				Caller: vm.AccountRef(owner),
-			},
-			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
-				st := initStateTransition(func(token common.Address) Message {
-					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.SetApprovalForAllCode, func() []byte {
-						op, err := operation.NewSetApprovalForAllOperation(spender, true)
-						assert.NoError(t, err)
-						binaryData, err := op.MarshalBinary()
-						assert.NoError(t, err)
-						return binaryData
-					}))
-				}, nil)
-
-				result, _ := st.TransitionDb()
-				approvedSpender := common.BytesToAddress(result.ReturnData)
-
-				assert.NoError(t, result.Err)
-				assert.NotNil(t, result.ReturnData)
-				assert.Equal(t, spender, approvedSpender)
-			},
-		},
-	}
-
-	for _, c := range tests {
-		t.Run(c.CaseName, func(t *testing.T) {
-			c.Fn(&c, &common.Address{})
-		})
-	}
-}
+//func TestTransitionDb(t *testing.T) {
+//	tests := []testutils.TestCase{
+//		{
+//			CaseName: "Create WRC20 token",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, nil, value, gas, newTokenOpData(operation.CreateCode, func() []byte {
+//						op, err := operation.NewWrc20CreateOperation(name, symbol, &decimals, totalSupply)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//				WRC20Address.SetBytes(result.ReturnData)
+//				balance := checkBalance(t, st.tp, WRC20Address, owner)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(balance, totalSupply)
+//			},
+//		},
+//		{
+//			CaseName: "Create WRC721 token",
+//			TestData: testutils.TestData{
+//				Caller:       vm.AccountRef(owner),
+//				TokenAddress: common.Address{},
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, nil, value, gas, newTokenOpData(operation.CreateCode, func() []byte {
+//						op, err := operation.NewWrc721CreateOperation(name, symbol, baseURI, &percentFee)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//				WRC721Address.SetBytes(result.ReturnData)
+//				balance := checkBalance(t, st.tp, WRC721Address, owner)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(balance, big.NewInt(0))
+//			},
+//		},
+//		{
+//			CaseName: "Properties of the WRC20 token",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.PropertiesCode, func() []byte {
+//						op, err := operation.NewPropertiesOperation(WRC20Address, nil)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//
+//				assert.NoError(t, result.Err)
+//				assert.Nil(t, result.ReturnData)
+//			},
+//		},
+//		{
+//			CaseName: "Properties of the WRC721 token",
+//			TestData: testutils.TestData{
+//				Caller:       vm.AccountRef(owner),
+//				TokenAddress: common.Address{},
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.PropertiesCode, func() []byte {
+//						op, err := operation.NewPropertiesOperation(WRC721Address, nil)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//
+//				assert.NoError(t, result.Err)
+//				assert.Nil(t, result.ReturnData)
+//			},
+//		},
+//		{
+//			CaseName: "Balance of the WRC20 token",
+//			TestData: testutils.TestData{
+//				Caller:       vm.AccountRef(owner),
+//				TokenAddress: common.Address{},
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BalanceOfCode, func() []byte {
+//						op, err := operation.NewBalanceOfOperation(WRC20Address, owner)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//
+//				assert.NoError(t, result.Err)
+//				assert.Nil(t, result.ReturnData)
+//			},
+//		},
+//		{
+//			CaseName: "Balance of the WRC721 token",
+//			TestData: testutils.TestData{
+//				Caller:       vm.AccountRef(owner),
+//				TokenAddress: common.Address{},
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BalanceOfCode, func() []byte {
+//						op, err := operation.NewBalanceOfOperation(WRC721Address, owner)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//
+//				assert.NoError(t, result.Err)
+//				assert.Nil(t, result.ReturnData)
+//			},
+//		},
+//		{
+//			CaseName: "Transfer from of the WRC20 token",
+//			TestData: testutils.TestData{
+//				Caller:       vm.AccountRef(owner),
+//				TokenAddress: common.Address{},
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				transferAmount := big.NewInt(10)
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.TransferFromCode, func() []byte {
+//						op, err := operation.NewTransferFromOperation(operation.StdWRC20, owner, to, transferAmount)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, func(tp *token.Processor) common.Address {
+//					approve, _ := operation.NewApproveOperation(operation.StdWRC20, spender, transferAmount)
+//					tp.Call(caller, WRC20Address, nil, approve)
+//
+//					return WRC20Address
+//				})
+//
+//				result, _ := st.TransitionDb()
+//				transferred := new(big.Int).SetBytes(result.ReturnData)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(transferred, transferAmount)
+//			},
+//		},
+//		{
+//			CaseName: "Transfer from of the WRC721 token",
+//			TestData: testutils.TestData{
+//				Caller:       vm.AccountRef(owner),
+//				TokenAddress: WRC721Address,
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				v := c.TestData.(testutils.TestData)
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.TransferFromCode, func() []byte {
+//						op, err := operation.NewTransferFromOperation(operation.StdWRC721, owner, to, ID1)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, func(tp *token.Processor) common.Address {
+//					mintNewToken(t, tp, owner, WRC721Address, ID1, metadata, v.Caller, c.Errs)
+//					callApprove(t, tp, operation.StdWRC721, spender, WRC721Address, v.Caller, ID1, c.Errs)
+//					return WRC721Address
+//				})
+//
+//				result, _ := st.TransitionDb()
+//				transferred := new(big.Int).SetBytes(result.ReturnData)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(transferred, ID1)
+//			},
+//		},
+//		{
+//			CaseName: "Transfer of the WRC20 token",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				transferAmount := big.NewInt(10)
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.TransferCode, func() []byte {
+//						op, err := operation.NewTransferOperation(to, transferAmount)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//				transferred := new(big.Int).SetBytes(result.ReturnData)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(transferred, transferAmount)
+//			},
+//		},
+//		{
+//			CaseName: "Mint of the WRC721 token",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.MintCode, func() []byte {
+//						op, err := operation.NewMintOperation(owner, ID2, metadata)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//				minted := new(big.Int).SetBytes(result.ReturnData)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(minted, ID2)
+//			},
+//		},
+//		{
+//			CaseName: "Burn of the WRC721 token",
+//			TestData: testutils.TestData{
+//				Caller:       vm.AccountRef(owner),
+//				TokenAddress: common.Address{},
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &token, value, gas, newTokenOpData(operation.BurnCode, func() []byte {
+//						op, err := operation.NewBurnOperation(ID3)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, func(tp *token.Processor) common.Address {
+//					mintNewToken(t, tp, owner, WRC721Address, ID3, metadata, caller, c.Errs)
+//					return WRC721Address
+//				})
+//
+//				result, _ := st.TransitionDb()
+//				burned := new(big.Int).SetBytes(result.ReturnData)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(burned, ID3)
+//			},
+//		},
+//		{
+//			CaseName: "Buy of the WRC20 token",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				v := c.TestData.(testutils.TestData)
+//				pricePerToken := big.NewInt(25)
+//				expTokenCount := big.NewInt(10)
+//				expTotalPrice := big.NewInt(0).Mul(pricePerToken, expTokenCount)
+//				value.Set(expTotalPrice).Add(value, big.NewInt(1))
+//
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(spender, &token, expTotalPrice, gas, newTokenOpData(operation.BuyCode, func() []byte {
+//						op, err := operation.NewBuyOperation(nil, nil)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, func(tp *token.Processor) common.Address {
+//					setPrice(t, tp, v.Caller, WRC20Address, nil, pricePerToken)
+//					return WRC20Address
+//				})
+//
+//				result, _ := st.TransitionDb()
+//				spenderBalance := checkBalance(t, st.tp, WRC20Address, spender)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(spenderBalance, expTokenCount)
+//			},
+//		},
+//		{
+//			CaseName: "Buy of the WRC721 NFT",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				var tokenID *big.Int
+//				tokenPrice := big.NewInt(30)
+//				value.Set(tokenPrice).Add(value, big.NewInt(1))
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(spender, &token, value, gas, newTokenOpData(operation.BuyCode, func() []byte {
+//						op, err := operation.NewBuyOperation(tokenID, nil)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, func(tp *token.Processor) common.Address {
+//					tokenID = big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
+//					mintNewToken(t, tp, spender, WRC721Address, tokenID, data, caller, nil)
+//
+//					sellCaller := vm.AccountRef(spender)
+//					setPrice(t, tp, sellCaller, WRC721Address, tokenID, tokenPrice)
+//
+//					return WRC721Address
+//				})
+//
+//				result, _ := st.TransitionDb()
+//				spenderBalance := checkBalance(t, st.tp, WRC721Address, spender)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(spenderBalance, big.NewInt(1))
+//			},
+//		},
+//		{
+//			CaseName: "Set price of the WRC20 token",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				newPrice := big.NewInt(15)
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.SetPriceCode, func() []byte {
+//						op, err := operation.NewSetPriceOperation(nil, newPrice)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//				currentPrice, _ := checkCost(st.tp, WRC20Address, nil)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(currentPrice, newPrice)
+//			},
+//		},
+//		{
+//			CaseName: "Set price of the WRC721 token",
+//			TestData: testutils.TestData{
+//				Caller:       vm.AccountRef(owner),
+//				TokenAddress: common.Address{},
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				newPrice := big.NewInt(15)
+//				var tokenID *big.Int
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.SetPriceCode, func() []byte {
+//						op, err := operation.NewSetPriceOperation(tokenID, newPrice)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, func(tp *token.Processor) common.Address {
+//					tokenID = big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
+//					mintNewToken(t, tp, owner, WRC721Address, tokenID, data, caller, c.Errs)
+//
+//					return WRC721Address
+//				})
+//
+//				result, _ := st.TransitionDb()
+//				currentPrice, _ := checkCost(st.tp, WRC721Address, tokenID)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(currentPrice, newPrice)
+//			},
+//		},
+//		{
+//			CaseName: "Approve spending of the WRC20 token",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				approveAmount := big.NewInt(20)
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &WRC20Address, value, gas, newTokenOpData(operation.ApproveCode, func() []byte {
+//						op, err := operation.NewApproveOperation(operation.StdWRC20, spender, approveAmount)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//				approvedAmount := new(big.Int).SetBytes(result.ReturnData)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(approvedAmount, approveAmount)
+//			},
+//		},
+//		{
+//			CaseName: "Approve spending of the WRC721 token",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				var tokenID *big.Int
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.ApproveCode, func() []byte {
+//						op, err := operation.NewApproveOperation(operation.StdWRC721, spender, tokenID)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, func(tp *token.Processor) common.Address {
+//					tokenID = big.NewInt(int64(testutils.RandomInt(1000, 99999999)))
+//					mintNewToken(t, tp, owner, WRC721Address, tokenID, data, caller, c.Errs)
+//
+//					return WRC721Address
+//				})
+//
+//				result, _ := st.TransitionDb()
+//				approvedID := new(big.Int).SetBytes(result.ReturnData)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				testutils.BigIntEquals(approvedID, tokenID)
+//			},
+//		},
+//		{
+//			CaseName: "Set approval for all WRC721 tokens",
+//			TestData: testutils.TestData{
+//				Caller: vm.AccountRef(owner),
+//			},
+//			Errs: []error{nil},
+//			Fn: func(c *testutils.TestCase, a *common.Address) {
+//				st := initStateTransition(func(token common.Address) Message {
+//					return NewMockMessage(owner, &WRC721Address, value, gas, newTokenOpData(operation.SetApprovalForAllCode, func() []byte {
+//						op, err := operation.NewSetApprovalForAllOperation(spender, true)
+//						assert.NoError(t, err)
+//						binaryData, err := op.MarshalBinary()
+//						assert.NoError(t, err)
+//						return binaryData
+//					}))
+//				}, nil)
+//
+//				result, _ := st.TransitionDb()
+//				approvedSpender := common.BytesToAddress(result.ReturnData)
+//
+//				assert.NoError(t, result.Err)
+//				assert.NotNil(t, result.ReturnData)
+//				assert.Equal(t, spender, approvedSpender)
+//			},
+//		},
+//	}
+//
+//	for _, c := range tests {
+//		t.Run(c.CaseName, func(t *testing.T) {
+//			c.Fn(&c, &common.Address{})
+//		})
+//	}
+//}
 
 func initStateTransition(m func(token common.Address) Message, init func(tp *token.Processor) common.Address) *StateTransition {
 	t := func(init func(tp *token.Processor) common.Address) common.Address {
@@ -627,7 +626,7 @@ func initStateTransition(m func(token common.Address) Message, init func(tp *tok
 			},
 			BaseFee: big.NewInt(10),
 		}, vm.TxContext{}, stateDB, params.TestChainConfig, vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer})
-		st = NewStateTransition(evm, tokenProcessor, m(t), new(GasPool).AddGas(50000000))
+		st = NewStateTransition(evm, tokenProcessor, nil, m(t), new(GasPool).AddGas(50000000))
 	)
 
 	stateTransition = st

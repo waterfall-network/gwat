@@ -28,17 +28,16 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/contracts/deposit"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -301,24 +300,22 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		g.Config = &params.ChainConfig{ValidatorsStateAddress: validatorsStateAddress}
 	}
 
-	g.CreateDepositContract(statedb, head)
-
-	validatorStorage := valStore.NewStorage(db, g.Config)
+	validatorStorage := valStore.NewStorage(g.Config)
 
 	validatorStorage.SetValidatorsList(statedb, g.Validators)
-	for i, val := range g.Validators {
-		v := valStore.NewValidator(val, nil, uint64(i), 0, math.MaxUint64, nil)
+	for _, val := range g.Validators {
+		v := valStore.NewValidator(common.BlsPubKey{}, val, &common.Address{})
+		v.SetActivationEpoch(uint64(0))
 
-		info, err := v.MarshalBinary()
+		err := validatorStorage.SetValidator(statedb, v)
 		if err != nil {
-			log.Error("can`t add validator to the state", "address", val, "error", err)
+			log.Error("can`t set validator from genesis", "error", err)
 		}
-
-		validatorStorage.SetValidatorInfo(statedb, info)
 	}
 
 	root := statedb.IntermediateRoot(false)
 	head.Root = root
+	head.Era = 0
 
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
@@ -326,20 +323,15 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	genesisBlock := types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
 
 	// Use genesis hash as seed for first and second epochs
-	rawdb.WriteFirstEpochBlockHash(db, 0, genesisBlock.Hash())
-	rawdb.WriteFirstEpochBlockHash(db, 1, genesisBlock.Hash())
+	rawdb.WriteLastCoordinatedCheckpoint(db, &types.Checkpoint{0, common.Hash{}, genesisBlock.Hash()})
+
+	genesisEra := era.Era{0, 0, g.Config.EpochsPerEra - 1, genesisBlock.Root()}
+	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
+	rawdb.WriteCurrentEra(db, genesisEra.Number)
+
+	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root)
 
 	return genesisBlock
-}
-
-// CreateDepositContract creates deposit contract for genesis state.
-func (g *Genesis) CreateDepositContract(statedb *state.StateDB, preHead *types.Header) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	context := NewEVMBlockContext(preHead, nil, &common.Address{})
-	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, g.configOrDefault(common.Hash{}), vm.Config{})
-	//create deposit address from contract data
-	depositAddr := crypto.Keccak256Address(common.FromHex(deposit.DepositContractBin))
-	log.Info("Deposit contract address", "address", depositAddr)
-	return vmenv.CreateGenesisContract(depositAddr, common.FromHex(deposit.DepositContractBin))
 }
 
 // Commit writes the block and state of a genesis specification to the database.

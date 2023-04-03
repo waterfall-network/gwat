@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
@@ -20,6 +21,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/validatorsync"
 )
 
 const (
@@ -39,6 +41,9 @@ type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 	Downloader() *downloader.Downloader
+	Etherbase() (eb common.Address, err error)
+	CreatorAuthorize(creator common.Address) error
+	AccountManager() *accounts.Manager
 }
 
 // Config is the configuration parameters of block creation.
@@ -614,7 +619,20 @@ func (c *Creator) updateSnapshot() {
 func (c *Creator) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := c.current.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(c.chainConfig, c.chain, &coinbase, c.current.gasPool, c.current.state, c.current.header, tx, &c.current.header.GasUsed, *c.chain.GetVMConfig())
+	if c.current.gasPool == nil {
+		c.current.gasPool = new(core.GasPool).AddGas(c.current.header.GasLimit)
+	}
+
+	receipt, err := core.ApplyTransaction(c.chainConfig,
+		c.chain, &coinbase,
+		c.current.gasPool,
+		c.current.state,
+		c.current.header,
+		tx,
+		&c.current.header.GasUsed,
+		*c.chain.GetVMConfig(),
+		c.chain,
+	)
 	if err != nil {
 		c.current.state.RevertToSnapshot(snap)
 		return nil, err
@@ -830,6 +848,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	header := &types.Header{
 		ParentHashes: parentHashes,
 		Slot:         slotInfo.Slot,
+		Era:          c.chain.GetEraInfo().Number(),
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
 		Extra:        c.extra,
@@ -879,23 +898,62 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	// Fill the block with all available pending transactions.
 	pending := c.getPending()
 
-	// Short circuit if no pending transactions
-	if len(pending) == 0 {
-		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
-		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
-		c.errWorkCh <- &ErrNoTxs
+	filterPending, err := c.filterPendingTxs(pending)
+	if err != nil {
+		log.Error("can`t filter pending transactions", "error", err)
+
 		return
 	}
 
-	if len(pending) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pending, header.BaseFee)
-		if c.commitTransactions(txs, c.coinbase) {
-			pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
-			log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
-			c.errWorkCh <- &ErrNoTxs
+	syncData := validatorsync.GetPendingValidatorSyncData(c.chain)
+
+	//syncData log
+	for _, sd := range syncData {
+		amt := new(big.Int)
+		if sd.Amount != nil {
+			amt.Set(sd.Amount)
+		}
+		log.Info("Creator: validator sync data",
+			"OpType", sd.OpType,
+			"ProcEpoch", sd.ProcEpoch,
+			"Index", sd.Index,
+			"Creator", fmt.Sprintf("%#x", sd.Creator),
+			"amount", amt.String(),
+			"TxHash", fmt.Sprintf("%#x", sd.TxHash),
+		)
+	}
+
+	// Short circuit if no pending transactions
+	if len(filterPending) == 0 && len(syncData) == 0 {
+		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
+		c.errWorkCh <- &ErrNoTxs
+
+		return
+	}
+
+	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
+	if c.commitTransactions(txs, c.coinbase) {
+		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
+			if err := c.processValidatorTxs(stateBlock.Hash(), syncData); err != nil {
+				return
+			}
+
+			c.commit(tips, c.fullTaskHook, true, tstart)
+
 			return
 		}
+		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
+		c.errWorkCh <- &ErrNoTxs
+
+		return
 	}
+
+	if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
+		c.processValidatorTxs(stateBlock.Hash(), syncData)
+	}
+
 	c.commit(tips, c.fullTaskHook, true, tstart)
 }
 
@@ -1054,4 +1112,42 @@ func (c *Creator) getAssignment() Assignment {
 // setAssignment
 func (c *Creator) setAssignment(assigned *Assignment) {
 	c.cacheAssignment = assigned
+}
+
+func (c *Creator) filterPendingTxs(pending map[common.Address]types.Transactions) (map[common.Address]types.Transactions, error) {
+	slotCreators, err := c.chain.ValidatorStorage().GetCreatorsBySlot(c.chain, c.chain.GetSlotInfo().CurrentSlot())
+	if err != nil {
+		return nil, err
+	}
+
+	for address := range pending {
+		for _, creator := range slotCreators {
+			if address == creator && creator != c.coinbase {
+				delete(pending, address)
+			}
+		}
+	}
+
+	return pending, nil
+}
+
+func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync) error {
+	nonce := c.eth.TxPool().Nonce(c.coinbase)
+	for _, validatorSync := range syncData {
+		if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
+			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, blockHash, c.coinbase, validatorSync, nonce)
+			if err != nil {
+				log.Error("failed to create validator sync tx", "error", err)
+				continue
+			}
+
+			_, err = c.commitTransaction(valSyncTx, c.coinbase)
+			if err != nil {
+				log.Error("can`t commit validator sync tx", "error", err)
+				return err
+			}
+		}
+	}
+
+	return nil
 }

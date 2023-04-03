@@ -1,14 +1,18 @@
 package storage
 
 import (
+	"encoding/binary"
+	"fmt"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
@@ -16,33 +20,36 @@ type blockchain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
-	GetCoordinatedCheckpointEpoch(epoch uint64) uint64
-	SearchFirstEpochBlockHashRecursive(epoch uint64) (common.Hash, bool)
+	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	GetEraInfo() *era.EraInfo
+	GetConfig() *params.ChainConfig
+	Database() ethdb.Database
 }
 
 type Storage interface {
 	GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address)
 	GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error)
 
-	SetValidatorInfo(stateDb *state.StateDB, info ValidatorInfo)
-	GetValidatorInfo(stateDb *state.StateDB, address common.Address) ValidatorInfo
+	SetValidator(stateDb vm.StateDB, val *Validator) error
+	GetValidator(stateDb vm.StateDB, address common.Address) (*Validator, error)
 
-	SetValidatorsList(stateDb *state.StateDB, list []common.Address)
-	GetValidatorsList(stateDb *state.StateDB) []common.Address
+	SetValidatorsList(stateDb vm.StateDB, list []common.Address)
+	GetValidatorsList(stateDb vm.StateDB) []common.Address
+	AddValidatorToList(stateDB vm.StateDB, index uint64, validator common.Address)
 
-	breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address
+	GetValidatorsStateAddress() *common.Address
+	GetDepositCount(stateDb vm.StateDB) uint64
+	IncrementDepositCount(stateDb vm.StateDB)
 }
 
 type storage struct {
 	validatorsCache *ValidatorsCache
-	db              ethdb.Database
 	config          *params.ChainConfig
 }
 
-func NewStorage(db ethdb.Database, config *params.ChainConfig) Storage {
+func NewStorage(config *params.ChainConfig) Storage {
 	return &storage{
 		validatorsCache: NewCache(),
-		db:              db,
 		config:          config,
 	}
 }
@@ -50,34 +57,76 @@ func (s *storage) ValidatorsStateAddress() *common.Address {
 	return s.config.ValidatorsStateAddress
 }
 
-func (s *storage) SetValidatorInfo(stateDb *state.StateDB, info ValidatorInfo) {
-	stateDb.SetCode(info.GetAddress(), info)
-}
-
-func (s *storage) GetValidatorInfo(stateDb *state.StateDB, address common.Address) ValidatorInfo {
-	return stateDb.GetCode(address)
-}
-
-func (s *storage) SetValidatorsList(stateDb *state.StateDB, list []common.Address) {
-	buf := make([]byte, len(list)*common.AddressLength)
-	for i, validator := range list {
-		beginning := i * common.AddressLength
-		end := beginning + common.AddressLength
-		copy(buf[beginning:end], validator[:])
+func (s *storage) SetValidator(stateDb vm.StateDB, val *Validator) error {
+	valData, err := val.MarshalBinary()
+	if err != nil {
+		return err
 	}
 
-	stateDb.SetCode(*s.ValidatorsStateAddress(), buf)
+	stateDb.SetCode(val.Address, valData)
+	return nil
 }
 
-func (s *storage) GetValidatorsList(stateDb *state.StateDB) []common.Address {
+func (s *storage) GetValidator(stateDb vm.StateDB, address common.Address) (*Validator, error) {
+	var valData ValidatorBinary
+
+	valData = stateDb.GetCode(address)
+	if valData == nil {
+		return nil, nil
+	}
+
+	return valData.ToValidator()
+}
+
+func (s *storage) SetValidatorsList(stateDb vm.StateDB, list []common.Address) {
+	newList := make([]byte, len(list)*common.AddressLength+uint64Size)
+
+	currentList := stateDb.GetCode(*s.ValidatorsStateAddress())
+	if len(currentList) > 0 {
+		depositCount := binary.BigEndian.Uint64(currentList[:uint64Size])
+		binary.BigEndian.PutUint64(newList[:uint64Size], depositCount)
+	}
+
+	for i, validator := range list {
+		beginning := i*common.AddressLength + uint64Size
+		end := beginning + common.AddressLength
+		copy(newList[beginning:end], validator[:])
+	}
+
+	stateDb.SetCode(*s.ValidatorsStateAddress(), newList)
+}
+
+func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
 	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
 
 	validators := make([]common.Address, 0)
-	for i := 0; i+common.AddressLength <= len(buf); i += common.AddressLength {
+	for i := uint64Size; i+common.AddressLength <= len(buf); i += common.AddressLength {
 		validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
 	}
 
 	return validators
+}
+
+func (s *storage) GetDepositCount(stateDb vm.StateDB) uint64 {
+	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
+	if buf == nil {
+		return 0
+	}
+
+	return binary.BigEndian.Uint64(buf[:uint64Size])
+}
+
+func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
+	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
+
+	if buf == nil {
+		buf = make([]byte, uint64Size)
+	}
+	currentCount := binary.BigEndian.Uint64(buf[:uint64Size])
+	currentCount++
+
+	binary.BigEndian.PutUint64(buf[:uint64Size], currentCount)
+	stateDb.SetCode(*s.ValidatorsStateAddress(), buf)
 }
 
 // GetValidators return two values: array of Validator and array of Validators addresses.
@@ -85,34 +134,30 @@ func (s *storage) GetValidatorsList(stateDb *state.StateDB) []common.Address {
 // Use parameter activeOnly true if you need only active validators.
 func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool) ([]Validator, []common.Address) {
 	var err error
-	validators := make([]Validator, 0)
+	var validators []Validator
 
 	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 
-	checkpointEpoch := bc.GetCoordinatedCheckpointEpoch(currentEpoch)
+	checkpoint := bc.GetLastCoordinatedCheckpoint()
 
-	validators, err = s.validatorsCache.getAllValidatorsByEpoch(checkpointEpoch)
+	validators, err = s.validatorsCache.getAllValidatorsByEpoch(checkpoint.Epoch)
+
 	if err != nil {
-		firstEpochBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(checkpointEpoch)
-		if !ok {
-			rawdb.WriteFirstEpochBlockHash(s.db, checkpointEpoch, firstEpochBlockHash)
-		}
+		log.Error("get validators", "error", err, "cp.Epoch", checkpoint.Epoch, "cp.Spine", fmt.Sprintf("%#x", checkpoint.Spine))
+		firstEpochBlockHash := checkpoint.Spine
 
 		firstEpochBlock := bc.GetBlock(firstEpochBlockHash)
 
-		stateDb, err := bc.StateAt(firstEpochBlock.Root())
+		stateDb, _ := bc.StateAt(firstEpochBlock.Root())
 
 		valList := s.GetValidatorsList(stateDb)
 		for _, valAddress := range valList {
-			var validator Validator
-			valInfo := s.GetValidatorInfo(stateDb, valAddress)
-			err = validator.UnmarshalBinary(valInfo)
+			val, err := s.GetValidator(stateDb, valAddress)
 			if err != nil {
-				log.Error("can`t get validators info from state", "error", err)
+				log.Error("can`t get validator from state", "error", err)
 				continue
 			}
-
-			validators = append(validators, validator)
+			validators = append(validators, *val)
 		}
 
 		s.validatorsCache.addAllValidatorsByEpoch(currentEpoch, validators)
@@ -166,13 +211,9 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 
 	activeEpochValidators := s.validatorsCache.getValidatorsAddresses(epoch, true)
 
-	checkpointEpoch := bc.GetCoordinatedCheckpointEpoch(epoch)
-	seedBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(checkpointEpoch)
-	if !ok {
-		rawdb.WriteFirstEpochBlockHash(s.db, checkpointEpoch, seedBlockHash)
-	}
+	checkpointEpoch := bc.GetLastCoordinatedCheckpoint()
 
-	seed, err := s.seed(epoch, seedBlockHash)
+	seed, err := s.seed(epoch, checkpointEpoch.Spine)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +223,7 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		return nil, err
 	}
 
-	shuffledValidatorsBySlots := s.breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot)
+	shuffledValidatorsBySlots := breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot, s.config.SlotsPerEpoch)
 
 	if uint64(len(shuffledValidatorsBySlots)) < s.config.SlotsPerEpoch {
 		for uint64(len(shuffledValidatorsBySlots)) < s.config.SlotsPerEpoch {
@@ -191,7 +232,7 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 				return nil, err
 			}
 
-			shuffledValidatorsBySlots = append(shuffledValidatorsBySlots, s.breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot)...)
+			shuffledValidatorsBySlots = append(shuffledValidatorsBySlots, breakByValidatorsBySlotCount(shuffledValidators, s.config.ValidatorsPerSlot, s.config.SlotsPerEpoch)...)
 		}
 	}
 
@@ -214,11 +255,10 @@ func (s *storage) seed(epoch uint64, firstEpochBlockHash common.Hash) (common.Ha
 	seed32 := common.BytesToHash(seed)
 
 	return seed32, nil
-
 }
 
 // breakByValidatorsBySlotCount splits the list of all validators into sublists for each slot
-func (s *storage) breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot uint64) [][]common.Address {
+func breakByValidatorsBySlotCount(validators []common.Address, validatorsPerSlot, slotsPerEpoch uint64) [][]common.Address {
 	chunks := make([][]common.Address, 0)
 
 	for i := uint64(0); i+validatorsPerSlot <= uint64(len(validators)); i += validatorsPerSlot {
@@ -226,10 +266,32 @@ func (s *storage) breakByValidatorsBySlotCount(validators []common.Address, vali
 		slotValidators := make([]common.Address, len(validators[i:end]))
 		copy(slotValidators, validators[i:end])
 		chunks = append(chunks, slotValidators)
-		if len(chunks) == int(s.config.SlotsPerEpoch) {
+		if len(chunks) == int(slotsPerEpoch) {
 			return chunks
 		}
 	}
 
 	return chunks
+}
+
+func (s *storage) GetValidatorsStateAddress() *common.Address {
+	return s.config.ValidatorsStateAddress
+}
+
+func (s *storage) AddValidatorToList(stateDb vm.StateDB, index uint64, validator common.Address) {
+	list := s.GetValidatorsList(stateDb)
+	for _, address := range list {
+		if address == validator {
+			return
+		}
+	}
+
+	if uint64(len(list)) <= index {
+		for uint64(len(list)) <= index {
+			list = append(list, common.Address{})
+		}
+	}
+
+	list[index] = validator
+	s.SetValidatorsList(stateDb, list)
 }

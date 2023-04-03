@@ -69,7 +69,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
-	validatorProcessor := validator.NewProcessor(blockContext, statedb)
+	validatorProcessor := validator.NewProcessor(blockContext, statedb, p.bc)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config), header.BaseFee)
@@ -138,7 +138,17 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig,
+	bc ChainContext,
+	author *common.Address,
+	gp *GasPool,
+	statedb *state.StateDB,
+	header *types.Header,
+	tx *types.Transaction,
+	usedGas *uint64,
+	cfg vm.Config,
+	chain *BlockChain,
+) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config), header.BaseFee)
 	if err != nil {
 		return nil, err
@@ -148,6 +158,6 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
-	validatorProcessor := validator.NewProcessor(blockContext, statedb)
+	validatorProcessor := validator.NewProcessor(blockContext, statedb, chain)
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Hash(), tx, usedGas, vmenv, tokenProcessor, validatorProcessor)
 }

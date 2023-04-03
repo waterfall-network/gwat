@@ -37,7 +37,14 @@ var (
 	lastCanonicalHashKey = []byte("LCHash")
 
 	// lastCoordHashKey tracks the latest known hash from coordinator.
+	// TODO replace usage by lastCoordCpKey
 	lastCoordHashKey = []byte("LCoordHash")
+
+	// lastCoordCpKey tracks the latest known hash from coordinator.
+	lastCoordCpKey = []byte("LCoordCp")
+
+	// coordCpPrefix + epoch.
+	coordCpPrefix = []byte("CoordCp")
 
 	// tipsHashesKey tracks the latest known tips hashes.
 	tipsHashesKey = []byte("TipsHashes")
@@ -89,6 +96,12 @@ var (
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
 	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
+	eraPrefix                   = []byte("era")
+	currentEraPrefix            = []byte("currentera")
+
+	// validator sync data
+	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
+	valSyncNotProcKey = []byte("vsnprockeys") // tracks the not processed validators' sync operation.
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -245,4 +258,19 @@ func childrenKey(hash common.Hash) []byte {
 // firstEpochBlockKey = firstEpochBlockPrefix + epoch
 func firstEpochBlockKey(epoch uint64) []byte {
 	return append(firstEpochBlockPrefix, Uint64ToByteSlice(epoch)...)
+}
+
+// eraKey = eraKey + era
+func eraKey(era uint64) []byte {
+	return append(eraPrefix, Uint64ToByteSlice(era)...)
+}
+
+// validatorSyncKey = valSyncOpPrefix + opType + creatorAddr
+func validatorSyncKey(creator common.Address, op uint64) []byte {
+	return append(append(valSyncOpPrefix, encodeBlockNumber(op)...), creator.Bytes()...)
+}
+
+// coordCpKey = coordCpPrefix + epoch
+func coordCpKey(epoch uint64) []byte {
+	return append(coordCpPrefix, Uint64ToByteSlice(epoch)...)
 }

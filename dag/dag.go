@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
@@ -22,6 +23,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // Backend wraps all methods required for block creation.
@@ -33,6 +35,7 @@ type Backend interface {
 	SetEtherbase(etherbase common.Address)
 	CreatorAuthorize(creator common.Address) error
 	IsDevMode() bool
+	AccountManager() *accounts.Manager
 }
 
 type Dag struct {
@@ -83,8 +86,7 @@ func (d *Dag) Creator() *creator.Creator {
 	return d.creator
 }
 
-// HandleFinalize handles consensus data
-// 1. blocks finalization
+// HandleFinalize run blocks finalization procedure
 func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
@@ -98,10 +100,37 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	defer d.bc.DagMu.Unlock()
 
 	if data.BaseSpine != nil {
-		log.Info("Handle Finalize: start", "baseSpine", (*data.BaseSpine).Hex(), "spines", data.Spines, "\u2692", params.BuildId)
+		log.Info("Handle Finalize: start",
+			"baseSpine", fmt.Sprintf("%#x", data.BaseSpine),
+			"spines", data.Spines,
+			"cp.Epoch", data.Checkpoint.Epoch,
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.Roor", fmt.Sprintf("%#x", data.Checkpoint.Root),
+			"ValSyncData", data.ValSyncData,
+			"\u2692", params.BuildId)
 	} else {
-		log.Info("Handle Finalize: start", "baseSpine", nil, "spines", data.Spines, "\u2692", params.BuildId)
+		log.Info("Handle Finalize: start",
+			"baseSpine", nil,
+			"spines", data.Spines,
+			"cp.Epoch", data.Checkpoint.Epoch,
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"ValSyncData", data.ValSyncData,
+			"\u2692", params.BuildId)
 	}
+
+	if data.ValSyncData != nil {
+		for _, vs := range data.ValSyncData {
+			log.Info("received validator sync",
+				"OpType", vs.OpType,
+				"Index", vs.Index,
+				"Creator", vs.Creator.Hash(),
+				"ProcEpoch", vs.ProcEpoch,
+				"Amount", vs.Amount,
+			)
+		}
+	}
+
 	res := &types.FinalizationResult{
 		Error: nil,
 	}
@@ -110,8 +139,16 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
 			e := err.Error()
 			res.Error = &e
+		} else {
+			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 		}
+	} else {
+		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 	}
+
+	// handle validator sync data
+	d.bc.AppendNotProcessedValidatorSyncData(data.ValSyncData)
+
 	lfHeader := d.bc.GetLastFinalizedHeader()
 	if lfHeader.Height != lfHeader.Nr() {
 		err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
@@ -127,7 +164,41 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash
 
+	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
+		res.CpEpoch = &cp.Epoch
+		res.CpRoot = &cp.Root
+	}
+
 	log.Info("Handle Finalize: response", "result", res)
+	return res
+}
+
+// HandleCoordinatedState return coordinated state
+func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
+	//skip if synchronising
+	if d.eth.Downloader().Synchronising() {
+		errStr := creator.ErrSynchronization.Error()
+		return &types.FinalizationResult{
+			Error: &errStr,
+		}
+	}
+
+	d.bc.DagMu.Lock()
+	defer d.bc.DagMu.Unlock()
+
+	lfHeader := d.bc.GetLastFinalizedHeader()
+	lfHash := lfHeader.Hash()
+	res := &types.FinalizationResult{
+		Error:   nil,
+		LFSpine: &lfHash,
+	}
+	var cpepoch uint64
+	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
+		res.CpEpoch = &cp.Epoch
+		res.CpRoot = &cp.Root
+		cpepoch = cp.Epoch
+	}
+	log.Info("Handle CoordinatedState: response", "epoch", cpepoch, "result", res)
 	return res
 }
 
@@ -239,23 +310,12 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			log.Info("Chain genesis time reached")
 			startTicker.Stop()
 			go d.workLoop(accounts)
+
+			return
 		}
 		tickSec = currentTime.Second()
 
-		select {
-		case <-d.exitChan:
-			close(d.exitChan)
-			close(d.errChan)
-			startTicker.Stop()
-			return
-		case err := <-d.errChan:
-			close(d.errChan)
-			close(d.exitChan)
-			startTicker.Stop()
-			log.Error("dag worker has error", "error", err)
-			return
-		case <-startTicker.C:
-		}
+		<-startTicker.C
 	}
 }
 
@@ -279,13 +339,29 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
+				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, common.Hash{})
+				d.bc.SetNewEraInfo(*newEra)
 				continue
 			}
 			var (
 				err      error
 				creators []common.Address
 			)
-			log.Info("New slot", "slot", slot)
+
+			transitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(d.bc.GetEraInfo().ToEpoch() - d.chainConfig.TransitionPeriod)
+			if err != nil {
+				log.Error("Error calculating transition slot", "error", err)
+				return
+			}
+
+			log.Info("New slot",
+				"slot", slot,
+				"epoch", d.bc.GetSlotInfo().SlotToEpoch(slot),
+				"era", d.bc.GetEraInfo().Number(),
+				"transEpoch", d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod,
+				"transSlot", transitionSlot)
+
+			d.handleEra(slot)
 
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
@@ -309,7 +385,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
-		d.errChan <- creator.ErrSynchronization
+		return
+		//d.errChan <- creator.ErrSynchronization
 	}
 
 	d.bc.DagMu.Lock()
@@ -388,4 +465,38 @@ func (d *Dag) countDagSlots(tips *types.Tips) int {
 		return -1
 	}
 	return len(candidates)
+}
+
+func (d *Dag) handleEra(slot uint64) {
+	currentEpoch := d.bc.GetSlotInfo().SlotToEpoch(slot)
+	newEpoch := d.bc.GetSlotInfo().IsEpochStart(slot)
+
+	if newEpoch {
+		// New era
+		if d.bc.GetEraInfo().ToEpoch()+1 == currentEpoch {
+			// Checkpoint
+			checkpoint := d.bc.GetLastCoordinatedCheckpoint()
+			spineRoot := common.Hash{}
+			if checkpoint != nil {
+				header := d.bc.GetHeaderByHash(checkpoint.Spine)
+				spineRoot = header.Root
+			} else {
+				log.Error("Invalid checkpoint: write new era error")
+			}
+
+			d.bc.EnterNextEra(spineRoot)
+
+			return
+		}
+
+		// Transition period
+		if d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
+			d.bc.StartTransitionPeriod()
+		}
+	}
+
+	// Sync era to current slot
+	if currentEpoch > (d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod) && !d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
+		d.bc.SyncEraToSlot(slot)
+	}
 }

@@ -5,6 +5,7 @@
 package finalizer
 
 import (
+	"fmt"
 	"sort"
 	"sync/atomic"
 
@@ -144,15 +145,19 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		}
 		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		if lastBlock.Height() != lastBlock.Nr() {
-			log.Error("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+
+		if lastBlock.Height() > lastBlock.Nr() {
+			log.Error("☠ finalizing: mismatch nr and height (critical)", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 			return f.SetSpineState(&successSpine, lastFinNr)
+		}
+		if lastBlock.Height() != lastBlock.Nr() {
+			log.Warn("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		}
 		lastFinNr = lastBlock.Nr()
 		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
 		log.Info("⛓ Finalization of spine completed (updateTips)", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		if lastBlock.Height() != lastBlock.Nr() {
-			log.Error("☠ finalizing: mismatch nr and height (aft updateTips)", "calc.nr", lastFinNr, "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+			log.Warn("☠ finalizing: mismatch nr and height (aft updateTips)", "calc.nr", lastFinNr, "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 		}
 		successSpine = spine.Hash()
 	}
@@ -330,11 +335,14 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	spineBlock := bc.GetBlock(*spineHash)
 
 	if spineBlock == nil {
-		log.Error("Set spine state: spine not found", "spineHash", spineHash)
+		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash))
 		return ErrSpineNotFound
 	}
 	if spineBlock.Height() != spineBlock.Nr() {
-		log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", spineHash)
+		log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
+	}
+	if spineBlock.Height() > spineBlock.Nr() {
+		log.Error("Set spine state: bad spine (critical)", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
 		return ErrSpineNotFound
 	}
 

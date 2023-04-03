@@ -32,6 +32,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -813,29 +814,127 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 	})
 }
 
-func TestWriteReadDeleteSeedHash(t *testing.T) {
+func TestWriteAndReadEra(t *testing.T) {
+	// Create an in-memory database for testing
 	db := NewMemoryDatabase()
 
-	// Test writing seed hash
-	epoch := uint64(0)
-	seed := common.HexToHash("0x1234567890abcdef")
-	WriteFirstEpochBlockHash(db, epoch, seed)
-	if !ExistFirstEpochBlockHash(db, epoch) {
-		t.Fatalf("Failed to write seed hash")
+	// Define a test era
+	testEra := era.NewEra(0, 1000, 2000, common.Hash{})
+
+	// Test writing the era to the database
+	WriteEra(db, 1, *testEra)
+
+	// Test reading the era from the database
+	readEra := ReadEra(db, 1)
+	if readEra == nil {
+		t.Errorf("ReadEra error")
 	}
 
-	// Test reading seed hash
-	readSeed := ReadFirstEpochBlockHash(db, epoch)
+	// Verify that the era read from the database is equal to the test era
+	if testEra.To != readEra.To {
+		t.Errorf("GetEra returned incorrect end epoch: expected %d, got %d", testEra.To, readEra.To)
+	}
+	if testEra.From != readEra.From {
+		t.Errorf("GetEra returned incorrect begin epoch: expected %d, got %d", testEra.From, readEra.From)
+	}
+	if !reflect.DeepEqual(testEra, readEra) {
+		t.Errorf("GetEra returned incorrect era: expected %+v, got %+v", testEra, readEra)
+	}
+}
 
-	if readSeed != seed {
-		t.Fatalf("Incorrect seed hash read: expected %x, got %x", seed, readSeed)
+func TestReadWriteCurrentEra(t *testing.T) {
+	// Create an in-memory key-value database for testing
+	db := NewMemoryDatabase()
+
+	// Test case 1: write current era number to database and verify it was written correctly
+	eraNumber1 := uint64(1234567890)
+	WriteCurrentEra(db, eraNumber1)
+	eraNumber1Read := ReadCurrentEra(db)
+	if eraNumber1Read != eraNumber1 {
+		t.Errorf("Expected era number %d but got %d", eraNumber1, eraNumber1Read)
 	}
 
-	// Test deleting seed hash
-	DeleteFirstEpochBlockHash(db, epoch)
+	// Test case 2: overwrite current era number in database and verify it was updated correctly
+	eraNumber2 := uint64(9876543210)
+	WriteCurrentEra(db, eraNumber2)
+	eraNumber2Read := ReadCurrentEra(db)
+	if eraNumber2Read != eraNumber2 {
+		t.Errorf("Expected era number %d but got %d", eraNumber2, eraNumber2Read)
+	}
 
-	// Test checking the existence of seed hash
-	if ExistFirstEpochBlockHash(db, epoch) {
-		t.Fatalf("Seed hash should not exist")
+	// Test case 3: read non-existent current era number from database and verify it returns zero
+	db.Delete(append(currentEraPrefix))
+	eraNumber3 := ReadCurrentEra(db)
+	if eraNumber3 != 0 {
+		t.Errorf("Expected era number 0 but got %d", eraNumber3)
+	}
+}
+
+func TestFindEra(t *testing.T) {
+	// Create a mock database
+	db := NewMemoryDatabase()
+
+	// Test case 0: There are no eras in the database
+	lastEra := FindEra(db, 5)
+	if lastEra != nil {
+		t.Errorf("Expected nil, got %v", lastEra)
+	}
+
+	// Create some eras and add them to the database
+	era0 := era.NewEra(0, 0, 10, common.Hash{})
+	WriteEra(db, era0.Number, *era0)
+
+	era1 := era.NewEra(1, 11, 20, common.Hash{})
+	WriteEra(db, era1.Number, *era1)
+
+	era2 := era.NewEra(2, 21, 30, common.Hash{})
+	WriteEra(db, era2.Number, *era2)
+
+	// Test case 1: Return exact era
+	lastEra = FindEra(db, 1)
+	if lastEra == nil {
+		t.Error("Expected an era, got nil")
+	} else if lastEra.Number != 1 {
+		t.Errorf("Expected era 2, got era %d", lastEra.Number)
+	}
+
+	// Test case 2: The last era exists
+	lastEra = FindEra(db, 5)
+	if lastEra == nil {
+		t.Error("Expected an era, got nil")
+	} else if lastEra.Number != 2 {
+		t.Errorf("Expected era 2, got era %d", lastEra.Number)
+	}
+}
+
+func TestWriteAndReadCoordinatedCheckpoint(t *testing.T) {
+	// Create an in-memory database for testing
+	memDB := NewMemoryDatabase()
+
+	// Create a checkpoint to write to the database
+	checkpoint := &types.Checkpoint{
+		Epoch: 1,
+		Root:  common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+		Spine: common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
+	}
+
+	// Write the checkpoint to the database
+	WriteCoordinatedCheckpoint(memDB, checkpoint)
+
+	// Read the checkpoint back from the database
+	readCheckpoint := ReadCoordinatedCheckpoint(memDB, checkpoint.Epoch)
+
+	// Ensure the read checkpoint matches the original checkpoint
+	if !bytes.Equal(checkpoint.Bytes(), readCheckpoint.Bytes()) {
+		t.Errorf("Expected checkpoint bytes to be %v, but got %v", checkpoint.Bytes(), readCheckpoint.Bytes())
+	}
+	if checkpoint.Epoch != readCheckpoint.Epoch {
+		t.Errorf("Expected checkpoint epoch to be %v, but got %v", checkpoint.Epoch, readCheckpoint.Epoch)
+	}
+	if checkpoint.Root != readCheckpoint.Root {
+		t.Errorf("Expected checkpoint root to be %v, but got %v", checkpoint.Root, readCheckpoint.Root)
+	}
+	if checkpoint.Spine != readCheckpoint.Spine {
+		t.Errorf("Expected checkpoint spine to be %v, but got %v", checkpoint.Spine, readCheckpoint.Spine)
 	}
 }

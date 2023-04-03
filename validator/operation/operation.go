@@ -1,18 +1,18 @@
 package operation
 
-import (
-	"encoding"
-)
+import "encoding"
 
 // Validator operation code
 type Code byte
 
 // Token operation codes use invalid op codes of EVM instructions to prevent clashes.
 const (
-	DepositCode     = 0x01
-	ActivationCode  = 0x02
-	RequestExitCode = 0x03
-	ExitCode        = 0x04
+	DepositCode       = 0x01
+	ActivateCode      = 0x02
+	ExitCode          = 0x03
+	DeactivateCode    = 0x04
+	UpdateBalanceCode = 0x05
+	WithdrawalCode    = 0x06
 )
 
 // Prefix for the encoded data field of a validator operation
@@ -57,16 +57,16 @@ func DecodeBytes(b []byte) (Operation, error) {
 	switch opCode {
 	case DepositCode:
 		op = &depositOperation{}
-	// todo implement
-	//case ActivationCode:
-	//	op = &ActivationOperation{}
-	// todo implement
-	//case RequestExitCode:
-	//	op = &RequestExitOperation{}
-	// todo implement
-	//case ExitCode:
-	//	op = &ExitOperation{}
-
+	case ActivateCode:
+		op = &validatorSyncOperation{}
+	case DeactivateCode:
+		op = &validatorSyncOperation{}
+	case UpdateBalanceCode:
+		op = &validatorSyncOperation{}
+	case ExitCode:
+		op = &exitOperation{}
+	case WithdrawalCode:
+		op = &withdrawalOperation{}
 	default:
 		return nil, ErrOpNotValid
 	}
@@ -90,16 +90,17 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 	switch op.(type) {
 	case *depositOperation:
 		buf[1] = DepositCode
-
-		// todo implement
-		//case *activationCodeOperation:
-		//	buf[1] = ActivationCode
-		// todo implement
-		//case *requestExitOperation:
-		//	buf[1] = RequestExitCode
-		// todo implement
-		//case *exitCodeOperation:
-		//	buf[1] = ExitCode
+	case *validatorSyncOperation:
+		vs := new(validatorSyncOperation)
+		err := vs.UnmarshalBinary(b)
+		if err != nil {
+			return nil, err
+		}
+		buf[1] = byte(vs.OpCode())
+	case *exitOperation:
+		buf[1] = ExitCode
+	case *withdrawalOperation:
+		buf[1] = WithdrawalCode
 	}
 
 	buf = append(buf, b...)

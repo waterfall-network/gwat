@@ -31,7 +31,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
-	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -86,6 +85,7 @@ type Message interface {
 	IsFake() bool
 	Data() []byte
 	AccessList() types.AccessList
+	TxHash() common.Hash
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -124,11 +124,13 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isValidatorOp bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation {
 		gas = params.TxGasContractCreation
+	} else if isValidatorOp {
+		gas = 0
 	} else {
 		gas = params.TxGas
 	}
@@ -226,6 +228,8 @@ func (st *StateTransition) PreCheck() error {
 
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
+	var isValOp bool
+
 	if !st.msg.IsFake() {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(st.msg.From())
@@ -237,17 +241,16 @@ func (st *StateTransition) preCheck() error {
 				st.msg.From().Hex(), msgNonce, stNonce)
 		}
 
-		if !bytes.Equal(st.evm.ChainConfig().ValidatorsStateAddress.Bytes(), st.msg.To().Bytes()) {
-			// Check the sender is validator or not.
-			if !st.state.IsValidatorAddress(st.msg.From()) {
-				// Make sure the sender is an EOA
-				if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
-					return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
-						st.msg.From().Hex(), codeHash)
-				}
+		if bytes.Equal(st.evm.ChainConfig().ValidatorsStateAddress.Bytes(), st.msg.To().Bytes()) && st.state.IsValidatorAddress(st.msg.From()) {
+			isValOp = true
+		} else {
+			if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) && !st.state.IsValidatorAddress(st.msg.From()) {
+				return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+					st.msg.From().Hex(), codeHash)
 			}
 		}
 	}
+
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
 
 	// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
@@ -266,7 +269,7 @@ func (st *StateTransition) preCheck() error {
 		}
 		// This will panic if baseFee is nil, but basefee presence is verified
 		// as part of header validation.
-		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
+		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 && !isValOp {
 			return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
 				st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
 		}
@@ -315,14 +318,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	isContractCreation := msg.To() == nil && !isTokenCreation
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation, isValidatorOp)
 	if err != nil {
 		return nil, err
 	}
-	if st.gas < gas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+
+	if !isValidatorOp {
+		if st.gas < gas {
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+		}
+		st.gas -= gas
 	}
-	st.gas -= gas
 
 	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
@@ -349,11 +355,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			}
 			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
 		} else if isValidatorOp {
-			op, err := validatorOp.DecodeBytes(msg.Data())
-			if err != nil {
-				return nil, err
-			}
-			ret, vmerr = st.vp.Call(sender, st.to(), st.value, op)
+			ret, vmerr = st.vp.Call(sender, st.to(), st.value, st.msg)
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"math/big"
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -35,7 +36,6 @@ type DepositArgs struct {
 	CreatorAddress    *common.Address      `json:"creator_address"`    // attached creator account
 	WithdrawalAddress *common.Address      `json:"withdrawal_address"` // attached withdrawal credentials
 	Signature         *common.BlsSignature `json:"signature"`
-	DepositDataRoot   *common.Hash         `json:"deposit_data_root"`
 }
 
 // GetAPIs provides api access
@@ -64,16 +64,13 @@ func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args Depos
 	if args.Signature == nil {
 		return nil, operation.ErrNoSignature
 	}
-	if args.DepositDataRoot == nil {
-		return nil, operation.ErrNoDepositDataRoot
-	}
 
 	var (
 		op  operation.Operation
 		err error
 	)
 
-	if op, err = operation.NewDepositOperation(*args.PubKey, *args.CreatorAddress, *args.WithdrawalAddress, *args.Signature, *args.DepositDataRoot); err != nil {
+	if op, err = operation.NewDepositOperation(*args.PubKey, *args.CreatorAddress, *args.WithdrawalAddress, *args.Signature); err != nil {
 		return nil, err
 	}
 
@@ -87,15 +84,91 @@ func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args Depos
 
 // DepositCount returns a validators deposit count.
 func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	//TODO implement
 	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, bNrOrHash)
-	if state == nil || err != nil {
+	stateDb, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, bNrOrHash)
+	if stateDb == nil || err != nil {
 		return 0, err
 	}
-	count := state.GetBalance(GetValidatorsStateAddress())
-	return hexutil.Uint64(count.Uint64()), state.Error()
+
+	validatorProcessor, _, err := s.b.GetVP(ctx, stateDb, header)
+	if err != nil {
+		return 0, err
+	}
+
+	count := validatorProcessor.getDepositCount()
+	return hexutil.Uint64(count), stateDb.Error()
+}
+
+type ExitRequestArgs struct {
+	PubKey         *common.BlsPubKey `json:"pubkey"`
+	CreatorAddress *common.Address   `json:"creator_address"`
+	ExitEpoch      *uint64           `json:"exit_epoch"`
+}
+
+func (s *PublicValidatorAPI) Validator_ExitData(_ context.Context, args ExitRequestArgs) (hexutil.Bytes, error) {
+	if args.PubKey == nil {
+		return nil, operation.ErrNoPubKey
+	}
+	if args.CreatorAddress == nil {
+		return nil, operation.ErrNoCreatorAddress
+	}
+
+	var (
+		op  operation.Operation
+		err error
+	)
+
+	if op, err = operation.NewExitOperation(
+		*args.PubKey,
+		*args.CreatorAddress,
+		args.ExitEpoch,
+	); err != nil {
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Warn("Failed to encode validator exit operation", "err", err)
+		return nil, err
+	}
+
+	return b, nil
+}
+
+type WithdrawalArgs struct {
+	CreatorAddress *common.Address `json:"creator_address"`
+	Amount         *hexutil.Big    `json:"amount"`
+}
+
+func (s *PublicValidatorAPI) Validator_WithdrawalData(args WithdrawalArgs) (hexutil.Bytes, error) {
+	if args.CreatorAddress == nil {
+		return nil, operation.ErrNoCreatorAddress
+	}
+
+	if args.Amount == nil {
+		return nil, operation.ErrNoAmount
+	}
+
+	var (
+		op  operation.Operation
+		err error
+	)
+
+	if op, err = operation.NewWithdrawalOperation(
+		*args.CreatorAddress,
+		(*big.Int)(args.Amount),
+	); err != nil {
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Warn("Failed to encode validator withdrawal operation", "err", err)
+		return nil, err
+	}
+
+	return b, nil
 }

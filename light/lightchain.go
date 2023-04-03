@@ -36,6 +36,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -65,6 +66,7 @@ type LightChain struct {
 
 	slotInfo         *types.SlotInfo // coordinator slot settings
 	validatorStorage valStore.Storage
+	eraInfo          *era.EraInfo
 
 	chainmu sync.RWMutex // protects header inserts
 	quit    chan struct{}
@@ -74,6 +76,18 @@ type LightChain struct {
 	running          int32 // whether LightChain is running or stopped
 	procInterrupt    int32 // interrupts chain insert
 	disableCheckFreq int32 // disables header verification
+}
+
+func (lc *LightChain) Database() ethdb.Database {
+	return lc.chainDb
+}
+
+func (lc *LightChain) GetConfig() *params.ChainConfig {
+	return lc.Config()
+}
+
+func (lc *LightChain) GetEraInfo() *era.EraInfo {
+	return lc.eraInfo
 }
 
 func (lc *LightChain) Synchronising() bool {
@@ -159,7 +173,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		}
 	}
 
-	bc.validatorStorage = valStore.NewStorage(chainDB, config)
+	bc.validatorStorage = valStore.NewStorage(config)
 
 	bc.SetSlotInfo(&types.SlotInfo{
 		GenesisTime:    bc.genesisBlock.Time(),
@@ -645,49 +659,6 @@ func (lc *LightChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
 	}
 
 	return epoch
-}
-
-// SearchFirstEpochBlockHashRecursive return first epoch block hash and true if hash is saved in database.
-// Use this hash at seed for shuffle algorithm.
-func (lc *LightChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash, isSaved bool) {
-	firstEpochBlock := rawdb.ReadFirstEpochBlockHash(lc.chainDb, epoch)
-	if firstEpochBlock != (common.Hash{}) {
-		return firstEpochBlock, true
-	}
-
-	previousEpoch := epoch - 1
-	firstEpochBlockHash, ok := lc.SearchFirstEpochBlockHashRecursive(previousEpoch)
-
-	ctx := context.Background()
-	previousEpochBlock, _ := lc.GetBlock(ctx, firstEpochBlockHash)
-	if previousEpochBlock == nil {
-		return firstEpochBlockHash, ok
-	}
-
-	previousBlockEpoch := lc.GetSlotInfo().SlotToEpoch(previousEpochBlock.Slot())
-
-	number := *previousEpochBlock.Number() + 1
-
-	for {
-		block, _ := lc.GetBlockByNumber(ctx, number)
-		if block == nil {
-			return firstEpochBlockHash, ok
-		}
-
-		blockEpoch := lc.GetSlotInfo().SlotToEpoch(block.Slot())
-		if blockEpoch == previousBlockEpoch {
-			number++
-			continue
-		}
-
-		if blockEpoch == epoch {
-			return block.Hash(), false
-		}
-
-		if blockEpoch > epoch {
-			return firstEpochBlockHash, true
-		}
-	}
 }
 
 // StateAt returns a new mutable state based on a particular point in time.

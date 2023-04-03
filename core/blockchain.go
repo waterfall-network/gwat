@@ -18,6 +18,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -46,6 +47,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
+	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -86,6 +90,7 @@ var (
 )
 
 const (
+	valSyncCacheLimit   = 128
 	bodyCacheLimit      = 256
 	blockCacheLimit     = 256
 	receiptsCacheLimit  = 32
@@ -195,6 +200,10 @@ type BlockChain struct {
 	lastFinalizedBlock     atomic.Value // Current last finalized block of the blockchain
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
 	lastCoordinatedSlot    uint64       // Last slot received from coordinating network
+	eraInfo                era.EraInfo  // Current Era
+	lastCoordinatedCp      atomic.Value // Current last coordinated checkpoint
+	notProcValSyncOps      map[[28]byte]*types.ValidatorSync
+	valSyncCache           *lru.Cache
 
 	stateCache         state.Database // State database to reuse between imports (contains state cache)
 	bodyCache          *lru.Cache     // Cache for the most recent block bodies
@@ -228,6 +237,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
+	valSyncCache, _ := lru.New(valSyncCacheLimit)
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
@@ -247,6 +257,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}),
 		quit:               make(chan struct{}),
 		chainmu:            syncx.NewClosableMutex(),
+		valSyncCache:       valSyncCache,
 		bodyCache:          bodyCache,
 		bodyRLPCache:       bodyRLPCache,
 		receiptsCache:      receiptsCache,
@@ -256,7 +267,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:             engine,
 		vmConfig:           vmConfig,
 		syncProvider:       nil,
-		validatorStorage:   valStore.NewStorage(db, chainConfig),
+		validatorStorage:   valStore.NewStorage(chainConfig),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -438,6 +449,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
 	})
 
+	bc.notProcValSyncOps = bc.GetNotProcessedValidatorSyncData()
+
 	return bc, nil
 }
 
@@ -546,6 +559,125 @@ func (bc *BlockChain) SetSlotInfo(si *types.SlotInfo) error {
 // GetSlotInfo get current slot info.
 func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 	return bc.slotInfo.Copy()
+}
+
+// GetSlotInfo get current slot info.
+func (bc *BlockChain) GetConfig() *params.ChainConfig {
+	return bc.chainConfig
+}
+
+// SetLastCoordinatedCheckpoint set last coordinated checkpoint.
+func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
+	currCp := bc.GetLastCoordinatedCheckpoint()
+	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch {
+		bc.lastCoordinatedCp.Store(cp.Copy())
+		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
+		rawdb.WriteCoordinatedCheckpoint(bc.db, cp)
+
+		// Handle era
+		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
+		if err != nil {
+			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
+		}
+		bc.SyncEraToSlot(epochStartSlot)
+	}
+}
+
+// GetLastCoordinatedCheckpoint retrieves the latest coordinated checkpoint.
+func (bc *BlockChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
+	if bc.lastCoordinatedCp.Load() == nil {
+		cp := rawdb.ReadLastCoordinatedCheckpoint(bc.db)
+		if cp == nil {
+			return nil
+		}
+		bc.lastCoordinatedCp.Store(cp.Copy())
+	}
+	return bc.lastCoordinatedCp.Load().(*types.Checkpoint)
+}
+
+// GetValidatorSyncData retrieves a validator sync data from the database by
+// creator addr and op, caching it if found.
+func (bc *BlockChain) GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
+	// Short circuit if the body's already in the cache, retrieve otherwise
+	key := (&types.ValidatorSync{OpType: op, Creator: creator}).Key()
+	if cached, ok := bc.valSyncCache.Get(key); ok {
+		vs := cached.(*types.ValidatorSync)
+		return vs
+	}
+	vs := rawdb.ReadValidatorSync(bc.db, creator, op)
+	if vs == nil {
+		return nil
+	}
+	// Cache the found data for next time and return
+	bc.valSyncCache.Add(key, vs)
+	return vs
+}
+
+func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
+	key := validatorSync.Key()
+	if _, ok := bc.valSyncCache.Get(key); ok {
+		bc.valSyncCache.Remove(key)
+	}
+	bc.valSyncCache.Add(key, validatorSync)
+	rawdb.WriteValidatorSync(bc.db, validatorSync)
+	if validatorSync.TxHash != nil && bc.notProcValSyncOps[key] != nil {
+		notProcValSyncOps := map[[28]byte]*types.ValidatorSync{}
+		for k, vs := range bc.notProcValSyncOps {
+			if k != key {
+				notProcValSyncOps[k] = vs
+			}
+		}
+		bc.notProcValSyncOps = notProcValSyncOps
+		vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
+		for _, vs := range bc.notProcValSyncOps {
+			vsArr = append(vsArr, vs)
+		}
+		rawdb.WriteNotProcessedValidatorSyncOps(bc.db, vsArr)
+	}
+}
+
+// AppendNotProcessedValidatorSyncData append to not processed validators sync data.
+// skips currently existed items
+func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync) {
+	currOps := bc.GetNotProcessedValidatorSyncData()
+	isUpdated := false
+	for _, vs := range valSyncData {
+		if currOps[vs.Key()] == nil {
+			bc.notProcValSyncOps[vs.Key()] = vs
+			isUpdated = true
+		}
+	}
+	// rm handled operations
+	for k, vs := range bc.notProcValSyncOps {
+		if vs.TxHash != nil {
+			delete(bc.notProcValSyncOps, k)
+			isUpdated = true
+		}
+	}
+
+	if isUpdated {
+		vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
+		for _, vs := range bc.notProcValSyncOps {
+			vsArr = append(vsArr, vs)
+		}
+		rawdb.WriteNotProcessedValidatorSyncOps(bc.db, vsArr)
+	}
+}
+
+// GetNotProcessedValidatorSyncData get current not processed validator sync data.
+func (bc *BlockChain) GetNotProcessedValidatorSyncData() map[[28]byte]*types.ValidatorSync {
+	if bc.notProcValSyncOps == nil {
+		ops := rawdb.ReadNotProcessedValidatorSyncOps(bc.db)
+		bc.notProcValSyncOps = make(map[[28]byte]*types.ValidatorSync, len(ops))
+		for _, op := range ops {
+			if op == nil {
+				log.Warn("GetNotProcessedValidatorSyncData: nil data detected")
+				continue
+			}
+			bc.notProcValSyncOps[op.Key()] = op
+		}
+	}
+	return bc.notProcValSyncOps
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node
@@ -756,6 +888,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		bc.hc.SetHead(head, updateFn, delFn)
 	}
 	// Clear out any stale content from the caches
+	bc.valSyncCache.Purge()
 	bc.bodyCache.Purge()
 	bc.bodyRLPCache.Purge()
 	bc.receiptsCache.Purge()
@@ -918,10 +1051,6 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 
 	for _, tx := range block.Transactions() {
 		bc.RemoveTxFromPool(tx)
-	}
-
-	if !bc.ExistFirstEpochBlockHash(bc.GetSlotInfo().SlotToEpoch(block.Slot())) {
-		rawdb.WriteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()), block.Hash())
 	}
 
 	return nil
@@ -1210,6 +1339,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// Write all the data out into the database
 			rawdb.WriteBody(batch, block.Hash(), block.Body())
 			rawdb.WriteReceipts(batch, block.Hash(), receiptChain[i])
+			bc.handleBlockValidatorSyncReceipts(block, receiptChain[i])
 
 			// Always write tx indices for live blocks, we assume they are needed
 			for i, tx := range block.Transactions() {
@@ -1345,11 +1475,6 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
 
-	epochBlockSeed := rawdb.ReadFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
-	if epochBlockSeed == block.Hash() {
-		rawdb.DeleteFirstEpochBlockHash(bc.db, bc.GetSlotInfo().SlotToEpoch(block.Slot()))
-	}
-
 	// update finalized number cache
 	bc.hc.numberCache.Remove(block.Hash())
 
@@ -1421,6 +1546,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	blockBatch := bc.db.NewBatch()
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), receipts)
+	bc.handleBlockValidatorSyncReceipts(block, receipts)
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 
 	// create transaction lookup for applied txs.
@@ -1947,6 +2073,13 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	// Verify block era
+	isValidEra := bc.verifyBlockEra(block)
+	if !isValidEra {
+		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
+		return false, nil
+	}
+
 	unknownParent := false
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetBlockByHash(parentHash)
@@ -1977,17 +2110,21 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			intrGas uint64
 			err     error
 		)
-		isTokenOp := false
-		if _, err = operation.GetOpCode(tx.Data()); err == nil {
-			isTokenOp = true
+		var isTokenOp, isValidatorOp bool
+		if tx.To() == nil {
+			if _, err = operation.GetOpCode(tx.Data()); err == nil {
+				isTokenOp = true
+			}
+		} else {
+			isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
 		}
 
 		var txData []byte
-		if !isTokenOp {
+		if !isTokenOp && !isValidatorOp {
 			txData = tx.Data()
 		}
 
-		contractCreation := tx.To() == nil && !isTokenOp
+		contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
 		if len(tx.Data()) > 0 {
 			intrGas, err = bc.TxEstimateGas(tx, nil)
 			if err != nil {
@@ -1995,7 +2132,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 				return false, err
 			}
 		} else {
-			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation)
+			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
 		}
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
@@ -2021,8 +2158,18 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"hash", block.Hash().Hex(),
 			"stateBlock", stateBlock,
 		)
+	}
+
+	if block.Height() > calcHeight {
+		log.Warn("Block verification: block invalid height (critical)",
+			"calcHeight", calcHeight,
+			"height", block.Height(),
+			"hash", block.Hash().Hex(),
+			"stateBlock", stateBlock,
+		)
 		return false, nil
 	}
+
 	return bc.verifyBlockParents(block) && bc.verifyLFData(block), nil
 }
 
@@ -2609,7 +2756,6 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlock(block *types.Block) (stat
 
 // RecommitBlockTransactions recommits transactions of red blocks.
 func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *state.StateDB) *state.StateDB {
-
 	log.Info("Recommit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
@@ -2670,6 +2816,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 	}
 
 	rawdb.WriteReceipts(bc.db, block.Hash(), receipts)
+	bc.handleBlockValidatorSyncReceipts(block, receipts)
 
 	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: rlogs})
 	if len(rlogs) > 0 {
@@ -2682,7 +2829,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 // recommitBlockTransaction applies single transactions wile recommit block process.
 func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool, gasUsed *uint64) (*types.Receipt, []*types.Log, error) {
 	snap := statedb.Snapshot()
-	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig())
+	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
 	if err != nil {
 		log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
 		statedb.RevertToSnapshot(snap)
@@ -2714,7 +2861,7 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (ui
 	gasPool := new(GasPool).AddGas(math.MaxUint64)
 	usedGas := uint64(0)
 
-	receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig())
+	receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig(), bc)
 	if err != nil {
 		log.Error("Tx Estimate Gas: Error", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "err", err)
 		return 0, err
@@ -3449,9 +3596,9 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 		if block == nil {
 			continue
 		}
+		bc.handleBlockValidatorSyncTxs(block)
 		txs = append(txs, block.Transactions()...)
 	}
-
 	sort.Slice(txs, func(i, j int) bool {
 		return txs[i].Nonce() < txs[j].Nonce()
 	})
@@ -3504,61 +3651,225 @@ func (bc *BlockChain) HeadSynchronising() bool {
 	return bc.syncProvider.HeadSynchronising()
 }
 
-// SearchFirstEpochBlockHashRecursive return first epoch block hash and true if hash is saved in database.
-// Use this hash at seed for shuffle algorithm.
-func (bc *BlockChain) SearchFirstEpochBlockHashRecursive(epoch uint64) (hash common.Hash, isSaved bool) {
-	firstEpochBlock := rawdb.ReadFirstEpochBlockHash(bc.db, epoch)
-	if firstEpochBlock != (common.Hash{}) {
-		return firstEpochBlock, true
-	}
-
-	previousEpoch := epoch - 1
-	firstEpochBlockHash, ok := bc.SearchFirstEpochBlockHashRecursive(previousEpoch)
-
-	previousEpochBlock := bc.GetBlock(firstEpochBlockHash)
-
-	previousBlockEpoch := bc.GetSlotInfo().SlotToEpoch(previousEpochBlock.Slot())
-
-	number := *previousEpochBlock.Number() + 1
-
-	for {
-		block := bc.GetBlockByNumber(number)
-		if block == nil {
-			return firstEpochBlockHash, ok
-		}
-
-		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-		if blockEpoch == previousBlockEpoch {
-			number++
-			continue
-		}
-
-		if blockEpoch == epoch {
-			return block.Hash(), false
-		}
-
-		if blockEpoch > epoch {
-			return firstEpochBlockHash, true
-		}
-	}
-}
-
-func (bc *BlockChain) DeleteFirstEpochBlockHash(epoch uint64) {
-	rawdb.DeleteFirstEpochBlockHash(bc.db, epoch)
-}
-
-func (bc *BlockChain) ExistFirstEpochBlockHash(epoch uint64) bool {
-	return rawdb.ExistFirstEpochBlockHash(bc.db, epoch)
-}
-
 func (bc *BlockChain) ValidatorStorage() valStore.Storage {
 	return bc.validatorStorage
 }
 
-func (bc *BlockChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
-	if epoch >= 2 {
-		epoch = epoch - 2
+func (bc *BlockChain) GetEraInfo() *era.EraInfo {
+	return &bc.eraInfo
+}
+
+// SetNewEraInfo sets new era info.
+func (bc *BlockChain) SetNewEraInfo(newEra era.Era) {
+	log.Info("New era", "num", newEra.Number, "begin", newEra.From, "end", newEra.To, "root", newEra.Root)
+	bc.eraInfo = era.NewEraInfo(newEra)
+}
+
+func (bc *BlockChain) SyncEraToSlot(slot uint64) {
+	toEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	// Sync era from current epoch to slot
+	for !bc.GetEraInfo().GetEra().IsContainsEpoch(toEpoch) && bc.GetEraInfo().GetEra().To < toEpoch {
+		checkpoint := rawdb.ReadCoordinatedCheckpoint(bc.db, bc.GetSlotInfo().SlotToEpoch(slot))
+		spineRoot := common.Hash{}
+		if checkpoint != nil {
+			header := bc.GetHeaderByHash(checkpoint.Spine)
+			spineRoot = header.Root
+		} else {
+			log.Error("Invalid checkpoint: sync to era error")
+		}
+
+		bc.EnterNextEra(spineRoot)
+	}
+}
+
+func (bc *BlockChain) Database() ethdb.Database {
+	return bc.db
+}
+
+func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
+	// Get the epoch of the block
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+
+	// Get the era that the block belongs to
+	var valEra *era.Era
+	if bc.GetEraInfo().GetEra().Number == block.Era() {
+		valEra = bc.GetEraInfo().GetEra()
+	} else {
+		valEra = rawdb.ReadEra(bc.db, block.Era())
 	}
 
-	return epoch
+	// Check if the block epoch is within the era
+	return valEra != nil && valEra.IsContainsEpoch(blockEpoch)
+}
+
+func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
+	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
+	if nextEra != nil {
+		rawdb.WriteCurrentEra(bc.db, nextEra.Number)
+		bc.SetNewEraInfo(*nextEra)
+		return nextEra
+	}
+
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
+	nextEra = era.NextEra(bc, root, uint64(len(validators)))
+	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
+	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
+	bc.SetNewEraInfo(*nextEra)
+	return nextEra
+}
+
+func (bc *BlockChain) StartTransitionPeriod() {
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
+
+	// Checkpoint
+	checkpoint := bc.GetLastCoordinatedCheckpoint()
+	spineRoot := common.Hash{}
+	if checkpoint != nil {
+		header := bc.GetHeaderByHash(checkpoint.Spine)
+		spineRoot = header.Root
+	} else {
+		log.Error("Invalid checkpoint: write new era error")
+	}
+
+	nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
+
+	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
+
+	log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
+}
+
+func (bc *BlockChain) IsTxValidatorSync(tx *types.Transaction) bool {
+	if tx == nil {
+		return false
+	}
+	return tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes())
+}
+
+func (bc *BlockChain) verifyBlockValidatorSyncTx(block *types.Block, tx *types.Transaction) error {
+	if !bc.IsTxValidatorSync(tx) {
+		return nil
+	}
+	op, err := validatorOp.DecodeBytes(tx.Data())
+	if err != nil {
+		log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+		return err
+	}
+
+	switch v := op.(type) {
+	case validatorOp.ValidatorSync:
+		savedValSync := bc.GetValidatorSyncData(v.Creator(), v.OpType())
+		if savedValSync == nil {
+			return validator.ErrNoSavedValSyncOp
+		}
+		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+		if blockEpoch > v.ProcEpoch() {
+			return validator.ErrInvalidOpEpoch
+		}
+		if !validator.CompareValSync(savedValSync, v) {
+			return validator.ErrMismatchValSyncOp
+		}
+		if savedValSync.TxHash != nil && *savedValSync.TxHash != tx.Hash() {
+			return validator.ErrMismatchTxHashes
+		}
+	}
+	return nil
+}
+
+func (bc *BlockChain) handleBlockValidatorSyncTxs(block *types.Block) {
+	for _, tx := range block.Transactions() {
+		if !bc.IsTxValidatorSync(tx) {
+			continue
+		}
+		if err := bc.verifyBlockValidatorSyncTx(block, tx); err != nil {
+			log.Error("Validator sync tx handling",
+				"err", err,
+				"tx.Hash", tx.Hash().Hex(),
+				"tx.To", tx.To().Hex(),
+				"ValidatorsStateAddress", bc.Config().ValidatorsStateAddress.Bytes(),
+				"condIsValSync", bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()),
+			)
+			continue
+		}
+
+		op, err := validatorOp.DecodeBytes(tx.Data())
+		if err != nil {
+			log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+			continue
+		}
+		switch v := op.(type) {
+		case validatorOp.ValidatorSync:
+			txHash := tx.Hash()
+			txValSyncOp := &types.ValidatorSync{
+				OpType:    v.OpType(),
+				ProcEpoch: v.ProcEpoch(),
+				Index:     v.Index(),
+				Creator:   v.Creator(),
+				Amount:    v.Amount(),
+				TxHash:    &txHash,
+			}
+			log.Info("Validator sync tx",
+				"OpType", txValSyncOp.OpType,
+				"ProcEpoch", txValSyncOp.ProcEpoch,
+				"Index", txValSyncOp.Index,
+				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
+				"amount", txValSyncOp.Amount,
+				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+			)
+			bc.SetValidatorSyncData(txValSyncOp)
+		}
+	}
+}
+
+func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, receipts types.Receipts) {
+	for _, receipt := range receipts {
+		if receipt == nil {
+			continue
+		}
+		if receipt.Status != types.ReceiptStatusSuccessful {
+			continue
+		}
+		tx := block.Transactions()[receipt.TransactionIndex]
+		if !bc.IsTxValidatorSync(tx) {
+			continue
+		}
+
+		log.Info("Validator sync tx receipts (start)",
+			"tx.Hash", tx.Hash().Hex(),
+			"rc.Hash", receipt.TxHash.Hex(),
+			"conditionHash", tx.Hash() == receipt.TxHash,
+			"tx.To", tx.To().Hex(),
+			"ValidatorsStateAddress", bc.Config().ValidatorsStateAddress.Hex(),
+			"condIsValSync", bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()),
+			"rc.Status", receipt.Status,
+			"conditionStatus", receipt.Status != types.ReceiptStatusSuccessful,
+		)
+
+		op, err := validatorOp.DecodeBytes(tx.Data())
+		if err != nil {
+			log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+			continue
+		}
+
+		switch v := op.(type) {
+		case validatorOp.ValidatorSync:
+			txHash := tx.Hash()
+			txValSyncOp := &types.ValidatorSync{
+				OpType:    v.OpType(),
+				ProcEpoch: v.ProcEpoch(),
+				Index:     v.Index(),
+				Creator:   v.Creator(),
+				Amount:    v.Amount(),
+				TxHash:    &txHash,
+			}
+			log.Info("Validator sync tx receipts",
+				"OpType", txValSyncOp.OpType,
+				"ProcEpoch", txValSyncOp.ProcEpoch,
+				"Index", txValSyncOp.Index,
+				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
+				"amount", txValSyncOp.Amount,
+				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+			)
+			bc.SetValidatorSyncData(txValSyncOp)
+		}
+	}
 }

@@ -11,7 +11,6 @@ type depositOperation struct {
 	creator_address    common.Address   // attached creator account
 	withdrawal_address common.Address   // attached withdrawal credentials
 	signature          common.BlsSignature
-	deposit_data_root  common.Hash
 }
 
 func (op *depositOperation) init(
@@ -19,7 +18,6 @@ func (op *depositOperation) init(
 	creator_address common.Address,
 	withdrawal_address common.Address,
 	signature common.BlsSignature,
-	deposit_data_root common.Hash,
 ) error {
 	if pubkey == (common.BlsPubKey{}) {
 		return ErrNoPubKey
@@ -33,14 +31,11 @@ func (op *depositOperation) init(
 	if signature == (common.BlsSignature{}) {
 		return ErrNoSignature
 	}
-	if deposit_data_root == (common.Hash{}) {
-		return ErrNoDepositDataRoot
-	}
 	op.pubkey = pubkey
 	op.creator_address = creator_address
 	op.withdrawal_address = withdrawal_address
 	op.signature = signature
-	op.deposit_data_root = deposit_data_root
+
 	return nil
 }
 
@@ -50,10 +45,9 @@ func NewDepositOperation(
 	creator_address common.Address,
 	withdrawal_address common.Address,
 	signature common.BlsSignature,
-	deposit_data_root common.Hash,
 ) (Deposit, error) {
 	op := depositOperation{}
-	if err := op.init(pubkey, creator_address, withdrawal_address, signature, deposit_data_root); err != nil {
+	if err := op.init(pubkey, creator_address, withdrawal_address, signature); err != nil {
 		return nil, err
 	}
 	return &op, nil
@@ -81,11 +75,7 @@ func (op *depositOperation) UnmarshalBinary(b []byte) error {
 	endOffset = startOffset + common.BlsSigLength
 	signature := common.BytesToBlsSig(b[startOffset:endOffset])
 
-	startOffset = endOffset
-	endOffset = startOffset + common.HashLength
-	depositDataRoot := common.BytesToHash(b[startOffset:endOffset])
-
-	return op.init(pubKey, creatorAddress, withdrawalAddress, signature, depositDataRoot)
+	return op.init(pubKey, creatorAddress, withdrawalAddress, signature)
 }
 
 // MarshalBinary marshals a create operation to byte encoding
@@ -96,7 +86,7 @@ func (op *depositOperation) MarshalBinary() ([]byte, error) {
 	bin = append(bin, op.creator_address.Bytes()...)
 	bin = append(bin, op.withdrawal_address.Bytes()...)
 	bin = append(bin, op.signature.Bytes()...)
-	bin = append(bin, op.deposit_data_root.Bytes()...)
+
 	return bin, nil
 }
 
@@ -125,8 +115,4 @@ func (op *depositOperation) WithdrawalAddress() common.Address {
 
 func (op *depositOperation) Signature() common.BlsSignature {
 	return common.BytesToBlsSig(makeCopy(op.signature[:]))
-}
-
-func (op *depositOperation) DepositDataRoot() common.Hash {
-	return common.BytesToHash(makeCopy(op.deposit_data_root[:]))
 }
