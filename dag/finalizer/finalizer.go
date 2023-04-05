@@ -99,7 +99,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 	}
 
 	//sort by slots
-	slots := common.SorterAskU64{}
+	slots := common.SorterAscU64{}
 	for sl := range spinesMap {
 		slots = append(slots, sl)
 	}
@@ -235,6 +235,38 @@ func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, 
 	}
 	spineHashes := spines.GetOrderedHashes()
 	return *spineHashes, nil
+}
+
+func (f *Finalizer) GetOptimisticCandidates(gtSlot *uint64) ([]common.HashArray, error) {
+	bc := f.eth.BlockChain()
+	tips := bc.GetTips()
+
+	var finChain types.Blocks
+	for _, block := range bc.GetBlocksByHashes(tips.GetOrderedDagChainHashes().Uniq()).ToArray() {
+		if block.Height() > 0 && block.Nr() == 0 {
+			finChain = append(finChain, block)
+		}
+	}
+
+	if len(finChain) == 0 {
+		return []common.HashArray{}, nil
+	}
+
+	candidates := make(types.Blocks, 0)
+	if gtSlot != nil {
+		for _, block := range finChain {
+			if block.Slot() > *gtSlot {
+				candidates = append(candidates, block)
+			}
+		}
+	}
+
+	orderedCandidates, err := types.CalculateOptimisticCandidates(candidates)
+	if err != nil {
+		return []common.HashArray{}, err
+	}
+
+	return orderedCandidates, nil
 }
 
 // ValidateSequenceOfSpines check is sequence of spines is valid.

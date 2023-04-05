@@ -2684,7 +2684,7 @@ func (bc *BlockChain) CollectStateDataByFinalizedBlockRecursive(block *types.Blo
 		}
 	}
 	//rm stateBlock and blocks with lt nr
-	nrs := common.SorterAskU64{}
+	nrs := common.SorterAscU64{}
 	blockMap := types.BlockMap{}
 	for _, bl := range _memo {
 		if bl == nil || bl.Nr() <= stateBlock.Nr() {

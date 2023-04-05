@@ -2240,6 +2240,11 @@ func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types
 	return api.b.Dag().HandleGetCandidates(slot), nil
 }
 
+// GetOptimisticCandidates retrieves finalization optimistic candidates.
+func (api *PublicDagAPI) GetOptimisticCandidates(ctx context.Context, lastFinSpine common.Hash) (*types.OptimisticCandidatesResult, error) {
+	return api.b.Dag().HandleGetOptimisticCandidates(lastFinSpine), nil
+}
+
 // HeadSyncReady set initial state to start head sync with coordinating network.
 func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
 	return api.b.Dag().HandleHeadSyncReady(checkpoint)
