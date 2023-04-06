@@ -82,6 +82,19 @@ func TestGetValidators(t *testing.T) {
 	store := NewStorage(testmodels.TestChainConfig)
 	store.SetValidatorsList(stateDb, testmodels.InputValidators)
 
+	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+		GenesisTime:    uint64(time.Now().Unix()),
+		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
+		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
+	})
+	bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
+	bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
+	bc.EXPECT().GetLastCoordinatedCheckpoint().AnyTimes().Return(&types.Checkpoint{
+		Epoch: uint64(testutils.RandomInt(0, 99999)),
+		Root:  common.BytesToHash(testutils.RandomData(32)),
+		Spine: common.BytesToHash(testutils.RandomData(32)),
+	})
+
 	for _, address := range testmodels.InputValidators {
 		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
 
@@ -148,15 +161,6 @@ func TestGetValidators(t *testing.T) {
 				}
 			}
 
-			bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
-				GenesisTime:    uint64(time.Now().Unix()),
-				SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
-				SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
-			})
-
-			bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
-			bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
-
 			validators, addresses := store.GetValidators(bc, test.slot, test.activeOnly, test.needAddresses)
 			testutils.AssertEqual(t, test.wantValidators, validators)
 			testutils.AssertEqual(t, test.wantAddresses, addresses)
@@ -183,6 +187,11 @@ func TestGetShuffledValidators(t *testing.T) {
 	})
 	bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
 	bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
+	bc.EXPECT().GetLastCoordinatedCheckpoint().AnyTimes().Return(&types.Checkpoint{
+		Epoch: 10,
+		Root:  common.HexToHash("0xe46fb9c7774e3189b822353c521183f637560dfa199695ed5157d49f989d0c52"),
+		Spine: common.HexToHash("0x5e44e252e7b239ea389a3cb95b112ffccd349852dcfd5b4c5e8f7857f1e730e5"),
+	})
 
 	store := NewStorage(testmodels.TestChainConfig)
 	store.SetValidatorsList(stateDb, testmodels.InputValidators)
@@ -206,9 +215,9 @@ func TestGetShuffledValidators(t *testing.T) {
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, []common.Address{
 		testmodels.Addr1,
+		testmodels.Addr4,
 		testmodels.Addr3,
 		testmodels.Addr2,
-		testmodels.Addr4,
 		testmodels.Addr5,
 		testmodels.Addr6}, result)
 }

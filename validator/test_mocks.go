@@ -53,7 +53,7 @@ func (mr *MockblockchainMockRecorder) Database() *gomock.Call {
 }
 
 // GetConfig mocks base method.
-func (m *Mockblockchain) GetConfig() *params.ChainConfig {
+func (m *Mockblockchain) Config() *params.ChainConfig {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetConfig")
 	ret0, _ := ret[0].(*params.ChainConfig)
@@ -61,9 +61,9 @@ func (m *Mockblockchain) GetConfig() *params.ChainConfig {
 }
 
 // GetConfig indicates an expected call of GetConfig.
-func (mr *MockblockchainMockRecorder) GetConfig() *gomock.Call {
+func (mr *MockblockchainMockRecorder) Config() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*Mockblockchain)(nil).GetConfig))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*Mockblockchain)(nil).Config))
 }
 
 // GetEraInfo mocks base method.
