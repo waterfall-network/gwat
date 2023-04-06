@@ -127,7 +127,6 @@ func CalculateOptimisticSpines(blocks Blocks) ([]common.HashArray, error) {
 
 func GroupByParents(blocks Blocks) Blocks {
 	blocksByParents := make(map[uint64]Blocks)
-	parentsCounts := make([]uint64, 0)
 	for _, block := range blocks {
 		parentsCount := uint64(len(block.ParentHashes()))
 		parentsBlocks, ok := blocksByParents[parentsCount]
@@ -136,14 +135,13 @@ func GroupByParents(blocks Blocks) Blocks {
 		}
 		parentsBlocks = append(parentsBlocks, block)
 		blocksByParents[parentsCount] = parentsBlocks
-		parentsCounts = append(parentsCounts, parentsCount)
 	}
 
 	// calculate max block height in the slot
 	var maxParents uint64
-	for _, parents := range parentsCounts {
-		if parents > maxParents {
-			maxParents = parents
+	for parentsCount := range blocksByParents {
+		if parentsCount > maxParents {
+			maxParents = parentsCount
 		}
 	}
 

@@ -191,7 +191,7 @@ type BlockChain struct {
 	scope          event.SubscriptionScope
 	genesisBlock   *types.Block
 
-	DagMu sync.RWMutex // finalizing lock
+	dagMu sync.RWMutex // finalizing lock
 
 	// This mutex synchronizes chain write operations.
 	// Readers don't need to take it, they can just read the database.
@@ -1700,8 +1700,8 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 		return 0, nil
 	}
 
-	bc.DagMu.Lock()
-	defer bc.DagMu.Unlock()
+	bc.dagMu.Lock()
+	defer bc.dagMu.Unlock()
 
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)

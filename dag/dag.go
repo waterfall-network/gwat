@@ -67,17 +67,21 @@ type blockChain interface {
 	UpdateSlotBlocks(block *types.Block)
 }
 
+type ethDownloader interface {
+	Synchronising() bool
+}
+
 type Dag struct {
 	chainConfig *params.ChainConfig
 
 	// events
 	mux *event.TypeMux
 
-	consensusInfo     *types.ConsensusInfo
 	consensusInfoFeed event.Feed
 
-	eth Backend
-	bc  blockChain
+	eth        Backend
+	bc         blockChain
+	downloader ethDownloader
 
 	//creator
 	creator *creator.Creator
@@ -102,6 +106,7 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		eth:         eth,
 		mux:         mux,
 		bc:          eth.BlockChain(),
+		downloader:  eth.Downloader(),
 		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
 		finalizer:   fin,
 		headsync:    headsync.New(chainConfig, eth, mux, fin),
@@ -121,7 +126,7 @@ func (d *Dag) Creator() *creator.Creator {
 // HandleFinalize run blocks finalization procedure
 func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
 		return &types.FinalizationResult{
 			Error: &errStr,
@@ -208,7 +213,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 // HandleCoordinatedState return coordinated state
 func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
 		return &types.FinalizationResult{
 			Error: &errStr,
@@ -237,7 +242,7 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 // HandleGetCandidates collect next finalization candidates
 func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
 		return &types.CandidatesResult{
 			Error: &errStr,
@@ -271,7 +276,7 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 	spineBlock := d.bc.GetBlock(lastFinSpine)
 	spineSlot := spineBlock.Slot()
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
 		return &types.OptimisticSpinesResult{
 			Error: &errStr,
@@ -303,14 +308,14 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 }
 
 func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
-	lastFinSlot := d.bc.GetLastFinalizedBlock().Slot()
-	if lastFinSlot <= gtSlot {
+	currentSlot := d.bc.GetSlotInfo().CurrentSlot()
+	if currentSlot <= gtSlot {
 		return []common.HashArray{}, nil
 	}
 
 	slotsBlocks := make(types.Blocks, 0)
 
-	for i := gtSlot + 1; i <= lastFinSlot; i++ {
+	for i := gtSlot + 1; i <= currentSlot; i++ {
 		blocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
 		for _, hash := range blocksHashes {
 			block := d.bc.GetBlock(hash)
@@ -368,14 +373,6 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	defer d.mutex.Unlock()
 	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
-}
-
-// GetConsensusInfo returns the last info received from the consensus network
-func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
-	if d.consensusInfo == nil {
-		return nil
-	}
-	return d.consensusInfo.Copy()
 }
 
 // SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
@@ -474,9 +471,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		return
-		//d.errChan <- creator.ErrSynchronization
 	}
 
 	d.mutex.Lock()
@@ -507,14 +503,6 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		crtInfo := map[string]string{}
 		for _, creator := range assigned.Creators {
 			// if received next slot
-
-			// TODO: may be drop consensusInfo field from blockchain because we don`t write value to it
-			if d.consensusInfo != nil && d.consensusInfo.Slot > assigned.Slot {
-				break
-			}
-
-			//d.eth.BlockChain().DagMu.Lock()
-			//defer d.eth.BlockChain().DagMu.Unlock()
 
 			coinbase := common.Address{}
 			for _, acc := range accounts {
