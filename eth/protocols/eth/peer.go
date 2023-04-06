@@ -467,13 +467,13 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 }
 
 // RequestDag fetches a batch of transaction receipts from a remote node.
-func (p *Peer) RequestDag(fromFinNr uint64) error {
-	p.Log().Info("Fetching dag chain", "fromFinNr", fromFinNr)
+func (p *Peer) RequestDag(cpEpoch uint64) error {
+	p.Log().Info("Fetching dag chain", "cpEpoch", cpEpoch)
 	id := rand.Uint64()
 	requestTracker.Track(p.id, p.version, GetDagMsg, DagMsg, id)
 	return p2p.Send(p.rw, GetDagMsg, &GetDagPacket66{
 		RequestId:    id,
-		GetDagPacket: GetDagPacket(fromFinNr),
+		GetDagPacket: GetDagPacket(cpEpoch),
 	})
 }
 

@@ -207,14 +207,14 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 }
 
 // FetchDag sends a dag hashes retrieval request to the remote peer.
-func (p *peerConnection) FetchDag(fromFinNr uint64) error {
+func (p *peerConnection) FetchDag(fromCpEpoch uint64) error {
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.dagIdle, 0, 1) {
 		return errAlreadyFetching
 	}
 	p.dagStarted = time.Now()
 	// Issue the header retrieval request (absolute upwards without gaps)
-	go p.peer.RequestDag(fromFinNr)
+	go p.peer.RequestDag(fromCpEpoch)
 	return nil
 }
 

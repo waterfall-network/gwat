@@ -18,7 +18,8 @@ package eth
 
 import (
 	"fmt"
-
+	
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -437,42 +438,30 @@ func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.
 	// Gather dag data
 	dag := common.HashArray{}
 	finalized := common.HashArray{}
-	fromFinNr := uint64(query)
-
-	//expCache := core.ExploreResultMap{}
-	//for _, h := range backend.Chain().GetTips().GetHashes() {
-	//	unloaded, loaded, _, _, exc, err := backend.Chain().ExploreChainRecursive(h, expCache)
-	//	if err != nil {
-	//		return dag, 0, err
-	//	}
-	//	expCache = exc
-	//	if len(unloaded) > 0 {
-	//		return dag, 0, fmt.Errorf("%w", errInvalidDag)
-	//	}
-	//	dag = dag.Concat(loaded)
-	//
-	//	// if tips set to last finalized block - add it
-	//	if len(loaded) == 0 {
-	//		lfBlock := backend.Chain().GetLastFinalizedBlock()
-	//		if lfBlock.Hash() == h {
-	//			dag = append(dag, h)
-	//		}
-	//	}
-	//}
+	fromCpEpoch := uint64(query)
 
 	dag = backend.Chain().GetTips().GetOrderedDagChainHashes()
-	lastFinNr := backend.Chain().GetLastFinalizedNumber()
-	if fromFinNr > lastFinNr {
+	lastCp := backend.Chain().GetLastCoordinatedCheckpoint()
+	if fromCpEpoch > lastCp.Epoch {
 		return dag, 0, fmt.Errorf("%w", errInvalidDag)
 	}
-	for i := uint64(1); fromFinNr+i <= lastFinNr; i++ {
-		finHash := backend.Chain().ReadFinalizedHashByNumber(fromFinNr + i)
-		if finHash != (common.Hash{}) {
-			finalized = append(finalized, finHash)
+
+	fromCp := rawdb.ReadCoordinatedCheckpoint(backend.Chain().Database(), fromCpEpoch)
+	spineCpHeader := backend.Chain().GetHeader(fromCp.Spine)
+	fromFinBlNr := spineCpHeader.Nr()
+
+	toFinNr := backend.Chain().GetLastFinalizedNumber()
+	for i := uint64(0); fromCpEpoch+i <= lastCp.Epoch; i++ {
+		for b := uint64(1); fromFinBlNr+b <= toFinNr; b++ {
+			finHash := backend.Chain().ReadFinalizedHashByNumber(fromFinBlNr + b)
+			if finHash != (common.Hash{}) {
+				finalized = append(finalized, finHash)
+			}
 		}
+		dag = finalized.Concat(dag)
 	}
-	dag = finalized.Concat(dag)
-	return dag, fromFinNr, nil
+
+	return dag, fromCpEpoch, nil
 }
 
 func handleDag66(backend Backend, msg Decoder, peer *Peer) error {
