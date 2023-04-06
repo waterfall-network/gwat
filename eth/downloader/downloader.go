@@ -752,7 +752,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 		block := types.NewBlockWithHeader(header).WithBody(txs)
 		blocks[i] = block
 	}
-	blocksBySlot, err := (&blocks).SortBySlot()
+	blocksBySlot, err := (&blocks).GroupBySlot()
 	if err != nil {
 		return err
 	}
@@ -827,7 +827,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		blocks = append(blocks, block)
 	}
 
-	blocksBySlot, err := (&blocks).SortBySlot()
+	blocksBySlot, err := (&blocks).GroupBySlot()
 	if err != nil {
 		return err
 	}

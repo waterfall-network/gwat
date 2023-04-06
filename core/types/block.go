@@ -458,7 +458,7 @@ func (bs *Blocks) GetMaxParentHashesLenBlocks() Blocks {
 	return res
 }
 
-func (bs *Blocks) SortBySlot() (SlotBlocksMap, error) {
+func (bs *Blocks) GroupBySlot() (SlotBlocksMap, error) {
 	if len(*bs) == 0 {
 		return SlotBlocksMap{}, nil
 	}

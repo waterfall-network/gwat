@@ -237,7 +237,7 @@ func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, 
 	return *spineHashes, nil
 }
 
-func (f *Finalizer) GetOptimisticCandidates(gtSlot *uint64) ([]common.HashArray, error) {
+func (f *Finalizer) GetOptimisticSpines(gtSlot *uint64) ([]common.HashArray, error) {
 	bc := f.eth.BlockChain()
 	tips := bc.GetTips()
 
@@ -252,21 +252,21 @@ func (f *Finalizer) GetOptimisticCandidates(gtSlot *uint64) ([]common.HashArray,
 		return []common.HashArray{}, nil
 	}
 
-	candidates := make(types.Blocks, 0)
+	spines := make(types.Blocks, 0)
 	if gtSlot != nil {
 		for _, block := range finChain {
 			if block.Slot() > *gtSlot {
-				candidates = append(candidates, block)
+				spines = append(spines, block)
 			}
 		}
 	}
 
-	orderedCandidates, err := types.CalculateOptimisticCandidates(candidates)
+	orderedSpines, err := types.CalculateOptimisticSpines(spines)
 	if err != nil {
 		return []common.HashArray{}, err
 	}
 
-	return orderedCandidates, nil
+	return orderedSpines, nil
 }
 
 // ValidateSequenceOfSpines check is sequence of spines is valid.

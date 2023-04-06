@@ -235,13 +235,13 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	return res
 }
 
-func (d *Dag) HandleGetOptimisticCandidates(lastFinSpine common.Hash) *types.OptimisticCandidatesResult {
+func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.OptimisticSpinesResult {
 	spineBlock := d.bc.GetBlock(lastFinSpine)
 	spineSlot := spineBlock.Slot()
 	//skip if synchronising
 	if d.eth.Downloader().Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
-		return &types.OptimisticCandidatesResult{
+		return &types.OptimisticSpinesResult{
 			Error: &errStr,
 		}
 	}
@@ -251,22 +251,22 @@ func (d *Dag) HandleGetOptimisticCandidates(lastFinSpine common.Hash) *types.Opt
 
 	tstart := time.Now()
 
-	// collect optimistic candidates
-	candidates, err := d.finalizer.GetOptimisticCandidates(&spineSlot)
-	if len(candidates) == 0 {
-		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
+	// collect optimistic spines
+	spines, err := d.finalizer.GetOptimisticSpines(&spineSlot)
+	if len(spines) == 0 {
+		log.Info("No spines for tips", "tips", d.bc.GetTips().Print())
 	}
 
-	log.Info("Handle GetOptimisticCandidates: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
-	res := &types.OptimisticCandidatesResult{
+	log.Info("Handle GetOptimisticSpines: get finalizing spines", "err", err, "spines", spines, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
+	res := &types.OptimisticSpinesResult{
 		Error: nil,
-		Data:  candidates,
+		Data:  spines,
 	}
 	if err != nil {
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle GetOptimisticCandidates: response", "result", res, "\u2692", params.BuildId)
+	log.Info("Handle GetOptimisticSpines: response", "result", res, "\u2692", params.BuildId)
 	return res
 }
 

@@ -96,7 +96,7 @@ func TestSortByHeight(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			sortBlocks := SortByHeight(testCase.blocks)
+			sortBlocks := GroupByHeight(testCase.blocks)
 			testutils.AssertEqual(t, testCase.expectedBlocks, sortBlocks)
 		})
 	}
@@ -205,7 +205,7 @@ func TestSortSameHeightBlocks(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			sortingBlocks := SortSameHeightBlocks(testCase.blocks)
+			sortingBlocks := GroupByParents(testCase.blocks)
 			testutils.AssertEqual(t, testCase.expectedBlocks, sortingBlocks)
 		})
 	}
@@ -384,7 +384,7 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			candidates, err := CalculateOptimisticCandidates(testCase.blocks)
+			candidates, err := CalculateOptimisticSpines(testCase.blocks)
 			testutils.AssertNoError(t, err)
 			testutils.AssertEqual(t, testCase.expectedBlocks, candidates)
 		})
@@ -476,7 +476,7 @@ func TestSortBySlot(t *testing.T) {
 			Slot: 1,
 		}, nil, nil, nil),
 	}
-	res, err := blocks.SortBySlot()
+	res, err := blocks.GroupBySlot()
 	if err != nil {
 		t.Fatal(err.Error())
 	}

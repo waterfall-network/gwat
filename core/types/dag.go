@@ -323,7 +323,7 @@ type CandidatesResult struct {
 	Candidates common.HashArray `json:"candidates"`
 }
 
-type OptimisticCandidatesResult struct {
+type OptimisticSpinesResult struct {
 	Data  []common.HashArray `json:"data"`
 	Error *string            `json:"error"`
 }

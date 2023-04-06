@@ -67,7 +67,7 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 }
 
 func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
-	blocksBySlot, err := blocks.SortBySlot()
+	blocksBySlot, err := blocks.GroupBySlot()
 	if err != nil {
 		return nil, err
 	}
@@ -91,8 +91,8 @@ func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
 	return spines, nil
 }
 
-func CalculateOptimisticCandidates(blocks Blocks) ([]common.HashArray, error) {
-	spinesBySlots, err := blocks.SortBySlot()
+func CalculateOptimisticSpines(blocks Blocks) ([]common.HashArray, error) {
+	spinesBySlots, err := blocks.GroupBySlot()
 	if err != nil {
 		return []common.HashArray{}, err
 	}
@@ -103,9 +103,9 @@ func CalculateOptimisticCandidates(blocks Blocks) ([]common.HashArray, error) {
 	}
 	sort.Sort(slots)
 
-	optimisticCandidates := make([]common.HashArray, 0)
+	optimisticSpines := make([]common.HashArray, 0)
 	for _, slot := range slots {
-		blocksByHeight := SortByHeight(spinesBySlots[slot])
+		blocksByHeight := GroupByHeight(spinesBySlots[slot])
 		var maxHeight uint64
 		// calculate max block height in the slot
 		for height := range blocksByHeight {
@@ -116,16 +116,16 @@ func CalculateOptimisticCandidates(blocks Blocks) ([]common.HashArray, error) {
 
 		maxHeightBlocks := blocksByHeight[maxHeight]
 		if len(maxHeightBlocks) > 1 {
-			maxHeightBlocks = SortSameHeightBlocks(maxHeightBlocks)
+			maxHeightBlocks = GroupByParents(maxHeightBlocks)
 		}
 
-		optimisticCandidates = append(optimisticCandidates, *maxHeightBlocks.GetHashes())
+		optimisticSpines = append(optimisticSpines, *maxHeightBlocks.GetHashes())
 	}
 
-	return optimisticCandidates, nil
+	return optimisticSpines, nil
 }
 
-func SortSameHeightBlocks(blocks Blocks) Blocks {
+func GroupByParents(blocks Blocks) Blocks {
 	blocksByParents := make(map[uint64]Blocks)
 	parentsCounts := make([]uint64, 0)
 	for _, block := range blocks {
@@ -161,7 +161,7 @@ func SortByHash(blocks []*Block) {
 	})
 }
 
-func SortByHeight(blocks Blocks) map[uint64]Blocks {
+func GroupByHeight(blocks Blocks) map[uint64]Blocks {
 	if len(blocks) == 0 {
 		return map[uint64]Blocks{}
 	}
@@ -186,7 +186,7 @@ func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
 	dagBlocks := make(Blocks, 0)
 	spineProcessBlock(bc, spine, candidatesInChain, &dagBlocks)
 	// sort by slot
-	blocksBySlot, err := dagBlocks.SortBySlot()
+	blocksBySlot, err := dagBlocks.GroupBySlot()
 	if err != nil {
 		log.Error("☠ Ordering dag chain failed", "err", err)
 	}
