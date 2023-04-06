@@ -443,11 +443,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}()
 	}
 
-	bc.SetSlotInfo(&types.SlotInfo{
-		GenesisTime:    bc.genesisBlock.Time(),
-		SecondsPerSlot: chainConfig.SecondsPerSlot,
-		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
-	})
+	// TODO: del
+	//bc.SetSlotInfo(&types.SlotInfo{
+	//	GenesisTime:    bc.genesisBlock.Time(),
+	//	SecondsPerSlot: chainConfig.SecondsPerSlot,
+	//	SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
+	//})
 
 	bc.notProcValSyncOps = bc.GetNotProcessedValidatorSyncData()
 
@@ -558,7 +559,11 @@ func (bc *BlockChain) SetSlotInfo(si *types.SlotInfo) error {
 
 // GetSlotInfo get current slot info.
 func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
-	return bc.slotInfo.Copy()
+	si := bc.slotInfo.Copy()
+	if si != nil {
+		return si
+	}
+	return nil
 }
 
 // GetSlotInfo get current slot info.
@@ -572,7 +577,7 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
-		rawdb.WriteCoordinatedCheckpoint(bc.db, cp)
+		bc.HandleCheckpointsForEpoch(cp)
 
 		// Handle era
 		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
@@ -580,6 +585,21 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
 		}
 		bc.SyncEraToSlot(epochStartSlot)
+	}
+}
+
+// HandleCheckpointsForEpoch adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
+func (bc *BlockChain) HandleCheckpointsForEpoch(targetCp *types.Checkpoint) {
+	currCp := bc.GetLastCoordinatedCheckpoint()
+	epochNum := currCp.Epoch
+	for epochNum < targetCp.Epoch {
+		epochNum++ // Increment the epoch number
+		currCp.Epoch = epochNum
+		rawdb.WriteCoordinatedCheckpoint(bc.db, currCp)
+	}
+
+	if epochNum == targetCp.Epoch {
+		rawdb.WriteCoordinatedCheckpoint(bc.db, targetCp)
 	}
 }
 

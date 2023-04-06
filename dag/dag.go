@@ -298,24 +298,29 @@ func (d *Dag) StartWork(accounts []common.Address) {
 
 	tickSec := 0
 	for {
+		inf := d.bc.GetSlotInfo()
 		currentTime := time.Now()
-		genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
+		if inf != nil {
+			genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
 
-		if currentTime.Before(genesisTime) {
-			if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
-				timeRemaining := genesisTime.Sub(currentTime)
-				log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+			if currentTime.Before(genesisTime) {
+				if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
+					timeRemaining := genesisTime.Sub(currentTime)
+					log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+				}
+			} else {
+				log.Info("Chain genesis time reached")
+				startTicker.Stop()
+				go d.workLoop(accounts)
+
+				return
 			}
-		} else {
-			log.Info("Chain genesis time reached")
-			startTicker.Stop()
-			go d.workLoop(accounts)
-
-			return
+			tickSec = currentTime.Second()
 		}
-		tickSec = currentTime.Second()
+		log.Info("Waiting for slot info from coordinator")
 
 		<-startTicker.C
+
 	}
 }
 
