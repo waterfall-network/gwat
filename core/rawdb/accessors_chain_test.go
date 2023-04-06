@@ -32,6 +32,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"golang.org/x/crypto/sha3"
 )
@@ -937,4 +938,18 @@ func TestWriteAndReadCoordinatedCheckpoint(t *testing.T) {
 	if checkpoint.Spine != readCheckpoint.Spine {
 		t.Errorf("Expected checkpoint spine to be %v, but got %v", checkpoint.Spine, readCheckpoint.Spine)
 	}
+}
+
+func TestWriteAndReadSlotBlocksHashes(t *testing.T) {
+	slot := uint64(testutils.RandomInt(0, 100))
+	hashesCount := testutils.RandomInt(5, 20)
+	blocksHashes := common.HashArray{}
+	for i := 0; i < hashesCount; i++ {
+		blocksHashes = append(blocksHashes, common.BytesToHash(testutils.RandomData(32)))
+	}
+
+	db := NewMemoryDatabase()
+	WriteSlotBlocksHashes(db, slot, blocksHashes)
+	dbBlocksHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, dbBlocksHashes)
 }

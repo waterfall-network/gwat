@@ -98,6 +98,7 @@ var (
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
 	eraPrefix                   = []byte("era")
 	currentEraPrefix            = []byte("currentera")
+	slotBlockKey                = []byte("slotBlocks")
 
 	// validator sync data
 	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
@@ -273,4 +274,8 @@ func validatorSyncKey(creator common.Address, op uint64) []byte {
 // coordCpKey = coordCpPrefix + epoch
 func coordCpKey(epoch uint64) []byte {
 	return append(coordCpPrefix, Uint64ToByteSlice(epoch)...)
+}
+
+func slotBlocksKey(slot uint64) []byte {
+	return append(slotBlockKey, Uint64ToByteSlice(slot)...)
 }

@@ -1252,3 +1252,21 @@ func FindEra(db ethdb.KeyValueReader, curEra uint64) *era.Era {
 	}
 	return lastEra
 }
+
+func WriteSlotBlocksHashes(db ethdb.KeyValueWriter, slot uint64, blocksHashes common.HashArray) {
+	key := slotBlocksKey(slot)
+	err := db.Put(key, blocksHashes.ToBytes())
+	if err != nil {
+		log.Crit("Failed to store slot blocks", "err", err)
+	}
+}
+
+func ReadSlotBlocksHashes(db ethdb.KeyValueReader, slot uint64) common.HashArray {
+	key := slotBlocksKey(slot)
+	buf, _ := db.Get(key)
+	if buf != nil {
+		return common.HashArrayFromBytes(buf)
+	}
+
+	return common.HashArray{}
+}

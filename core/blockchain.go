@@ -1825,6 +1825,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			return it.index, ErrBannedHash
 		}
 
+		bc.UpdateSlotBlocks(block)
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 		isHead := maxFinNr == block.Nr()
@@ -2294,6 +2295,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			log.Info("Insert propagated block: check block exists", "stateOnly", stateOnly, "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
 		}
 
+		bc.UpdateSlotBlocks(block)
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 		bc.MoveTxsToProcessing(types.Blocks{block})
@@ -2956,6 +2958,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Retrieve the parent block, and it's state to execute on top
 		start := time.Now()
 
+		bc.UpdateSlotBlocks(block)
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
@@ -3872,4 +3875,16 @@ func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, recei
 			bc.SetValidatorSyncData(txValSyncOp)
 		}
 	}
+}
+
+func (bc *BlockChain) UpdateSlotBlocks(block *types.Block) {
+	blocks := rawdb.ReadSlotBlocksHashes(bc.Database(), block.Slot())
+	for _, hash := range blocks {
+		if hash == block.Hash() {
+			return
+		}
+	}
+
+	blocks = append(blocks, block.Hash())
+	rawdb.WriteSlotBlocksHashes(bc.Database(), block.Slot(), blocks)
 }

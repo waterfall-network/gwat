@@ -140,7 +140,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 
 	checkpoint := bc.GetLastCoordinatedCheckpoint()
 
-	validators, err = s.validatorsCache.getAllValidatorsByEpoch(checkpoint.Epoch)
+	validators, err = s.validatorsCache.getAllValidatorsByEpoch(currentEpoch)
 
 	if err != nil {
 		log.Error("get validators", "error", err, "cp.Epoch", checkpoint.Epoch, "cp.Spine", fmt.Sprintf("%#x", checkpoint.Spine))

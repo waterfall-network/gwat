@@ -14,6 +14,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
@@ -252,7 +253,7 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 	tstart := time.Now()
 
 	// collect optimistic spines
-	spines, err := d.finalizer.GetOptimisticSpines(&spineSlot)
+	spines, err := d.GetOptimisticSpines(spineSlot)
 	if len(spines) == 0 {
 		log.Info("No spines for tips", "tips", d.bc.GetTips().Print())
 	}
@@ -268,6 +269,29 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 	}
 	log.Info("Handle GetOptimisticSpines: response", "result", res, "\u2692", params.BuildId)
 	return res
+}
+
+func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
+	lastFinSlot := d.bc.GetLastFinalizedBlock().Slot()
+	if lastFinSlot <= gtSlot {
+		return []common.HashArray{}, nil
+	}
+
+	slotsBlocks := make(types.Blocks, 0)
+
+	for i := gtSlot + 1; i <= lastFinSlot; i++ {
+		blocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
+		for _, hash := range blocksHashes {
+			block := d.bc.GetBlock(hash)
+			slotsBlocks = append(slotsBlocks, block)
+		}
+	}
+
+	if len(slotsBlocks) == 0 {
+		return []common.HashArray{}, nil
+	}
+
+	return types.CalculateOptimisticSpines(slotsBlocks)
 }
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.
@@ -486,7 +510,9 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 
 			if block != nil {
 				crtInfo["newBlock"] = block.Hash().Hex()
+				d.bc.UpdateSlotBlocks(block)
 			}
+
 			log.Info("Creator processing: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 		}
 	}
