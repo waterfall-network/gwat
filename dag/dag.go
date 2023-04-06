@@ -7,6 +7,7 @@ package dag
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -15,16 +16,19 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/headsync"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/slotticker"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 // Backend wraps all methods required for block creation.
@@ -39,6 +43,30 @@ type Backend interface {
 	AccountManager() *accounts.Manager
 }
 
+type blockChain interface {
+	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
+	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
+	GetLastFinalizedHeader() *types.Header
+	GetHeaderByHash(hash common.Hash) *types.Header
+	WriteLastCoordinatedHash(hash common.Hash)
+	GetBlock(hash common.Hash) *types.Block
+	GetLastFinalizedBlock() *types.Block
+	GetTips() types.Tips
+	Database() ethdb.Database
+	GetSlotInfo() *types.SlotInfo
+	SetSlotInfo(si *types.SlotInfo) error
+	Config() *params.ChainConfig
+	GetEraInfo() *era.EraInfo
+	SetNewEraInfo(newEra era.Era)
+	EnterNextEra(root common.Hash) *era.Era
+	StartTransitionPeriod()
+	SyncEraToSlot(slot uint64)
+	ValidatorStorage() valStore.Storage
+	StateAt(root common.Hash) (*state.StateDB, error)
+	UpdateSlotBlocks(block *types.Block)
+}
+
 type Dag struct {
 	chainConfig *params.ChainConfig
 
@@ -49,7 +77,7 @@ type Dag struct {
 	consensusInfoFeed event.Feed
 
 	eth Backend
-	bc  *core.BlockChain
+	bc  blockChain
 
 	//creator
 	creator *creator.Creator
@@ -62,6 +90,8 @@ type Dag struct {
 
 	exitChan chan struct{}
 	errChan  chan error
+
+	mutex *sync.Mutex
 }
 
 // New creates new instance of Dag
@@ -77,6 +107,7 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		headsync:    headsync.New(chainConfig, eth, mux, fin),
 		exitChan:    make(chan struct{}),
 		errChan:     make(chan error),
+		mutex:       new(sync.Mutex),
 	}
 	atomic.StoreInt32(&d.busy, 0)
 	return d
@@ -97,8 +128,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 
 	if data.BaseSpine != nil {
 		log.Info("Handle Finalize: start",
@@ -184,8 +215,8 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 		}
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
 	lfHash := lfHeader.Hash()
@@ -213,8 +244,8 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		}
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 
 	tstart := time.Now()
 
@@ -247,8 +278,8 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 		}
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 
 	tstart := time.Now()
 
@@ -296,16 +327,16 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.
 func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
 	return d.headsync.SetReadyState(checkpoint)
 }
 
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	log.Info("Handle Sync Slot info", "params", slotInfo)
 	si := d.bc.GetSlotInfo()
 	if si.GenesisTime == slotInfo.GenesisTime &&
@@ -325,16 +356,16 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 
 // HandleHeadSync run head sync with coordinating network.
 func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
 	return d.headsync.Sync(data)
 }
 
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
@@ -448,8 +479,8 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		//d.errChan <- creator.ErrSynchronization
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 
 	errs := map[string]string{}
 

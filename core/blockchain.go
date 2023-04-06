@@ -561,11 +561,6 @@ func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 	return bc.slotInfo.Copy()
 }
 
-// GetSlotInfo get current slot info.
-func (bc *BlockChain) GetConfig() *params.ChainConfig {
-	return bc.chainConfig
-}
-
 // SetLastCoordinatedCheckpoint set last coordinated checkpoint.
 func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	currCp := bc.GetLastCoordinatedCheckpoint()
