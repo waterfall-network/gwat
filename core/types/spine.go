@@ -105,73 +105,71 @@ func CalculateOptimisticSpines(blocks Blocks) ([]common.HashArray, error) {
 
 	optimisticSpines := make([]common.HashArray, 0)
 	for _, slot := range slots {
-		blocksByHeight := GroupByHeight(spinesBySlots[slot])
-		var maxHeight uint64
-		// calculate max block height in the slot
-		for height := range blocksByHeight {
-			if height > maxHeight {
-				maxHeight = height
-			}
-		}
-
-		maxHeightBlocks := blocksByHeight[maxHeight]
-		if len(maxHeightBlocks) > 1 {
-			maxHeightBlocks = GroupByParents(maxHeightBlocks)
-		}
-
-		optimisticSpines = append(optimisticSpines, *maxHeightBlocks.GetHashes())
+		blocksByHeight := FindByHeight(spinesBySlots[slot])
+		optimisticSpines = append(optimisticSpines, *blocksByHeight.GetHashes())
 	}
 
 	return optimisticSpines, nil
 }
 
-func GroupByParents(blocks Blocks) Blocks {
-	blocksByParents := make(map[uint64]Blocks)
+func FindByParents(blocks Blocks) Blocks {
 	var maxParents uint64
+	maxParentsBlocks := make(Blocks, 0)
 	for _, block := range blocks {
-		parentsCount := uint64(len(block.ParentHashes()))
-		if parentsCount > maxParents {
-			maxParents = parentsCount
+		blockParents := uint64(len(block.ParentHashes()))
+
+		if blockParents < maxParents {
+			continue
 		}
-		parentsBlocks, ok := blocksByParents[parentsCount]
-		if !ok {
-			parentsBlocks = make(Blocks, 0)
+
+		if blockParents > maxParents {
+			maxParents = blockParents
+			maxParentsBlocks = make(Blocks, 0)
 		}
-		parentsBlocks = append(parentsBlocks, block)
-		blocksByParents[parentsCount] = parentsBlocks
+
+		maxParentsBlocks = append(maxParentsBlocks, block)
 	}
 
-	maxParentBlocks := blocksByParents[maxParents]
-	if len(maxParentBlocks) > 1 {
-		SortByHash(maxParentBlocks)
+	if len(maxParentsBlocks) > 1 {
+		SortByHash(maxParentsBlocks)
 	}
 
-	return maxParentBlocks
+	return maxParentsBlocks
 }
 
-func SortByHash(blocks []*Block) {
+func SortByHash(blocks Blocks) {
 	sort.Slice(blocks, func(i, j int) bool {
 		return bytes.Compare(blocks[i].Hash().Bytes(), blocks[j].Hash().Bytes()) < 0
 	})
 }
 
-func GroupByHeight(blocks Blocks) map[uint64]Blocks {
+func FindByHeight(blocks Blocks) Blocks {
 	if len(blocks) == 0 {
-		return map[uint64]Blocks{}
+		return Blocks{}
 	}
 
-	blocksByHeight := make(map[uint64]Blocks)
+	var maxHeight uint64
+	maxHeightBlocks := make(Blocks, 0)
 	for _, block := range blocks {
 		blockHeight := block.Height()
-		slotBlocks, ok := blocksByHeight[blockHeight]
-		if !ok {
-			slotBlocks = make(Blocks, 0)
+
+		if blockHeight < maxHeight {
+			continue
 		}
-		slotBlocks = append(slotBlocks, block)
-		blocksByHeight[blockHeight] = slotBlocks
+
+		if blockHeight > maxHeight {
+			maxHeight = blockHeight
+			maxHeightBlocks = make(Blocks, 0)
+		}
+
+		maxHeightBlocks = append(maxHeightBlocks, block)
 	}
 
-	return blocksByHeight
+	if len(maxHeightBlocks) > 1 {
+		maxHeightBlocks = FindByParents(maxHeightBlocks)
+	}
+
+	return maxHeightBlocks
 }
 
 func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {

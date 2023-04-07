@@ -39,70 +39,64 @@ func (bc *BlockChainMock) GetBlocksByHashes(hashes common.HashArray) BlockMap {
 	return res
 }
 
-func TestSortByHeight(t *testing.T) {
+func TestFindByHeight(t *testing.T) {
 	block1 := &Block{
 		header: &Header{
 			ParentHashes: nil,
-			Height:       uint64(testutils.RandomInt(0, 99999)),
+			Height:       uint64(56),
 		},
 	}
 	block2 := &Block{
 		header: &Header{
 			ParentHashes: nil,
-			Height:       uint64(testutils.RandomInt(0, 99999)),
+			Height:       uint64(24),
 		},
 	}
 	block3 := &Block{
 		header: &Header{
 			ParentHashes: nil,
-			Height:       uint64(testutils.RandomInt(0, 99999)),
+			Height:       uint64(175),
 		},
 	}
 	block4 := &Block{
 		header: &Header{
 			ParentHashes: nil,
-			Height:       uint64(testutils.RandomInt(0, 99999)),
+			Height:       uint64(1),
 		},
 	}
 	block5 := &Block{
 		header: &Header{
 			ParentHashes: nil,
-			Height:       uint64(testutils.RandomInt(0, 99999)),
+			Height:       uint64(10),
 		},
 	}
 
 	testCases := []struct {
 		name           string
 		blocks         Blocks
-		expectedBlocks map[uint64]Blocks
+		expectedBlocks Blocks
 	}{
 		{
 			name:           "Sort missing blocks",
 			blocks:         Blocks{},
-			expectedBlocks: map[uint64]Blocks{},
+			expectedBlocks: Blocks{},
 		},
 		{
-			name:   "Sort blocks",
-			blocks: Blocks{block1, block2, block3, block4, block5},
-			expectedBlocks: map[uint64]Blocks{
-				block1.Height(): {block1},
-				block2.Height(): {block2},
-				block3.Height(): {block3},
-				block4.Height(): {block4},
-				block5.Height(): {block5},
-			},
+			name:           "Sort blocks",
+			blocks:         Blocks{block1, block2, block3, block4, block5},
+			expectedBlocks: Blocks{block3},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			sortBlocks := GroupByHeight(testCase.blocks)
+			sortBlocks := FindByHeight(testCase.blocks)
 			testutils.AssertEqual(t, testCase.expectedBlocks, sortBlocks)
 		})
 	}
 }
 
-func TestSortSameHeightBlocks(t *testing.T) {
+func TestFinaByParents(t *testing.T) {
 	block1 := &Block{
 		header: &Header{
 			ParentHashes: common.HashArray{
@@ -205,7 +199,7 @@ func TestSortSameHeightBlocks(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			sortingBlocks := GroupByParents(testCase.blocks)
+			sortingBlocks := FindByParents(testCase.blocks)
 			testutils.AssertEqual(t, testCase.expectedBlocks, sortingBlocks)
 		})
 	}
