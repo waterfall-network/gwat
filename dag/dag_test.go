@@ -29,8 +29,8 @@ func TestGetOptimisticSpines(t *testing.T) {
 
 	bc.EXPECT().Database().AnyTimes().Return(db)
 	bc.EXPECT().GetBlock(spineBlock.Hash()).Return(spineBlock)
-	bc.EXPECT().GetSlotInfo().Return(&types.SlotInfo{
-		GenesisTime:    uint64(time.Now().Unix() - 100),
+	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+		GenesisTime:    uint64(time.Now().Unix() - 600),
 		SecondsPerSlot: 4,
 		SlotsPerEpoch:  32,
 	})
@@ -39,11 +39,11 @@ func TestGetOptimisticSpines(t *testing.T) {
 		bc.EXPECT().GetBlock(testBlock.Hash()).Return(testBlock)
 	}
 
-	dag := Dag{eth: backend, bc: bc, downloader: down, mutex: new(sync.Mutex)}
+	dag := Dag{eth: backend, bc: bc, downloader: down, mutex: new(sync.Mutex), optimisticSpinesCache: make(map[uint64]types.Blocks)}
 	result := dag.HandleGetOptimisticSpines(spineBlock.Hash())
 
 	expectedResult := types.OptimisticSpinesResult{
-		Data:  []common.HashArray{{block.Hash()}, {block3.Hash()}, {block6.Hash(), block5.Hash()}, {block7.Hash()}},
+		Data:  []common.HashArray{{block.Hash()}, {block3.Hash()}, {block5.Hash(), block6.Hash()}, {block7.Hash()}},
 		Error: nil,
 	}
 	testutils.AssertEqual(t, expectedResult, *result)

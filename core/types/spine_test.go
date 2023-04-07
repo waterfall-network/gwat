@@ -96,7 +96,7 @@ func TestFindByHeight(t *testing.T) {
 	}
 }
 
-func TestFinaByParents(t *testing.T) {
+func TestFindByParents(t *testing.T) {
 	block1 := &Block{
 		header: &Header{
 			ParentHashes: common.HashArray{
@@ -357,22 +357,22 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 	testCases := []struct {
 		name           string
 		blocks         Blocks
-		expectedBlocks []common.HashArray
+		expectedBlocks []Blocks
 	}{
 		{
 			name:           "Sort by height",
 			blocks:         Blocks{block1, block2, block3, block4},
-			expectedBlocks: []common.HashArray{{block1.Hash()}, {block4.Hash()}},
+			expectedBlocks: []Blocks{{block1}, {block4}},
 		},
 		{
 			name:           "Sort by parents count",
 			blocks:         Blocks{block4, block5, block6, block7, block8, block9},
-			expectedBlocks: []common.HashArray{{block5.Hash()}, {block7.Hash()}},
+			expectedBlocks: []Blocks{{block5}, {block7}},
 		},
 		{
 			name:           "Sort by hashes",
 			blocks:         Blocks{block9, block10, block11, block12, block13, block14},
-			expectedBlocks: []common.HashArray{{block10.Hash(), block11.Hash(), block9.Hash()}, {block12.Hash(), block14.Hash(), block13.Hash()}},
+			expectedBlocks: []Blocks{{block10, block11, block9}, {block12, block14, block13}},
 		},
 	}
 

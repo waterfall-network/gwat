@@ -29,7 +29,7 @@ var (
 	}, nil, nil, nil)
 
 	block3 = types.NewBlock(&types.Header{
-		Slot:   15,
+		Slot:   37,
 		Height: 14,
 		ParentHashes: common.HashArray{
 			common.BytesToHash(testutils.RandomData(32)),
@@ -42,7 +42,7 @@ var (
 	}, nil, nil, nil)
 
 	block4 = types.NewBlock(&types.Header{
-		Slot:   15,
+		Slot:   37,
 		Height: 14,
 		ParentHashes: common.HashArray{
 			common.BytesToHash(testutils.RandomData(32)),
@@ -53,7 +53,7 @@ var (
 	}, nil, nil, nil)
 
 	block5 = types.NewBlock(&types.Header{
-		Slot:   16,
+		Slot:   65,
 		Height: 10,
 		ParentHashes: common.HashArray{
 			common.Hash{0x01},
@@ -62,12 +62,12 @@ var (
 			common.Hash{0x04},
 			common.Hash{0x05},
 		},
-		TxHash: common.Hash{0x025, 255, 255},
-		Root:   common.Hash{0x025, 255, 255},
+		TxHash: common.Hash{0x025, 255, 255, 125},
+		Root:   common.Hash{0x025, 255, 255, 156},
 	}, nil, nil, nil)
 
 	block6 = types.NewBlock(&types.Header{
-		Slot:   16,
+		Slot:   65,
 		Height: 10,
 		ParentHashes: common.HashArray{
 			common.Hash{0x07},
@@ -81,7 +81,7 @@ var (
 	}, nil, nil, nil)
 
 	block7 = types.NewBlock(&types.Header{
-		Slot:   22,
+		Slot:   115,
 		Height: 35,
 		ParentHashes: common.HashArray{
 			common.Hash{0x01},

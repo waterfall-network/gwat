@@ -7,6 +7,7 @@ package dag
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
+
+const optimisticSpinesCacheLen = 2
 
 // Backend wraps all methods required for block creation.
 type Backend interface {
@@ -96,23 +99,26 @@ type Dag struct {
 	errChan  chan error
 
 	mutex *sync.Mutex
+
+	optimisticSpinesCache map[uint64]types.Blocks // epoch/spines
 }
 
 // New creates new instance of Dag
 func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creatorConfig *creator.Config, engine consensus.Engine) *Dag {
 	fin := finalizer.New(chainConfig, eth, mux)
 	d := &Dag{
-		chainConfig: chainConfig,
-		eth:         eth,
-		mux:         mux,
-		bc:          eth.BlockChain(),
-		downloader:  eth.Downloader(),
-		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
-		finalizer:   fin,
-		headsync:    headsync.New(chainConfig, eth, mux, fin),
-		exitChan:    make(chan struct{}),
-		errChan:     make(chan error),
-		mutex:       new(sync.Mutex),
+		chainConfig:           chainConfig,
+		eth:                   eth,
+		mux:                   mux,
+		bc:                    eth.BlockChain(),
+		downloader:            eth.Downloader(),
+		creator:               creator.New(creatorConfig, chainConfig, engine, eth, mux),
+		finalizer:             fin,
+		headsync:              headsync.New(chainConfig, eth, mux, fin),
+		exitChan:              make(chan struct{}),
+		errChan:               make(chan error),
+		mutex:                 new(sync.Mutex),
+		optimisticSpinesCache: make(map[uint64]types.Blocks),
 	}
 	atomic.StoreInt32(&d.busy, 0)
 	return d
@@ -315,6 +321,15 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 
 	slotsBlocks := make(types.Blocks, 0)
 
+	slotsBlocks = d.getSpinesFromCache()
+	if len(slotsBlocks) > 0 {
+		for _, slotsBlock := range slotsBlocks {
+			if slotsBlock.Number() != nil && *slotsBlock.Number() > gtSlot {
+				gtSlot = *slotsBlock.Number()
+			}
+		}
+	}
+
 	for i := gtSlot + 1; i <= currentSlot; i++ {
 		blocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
 		for _, hash := range blocksHashes {
@@ -327,7 +342,18 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 		return []common.HashArray{}, nil
 	}
 
-	return types.CalculateOptimisticSpines(slotsBlocks)
+	optimisticSpines, err := types.CalculateOptimisticSpines(slotsBlocks)
+	if err != nil {
+		return []common.HashArray{}, err
+	}
+
+	spinesHashes := make([]common.HashArray, 0)
+	for _, spines := range optimisticSpines {
+		d.addSpinesToCache(spines)
+		spinesHashes = append(spinesHashes, *spines.GetHashes())
+	}
+
+	return spinesHashes, nil
 }
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.
@@ -579,4 +605,45 @@ func (d *Dag) handleEra(slot uint64) {
 	if currentEpoch > (d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod) && !d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
 		d.bc.SyncEraToSlot(slot)
 	}
+}
+
+func (d *Dag) addSpinesToCache(spines types.Blocks) {
+	spinesByEpoch := d.groupBlocksByEpoch(spines)
+
+	for epoch, blocks := range spinesByEpoch {
+		d.optimisticSpinesCache[epoch] = blocks
+		if len(d.optimisticSpinesCache) > optimisticSpinesCacheLen {
+			d.clearingCache()
+		}
+	}
+}
+
+func (d *Dag) clearingCache() {
+	oldestEpoch := uint64(math.MaxUint64)
+	for epoch := range d.optimisticSpinesCache {
+		if epoch < oldestEpoch {
+			oldestEpoch = epoch
+		}
+	}
+
+	delete(d.optimisticSpinesCache, oldestEpoch)
+}
+
+func (d *Dag) groupBlocksByEpoch(blocks types.Blocks) map[uint64]types.Blocks {
+	blocksByEpoch := make(map[uint64]types.Blocks)
+	for _, block := range blocks {
+		blockEpoch := d.bc.GetSlotInfo().SlotToEpoch(block.Slot())
+		blocksByEpoch[blockEpoch] = append(blocksByEpoch[blockEpoch], block)
+	}
+
+	return blocksByEpoch
+}
+
+func (d *Dag) getSpinesFromCache() types.Blocks {
+	blocks := make(types.Blocks, 0)
+	for _, spines := range d.optimisticSpinesCache {
+		blocks = append(blocks, spines...)
+	}
+
+	return blocks
 }
