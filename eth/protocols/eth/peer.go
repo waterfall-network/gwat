@@ -71,9 +71,10 @@ type Peer struct {
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
 
-	lastFinNr uint64            // Latest advertised dag lastFinNr
-	dag       *common.HashArray // Latest advertised dag hashes
-	isNewCon  bool              // Is newly connected
+	lastFinNr         uint64            // Latest advertised dag lastFinNr
+	lastCoordinatedCp *types.Checkpoint // Latest checkpoint epoch
+	dag               *common.HashArray // Latest advertised dag hashes
+	isNewCon          bool              // Is newly connected
 
 	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
@@ -130,17 +131,17 @@ func (p *Peer) Version() uint {
 	return p.version
 }
 
-// GetDagInfo retrieves the current dag hashes and max lastFinNr of the peer.
-func (p *Peer) GetDagInfo() (lastFinNr uint64, dag *common.HashArray) {
+// GetDagInfo retrieves the current DAG hashes and the last coordinated checkpoint epoch of the peer.
+func (p *Peer) GetDagInfo() (lastFinNr uint64, lastCp *types.Checkpoint, dag *common.HashArray) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	lastFinNr = p.lastFinNr
+	lastCp = p.lastCoordinatedCp
 	if p.dag != nil {
 		dag = p.dag
-		//dag =
 	}
-	return lastFinNr, dag
+	return lastFinNr, lastCp, dag
 }
 
 // IsNewlyConnected check is handled by sync.
@@ -158,11 +159,12 @@ func (p *Peer) ResetNewlyConnected() {
 }
 
 // SetDagInfo updates the lastFinNr, hash and dag of the peer.
-func (p *Peer) SetDagInfo(lastFinNr uint64, dag *common.HashArray) {
+func (p *Peer) SetDagInfo(lastFinNr uint64, lastCp *types.Checkpoint, dag *common.HashArray) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	p.dag = dag
 	p.lastFinNr = lastFinNr
+	p.lastCoordinatedCp = lastCp
 }
 
 // KnownBlock returns whether peer is known to already have a block.

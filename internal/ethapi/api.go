@@ -2241,12 +2241,12 @@ func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types
 }
 
 // HeadSyncReady set initial state to start head sync with coordinating network.
-func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
+func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.Checkpoint) (bool, error) {
 	return api.b.Dag().HandleHeadSyncReady(checkpoint)
 }
 
 // HeadSync run head sync with coordinating network.
-func (api *PublicDagAPI) HeadSync(ctx context.Context, data []types.ConsensusInfo) (bool, error) {
+func (api *PublicDagAPI) HeadSync(ctx context.Context, data []types.Checkpoint) (bool, error) {
 	return api.b.Dag().HandleHeadSync(data)
 }
 

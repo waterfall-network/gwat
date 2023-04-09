@@ -80,11 +80,12 @@ type chainSyncer struct {
 
 // chainSyncOp is a scheduled sync operation.
 type chainSyncOp struct {
-	mode      downloader.SyncMode
-	peer      *eth.Peer
-	lastFinNr uint64
-	dag       common.HashArray
-	dagOnly   bool
+	mode       downloader.SyncMode
+	peer       *eth.Peer
+	lastFinNr  uint64
+	checkpoint *types.Checkpoint
+	dag        common.HashArray
+	dagOnly    bool
 }
 
 // newChainSyncer creates a chainSyncer.
@@ -235,6 +236,7 @@ func (cs *chainSyncer) getResyncOp() *chainSyncOp {
 }
 
 // nextSyncOp determines whether sync is required at this time.
+// TODO: wait for checkpoint from coordinator?
 func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
 		return nil // Sync already running.
@@ -277,7 +279,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if dhs := cs.handler.chain.GetDagHashes(); dhs != nil {
 		dagHashes = *dhs
 	}
-	_, dag := peer.GetDagInfo()
+	_, _, dag := peer.GetDagInfo()
 	for _, hash := range *dag {
 		block := cs.handler.chain.GetBlockByHash(hash)
 		if len(localTips) == 0 && block != nil && block.Nr() == lastFinNr {
@@ -301,8 +303,8 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 }
 
 func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
-	lastFinNr, _ := p.GetDagInfo()
-	return &chainSyncOp{mode: mode, peer: p, lastFinNr: lastFinNr, dag: common.HashArray{}, dagOnly: false}
+	lastFinNr, checkpoint, _ := p.GetDagInfo()
+	return &chainSyncOp{mode: mode, peer: p, lastFinNr: lastFinNr, checkpoint: checkpoint, dag: common.HashArray{}, dagOnly: false}
 }
 
 func (cs *chainSyncer) modeAndLocalHead() downloader.SyncMode {

@@ -44,9 +44,6 @@ type Dag struct {
 	// events
 	mux *event.TypeMux
 
-	consensusInfo     *types.ConsensusInfo
-	consensusInfoFeed event.Feed
-
 	eth Backend
 	bc  *core.BlockChain
 
@@ -236,7 +233,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 }
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.
-func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
+func (d *Dag) HandleHeadSyncReady(checkpoint *types.Checkpoint) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
@@ -265,7 +262,7 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 }
 
 // HandleHeadSync run head sync with coordinating network.
-func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
+func (d *Dag) HandleHeadSync(data []types.Checkpoint) (bool, error) {
 	d.bc.DagMu.Lock()
 	defer d.bc.DagMu.Unlock()
 	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
@@ -278,19 +275,6 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	defer d.bc.DagMu.Unlock()
 	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
-}
-
-// GetConsensusInfo returns the last info received from the consensus network
-func (d *Dag) GetConsensusInfo() *types.ConsensusInfo {
-	if d.consensusInfo == nil {
-		return nil
-	}
-	return d.consensusInfo.Copy()
-}
-
-// SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
-func (d *Dag) SubscribeConsensusInfoEvent(ch chan<- types.Tips) event.Subscription {
-	return d.consensusInfoFeed.Subscribe(ch)
 }
 
 func (d *Dag) StartWork(accounts []common.Address) {
@@ -424,9 +408,9 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 			// if received next slot
 
 			// TODO: may be drop consensusInfo field from blockchain because we don`t write value to it
-			if d.consensusInfo != nil && d.consensusInfo.Slot > assigned.Slot {
-				break
-			}
+			//if d.consensusInfo != nil && d.consensusInfo.Slot > assigned.Slot {
+			//	break
+			//}
 
 			//d.eth.BlockChain().DagMu.Lock()
 			//defer d.eth.BlockChain().DagMu.Unlock()

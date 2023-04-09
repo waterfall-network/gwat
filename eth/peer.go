@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/snap"
 )
@@ -30,6 +31,7 @@ import (
 type ethPeerInfo struct {
 	Version   uint              `json:"version"`   // Ethereum protocol version negotiated
 	LastFinNr uint64            `json:"lastFinNr"` // dag max height of the peer
+	LastCp    *types.Checkpoint `json:"lastCp"`    // last coordinated checkpoint of the peer
 	Dag       *common.HashArray `json:"dag"`       // hashes of the peer dag
 }
 
@@ -45,10 +47,11 @@ type ethPeer struct {
 
 // info gathers and returns some `eth` protocol metadata known about a peer.
 func (p *ethPeer) info() *ethPeerInfo {
-	lastFinNr, dag := p.GetDagInfo()
+	lastFinNr, lastCp, dag := p.GetDagInfo()
 	return &ethPeerInfo{
 		Version:   p.Version(),
 		LastFinNr: lastFinNr,
+		LastCp:    lastCp,
 		Dag:       dag,
 	}
 }
