@@ -443,13 +443,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}()
 	}
 
-	// TODO: del
-	//bc.SetSlotInfo(&types.SlotInfo{
-	//	GenesisTime:    bc.genesisBlock.Time(),
-	//	SecondsPerSlot: chainConfig.SecondsPerSlot,
-	//	SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
-	//})
-
 	bc.notProcValSyncOps = bc.GetNotProcessedValidatorSyncData()
 
 	return bc, nil

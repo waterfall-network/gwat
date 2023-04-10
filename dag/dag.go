@@ -246,12 +246,17 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 	defer d.bc.DagMu.Unlock()
 	log.Info("Handle Sync Slot info", "params", slotInfo)
 	si := d.bc.GetSlotInfo()
-	if si.GenesisTime == slotInfo.GenesisTime &&
+	if si == nil {
+		err := d.bc.SetSlotInfo(&slotInfo)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	} else if si.GenesisTime == slotInfo.GenesisTime &&
 		si.SecondsPerSlot == slotInfo.SecondsPerSlot &&
 		si.SlotsPerEpoch == slotInfo.SlotsPerEpoch {
 		return true, nil
-	}
-	if d.eth.IsDevMode() {
+	} else if d.eth.IsDevMode() {
 		err := d.bc.SetSlotInfo(&slotInfo)
 		if err != nil {
 			return false, err
@@ -278,7 +283,7 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 }
 
 func (d *Dag) StartWork(accounts []common.Address) {
-	startTicker := time.NewTicker(500 * time.Millisecond)
+	startTicker := time.NewTicker(2000 * time.Millisecond)
 
 	tickSec := 0
 	for {
