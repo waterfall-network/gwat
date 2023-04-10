@@ -172,29 +172,6 @@ func (cs *chainSyncer) loop() {
 	}
 }
 
-// TODO rm deprecated
-func (cs *chainSyncer) isResync() bool {
-	if cs.handler.downloader.Synchronising() {
-		return false
-	}
-	tips := cs.handler.chain.GetTips()
-	dagHashes := tips.GetOrderedDagChainHashes()
-	blocks := cs.handler.chain.GetBlocksByHashes(dagHashes)
-	mapSlot := make(map[uint64]int, 0)
-	dagHeshCount := 0
-	for _, b := range blocks {
-		if b != nil && b.Nr() == 0 && b.Height() > 0 {
-			mapSlot[b.Slot()]++
-			dagHeshCount++
-		}
-	}
-	slotsCount := len(mapSlot)
-
-	log.Debug("is resync", "slotsCount", slotsCount, "dagSlotsLimit", dagSlotsLimit, "len(blocks)", len(blocks), "mapSlot", mapSlot)
-
-	return slotsCount > dagSlotsLimit
-}
-
 // getResyncOp determines whether resync is required.
 func (cs *chainSyncer) getResyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
@@ -236,7 +213,6 @@ func (cs *chainSyncer) getResyncOp() *chainSyncOp {
 }
 
 // nextSyncOp determines whether sync is required at this time.
-// TODO: wait for checkpoint from coordinator?
 func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
 		return nil // Sync already running.

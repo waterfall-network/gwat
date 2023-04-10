@@ -81,7 +81,6 @@ func (hs *Headsync) SetReadyState(checkpoint *types.Checkpoint) (bool, error) {
 	if checkpoint.Epoch == 0 {
 		log.Info("Prepare to head synchronising set to genesis", "checkpoint", checkpoint)
 		atomic.StoreInt32(&hs.ready, 1)
-		//hs.lastSyncData = checkpoint
 		hs.checkpoint = checkpoint
 		return true, nil
 	}

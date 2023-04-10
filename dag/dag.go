@@ -282,9 +282,9 @@ func (d *Dag) StartWork(accounts []common.Address) {
 
 	tickSec := 0
 	for {
-		inf := d.bc.GetSlotInfo()
+		si := d.bc.GetSlotInfo()
 		currentTime := time.Now()
-		if inf != nil {
+		if si != nil {
 			genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
 
 			if currentTime.Before(genesisTime) {
@@ -300,11 +300,17 @@ func (d *Dag) StartWork(accounts []common.Address) {
 				return
 			}
 			tickSec = currentTime.Second()
+		} else {
+			lcp := d.bc.GetLastCoordinatedCheckpoint()
+			// revert to LastCoordinatedCheckpoint
+			if lcp.Root != d.bc.GetLastFinalizedHeader().Root {
+				d.bc.SetHeadBeyondRoot(lcp.Spine, lcp.Root)
+			}
+
+			log.Info("Waiting for slot info from coordinator")
 		}
-		log.Info("Waiting for slot info from coordinator")
 
 		<-startTicker.C
-
 	}
 }
 

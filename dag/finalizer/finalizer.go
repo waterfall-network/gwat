@@ -94,6 +94,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		if block == nil {
 			log.Error("Block finalization failed", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
 			return ErrSpineNotFound
+			// TODO: sync, get missing hashes
 		}
 		spinesMap[block.Slot()] = block
 	}
