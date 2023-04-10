@@ -303,7 +303,7 @@ func (d *Dag) StartWork(accounts []common.Address) {
 		} else {
 			lcp := d.bc.GetLastCoordinatedCheckpoint()
 			// revert to LastCoordinatedCheckpoint
-			if lcp.Root != d.bc.GetLastFinalizedHeader().Root {
+			if lcp.Spine != d.bc.GetLastFinalizedHeader().Hash() {
 				d.bc.SetHeadBeyondRoot(lcp.Spine, lcp.Root)
 			}
 
