@@ -259,6 +259,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 			//save block
 			blockBatch := db.NewBatch()
+			rawdb.UpdateSlotBlocksHashes(db, block)
 			rawdb.WriteBlock(blockBatch, block)
 			rawdb.WriteReceipts(blockBatch, block.Hash(), b.receipts)
 			rawdb.WritePreimages(blockBatch, statedb.Preimages())

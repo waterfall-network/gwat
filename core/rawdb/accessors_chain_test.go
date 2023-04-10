@@ -953,3 +953,32 @@ func TestWriteAndReadSlotBlocksHashes(t *testing.T) {
 	dbBlocksHashes := ReadSlotBlocksHashes(db, slot)
 	testutils.AssertEqual(t, blocksHashes, dbBlocksHashes)
 }
+
+func TestUpdateSlotBlocks(t *testing.T) {
+	slot := uint64(testutils.RandomInt(0, 100))
+	hashesCount := testutils.RandomInt(5, 20)
+	newBlock := types.NewBlock(&types.Header{
+		Slot:   slot,
+		TxHash: common.BytesToHash(testutils.RandomData(32)),
+		Root:   common.BytesToHash(testutils.RandomData(32)),
+	}, nil, nil, nil)
+
+	db := NewMemoryDatabase()
+
+	blocksHashes := common.HashArray{}
+	for i := 0; i < hashesCount; i++ {
+		blocksHashes = append(blocksHashes, common.BytesToHash(testutils.RandomData(32)))
+	}
+
+	WriteSlotBlocksHashes(db, slot, blocksHashes)
+	slotBlocks := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, slotBlocks)
+
+	UpdateSlotBlocksHashes(db, newBlock)
+	updatedSlotBlocks := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, append(blocksHashes, newBlock.Hash()), updatedSlotBlocks)
+
+	DeleteSlotBlockHash(db, newBlock)
+	updatedSlotBlocks = ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, updatedSlotBlocks)
+}

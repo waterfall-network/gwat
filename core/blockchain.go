@@ -872,7 +872,8 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
-	if block := bc.GetLastFinalizedBlock(); block.Hash() == head {
+	block := bc.GetLastFinalizedBlock()
+	if block.Hash() == head {
 		if target, force := updateFn(bc.db, block.Header()); force {
 			bc.hc.SetHead(target, updateFn, delFn)
 		}
@@ -882,6 +883,8 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		log.Warn("Rewinding blockchain", "target", head.Hex())
 		bc.hc.SetHead(head, updateFn, delFn)
 	}
+
+	rawdb.DeleteSlotBlockHash(bc.Database(), block)
 	// Clear out any stale content from the caches
 	bc.valSyncCache.Purge()
 	bc.bodyCache.Purge()
@@ -942,6 +945,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := bc.db.NewBatch()
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), genesis)
 	rawdb.WriteBlock(batch, genesis)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
@@ -1424,6 +1428,7 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
 	}
 
 	batch := bc.db.NewBatch()
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -1539,6 +1544,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), receipts)
 	bc.handleBlockValidatorSyncReceipts(block, receipts)
@@ -1820,7 +1826,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			return it.index, ErrBannedHash
 		}
 
-		bc.UpdateSlotBlocks(block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 		isHead := maxFinNr == block.Nr()
@@ -2290,7 +2296,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			log.Info("Insert propagated block: check block exists", "stateOnly", stateOnly, "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
 		}
 
-		bc.UpdateSlotBlocks(block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 		bc.MoveTxsToProcessing(types.Blocks{block})
@@ -2953,7 +2959,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Retrieve the parent block, and it's state to execute on top
 		start := time.Now()
 
-		bc.UpdateSlotBlocks(block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 		rawdb.WriteBlock(bc.db, block)
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
@@ -3870,16 +3876,4 @@ func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, recei
 			bc.SetValidatorSyncData(txValSyncOp)
 		}
 	}
-}
-
-func (bc *BlockChain) UpdateSlotBlocks(block *types.Block) {
-	blocks := rawdb.ReadSlotBlocksHashes(bc.Database(), block.Slot())
-	for _, hash := range blocks {
-		if hash == block.Hash() {
-			return
-		}
-	}
-
-	blocks = append(blocks, block.Hash())
-	rawdb.WriteSlotBlocksHashes(bc.Database(), block.Slot(), blocks)
 }

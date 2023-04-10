@@ -105,14 +105,23 @@ func CalculateOptimisticSpines(blocks Blocks) ([]Blocks, error) {
 
 	optimisticSpines := make([]Blocks, 0)
 	for _, slot := range slots {
-		blocksByHeight := FindByHeight(spinesBySlots[slot])
-		optimisticSpines = append(optimisticSpines, blocksByHeight)
+		slotSpines := selectSpinesByMaxHeight(spinesBySlots[slot])
+
+		if len(slotSpines) > 1 {
+			slotSpines = selectSpinesByMaxParentsCount(slotSpines)
+		}
+
+		if len(slotSpines) > 1 {
+			sortByHash(slotSpines)
+		}
+
+		optimisticSpines = append(optimisticSpines, slotSpines)
 	}
 
 	return optimisticSpines, nil
 }
 
-func FindByParents(blocks Blocks) Blocks {
+func selectSpinesByMaxParentsCount(blocks Blocks) Blocks {
 	var maxParents uint64
 	maxParentsBlocks := make(Blocks, 0)
 	for _, block := range blocks {
@@ -130,20 +139,16 @@ func FindByParents(blocks Blocks) Blocks {
 		maxParentsBlocks = append(maxParentsBlocks, block)
 	}
 
-	if len(maxParentsBlocks) > 1 {
-		SortByHash(maxParentsBlocks)
-	}
-
 	return maxParentsBlocks
 }
 
-func SortByHash(blocks Blocks) {
+func sortByHash(blocks Blocks) {
 	sort.Slice(blocks, func(i, j int) bool {
 		return bytes.Compare(blocks[i].Hash().Bytes(), blocks[j].Hash().Bytes()) < 0
 	})
 }
 
-func FindByHeight(blocks Blocks) Blocks {
+func selectSpinesByMaxHeight(blocks Blocks) Blocks {
 	if len(blocks) == 0 {
 		return Blocks{}
 	}
@@ -163,10 +168,6 @@ func FindByHeight(blocks Blocks) Blocks {
 		}
 
 		maxHeightBlocks = append(maxHeightBlocks, block)
-	}
-
-	if len(maxHeightBlocks) > 1 {
-		maxHeightBlocks = FindByParents(maxHeightBlocks)
 	}
 
 	return maxHeightBlocks

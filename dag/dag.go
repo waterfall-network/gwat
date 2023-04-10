@@ -32,7 +32,7 @@ import (
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
-const optimisticSpinesCacheLen = 2
+const optimisticSpinesCacheLen = 8
 
 // Backend wraps all methods required for block creation.
 type Backend interface {
@@ -67,7 +67,6 @@ type blockChain interface {
 	SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
-	UpdateSlotBlocks(block *types.Block)
 }
 
 type ethDownloader interface {
@@ -100,7 +99,7 @@ type Dag struct {
 
 	mutex *sync.Mutex
 
-	optimisticSpinesCache map[uint64]types.Blocks // epoch/spines
+	optimisticSpinesCache map[uint64]map[uint64]types.Blocks // epoch/slot/spines
 }
 
 // New creates new instance of Dag
@@ -118,7 +117,7 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		exitChan:              make(chan struct{}),
 		errChan:               make(chan error),
 		mutex:                 new(sync.Mutex),
-		optimisticSpinesCache: make(map[uint64]types.Blocks),
+		optimisticSpinesCache: make(map[uint64]map[uint64]types.Blocks),
 	}
 	atomic.StoreInt32(&d.busy, 0)
 	return d
@@ -321,21 +320,18 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 
 	slotsBlocks := make(types.Blocks, 0)
 
-	slotsBlocks = d.getSpinesFromCache()
-	if len(slotsBlocks) > 0 {
-		for _, slotsBlock := range slotsBlocks {
-			if slotsBlock.Number() != nil && *slotsBlock.Number() > gtSlot {
-				gtSlot = *slotsBlock.Number()
+	for i := gtSlot + 1; i <= currentSlot; i++ {
+		slotSpinesFromCache := d.getSpinesFromCache(i)
+		if slotSpinesFromCache == nil {
+			blocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
+			for _, hash := range blocksHashes {
+				block := d.bc.GetBlock(hash)
+				slotSpinesFromCache = append(slotSpinesFromCache, block)
+				d.addSpineToCache(block)
 			}
 		}
-	}
 
-	for i := gtSlot + 1; i <= currentSlot; i++ {
-		blocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
-		for _, hash := range blocksHashes {
-			block := d.bc.GetBlock(hash)
-			slotsBlocks = append(slotsBlocks, block)
-		}
+		slotsBlocks = append(slotsBlocks, slotSpinesFromCache...)
 	}
 
 	if len(slotsBlocks) == 0 {
@@ -349,7 +345,6 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 
 	spinesHashes := make([]common.HashArray, 0)
 	for _, spines := range optimisticSpines {
-		d.addSpinesToCache(spines)
 		spinesHashes = append(spinesHashes, *spines.GetHashes())
 	}
 
@@ -555,7 +550,7 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 
 			if block != nil {
 				crtInfo["newBlock"] = block.Hash().Hex()
-				d.bc.UpdateSlotBlocks(block)
+				rawdb.UpdateSlotBlocksHashes(d.bc.Database(), block)
 			}
 
 			log.Info("Creator processing: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
@@ -607,18 +602,28 @@ func (d *Dag) handleEra(slot uint64) {
 	}
 }
 
-func (d *Dag) addSpinesToCache(spines types.Blocks) {
-	spinesByEpoch := d.groupBlocksByEpoch(spines)
+func (d *Dag) addSpineToCache(spine *types.Block) {
+	spineEpoch := d.bc.GetSlotInfo().SlotToEpoch(spine.Slot())
 
-	for epoch, blocks := range spinesByEpoch {
-		d.optimisticSpinesCache[epoch] = blocks
-		if len(d.optimisticSpinesCache) > optimisticSpinesCacheLen {
-			d.clearingCache()
-		}
+	epochSpines, ok := d.optimisticSpinesCache[spineEpoch]
+	if !ok {
+		d.optimisticSpinesCache[spineEpoch] = make(map[uint64]types.Blocks)
+	}
+
+	slotSpines, ok := epochSpines[spine.Slot()]
+	if !ok {
+		slotSpines = make(types.Blocks, 0)
+	}
+
+	slotSpines = append(slotSpines, spine)
+	d.optimisticSpinesCache[spineEpoch][spine.Slot()] = slotSpines
+
+	if len(d.optimisticSpinesCache) > optimisticSpinesCacheLen {
+		d.cleanOptimisticSpinesCache()
 	}
 }
 
-func (d *Dag) clearingCache() {
+func (d *Dag) cleanOptimisticSpinesCache() {
 	oldestEpoch := uint64(math.MaxUint64)
 	for epoch := range d.optimisticSpinesCache {
 		if epoch < oldestEpoch {
@@ -629,21 +634,13 @@ func (d *Dag) clearingCache() {
 	delete(d.optimisticSpinesCache, oldestEpoch)
 }
 
-func (d *Dag) groupBlocksByEpoch(blocks types.Blocks) map[uint64]types.Blocks {
-	blocksByEpoch := make(map[uint64]types.Blocks)
-	for _, block := range blocks {
-		blockEpoch := d.bc.GetSlotInfo().SlotToEpoch(block.Slot())
-		blocksByEpoch[blockEpoch] = append(blocksByEpoch[blockEpoch], block)
+func (d *Dag) getSpinesFromCache(slot uint64) types.Blocks {
+	slotEpoch := d.bc.GetSlotInfo().SlotToEpoch(slot)
+
+	epochSpines, ok := d.optimisticSpinesCache[slotEpoch]
+	if !ok {
+		return nil
 	}
 
-	return blocksByEpoch
-}
-
-func (d *Dag) getSpinesFromCache() types.Blocks {
-	blocks := make(types.Blocks, 0)
-	for _, spines := range d.optimisticSpinesCache {
-		blocks = append(blocks, spines...)
-	}
-
-	return blocks
+	return epochSpines[slot]
 }

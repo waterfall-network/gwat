@@ -1270,3 +1270,27 @@ func ReadSlotBlocksHashes(db ethdb.KeyValueReader, slot uint64) common.HashArray
 
 	return common.HashArray{}
 }
+
+func DeleteSlotBlockHash(db ethdb.Database, block *types.Block) {
+	slot := block.Slot()
+	slotBlocks := ReadSlotBlocksHashes(db, slot)
+	for i := 0; i < len(slotBlocks); i++ {
+		if slotBlocks[i] == block.Hash() {
+			slotBlocks = append(slotBlocks[:i], slotBlocks[i+1:]...)
+		}
+	}
+
+	WriteSlotBlocksHashes(db, slot, slotBlocks)
+}
+
+func UpdateSlotBlocksHashes(db ethdb.Database, block *types.Block) {
+	blocks := ReadSlotBlocksHashes(db, block.Slot())
+	for _, hash := range blocks {
+		if hash == block.Hash() {
+			return
+		}
+	}
+
+	blocks = append(blocks, block.Hash())
+	WriteSlotBlocksHashes(db, block.Slot(), blocks)
+}

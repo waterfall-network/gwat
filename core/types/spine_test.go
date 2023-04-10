@@ -1,11 +1,11 @@
 package types
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"reflect"
 	"testing"
 
-	"database/sql/driver"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
@@ -39,7 +39,7 @@ func (bc *BlockChainMock) GetBlocksByHashes(hashes common.HashArray) BlockMap {
 	return res
 }
 
-func TestFindByHeight(t *testing.T) {
+func TestSelectBlocks(t *testing.T) {
 	block1 := &Block{
 		header: &Header{
 			ParentHashes: nil,
@@ -70,34 +70,7 @@ func TestFindByHeight(t *testing.T) {
 			Height:       uint64(10),
 		},
 	}
-
-	testCases := []struct {
-		name           string
-		blocks         Blocks
-		expectedBlocks Blocks
-	}{
-		{
-			name:           "Sort missing blocks",
-			blocks:         Blocks{},
-			expectedBlocks: Blocks{},
-		},
-		{
-			name:           "Sort blocks",
-			blocks:         Blocks{block1, block2, block3, block4, block5},
-			expectedBlocks: Blocks{block3},
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			sortBlocks := FindByHeight(testCase.blocks)
-			testutils.AssertEqual(t, testCase.expectedBlocks, sortBlocks)
-		})
-	}
-}
-
-func TestFindByParents(t *testing.T) {
-	block1 := &Block{
+	block6 := &Block{
 		header: &Header{
 			ParentHashes: common.HashArray{
 				common.Hash{0x01},
@@ -106,7 +79,7 @@ func TestFindByParents(t *testing.T) {
 			Height: uint64(100),
 		},
 	}
-	block2 := &Block{
+	block7 := &Block{
 		header: &Header{
 			ParentHashes: common.HashArray{
 				common.Hash{0x01},
@@ -114,7 +87,7 @@ func TestFindByParents(t *testing.T) {
 			Height: uint64(100),
 		},
 	}
-	block3 := &Block{
+	block8 := &Block{
 		header: &Header{
 			ParentHashes: common.HashArray{
 				common.Hash{0x01},
@@ -125,7 +98,7 @@ func TestFindByParents(t *testing.T) {
 			Height: uint64(100),
 		},
 	}
-	block4 := &Block{
+	block9 := &Block{
 		header: &Header{
 			ParentHashes: common.HashArray{
 				common.Hash{0x01},
@@ -137,7 +110,7 @@ func TestFindByParents(t *testing.T) {
 			Height: uint64(100),
 		},
 	}
-	block5 := &Block{
+	block10 := &Block{
 		header: &Header{
 			ParentHashes: common.HashArray{
 				common.Hash{0x01},
@@ -147,7 +120,7 @@ func TestFindByParents(t *testing.T) {
 			Height: uint64(100),
 		},
 	}
-	block6 := &Block{
+	block11 := &Block{
 		header: &Header{
 			TxHash: common.Hash{0x02},
 			ParentHashes: common.HashArray{
@@ -158,7 +131,7 @@ func TestFindByParents(t *testing.T) {
 			Height: uint64(100),
 		},
 	}
-	block7 := &Block{
+	block12 := &Block{
 		header: &Header{
 			TxHash: common.Hash{0x03},
 			ParentHashes: common.HashArray{
@@ -169,7 +142,7 @@ func TestFindByParents(t *testing.T) {
 			Height: uint64(100),
 		},
 	}
-	block8 := &Block{
+	block13 := &Block{
 		header: &Header{
 			TxHash: common.Hash{0x01},
 			ParentHashes: common.HashArray{
@@ -180,27 +153,51 @@ func TestFindByParents(t *testing.T) {
 			Height: uint64(100),
 		},
 	}
+
 	testCases := []struct {
 		name           string
 		blocks         Blocks
 		expectedBlocks Blocks
+		selectFunc     func(Blocks) Blocks
 	}{
 		{
-			name:           "Sort by parents count",
+			name:           "Missing blocks",
+			blocks:         Blocks{},
+			expectedBlocks: Blocks{},
+			selectFunc: func(blocks Blocks) Blocks {
+				return selectSpinesByMaxHeight(blocks)
+			},
+		},
+		{
+			name:           "Select blocks by height",
 			blocks:         Blocks{block1, block2, block3, block4, block5},
-			expectedBlocks: Blocks{block4},
+			expectedBlocks: Blocks{block3},
+			selectFunc: func(blocks Blocks) Blocks {
+				return selectSpinesByMaxHeight(blocks)
+			},
+		}, {
+			name:           "Select blocks by parents count",
+			blocks:         Blocks{block6, block7, block8, block9, block10},
+			expectedBlocks: Blocks{block9},
+			selectFunc: func(blocks Blocks) Blocks {
+				return selectSpinesByMaxParentsCount(blocks)
+			},
 		},
 		{
 			name:           "Sort by hash",
-			blocks:         Blocks{block6, block7, block8},
-			expectedBlocks: Blocks{block7, block6, block8},
+			blocks:         Blocks{block11, block12, block13},
+			expectedBlocks: Blocks{block12, block11, block13},
+			selectFunc: func(blocks Blocks) Blocks {
+				sortByHash(blocks)
+				return blocks
+			},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			sortingBlocks := FindByParents(testCase.blocks)
-			testutils.AssertEqual(t, testCase.expectedBlocks, sortingBlocks)
+			sortBlocks := testCase.selectFunc(testCase.blocks)
+			testutils.AssertEqual(t, testCase.expectedBlocks, sortBlocks)
 		})
 	}
 }
