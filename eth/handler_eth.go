@@ -220,13 +220,11 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-// TODO: handle checkpoint
 func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block, peer.RequestOneHeader, peer.RequestBodies)
 	// Update the peer's status info if better than the previous
-	cp := h.chain.GetLastCoordinatedCheckpoint()
-	lastFinNr, _, dag := peer.GetDagInfo()
+	lastFinNr, dag := peer.GetDagInfo()
 	if dag == nil {
 		dag = &common.HashArray{}
 	}
@@ -247,7 +245,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 		}
 	}
 	upDag = append(upDag, block.Hash())
-	peer.SetDagInfo(lastFinNr, cp, &upDag)
+	peer.SetDagInfo(lastFinNr, &upDag)
 	h.chainSync.handlePeerEvent(peer, evtBroadcast)
 	return nil
 }

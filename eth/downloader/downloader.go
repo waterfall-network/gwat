@@ -949,23 +949,16 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 	mode := d.getMode()
 
 	// Request the advertised remote head block and wait for the response
-	_, lastCp, _ := p.peer.GetDagInfo()
+	//lastFinNr, _ := p.peer.GetDagInfo()
+	lcp := d.blockchain.GetLastCoordinatedCheckpoint()
+
 	//lastFinNr, dag := p.peer.GetDagInfo()
-
-	currCp := d.blockchain.GetLastCoordinatedCheckpoint()
-	log.Info("fetchHead peer", "peerCpEpoch", lastCp.Epoch, "peerCpSpine", lastCp.Spine, "peerCpRoot", lastCp.Spine)
-	log.Info("fetchHead current", "peerCpEpoch", currCp.Epoch, "peerCpSpine", currCp.Spine, "currCpRoot", lastCp.Spine)
-
-	// Compare checkpoints
-	if lastCp.Epoch < currCp.Epoch {
-		return nil, nil, fmt.Errorf("%w: remote head %d below checkpoint %d", errUnsyncedPeer, head.Nr(), d.checkpoint)
-	}
-
 	fetch := 1
 	if mode == FastSync {
 		fetch = 2 // head + pivot headers
 	}
-	go p.peer.RequestHeadersByHash(lastCp.Spine, fetch, fsMinFullBlocks-1, true)
+	// from spine hash to spine hash
+	go p.peer.RequestHeadersByHash(lcp.Spine, fetch, fsMinFullBlocks-1, true)
 	//go p.peer.RequestHeadersByNumber(lastFinNr, fetch, fsMinFullBlocks-1, true)
 
 	ttl := d.peers.rates.TargetTimeout()

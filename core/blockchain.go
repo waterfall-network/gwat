@@ -601,6 +601,7 @@ func (bc *BlockChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	if bc.lastCoordinatedCp.Load() == nil {
 		cp := rawdb.ReadLastCoordinatedCheckpoint(bc.db)
 		if cp == nil {
+			log.Warn("Checkpoint not found in db")
 			return nil
 		}
 		bc.lastCoordinatedCp.Store(cp.Copy())

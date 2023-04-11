@@ -80,12 +80,11 @@ type chainSyncer struct {
 
 // chainSyncOp is a scheduled sync operation.
 type chainSyncOp struct {
-	mode       downloader.SyncMode
-	peer       *eth.Peer
-	lastFinNr  uint64
-	checkpoint *types.Checkpoint
-	dag        common.HashArray
-	dagOnly    bool
+	mode      downloader.SyncMode
+	peer      *eth.Peer
+	lastFinNr uint64
+	dag       common.HashArray
+	dagOnly   bool
 }
 
 // newChainSyncer creates a chainSyncer.
@@ -123,51 +122,54 @@ func (cs *chainSyncer) loop() {
 	defer cs.force.Stop()
 	var pevt peerEvt
 	for {
-		var op *chainSyncOp
-		if pevt.kind == evtBroadcast {
-			//TODO rm deprecated
-			//// if no finalization while defined slots number - start resync
-			//if cs.isResync() {
-			//	op = cs.getResyncOp()
-			//	log.Warn("Resync required", "op", op)
-			//}
-		} else {
-			op = cs.nextSyncOp()
-			// check sync is busy
-			if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
-				log.Warn("Synchronization canceled (process busy)", "op", op)
-				op = nil
+		si := cs.handler.chain.GetSlotInfo()
+		if si != nil {
+			var op *chainSyncOp
+			if pevt.kind == evtBroadcast {
+				//TODO rm deprecated
+				//// if no finalization while defined slots number - start resync
+				//if cs.isResync() {
+				//	op = cs.getResyncOp()
+				//	log.Warn("Resync required", "op", op)
+				//}
+			} else {
+				op = cs.nextSyncOp()
+				// check sync is busy
+				if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
+					log.Warn("Synchronization canceled (process busy)", "op", op)
+					op = nil
+				}
 			}
-		}
-		if op != nil {
-			log.Warn("Synchronization start", "op", op)
-			cs.startSync(op)
-		}
-		pevt.kind = evtDefault
-		select {
-		case pevt = <-cs.peerEventCh:
-			log.Debug("sync: peer evt", "kind", pevt.kind)
-			// Peer information changed, recheck.
-		case <-cs.doneCh:
-			log.Debug("sync: done ch")
-			cs.doneCh = nil
-			cs.force.Reset(forceSyncCycle)
-			cs.forced = false
-		case <-cs.force.C:
-			log.Debug("sync: force timer")
-			cs.forced = true
+			if op != nil {
+				log.Warn("Synchronization start", "op", op)
+				cs.startSync(op)
+			}
+			pevt.kind = evtDefault
+			select {
+			case pevt = <-cs.peerEventCh:
+				log.Debug("sync: peer evt", "kind", pevt.kind)
+				// Peer information changed, recheck.
+			case <-cs.doneCh:
+				log.Debug("sync: done ch")
+				cs.doneCh = nil
+				cs.force.Reset(forceSyncCycle)
+				cs.forced = false
+			case <-cs.force.C:
+				log.Debug("sync: force timer")
+				cs.forced = true
 
-		case <-cs.handler.quitSync:
-			log.Debug("sync: quit")
-			// Disable all insertion on the blockchain. This needs to happen before
-			// terminating the downloader because the downloader waits for blockchain
-			// inserts, and these can take a long time to finish.
-			cs.handler.chain.StopInsert()
-			cs.handler.downloader.Terminate()
-			if cs.doneCh != nil {
-				<-cs.doneCh
+			case <-cs.handler.quitSync:
+				log.Debug("sync: quit")
+				// Disable all insertion on the blockchain. This needs to happen before
+				// terminating the downloader because the downloader waits for blockchain
+				// inserts, and these can take a long time to finish.
+				cs.handler.chain.StopInsert()
+				cs.handler.downloader.Terminate()
+				if cs.doneCh != nil {
+					<-cs.doneCh
+				}
+				return
 			}
-			return
 		}
 	}
 }
@@ -189,7 +191,7 @@ func (cs *chainSyncer) getResyncOp() *chainSyncOp {
 		return nil
 	}
 	// We have enough peers, select peer to sync
-	peer := cs.handler.peers.getHighestPeer(false)
+	peer := cs.handler.peers.getPeer(false)
 	if peer == nil {
 		return nil
 	}
@@ -226,10 +228,11 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		minPeers = cs.handler.maxPeers
 	}
 	if cs.handler.peers.len() < minPeers {
+		log.Info("Count of active peers is less then minPeers")
 		return nil
 	}
 	// We have enough peers, select peer to sync
-	peer := cs.handler.peers.getHighestPeer(true)
+	peer := cs.handler.peers.getPeer(true)
 	if peer == nil {
 		return nil
 	}
@@ -255,7 +258,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if dhs := cs.handler.chain.GetDagHashes(); dhs != nil {
 		dagHashes = *dhs
 	}
-	_, _, dag := peer.GetDagInfo()
+	_, dag := peer.GetDagInfo()
 	for _, hash := range *dag {
 		block := cs.handler.chain.GetBlockByHash(hash)
 		if len(localTips) == 0 && block != nil && block.Nr() == lastFinNr {
@@ -279,8 +282,8 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 }
 
 func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
-	lastFinNr, checkpoint, _ := p.GetDagInfo()
-	return &chainSyncOp{mode: mode, peer: p, lastFinNr: lastFinNr, checkpoint: checkpoint, dag: common.HashArray{}, dagOnly: false}
+	lastFinNr, _ := p.GetDagInfo()
+	return &chainSyncOp{mode: mode, peer: p, lastFinNr: lastFinNr, dag: common.HashArray{}, dagOnly: false}
 }
 
 func (cs *chainSyncer) modeAndLocalHead() downloader.SyncMode {

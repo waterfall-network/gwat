@@ -229,47 +229,23 @@ func (ps *peerSet) snapLen() int {
 }
 
 // getHighestPeer retrieves the known peer with the max lastFinNr
-func (ps *peerSet) getHighestPeer(onlyNew bool) *eth.Peer {
+func (ps *peerSet) getPeer(onlyNew bool) *eth.Peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	var (
-		bestPeer   *eth.Peer
-		bestHeight uint64
-	)
+	var peer *eth.Peer
+
 	for _, p := range ps.peers {
 		if onlyNew && !p.IsNewlyConnected() {
 			continue
 		}
 		// dag == nil - has not synchronized tips
-		if _, lastCp, dag := p.GetDagInfo(); dag != nil && (bestPeer == nil || lastCp.Epoch > bestHeight) {
-			bestPeer, bestHeight = p.Peer, lastCp.Epoch
+		if _, dag := p.GetDagInfo(); dag != nil {
+			peer = p.Peer
 			p.ResetNewlyConnected()
 		}
 	}
-	return bestPeer
-}
-
-// getHighestPeer retrieves the known peer with the max lastFinNr
-func (ps *peerSet) getHighestPeer_deprecated(onlyNew bool) *eth.Peer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	var (
-		bestPeer   *eth.Peer
-		bestHeight uint64
-	)
-	for _, p := range ps.peers {
-		if onlyNew && !p.IsNewlyConnected() {
-			continue
-		}
-		// dag == nil - has not synchronized tips
-		if lastFinNr, _, dag := p.GetDagInfo(); dag != nil && (bestPeer == nil || lastFinNr > bestHeight) {
-			bestPeer, bestHeight = p.Peer, lastFinNr
-			p.ResetNewlyConnected()
-		}
-	}
-	return bestPeer
+	return peer
 }
 
 // close disconnects all peers.

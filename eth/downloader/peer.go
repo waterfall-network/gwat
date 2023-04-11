@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -72,7 +71,7 @@ type peerConnection struct {
 
 // LightPeer encapsulates the methods required to synchronise with a remote light peer.
 type LightPeer interface {
-	GetDagInfo() (uint64, *types.Checkpoint, *common.HashArray)
+	GetDagInfo() (uint64, *common.HashArray)
 	RequestHeadersByHashes(common.HashArray) error
 	RequestHeadersByHash(common.Hash, int, int, bool) error
 	RequestHeadersByNumber(uint64, int, int, bool) error
@@ -95,7 +94,7 @@ type lightPeerWrapper struct {
 func (w *lightPeerWrapper) RequestDag(fromFinNr uint64) error {
 	panic("RequestReceipts not supported in light client mode sync")
 }
-func (w *lightPeerWrapper) GetDagInfo() (uint64, *types.Checkpoint, *common.HashArray) {
+func (w *lightPeerWrapper) GetDagInfo() (uint64, *common.HashArray) {
 	return w.peer.GetDagInfo()
 }
 func (w *lightPeerWrapper) RequestHeadersByHash(h common.Hash, amount int, skip int, reverse bool) error {
