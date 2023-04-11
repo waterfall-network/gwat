@@ -3690,6 +3690,10 @@ func (bc *BlockChain) Database() ethdb.Database {
 	return bc.db
 }
 
+func (bc *BlockChain) DagMu() sync.RWMutex {
+	return bc.dagMu
+}
+
 func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 	// Get the epoch of the block
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())

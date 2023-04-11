@@ -67,6 +67,7 @@ type blockChain interface {
 	SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
+	DagMu() sync.RWMutex
 }
 
 type ethDownloader interface {
@@ -97,8 +98,6 @@ type Dag struct {
 	exitChan chan struct{}
 	errChan  chan error
 
-	mutex *sync.Mutex
-
 	optimisticSpinesCache map[uint64]map[uint64]types.Blocks // epoch/slot/spines
 }
 
@@ -116,7 +115,6 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		headsync:              headsync.New(chainConfig, eth, mux, fin),
 		exitChan:              make(chan struct{}),
 		errChan:               make(chan error),
-		mutex:                 new(sync.Mutex),
 		optimisticSpinesCache: make(map[uint64]map[uint64]types.Blocks),
 	}
 	atomic.StoreInt32(&d.busy, 0)
@@ -138,8 +136,9 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
 
 	if data.BaseSpine != nil {
 		log.Info("Handle Finalize: start",
@@ -225,8 +224,9 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 		}
 	}
 
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
 	lfHash := lfHeader.Hash()
@@ -254,8 +254,9 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		}
 	}
 
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
 
 	tstart := time.Now()
 
@@ -288,8 +289,9 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 		}
 	}
 
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
 
 	tstart := time.Now()
 
@@ -353,16 +355,20 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.
 func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
+
 	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
 	return d.headsync.SetReadyState(checkpoint)
 }
 
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
+
 	log.Info("Handle Sync Slot info", "params", slotInfo)
 	si := d.bc.GetSlotInfo()
 	if si.GenesisTime == slotInfo.GenesisTime &&
@@ -382,16 +388,20 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 
 // HandleHeadSync run head sync with coordinating network.
 func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
+
 	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
 	return d.headsync.Sync(data)
 }
 
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
+
 	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
@@ -496,8 +506,9 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		return
 	}
 
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	mu := d.bc.DagMu()
+	mu.Lock()
+	defer mu.Unlock()
 
 	errs := map[string]string{}
 
