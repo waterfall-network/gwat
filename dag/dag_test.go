@@ -1,7 +1,6 @@
 package dag
 
 import (
-	"sync"
 	"testing"
 	"time"
 
@@ -39,7 +38,7 @@ func TestGetOptimisticSpines(t *testing.T) {
 		bc.EXPECT().GetBlock(testBlock.Hash()).Return(testBlock)
 	}
 
-	dag := Dag{eth: backend, bc: bc, downloader: down, mutex: new(sync.Mutex), optimisticSpinesCache: make(map[uint64]map[uint64]types.Blocks)}
+	dag := Dag{eth: backend, bc: bc, downloader: down}
 	result := dag.HandleGetOptimisticSpines(spineBlock.Hash())
 
 	expectedResult := types.OptimisticSpinesResult{

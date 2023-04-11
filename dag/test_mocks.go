@@ -177,6 +177,18 @@ func (m *MockblockChain) EXPECT() *MockblockChainMockRecorder {
 	return m.recorder
 }
 
+// AddOptimisticSpineToCache mocks base method.
+func (m *MockblockChain) AddOptimisticSpineToCache(spine *types.Block) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddOptimisticSpineToCache", spine)
+}
+
+// AddOptimisticSpineToCache indicates an expected call of AddOptimisticSpineToCache.
+func (mr *MockblockChainMockRecorder) AddOptimisticSpineToCache(spine interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOptimisticSpineToCache", reflect.TypeOf((*MockblockChain)(nil).AddOptimisticSpineToCache), spine)
+}
+
 // AppendNotProcessedValidatorSyncData mocks base method.
 func (m *MockblockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync) {
 	m.ctrl.T.Helper()
@@ -201,6 +213,30 @@ func (m *MockblockChain) Config() *params.ChainConfig {
 func (mr *MockblockChainMockRecorder) Config() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockblockChain)(nil).Config))
+}
+
+// DagMuLock mocks base method.
+func (m *MockblockChain) DagMuLock() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DagMuLock")
+}
+
+// DagMuLock indicates an expected call of DagMuLock.
+func (mr *MockblockChainMockRecorder) DagMuLock() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DagMuLock", reflect.TypeOf((*MockblockChain)(nil).DagMuLock))
+}
+
+// DagMuUnlock mocks base method.
+func (m *MockblockChain) DagMuUnlock() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DagMuUnlock")
+}
+
+// DagMuUnlock indicates an expected call of DagMuUnlock.
+func (mr *MockblockChainMockRecorder) DagMuUnlock() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DagMuUnlock", reflect.TypeOf((*MockblockChain)(nil).DagMuUnlock))
 }
 
 // Database mocks base method.
@@ -315,6 +351,20 @@ func (mr *MockblockChainMockRecorder) GetLastFinalizedHeader() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastFinalizedHeader", reflect.TypeOf((*MockblockChain)(nil).GetLastFinalizedHeader))
 }
 
+// GetOptimisticSpinesFromCache mocks base method.
+func (m *MockblockChain) GetOptimisticSpinesFromCache(slot uint64) types.Blocks {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOptimisticSpinesFromCache", slot)
+	ret0, _ := ret[0].(types.Blocks)
+	return ret0
+}
+
+// GetOptimisticSpinesFromCache indicates an expected call of GetOptimisticSpinesFromCache.
+func (mr *MockblockChainMockRecorder) GetOptimisticSpinesFromCache(slot interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOptimisticSpinesFromCache", reflect.TypeOf((*MockblockChain)(nil).GetOptimisticSpinesFromCache), slot)
+}
+
 // GetSlotInfo mocks base method.
 func (m *MockblockChain) GetSlotInfo() *types.SlotInfo {
 	m.ctrl.T.Helper()
@@ -418,18 +468,6 @@ func (m *MockblockChain) SyncEraToSlot(slot uint64) {
 func (mr *MockblockChainMockRecorder) SyncEraToSlot(slot interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncEraToSlot", reflect.TypeOf((*MockblockChain)(nil).SyncEraToSlot), slot)
-}
-
-// UpdateSlotBlocks mocks base method.
-func (m *MockblockChain) UpdateSlotBlocks(block *types.Block) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "UpdateSlotBlocks", block)
-}
-
-// UpdateSlotBlocks indicates an expected call of UpdateSlotBlocks.
-func (mr *MockblockChainMockRecorder) UpdateSlotBlocks(block interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSlotBlocks", reflect.TypeOf((*MockblockChain)(nil).UpdateSlotBlocks), block)
 }
 
 // ValidatorStorage mocks base method.

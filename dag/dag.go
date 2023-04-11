@@ -7,8 +7,6 @@ package dag
 
 import (
 	"fmt"
-	"math"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -67,7 +65,10 @@ type blockChain interface {
 	SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
-	DagMu() sync.RWMutex
+	DagMuLock()
+	DagMuUnlock()
+	AddOptimisticSpineToCache(spine *types.Block)
+	GetOptimisticSpinesFromCache(slot uint64) types.Blocks
 }
 
 type ethDownloader interface {
@@ -97,25 +98,22 @@ type Dag struct {
 
 	exitChan chan struct{}
 	errChan  chan error
-
-	optimisticSpinesCache map[uint64]map[uint64]types.Blocks // epoch/slot/spines
 }
 
 // New creates new instance of Dag
 func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creatorConfig *creator.Config, engine consensus.Engine) *Dag {
 	fin := finalizer.New(chainConfig, eth, mux)
 	d := &Dag{
-		chainConfig:           chainConfig,
-		eth:                   eth,
-		mux:                   mux,
-		bc:                    eth.BlockChain(),
-		downloader:            eth.Downloader(),
-		creator:               creator.New(creatorConfig, chainConfig, engine, eth, mux),
-		finalizer:             fin,
-		headsync:              headsync.New(chainConfig, eth, mux, fin),
-		exitChan:              make(chan struct{}),
-		errChan:               make(chan error),
-		optimisticSpinesCache: make(map[uint64]map[uint64]types.Blocks),
+		chainConfig: chainConfig,
+		eth:         eth,
+		mux:         mux,
+		bc:          eth.BlockChain(),
+		downloader:  eth.Downloader(),
+		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
+		finalizer:   fin,
+		headsync:    headsync.New(chainConfig, eth, mux, fin),
+		exitChan:    make(chan struct{}),
+		errChan:     make(chan error),
 	}
 	atomic.StoreInt32(&d.busy, 0)
 	return d
@@ -136,9 +134,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	if data.BaseSpine != nil {
 		log.Info("Handle Finalize: start",
@@ -224,9 +221,8 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 		}
 	}
 
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
 	lfHash := lfHeader.Hash()
@@ -254,9 +250,8 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		}
 	}
 
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	tstart := time.Now()
 
@@ -289,9 +284,8 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 		}
 	}
 
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	tstart := time.Now()
 
@@ -323,13 +317,13 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 	slotsBlocks := make(types.Blocks, 0)
 
 	for i := gtSlot + 1; i <= currentSlot; i++ {
-		slotSpinesFromCache := d.getSpinesFromCache(i)
+		slotSpinesFromCache := d.bc.GetOptimisticSpinesFromCache(i)
 		if slotSpinesFromCache == nil {
 			blocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
 			for _, hash := range blocksHashes {
 				block := d.bc.GetBlock(hash)
 				slotSpinesFromCache = append(slotSpinesFromCache, block)
-				d.addSpineToCache(block)
+				d.bc.AddOptimisticSpineToCache(block)
 			}
 		}
 
@@ -355,9 +349,8 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.
 func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
 	return d.headsync.SetReadyState(checkpoint)
@@ -365,9 +358,8 @@ func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error)
 
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	log.Info("Handle Sync Slot info", "params", slotInfo)
 	si := d.bc.GetSlotInfo()
@@ -388,9 +380,8 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 
 // HandleHeadSync run head sync with coordinating network.
 func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
 	return d.headsync.Sync(data)
@@ -398,9 +389,8 @@ func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
 
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
@@ -506,9 +496,8 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		return
 	}
 
-	mu := d.bc.DagMu()
-	mu.Lock()
-	defer mu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	errs := map[string]string{}
 
@@ -561,7 +550,6 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 
 			if block != nil {
 				crtInfo["newBlock"] = block.Hash().Hex()
-				rawdb.UpdateSlotBlocksHashes(d.bc.Database(), block)
 			}
 
 			log.Info("Creator processing: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
@@ -611,47 +599,4 @@ func (d *Dag) handleEra(slot uint64) {
 	if currentEpoch > (d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod) && !d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
 		d.bc.SyncEraToSlot(slot)
 	}
-}
-
-func (d *Dag) addSpineToCache(spine *types.Block) {
-	spineEpoch := d.bc.GetSlotInfo().SlotToEpoch(spine.Slot())
-
-	epochSpines, ok := d.optimisticSpinesCache[spineEpoch]
-	if !ok {
-		d.optimisticSpinesCache[spineEpoch] = make(map[uint64]types.Blocks)
-	}
-
-	slotSpines, ok := epochSpines[spine.Slot()]
-	if !ok {
-		slotSpines = make(types.Blocks, 0)
-	}
-
-	slotSpines = append(slotSpines, spine)
-	d.optimisticSpinesCache[spineEpoch][spine.Slot()] = slotSpines
-
-	if len(d.optimisticSpinesCache) > optimisticSpinesCacheLen {
-		d.cleanOptimisticSpinesCache()
-	}
-}
-
-func (d *Dag) cleanOptimisticSpinesCache() {
-	oldestEpoch := uint64(math.MaxUint64)
-	for epoch := range d.optimisticSpinesCache {
-		if epoch < oldestEpoch {
-			oldestEpoch = epoch
-		}
-	}
-
-	delete(d.optimisticSpinesCache, oldestEpoch)
-}
-
-func (d *Dag) getSpinesFromCache(slot uint64) types.Blocks {
-	slotEpoch := d.bc.GetSlotInfo().SlotToEpoch(slot)
-
-	epochSpines, ok := d.optimisticSpinesCache[slotEpoch]
-	if !ok {
-		return nil
-	}
-
-	return epochSpines[slot]
 }

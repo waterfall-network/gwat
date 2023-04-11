@@ -259,7 +259,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 			//save block
 			blockBatch := db.NewBatch()
-			rawdb.UpdateSlotBlocksHashes(db, block)
 			rawdb.WriteBlock(blockBatch, block)
 			rawdb.WriteReceipts(blockBatch, block.Hash(), b.receipts)
 			rawdb.WritePreimages(blockBatch, statedb.Preimages())
@@ -273,6 +272,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := blockBatch.Write(); err != nil {
 				log.Crit("Failed to write block into disk", "err", err)
 			}
+			rawdb.UpdateSlotBlocksHashes(db, block)
+
 			parents := block.ParentHashes()
 			child := block.Hash()
 			batch := db.NewBatch()

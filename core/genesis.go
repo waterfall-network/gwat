@@ -348,7 +348,6 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	rawdb.UpdateSlotBlocksHashes(db, block)
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), nil)
 	rawdb.WriteLastCanonicalHash(db, block.Hash())
@@ -356,7 +355,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.WriteFinalizedHashNumber(db, block.Hash(), 0)
 	rawdb.WriteLastFinalizedHash(db, block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
-
+	rawdb.UpdateSlotBlocksHashes(db, block)
 	//set genesis blockDag
 	genesisDag := &types.BlockDAG{
 		Hash:                block.Hash(),

@@ -267,12 +267,13 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := lc.chainDb.NewBatch()
-	rawdb.UpdateSlotBlocksHashes(lc.chainDb, genesis)
 	rawdb.WriteBlock(batch, genesis)
 	rawdb.WriteLastFinalizedHash(batch, genesis.Hash())
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to reset genesis block", "err", err)
 	}
+
+	rawdb.UpdateSlotBlocksHashes(lc.chainDb, genesis)
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
 	lc.hc.SetLastFinalisedHeader(lc.genesisBlock.Header(), uint64(0))

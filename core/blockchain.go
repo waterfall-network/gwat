@@ -90,13 +90,14 @@ var (
 )
 
 const (
-	valSyncCacheLimit   = 128
-	bodyCacheLimit      = 256
-	blockCacheLimit     = 256
-	receiptsCacheLimit  = 32
-	txLookupCacheLimit  = 1024
-	TriesInMemory       = 128
-	invBlocksCacheLimit = 512
+	valSyncCacheLimit          = 128
+	bodyCacheLimit             = 256
+	blockCacheLimit            = 256
+	receiptsCacheLimit         = 32
+	txLookupCacheLimit         = 1024
+	TriesInMemory              = 128
+	invBlocksCacheLimit        = 512
+	optimisticSpinesCacheLimit = 128
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
 	// Changelog:
@@ -205,13 +206,14 @@ type BlockChain struct {
 	notProcValSyncOps      map[[28]byte]*types.ValidatorSync
 	valSyncCache           *lru.Cache
 
-	stateCache         state.Database // State database to reuse between imports (contains state cache)
-	bodyCache          *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache       *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache      *lru.Cache     // Cache for the most recent receipts per block
-	blockCache         *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache      *lru.Cache     // Cache for the most recent transaction lookup data.
-	invalidBlocksCache *lru.Cache     // Cache for the blocks with unknown parents
+	stateCache            state.Database // State database to reuse between imports (contains state cache)
+	bodyCache             *lru.Cache     // Cache for the most recent block bodies
+	bodyRLPCache          *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache         *lru.Cache     // Cache for the most recent receipts per block
+	blockCache            *lru.Cache     // Cache for the most recent entire blocks
+	txLookupCache         *lru.Cache     // Cache for the most recent transaction lookup data.
+	invalidBlocksCache    *lru.Cache     // Cache for the blocks with unknown parents
+	optimisticSpinesCache *lru.Cache
 
 	validatorStorage valStore.Storage
 
@@ -244,6 +246,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	invBlocksCache, _ := lru.New(invBlocksCacheLimit)
+	optimisticSpinesCache, _ := lru.New(optimisticSpinesCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -255,19 +258,20 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:               make(chan struct{}),
-		chainmu:            syncx.NewClosableMutex(),
-		valSyncCache:       valSyncCache,
-		bodyCache:          bodyCache,
-		bodyRLPCache:       bodyRLPCache,
-		receiptsCache:      receiptsCache,
-		blockCache:         blockCache,
-		txLookupCache:      txLookupCache,
-		invalidBlocksCache: invBlocksCache,
-		engine:             engine,
-		vmConfig:           vmConfig,
-		syncProvider:       nil,
-		validatorStorage:   valStore.NewStorage(chainConfig),
+		quit:                  make(chan struct{}),
+		chainmu:               syncx.NewClosableMutex(),
+		valSyncCache:          valSyncCache,
+		bodyCache:             bodyCache,
+		bodyRLPCache:          bodyRLPCache,
+		receiptsCache:         receiptsCache,
+		blockCache:            blockCache,
+		txLookupCache:         txLookupCache,
+		invalidBlocksCache:    invBlocksCache,
+		optimisticSpinesCache: optimisticSpinesCache,
+		engine:                engine,
+		vmConfig:              vmConfig,
+		syncProvider:          nil,
+		validatorStorage:      valStore.NewStorage(chainConfig),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -861,6 +865,10 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 				log.Crit("Failed to truncate ancient data", "number", num, "err", err)
 			}
 		}
+		delBlock := bc.GetBlockByHash(hash)
+		rawdb.DeleteSlotBlockHash(bc.Database(), delBlock)
+		bc.DeleteOptimisticSpineFromCache(delBlock)
+
 		if num != nil {
 			rawdb.DeleteBlock(db, hash, num)
 		} else {
@@ -883,8 +891,6 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		log.Warn("Rewinding blockchain", "target", head.Hex())
 		bc.hc.SetHead(head, updateFn, delFn)
 	}
-
-	rawdb.DeleteSlotBlockHash(bc.Database(), block)
 	// Clear out any stale content from the caches
 	bc.valSyncCache.Purge()
 	bc.bodyCache.Purge()
@@ -945,11 +951,13 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := bc.db.NewBatch()
-	rawdb.UpdateSlotBlocksHashes(bc.Database(), genesis)
 	rawdb.WriteBlock(batch, genesis)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), genesis)
+	bc.AddOptimisticSpineToCache(genesis)
+
 	bc.writeFinalizedBlock(0, genesis, true)
 
 	// Last update all in-memory chain markers
@@ -1307,6 +1315,17 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		if err := batch.Write(); err != nil {
 			return 0, err
 		}
+
+		for _, block := range blockChain {
+			canonHashes[block.Hash()] = struct{}{}
+			if block.Nr() == 0 {
+				continue
+			}
+
+			rawdb.DeleteSlotBlockHash(bc.db, block)
+			bc.DeleteOptimisticSpineFromCache(block)
+		}
+
 		return 0, nil
 	}
 
@@ -1428,11 +1447,13 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
 	}
 
 	batch := bc.db.NewBatch()
-	rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+	bc.AddOptimisticSpineToCache(block)
+
 	bc.AppendToChildren(block.Hash(), block.ParentHashes())
 	return nil
 }
@@ -1544,7 +1565,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
-	rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), receipts)
 	bc.handleBlockValidatorSyncReceipts(block, receipts)
@@ -1560,6 +1580,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+	bc.AddOptimisticSpineToCache(block)
+
 	bc.AppendToChildren(block.Hash(), block.ParentHashes())
 	// Commit all cached state changes into underlying memory database.
 	root, err := state.Commit(true)
@@ -1706,8 +1729,8 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 		return 0, nil
 	}
 
-	bc.dagMu.Lock()
-	defer bc.dagMu.Unlock()
+	bc.DagMuLock()
+	defer bc.DagMuUnlock()
 
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
@@ -1826,8 +1849,10 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 			return it.index, ErrBannedHash
 		}
 
-		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 		rawdb.WriteBlock(bc.db, block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+		bc.AddOptimisticSpineToCache(block)
+
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 		isHead := maxFinNr == block.Nr()
 		bc.writeFinalizedBlock(block.Nr(), block, isHead)
@@ -2296,8 +2321,10 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			log.Info("Insert propagated block: check block exists", "stateOnly", stateOnly, "Nr", checkBlock.Nr(), "Height", checkBlock.Height(), "Hash", checkBlock.Hash().Hex())
 		}
 
-		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 		rawdb.WriteBlock(bc.db, block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+		bc.AddOptimisticSpineToCache(block)
+
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 		bc.MoveTxsToProcessing(types.Blocks{block})
 
@@ -2959,8 +2986,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Retrieve the parent block, and it's state to execute on top
 		start := time.Now()
 
-		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
 		rawdb.WriteBlock(bc.db, block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+		bc.AddOptimisticSpineToCache(block)
+
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		//retrieve state data
@@ -3690,8 +3719,12 @@ func (bc *BlockChain) Database() ethdb.Database {
 	return bc.db
 }
 
-func (bc *BlockChain) DagMu() sync.RWMutex {
-	return bc.dagMu
+func (bc *BlockChain) DagMuLock() {
+	bc.dagMu.Lock()
+}
+
+func (bc *BlockChain) DagMuUnlock() {
+	bc.dagMu.Unlock()
 }
 
 func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
@@ -3880,4 +3913,49 @@ func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, recei
 			bc.SetValidatorSyncData(txValSyncOp)
 		}
 	}
+}
+
+func (bc *BlockChain) AddOptimisticSpineToCache(spine *types.Block) {
+	slotSpines := bc.GetOptimisticSpinesFromCache(spine.Slot())
+	for _, slotSpine := range slotSpines {
+		if slotSpine.Hash() == spine.Hash() {
+			return
+		}
+	}
+	slotSpines = append(slotSpines, spine)
+	bc.optimisticSpinesCache.Add(spine.Slot(), slotSpines)
+
+	if bc.optimisticSpinesCache.Len() == optimisticSpinesCacheLimit {
+		bc.optimisticSpinesCache.RemoveOldest()
+	}
+}
+
+func (bc *BlockChain) GetOptimisticSpinesFromCache(slot uint64) types.Blocks {
+	blocks, ok := bc.optimisticSpinesCache.Get(slot)
+	if !ok {
+		return nil
+	}
+
+	blk := blocks.(*types.Blocks)
+	if blk != nil {
+		return *blk
+	}
+
+	return nil
+}
+
+func (bc *BlockChain) DeleteOptimisticSpineFromCache(spine *types.Block) {
+	slotSpines := bc.GetOptimisticSpinesFromCache(spine.Slot())
+	for i, slotSpine := range slotSpines {
+		if slotSpine.Hash() == spine.Hash() {
+			slotSpines = append(slotSpines[:i], slotSpines[i+1:]...)
+		}
+	}
+
+	if len(slotSpines) > 0 {
+		bc.optimisticSpinesCache.Add(spine.Slot(), slotSpines)
+		return
+	}
+
+	bc.optimisticSpinesCache.Remove(spine.Slot())
 }
