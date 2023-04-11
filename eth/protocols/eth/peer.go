@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"math/rand"
 	"sync"
 

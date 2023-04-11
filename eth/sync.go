@@ -126,12 +126,6 @@ func (cs *chainSyncer) loop() {
 		if si != nil {
 			var op *chainSyncOp
 			if pevt.kind == evtBroadcast {
-				//TODO rm deprecated
-				//// if no finalization while defined slots number - start resync
-				//if cs.isResync() {
-				//	op = cs.getResyncOp()
-				//	log.Warn("Resync required", "op", op)
-				//}
 			} else {
 				op = cs.nextSyncOp()
 				// check sync is busy
@@ -369,4 +363,15 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		h.BroadcastBlock(block, false)
 	}
 	return nil
+}
+
+// StartSync trigers startSync.
+func (cs *chainSyncer) Sync() {
+	cs.forced = true
+	op := cs.nextSyncOp()
+	if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
+		log.Warn("Synchronization canceled (process busy)", "op", op)
+		op = nil
+	}
+	cs.startSync(op)
 }

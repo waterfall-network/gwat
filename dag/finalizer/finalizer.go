@@ -30,6 +30,7 @@ const (
 type Backend interface {
 	BlockChain() *core.BlockChain
 	Downloader() *downloader.Downloader
+	TriggerSync()
 }
 
 // Finalizer
@@ -93,8 +94,8 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		block := bc.GetBlockByHash(spineHash)
 		if block == nil {
 			log.Error("Block finalization failed", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
+			f.eth.TriggerSync()
 			return ErrSpineNotFound
-			// TODO: sync, get missing hashes
 		}
 		spinesMap[block.Slot()] = block
 	}
@@ -120,10 +121,15 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		if isHeadSync {
 			//validate blocks while head sync
 			for _, block := range orderedChain {
-				if ok, err := bc.VerifyBlock(block); !ok {
-					if err == nil {
+				if ok, doSync, err := bc.VerifyBlock(block); !ok {
+					if err != nil {
 						bc.CacheInvalidBlock(block)
 						err = ErrInvalidBlock
+					}
+
+					if doSync {
+						log.Warn("Parent not fount")
+						f.eth.TriggerSync()
 					}
 					log.Error("Block finalization failed (validation)", "valid", ok, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 					return err

@@ -2078,20 +2078,20 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 }
 
 // VerifyBlock validate block
-func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
+func (bc *BlockChain) VerifyBlock(block *types.Block) (ok, isSync bool, err error) {
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
-		return false, nil
+		return false, false, nil
 	}
 	if !bc.verifyCreators(block) {
-		return false, nil
+		return false, false, nil
 	}
 
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
 	if !isValidEra {
 		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
-		return false, nil
+		return false, false, nil
 	}
 
 	unknownParent := false
@@ -2101,7 +2101,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		if parent == nil {
 			if _, ok := bc.invalidBlocksCache.Get(parentHash); ok {
 				log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
-				return false, nil
+				return false, true, nil
 			}
 			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
 			unknownParent = true
@@ -2110,12 +2110,12 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 
 		if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
 			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
-			return false, nil
+			return false, false, nil
 		}
 	}
 
 	if unknownParent {
-		return false, ErrInsertUncompletedDag
+		return false, false, ErrInsertUncompletedDag
 	}
 
 	intrGasSum := uint64(0)
@@ -2143,27 +2143,27 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			intrGas, err = bc.TxEstimateGas(tx, nil)
 			if err != nil {
 				log.Warn("Block verification: gas usage error", "err", err)
-				return false, err
+				return false, false, err
 			}
 		} else {
 			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
 		}
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
-			return false, nil
+			return false, false, nil
 		}
 		intrGasSum += intrGas
 	}
 	if intrGasSum > block.GasLimit() {
 		log.Warn("Block verification: intrinsic gas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
-		return false, nil
+		return false, false, nil
 	}
 
 	//validate height
 	_, stateBlock, _, calcHeight, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 	if stateErr != nil {
 		log.Error("Block verification: calc height err", "block hash", block.Hash().Hex())
-		return false, stateErr
+		return false, false, stateErr
 	}
 	if block.Height() != calcHeight {
 		log.Warn("Block verification: block invalid height",
@@ -2181,10 +2181,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"hash", block.Hash().Hex(),
 			"stateBlock", stateBlock,
 		)
-		return false, nil
+		return false, false, nil
 	}
 
-	return bc.verifyBlockParents(block) && bc.verifyLFData(block), nil
+	return bc.verifyBlockParents(block) && bc.verifyLFData(block), false, nil
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
@@ -2283,7 +2283,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 			return it.index, ErrBannedHash
 		}
 
-		if ok, err := bc.VerifyBlock(block); !ok {
+		if ok, _, err := bc.VerifyBlock(block); !ok {
 			if err != nil {
 				return it.index, err
 			}

@@ -556,3 +556,8 @@ func (h *handler) txBroadcastLoop() {
 		}
 	}
 }
+
+// txBroadcastLoop announces new transactions to connected peers.
+func (h *handler) TriggerSync() {
+	h.chainSync.Sync()
+}

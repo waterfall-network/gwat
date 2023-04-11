@@ -36,6 +36,7 @@ type Backend interface {
 	CreatorAuthorize(creator common.Address) error
 	IsDevMode() bool
 	AccountManager() *accounts.Manager
+	TriggerSync()
 }
 
 type Dag struct {
@@ -309,7 +310,10 @@ func (d *Dag) StartWork(accounts []common.Address) {
 			lcp := d.bc.GetLastCoordinatedCheckpoint()
 			// revert to LastCoordinatedCheckpoint
 			if lcp.Spine != d.bc.GetLastFinalizedHeader().Hash() {
-				d.bc.SetHeadBeyondRoot(lcp.Spine, lcp.Root)
+				spineBlock := d.bc.GetBlock(lcp.Spine)
+				if err := d.finalizer.SetSpineState(&lcp.Spine, spineBlock.Nr()); err != nil {
+					log.Error("Revert to checkpoint spine error", "error", err)
+				}
 			}
 
 			log.Info("Waiting for slot info from coordinator")
