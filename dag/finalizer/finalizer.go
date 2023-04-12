@@ -141,6 +141,11 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		for i, block := range orderedChain {
 			nr := lastFinNr + uint64(i) + 1
 			block.SetNumber(&nr)
+			err := bc.UpdateFinalizingState(block, lastFinBlock)
+			if err != nil {
+				log.Error("Block finalization failed: PreFinalizingUpdateState failed", "err", err)
+				return err
+			}
 			isHead := i == len(orderedChain)-1
 			if err := f.finalizeBlock(nr, *block, isHead); err != nil {
 				log.Error("Block finalization failed", "isHead", isHead, "calc.nr", nr, "b.nr", block.Nr(), "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
@@ -149,6 +154,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 				}
 				return err
 			}
+			lastFinBlock = block
 		}
 		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())

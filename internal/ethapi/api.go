@@ -1311,6 +1311,10 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"parentHashes":     head.ParentHashes,
 		"lfHash":           head.LFHash,
 		"lfNumber":         hexutil.Uint64(head.LFNumber),
+		"lfGasUsed":        hexutil.Uint64(head.LFGasUsed),
+		"lfReceiptsRoot":   head.LFReceiptHash,
+		"lfStateRoot":      head.LFRoot,
+		"lflLogsBloom":     head.LFBloom,
 		"miner":            head.Coinbase,
 		"transactionsRoot": head.TxHash,
 		"gasLimit":         hexutil.Uint64(head.GasLimit),
@@ -1326,6 +1330,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
+	}
+	if head.LFBaseFee != nil {
+		result["lflBaseFeePerGas"] = (*hexutil.Big)(head.LFBaseFee)
 	}
 	if head.Number != nil {
 		result["number"] = hexutil.Uint64(head.Nr())

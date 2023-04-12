@@ -153,29 +153,29 @@ func (c *Sealer) VerifyHeader(chain consensus.ChainHeaderReader, header *types.H
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
 // method returns a quit channel to abort the operations and a results channel to
 // retrieve the async verifications (the order is that of the input slice).
-func (c *Sealer) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (c *Sealer) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
 	go func() {
 		//todo
-		//for i, header := range headers {
-		//	err := c.verifyHeader(chain, header, headers[:i])
-		//
-		//	select {
-		//	case <-abort:
-		//		return
-		//	case results <- err:
-		//	}
-		//}
-		for range headers {
-			var err error = nil
+		for i, header := range headers {
+			err := c.verifyHeader(chain, header, headers[:i])
+
 			select {
 			case <-abort:
 				return
 			case results <- err:
 			}
 		}
+		//for range headers {
+		//	var err error = nil
+		//	select {
+		//	case <-abort:
+		//		return
+		//	case results <- err:
+		//	}
+		//}
 	}()
 	return abort, results
 }
@@ -309,7 +309,7 @@ func (c *Sealer) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	//	}
 	//}
 	// All basic checks passed, verify the seal and return
-	return c.verifySeal(chain, header, parents)
+	return nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
