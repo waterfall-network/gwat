@@ -85,8 +85,7 @@ type Message interface {
 	IsFake() bool
 	Data() []byte
 	AccessList() types.AccessList
-
-	TxHash() *common.Hash
+	TxHash() common.Hash
 }
 
 // ExecutionResult includes all output after executing given evm

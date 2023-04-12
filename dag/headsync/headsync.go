@@ -218,7 +218,7 @@ func (hs *Headsync) validateCheckpoint(checkpoint *types.ConsensusInfo) (bool, e
 		return false, ErrCheckpointNotFin
 	}
 	// accordance height to number
-	if block.Height() != block.Nr() {
+	if block.Height() > block.Nr() {
 		return false, ErrCheckpointBadNr
 	}
 	// state exists

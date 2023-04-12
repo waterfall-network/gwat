@@ -160,10 +160,10 @@ func (mr *MockmessageMockRecorder) Data() *gomock.Call {
 }
 
 // TxHash mocks base method.
-func (m *Mockmessage) TxHash() *common.Hash {
+func (m *Mockmessage) TxHash() common.Hash {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TxHash")
-	ret0, _ := ret[0].(*common.Hash)
+	ret0, _ := ret[0].(common.Hash)
 	return ret0
 }
 

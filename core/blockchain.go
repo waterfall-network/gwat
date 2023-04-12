@@ -48,6 +48,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
@@ -621,7 +622,13 @@ func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
 	bc.valSyncCache.Add(key, validatorSync)
 	rawdb.WriteValidatorSync(bc.db, validatorSync)
 	if validatorSync.TxHash != nil && bc.notProcValSyncOps[key] != nil {
-		delete(bc.notProcValSyncOps, key)
+		notProcValSyncOps := map[[28]byte]*types.ValidatorSync{}
+		for k, vs := range bc.notProcValSyncOps {
+			if k != key {
+				notProcValSyncOps[k] = vs
+			}
+		}
+		bc.notProcValSyncOps = notProcValSyncOps
 		vsArr := make([]*types.ValidatorSync, 0, len(bc.notProcValSyncOps))
 		for _, vs := range bc.notProcValSyncOps {
 			vsArr = append(vsArr, vs)
@@ -1333,6 +1340,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// Write all the data out into the database
 			rawdb.WriteBody(batch, block.Hash(), block.Body())
 			rawdb.WriteReceipts(batch, block.Hash(), receiptChain[i])
+			bc.handleBlockValidatorSyncReceipts(block, receiptChain[i])
 
 			// Always write tx indices for live blocks, we assume they are needed
 			for i, tx := range block.Transactions() {
@@ -1548,6 +1556,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	blockBatch := bc.db.NewBatch()
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), receipts)
+	bc.handleBlockValidatorSyncReceipts(block, receipts)
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 
 	// create transaction lookup for applied txs.
@@ -2143,6 +2152,15 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	}
 	if block.Height() != calcHeight {
 		log.Warn("Block verification: block invalid height",
+			"calcHeight", calcHeight,
+			"height", block.Height(),
+			"hash", block.Hash().Hex(),
+			"stateBlock", stateBlock,
+		)
+	}
+
+	if block.Height() > calcHeight {
+		log.Warn("Block verification: block invalid height (critical)",
 			"calcHeight", calcHeight,
 			"height", block.Height(),
 			"hash", block.Hash().Hex(),
@@ -3047,6 +3065,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 	}
 
 	rawdb.WriteReceipts(bc.db, block.Hash(), receipts)
+	bc.handleBlockValidatorSyncReceipts(block, receipts)
 
 	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: rlogs})
 	if len(rlogs) > 0 {
@@ -3899,16 +3918,7 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 		if block == nil {
 			continue
 		}
-
-		receipts := bc.GetReceiptsByHash(block.Hash())
-		for _, tx := range block.Transactions() {
-			for _, receipt := range receipts {
-				if tx.Hash() == receipt.TxHash && tx.To() != nil && bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()) {
-					bc.CheckValidatorSyncTx(tx, receipt)
-				}
-			}
-		}
-
+		bc.handleBlockValidatorSyncTxs(block)
 		txs = append(txs, block.Transactions()...)
 	}
 	sort.Slice(txs, func(i, j int) bool {
@@ -4050,37 +4060,138 @@ func (bc *BlockChain) StartTransitionPeriod() {
 	log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
 }
 
-func (bc *BlockChain) CheckValidatorSyncTx(tx *types.Transaction, receipt *types.Receipt) {
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return
+func (bc *BlockChain) IsTxValidatorSync(tx *types.Transaction) bool {
+	if tx == nil {
+		return false
 	}
+	return tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes())
+}
 
+func (bc *BlockChain) verifyBlockValidatorSyncTx(block *types.Block, tx *types.Transaction) error {
+	if !bc.IsTxValidatorSync(tx) {
+		return nil
+	}
 	op, err := validatorOp.DecodeBytes(tx.Data())
 	if err != nil {
 		log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
-		return
+		return err
 	}
 
 	switch v := op.(type) {
 	case validatorOp.ValidatorSync:
-		txHash := tx.Hash()
-		txValSyncOp := &types.ValidatorSync{
-			OpType:    v.OpType(),
-			ProcEpoch: v.ProcEpoch(),
-			Index:     v.Index(),
-			Creator:   v.Creator(),
-			Amount:    v.Amount(),
-			TxHash:    &txHash,
+		savedValSync := bc.GetValidatorSyncData(v.Creator(), v.OpType())
+		if savedValSync == nil {
+			return validator.ErrNoSavedValSyncOp
 		}
-		log.Info("Validator sync tx",
-			"OpType", txValSyncOp.OpType,
-			"ProcEpoch", txValSyncOp.ProcEpoch,
-			"Index", txValSyncOp.Index,
-			"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
-			"amount", txValSyncOp.Amount,
-			"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+		if blockEpoch > v.ProcEpoch() {
+			return validator.ErrInvalidOpEpoch
+		}
+		if !validator.CompareValSync(savedValSync, v) {
+			return validator.ErrMismatchValSyncOp
+		}
+		if savedValSync.TxHash != nil && *savedValSync.TxHash != tx.Hash() {
+			return validator.ErrMismatchTxHashes
+		}
+	}
+	return nil
+}
+
+func (bc *BlockChain) handleBlockValidatorSyncTxs(block *types.Block) {
+	for _, tx := range block.Transactions() {
+		if !bc.IsTxValidatorSync(tx) {
+			continue
+		}
+		if err := bc.verifyBlockValidatorSyncTx(block, tx); err != nil {
+			log.Error("Validator sync tx handling",
+				"err", err,
+				"tx.Hash", tx.Hash().Hex(),
+				"tx.To", tx.To().Hex(),
+				"ValidatorsStateAddress", bc.Config().ValidatorsStateAddress.Bytes(),
+				"condIsValSync", bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()),
+			)
+			continue
+		}
+
+		op, err := validatorOp.DecodeBytes(tx.Data())
+		if err != nil {
+			log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+			continue
+		}
+		switch v := op.(type) {
+		case validatorOp.ValidatorSync:
+			txHash := tx.Hash()
+			txValSyncOp := &types.ValidatorSync{
+				OpType:    v.OpType(),
+				ProcEpoch: v.ProcEpoch(),
+				Index:     v.Index(),
+				Creator:   v.Creator(),
+				Amount:    v.Amount(),
+				TxHash:    &txHash,
+			}
+			log.Info("Validator sync tx",
+				"OpType", txValSyncOp.OpType,
+				"ProcEpoch", txValSyncOp.ProcEpoch,
+				"Index", txValSyncOp.Index,
+				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
+				"amount", txValSyncOp.Amount,
+				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+			)
+			bc.SetValidatorSyncData(txValSyncOp)
+		}
+	}
+}
+
+func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, receipts types.Receipts) {
+	for _, receipt := range receipts {
+		if receipt == nil {
+			continue
+		}
+		if receipt.Status != types.ReceiptStatusSuccessful {
+			continue
+		}
+		tx := block.Transactions()[receipt.TransactionIndex]
+		if !bc.IsTxValidatorSync(tx) {
+			continue
+		}
+
+		log.Info("Validator sync tx receipts (start)",
+			"tx.Hash", tx.Hash().Hex(),
+			"rc.Hash", receipt.TxHash.Hex(),
+			"conditionHash", tx.Hash() == receipt.TxHash,
+			"tx.To", tx.To().Hex(),
+			"ValidatorsStateAddress", bc.Config().ValidatorsStateAddress.Hex(),
+			"condIsValSync", bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()),
+			"rc.Status", receipt.Status,
+			"conditionStatus", receipt.Status != types.ReceiptStatusSuccessful,
 		)
 
-		bc.SetValidatorSyncData(txValSyncOp)
+		op, err := validatorOp.DecodeBytes(tx.Data())
+		if err != nil {
+			log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+			continue
+		}
+
+		switch v := op.(type) {
+		case validatorOp.ValidatorSync:
+			txHash := tx.Hash()
+			txValSyncOp := &types.ValidatorSync{
+				OpType:    v.OpType(),
+				ProcEpoch: v.ProcEpoch(),
+				Index:     v.Index(),
+				Creator:   v.Creator(),
+				Amount:    v.Amount(),
+				TxHash:    &txHash,
+			}
+			log.Info("Validator sync tx receipts",
+				"OpType", txValSyncOp.OpType,
+				"ProcEpoch", txValSyncOp.ProcEpoch,
+				"Index", txValSyncOp.Index,
+				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
+				"amount", txValSyncOp.Amount,
+				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+			)
+			bc.SetValidatorSyncData(txValSyncOp)
+		}
 	}
 }
