@@ -150,10 +150,11 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
 			Public:    false,
 		}, {
-			Namespace: "dag",
-			Version:   "1.0",
-			Service:   NewPublicDagAPI(apiBackend),
-			Public:    true,
+			Namespace:     "dag",
+			Version:       "1.0",
+			Service:       NewPublicDagAPI(apiBackend),
+			Public:        true,
+			Authenticated: true,
 		},
 	}
 }

@@ -713,6 +713,27 @@ var (
 		Usage: "InfluxDB organization name (v2 only)",
 		Value: metrics.DefaultConfig.InfluxDBOrganization,
 	}
+
+	// Authenticated RPC HTTP settings
+	AuthListenFlag = &cli.StringFlag{
+		Name:  "authrpc.addr",
+		Usage: "Listening address for authenticated APIs",
+		Value: node.DefaultConfig.AuthAddr,
+	}
+	AuthPortFlag = &cli.IntFlag{
+		Name:  "authrpc.port",
+		Usage: "Listening port for authenticated APIs",
+		Value: node.DefaultConfig.AuthPort,
+	}
+	AuthVirtualHostsFlag = &cli.StringFlag{
+		Name:  "authrpc.vhosts",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value: strings.Join(node.DefaultConfig.AuthVirtualHosts, ","),
+	}
+	JWTSecretFlag = &cli.StringFlag{
+		Name:  "authrpc.jwtsecret",
+		Usage: "Path to a JWT secret to use for authenticated RPC endpoints",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -874,6 +895,18 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(AllowUnprotectedTxs.Name) {
 		cfg.AllowUnprotectedTxs = ctx.GlobalBool(AllowUnprotectedTxs.Name)
+	}
+
+	if ctx.IsSet(AuthListenFlag.Name) {
+		cfg.AuthAddr = ctx.GlobalString(AuthListenFlag.Name)
+	}
+
+	if ctx.IsSet(AuthPortFlag.Name) {
+		cfg.AuthPort = ctx.GlobalInt(AuthPortFlag.Name)
+	}
+
+	if ctx.IsSet(AuthVirtualHostsFlag.Name) {
+		cfg.AuthVirtualHosts = SplitAndTrim(ctx.String(AuthVirtualHostsFlag.Name))
 	}
 }
 
@@ -1130,6 +1163,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(InsecureUnlockAllowedFlag.Name) {
 		cfg.InsecureUnlockAllowed = ctx.GlobalBool(InsecureUnlockAllowedFlag.Name)
+	}
+	if ctx.GlobalIsSet(JWTSecretFlag.Name) {
+		cfg.JWTSecret = ctx.GlobalString(JWTSecretFlag.Name)
 	}
 }
 
