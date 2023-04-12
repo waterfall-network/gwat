@@ -6,6 +6,7 @@
 package dag
 
 import (
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -30,7 +31,7 @@ import (
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
-const optimisticSpinesCacheLen = 8
+var errWrongInputSlot = errors.New("input slot is greater that current slot")
 
 // Backend wraps all methods required for block creation.
 type Backend interface {
@@ -67,8 +68,8 @@ type blockChain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 	DagMuLock()
 	DagMuUnlock()
-	AddOptimisticSpineToCache(spine *types.Block)
-	GetOptimisticSpinesFromCache(slot uint64) types.Blocks
+	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
+	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
 }
 
 type ethDownloader interface {
@@ -311,40 +312,33 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 	currentSlot := d.bc.GetSlotInfo().CurrentSlot()
 	if currentSlot <= gtSlot {
-		return []common.HashArray{}, nil
+		return []common.HashArray{}, errWrongInputSlot
 	}
 
-	slotsBlocks := make(types.Blocks, 0)
+	var err error
+	optimisticSpines := make([]common.HashArray, 0)
 
 	for i := gtSlot + 1; i <= currentSlot; i++ {
-		slotSpinesFromCache := d.bc.GetOptimisticSpinesFromCache(i)
-		if slotSpinesFromCache == nil {
-			blocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
-			for _, hash := range blocksHashes {
+		slotSpines := d.bc.GetOptimisticSpinesFromCache(i)
+		if slotSpines == nil {
+			slotBlocks := make(types.Blocks, 0)
+			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
+			for _, hash := range slotBlocksHashes {
 				block := d.bc.GetBlock(hash)
-				slotSpinesFromCache = append(slotSpinesFromCache, block)
-				d.bc.AddOptimisticSpineToCache(block)
+				slotBlocks = append(slotBlocks, block)
 			}
+			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
+			if err != nil {
+				return []common.HashArray{}, err
+			}
+
+			d.bc.SetOptimisticSpinesToCache(i, slotSpines)
 		}
 
-		slotsBlocks = append(slotsBlocks, slotSpinesFromCache...)
+		optimisticSpines = append(optimisticSpines, slotSpines)
 	}
 
-	if len(slotsBlocks) == 0 {
-		return []common.HashArray{}, nil
-	}
-
-	optimisticSpines, err := types.CalculateOptimisticSpines(slotsBlocks)
-	if err != nil {
-		return []common.HashArray{}, err
-	}
-
-	spinesHashes := make([]common.HashArray, 0)
-	for _, spines := range optimisticSpines {
-		spinesHashes = append(spinesHashes, *spines.GetHashes())
-	}
-
-	return spinesHashes, nil
+	return optimisticSpines, nil
 }
 
 // HandleHeadSyncReady set initial state to start head sync with coordinating network.

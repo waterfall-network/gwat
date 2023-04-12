@@ -91,32 +91,19 @@ func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
 	return spines, nil
 }
 
-func CalculateOptimisticSpines(blocks Blocks) ([]Blocks, error) {
-	spinesBySlots, err := blocks.GroupBySlot()
-	if err != nil {
-		return []Blocks{}, err
+func CalculateOptimisticSpines(slotBlocks Blocks) (common.HashArray, error) {
+	optimisticSpines := make(common.HashArray, 0)
+	slotSpines := selectSpinesByMaxHeight(slotBlocks)
+
+	if len(slotSpines) > 1 {
+		slotSpines = selectSpinesByMaxParentsCount(slotSpines)
 	}
 
-	slots := make(common.SorterAscU64, 0, len(spinesBySlots))
-	for slot := range spinesBySlots {
-		slots = append(slots, slot)
+	if len(slotSpines) > 1 {
+		sortByHash(slotSpines)
 	}
-	sort.Sort(slots)
 
-	optimisticSpines := make([]Blocks, 0)
-	for _, slot := range slots {
-		slotSpines := selectSpinesByMaxHeight(spinesBySlots[slot])
-
-		if len(slotSpines) > 1 {
-			slotSpines = selectSpinesByMaxParentsCount(slotSpines)
-		}
-
-		if len(slotSpines) > 1 {
-			sortByHash(slotSpines)
-		}
-
-		optimisticSpines = append(optimisticSpines, slotSpines)
-	}
+	optimisticSpines = append(optimisticSpines, *slotSpines.GetHashes()...)
 
 	return optimisticSpines, nil
 }

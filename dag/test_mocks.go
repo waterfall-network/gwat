@@ -177,18 +177,6 @@ func (m *MockblockChain) EXPECT() *MockblockChainMockRecorder {
 	return m.recorder
 }
 
-// AddOptimisticSpineToCache mocks base method.
-func (m *MockblockChain) AddOptimisticSpineToCache(spine *types.Block) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddOptimisticSpineToCache", spine)
-}
-
-// AddOptimisticSpineToCache indicates an expected call of AddOptimisticSpineToCache.
-func (mr *MockblockChainMockRecorder) AddOptimisticSpineToCache(spine interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOptimisticSpineToCache", reflect.TypeOf((*MockblockChain)(nil).AddOptimisticSpineToCache), spine)
-}
-
 // AppendNotProcessedValidatorSyncData mocks base method.
 func (m *MockblockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync) {
 	m.ctrl.T.Helper()
@@ -352,10 +340,10 @@ func (mr *MockblockChainMockRecorder) GetLastFinalizedHeader() *gomock.Call {
 }
 
 // GetOptimisticSpinesFromCache mocks base method.
-func (m *MockblockChain) GetOptimisticSpinesFromCache(slot uint64) types.Blocks {
+func (m *MockblockChain) GetOptimisticSpinesFromCache(slot uint64) common.HashArray {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetOptimisticSpinesFromCache", slot)
-	ret0, _ := ret[0].(types.Blocks)
+	ret0, _ := ret[0].(common.HashArray)
 	return ret0
 }
 
@@ -415,6 +403,18 @@ func (m *MockblockChain) SetNewEraInfo(newEra era.Era) {
 func (mr *MockblockChainMockRecorder) SetNewEraInfo(newEra interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNewEraInfo", reflect.TypeOf((*MockblockChain)(nil).SetNewEraInfo), newEra)
+}
+
+// SetOptimisticSpinesToCache mocks base method.
+func (m *MockblockChain) SetOptimisticSpinesToCache(slot uint64, spines common.HashArray) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetOptimisticSpinesToCache", slot, spines)
+}
+
+// SetOptimisticSpinesToCache indicates an expected call of SetOptimisticSpinesToCache.
+func (mr *MockblockChainMockRecorder) SetOptimisticSpinesToCache(slot, spines interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOptimisticSpinesToCache", reflect.TypeOf((*MockblockChain)(nil).SetOptimisticSpinesToCache), slot, spines)
 }
 
 // SetSlotInfo mocks base method.
