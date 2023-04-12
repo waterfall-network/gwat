@@ -225,9 +225,8 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 				common.Hash{0x02},
 				common.Hash{0x03},
 				common.Hash{0x04},
-				common.Hash{0x05},
 			},
-			Height: 15,
+			Height: 25,
 		},
 	}
 	block4 := &Block{
@@ -238,6 +237,7 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 				common.Hash{0x02},
 				common.Hash{0x03},
 				common.Hash{0x04},
+				common.Hash{0x05},
 			},
 			Height: 25,
 		},
@@ -248,44 +248,11 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 			ParentHashes: common.HashArray{
 				common.Hash{0x01},
 				common.Hash{0x02},
-				common.Hash{0x03},
-				common.Hash{0x04},
-				common.Hash{0x05},
 			},
 			Height: 25,
 		},
 	}
 	block6 := &Block{
-		header: &Header{
-			Slot: 2,
-			ParentHashes: common.HashArray{
-				common.Hash{0x01},
-				common.Hash{0x02},
-			},
-			Height: 25,
-		},
-	}
-	block7 := &Block{
-		header: &Header{
-			Slot: 3,
-			ParentHashes: common.HashArray{
-				common.Hash{0x01},
-				common.Hash{0x02},
-				common.Hash{0x03},
-			},
-			Height: 30,
-		},
-	}
-	block8 := &Block{
-		header: &Header{
-			Slot: 3,
-			ParentHashes: common.HashArray{
-				common.Hash{0x01},
-			},
-			Height: 30,
-		},
-	}
-	block9 := &Block{
 		header: &Header{
 			Slot:   3,
 			TxHash: common.Hash{0x015, 8},
@@ -296,7 +263,7 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 			Height: 30,
 		},
 	}
-	block10 := &Block{
+	block7 := &Block{
 		header: &Header{
 			Slot:   3,
 			TxHash: common.Hash{0x02},
@@ -307,7 +274,7 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 			Height: 30,
 		},
 	}
-	block11 := &Block{
+	block8 := &Block{
 		header: &Header{
 			Slot:   3,
 			TxHash: common.Hash{0x01},
@@ -318,58 +285,25 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 			Height: 30,
 		},
 	}
-	block12 := &Block{
-		header: &Header{
-			Slot:   4,
-			TxHash: common.Hash{0x015, 15, 48},
-			ParentHashes: common.HashArray{
-				common.Hash{0x01},
-				common.Hash{0x02},
-			},
-			Height: 40,
-		},
-	}
-	block13 := &Block{
-		header: &Header{
-			Slot:   4,
-			TxHash: common.Hash{0x015},
-			ParentHashes: common.HashArray{
-				common.Hash{0x01},
-				common.Hash{0x02},
-			},
-			Height: 40,
-		},
-	}
-	block14 := &Block{
-		header: &Header{
-			Slot:   4,
-			TxHash: common.Hash{0x1},
-			ParentHashes: common.HashArray{
-				common.Hash{0x01},
-				common.Hash{0x02},
-			},
-			Height: 40,
-		},
-	}
 	testCases := []struct {
 		name           string
 		blocks         Blocks
-		expectedBlocks []Blocks
+		expectedBlocks common.HashArray
 	}{
 		{
 			name:           "Sort by height",
-			blocks:         Blocks{block1, block2, block3, block4},
-			expectedBlocks: []Blocks{{block1}, {block4}},
+			blocks:         Blocks{block1, block2},
+			expectedBlocks: common.HashArray{block1.Hash()},
 		},
 		{
 			name:           "Sort by parents count",
-			blocks:         Blocks{block4, block5, block6, block7, block8, block9},
-			expectedBlocks: []Blocks{{block5}, {block7}},
+			blocks:         Blocks{block3, block4, block5},
+			expectedBlocks: common.HashArray{block4.Hash()},
 		},
 		{
 			name:           "Sort by hashes",
-			blocks:         Blocks{block9, block10, block11, block12, block13, block14},
-			expectedBlocks: []Blocks{{block10, block11, block9}, {block12, block14, block13}},
+			blocks:         Blocks{block6, block7, block8},
+			expectedBlocks: common.HashArray{block7.Hash(), block8.Hash(), block6.Hash()},
 		},
 	}
 
