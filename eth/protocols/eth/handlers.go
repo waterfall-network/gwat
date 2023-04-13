@@ -426,7 +426,7 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	dag, _, err := answerGetDagQuery(backend, query.GetDagPacket, peer)
+	dag, _, _, err := answerGetDagQuery(backend, query.GetDagPacket)
 	if err != nil {
 		return err
 	}
@@ -434,13 +434,16 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyDagData(query.RequestId, dag)
 }
 
-func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.HashArray, uint64, error) {
+func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, uint64, uint64, error) {
 	// Gather dag data
 	dag := common.HashArray{}
 	finalized := common.HashArray{}
 	toCp := &types.Checkpoint{}
-	fromCpEpoch := query.fromEpoch
-	toCpEpoch := query.toEpoch
+	fromCp := &types.Checkpoint{}
+
+	spine := query.Spine
+	fromCpEpoch := query.FromEpoch
+	toCpEpoch := query.ToEpoch
 
 	dag = backend.Chain().GetTips().GetOrderedDagChainHashes()
 	if toCp = rawdb.ReadCoordinatedCheckpoint(backend.Chain().Database(), toCpEpoch); toCp == nil {
@@ -448,10 +451,13 @@ func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.
 	}
 
 	if fromCpEpoch > toCp.Epoch {
-		return dag, 0, fmt.Errorf("%w", errInvalidDag)
+		return dag, 0, 0, fmt.Errorf("%w", errInvalidDag)
 	}
 
-	fromCp := rawdb.ReadCoordinatedCheckpoint(backend.Chain().Database(), fromCpEpoch)
+	if fromCp = rawdb.ReadCoordinatedCheckpoint(backend.Chain().Database(), fromCpEpoch); fromCp != nil || fromCp.Spine != spine {
+		return dag, 0, 0, fmt.Errorf("%w", errInvalidDag)
+	}
+
 	spineCpHeader := backend.Chain().GetHeader(fromCp.Spine)
 	fromFinBlNr := spineCpHeader.Nr()
 
@@ -466,7 +472,7 @@ func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.
 		dag = finalized.Concat(dag)
 	}
 
-	return dag, toCpEpoch, nil
+	return dag, fromCpEpoch, toCpEpoch, nil
 }
 
 func handleDag66(backend Backend, msg Decoder, peer *Peer) error {

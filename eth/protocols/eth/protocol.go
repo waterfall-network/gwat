@@ -314,8 +314,9 @@ type PooledTransactionsRLPPacket66 struct {
 
 // GetDagPacket represents a dag query.
 type GetDagPacket struct {
-	fromEpoch uint64
-	toEpoch   uint64
+	Spine     common.Hash
+	FromEpoch uint64
+	ToEpoch   uint64
 }
 
 // GetDagPacket represents a dag query over wfdag/66.
