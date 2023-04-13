@@ -971,14 +971,14 @@ func TestUpdateSlotBlocks(t *testing.T) {
 	}
 
 	WriteSlotBlocksHashes(db, slot, blocksHashes)
-	slotBlocks := ReadSlotBlocksHashes(db, slot)
-	testutils.AssertEqual(t, blocksHashes, slotBlocks)
+	slotBlocksHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, slotBlocksHashes)
 
-	UpdateSlotBlocksHashes(db, newBlock)
-	updatedSlotBlocks := ReadSlotBlocksHashes(db, slot)
-	testutils.AssertEqual(t, append(blocksHashes, newBlock.Hash()), updatedSlotBlocks)
+	UpdateSlotBlocksHashes(db, newBlock.Slot(), newBlock.Hash())
+	updatedHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, append(blocksHashes, newBlock.Hash()), updatedHashes)
 
-	DeleteSlotBlockHash(db, newBlock)
-	updatedSlotBlocks = ReadSlotBlocksHashes(db, slot)
-	testutils.AssertEqual(t, blocksHashes, updatedSlotBlocks)
+	DeleteSlotBlockHash(db, newBlock.Slot(), newBlock.Hash())
+	updatedHashes = ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, updatedHashes)
 }

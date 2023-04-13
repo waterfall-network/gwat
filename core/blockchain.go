@@ -866,6 +866,9 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 			}
 		}
 
+		delBlock := bc.GetBlockByHash(hash)
+		rawdb.DeleteSlotBlockHash(bc.Database(), delBlock.Slot(), hash)
+
 		if num != nil {
 			rawdb.DeleteBlock(db, hash, num)
 		} else {
@@ -873,8 +876,6 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		}
 		bc.RemoveTips(common.HashArray{hash})
 
-		delBlock := bc.GetBlockByHash(hash)
-		rawdb.DeleteSlotBlockHash(bc.Database(), delBlock)
 		// Todo(rjl493456442) txlookup, bloombits, etc
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
@@ -955,7 +956,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
-	rawdb.UpdateSlotBlocksHashes(bc.Database(), genesis)
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), genesis.Slot(), genesis.Hash())
 
 	bc.writeFinalizedBlock(0, genesis, true)
 
@@ -1440,7 +1441,7 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
-	rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), block.Slot(), block.Hash())
 
 	bc.AppendToChildren(block.Hash(), block.ParentHashes())
 	return nil
@@ -1568,7 +1569,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
-	rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+	rawdb.UpdateSlotBlocksHashes(bc.Database(), block.Slot(), block.Hash())
 	bc.removeOptimisticSpinesFromCache(block.Slot())
 	bc.AppendToChildren(block.Hash(), block.ParentHashes())
 	// Commit all cached state changes into underlying memory database.
@@ -1837,7 +1838,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks, verifySeals bool) (int
 		}
 
 		rawdb.WriteBlock(bc.db, block)
-		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 		isHead := maxFinNr == block.Nr()
 		bc.writeFinalizedBlock(block.Nr(), block, isHead)
@@ -2307,7 +2308,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, verifySeals boo
 		}
 
 		rawdb.WriteBlock(bc.db, block)
-		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 		bc.MoveTxsToProcessing(types.Blocks{block})
 
@@ -2970,7 +2971,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		start := time.Now()
 
 		rawdb.WriteBlock(bc.db, block)
-		rawdb.UpdateSlotBlocksHashes(bc.Database(), block)
+		rawdb.UpdateSlotBlocksHashes(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
 		//retrieve state data

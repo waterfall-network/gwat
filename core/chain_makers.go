@@ -272,7 +272,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := blockBatch.Write(); err != nil {
 				log.Crit("Failed to write block into disk", "err", err)
 			}
-			rawdb.UpdateSlotBlocksHashes(db, block)
+			rawdb.UpdateSlotBlocksHashes(db, block.Slot(), block.Hash())
 
 			parents := block.ParentHashes()
 			child := block.Hash()

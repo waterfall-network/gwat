@@ -355,7 +355,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.WriteFinalizedHashNumber(db, block.Hash(), 0)
 	rawdb.WriteLastFinalizedHash(db, block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
-	rawdb.UpdateSlotBlocksHashes(db, block)
+	rawdb.UpdateSlotBlocksHashes(db, block.Slot(), block.Hash())
 	//set genesis blockDag
 	genesisDag := &types.BlockDAG{
 		Hash:                block.Hash(),
