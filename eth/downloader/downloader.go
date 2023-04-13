@@ -730,7 +730,8 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	lastFinBlock := d.blockchain.GetLastFinalizedBlock()
 	spineBlock := d.blockchain.GetBlockByHash(lcp.Spine)
 
-	dag, finNr, err := d.fetchDagHashes(p, lcp.Epoch)
+	// fetch dag up to next epoch
+	dag, finNr, err := d.fetchDagHashes(p, lcp.Epoch, lcp.Epoch+1)
 	if len(dag) == 1 {
 		// if remote tips set to last finalized block - do same
 		block := d.blockchain.GetBlockByHash(dag[0])
@@ -2406,10 +2407,10 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 }
 
 // fetchDagHashes retrieves the dag chain hashes beginning from finalized block (excluded from response).
-func (d *Downloader) fetchDagHashes(p *peerConnection, cpEpoch uint64) (dag common.HashArray, fromCp uint64, err error) {
-	p.log.Info("Retrieving remote dag hashes: start", "fromEpoch", cpEpoch)
+func (d *Downloader) fetchDagHashes(p *peerConnection, fromCpEpoch, toCpEpoch uint64) (dag common.HashArray, fromCp uint64, err error) {
+	p.log.Info("Retrieving remote dag hashes: start", "fromEpoch", fromCpEpoch, "toEpoch", toCpEpoch)
 
-	go p.peer.RequestDag(cpEpoch)
+	go p.peer.RequestDag(fromCpEpoch, toCpEpoch)
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
@@ -2430,7 +2431,7 @@ func (d *Downloader) fetchDagHashes(p *peerConnection, cpEpoch uint64) (dag comm
 			if len(dag) == 0 {
 				err = errInvalidDag
 			}
-			return dag, cpEpoch, err
+			return dag, fromCpEpoch, err
 		case <-timeout:
 			p.log.Debug("Waiting for dag timed out", "elapsed", ttl)
 			return nil, 0, errTimeout

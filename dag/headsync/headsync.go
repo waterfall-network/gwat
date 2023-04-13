@@ -3,11 +3,9 @@
 package headsync
 
 import (
-	"sort"
 	"sync/atomic"
 	"time"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
@@ -152,63 +150,6 @@ func (hs *Headsync) SetReadyState(checkpoint *types.Checkpoint) (bool, error) {
 	// set ready state
 	atomic.StoreInt32(&hs.ready, 1)
 	hs.checkpoint = checkpoint
-	return true, nil
-}
-
-// Sync run head sync with coordinating network.
-func (hs *Headsync) Sync(data []types.Checkpoint) (bool, error) {
-	//skip if head synchronising is not active
-	if !hs.eth.Downloader().HeadSynchronising() {
-		log.Warn("⌛ Head synchronising is skipped (not ready)")
-		return false, ErrNotReady
-	}
-
-	atomic.StoreInt32(&hs.mainProc, 1)
-	defer func() {
-		atomic.StoreInt32(&hs.mainProc, 0)
-		hs.headSyncReset()
-	}()
-
-	//check ready state
-	if atomic.LoadInt32(&hs.ready) != 1 {
-		log.Info("⌛ Head synchronising is skipped (set to checkpoint is not ready)")
-		return false, ErrNotReady
-	}
-	defer atomic.StoreInt32(&hs.ready, 0)
-
-	//sort data by slots
-	checkpointsByEpoch := map[uint64]types.Checkpoint{}
-	epochs := common.SorterAskU64{}
-	for _, d := range data {
-		epoch := d.Epoch
-		checkpointsByEpoch[epoch] = d
-		epochs = append(epochs, epoch)
-	}
-	sort.Sort(epochs)
-	// apply data
-	baseSpine := hs.eth.BlockChain().GetLastFinalizedHeader().Hash()
-
-	for _, epoch := range epochs {
-		d := checkpointsByEpoch[epoch]
-
-		// collect spines
-		spineBlock := hs.eth.BlockChain().GetBlock(d.Spine)
-		spineSlot := spineBlock.Slot()
-		spines, err := hs.finalizer.GetFinalizingCandidates(&spineSlot)
-		if err != nil {
-			log.Warn("☠ Head synchronising failed", "err", err)
-			return false, err
-		}
-
-		// finalize spines
-		err = hs.finalizer.Finalize(&spines, &baseSpine, true)
-		if err != nil {
-			log.Warn("☠ Head synchronising failed", "err", err)
-			return false, err
-		}
-		baseSpine = d.Spine
-	}
-
 	return true, nil
 }
 

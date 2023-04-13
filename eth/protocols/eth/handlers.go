@@ -18,9 +18,9 @@ package eth
 
 import (
 	"fmt"
-	
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
@@ -438,11 +438,16 @@ func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.
 	// Gather dag data
 	dag := common.HashArray{}
 	finalized := common.HashArray{}
-	fromCpEpoch := uint64(query)
+	toCp := &types.Checkpoint{}
+	fromCpEpoch := query.fromEpoch
+	toCpEpoch := query.toEpoch
 
 	dag = backend.Chain().GetTips().GetOrderedDagChainHashes()
-	lastCp := backend.Chain().GetLastCoordinatedCheckpoint()
-	if fromCpEpoch > lastCp.Epoch {
+	if toCp = rawdb.ReadCoordinatedCheckpoint(backend.Chain().Database(), toCpEpoch); toCp == nil {
+		toCp = backend.Chain().GetLastCoordinatedCheckpoint()
+	}
+
+	if fromCpEpoch > toCp.Epoch {
 		return dag, 0, fmt.Errorf("%w", errInvalidDag)
 	}
 
@@ -451,7 +456,7 @@ func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.
 	fromFinBlNr := spineCpHeader.Nr()
 
 	toFinNr := backend.Chain().GetLastFinalizedNumber()
-	for i := uint64(0); fromCpEpoch+i <= lastCp.Epoch; i++ {
+	for i := uint64(0); fromCpEpoch+i <= toCp.Epoch; i++ {
 		for b := uint64(1); fromFinBlNr+b <= toFinNr; b++ {
 			finHash := backend.Chain().ReadFinalizedHashByNumber(fromFinBlNr + b)
 			if finHash != (common.Hash{}) {
@@ -461,7 +466,7 @@ func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.
 		dag = finalized.Concat(dag)
 	}
 
-	return dag, fromCpEpoch, nil
+	return dag, toCpEpoch, nil
 }
 
 func handleDag66(backend Backend, msg Decoder, peer *Peer) error {
