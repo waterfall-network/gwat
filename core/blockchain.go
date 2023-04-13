@@ -553,11 +553,7 @@ func (bc *BlockChain) SetSlotInfo(si *types.SlotInfo) error {
 
 // GetSlotInfo get current slot info.
 func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
-	si := bc.slotInfo.Copy()
-	if si != nil {
-		return si
-	}
-	return nil
+	return bc.slotInfo.Copy()
 }
 
 // GetSlotInfo get current slot info.
@@ -2077,21 +2073,21 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 }
 
 // VerifyBlock validate block
-func (bc *BlockChain) VerifyBlock(block *types.Block) (ok, isSync bool, err error) {
+func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
-		return false, false, nil
+		return false, nil
 	}
 	if !bc.verifyCreators(block) {
-		return false, false, nil
+		return false, nil
 	}
 
 	// Verify block era
-	isValidEra := bc.verifyBlockEra(block)
-	if !isValidEra {
-		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
-		return false, false, nil
-	}
+	bc.verifyBlockEra(block)
+	//if !isValidEra {
+	//	log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
+	//	return false, false, nil
+	//}
 
 	unknownParent := false
 	for _, parentHash := range block.ParentHashes() {
@@ -2100,7 +2096,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok, isSync bool, err erro
 		if parent == nil {
 			if _, ok := bc.invalidBlocksCache.Get(parentHash); ok {
 				log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
-				return false, true, nil
+				return false, nil
 			}
 			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
 			unknownParent = true
@@ -2109,12 +2105,12 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok, isSync bool, err erro
 
 		if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
 			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
-			return false, false, nil
+			return false, nil
 		}
 	}
 
 	if unknownParent {
-		return false, false, ErrInsertUncompletedDag
+		return false, ErrInsertUncompletedDag
 	}
 
 	intrGasSum := uint64(0)
@@ -2142,27 +2138,27 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok, isSync bool, err erro
 			intrGas, err = bc.TxEstimateGas(tx, nil)
 			if err != nil {
 				log.Warn("Block verification: gas usage error", "err", err)
-				return false, false, err
+				return false, err
 			}
 		} else {
 			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
 		}
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
-			return false, false, nil
+			return false, nil
 		}
 		intrGasSum += intrGas
 	}
 	if intrGasSum > block.GasLimit() {
 		log.Warn("Block verification: intrinsic gas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
-		return false, false, nil
+		return false, nil
 	}
 
 	//validate height
 	_, stateBlock, _, calcHeight, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 	if stateErr != nil {
 		log.Error("Block verification: calc height err", "block hash", block.Hash().Hex())
-		return false, false, stateErr
+		return false, stateErr
 	}
 	if block.Height() != calcHeight {
 		log.Warn("Block verification: block invalid height",
@@ -2180,10 +2176,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok, isSync bool, err erro
 			"hash", block.Hash().Hex(),
 			"stateBlock", stateBlock,
 		)
-		return false, false, nil
+		return false, nil
 	}
 
-	return bc.verifyBlockParents(block) && bc.verifyLFData(block), false, nil
+	return bc.verifyBlockParents(block) && bc.verifyLFData(block), nil
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
@@ -2269,7 +2265,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
-		if ok, _, err := bc.VerifyBlock(block); !ok {
+		if ok, err := bc.VerifyBlock(block); !ok {
 			if err != nil {
 				return it.index, err
 			}
@@ -2584,132 +2580,6 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 
 	return nil
 }
-
-// // FinalizeBlock finalizing block
-// func (bc *BlockChain) FinalizingBlueBlock(block *types.Block, statedb *state.StateDB, verifySeals bool) (*state.StateDB, error) {
-// 	// If the chain is terminating, don't even bother starting up
-// 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
-// 		return statedb, nil
-// 	}
-
-// 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-// 	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), []*types.Block{block})
-
-// 	var (
-// 		stats     = insertStats{startTime: mclock.Now()}
-// 		lastCanon *types.Block
-// 	)
-// 	// Fire a single chain head event if we've progressed the chain
-// 	defer func() {
-// 		lfb := bc.GetLastFinalizedBlock()
-// 		if lastCanon != nil && lfb.Hash() == lastCanon.Hash() {
-// 			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon, ET_SYNC_FIN})
-// 		}
-// 	}()
-// 	// Start the parallel header verifier
-// 	headerMap := make(types.HeaderMap, 1)
-// 	headerMap[block.Hash()] = block.Header()
-// 	seals := make([]bool, 1)
-// 	seals[0] = verifySeals
-
-// 	//abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray(), seals)
-// 	abort, _ := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
-// 	defer close(abort)
-
-// 	// No validation errors for the first block (or chain prefix skipped)
-// 	var activeState *state.StateDB
-// 	defer func() {
-// 		// The chain importer is starting and stopping trie prefetchers. If a bad
-// 		// block or other error is hit however, an early return may not properly
-// 		// terminate the background threads. This defer ensures that we clean up
-// 		// and dangling prefetcher, without defering each and holding on live refs.
-// 		if activeState != nil {
-// 			activeState.StopPrefetcher()
-// 		}
-// 	}()
-
-// 	start := time.Now()
-
-// 	// Process block using the parent state as reference point
-// 	substart := time.Now()
-// 	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-// 	if err != nil {
-// 		bc.reportBlock(block, receipts, err)
-// 		//atomic.StoreUint32(&followupInterrupt, 1)
-// 		return statedb, err
-// 	}
-// 	// Update the metrics touched during block processing
-// 	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-// 	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-// 	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-// 	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-// 	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-// 	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-// 	triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
-// 	trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-// 	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
-
-// 	blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
-
-// 	// Validate the state using the default validator
-// 	substart = time.Now()
-// 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-
-// 	}
-// 	proctime := time.Since(start)
-
-// 	// Update the metrics touched during block validation
-// 	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-// 	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-
-// 	blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
-
-// 	// Write the block to the chain and get the status.
-// 	substart = time.Now()
-// 	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "FinalizingBlock")
-// 	//atomic.StoreUint32(&followupInterrupt, 1)
-// 	if err != nil {
-// 		return statedb, err
-// 	}
-// 	// Update the metrics touched during block commit
-// 	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
-// 	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
-// 	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-
-// 	blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
-// 	blockInsertTimer.UpdateSince(start)
-
-// 	switch status {
-// 	case CanonStatTy:
-// 		log.Debug("Inserted new block", "hash", block.Hash(),
-// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-// 			"elapsed", common.PrettyDuration(time.Since(start)),
-// 			"root", block.Root())
-
-// 		lastCanon = block
-
-// 		// Only count canonical blocks for GC processing time
-// 		bc.gcproc += proctime
-
-// 	case SideStatTy:
-// 		log.Debug("Inserted forked block", "hash", block.Hash(),
-// 			"elapsed", common.PrettyDuration(time.Since(start)),
-// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-// 			"root", block.Root())
-
-// 	default:
-// 		// This in theory is impossible, but lets be nice to our future selves and leave
-// 		// a log, instead of trying to track down blocks imports that don't emit logs.
-// 		log.Warn("Inserted block with unknown status", "hash", block.Hash(),
-// 			"elapsed", common.PrettyDuration(time.Since(start)),
-// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-// 			"root", block.Root())
-// 	}
-// 	stats.processed++
-// 	stats.usedGas += usedGas
-
-// 	return statedb, err
-// }
 
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return

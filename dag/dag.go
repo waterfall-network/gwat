@@ -135,6 +135,10 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	// finalization
 	if len(data.Spines) > 0 {
 		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
+			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
+				// Start syncing if spine or parent is unloaded
+				d.synchronizeUnloadedBlocks(data.Spines)
+			}
 			e := err.Error()
 			res.Error = &e
 		} else {
@@ -169,6 +173,41 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	log.Info("Handle Finalize: response", "result", res)
 	return res
+}
+
+// unloadedBlocks composes unloaded spines and parents hashes array
+func (d *Dag) unloadedBlocks(spines common.HashArray) common.HashArray {
+	unloaded := common.HashArray{}
+	for _, spine := range spines {
+		sb := d.bc.GetBlockByHash(spine)
+		if sb == nil {
+			unloaded = append(unloaded, spine)
+			continue
+		}
+		parents := d.bc.GetBlocksByHashes(spines)
+		for h, b := range parents {
+			if b == nil {
+				unloaded = append(unloaded, h)
+			}
+		}
+	}
+
+	return unloaded
+}
+
+func (d *Dag) synchronizeUnloadedBlocks(spines common.HashArray) {
+	lastFinNr := d.bc.GetLastFinalizedNumber()
+	unloaded := d.unloadedBlocks(spines)
+	log.Warn("Finalize blocks: unloaded blocks detected. start sync", "unknown", unloaded)
+	for len(unloaded) != 0 {
+		for _, p := range d.eth.Downloader().GetPeers().AllPeers() {
+			err := d.eth.Downloader().Synchronise(p.Id(), unloaded, lastFinNr, downloader.FullSync, true)
+			if err != nil {
+				log.Debug("Synchronise failed", "reason", err)
+				unloaded = d.unloadedBlocks(spines)
+			}
+		}
+	}
 }
 
 // HandleCoordinatedState return coordinated state
@@ -233,14 +272,6 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	return res
 }
 
-// HandleHeadSyncReady set initial state to start head sync with coordinating network.
-func (d *Dag) HandleHeadSyncReady(checkpoint *types.Checkpoint) (bool, error) {
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
-	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
-	return d.headsync.SetReadyState(checkpoint)
-}
-
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 	d.bc.DagMu.Lock()
@@ -265,14 +296,6 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 		return true, nil
 	}
 	return false, nil
-}
-
-// HandleHeadSync run head sync with coordinating network.
-func (d *Dag) HandleHeadSync(data []types.Checkpoint) (bool, error) {
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
-	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
-	return d.headsync.Sync(data)
 }
 
 // HandleValidateSpines collect next finalization candidates

@@ -228,7 +228,7 @@ func (ps *peerSet) snapLen() int {
 	return ps.snapPeers
 }
 
-// getHighestPeer retrieves the known peer with the max lastFinNr
+// getPeer retrieves the known peer
 func (ps *peerSet) getPeer(onlyNew bool) *eth.Peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()

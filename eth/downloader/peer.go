@@ -326,6 +326,11 @@ func (p *peerConnection) Lacks(hash common.Hash) bool {
 	return ok
 }
 
+// Id returns peerconnection id.
+func (p *peerConnection) Id() string {
+	return p.id
+}
+
 // peerSet represents the collection of active peer participating in the chain
 // download procedure.
 type peerSet struct {

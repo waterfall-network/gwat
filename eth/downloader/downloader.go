@@ -404,6 +404,11 @@ func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
 	return nil
 }
 
+// GetPeers returns all active peers.
+func (d *Downloader) GetPeers() *peerSet {
+	return d.peers
+}
+
 // RegisterLightPeer injects a light client peer, wrapping it so it appears as a regular peer.
 func (d *Downloader) RegisterLightPeer(id string, version uint, peer LightPeer) error {
 	return d.RegisterPeer(id, version, &lightPeerWrapper{peer})

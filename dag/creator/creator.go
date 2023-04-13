@@ -509,8 +509,6 @@ func (c *Creator) resultHandler(task *task) {
 		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
 	}
 
-	// Merge add v0.6-fix-height-calc-validate
-
 	newBlockDag := &types.BlockDAG{
 		Hash:                task.block.Hash(),
 		Height:              task.block.Height(),
@@ -796,7 +794,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		Extra:        c.extra,
 		Time:         uint64(timestamp),
 		// Checkpoint spine block
-		LFHash:        checkpointBlock.FinalizedHash(),
+		LFHash:        checkpointBlock.Hash(),
 		LFNumber:      checkpointBlock.Nr(),
 		LFBaseFee:     checkpointBlock.BaseFee(),
 		LFBloom:       checkpointBlock.Bloom(),
