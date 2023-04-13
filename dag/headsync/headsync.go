@@ -3,11 +3,11 @@
 package headsync
 
 import (
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"sort"
 	"sync/atomic"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
