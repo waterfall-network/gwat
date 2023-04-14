@@ -115,7 +115,7 @@ func (tips Tips) getOrderedHashes() common.HashArray {
 		heightMap[key] = append(heightMap[key], dag.Hash)
 	}
 	// sort by height
-	keys := make(common.SorterDeskU64, 0, len(heightMap))
+	keys := make(common.SorterDescU64, 0, len(heightMap))
 	for k := range heightMap {
 		keys = append(keys, k)
 	}
@@ -290,7 +290,7 @@ func (gd *GraphDag) GetOrderedLoadedAncestors() []*GraphDag {
 		lenMap[*key] = append(lenMap[*key], itm)
 	}
 	// sort by height
-	keys := make(common.SorterDeskU64, 0, len(lenMap))
+	keys := make(common.SorterDescU64, 0, len(lenMap))
 	for k := range lenMap {
 		keys = append(keys, k)
 	}
@@ -487,7 +487,7 @@ func (hm HeaderMap) FinalizingSort() common.HashArray {
 		heightMap[key] = append(heightMap[key], h.Hash())
 	}
 	// sort by height
-	keys := make(common.SorterAskU64, 0, len(heightMap))
+	keys := make(common.SorterAscU64, 0, len(heightMap))
 	for k := range heightMap {
 		keys = append(keys, k)
 	}

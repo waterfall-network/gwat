@@ -2,17 +2,14 @@ package storage
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
@@ -21,9 +18,6 @@ type blockchain interface {
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
-	GetEraInfo() *era.EraInfo
-	GetConfig() *params.ChainConfig
-	Database() ethdb.Database
 }
 
 type Storage interface {
@@ -137,18 +131,13 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 	var validators []Validator
 
 	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-
-	checkpoint := bc.GetLastCoordinatedCheckpoint()
-
-	validators, err = s.validatorsCache.getAllValidatorsByEpoch(checkpoint.Epoch)
+	validators, err = s.validatorsCache.getAllValidatorsByEpoch(currentEpoch)
 
 	if err != nil {
-		log.Error("get validators", "error", err, "cp.Epoch", checkpoint.Epoch, "cp.Spine", fmt.Sprintf("%#x", checkpoint.Spine))
-		firstEpochBlockHash := checkpoint.Spine
+		log.Error("get validators", "error", err, "epoch", currentEpoch)
+		checkpointBlock := bc.GetBlock(bc.GetLastCoordinatedCheckpoint().Spine)
 
-		firstEpochBlock := bc.GetBlock(firstEpochBlockHash)
-
-		stateDb, _ := bc.StateAt(firstEpochBlock.Root())
+		stateDb, _ := bc.StateAt(checkpointBlock.Root())
 
 		valList := s.GetValidatorsList(stateDb)
 		for _, valAddress := range valList {

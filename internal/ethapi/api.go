@@ -2240,6 +2240,11 @@ func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types
 	return api.b.Dag().HandleGetCandidates(slot), nil
 }
 
+// GetOptimisticSpines retrieves optimistic spines.
+func (api *PublicDagAPI) GetOptimisticSpines(ctx context.Context, lastFinSpine common.Hash) (*types.OptimisticSpinesResult, error) {
+	return api.b.Dag().HandleGetOptimisticSpines(lastFinSpine), nil
+}
+
 // HeadSyncReady set initial state to start head sync with coordinating network.
 func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
 	return api.b.Dag().HandleHeadSyncReady(checkpoint)

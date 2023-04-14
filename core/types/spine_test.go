@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 type testSpineCase struct {
@@ -36,6 +37,284 @@ func (bc *BlockChainMock) GetBlocksByHashes(hashes common.HashArray) BlockMap {
 		res[hash] = nil
 	}
 	return res
+}
+
+func TestSelectBlocks(t *testing.T) {
+	block1 := &Block{
+		header: &Header{
+			ParentHashes: nil,
+			Height:       uint64(56),
+		},
+	}
+	block2 := &Block{
+		header: &Header{
+			ParentHashes: nil,
+			Height:       uint64(24),
+		},
+	}
+	block3 := &Block{
+		header: &Header{
+			ParentHashes: nil,
+			Height:       uint64(175),
+		},
+	}
+	block4 := &Block{
+		header: &Header{
+			ParentHashes: nil,
+			Height:       uint64(1),
+		},
+	}
+	block5 := &Block{
+		header: &Header{
+			ParentHashes: nil,
+			Height:       uint64(10),
+		},
+	}
+	block6 := &Block{
+		header: &Header{
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+			},
+			Height: uint64(100),
+		},
+	}
+	block7 := &Block{
+		header: &Header{
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+			},
+			Height: uint64(100),
+		},
+	}
+	block8 := &Block{
+		header: &Header{
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+				common.Hash{0x03},
+				common.Hash{0x04},
+			},
+			Height: uint64(100),
+		},
+	}
+	block9 := &Block{
+		header: &Header{
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+				common.Hash{0x03},
+				common.Hash{0x04},
+				common.Hash{0x05},
+			},
+			Height: uint64(100),
+		},
+	}
+	block10 := &Block{
+		header: &Header{
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+				common.Hash{0x03},
+			},
+			Height: uint64(100),
+		},
+	}
+	block11 := &Block{
+		header: &Header{
+			TxHash: common.Hash{0x02},
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+				common.Hash{0x03},
+			},
+			Height: uint64(100),
+		},
+	}
+	block12 := &Block{
+		header: &Header{
+			TxHash: common.Hash{0x03},
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+				common.Hash{0x03},
+			},
+			Height: uint64(100),
+		},
+	}
+	block13 := &Block{
+		header: &Header{
+			TxHash: common.Hash{0x01},
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+				common.Hash{0x03},
+			},
+			Height: uint64(100),
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		blocks         Blocks
+		expectedBlocks Blocks
+		selectFunc     func(Blocks) Blocks
+	}{
+		{
+			name:           "Missing blocks",
+			blocks:         Blocks{},
+			expectedBlocks: Blocks{},
+			selectFunc: func(blocks Blocks) Blocks {
+				return selectSpinesByMaxHeight(blocks)
+			},
+		},
+		{
+			name:           "Select blocks by height",
+			blocks:         Blocks{block1, block2, block3, block4, block5},
+			expectedBlocks: Blocks{block3},
+			selectFunc: func(blocks Blocks) Blocks {
+				return selectSpinesByMaxHeight(blocks)
+			},
+		}, {
+			name:           "Select blocks by parents count",
+			blocks:         Blocks{block6, block7, block8, block9, block10},
+			expectedBlocks: Blocks{block9},
+			selectFunc: func(blocks Blocks) Blocks {
+				return selectSpinesByMaxParentsCount(blocks)
+			},
+		},
+		{
+			name:           "Sort by hash",
+			blocks:         Blocks{block11, block12, block13},
+			expectedBlocks: Blocks{block12, block11, block13},
+			selectFunc: func(blocks Blocks) Blocks {
+				sortByHash(blocks)
+				return blocks
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			sortBlocks := testCase.selectFunc(testCase.blocks)
+			testutils.AssertEqual(t, testCase.expectedBlocks, sortBlocks)
+		})
+	}
+}
+
+func TestCalculateOptimisticCandidates(t *testing.T) {
+	block1 := &Block{
+		header: &Header{
+			Slot:         1,
+			ParentHashes: nil,
+			Height:       10,
+		},
+	}
+	block2 := &Block{
+		header: &Header{
+			Slot:         1,
+			ParentHashes: nil,
+			Height:       8,
+		},
+	}
+	block3 := &Block{
+		header: &Header{
+			Slot: 2,
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+				common.Hash{0x03},
+				common.Hash{0x04},
+			},
+			Height: 25,
+		},
+	}
+	block4 := &Block{
+		header: &Header{
+			Slot: 2,
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+				common.Hash{0x03},
+				common.Hash{0x04},
+				common.Hash{0x05},
+			},
+			Height: 25,
+		},
+	}
+	block5 := &Block{
+		header: &Header{
+			Slot: 2,
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+			},
+			Height: 25,
+		},
+	}
+	block6 := &Block{
+		header: &Header{
+			Slot:   3,
+			TxHash: common.Hash{0x015, 8},
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+			},
+			Height: 30,
+		},
+	}
+	block7 := &Block{
+		header: &Header{
+			Slot:   3,
+			TxHash: common.Hash{0x02},
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+			},
+			Height: 30,
+		},
+	}
+	block8 := &Block{
+		header: &Header{
+			Slot:   3,
+			TxHash: common.Hash{0x01},
+			ParentHashes: common.HashArray{
+				common.Hash{0x01},
+				common.Hash{0x02},
+			},
+			Height: 30,
+		},
+	}
+	testCases := []struct {
+		name           string
+		blocks         Blocks
+		expectedBlocks common.HashArray
+	}{
+		{
+			name:           "Sort by height",
+			blocks:         Blocks{block1, block2},
+			expectedBlocks: common.HashArray{block1.Hash()},
+		},
+		{
+			name:           "Sort by parents count",
+			blocks:         Blocks{block3, block4, block5},
+			expectedBlocks: common.HashArray{block4.Hash()},
+		},
+		{
+			name:           "Sort by hashes",
+			blocks:         Blocks{block6, block7, block8},
+			expectedBlocks: common.HashArray{block7.Hash(), block8.Hash(), block6.Hash()},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidates, err := CalculateOptimisticSpines(testCase.blocks)
+			testutils.AssertNoError(t, err)
+			testutils.AssertEqual(t, testCase.expectedBlocks, candidates)
+		})
+	}
+
 }
 
 //func TestCalculateSpine(t *testing.T) {
@@ -110,7 +389,7 @@ func (bc *BlockChainMock) GetBlocksByHashes(hashes common.HashArray) BlockMap {
 //	}
 //}
 
-func TestGroupBySlot(t *testing.T) {
+func TestSortBySlot(t *testing.T) {
 	blocks := Blocks{
 		NewBlock(&Header{
 			Slot: 1,

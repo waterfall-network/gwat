@@ -32,6 +32,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"golang.org/x/crypto/sha3"
 )
@@ -937,4 +938,47 @@ func TestWriteAndReadCoordinatedCheckpoint(t *testing.T) {
 	if checkpoint.Spine != readCheckpoint.Spine {
 		t.Errorf("Expected checkpoint spine to be %v, but got %v", checkpoint.Spine, readCheckpoint.Spine)
 	}
+}
+
+func TestWriteAndReadSlotBlocksHashes(t *testing.T) {
+	slot := uint64(testutils.RandomInt(0, 100))
+	hashesCount := testutils.RandomInt(5, 20)
+	blocksHashes := common.HashArray{}
+	for i := 0; i < hashesCount; i++ {
+		blocksHashes = append(blocksHashes, common.BytesToHash(testutils.RandomData(32)))
+	}
+
+	db := NewMemoryDatabase()
+	WriteSlotBlocksHashes(db, slot, blocksHashes)
+	dbBlocksHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, dbBlocksHashes)
+}
+
+func TestUpdateSlotBlocks(t *testing.T) {
+	slot := uint64(testutils.RandomInt(0, 100))
+	hashesCount := testutils.RandomInt(5, 20)
+	newBlock := types.NewBlock(&types.Header{
+		Slot:   slot,
+		TxHash: common.BytesToHash(testutils.RandomData(32)),
+		Root:   common.BytesToHash(testutils.RandomData(32)),
+	}, nil, nil, nil)
+
+	db := NewMemoryDatabase()
+
+	blocksHashes := common.HashArray{}
+	for i := 0; i < hashesCount; i++ {
+		blocksHashes = append(blocksHashes, common.BytesToHash(testutils.RandomData(32)))
+	}
+
+	WriteSlotBlocksHashes(db, slot, blocksHashes)
+	slotBlocksHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, slotBlocksHashes)
+
+	AddSlotBlockHash(db, newBlock.Slot(), newBlock.Hash())
+	updatedHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, append(blocksHashes, newBlock.Hash()), updatedHashes)
+
+	DeleteSlotBlockHash(db, newBlock.Slot(), newBlock.Hash())
+	updatedHashes = ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, updatedHashes)
 }

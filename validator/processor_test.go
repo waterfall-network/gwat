@@ -61,7 +61,7 @@ func TestProcessorDeposit(t *testing.T) {
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -144,6 +144,9 @@ func TestProcessorDeposit(t *testing.T) {
 }
 
 func TestProcessorActivate(t *testing.T) {
+	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress)
+	testutils.AssertNoError(t, err)
+
 	ctrl = gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -152,7 +155,7 @@ func TestProcessorActivate(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	rawdb.WriteEra(db, eraInfo.Number(), *eraInfo.GetEra())
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().GetConfig().AnyTimes().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().AnyTimes().Return(testmodels.TestChainConfig)
 	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
 		GenesisTime:    uint64(time.Now().Unix()),
 		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
@@ -160,15 +163,24 @@ func TestProcessorActivate(t *testing.T) {
 	})
 	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
 	bc.EXPECT().Database().AnyTimes().Return(db)
+	bc.EXPECT().GetValidatorSyncData(
+		gomock.AssignableToTypeOf(common.Address{}),
+		gomock.AssignableToTypeOf(types.Activate)).
+		AnyTimes().Return(&types.ValidatorSync{
+		OpType:    activateOperation.OpType(),
+		ProcEpoch: activateOperation.ProcEpoch(),
+		Index:     activateOperation.Index(),
+		Creator:   activateOperation.Creator(),
+		Amount:    activateOperation.Amount(),
+	})
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
-	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress)
-	testutils.AssertNoError(t, err)
 
 	opData, err := operation.EncodeToBytes(activateOperation)
 	testutils.AssertNoError(t, err)
 	msg.EXPECT().Data().AnyTimes().Return(opData)
+	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
 
 	cases := []*testmodels.TestCase{
 		{
@@ -181,7 +193,6 @@ func TestProcessorActivate(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
-				msg.EXPECT().TxHash().Return(nil)
 				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
 			},
 		},
@@ -210,7 +221,6 @@ func TestProcessorActivate(t *testing.T) {
 					t.Fatal()
 				}
 
-				msg.EXPECT().TxHash().Return(nil)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 
 				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr2)
@@ -242,7 +252,6 @@ func TestProcessorActivate(t *testing.T) {
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
 
-				msg.EXPECT().TxHash().Return(nil)
 				processor.ctx.Era = 3
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
@@ -272,7 +281,6 @@ func TestProcessorActivate(t *testing.T) {
 					t.Fatal()
 				}
 
-				msg.EXPECT().TxHash().Return(nil)
 				processor.ctx.Era = 3
 				rawdb.WriteEra(db, 3, era.Era{
 					Number: 3,
@@ -322,7 +330,6 @@ func TestProcessorActivate(t *testing.T) {
 					t.Fatal()
 				}
 
-				msg.EXPECT().TxHash().Return(nil)
 				processor.ctx.Slot = 2790
 				processor.ctx.Era = 4
 				rawdb.WriteEra(db, 3, era.Era{
@@ -370,7 +377,7 @@ func TestProcessorExit(t *testing.T) {
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -493,6 +500,9 @@ func TestProcessorExit(t *testing.T) {
 }
 
 func TestProcessorDeactivate(t *testing.T) {
+	deactivateOp, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
+	testutils.AssertNoError(t, err)
+
 	ctrl = gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -501,7 +511,7 @@ func TestProcessorDeactivate(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	rawdb.WriteEra(db, eraInfo.Number(), *eraInfo.GetEra())
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().GetConfig().AnyTimes().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().AnyTimes().Return(testmodels.TestChainConfig)
 	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
 		GenesisTime:    uint64(time.Now().Unix()),
 		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
@@ -509,16 +519,24 @@ func TestProcessorDeactivate(t *testing.T) {
 	})
 	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
 	bc.EXPECT().Database().AnyTimes().Return(db)
+	bc.EXPECT().GetValidatorSyncData(
+		gomock.AssignableToTypeOf(common.Address{}),
+		gomock.AssignableToTypeOf(types.Deactivate)).
+		AnyTimes().Return(&types.ValidatorSync{
+		OpType:    deactivateOp.OpType(),
+		ProcEpoch: deactivateOp.ProcEpoch(),
+		Index:     deactivateOp.Index(),
+		Creator:   deactivateOp.Creator(),
+		Amount:    deactivateOp.Amount(),
+	})
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	deactivateOp, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
-	testutils.AssertNoError(t, err)
-
 	opData, err := operation.EncodeToBytes(deactivateOp)
 	testutils.AssertNoError(t, err)
 	msg.EXPECT().Data().AnyTimes().Return(opData)
+	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
 
 	cases := []*testmodels.TestCase{
 		{
@@ -530,7 +548,6 @@ func TestProcessorDeactivate(t *testing.T) {
 			Errs: []error{ErrUnknownValidator},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				msg.EXPECT().TxHash().Return(nil)
 				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
 			},
 		},
@@ -548,7 +565,6 @@ func TestProcessorDeactivate(t *testing.T) {
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				msg.EXPECT().TxHash().Return(nil)
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
@@ -569,7 +585,6 @@ func TestProcessorDeactivate(t *testing.T) {
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				msg.EXPECT().TxHash().Return(nil)
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
@@ -589,7 +604,6 @@ func TestProcessorDeactivate(t *testing.T) {
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				msg.EXPECT().TxHash().Return(nil)
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 
@@ -617,7 +631,6 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				msg.EXPECT().TxHash().Return(nil)
 				processor.ctx.Era = 3
 				rawdb.WriteEra(db, 3, era.Era{
 					Number: 3,
@@ -653,7 +666,6 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				msg.EXPECT().TxHash().Return(nil)
 				processor.ctx.Slot = 2790
 				processor.ctx.Era = 3
 				rawdb.WriteEra(db, 3, era.Era{
@@ -692,7 +704,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -813,23 +825,39 @@ func TestProcessorWithdrawal(t *testing.T) {
 }
 
 func TestProcessorUpdateBalance(t *testing.T) {
+	updateBalanceOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress)
+	testutils.AssertNoError(t, err)
+
 	ctrl = gomock.NewController(t)
 	defer ctrl.Finish()
 
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().GetConfig().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
+	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+		GenesisTime:    uint64(time.Now().Unix()),
+		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
+		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
+	})
+	bc.EXPECT().GetValidatorSyncData(
+		gomock.AssignableToTypeOf(common.Address{}),
+		gomock.AssignableToTypeOf(types.UpdateBalance)).
+		AnyTimes().Return(&types.ValidatorSync{
+		OpType:    updateBalanceOperation.OpType(),
+		ProcEpoch: updateBalanceOperation.ProcEpoch(),
+		Index:     updateBalanceOperation.Index(),
+		Creator:   updateBalanceOperation.Creator(),
+		Amount:    updateBalanceOperation.Amount(),
+	})
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	withdrawalOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress)
-	testutils.AssertNoError(t, err)
-
-	opData, err := operation.EncodeToBytes(withdrawalOperation)
+	opData, err := operation.EncodeToBytes(updateBalanceOperation)
 	testutils.AssertNoError(t, err)
 	msg.EXPECT().Data().AnyTimes().Return(opData)
+	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
 
 	cases := []*testmodels.TestCase{
 		{
@@ -841,7 +869,6 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Errs: []error{ErrUnknownValidator},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				msg.EXPECT().TxHash().Return(nil)
 
 				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
 			},
@@ -860,7 +887,6 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				msg.EXPECT().TxHash().Return(nil)
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
@@ -880,7 +906,6 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				msg.EXPECT().TxHash().Return(nil)
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
@@ -904,7 +929,6 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-				msg.EXPECT().TxHash().Return(nil)
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 
@@ -941,7 +965,12 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().GetConfig().AnyTimes().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().AnyTimes().Return(testmodels.TestChainConfig)
+	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+		GenesisTime:    168752223,
+		SecondsPerSlot: 4,
+		SlotsPerEpoch:  32,
+	})
 
 	processor := NewProcessor(ctx, stateDb, bc)
 
@@ -952,7 +981,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 	testutils.AssertNoError(t, err)
 	msg.EXPECT().Data().AnyTimes().Return(opData)
 	txHash := crypto.Keccak256Hash(opData)
-	msg.EXPECT().TxHash().AnyTimes().Return(&txHash)
+	msg.EXPECT().TxHash().AnyTimes().Return(txHash)
 	cases := []*testmodels.TestCase{
 		{
 			CaseName: "ErrInvalidOpEpoch",
@@ -965,11 +994,6 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 				valSyncData.Amount = nil
 				bc.EXPECT().GetValidatorSyncData(creatorAddress, valSyncData.OpType).Return(&valSyncData)
-				bc.EXPECT().GetSlotInfo().Return(&types.SlotInfo{
-					GenesisTime:    168752223,
-					SecondsPerSlot: 4,
-					SlotsPerEpoch:  32,
-				})
 				processor.ctx.Slot = math.MaxUint64
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				processor.ctx.Slot = 0

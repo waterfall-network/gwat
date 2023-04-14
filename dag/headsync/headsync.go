@@ -175,7 +175,7 @@ func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
 
 	//sort data by slots
 	dataBySlots := map[uint64]types.ConsensusInfo{}
-	slots := common.SorterAskU64{}
+	slots := common.SorterAscU64{}
 	for _, d := range data {
 		sl := d.Slot
 		dataBySlots[sl] = d
