@@ -1282,7 +1282,7 @@ func DeleteSlotBlockHash(db ethdb.Database, slot uint64, hash common.Hash) {
 	WriteSlotBlocksHashes(db, slot, slotBlocksHashes)
 }
 
-func UpdateSlotBlocksHashes(db ethdb.Database, slot uint64, blockHash common.Hash) {
+func AddSlotBlockHash(db ethdb.Database, slot uint64, blockHash common.Hash) {
 	hashes := ReadSlotBlocksHashes(db, slot)
 	for _, hash := range hashes {
 		if hash == blockHash {

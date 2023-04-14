@@ -974,7 +974,7 @@ func TestUpdateSlotBlocks(t *testing.T) {
 	slotBlocksHashes := ReadSlotBlocksHashes(db, slot)
 	testutils.AssertEqual(t, blocksHashes, slotBlocksHashes)
 
-	UpdateSlotBlocksHashes(db, newBlock.Slot(), newBlock.Hash())
+	AddSlotBlockHash(db, newBlock.Slot(), newBlock.Hash())
 	updatedHashes := ReadSlotBlocksHashes(db, slot)
 	testutils.AssertEqual(t, append(blocksHashes, newBlock.Hash()), updatedHashes)
 
