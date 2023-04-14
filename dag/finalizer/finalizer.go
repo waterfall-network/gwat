@@ -99,7 +99,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 	}
 
 	//sort by slots
-	slots := common.SorterAskU64{}
+	slots := common.SorterAscU64{}
 	for sl := range spinesMap {
 		slots = append(slots, sl)
 	}

@@ -322,3 +322,8 @@ type CandidatesResult struct {
 	Error      *string          `json:"error"`
 	Candidates common.HashArray `json:"candidates"`
 }
+
+type OptimisticSpinesResult struct {
+	Data  []common.HashArray `json:"data"`
+	Error *string            `json:"error"`
+}

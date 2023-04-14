@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"sort"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -31,7 +32,7 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 	}
 
 	//sort by height
-	heightKeys := make(common.SorterDeskU64, 0, len(heightPlenMap))
+	heightKeys := make(common.SorterDescU64, 0, len(heightPlenMap))
 	for k := range heightPlenMap {
 		heightKeys = append(heightKeys, k)
 	}
@@ -41,7 +42,7 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 	for _, hk := range heightKeys {
 		plenMap := heightPlenMap[hk]
 		// sort by number of parents
-		plenKeys := make(common.SorterDeskU64, 0, len(plenMap))
+		plenKeys := make(common.SorterDescU64, 0, len(plenMap))
 		for plk, _ := range plenMap {
 			plenKeys = append(plenKeys, plk)
 		}
@@ -72,7 +73,7 @@ func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
 	}
 	spines := make(SlotSpineMap)
 	//sort by slots
-	slots := common.SorterAskU64{}
+	slots := common.SorterAscU64{}
 	for sl, _ := range blocksBySlot {
 		// exclude finalized slots
 		if sl > lastFinSlot {
@@ -90,6 +91,75 @@ func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
 	return spines, nil
 }
 
+func CalculateOptimisticSpines(slotBlocks Blocks) (common.HashArray, error) {
+	optimisticSpines := make(common.HashArray, 0)
+	slotSpines := selectSpinesByMaxHeight(slotBlocks)
+
+	if len(slotSpines) > 1 {
+		slotSpines = selectSpinesByMaxParentsCount(slotSpines)
+	}
+
+	if len(slotSpines) > 1 {
+		sortByHash(slotSpines)
+	}
+
+	optimisticSpines = append(optimisticSpines, *slotSpines.GetHashes()...)
+
+	return optimisticSpines, nil
+}
+
+func selectSpinesByMaxParentsCount(blocks Blocks) Blocks {
+	var maxParents uint64
+	maxParentsBlocks := make(Blocks, 0)
+	for _, block := range blocks {
+		blockParents := uint64(len(block.ParentHashes()))
+
+		if blockParents < maxParents {
+			continue
+		}
+
+		if blockParents > maxParents {
+			maxParents = blockParents
+			maxParentsBlocks = make(Blocks, 0)
+		}
+
+		maxParentsBlocks = append(maxParentsBlocks, block)
+	}
+
+	return maxParentsBlocks
+}
+
+func sortByHash(blocks Blocks) {
+	sort.Slice(blocks, func(i, j int) bool {
+		return bytes.Compare(blocks[i].Hash().Bytes(), blocks[j].Hash().Bytes()) < 0
+	})
+}
+
+func selectSpinesByMaxHeight(blocks Blocks) Blocks {
+	if len(blocks) == 0 {
+		return Blocks{}
+	}
+
+	var maxHeight uint64
+	maxHeightBlocks := make(Blocks, 0)
+	for _, block := range blocks {
+		blockHeight := block.Height()
+
+		if blockHeight < maxHeight {
+			continue
+		}
+
+		if blockHeight > maxHeight {
+			maxHeight = blockHeight
+			maxHeightBlocks = make(Blocks, 0)
+		}
+
+		maxHeightBlocks = append(maxHeightBlocks, block)
+	}
+
+	return maxHeightBlocks
+}
+
 func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
 	// collect all ancestors in dag (not finalized)
 	candidatesInChain := make(map[common.Hash]struct{})
@@ -101,7 +171,7 @@ func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
 		log.Error("☠ Ordering dag chain failed", "err", err)
 	}
 	//sort by slots
-	slots := common.SorterAskU64{}
+	slots := common.SorterAscU64{}
 	for sl, _ := range blocksBySlot {
 		slots = append(slots, sl)
 	}

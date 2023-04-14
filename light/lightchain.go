@@ -272,6 +272,8 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to reset genesis block", "err", err)
 	}
+
+	rawdb.AddSlotBlockHash(lc.chainDb, genesis.Slot(), genesis.Hash())
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
 	lc.hc.SetLastFinalisedHeader(lc.genesisBlock.Header(), uint64(0))
