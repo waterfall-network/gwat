@@ -1253,9 +1253,9 @@ func FindEra(db ethdb.KeyValueReader, curEra uint64) *era.Era {
 	return lastEra
 }
 
-func WriteSlotBlocksHashes(db ethdb.KeyValueWriter, slot uint64, blocksHashes common.HashArray) {
+func WriteSlotBlocksHashes(db ethdb.KeyValueWriter, slot uint64, hashes common.HashArray) {
 	key := slotBlocksKey(slot)
-	err := db.Put(key, blocksHashes.ToBytes())
+	err := db.Put(key, hashes.ToBytes())
 	if err != nil {
 		log.Crit("Failed to store slot blocks", "err", err)
 	}
@@ -1272,14 +1272,14 @@ func ReadSlotBlocksHashes(db ethdb.KeyValueReader, slot uint64) common.HashArray
 }
 
 func DeleteSlotBlockHash(db ethdb.Database, slot uint64, hash common.Hash) {
-	slotBlocksHashes := ReadSlotBlocksHashes(db, slot)
-	for i := 0; i < len(slotBlocksHashes); i++ {
-		if slotBlocksHashes[i] == hash {
-			slotBlocksHashes = append(slotBlocksHashes[:i], slotBlocksHashes[i+1:]...)
+	hashes := ReadSlotBlocksHashes(db, slot)
+	for i := 0; i < len(hashes); i++ {
+		if hashes[i] == hash {
+			hashes = append(hashes[:i], hashes[i+1:]...)
 		}
 	}
 
-	WriteSlotBlocksHashes(db, slot, slotBlocksHashes)
+	WriteSlotBlocksHashes(db, slot, hashes)
 }
 
 func AddSlotBlockHash(db ethdb.Database, slot uint64, blockHash common.Hash) {
