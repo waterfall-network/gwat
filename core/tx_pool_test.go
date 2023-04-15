@@ -180,7 +180,7 @@ func (bc *testBlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction
 }
 
 func (bc *testBlockChain) ValidatorStorage() valStore.Storage {
-	return valStore.NewStorage(rawdb.NewMemoryDatabase(), &params.ChainConfig{})
+	return valStore.NewStorage(&params.ChainConfig{})
 }
 
 func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Transaction {

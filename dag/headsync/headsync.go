@@ -149,7 +149,59 @@ func (hs *Headsync) SetReadyState(checkpoint *types.Checkpoint) (bool, error) {
 
 	// set ready state
 	atomic.StoreInt32(&hs.ready, 1)
-	hs.checkpoint = checkpoint
+	hs.lastSyncData = checkpoint
+	return true, nil
+}
+
+// TODO: delete
+// Sync run head sync with coordinating network.
+func (hs *Headsync) Sync(data []types.ConsensusInfo) (bool, error) {
+	//skip if head synchronising is not active
+	if !hs.eth.Downloader().HeadSynchronising() {
+		log.Warn("⌛ Head synchronising is skipped (not ready)")
+		return false, ErrNotReady
+	}
+
+	atomic.StoreInt32(&hs.mainProc, 1)
+	defer func() {
+		atomic.StoreInt32(&hs.mainProc, 0)
+		hs.headSyncReset()
+	}()
+
+	//check ready state
+	if atomic.LoadInt32(&hs.ready) != 1 {
+		log.Info("⌛ Head synchronising is skipped (set to checkpoint is not ready)")
+		return false, ErrNotReady
+	}
+	defer atomic.StoreInt32(&hs.ready, 0)
+
+	//sort data by slots
+	dataBySlots := map[uint64]types.ConsensusInfo{}
+	slots := common.SorterAscU64{}
+	for _, d := range data {
+		sl := d.Slot
+		dataBySlots[sl] = d
+		slots = append(slots, sl)
+	}
+	sort.Sort(slots)
+	// apply data
+	baseSpine := hs.eth.BlockChain().GetLastFinalizedHeader().Hash()
+
+	for _, slot := range slots {
+		d := dataBySlots[slot]
+		if len(d.Finalizing) == 0 {
+			log.Info("⌛ Head synchronising is skipped (received spines empty)", "slot", slot)
+			continue
+		}
+		// finalize spines
+		err := hs.finalizer.Finalize(&d.Finalizing, &baseSpine, true)
+		if err != nil {
+			log.Warn("☠ Head synchronising failed", "err", err)
+			return false, err
+		}
+		baseSpine = d.Finalizing[len(d.Finalizing)-1]
+	}
+
 	return true, nil
 }
 

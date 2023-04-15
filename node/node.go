@@ -17,8 +17,10 @@
 package node
 
 import (
+	crand "crypto/rand"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,6 +30,8 @@ import (
 
 	"github.com/prometheus/tsdb/fileutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
@@ -54,6 +58,7 @@ type Node struct {
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	http          *httpServer //
+	httpAuth      *httpServer //
 	ws            *httpServer //
 	ipc           *ipcServer  // Stores information about the ipc http server
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
@@ -147,6 +152,7 @@ func New(conf *Config) (*Node, error) {
 
 	// Configure RPC servers.
 	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
+	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts)
 	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
 	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
@@ -350,41 +356,94 @@ func (n *Node) startRPC() error {
 		}
 	}
 
-	// Configure HTTP.
-	if n.config.HTTPHost != "" {
-		config := httpConfig{
+	var (
+		servers           []*httpServer
+		openAPIs, allAPIs = n.getAPIs()
+	)
+
+	initHttp := func(server *httpServer, port int) error {
+		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
+			return err
+		}
+		if err := server.enableRPC(openAPIs, httpConfig{
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
-		}
-		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
+		}); err != nil {
 			return err
 		}
-		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
+		servers = append(servers, server)
+		return nil
+	}
+
+	initWS := func(port int) error {
+		server := n.wsServerForPort(port)
+		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
+			return err
+		}
+		if err := server.enableWS(openAPIs, wsConfig{
+			Modules: n.config.WSModules,
+			Origins: n.config.WSOrigins,
+			prefix:  n.config.WSPathPrefix,
+		}); err != nil {
+			return err
+		}
+		servers = append(servers, server)
+		return nil
+	}
+
+	initAuthHttp := func(port int, secret []byte) error {
+		server := n.httpAuth
+		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
+			return err
+		}
+		if err := server.enableRPC(allAPIs, httpConfig{
+			CorsAllowedOrigins: DefaultAuthCors,
+			Vhosts:             n.config.AuthVirtualHosts,
+			Modules:            DefaultAuthModules,
+			prefix:             DefaultAuthPrefix,
+			jwtSecret:          secret,
+		}); err != nil {
+			return err
+		}
+		servers = append(servers, server)
+		return nil
+	}
+
+	// Set up HTTP.
+	if n.config.HTTPHost != "" {
+		// Configure legacy unauthenticated HTTP.
+		if err := initHttp(n.http, n.config.HTTPPort); err != nil {
 			return err
 		}
 	}
 
 	// Configure WebSocket.
 	if n.config.WSHost != "" {
-		server := n.wsServerForPort(n.config.WSPort)
-		config := wsConfig{
-			Modules: n.config.WSModules,
-			Origins: n.config.WSOrigins,
-			prefix:  n.config.WSPathPrefix,
-		}
-		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
-			return err
-		}
-		if err := server.enableWS(n.rpcAPIs, config); err != nil {
+		// legacy unauthenticated
+		if err := initWS(n.config.WSPort); err != nil {
 			return err
 		}
 	}
 
-	if err := n.http.start(); err != nil {
-		return err
+	// Configure authenticated API
+	if len(openAPIs) != len(allAPIs) {
+		jwtSecret, err := n.obtainJWTSecret(n.config.JWTSecret)
+		if err != nil {
+			return err
+		}
+		if err := initAuthHttp(n.config.AuthPort, jwtSecret); err != nil {
+			return err
+		}
 	}
+	// Start the servers
+	for _, server := range servers {
+		if err := server.start(); err != nil {
+			return err
+		}
+	}
+
 	return n.ws.start()
 }
 
@@ -456,6 +515,17 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 		panic("can't register APIs on running/stopped node")
 	}
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
+}
+
+// getAPIs return two sets of APIs, both the ones that do not require
+// authentication, and the complete set
+func (n *Node) getAPIs() (unauthenticated, all []rpc.API) {
+	for _, api := range n.rpcAPIs {
+		if !api.Authenticated {
+			unauthenticated = append(unauthenticated, api)
+		}
+	}
+	return unauthenticated, n.rpcAPIs
 }
 
 // RegisterHandler mounts a handler on the given path on the canonical HTTP server.
@@ -648,4 +718,46 @@ func (n *Node) closeDatabases() (errors []error) {
 		}
 	}
 	return errors
+}
+
+// obtainJWTSecret loads the jwt-secret, either from the provided config,
+// or from the default location. If neither of those are present, it generates
+// a new secret and stores to the default location.
+func (n *Node) obtainJWTSecret(jwtPath string) ([]byte, error) {
+	fileName := jwtPath
+	if len(fileName) == 0 {
+		// no path provided, use default
+		fileName = n.ResolvePath(datadirJWTKey)
+	}
+	// try reading from file
+	if data, err := os.ReadFile(fileName); err == nil {
+		jwtSecret := common.FromHex(strings.TrimSpace(string(data)))
+		if len(jwtSecret) == 32 {
+			log.Info("Loaded JWT secret file", "path", fileName, "crc32", fmt.Sprintf("%#x", crc32.ChecksumIEEE(jwtSecret)), "KEY", string(data))
+			return jwtSecret, nil
+		}
+
+		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
+		return nil, errors.New("invalid JWT secret")
+	}
+	// Need to generate one
+	jwtSecret := make([]byte, 32)
+	crand.Read(jwtSecret)
+	// if we're in --dev mode, don't bother saving, just show it
+	if fileName == "" {
+		log.Info("Generated ephemeral JWT secret", "secret", hexutil.Encode(jwtSecret))
+		return jwtSecret, nil
+	}
+
+	if err := os.WriteFile(fileName, []byte(hexutil.Encode(jwtSecret)), 0600); err != nil {
+		return nil, err
+	}
+
+	log.Info("Generated JWT secret", "path", fileName)
+	return jwtSecret, nil
+}
+
+// HTTPAuthEndpoint returns the URL of the authenticated HTTP server.
+func (n *Node) HTTPAuthEndpoint() string {
+	return "http://" + n.httpAuth.listenAddr()
 }

@@ -533,17 +533,18 @@ func (bs *Blocks) GroupBySlot() (SlotBlocksMap, error) {
 	if len(*bs) == 0 {
 		return SlotBlocksMap{}, nil
 	}
+
+	res := make(SlotBlocksMap)
 	for _, block := range *bs {
 		if block == nil {
 			return nil, errors.New("nil block found")
 		}
+
 		if block.header == nil {
 			log.Error("nil header found", "block", block)
 			return nil, errors.New("nil header found")
 		}
-	}
-	res := make(SlotBlocksMap)
-	for _, block := range *bs {
+
 		blockSlot := block.Slot()
 		if _, exists := res[blockSlot]; !exists {
 			res[blockSlot] = make(Blocks, 0, 1)
@@ -608,7 +609,7 @@ func (shm *SlotSpineMap) GetOrderedHashes() *common.HashArray {
 	}
 	hashes := make(common.HashArray, 0, len(*shm))
 	//sort by slots
-	slots := common.SorterAskU64{}
+	slots := common.SorterAscU64{}
 	for sl, _ := range *shm {
 		slots = append(slots, sl)
 	}

@@ -18,11 +18,16 @@ type mockBlockchain struct {
 	db                         ethdb.Database
 }
 
+func (m mockBlockchain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (m mockBlockchain) GetEraInfo() *EraInfo {
 	return m.eraInfo
 }
 
-func (m mockBlockchain) GetConfig() *params.ChainConfig {
+func (m mockBlockchain) Config() *params.ChainConfig {
 	return m.config
 }
 

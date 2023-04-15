@@ -68,7 +68,7 @@ type Ref interface {
 type blockchain interface {
 	GetSlotInfo() *types.SlotInfo
 	GetEraInfo() *era.EraInfo
-	GetConfig() *params.ChainConfig
+	Config() *params.ChainConfig
 	Database() ethdb.Database
 	GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
@@ -96,7 +96,7 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, bc blockchain) *
 		ctx:          blockCtx,
 		state:        stateDb,
 		eventEmmiter: NewEventEmmiter(stateDb),
-		storage:      valStore.NewStorage(bc.GetConfig()),
+		storage:      valStore.NewStorage(bc.Config()),
 		blockchain:   bc,
 	}
 }

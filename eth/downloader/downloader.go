@@ -768,7 +768,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 		return err
 	}
 	//sort by slots
-	slots := common.SorterAskU64{}
+	slots := common.SorterAscU64{}
 	for sl, _ := range blocksBySlot {
 		slots = append(slots, sl)
 	}
@@ -843,7 +843,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		return err
 	}
 	//sort by slots
-	slots := common.SorterAskU64{}
+	slots := common.SorterAscU64{}
 	for sl, _ := range blocksBySlot {
 		slots = append(slots, sl)
 	}

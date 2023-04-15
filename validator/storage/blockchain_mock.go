@@ -11,9 +11,6 @@ import (
 	common "gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	state "gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	types "gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	ethdb "gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
-	params "gitlab.waterfall.network/waterfall/protocol/gwat/params"
-	era "gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // Mockblockchain is a mock of blockchain interface.
@@ -39,20 +36,6 @@ func (m *Mockblockchain) EXPECT() *MockblockchainMockRecorder {
 	return m.recorder
 }
 
-// Database mocks base method.
-func (m *Mockblockchain) Database() ethdb.Database {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Database")
-	ret0, _ := ret[0].(ethdb.Database)
-	return ret0
-}
-
-// Database indicates an expected call of Database.
-func (mr *MockblockchainMockRecorder) Database() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Database", reflect.TypeOf((*Mockblockchain)(nil).Database))
-}
-
 // GetBlock mocks base method.
 func (m *Mockblockchain) GetBlock(hash common.Hash) *types.Block {
 	m.ctrl.T.Helper()
@@ -65,34 +48,6 @@ func (m *Mockblockchain) GetBlock(hash common.Hash) *types.Block {
 func (mr *MockblockchainMockRecorder) GetBlock(hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*Mockblockchain)(nil).GetBlock), hash)
-}
-
-// GetConfig mocks base method.
-func (m *Mockblockchain) GetConfig() *params.ChainConfig {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetConfig")
-	ret0, _ := ret[0].(*params.ChainConfig)
-	return ret0
-}
-
-// GetConfig indicates an expected call of GetConfig.
-func (mr *MockblockchainMockRecorder) GetConfig() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*Mockblockchain)(nil).GetConfig))
-}
-
-// GetEraInfo mocks base method.
-func (m *Mockblockchain) GetEraInfo() *era.EraInfo {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEraInfo")
-	ret0, _ := ret[0].(*era.EraInfo)
-	return ret0
-}
-
-// GetEraInfo indicates an expected call of GetEraInfo.
-func (mr *MockblockchainMockRecorder) GetEraInfo() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEraInfo", reflect.TypeOf((*Mockblockchain)(nil).GetEraInfo))
 }
 
 // GetLastCoordinatedCheckpoint mocks base method.

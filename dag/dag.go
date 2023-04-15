@@ -6,6 +6,7 @@
 package dag
 
 import (
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -14,17 +15,23 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/headsync"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/slotticker"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
+
+var errWrongInputSlot = errors.New("input slot is greater that current slot")
 
 // Backend wraps all methods required for block creation.
 type Backend interface {
@@ -39,14 +46,46 @@ type Backend interface {
 	TriggerSync()
 }
 
+type blockChain interface {
+	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
+	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
+	GetLastFinalizedHeader() *types.Header
+	GetHeaderByHash(hash common.Hash) *types.Header
+	WriteLastCoordinatedHash(hash common.Hash)
+	GetBlock(hash common.Hash) *types.Block
+	GetLastFinalizedBlock() *types.Block
+	GetTips() types.Tips
+	Database() ethdb.Database
+	GetSlotInfo() *types.SlotInfo
+	SetSlotInfo(si *types.SlotInfo) error
+	Config() *params.ChainConfig
+	GetEraInfo() *era.EraInfo
+	SetNewEraInfo(newEra era.Era)
+	EnterNextEra(root common.Hash) *era.Era
+	StartTransitionPeriod()
+	SyncEraToSlot(slot uint64)
+	ValidatorStorage() valStore.Storage
+	StateAt(root common.Hash) (*state.StateDB, error)
+	DagMuLock()
+	DagMuUnlock()
+	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
+	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
+}
+
+type ethDownloader interface {
+	Synchronising() bool
+}
+
 type Dag struct {
 	chainConfig *params.ChainConfig
 
 	// events
 	mux *event.TypeMux
 
-	eth Backend
-	bc  *core.BlockChain
+	eth        Backend
+	bc         blockChain
+	downloader ethDownloader
 
 	//creator
 	creator *creator.Creator
@@ -69,6 +108,7 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		eth:         eth,
 		mux:         mux,
 		bc:          eth.BlockChain(),
+		downloader:  eth.Downloader(),
 		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
 		finalizer:   fin,
 		headsync:    headsync.New(chainConfig, eth, mux, fin),
@@ -87,15 +127,15 @@ func (d *Dag) Creator() *creator.Creator {
 // HandleFinalize run blocks finalization procedure
 func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
 		return &types.FinalizationResult{
 			Error: &errStr,
 		}
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	if data.BaseSpine != nil {
 		log.Info("Handle Finalize: start",
@@ -213,15 +253,15 @@ func (d *Dag) synchronizeUnloadedBlocks(spines common.HashArray) {
 // HandleCoordinatedState return coordinated state
 func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
 		return &types.FinalizationResult{
 			Error: &errStr,
 		}
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
 	lfHash := lfHeader.Hash()
@@ -242,15 +282,15 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 // HandleGetCandidates collect next finalization candidates
 func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
 		return &types.CandidatesResult{
 			Error: &errStr,
 		}
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	tstart := time.Now()
 
@@ -272,10 +312,88 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	return res
 }
 
+func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.OptimisticSpinesResult {
+	spineBlock := d.bc.GetBlock(lastFinSpine)
+	spineSlot := spineBlock.Slot()
+	//skip if synchronising
+	if d.downloader.Synchronising() {
+		errStr := creator.ErrSynchronization.Error()
+		return &types.OptimisticSpinesResult{
+			Error: &errStr,
+		}
+	}
+
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
+
+	tstart := time.Now()
+
+	// collect optimistic spines
+	spines, err := d.GetOptimisticSpines(spineSlot)
+	if len(spines) == 0 {
+		log.Info("No spines for tips", "tips", d.bc.GetTips().Print())
+	}
+
+	log.Info("Handle GetOptimisticSpines: get finalizing spines", "err", err, "spines", spines, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
+	res := &types.OptimisticSpinesResult{
+		Error: nil,
+		Data:  spines,
+	}
+	if err != nil {
+		estr := err.Error()
+		res.Error = &estr
+	}
+	log.Info("Handle GetOptimisticSpines: response", "result", res, "\u2692", params.BuildId)
+	return res
+}
+
+func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
+	currentSlot := d.bc.GetSlotInfo().CurrentSlot()
+	if currentSlot <= gtSlot {
+		return []common.HashArray{}, errWrongInputSlot
+	}
+
+	var err error
+	optimisticSpines := make([]common.HashArray, 0)
+
+	for i := gtSlot + 1; i <= currentSlot; i++ {
+		slotSpines := d.bc.GetOptimisticSpinesFromCache(i)
+		if slotSpines == nil {
+			slotBlocks := make(types.Blocks, 0)
+			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
+			for _, hash := range slotBlocksHashes {
+				block := d.bc.GetBlock(hash)
+				slotBlocks = append(slotBlocks, block)
+			}
+			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
+			if err != nil {
+				return []common.HashArray{}, err
+			}
+
+			d.bc.SetOptimisticSpinesToCache(i, slotSpines)
+		}
+
+		optimisticSpines = append(optimisticSpines, slotSpines)
+	}
+
+	return optimisticSpines, nil
+}
+
+// TODO: delete
+// HandleHeadSyncReady set initial state to start head sync with coordinating network.
+func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
+
+	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
+	return d.headsync.SetReadyState(checkpoint)
+}
+
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
+
 	log.Info("Handle Sync Slot info", "params", slotInfo)
 	si := d.bc.GetSlotInfo()
 	if si == nil {
@@ -298,12 +416,29 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 	return false, nil
 }
 
+// TODO: delete
+// HandleHeadSync run head sync with coordinating network.
+func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
+
+	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
+	return d.headsync.Sync(data)
+}
+
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
+
 	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
+}
+
+// TODO: delete
+// SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
+func (d *Dag) SubscribeConsensusInfoEvent(ch chan<- types.Tips) event.Subscription {
+	return d.consensusInfoFeed.Subscribe(ch)
 }
 
 func (d *Dag) StartWork(accounts []common.Address) {
@@ -411,13 +546,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	//skip if synchronising
-	if d.eth.Downloader().Synchronising() {
+	if d.downloader.Synchronising() {
 		return
-		//d.errChan <- creator.ErrSynchronization
 	}
 
-	d.bc.DagMu.Lock()
-	defer d.bc.DagMu.Unlock()
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	errs := map[string]string{}
 
@@ -445,14 +579,6 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		for _, creator := range assigned.Creators {
 			// if received next slot
 
-			// TODO: may be drop consensusInfo field from blockchain because we don`t write value to it
-			//if d.consensusInfo != nil && d.consensusInfo.Slot > assigned.Slot {
-			//	break
-			//}
-
-			//d.eth.BlockChain().DagMu.Lock()
-			//defer d.eth.BlockChain().DagMu.Unlock()
-
 			coinbase := common.Address{}
 			for _, acc := range accounts {
 				if creator == acc {
@@ -479,6 +605,7 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 			if block != nil {
 				crtInfo["newBlock"] = block.Hash().Hex()
 			}
+
 			log.Info("Creator processing: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 		}
 	}
