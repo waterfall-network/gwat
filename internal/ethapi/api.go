@@ -2252,18 +2252,6 @@ func (api *PublicDagAPI) GetOptimisticSpines(ctx context.Context, lastFinSpine c
 	return api.b.Dag().HandleGetOptimisticSpines(lastFinSpine), nil
 }
 
-// TODO: delete
-// HeadSyncReady set initial state to start head sync with coordinating network.
-func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
-	return api.b.Dag().HandleHeadSyncReady(checkpoint)
-}
-
-// TODO: delete
-// HeadSync run head sync with coordinating network.
-func (api *PublicDagAPI) HeadSync(ctx context.Context, data []types.ConsensusInfo) (bool, error) {
-	return api.b.Dag().HandleHeadSync(data)
-}
-
 // ValidateSpines validate given sequence of spines.
 func (api *PublicDagAPI) ValidateSpines(ctx context.Context, data common.HashArray) (bool, error) {
 	return api.b.Dag().HandleValidateSpines(data)

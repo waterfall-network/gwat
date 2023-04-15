@@ -54,6 +54,9 @@ type blockChain interface {
 	GetHeaderByHash(hash common.Hash) *types.Header
 	WriteLastCoordinatedHash(hash common.Hash)
 	GetBlock(hash common.Hash) *types.Block
+	GetBlockByHash(hash common.Hash) *types.Block
+	GetLastFinalizedNumber() uint64
+	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 	GetLastFinalizedBlock() *types.Block
 	GetTips() types.Tips
 	Database() ethdb.Database
@@ -379,16 +382,6 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 	return optimisticSpines, nil
 }
 
-// TODO: delete
-// HandleHeadSyncReady set initial state to start head sync with coordinating network.
-func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
-
-	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
-	return d.headsync.SetReadyState(checkpoint)
-}
-
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 	d.bc.DagMuLock()
@@ -416,16 +409,6 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 	return false, nil
 }
 
-// TODO: delete
-// HandleHeadSync run head sync with coordinating network.
-func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
-
-	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
-	return d.headsync.Sync(data)
-}
-
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	d.bc.DagMuLock()
@@ -433,12 +416,6 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 
 	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
-}
-
-// TODO: delete
-// SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
-func (d *Dag) SubscribeConsensusInfoEvent(ch chan<- types.Tips) event.Subscription {
-	return d.consensusInfoFeed.Subscribe(ch)
 }
 
 func (d *Dag) StartWork(accounts []common.Address) {
