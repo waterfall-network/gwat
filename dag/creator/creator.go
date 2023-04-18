@@ -734,10 +734,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		}
 	}
 
-	if maxTipsTs := tipsBlocks.GetMaxTime(); maxTipsTs >= uint64(timestamp) {
-		timestamp = int64(maxTipsTs + 1)
-	}
-
 	finDag := tips.GetFinalizingDag()
 	if finDag == nil {
 		log.Error("Tips empty, skipping block creation", "Initial", c.chain.GetTips().Print(), "uncompleted", c.chain.GetUnsynchronizedTipsHashes())
@@ -792,7 +788,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
 		Extra:        c.extra,
-		Time:         uint64(timestamp),
+		Time:         uint64(time.Now().Unix()),
 		// Checkpoint spine block
 		LFHash:        checkpointBlock.Hash(),
 		LFNumber:      checkpointBlock.Nr(),
