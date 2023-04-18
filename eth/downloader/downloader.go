@@ -439,12 +439,12 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) Synchronise(id string, dag common.HashArray, lastFinNr uint64, mode SyncMode, dagOnly bool) error {
-	prr := d.peers.Peer("6458879e31e8f0006b42c6fa1231161856fa3194b0ff7edc0e1aee8911bdd56f")
-	log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", d.peers)
-	lfn, dag1 := prr.peer.GetDagInfo()
-	// "6458879e31e8f0006b42c6fa1231161856fa3194b0ff7edc0e1aee8911bdd56f"
-	log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", prr, "dag", dag1, "lfn", lfn)
-	err := d.synchronise(prr.id, dag, lastFinNr, mode, dagOnly)
+	//prr := d.peers.Peer("6458879e31e8f0006b42c6fa1231161856fa3194b0ff7edc0e1aee8911bdd56f")
+	//log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", d.peers)
+	//lfn, dag1 := prr.peer.GetDagInfo()
+	//// "6458879e31e8f0006b42c6fa1231161856fa3194b0ff7edc0e1aee8911bdd56f"
+	//log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", prr, "dag", dag1, "lfn", lfn)
+	err := d.synchronise(id, dag, lastFinNr, mode, dagOnly)
 
 	switch err {
 	case nil, errBusy, errCanceled:
@@ -552,6 +552,7 @@ func (d *Downloader) synchronise(id string, dag common.HashArray, lastFinNr uint
 
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
+	log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", p)
 	if p == nil {
 		return errUnknownPeer
 	}
