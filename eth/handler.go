@@ -283,7 +283,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.GetLastFinalizedBlock().Nr())
 	if err := peer.Handshake(h.networkID, lastFinNr, dag, genesis.Hash(), forkID, h.forkFilter); err != nil {
-		peer.Log().Debug("Ethereum handshake failed", "err", err)
+		peer.Log().Error("Ethereum handshake failed", "err", err)
 		return err
 	}
 	reject := false // reserved peer slots
@@ -303,7 +303,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return p2p.DiscTooManyPeers
 		}
 	}
-	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
+	peer.Log().Info("Ethereum peer connected", "name", peer.Name(), "ID", peer.ID())
 
 	// Register the peer locally
 	if err := h.peers.registerPeer(peer, snap); err != nil {
@@ -354,7 +354,13 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	// If we have any explicit whitelist block hashes, request them
 	for number := range h.whitelist {
+
+		peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "number", number)
+
 		if err := peer.RequestHeadersByNumber(number, 1, 0, false); err != nil {
+
+			peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "err", err)
+
 			return err
 		}
 	}
@@ -414,6 +420,33 @@ func (h *handler) unregisterPeer(id string) {
 	if err := h.peers.unregisterPeer(id); err != nil {
 		logger.Error("Ethereum peer removal failed", "err", err)
 	}
+}
+
+func (h *handler) StartSync(hashes common.HashArray, lastFinNr uint64) error {
+
+	log.Info("******* func (h *handler) SyncUnloadedHashes( *******", "hashes", hashes, "lastFinNr", lastFinNr, "len(h.peers)", len(h.peers.peers))
+
+	if len(h.peers.peers) == 0 {
+
+		log.Error("******* func (h *handler) SyncUnloadedHashes( *******", "hashes", hashes, "lastFinNr", lastFinNr, "len(h.peers)", len(h.peers.peers))
+
+		return errors.New("No peers")
+	}
+
+	peerId := h.peers.getPeer(false).ID()
+	err := h.downloader.Synchronise(peerId, hashes, lastFinNr, downloader.FullSync, true)
+	if err != nil {
+		return err
+	}
+	if atomic.LoadUint32(&h.fastSync) == 1 {
+		log.Info("Fast sync complete, auto disabling")
+		atomic.StoreUint32(&h.fastSync, 0)
+	}
+	if atomic.LoadUint32(&h.snapSync) == 1 {
+		log.Info("Snap sync complete, auto disabling")
+		atomic.StoreUint32(&h.snapSync, 0)
+	}
+	return nil
 }
 
 func (h *handler) Start(maxPeers int) {
@@ -556,8 +589,3 @@ func (h *handler) txBroadcastLoop() {
 		}
 	}
 }
-
-// txBroadcastLoop announces new transactions to connected peers.
-//func (h *handler) TriggerSync() {
-//	h.chainSync.Sync()
-//}

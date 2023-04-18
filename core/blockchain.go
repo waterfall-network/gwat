@@ -3683,6 +3683,9 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 	lfNr := bc.GetLastFinalizedBlock().Nr()
 
 	block := bc.GetBlockByHash(headHash)
+	if block == nil {
+		return common.HashArray{headHash}, loaded, finalized, graph, memo[0], err
+	}
 	if block.Nr() > lfNr {
 		block.SetNumber(nil)
 	}

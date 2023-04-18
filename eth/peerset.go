@@ -236,6 +236,9 @@ func (ps *peerSet) getPeer(onlyNew bool) *eth.Peer {
 	var peer *eth.Peer
 
 	for _, p := range ps.peers {
+		// todo check it
+		//peer = p.Peer
+
 		//if onlyNew && !p.IsNewlyConnected() {
 		//	continue
 		//}

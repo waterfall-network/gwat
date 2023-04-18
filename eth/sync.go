@@ -157,17 +157,20 @@ func (cs *chainSyncer) loop() {
 				cs.forced = true
 
 			case <-startTicker.C:
-				if len(cs.handler.chain.GetSyncHashes()) != 0 {
-					var op *chainSyncOp
-					op = cs.explicitSyncOp()
-					log.Warn("111111111111 SYNC LOOP start", "op", op)
-					if op != nil {
-						log.Warn("Synchronization start", "op", op)
-						cs.startSync(op)
-					}
-					log.Warn("Synchronization start", "op", op)
-					pevt.kind = evtDefault
-				}
+
+				log.Info(" ########### case <-startTicker.C:", "peers.len()", cs.handler.peers.len())
+
+				//if len(cs.handler.chain.GetSyncHashes()) != 0 {
+				//	var op *chainSyncOp
+				//	op = cs.explicitSyncOp()
+				//	log.Warn("111111111111 SYNC LOOP start", "op", op)
+				//	if op != nil {
+				//		log.Warn("Synchronization start", "op", op)
+				//		cs.startSync(op)
+				//	}
+				//	log.Warn("Synchronization start", "op", op)
+				//	pevt.kind = evtDefault
+				//}
 
 			case <-cs.handler.quitSync:
 				log.Debug("sync: quit")

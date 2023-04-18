@@ -43,7 +43,7 @@ type Backend interface {
 	CreatorAuthorize(creator common.Address) error
 	IsDevMode() bool
 	AccountManager() *accounts.Manager
-	//TriggerSync()
+	SyncUnloadedHashes(hashes common.HashArray, lastFinNr uint64) error
 }
 
 type blockChain interface {
@@ -76,6 +76,7 @@ type blockChain interface {
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
 	AddSyncHash(hash common.Hash)
 	GetSyncHashes() common.HashArray
+	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
 }
 
 type ethDownloader interface {
@@ -99,7 +100,9 @@ type Dag struct {
 	//headsync
 	headsync *headsync.Headsync
 
-	busy int32
+	//todo sync flow
+	isSynced bool
+	busy     int32
 
 	exitChan chan struct{}
 	errChan  chan error
@@ -131,6 +134,8 @@ func (d *Dag) Creator() *creator.Creator {
 
 // HandleFinalize run blocks finalization procedure
 func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
+
+	// todo deprecated
 	//skip if synchronising
 	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
@@ -141,6 +146,15 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
+
+	// todo check it
+	// check is synchronized
+	if data.Checkpoint.Spine != (common.Hash{}) {
+		cpHeader := d.bc.GetHeaderByHash(data.Checkpoint.Spine)
+		if cpHeader.Height > 0 && cpHeader.Nr() > 0 {
+			d.isSynced = true
+		}
+	}
 
 	if data.BaseSpine != nil {
 		log.Info("Handle Finalize: start",
@@ -179,7 +193,10 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	}
 	// finalization
 	if len(data.Spines) > 0 {
-		d.synchronizeUnloadedBlocks(data.Spines)
+
+		//d.synchronizeUnloadedBlocks(data.Spines)
+		d.syncUnloadedBlocksRecursive(data.Spines)
+
 		log.Info("888888888 d.finalizer.Finalize", "spines", data.Spines)
 		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
@@ -222,65 +239,44 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	return res
 }
 
-// unloadedBlocks composes unloaded spines and parents hashes array
-func (d *Dag) unloadedBlocks(spines common.HashArray) {
-
-	for _, spine := range spines {
-		sb := d.bc.GetBlockByHash(spine)
-		if sb == nil {
-			d.bc.AddSyncHash(spine)
-			continue
-		}
-		parents := d.bc.GetBlocksByHashes(spines)
-		for h, b := range parents {
-			if b == nil {
-				d.bc.AddSyncHash(h)
-			}
-		}
+// todo optimize
+func (d *Dag) syncUnloadedBlocksRecursive(spines common.HashArray) error {
+	unloaded, err := d.filterUnloadedBlocks(spines)
+	if err != nil {
+		return err
 	}
+	if len(unloaded) == 0 {
+		return nil
+	}
+	lfNr := d.bc.GetLastFinalizedNumber()
+	d.eth.SyncUnloadedHashes(unloaded, lfNr)
+
+	unloaded, err = d.filterUnloadedBlocks(spines)
+	if err != nil {
+		return err
+	}
+	if len(unloaded) > 0 {
+		d.syncUnloadedBlocksRecursive(unloaded)
+	}
+	return nil
 }
 
-func (d *Dag) synchronizeUnloadedBlocks(spines common.HashArray) {
-	//lastFinNr := d.bc.GetLastFinalizedNumber()
-	d.unloadedBlocks(spines)
-	//unloadedlen := len(unloaded)
+func (d *Dag) filterUnloadedBlocks(spines common.HashArray) (common.HashArray, error) {
+	var (
+		expCache core.ExploreResultMap
+		unloaded common.HashArray
+		unl      common.HashArray
+		err      error
+	)
 
-	//unloadedCopy := make(common.HashArray, len(unloaded))
-	//copy(unloadedCopy, unloaded)
-
-	//log.Warn("Finalize blocks: synchronizeUnloadedBlocks", "unknown", d.bc.GetSyncHashes())
-	//log.Warn("UNLOADED LEN", "unknown len", len(unloadedCopy))
-
-	//if len(unloadedCopy) != 0 {
-	//log.Warn("Synchronisation PEERS all", "!!!!!!!!!", d.eth.Downloader().GetPeers().AllPeers())
-
-	//log.Warn("Inside the conditional statement")
-	//log.Warn("Synchronisation PEERS all", "!!!!!!!!!", d.eth.Downloader().GetPeers().)
-	//for _, p := range d.eth.Downloader().GetPeers().AllPeers() {
-	//log.Warn("Synchronisation peers", "AllPeers", d.eth.Downloader().GetPeers().AllPeers())
-	//err := d.eth.Downloader().Synchronise("", unloaded, lastFinNr, downloader.FullSync, true)
-	//log.Warn("Synchronisation finished", "unloaded", unloaded)
-	//if err != nil {
-	//log.Warn("Synchronise failed", "reason", err)
-	//d.unloadedBlocks(spines)
-	//}
-	//}
-	//} else {
-	//	log.Warn("Inside the else branch")
-	//}
-
-	//for len(unloadedCopy) != 0 {
-	//log.Debug("Synchronisation PEERS all", "!!!!!!!!!", d.eth.Downloader().GetPeers().AllPeers())
-	//for _, p := range d.eth.Downloader().GetPeers().AllPeers() {
-	//	log.Debug(" !!!!!!!!! !!!!!!!!! !!!!!!!!!Synchronisation peers", "AllPeers", d.eth.Downloader().GetPeers().AllPeers())
-	//	err := d.eth.Downloader().Synchronise(unloaded, lastFinNr, downloader.FullSync, true)
-	//	log.Debug("Synchronisation finished", "unloaded", unloaded)
-	//	if err != nil {
-	//		log.Debug("Synchronise failed", "reason", err)
-	//		unloaded = d.unloadedBlocks(spines)
-	//	}
-	//}
-	//}
+	for _, spine := range spines {
+		unl, _, _, _, expCache, err = d.bc.ExploreChainRecursive(spine, expCache)
+		if err != nil {
+			return unloaded, err
+		}
+		unloaded = append(unloaded, unl...)
+	}
+	return unloaded, nil
 }
 
 // HandleCoordinatedState return coordinated state
@@ -515,6 +511,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			if slot == 0 {
 				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, common.Hash{})
 				d.bc.SetNewEraInfo(*newEra)
+				// todo sync flow
+				d.isSynced = true
+				continue
+			}
+
+			if !d.isSynced {
 				continue
 			}
 			var (
