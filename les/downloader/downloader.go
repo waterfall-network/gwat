@@ -430,8 +430,10 @@ func (d *Downloader) synchronise(id string, hash common.Hash, mode SyncMode) err
 
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
+	log.Warn("!!!!!!!!!! PEER p := d.peers.Peer(id)", "peer", p)
 	if p == nil {
-		return errUnknownPeer
+		d.peers.Register(id)
+		//return errUnknownPeer
 	}
 	return d.syncWithPeer(p, hash)
 }

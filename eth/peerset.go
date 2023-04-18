@@ -236,9 +236,9 @@ func (ps *peerSet) getPeer(onlyNew bool) *eth.Peer {
 	var peer *eth.Peer
 
 	for _, p := range ps.peers {
-		if onlyNew && !p.IsNewlyConnected() {
-			continue
-		}
+		//if onlyNew && !p.IsNewlyConnected() {
+		//	continue
+		//}
 		// dag == nil - has not synchronized tips
 		if _, dag := p.GetDagInfo(); dag != nil {
 			peer = p.Peer

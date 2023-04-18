@@ -516,9 +516,9 @@ func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruni
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 func (s *Ethereum) IsDevMode() bool                    { return s.config.IsDevMode }
 
-func (s *Ethereum) TriggerSync() {
-	s.handler.chainSync.Sync()
-}
+//func (s *Ethereum) TriggerSync() {
+//	s.handler.chainSync.Sync()
+//}
 
 // Protocols returns all the currently configured
 // network protocols to start.

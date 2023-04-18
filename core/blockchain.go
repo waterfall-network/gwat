@@ -231,6 +231,8 @@ type BlockChain struct {
 	processor    Processor // Block transaction processor interface
 	vmConfig     vm.Config
 	syncProvider types.SyncProvider
+	syncQueue    common.HashArray
+	syncQueueM   sync.Mutex // Mutex for thread-safe access to hashQueue
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -575,6 +577,49 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		}
 		bc.SyncEraToSlot(epochStartSlot)
 	}
+}
+
+// AddHash adds a hash to the BlockChain's sync queue
+func (bc *BlockChain) AddSyncHash(hash common.Hash) {
+	bc.syncQueueM.Lock()
+	defer bc.syncQueueM.Unlock()
+
+	// Check if the hash already exists in the queue
+	for _, existingHash := range bc.syncQueue {
+		if existingHash == hash {
+			return // Hash already exists, do not add it
+		}
+	}
+
+	log.Error("Sync hash queue updated", "queue", bc.syncQueue)
+	bc.syncQueue = append(bc.syncQueue, hash)
+}
+
+// RemoveHash removes a specific hash from the BlockChain's hash queue
+func (bc *BlockChain) RemoveSyncHash(hashToRemove common.Hash) {
+	bc.syncQueueM.Lock()
+	defer bc.syncQueueM.Unlock()
+	for i, hash := range bc.syncQueue {
+		log.Warn("2222222222 THE SAME ", "hash", hash, "i", i)
+		if hash == hashToRemove {
+			// Remove the hash from the queue by slicing the array
+			bc.syncQueue = append(bc.syncQueue[:i], bc.syncQueue[i+1:]...)
+			log.Warn(" 2222222222 HASH WAS REMOVED", "hash", hash, "sync", bc.syncQueue)
+		}
+
+	}
+}
+
+// GetHashes retrieves and removes up to maxRetrieve hashes from the BlockChain's hash queue
+func (bc *BlockChain) GetSyncHashes() common.HashArray {
+	bc.syncQueueM.Lock()
+	defer bc.syncQueueM.Unlock()
+	log.Error("TAKE SYNC HASHES", "queue", bc.syncQueue)
+	if len(bc.syncQueue) == 0 {
+		return nil
+	}
+
+	return bc.syncQueue
 }
 
 // HandleCheckpointsForEpoch adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
@@ -1929,6 +1974,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 
 		// Write the block to the chain and get the status.
 		substart = time.Now()
+		log.Error(" >>>>>>>>>>>>> SyncInsert schain <<<<<<<<<<<<<<", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "syncInsertChain")
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
@@ -2278,13 +2324,13 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
-		if ok, err := bc.VerifyBlock(block); !ok {
-			if err != nil {
-				return it.index, err
-			}
-			bc.CacheInvalidBlock(block)
-			continue
-		}
+		//if ok, err := bc.VerifyBlock(block); !ok {
+		//	if err != nil {
+		//		return it.index, err
+		//	}
+		//	bc.CacheInvalidBlock(block)
+		//	continue
+		//}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
 
@@ -2553,6 +2599,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 
 	// Write the block to the chain and get the status.
 	subStart = time.Now()
+	log.Error(">>>>>>>>> UpdateFinalizingState <<<<<<", "height", block.Height(), "hash", block.Hash().Hex())
 	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
 	if err != nil {
 		return err
@@ -3538,6 +3585,36 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 }
 
 /********** BlockDAG **********/
+
+// GetDagHashes retrieves all non finalized block's hashes
+func (bc *BlockChain) GetUnloadedDagHashes() *common.HashArray {
+	dagHashes := common.HashArray{}
+	tips := *bc.hc.GetTips()
+
+	tipsHashes := tips.GetOrderedDagChainHashes()
+	dagBlocks := bc.GetBlocksByHashes(tipsHashes)
+	for hash, bl := range dagBlocks {
+		if bl != nil && bl.Nr() == 0 && bl.Height() > 0 {
+			dagHashes = append(dagHashes, hash)
+		}
+	}
+	if len(dagHashes) == 0 {
+		dagHashes = common.HashArray{bc.GetLastFinalizedBlock().Hash()}
+	}
+
+	//expCache := ExploreResultMap{}
+	//for hash, tip := range tips {
+	//	if hash == tip.LastFinalizedHash {
+	//		dagHashes = append(dagHashes, hash)
+	//		continue
+	//	}
+	//	_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
+	//	expCache = c
+	//	dagHashes = dagHashes.Concat(loaded)
+	//}
+	//dagHashes = dagHashes.Uniq().Sort()
+	return &dagHashes
+}
 
 // GetDagHashes retrieves all non finalized block's hashes
 func (bc *BlockChain) GetDagHashes() *common.HashArray {

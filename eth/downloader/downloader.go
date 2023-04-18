@@ -439,7 +439,12 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) Synchronise(id string, dag common.HashArray, lastFinNr uint64, mode SyncMode, dagOnly bool) error {
-	err := d.synchronise(id, dag, lastFinNr, mode, dagOnly)
+	prr := d.peers.Peer("6458879e31e8f0006b42c6fa1231161856fa3194b0ff7edc0e1aee8911bdd56f")
+	log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", d.peers)
+	lfn, dag1 := prr.peer.GetDagInfo()
+	// "6458879e31e8f0006b42c6fa1231161856fa3194b0ff7edc0e1aee8911bdd56f"
+	log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", prr, "dag", dag1, "lfn", lfn)
+	err := d.synchronise(prr.id, dag, lastFinNr, mode, dagOnly)
 
 	switch err {
 	case nil, errBusy, errCanceled:
@@ -583,134 +588,134 @@ func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastF
 
 	// if remote peer has unknown dag blocks only
 	// sync such blocks only
-	if dagOnly {
-		if err = d.syncWithPeerUnknownDagBlocks(p, dag); err != nil {
-			log.Error("Synchronization of unknown dag blocks failed", "err", err)
-			return err
-		}
-		d.Cancel()
-		return nil
+	//if dagOnly {
+	if err = d.syncWithPeerUnknownDagBlocks(p, dag); err != nil {
+		log.Error("Synchronization of unknown dag blocks failed", "err", err)
+		return err
 	}
+	d.Cancel()
+	return nil
+	//}
 
 	// Look up the sync boundaries: the common ancestor and the target block
-	latest, pivot, err := d.fetchHead(p)
-	if err != nil {
-		return err
-	}
-	if mode == FastSync && pivot == nil {
-		// If no pivot block was returned, the head is below the min full block
-		// threshold (i.e. new chain). In that case we won't really fast sync
-		// anyway, but still need a valid pivot block to avoid some code hitting
-		// nil panics on an access.
-		pivot = d.blockchain.GetLastFinalizedBlock().Header()
-	}
-	height := lastFinNr
-
-	origin, err := d.findCoordinatedAncestor(p, latest)
-	log.Info("Synchronization of finalized chain: start", "origin", origin, "latest.Number", latest.Nr(), "latest.Hash", latest.Hash().Hex())
-	if err != nil {
-		d.dropPeer(p.id)
-		return err
-	}
-	d.syncStatsLock.Lock()
-	if d.syncStatsChainHeight <= origin || d.syncStatsChainOrigin > origin {
-		d.syncStatsChainOrigin = origin
-	}
-	d.syncStatsChainHeight = height
-	d.syncStatsLock.Unlock()
-
-	// Ensure our origin point is below any fast sync pivot point
-	if mode == FastSync {
-		if height <= uint64(fsMinFullBlocks) {
-			origin = 0
-		} else {
-			pivotNumber := *pivot.Number
-			if pivotNumber <= origin {
-				origin = pivotNumber - 1
-			}
-			// Write out the pivot into the database so a rollback beyond it will
-			// reenable fast sync
-			rawdb.WriteLastPivotNumber(d.stateDB, pivotNumber)
-		}
-	}
-	d.committed = 1
-	if mode == FastSync && *pivot.Number != 0 {
-		d.committed = 0
-	}
-	if mode == FastSync {
-		// Set the ancient data limitation.
-		// If we are running fast sync, all block data older than ancientLimit will be
-		// written to the ancient store. More recent data will be written to the active
-		// database and will wait for the freezer to migrate.
-		//
-		// If there is a checkpoint available, then calculate the ancientLimit through
-		// that. Otherwise calculate the ancient limit through the advertised height
-		// of the remote peer.
-		//
-		// The reason for picking checkpoint first is that a malicious peer can give us
-		// a fake (very high) height, forcing the ancient limit to also be very high.
-		// The peer would start to feed us valid blocks until head, resulting in all of
-		// the blocks might be written into the ancient store. A following mini-reorg
-		// could cause issues.
-		if d.checkpoint != 0 && d.checkpoint > fullMaxForkAncestry+1 {
-			d.ancientLimit = d.checkpoint
-		} else if height > fullMaxForkAncestry+1 {
-			d.ancientLimit = height - fullMaxForkAncestry - 1
-		} else {
-			d.ancientLimit = 0
-		}
-		frozen, _ := d.stateDB.Ancients() // Ignore the error here since light client can also hit here.
-
-		// If a part of blockchain data has already been written into active store,
-		// disable the ancient style insertion explicitly.
-		if origin >= frozen && frozen != 0 {
-			d.ancientLimit = 0
-			log.Info("Disabling direct-ancient mode", "origin", origin, "ancient", frozen-1)
-		} else if d.ancientLimit > 0 {
-			log.Debug("Enabling direct-ancient mode", "ancient", d.ancientLimit)
-		}
-		// Rewind the ancient store and blockchain if reorg happens.
-		if origin+1 < frozen {
-			header := d.lightchain.GetHeaderByNumber(origin + 1)
-			if header != nil {
-				if err := d.lightchain.SetHead(header.Hash()); err != nil {
-					return err
-				}
-			}
-		}
-	}
+	//latest, pivot, err := d.fetchHead(p)
+	//if err != nil {
+	//	return err
+	//}
+	//if mode == FastSync && pivot == nil {
+	//	// If no pivot block was returned, the head is below the min full block
+	//	// threshold (i.e. new chain). In that case we won't really fast sync
+	//	// anyway, but still need a valid pivot block to avoid some code hitting
+	//	// nil panics on an access.
+	//	pivot = d.blockchain.GetLastFinalizedBlock().Header()
+	//}
+	//height := lastFinNr
+	//
+	//origin, err := d.findCoordinatedAncestor(p, latest)
+	//log.Info("Synchronization of finalized chain: start", "origin", origin, "latest.Number", latest.Nr(), "latest.Hash", latest.Hash().Hex())
+	//if err != nil {
+	//	d.dropPeer(p.id)
+	//	return err
+	//}
+	//d.syncStatsLock.Lock()
+	//if d.syncStatsChainHeight <= origin || d.syncStatsChainOrigin > origin {
+	//	d.syncStatsChainOrigin = origin
+	//}
+	//d.syncStatsChainHeight = height
+	//d.syncStatsLock.Unlock()
+	//
+	//// Ensure our origin point is below any fast sync pivot point
+	//if mode == FastSync {
+	//	if height <= uint64(fsMinFullBlocks) {
+	//		origin = 0
+	//	} else {
+	//		pivotNumber := *pivot.Number
+	//		if pivotNumber <= origin {
+	//			origin = pivotNumber - 1
+	//		}
+	//		// Write out the pivot into the database so a rollback beyond it will
+	//		// reenable fast sync
+	//		rawdb.WriteLastPivotNumber(d.stateDB, pivotNumber)
+	//	}
+	//}
+	//d.committed = 1
+	//if mode == FastSync && *pivot.Number != 0 {
+	//	d.committed = 0
+	//}
+	//if mode == FastSync {
+	//	// Set the ancient data limitation.
+	//	// If we are running fast sync, all block data older than ancientLimit will be
+	//	// written to the ancient store. More recent data will be written to the active
+	//	// database and will wait for the freezer to migrate.
+	//	//
+	//	// If there is a checkpoint available, then calculate the ancientLimit through
+	//	// that. Otherwise calculate the ancient limit through the advertised height
+	//	// of the remote peer.
+	//	//
+	//	// The reason for picking checkpoint first is that a malicious peer can give us
+	//	// a fake (very high) height, forcing the ancient limit to also be very high.
+	//	// The peer would start to feed us valid blocks until head, resulting in all of
+	//	// the blocks might be written into the ancient store. A following mini-reorg
+	//	// could cause issues.
+	//	if d.checkpoint != 0 && d.checkpoint > fullMaxForkAncestry+1 {
+	//		d.ancientLimit = d.checkpoint
+	//	} else if height > fullMaxForkAncestry+1 {
+	//		d.ancientLimit = height - fullMaxForkAncestry - 1
+	//	} else {
+	//		d.ancientLimit = 0
+	//	}
+	//	frozen, _ := d.stateDB.Ancients() // Ignore the error here since light client can also hit here.
+	//
+	//	// If a part of blockchain data has already been written into active store,
+	//	// disable the ancient style insertion explicitly.
+	//	if origin >= frozen && frozen != 0 {
+	//		d.ancientLimit = 0
+	//		log.Info("Disabling direct-ancient mode", "origin", origin, "ancient", frozen-1)
+	//	} else if d.ancientLimit > 0 {
+	//		log.Debug("Enabling direct-ancient mode", "ancient", d.ancientLimit)
+	//	}
+	//	// Rewind the ancient store and blockchain if reorg happens.
+	//	if origin+1 < frozen {
+	//		header := d.lightchain.GetHeaderByNumber(origin + 1)
+	//		if header != nil {
+	//			if err := d.lightchain.SetHead(header.Hash()); err != nil {
+	//				return err
+	//			}
+	//		}
+	//	}
+	//}
 	// Initiate the sync using a concurrent header and content retrieval algorithm
-	d.queue.Prepare(origin+1, mode)
-	if d.syncInitHook != nil {
-		d.syncInitHook(origin, height)
-	}
-	fetchers := []func() error{
-		func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
-		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and fast sync
-		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
-		func() error { return d.processHeaders(origin + 1) },
-	}
-	if mode == FastSync {
-		d.pivotLock.Lock()
-		d.pivotHeader = pivot
-		d.pivotLock.Unlock()
-
-		fetchers = append(fetchers, func() error { return d.processFastSyncContent() })
-	} else if mode == FullSync {
-		fetchers = append(fetchers, d.processFullSyncContent)
-	}
-	//Synchronisation of finalized chain
-	if err = d.spawnSync(fetchers); err != nil {
-		log.Error("Synchronization of finalized chain failed", "err", err)
-		d.Cancel()
-		return err
-	}
+	//d.queue.Prepare(origin+1, mode)
+	//if d.syncInitHook != nil {
+	//	d.syncInitHook(origin, height)
+	//}
+	//fetchers := []func() error{
+	//	func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
+	//	func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and fast sync
+	//	func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
+	//	func() error { return d.processHeaders(origin + 1) },
+	//}
+	//if mode == FastSync {
+	//	d.pivotLock.Lock()
+	//	d.pivotHeader = pivot
+	//	d.pivotLock.Unlock()
+	//
+	//	fetchers = append(fetchers, func() error { return d.processFastSyncContent() })
+	//} else if mode == FullSync {
+	//	fetchers = append(fetchers, d.processFullSyncContent)
+	//}
+	////Synchronisation of finalized chain
+	//if err = d.spawnSync(fetchers); err != nil {
+	//	log.Error("Synchronization of finalized chain failed", "err", err)
+	//	d.Cancel()
+	//	return err
+	//}
 	//Synchronisation of dag chain
-	if err = d.syncWithPeerDagChain(p); err != nil {
-		log.Error("Synchronization of dag chain failed", "err", err)
-		d.Cancel()
-		return err
-	}
+	//if err = d.syncWithPeerDagChain(p); err != nil {
+	//	log.Error("Synchronization of dag chain failed", "err", err)
+	//	d.Cancel()
+	//	return err
+	//}
 	d.Cancel()
 	return nil
 }

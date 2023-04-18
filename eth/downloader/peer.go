@@ -80,6 +80,7 @@ type LightPeer interface {
 // Peer encapsulates the methods required to synchronise with a remote full peer.
 type Peer interface {
 	LightPeer
+	GetDagInfo() (uint64, *common.HashArray)
 	RequestBodies([]common.Hash) error
 	RequestReceipts([]common.Hash) error
 	RequestNodeData([]common.Hash) error
@@ -391,7 +392,7 @@ func (ps *peerSet) Register(p *peerConnection) error {
 	}
 	ps.peers[p.id] = p
 	ps.lock.Unlock()
-
+	log.Error("PEERSET Register", "peerSet", ps)
 	ps.newPeerFeed.Send(p)
 	return nil
 }

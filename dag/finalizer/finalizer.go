@@ -91,6 +91,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 	spinesMap := make(types.SlotSpineMap, len(*spines))
 	for _, spineHash := range *spines {
 		block := bc.GetBlockByHash(spineHash)
+		bc.AddSyncHash(spineHash)
 		if block == nil {
 			log.Error("Block finalization failed", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
 			return ErrSpineNotFound
@@ -107,6 +108,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 
 	for _, slot := range slots {
 		spine := spinesMap[slot]
+		log.Warn("⌛ Finalization start spines before ordering: (!!!!!!!!!!)", "spines", spine)
 		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
 
 		log.Info("Finalization spine chain calculated", "isHeadSync", isHeadSync, "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
@@ -344,13 +346,13 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash))
 		return ErrSpineNotFound
 	}
-	if spineBlock.Height() != spineBlock.Nr() {
-		log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
-	}
-	if spineBlock.Height() > spineBlock.Nr() {
-		log.Error("Set spine state: bad spine (critical)", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
-		return ErrSpineNotFound
-	}
+	//if spineBlock.Height() != spineBlock.Nr() {
+	//	log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
+	//}
+	//if spineBlock.Height() > spineBlock.Nr() {
+	//	log.Error("Set spine state: bad spine (critical)", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
+	//	return ErrSpineNotFound
+	//}
 
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	if spineBlock.Hash() == lastFinBlock.Hash() && spineBlock.Nr() >= lfNr {

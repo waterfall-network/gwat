@@ -34,7 +34,7 @@ const (
 	DefaultWSPort      = 8546        // Default TCP port for the websocket RPC server
 	DefaultGraphQLHost = "localhost" // Default host interface for the GraphQL server
 	DefaultGraphQLPort = 8547        // Default TCP port for the GraphQL server
-	DefaultAuthPort    = 8551
+	DefaultAuthPort    = 8559
 	DefaultAuthAddr    = "localhost"
 )
 
@@ -56,9 +56,9 @@ var DefaultConfig = Config{
 	WSPort:              DefaultWSPort,
 	WSModules:           []string{"net", "web3"},
 	GraphQLVirtualHosts: []string{"localhost"},
-	AuthPort:            DefaultAuthPort,
-	AuthAddr:            DefaultAuthAddr,
-	AuthVirtualHosts:    DefaultAuthVhosts,
+	//AuthPort:            DefaultAuthPort,
+	//AuthAddr:            DefaultAuthAddr,
+	AuthVirtualHosts: DefaultAuthVhosts,
 	P2P: p2p.Config{
 		ListenAddr: ":30303",
 		MaxPeers:   50,

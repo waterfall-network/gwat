@@ -723,12 +723,14 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 				continue
 			}
 			if c.chain.IsAncestorRecursive(block, ancestor) {
-				log.Warn("Creator remove ancestor tips",
+				log.Warn(""+
+					"Creator remove ancestor tips",
 					"block", block.Hash().Hex(),
 					"ancestor", ancestor.Hex(),
 					"tips", tips.Print(),
 				)
-				delete(tips, ancestor) // TODO check sometimes panic
+				delete(tips, ancestor) // TODO check sometimes pa
+				// nic
 				delete(tipsBlocks, ancestor)
 			}
 		}

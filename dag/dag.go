@@ -43,7 +43,7 @@ type Backend interface {
 	CreatorAuthorize(creator common.Address) error
 	IsDevMode() bool
 	AccountManager() *accounts.Manager
-	TriggerSync()
+	//TriggerSync()
 }
 
 type blockChain interface {
@@ -74,6 +74,8 @@ type blockChain interface {
 	DagMuUnlock()
 	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
+	AddSyncHash(hash common.Hash)
+	GetSyncHashes() common.HashArray
 }
 
 type ethDownloader interface {
@@ -177,10 +179,12 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	}
 	// finalization
 	if len(data.Spines) > 0 {
+		d.synchronizeUnloadedBlocks(data.Spines)
+		log.Info("888888888 d.finalizer.Finalize", "spines", data.Spines)
 		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
 				// Start syncing if spine or parent is unloaded
-				d.synchronizeUnloadedBlocks(data.Spines)
+				//d.synchronizeUnloadedBlocks(data.pines)
 			}
 			e := err.Error()
 			res.Error = &e
@@ -219,38 +223,64 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 }
 
 // unloadedBlocks composes unloaded spines and parents hashes array
-func (d *Dag) unloadedBlocks(spines common.HashArray) common.HashArray {
-	unloaded := common.HashArray{}
+func (d *Dag) unloadedBlocks(spines common.HashArray) {
+
 	for _, spine := range spines {
 		sb := d.bc.GetBlockByHash(spine)
 		if sb == nil {
-			unloaded = append(unloaded, spine)
+			d.bc.AddSyncHash(spine)
 			continue
 		}
 		parents := d.bc.GetBlocksByHashes(spines)
 		for h, b := range parents {
 			if b == nil {
-				unloaded = append(unloaded, h)
+				d.bc.AddSyncHash(h)
 			}
 		}
 	}
-
-	return unloaded
 }
 
 func (d *Dag) synchronizeUnloadedBlocks(spines common.HashArray) {
-	lastFinNr := d.bc.GetLastFinalizedNumber()
-	unloaded := d.unloadedBlocks(spines)
-	log.Warn("Finalize blocks: unloaded blocks detected. start sync", "unknown", unloaded)
-	for len(unloaded) != 0 {
-		for _, p := range d.eth.Downloader().GetPeers().AllPeers() {
-			err := d.eth.Downloader().Synchronise(p.Id(), unloaded, lastFinNr, downloader.FullSync, true)
-			if err != nil {
-				log.Debug("Synchronise failed", "reason", err)
-				unloaded = d.unloadedBlocks(spines)
-			}
-		}
-	}
+	//lastFinNr := d.bc.GetLastFinalizedNumber()
+	d.unloadedBlocks(spines)
+	//unloadedlen := len(unloaded)
+
+	//unloadedCopy := make(common.HashArray, len(unloaded))
+	//copy(unloadedCopy, unloaded)
+
+	//log.Warn("Finalize blocks: synchronizeUnloadedBlocks", "unknown", d.bc.GetSyncHashes())
+	//log.Warn("UNLOADED LEN", "unknown len", len(unloadedCopy))
+
+	//if len(unloadedCopy) != 0 {
+	//log.Warn("Synchronisation PEERS all", "!!!!!!!!!", d.eth.Downloader().GetPeers().AllPeers())
+
+	//log.Warn("Inside the conditional statement")
+	//log.Warn("Synchronisation PEERS all", "!!!!!!!!!", d.eth.Downloader().GetPeers().)
+	//for _, p := range d.eth.Downloader().GetPeers().AllPeers() {
+	//log.Warn("Synchronisation peers", "AllPeers", d.eth.Downloader().GetPeers().AllPeers())
+	//err := d.eth.Downloader().Synchronise("", unloaded, lastFinNr, downloader.FullSync, true)
+	//log.Warn("Synchronisation finished", "unloaded", unloaded)
+	//if err != nil {
+	//log.Warn("Synchronise failed", "reason", err)
+	//d.unloadedBlocks(spines)
+	//}
+	//}
+	//} else {
+	//	log.Warn("Inside the else branch")
+	//}
+
+	//for len(unloadedCopy) != 0 {
+	//log.Debug("Synchronisation PEERS all", "!!!!!!!!!", d.eth.Downloader().GetPeers().AllPeers())
+	//for _, p := range d.eth.Downloader().GetPeers().AllPeers() {
+	//	log.Debug(" !!!!!!!!! !!!!!!!!! !!!!!!!!!Synchronisation peers", "AllPeers", d.eth.Downloader().GetPeers().AllPeers())
+	//	err := d.eth.Downloader().Synchronise(unloaded, lastFinNr, downloader.FullSync, true)
+	//	log.Debug("Synchronisation finished", "unloaded", unloaded)
+	//	if err != nil {
+	//		log.Debug("Synchronise failed", "reason", err)
+	//		unloaded = d.unloadedBlocks(spines)
+	//	}
+	//}
+	//}
 }
 
 // HandleCoordinatedState return coordinated state
@@ -441,18 +471,23 @@ func (d *Dag) StartWork(accounts []common.Address) {
 				return
 			}
 			tickSec = currentTime.Second()
-		} else {
-			lcp := d.bc.GetLastCoordinatedCheckpoint()
-			// revert to LastCoordinatedCheckpoint
-			if lcp.Spine != d.bc.GetLastFinalizedHeader().Hash() {
-				spineBlock := d.bc.GetBlock(lcp.Spine)
-				if err := d.finalizer.SetSpineState(&lcp.Spine, spineBlock.Nr()); err != nil {
-					log.Error("Revert to checkpoint spine error", "error", err)
-				}
-			}
-
-			log.Info("Waiting for slot info from coordinator")
 		}
+		//else {
+		//	lcp := d.bc.GetLastCoordinatedCheckpoint()
+		//	log.Error("0000000000 Revert to checkpoint spine SPINE", "lcp", lcp)
+		//	// revert to LastCoordinatedCheckpoint
+		//	if lcp.Spine != d.bc.GetLastFinalizedBlock().Hash() {
+		//		spineBlock := d.bc.GetBlock(lcp.Spine)
+		//		log.Error("0000000000111111111 Revert to checkpoint spine SPINE", "Nr", spineBlock.Nr(), "number", spineBlock.Number(), "block", spineBlock.Hash().Hex(), "root", spineBlock.Root().Hex())
+		//		if err := d.finalizer.SetSpineState(&lcp.Spine, spineBlock.Nr()); err != nil {
+		//			log.Error("Revert to checkpoint spine error", "error", err)
+		//		}
+		//		//d.bc..SetLastFinalisedHeader(genesisHeader, genesisHeight)
+		//		//d.bc.Set
+		//	}
+		//
+		//	log.Info("Waiting for slot info from coordinator")
+		//}
 
 		<-startTicker.C
 	}
