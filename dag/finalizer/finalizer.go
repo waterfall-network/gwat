@@ -344,13 +344,15 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash))
 		return ErrSpineNotFound
 	}
-	if spineBlock.Height() != spineBlock.Nr() {
-		log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
-	}
-	if spineBlock.Height() > spineBlock.Nr() {
-		log.Error("Set spine state: bad spine (critical)", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
-		return ErrSpineNotFound
-	}
+
+	// TODO: UNCOMMENT
+	//if spineBlock.Height() != spineBlock.Nr() {
+	//	log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
+	//}
+	//if spineBlock.Height() > spineBlock.Nr() {
+	//	log.Error("Set spine state: bad spine (critical)", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
+	//	return ErrSpineNotFound
+	//}
 
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	if spineBlock.Hash() == lastFinBlock.Hash() && spineBlock.Nr() >= lfNr {
