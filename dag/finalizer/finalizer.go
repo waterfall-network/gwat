@@ -91,7 +91,6 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 	spinesMap := make(types.SlotSpineMap, len(*spines))
 	for _, spineHash := range *spines {
 		block := bc.GetBlockByHash(spineHash)
-		bc.AddSyncHash(spineHash)
 		if block == nil {
 			log.Error("Block finalization failed", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
 			return ErrSpineNotFound

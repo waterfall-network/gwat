@@ -579,7 +579,7 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	}
 }
 
-// AddHash adds a hash to the BlockChain's sync queue
+// AddSyncHash adds a hash to the BlockChain's sync queue
 func (bc *BlockChain) AddSyncHash(hash common.Hash) {
 	bc.syncQueueM.Lock()
 	defer bc.syncQueueM.Unlock()
@@ -591,30 +591,27 @@ func (bc *BlockChain) AddSyncHash(hash common.Hash) {
 		}
 	}
 
-	log.Error("Sync hash queue updated", "queue", bc.syncQueue)
 	bc.syncQueue = append(bc.syncQueue, hash)
 }
 
-// RemoveHash removes a specific hash from the BlockChain's hash queue
+// RemoveHash removes a specific hash from the BlockChain's syncQueue queue
 func (bc *BlockChain) RemoveSyncHash(hashToRemove common.Hash) {
 	bc.syncQueueM.Lock()
 	defer bc.syncQueueM.Unlock()
 	for i, hash := range bc.syncQueue {
-		log.Warn("2222222222 THE SAME ", "hash", hash, "i", i)
 		if hash == hashToRemove {
 			// Remove the hash from the queue by slicing the array
 			bc.syncQueue = append(bc.syncQueue[:i], bc.syncQueue[i+1:]...)
-			log.Warn(" 2222222222 HASH WAS REMOVED", "hash", hash, "sync", bc.syncQueue)
 		}
 
 	}
 }
 
-// GetHashes retrieves and removes up to maxRetrieve hashes from the BlockChain's hash queue
+// GetHashes returns syncQueue
 func (bc *BlockChain) GetSyncHashes() common.HashArray {
 	bc.syncQueueM.Lock()
 	defer bc.syncQueueM.Unlock()
-	log.Error("TAKE SYNC HASHES", "queue", bc.syncQueue)
+
 	if len(bc.syncQueue) == 0 {
 		return nil
 	}
@@ -624,6 +621,7 @@ func (bc *BlockChain) GetSyncHashes() common.HashArray {
 
 // HandleCheckpointsForEpoch adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
 func (bc *BlockChain) HandleCheckpointsForEpoch(targetCp *types.Checkpoint) {
+	// TODO: add panic sanity check
 	currCp := bc.GetLastCoordinatedCheckpoint()
 	epochNum := currCp.Epoch
 	for epochNum < targetCp.Epoch {
@@ -2324,6 +2322,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
+		// TODO: UNCOMMENT
 		//if ok, err := bc.VerifyBlock(block); !ok {
 		//	if err != nil {
 		//		return it.index, err
@@ -2367,151 +2366,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		bc.WriteCurrentTips()
 
 		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
-
-		// // Merge add v0.6-fix-height-calc-validate
-
-		// //retrieve state data
-		// statedb, stateBlock, recommitBlocks, _, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
-		// if stateErr != nil && stateBlock == nil {
-		// 	log.Error("Propagated block import state err", "height", block.Height(), "hash", block.Hash().Hex(), "stateBlock", stateBlock, "err", stateErr)
-		// 	return it.index, stateErr
-
-		// Merge add v0.6-fix-height-calc-validate
-
-		// Merge add v0.6-fix-height-calc-validate
-
-		// 		bc.RemoveTips(block.ParentHashes())
-		// 		dagBlock := &types.BlockDAG{
-		// 			Hash:                block.Hash(),
-		// 			Height:              block.Height(),
-		// 			Slot:                block.Slot(),
-		// 			LastFinalizedHash:   block.LFHash(),
-		// 			LastFinalizedHeight: block.LFNumber(),
-		// 			DagChainHashes:      dagChainHashes.Uniq(),
-		// 		}
-		// 		bc.AddTips(dagBlock)
-		// 		bc.RemoveTips(dagBlock.DagChainHashes)
-		// 		bc.WriteCurrentTips()
-
-		// 		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
-
-		// 		if stateErr != nil || statedb == nil {
-		// 			log.Error("Propagated block import state err", "Height", block.Height(), "hash", block.Hash().Hex(), "state.height", stateBlock.Height(), "state.hash", stateBlock.Hash().Hex(), "err", stateErr)
-		// 			continue
-		// 		}
-		// 	}
-
-		// 	start := time.Now()
-		// 	// Enable prefetching to pull in trie node paths while processing transactions
-		// 	statedb.StartPrefetcher("chain")
-		// 	activeState = statedb
-
-		// 	// recommit transactions
-		// 	for _, bl := range recommitBlocks {
-		// 		statedb = bc.RecommitBlockTransactions(bl, statedb)
-		// 	}
-
-		// 	// If we have a followup block, run that against the current state to pre-cache
-		// 	// transactions and probabilistically some of the account/storage trie nodes.
-		// 	var followupInterrupt uint32
-		// 	if !bc.cacheConfig.TrieCleanNoPrefetch {
-		// 		if followup, err := it.peek(); followup != nil && err == nil {
-		// 			throwaway, _ := state.New(stateBlock.Root(), bc.stateCache, bc.snaps)
-
-		// 			go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
-		// 				bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
-
-		// 				blockPrefetchExecuteTimer.Update(time.Since(start))
-		// 				if atomic.LoadUint32(interrupt) == 1 {
-		// 					blockPrefetchInterruptMeter.Mark(1)
-		// 				}
-		// 			}(time.Now(), followup, throwaway, &followupInterrupt)
-		// 		}
-		// 	}
-		// 	// Process block using the parent state as reference point
-		// 	substart := time.Now()
-		// 	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-		// 	if err != nil {
-		// 		bc.reportBlock(block, receipts, err)
-		// 		atomic.StoreUint32(&followupInterrupt, 1)
-		// 		return it.index, err
-		// 	}
-		// 	// Update the metrics touched during block processing
-		// 	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-		// 	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-		// 	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-		// 	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-		// 	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-		// 	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-		// 	triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
-		// 	trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-		// 	trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
-
-		// 	blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
-
-		// 	// Validate the state using the default validator
-		// 	substart = time.Now()
-		// 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-		// 		log.Warn("Red block insertion to chain while propagate", "nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
-		// 		continue
-		// 	}
-		// 	proctime := time.Since(start)
-
-		// 	// Update the metrics touched during block validation
-		// 	accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-		// 	storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-
-		// 	blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
-
-		// 	// Write the block to the chain and get the status.
-		// 	substart = time.Now()
-		// 	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
-		// 	atomic.StoreUint32(&followupInterrupt, 1)
-		// 	if err != nil {
-		// 		return it.index, err
-		// 	}
-		// 	// Update the metrics touched during block commit
-		// 	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
-		// 	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
-		// 	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-
-		// 	blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
-		// 	blockInsertTimer.UpdateSince(start)
-
-		// 	switch status {
-		// 	case CanonStatTy:
-		// 		log.Debug("Inserted new block", "hash", block.Hash().Hex(),
-		// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-		// 			"elapsed", common.PrettyDuration(time.Since(start)),
-		// 			"root", block.Root())
-
-		// 		lastCanon = block
-
-		// 		// Only count canonical blocks for GC processing time
-		// 		bc.gcproc += proctime
-
-		// 	case SideStatTy:
-		// 		log.Debug("Inserted forked block", "hash", block.Hash().Hex(),
-		// 			"elapsed", common.PrettyDuration(time.Since(start)),
-		// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-		// 			"root", block.Root())
-
-		// 	default:
-		// 		// This in theory is impossible, but lets be nice to our future selves and leave
-		// 		// a log, instead of trying to track down blocks imports that don't emit logs.
-		// 		log.Warn("Inserted block with unknown status", "hash", block.Hash().Hex(),
-		// 			"elapsed", common.PrettyDuration(time.Since(start)),
-		// 			"txs", len(block.Transactions()), "gas", block.GasUsed(),
-		// 			"root", block.Root())
-		// 	}
-		// 	stats.processed++
-		// 	stats.usedGas += usedGas
-
-		// 	dirty, _ := bc.stateCache.TrieDB().Size()
-		// 	stats.report(chain, it.index, dirty)
-
-		// }
-		// Merge add v0.6-fix-height-calc-validate
 	}
 
 	return it.index, err
