@@ -232,9 +232,7 @@ type BlockChain struct {
 	vmConfig     vm.Config
 	syncProvider types.SyncProvider
 	isSynced     bool
-	syncQueue    common.HashArray
 	isSyncedM    sync.Mutex
-	syncQueueM   sync.Mutex // Mutex for thread-safe access to hashQueue
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -582,46 +580,6 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		}
 		bc.SyncEraToSlot(epochStartSlot)
 	}
-}
-
-// AddSyncHash adds a hash to the BlockChain's sync queue
-func (bc *BlockChain) AddSyncHash(hash common.Hash) {
-	bc.syncQueueM.Lock()
-	defer bc.syncQueueM.Unlock()
-
-	// Check if the hash already exists in the queue
-	for _, existingHash := range bc.syncQueue {
-		if existingHash == hash {
-			return // Hash already exists, do not add it
-		}
-	}
-
-	bc.syncQueue = append(bc.syncQueue, hash)
-}
-
-// RemoveHash removes a specific hash from the BlockChain's syncQueue queue
-func (bc *BlockChain) RemoveSyncHash(hashToRemove common.Hash) {
-	bc.syncQueueM.Lock()
-	defer bc.syncQueueM.Unlock()
-	for i, hash := range bc.syncQueue {
-		if hash == hashToRemove {
-			// Remove the hash from the queue by slicing the array
-			bc.syncQueue = append(bc.syncQueue[:i], bc.syncQueue[i+1:]...)
-		}
-
-	}
-}
-
-// GetHashes returns syncQueue
-func (bc *BlockChain) GetSyncHashes() common.HashArray {
-	bc.syncQueueM.Lock()
-	defer bc.syncQueueM.Unlock()
-
-	if len(bc.syncQueue) == 0 {
-		return nil
-	}
-
-	return bc.syncQueue
 }
 
 // HandleCheckpointsForEpoch adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
@@ -2827,9 +2785,10 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 		// Start executing the transaction
 		statedb.Prepare(tx.Hash(), i)
 
-		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool, gasUsed)
+		receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
+		//receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, statedb, block, gasPool, gasUsed)
 		receipts = append(receipts, receipt)
-		rlogs = append(rlogs, logs...)
+		rlogs = append(rlogs, receipt.Logs...)
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -2853,7 +2812,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
+			coalescedLogs = append(coalescedLogs, receipt.Logs...)
 			// create transaction lookup
 			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
 
@@ -2900,9 +2859,9 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 		// Start executing the transaction
 		statedb.Prepare(tx.Hash(), i)
 
-		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool, gasUsed)
+		receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
 		receipts = append(receipts, receipt)
-		rlogs = append(rlogs, logs...)
+		rlogs = append(rlogs, receipt.Logs...)
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -2926,7 +2885,7 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
+			coalescedLogs = append(coalescedLogs, receipt.Logs...)
 			// create transaction lookup
 			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
 
@@ -2952,17 +2911,18 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	return statedb, receipts, rlogs, *gasUsed
 }
 
-// recommitBlockTransaction applies single transactions wile recommit block process.
-func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool, gasUsed *uint64) (*types.Receipt, []*types.Log, error) {
-	snap := statedb.Snapshot()
-	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
-	if err != nil {
-		log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
-		statedb.RevertToSnapshot(snap)
-		return nil, nil, err
-	}
-	return receipt, receipt.Logs, nil
-}
+// TODO: rm
+//// recommitBlockTransaction applies single transactions wile recommit block process.
+//func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool, gasUsed *uint64) (*types.Receipt, []*types.Log, error) {
+//	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
+//	//snap := statedb.Snapshot()
+//	//if err != nil {
+//	//	log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
+//	//	statedb.RevertToSnapshot(snap)
+//	//	return nil, nil, err
+//	//}
+//	return receipt, receipt.Logs, err
+//}
 
 func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
 	defer func(start time.Time) { log.Info("+++ Executing EVM call finished +++", "runtime", time.Since(start)) }(time.Now())
