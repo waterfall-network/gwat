@@ -231,7 +231,9 @@ type BlockChain struct {
 	processor    Processor // Block transaction processor interface
 	vmConfig     vm.Config
 	syncProvider types.SyncProvider
+	isSynced     bool
 	syncQueue    common.HashArray
+	isSyncedM    sync.Mutex
 	syncQueueM   sync.Mutex // Mutex for thread-safe access to hashQueue
 }
 
@@ -449,6 +451,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+
+	// Initial coordinator sync node status
+	bc.SetIsSynced(false)
 
 	bc.notProcValSyncOps = bc.GetNotProcessedValidatorSyncData()
 
@@ -4057,4 +4062,18 @@ func (bc *BlockChain) GetOptimisticSpinesFromCache(slot uint64) common.HashArray
 
 func (bc *BlockChain) removeOptimisticSpinesFromCache(slot uint64) {
 	bc.optimisticSpinesCache.Remove(slot)
+}
+
+// SetIsSynced sets the value of isSynced with mu
+func (bc *BlockChain) SetIsSynced(synced bool) {
+	bc.isSyncedM.Lock()
+	defer bc.isSyncedM.Unlock()
+	bc.isSynced = synced
+}
+
+// IsSynced gets the value of isSynced with mu
+func (bc *BlockChain) IsSynced() bool {
+	bc.isSyncedM.Lock()
+	defer bc.isSyncedM.Unlock()
+	return bc.isSynced
 }
