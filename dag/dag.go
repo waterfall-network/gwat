@@ -74,7 +74,6 @@ type blockChain interface {
 	DagMuUnlock()
 	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
-	GetSyncHashes() common.HashArray
 	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
 
 	SetIsSynced(synced bool)

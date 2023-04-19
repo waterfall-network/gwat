@@ -1274,16 +1274,18 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// range. In this case, all tx indices of newly imported blocks should be
 		// generated.
 		var batch = bc.db.NewBatch()
-		for _, block := range blockChain {
+		for bi, block := range blockChain {
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.Nr() >= ancientLimit-bc.txLookupLimit {
 				for i, tx := range block.Transactions() {
-					if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
+					//if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
+					if receiptChain[bi][i].Status == types.ReceiptStatusSuccessful {
 						bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
 					}
 				}
 			} else if rawdb.ReadTxIndexTail(bc.db) != nil {
 				for i, tx := range block.Transactions() {
-					if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
+					//if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
+					if receiptChain[bi][i].Status == types.ReceiptStatusSuccessful {
 						bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
 					}
 				}
@@ -1367,9 +1369,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			bc.handleBlockValidatorSyncReceipts(block, receiptChain[i])
 
 			// Always write tx indices for live blocks, we assume they are needed
-			for i, tx := range block.Transactions() {
-				if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
-					bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+			for j, tx := range block.Transactions() {
+				//if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
+				if receiptChain[i][j].Status == types.ReceiptStatusSuccessful {
+					bc.WriteTxLookupEntry(j, tx.Hash(), block.Hash())
 				}
 			}
 
@@ -1587,7 +1590,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// create transaction lookup for applied txs.
 	for i, tx := range block.Transactions() {
-		if receipts[i] != nil {
+		//if receipts[i] != nil {
+		if receipts[i].Status == types.ReceiptStatusSuccessful {
 			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
 		}
 	}
@@ -2776,9 +2780,6 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 	var receipts []*types.Receipt
 	var rlogs []*types.Log
 
-	hightNonce := false
-	lowNonce := false
-
 	gasUsed := new(uint64)
 	for i, tx := range block.Transactions() {
 		from, _ := types.Sender(signer, tx)
@@ -2795,23 +2796,16 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			log.Error("Gas limit exceeded for current block while recommit", "sender", from, "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooLow):
-			if lowNonce {
-				continue
-			}
-			lowNonce = true
 			// New head notification data race between the transaction pool and miner, shift
 			log.Error("Skipping transaction with low nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooHigh):
-			if hightNonce {
-				continue
-			}
-			hightNonce = true
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Error("Skipping account with hight nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
+			//coalescedLogs = append(coalescedLogs, logs...)
 			coalescedLogs = append(coalescedLogs, receipt.Logs...)
 			// create transaction lookup
 			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
@@ -2850,9 +2844,6 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	var receipts []*types.Receipt
 	var rlogs []*types.Log
 
-	hightNonce := false
-	lowNonce := false
-
 	gasUsed := new(uint64)
 	for i, tx := range block.Transactions() {
 		from, _ := types.Sender(signer, tx)
@@ -2868,18 +2859,10 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 			log.Error("Gas limit exceeded for current block while recommit", "sender", from, "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooLow):
-			if lowNonce {
-				continue
-			}
-			lowNonce = true
 			// New head notification data race between the transaction pool and miner, shift
 			log.Error("Skipping transaction with low nonce while commit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooHigh):
-			if hightNonce {
-				continue
-			}
-			hightNonce = true
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Error("Skipping account with hight nonce while commit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
