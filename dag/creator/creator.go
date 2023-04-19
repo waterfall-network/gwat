@@ -718,6 +718,9 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	// check tips in ancestors other tips [a->b->c , c->...]
 	for _, th := range tips.GetHashes() {
 		block := tipsBlocks[th]
+		if block == nil {
+			continue
+		}
 		for _, ancestor := range tips.GetHashes() {
 			if block.Hash() == ancestor {
 				continue

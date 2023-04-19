@@ -164,7 +164,6 @@ func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
 	// collect all ancestors in dag (not finalized)
 	candidatesInChain := make(map[common.Hash]struct{})
 	dagBlocks := make(Blocks, 0)
-	log.Error("☠ Ordering before spineProcessBlock panic", "spine", spine)
 	spineProcessBlock(bc, spine, candidatesInChain, &dagBlocks)
 	// sort by slot
 	blocksBySlot, err := dagBlocks.GroupBySlot()
@@ -188,7 +187,7 @@ func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
 		orderedBlocks = append(orderedBlocks, slotBlocks...)
 	}
 
-	log.Error("☠ !!!!!!    !!!!orderedBlocks = append(orderedBlocks, slotBlocks...) before spineProcessBlock panic", "orderedBlocks", orderedBlocks)
+	log.Info("!!!!!!    !!!!orderedBlocks = append(orderedBlocks, slotBlocks...) before spineProcessBlock panic", "orderedBlocks", orderedBlocks)
 	// todo rm
 	// check that spine is the last in chain
 	if len(orderedBlocks) > 0 {

@@ -2914,7 +2914,7 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 			}
 			lowNonce = true
 			// New head notification data race between the transaction pool and miner, shift
-			log.Error("Skipping transaction with low nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
+			log.Error("Skipping transaction with low nonce while commit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
 
 		case errors.Is(err, ErrNonceTooHigh):
 			if hightNonce {
@@ -3774,17 +3774,20 @@ func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
 
 /* synchronization functionality */
 
+//todo RM/check
 // SetSyncProvider set provider of access to synchronization functionality
 func (bc *BlockChain) SetSyncProvider(provider types.SyncProvider) {
 	bc.syncProvider = provider
 }
 
+//todo RM/check
 // Synchronising returns whether the downloader is currently synchronising.
 func (bc *BlockChain) Synchronising() bool {
-	if bc.syncProvider == nil {
-		return false
-	}
-	return bc.syncProvider.Synchronising()
+	return !bc.isSynced
+	//if bc.syncProvider == nil {
+	//	return false
+	//}
+	//return bc.syncProvider.Synchronising()
 }
 
 // FinSynchronising returns whether the downloader is currently retrieving finalized blocks.

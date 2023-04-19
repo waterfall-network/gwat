@@ -213,6 +213,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash().Hex())
 			return 0, nil, nil
 		}
+
+		if !h.chain.IsSynced() {
+			return 0, nil, nil
+		}
+
 		n, err := h.chain.InsertPropagatedBlocks(blocks)
 		if err == core.ErrInsertUncompletedDag {
 			unloaded := common.HashArray{}
@@ -264,10 +269,10 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Snapshot extension barrier failed", "err", err)
 		return err
 	}
-	// TODO(karalabe): Not sure why this is needed
-	if !h.chainSync.handlePeerEvent(peer, evtPeerRun) {
-		return p2p.DiscQuitting
-	}
+	//// TODO(karalabe): Not sure why this is needed
+	//if !h.chainSync.handlePeerEvent(peer, evtPeerRun) {
+	//	return p2p.DiscQuitting
+	//}
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
 
@@ -327,7 +332,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return err
 		}
 	}
-	h.chainSync.handlePeerEvent(peer, evtPeerRun)
+	//h.chainSync.handlePeerEvent(peer, evtPeerRun)
 
 	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.

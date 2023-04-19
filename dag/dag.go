@@ -76,6 +76,9 @@ type blockChain interface {
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
 	GetSyncHashes() common.HashArray
 	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
+
+	SetIsSynced(synced bool)
+	IsSynced() bool
 }
 
 type ethDownloader interface {
@@ -99,9 +102,7 @@ type Dag struct {
 	//headsync
 	headsync *headsync.Headsync
 
-	//todo sync flow
-	isSynced bool
-	busy     int32
+	busy int32
 
 	exitChan chan struct{}
 	errChan  chan error
@@ -133,14 +134,24 @@ func (d *Dag) Creator() *creator.Creator {
 
 // HandleFinalize run blocks finalization procedure
 func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
+	res := &types.FinalizationResult{
+		Error: nil,
+	}
+
+	if d.bc.GetSlotInfo() == nil {
+		errStr := "no slot info"
+		res.Error = &errStr
+		log.Error("Handle Finalize: response (no slot info)", "result", res, "err", errStr)
+		return res
+	}
 
 	// todo deprecated
 	//skip if synchronising
 	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
-		return &types.FinalizationResult{
-			Error: &errStr,
-		}
+		res.Error = &errStr
+		log.Error("Handle Finalize: response (busy)", "result", res, "err", errStr)
+		return res
 	}
 
 	d.bc.DagMuLock()
@@ -150,8 +161,10 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	// check is synchronized
 	if data.Checkpoint.Spine != (common.Hash{}) {
 		cpHeader := d.bc.GetHeaderByHash(data.Checkpoint.Spine)
-		if cpHeader.Height > 0 && cpHeader.Nr() > 0 {
-			d.isSynced = true
+		if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+			d.bc.SetIsSynced(false)
+		} else {
+			d.bc.SetIsSynced(true)
 		}
 	}
 
@@ -161,7 +174,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			"spines", data.Spines,
 			"cp.Epoch", data.Checkpoint.Epoch,
 			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
-			"cp.Roor", fmt.Sprintf("%#x", data.Checkpoint.Root),
+			"cp.Root", fmt.Sprintf("%#x", data.Checkpoint.Root),
 			"ValSyncData", data.ValSyncData,
 			"\u2692", params.BuildId)
 	} else {
@@ -187,18 +200,21 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
-	res := &types.FinalizationResult{
-		Error: nil,
+	if err := d.syncUnloadedBlocksRecursive(data.Spines); err != nil {
+		strErr := err.Error()
+		res.Error = &strErr
+		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
+		return res
 	}
+
 	// finalization
 	if len(data.Spines) > 0 {
-
-		d.syncUnloadedBlocksRecursive(data.Spines)
-		
 		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
 				// Start syncing if spine or parent is unloaded
 				//d.synchronizeUnloadedBlocks(data.pines)
+				log.Error("Handle Finalize: response (finalize failed)", "result", res, "err", err)
+				return res
 			}
 			e := err.Error()
 			res.Error = &e
@@ -238,6 +254,9 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 // todo optimize
 func (d *Dag) syncUnloadedBlocksRecursive(spines common.HashArray) error {
+	if len(spines) == 0 {
+		return nil
+	}
 	unloaded, err := d.filterUnloadedBlocks(spines)
 	if err != nil {
 		return err
@@ -246,7 +265,9 @@ func (d *Dag) syncUnloadedBlocksRecursive(spines common.HashArray) error {
 		return nil
 	}
 	lfNr := d.bc.GetLastFinalizedNumber()
-	d.eth.SyncUnloadedHashes(unloaded, lfNr)
+	if err = d.eth.SyncUnloadedHashes(unloaded, lfNr); err != nil {
+		return err
+	}
 
 	unloaded, err = d.filterUnloadedBlocks(spines)
 	if err != nil {
@@ -506,12 +527,11 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			if slot == 0 {
 				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, common.Hash{})
 				d.bc.SetNewEraInfo(*newEra)
-				// todo sync flow
-				d.isSynced = true
+				d.bc.SetIsSynced(true)
 				continue
 			}
 
-			if !d.isSynced {
+			if !d.bc.IsSynced() {
 				continue
 			}
 			var (
@@ -555,7 +575,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	//skip if synchronising
-	if d.downloader.Synchronising() {
+	//if d.downloader.Synchronising() {
+	if !d.bc.IsSynced() {
 		return
 	}
 

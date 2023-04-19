@@ -355,7 +355,7 @@ func (d *Downloader) getResyncParams() (isResync bool, maxBlockSlot, lastCoordin
 
 // Synchronising returns whether the downloader is currently synchronising.
 func (d *Downloader) Synchronising() bool {
-	return d.FinSynchronising() || d.DagSynchronising() || d.HeadSynchronising()
+	return d.FinSynchronising() || d.DagSynchronising()
 }
 
 // FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
@@ -396,7 +396,7 @@ func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
 	} else {
 		logger = log.New("peer", id[:8])
 	}
-	logger.Trace("Registering sync peer")
+	logger.Info("Registering sync peer", "id", id)
 	if err := d.peers.Register(newPeerConnection(id, version, peer, logger)); err != nil {
 		logger.Error("Failed to register sync peer", "err", err)
 		return err
