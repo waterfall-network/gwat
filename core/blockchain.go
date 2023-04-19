@@ -232,9 +232,7 @@ type BlockChain struct {
 	vmConfig     vm.Config
 	syncProvider types.SyncProvider
 	isSynced     bool
-	syncQueue    common.HashArray
 	isSyncedM    sync.Mutex
-	syncQueueM   sync.Mutex // Mutex for thread-safe access to hashQueue
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -582,46 +580,6 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		}
 		bc.SyncEraToSlot(epochStartSlot)
 	}
-}
-
-// AddSyncHash adds a hash to the BlockChain's sync queue
-func (bc *BlockChain) AddSyncHash(hash common.Hash) {
-	bc.syncQueueM.Lock()
-	defer bc.syncQueueM.Unlock()
-
-	// Check if the hash already exists in the queue
-	for _, existingHash := range bc.syncQueue {
-		if existingHash == hash {
-			return // Hash already exists, do not add it
-		}
-	}
-
-	bc.syncQueue = append(bc.syncQueue, hash)
-}
-
-// RemoveHash removes a specific hash from the BlockChain's syncQueue queue
-func (bc *BlockChain) RemoveSyncHash(hashToRemove common.Hash) {
-	bc.syncQueueM.Lock()
-	defer bc.syncQueueM.Unlock()
-	for i, hash := range bc.syncQueue {
-		if hash == hashToRemove {
-			// Remove the hash from the queue by slicing the array
-			bc.syncQueue = append(bc.syncQueue[:i], bc.syncQueue[i+1:]...)
-		}
-
-	}
-}
-
-// GetHashes returns syncQueue
-func (bc *BlockChain) GetSyncHashes() common.HashArray {
-	bc.syncQueueM.Lock()
-	defer bc.syncQueueM.Unlock()
-
-	if len(bc.syncQueue) == 0 {
-		return nil
-	}
-
-	return bc.syncQueue
 }
 
 // HandleCheckpointsForEpoch adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
