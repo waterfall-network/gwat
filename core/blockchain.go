@@ -2785,9 +2785,10 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 		// Start executing the transaction
 		statedb.Prepare(tx.Hash(), i)
 
-		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool, gasUsed)
+		receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
+		//receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, statedb, block, gasPool, gasUsed)
 		receipts = append(receipts, receipt)
-		rlogs = append(rlogs, logs...)
+		rlogs = append(rlogs, receipt.Logs...)
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -2811,7 +2812,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
+			coalescedLogs = append(coalescedLogs, receipt.Logs...)
 			// create transaction lookup
 			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
 
@@ -2858,9 +2859,9 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 		// Start executing the transaction
 		statedb.Prepare(tx.Hash(), i)
 
-		receipt, logs, err := bc.recommitBlockTransaction(tx, statedb, block, gasPool, gasUsed)
+		receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
 		receipts = append(receipts, receipt)
-		rlogs = append(rlogs, logs...)
+		rlogs = append(rlogs, receipt.Logs...)
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -2884,7 +2885,7 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
+			coalescedLogs = append(coalescedLogs, receipt.Logs...)
 			// create transaction lookup
 			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
 
@@ -2910,17 +2911,18 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	return statedb, receipts, rlogs, *gasUsed
 }
 
-// recommitBlockTransaction applies single transactions wile recommit block process.
-func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool, gasUsed *uint64) (*types.Receipt, []*types.Log, error) {
-	snap := statedb.Snapshot()
-	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
-	if err != nil {
-		log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
-		statedb.RevertToSnapshot(snap)
-		return nil, nil, err
-	}
-	return receipt, receipt.Logs, nil
-}
+// TODO: rm
+//// recommitBlockTransaction applies single transactions wile recommit block process.
+//func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool, gasUsed *uint64) (*types.Receipt, []*types.Log, error) {
+//	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
+//	//snap := statedb.Snapshot()
+//	//if err != nil {
+//	//	log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
+//	//	statedb.RevertToSnapshot(snap)
+//	//	return nil, nil, err
+//	//}
+//	return receipt, receipt.Logs, err
+//}
 
 func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
 	defer func(start time.Time) { log.Info("+++ Executing EVM call finished +++", "runtime", time.Since(start)) }(time.Now())
