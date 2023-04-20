@@ -1797,12 +1797,10 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 	// Start the parallel header verifier
 	headers := make([]*types.Header, len(chain))
 	headerMap := make(types.HeaderMap, len(chain))
-	//seals := make([]bool, len(chain))
 
 	for i, block := range chain {
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
-		//seals[i] = verifySeals
 		if block.Number() != nil {
 			if block.Nr() > maxFinNr {
 				maxFinNr = block.Nr()
@@ -2490,19 +2488,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return bc.insertChain(chain)
 }
 
-// InsertChainWithoutSealVerification works exactly the same
-// except for seal verification, seal verification is omitted
-func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (int, error) {
-	bc.blockProcFeed.Send(true)
-	defer bc.blockProcFeed.Send(false)
-
-	if !bc.chainmu.TryLock() {
-		return 0, errChainStopped
-	}
-	defer bc.chainmu.Unlock()
-	return bc.insertChain(types.Blocks([]*types.Block{block}))
-}
-
 func (bc *BlockChain) calcBlockHeight(stateBlock *types.Block, recommitBlocks []*types.Block) uint64 {
 	baseHeight := stateBlock.Height()
 	recommitsLen := len(recommitBlocks)
@@ -2757,69 +2742,6 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 	return statedb, stateBlock, nil
 }
 
-// RecommitBlockTransactions recommits transactions of red blocks.
-func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *state.StateDB) *state.StateDB {
-	log.Info("Recommit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
-
-	gasPool := new(GasPool).AddGas(block.GasLimit())
-	signer := types.MakeSigner(bc.chainConfig)
-
-	var coalescedLogs []*types.Log
-	var receipts []*types.Receipt
-	var rlogs []*types.Log
-
-	gasUsed := new(uint64)
-	for i, tx := range block.Transactions() {
-		from, _ := types.Sender(signer, tx)
-		// Start executing the transaction
-		statedb.Prepare(tx.Hash(), i)
-
-		receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
-		//receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, statedb, block, gasPool, gasUsed)
-		receipts = append(receipts, receipt)
-		rlogs = append(rlogs, receipt.Logs...)
-		switch {
-		case errors.Is(err, ErrGasLimitReached):
-			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Error("Gas limit exceeded for current block while recommit", "sender", from, "hash", tx.Hash().Hex())
-
-		case errors.Is(err, ErrNonceTooLow):
-			// New head notification data race between the transaction pool and miner, shift
-			log.Error("Skipping transaction with low nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
-
-		case errors.Is(err, ErrNonceTooHigh):
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Error("Skipping account with hight nonce while recommit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
-
-		case errors.Is(err, nil):
-			// Everything ok, collect the logs and shift in the next transaction from the same account
-			//coalescedLogs = append(coalescedLogs, logs...)
-			coalescedLogs = append(coalescedLogs, receipt.Logs...)
-			// create transaction lookup
-			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash(), receipt.Status)
-
-		case errors.Is(err, ErrTxTypeNotSupported):
-			// Pop the unsupported transaction without shifting in the next from the account
-			log.Error("Skipping unsupported transaction type while recommit", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
-
-		default:
-			// Strange error, discard the transaction and get the next in line (note, the
-			// nonce-too-high clause will prevent us from executing in vain).
-			log.Error("Transaction failed, account skipped while recommit", "hash", tx.Hash().Hex(), "err", err)
-		}
-	}
-
-	rawdb.WriteReceipts(bc.db, block.Hash(), receipts)
-	bc.handleBlockValidatorSyncReceipts(block, receipts)
-
-	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: rlogs})
-	if len(rlogs) > 0 {
-		bc.logsFeed.Send(rlogs)
-	}
-
-	return statedb
-}
-
 // CommitBlockTransactions commits transactions of red blocks.
 func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state.StateDB) (*state.StateDB, []*types.Receipt, []*types.Log, uint64) {
 
@@ -2860,7 +2782,6 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 			// create transaction lookup
 			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash(), receipt.Status)
 
-			// TODO: check/add validation of tx type
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Error("Skipping unsupported transaction type while commit", "sender", from, "type", tx.Type(), "hash", tx.Hash().Hex())
@@ -2873,6 +2794,7 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	}
 
 	rawdb.WriteReceipts(bc.db, block.Hash(), receipts)
+	bc.handleBlockValidatorSyncReceipts(block, receipts)
 
 	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: rlogs})
 	if len(rlogs) > 0 {
@@ -2957,12 +2879,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 	// Start the parallel header verifier
 	headers := make([]*types.Header, len(chain))
 	headerMap := make(types.HeaderMap, len(chain))
-	//seals := make([]bool, len(chain))
 
 	for i, block := range chain {
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
-		//seals[i] = verifySeals
 	}
 
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
@@ -3028,7 +2948,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 
 		// recommit red blocks transactions
 		for _, bl := range recommitBlocks {
-			statedb = bc.RecommitBlockTransactions(bl, statedb)
+			statedb, _, _, _ = bc.CommitBlockTransactions(bl, statedb)
 		}
 
 		// If we have a followup block, run that against the current state to pre-cache
@@ -3181,7 +3101,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 			if err := bc.writeBlockWithoutState(block); err != nil {
 				return it.index, err
 			}
-			log.Debug("Injected sidechain block", "number", block.Nr(), "hash", block.Hash().Hex(),
+			log.Warn("====== Injected sidechain block (TODO CHECK) ======", "number", block.Nr(), "hash", block.Hash().Hex(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
@@ -3221,7 +3141,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// all raised events and logs from notifications since we're too heavy on the
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
-			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].Hash().Hex(), "end", block.Hash().Hex())
+			log.Info("====== Importing heavy sidechain segment (TODO CHECK)======", "blocks", len(blocks), "start", blocks[0].Hash().Hex(), "end", block.Hash().Hex())
 			if _, err := bc.insertChain(blocks); err != nil {
 				return 0, err
 			}
@@ -3229,13 +3149,13 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 
 			// If the chain is terminating, stop processing blocks
 			if bc.insertStopped() {
-				log.Debug("Abort during blocks processing")
+				log.Info("====== Abort during blocks processing (TODO CHECK)======")
 				return 0, nil
 			}
 		}
 	}
 	if len(blocks) > 0 {
-		log.Info("Importing sidechain segment", "start", blocks[0].Nr(), "end", blocks[len(blocks)-1].Nr(), "start", blocks[0].Hash().Hex(), "end", blocks[len(blocks)-1].Hash().Hex())
+		log.Info("====== Importing sidechain segment (TODO CHECK)======", "start", blocks[0].Nr(), "end", blocks[len(blocks)-1].Nr(), "start", blocks[0].Hash().Hex(), "end", blocks[len(blocks)-1].Hash().Hex())
 		return bc.insertChain(blocks)
 	}
 	return 0, nil
