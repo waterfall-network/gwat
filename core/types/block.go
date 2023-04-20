@@ -78,13 +78,13 @@ type Header struct {
 	Time         uint64           `json:"timestamp"        gencodec:"required"`
 	Extra        []byte           `json:"extraData"        gencodec:"required"`
 	//Last finalized block fields (set while create)
-	LFHash        common.Hash `json:"lfHash"           gencodec:"required"`
-	LFNumber      uint64      `json:"lfNumber"         gencodec:"required"`
-	LFBaseFee     *big.Int    `json:"lfBaseFeePerGas"  gencodec:"required"`
-	LFRoot        common.Hash `json:"lfStateRoot"      gencodec:"required"`
-	LFReceiptHash common.Hash `json:"lfReceiptsRoot"   gencodec:"required"`
-	LFGasUsed     uint64      `json:"lfGasUsed"        gencodec:"required"`
-	LFBloom       Bloom       `json:"lfLogsBloom"      gencodec:"required"`
+	CpHash        common.Hash `json:"cpHash"           gencodec:"required"`
+	CpNumber      uint64      `json:"cpNumber"         gencodec:"required"`
+	CpBaseFee     *big.Int    `json:"cpBaseFeePerGas"  gencodec:"required"`
+	CpRoot        common.Hash `json:"cpStateRoot"      gencodec:"required"`
+	CpReceiptHash common.Hash `json:"cpReceiptsRoot"   gencodec:"required"`
+	CpGasUsed     uint64      `json:"cpGasUsed"        gencodec:"required"`
+	CpBloom       Bloom       `json:"cpLogsBloom"      gencodec:"required"`
 	//State fields (set while finalize)
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee     *big.Int    `json:"baseFeePerGas" rlp:"optional"`
@@ -134,13 +134,13 @@ func (h *Header) Copy() *Header {
 			Slot:          h.Slot,
 			Era:           h.Era,
 			Height:        h.Height,
-			LFHash:        h.LFHash,
-			LFNumber:      h.LFNumber,
-			LFBaseFee:     h.LFBaseFee,
-			LFBloom:       h.LFBloom,
-			LFRoot:        h.LFRoot,
-			LFReceiptHash: h.LFReceiptHash,
-			LFGasUsed:     h.LFGasUsed,
+			CpHash:        h.CpHash,
+			CpNumber:      h.CpNumber,
+			CpBaseFee:     h.CpBaseFee,
+			CpBloom:       h.CpBloom,
+			CpRoot:        h.CpRoot,
+			CpReceiptHash: h.CpReceiptHash,
+			CpGasUsed:     h.CpGasUsed,
 			Coinbase:      h.Coinbase,
 			Root:          h.Root,
 			TxHash:        h.TxHash,
@@ -353,8 +353,8 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 	return nil
 }
 
-func (b *Block) LFHash() common.Hash            { return b.header.LFHash }
-func (b *Block) LFNumber() uint64               { return b.header.LFNumber }
+func (b *Block) CpHash() common.Hash            { return b.header.CpHash }
+func (b *Block) CpNumber() uint64               { return b.header.CpNumber }
 func (b *Block) GasLimit() uint64               { return b.header.GasLimit }
 func (b *Block) GasUsed() uint64                { return b.header.GasUsed }
 func (b *Block) Time() uint64                   { return b.header.Time }
@@ -373,7 +373,7 @@ func (b *Block) Number() *uint64                { return b.header.Number }
 func (b *Block) Nr() uint64                     { return b.header.Nr() }
 func (b *Block) SetNumber(finNr *uint64)        { b.header.Number = finNr }
 func (b *Block) FinalizedHash() common.Hash     { return b.header.FinalizedHash() }
-func (b *Block) LFRoot() common.Hash            { return b.header.LFRoot }
+func (b *Block) CpRoot() common.Hash            { return b.header.CpRoot }
 
 func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {
@@ -390,13 +390,13 @@ func (b *Block) BaseHeader() *Header {
 			ParentHashes:  b.header.ParentHashes,
 			Slot:          b.header.Slot,
 			Height:        b.header.Height,
-			LFHash:        b.header.LFHash,
-			LFNumber:      b.header.LFNumber,
-			LFBaseFee:     b.header.LFBaseFee,
-			LFBloom:       b.header.LFBloom,
-			LFRoot:        b.header.LFRoot,
-			LFReceiptHash: b.header.LFReceiptHash,
-			LFGasUsed:     b.header.LFGasUsed,
+			CpHash:        b.header.CpHash,
+			CpNumber:      b.header.CpNumber,
+			CpBaseFee:     b.header.CpBaseFee,
+			CpBloom:       b.header.CpBloom,
+			CpRoot:        b.header.CpRoot,
+			CpReceiptHash: b.header.CpReceiptHash,
+			CpGasUsed:     b.header.CpGasUsed,
 			Coinbase:      b.header.Coinbase,
 			TxHash:        b.header.TxHash,
 			GasLimit:      b.header.GasLimit,

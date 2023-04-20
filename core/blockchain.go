@@ -830,8 +830,8 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 				Hash:                newHeadBlock.Hash(),
 				Height:              newHeadBlock.Height(),
 				Slot:                newHeadBlock.Slot(),
-				LastFinalizedHash:   newHeadBlock.LFHash(),
-				LastFinalizedHeight: newHeadBlock.LFNumber(),
+				LastFinalizedHash:   newHeadBlock.CpHash(),
+				LastFinalizedHeight: newHeadBlock.CpNumber(),
 				//DagChainHashes:      common.HashArray{},
 				DagChainHashes: newHeadBlock.ParentHashes().Copy(),
 			}
@@ -1982,8 +1982,8 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 			Hash:                block.Hash(),
 			Height:              block.Height(),
 			Slot:                block.Slot(),
-			LastFinalizedHash:   block.LFHash(),
-			LastFinalizedHeight: block.LFNumber(),
+			LastFinalizedHash:   block.CpHash(),
+			LastFinalizedHeight: block.CpNumber(),
 			DagChainHashes:      dagChainHashes,
 		})
 		bc.RemoveTips(dagChainHashes)
@@ -1995,26 +1995,26 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 }
 
 func (bc *BlockChain) verifyLFData(block *types.Block) bool {
-	if block.LFNumber() > bc.GetLastFinalizedNumber() {
+	if block.CpNumber() > bc.GetLastFinalizedNumber() {
 		return true
 	}
-	LFBlock := bc.GetBlockByNumber(block.LFNumber())
+	LFBlock := bc.GetBlockByNumber(block.CpNumber())
 	if LFBlock == nil {
-		log.Warn("Block verification: LFBlock not found",
+		log.Warn("Block verification: CpBlock not found",
 			"block hash", block.Hash().Hex(),
-			"LFHash", block.LFHash(),
-			"LFNumber", block.LFNumber(),
+			"CpHash", block.CpHash(),
+			"CpNumber", block.CpNumber(),
 		)
 		return false
 	}
 	LFBlockRoot := LFBlock.Root()
-	if block.LFRoot() != LFBlockRoot {
+	if block.CpRoot() != LFBlockRoot {
 		log.Warn("Block verification: LFHash dismatch",
 			"block hash", block.Hash().Hex(),
-			"LFHash", block.LFHash(),
-			"LFNumber", block.LFNumber(),
+			"LFHash", block.CpHash(),
+			"LFNumber", block.CpNumber(),
 			"LFBlock hash", LFBlock.Root().Hex(),
-			"LFRoot", block.LFRoot().Hex(),
+			"LFRoot", block.CpRoot().Hex(),
 			"LFBlock finHash", LFBlockRoot.Hex(),
 		)
 		return false
@@ -2290,12 +2290,12 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
-		LFBlock := bc.GetBlockByHash(block.LFHash())
+		LFBlock := bc.GetBlockByHash(block.CpHash())
 		if LFBlock == nil {
 			log.Warn("LFBlock not found",
 				"block hash", block.Hash().Hex(),
-				"LFHash", block.LFHash(),
-				"LFNumber", block.LFNumber(),
+				"LFHash", block.CpHash(),
+				"LFNumber", block.CpNumber(),
 			)
 			// TODO: check
 			return it.index, ErrInsertUncompletedDag
@@ -2310,8 +2310,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			Hash:                block.Hash(),
 			Height:              block.Height(),
 			Slot:                block.Slot(),
-			LastFinalizedHash:   block.LFHash(),
-			LastFinalizedHeight: block.LFNumber(),
+			LastFinalizedHash:   block.CpHash(),
+			LastFinalizedHeight: block.CpNumber(),
 			DagChainHashes:      dagChainHashes.Uniq(),
 		}
 		bc.AddTips(dagBlock)
@@ -2348,8 +2348,8 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	}()
 
 	if stateBlock == nil {
-		log.Error("PreFinalizingUpdateState: LFBlock = nil", "LFNumber", block.LFNumber())
-		return fmt.Errorf("PreFinalizingUpdateState: unknown LFBlock, number=%v", block.LFNumber())
+		log.Error("PreFinalizingUpdateState: LFBlock = nil", "LFNumber", block.CpNumber())
+		return fmt.Errorf("PreFinalizingUpdateState: unknown LFBlock, number=%v", block.CpNumber())
 	}
 	statedb, stateErr := bc.StateAt(stateBlock.Root())
 	if stateErr != nil && stateBlock == nil {
@@ -3637,13 +3637,13 @@ func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
 
 /* synchronization functionality */
 
-//todo RM/check
+// todo RM/check
 // SetSyncProvider set provider of access to synchronization functionality
 func (bc *BlockChain) SetSyncProvider(provider types.SyncProvider) {
 	bc.syncProvider = provider
 }
 
-//todo RM/check
+// todo RM/check
 // Synchronising returns whether the downloader is currently synchronising.
 func (bc *BlockChain) Synchronising() bool {
 	return !bc.isSynced

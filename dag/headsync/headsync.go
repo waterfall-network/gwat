@@ -105,8 +105,8 @@ func (hs *Headsync) SetReadyState(checkpoint *types.Checkpoint) (bool, error) {
 			Hash:                block.Hash(),
 			Height:              block.Height(),
 			Slot:                block.Slot(),
-			LastFinalizedHash:   block.LFHash(),
-			LastFinalizedHeight: block.LFNumber(),
+			LastFinalizedHash:   block.CpHash(),
+			LastFinalizedHeight: block.CpNumber(),
 			DagChainHashes:      block.ParentHashes(),
 		})
 		err := bc.RollbackFinalization(i)

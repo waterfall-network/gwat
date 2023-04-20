@@ -207,8 +207,8 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 			Hash:                block.Hash(),
 			Height:              block.Height(),
 			Slot:                block.Slot(),
-			LastFinalizedHash:   block.LFHash(),
-			LastFinalizedHeight: block.LFNumber(),
+			LastFinalizedHash:   block.CpHash(),
+			LastFinalizedHeight: block.CpNumber(),
 			DagChainHashes:      tmpDagChainHashes,
 		}
 		rawdb.WriteBlockDag(bc.db, blockDag)

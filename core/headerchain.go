@@ -504,8 +504,8 @@ func (hc *HeaderChain) ResetTips() error {
 		Hash:                lastFinHeader.Hash(),
 		Height:              lastFinHeader.Height,
 		Slot:                lastFinHeader.Slot,
-		LastFinalizedHash:   lastFinHeader.LFHash,
-		LastFinalizedHeight: lastFinHeader.LFNumber,
+		LastFinalizedHash:   lastFinHeader.CpHash,
+		LastFinalizedHeight: lastFinHeader.CpNumber,
 		DagChainHashes:      common.HashArray{},
 	}
 	rawdb.WriteBlockDag(hc.chainDb, dag)
@@ -649,8 +649,8 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 				Hash:                tHeader.Hash(),
 				Height:              tHeader.Height,
 				Slot:                tHeader.Slot,
-				LastFinalizedHash:   tHeader.LFHash,
-				LastFinalizedHeight: tHeader.LFNumber,
+				LastFinalizedHash:   tHeader.CpHash,
+				LastFinalizedHeight: tHeader.CpNumber,
 				DagChainHashes:      common.HashArray{},
 			}
 		}
@@ -700,8 +700,8 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 			dag.Hash = hash
 			dag.Height = header.Height
 			dag.Slot = header.Slot
-			dag.LastFinalizedHash = header.LFHash
-			dag.LastFinalizedHeight = header.LFNumber
+			dag.LastFinalizedHash = header.CpHash
+			dag.LastFinalizedHeight = header.CpNumber
 			//dag.LastFinalizedHash = hash
 			//dag.LastFinalizedHeight = *nr
 			hc.AddTips(dag, true)
@@ -727,8 +727,8 @@ func (hc *HeaderChain) ReviseTips(bc *BlockChain) (tips *types.Tips, unloadedHas
 
 		// bad order of hashes
 		dag.DagChainHashes = chain.Difference(common.HashArray{hash}).Uniq()
-		dag.LastFinalizedHash = header.LFHash
-		dag.LastFinalizedHeight = header.LFNumber
+		dag.LastFinalizedHash = header.CpHash
+		dag.LastFinalizedHeight = header.CpNumber
 		//dag.DagChainHashes = *graph.GetDagChainHashes()
 		hc.AddTips(dag, true)
 		// if curTips synchronized
