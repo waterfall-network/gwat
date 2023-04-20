@@ -929,7 +929,7 @@ func (c *Creator) commit(tips types.Tips, interval func(), update bool, start ti
 		select {
 
 		case c.resultCh <- task:
-			log.Info("Commit new block creation work", "sealhash", c.engine.SealHash(block.Header()),
+			log.Info("Commit new block creation work",
 				"txs", c.current.tcount,
 				"gas", block.GasUsed(), "fees", c.current.cumutativeGas,
 				"tips", tips.GetHashes(),

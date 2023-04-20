@@ -521,6 +521,7 @@ func (c *Sealer) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	header.Root = state.IntermediateRoot(true)
 }
 
+// TODO: deprecated
 // FinalizeAndAssemble implements consensus.Engine
 // nor block rewards given, and returns the final block.
 func (c *Sealer) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
@@ -541,6 +542,7 @@ func (c *Sealer) Authorize(signer common.Address, signFn SignerFn) {
 	c.signFn = signFn
 }
 
+// TODO: deprecated
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
