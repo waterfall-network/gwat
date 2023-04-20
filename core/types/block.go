@@ -353,8 +353,6 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 	return nil
 }
 
-func (b *Block) CpHash() common.Hash            { return b.header.CpHash }
-func (b *Block) CpNumber() uint64               { return b.header.CpNumber }
 func (b *Block) GasLimit() uint64               { return b.header.GasLimit }
 func (b *Block) GasUsed() uint64                { return b.header.GasUsed }
 func (b *Block) Time() uint64                   { return b.header.Time }
@@ -373,7 +371,13 @@ func (b *Block) Number() *uint64                { return b.header.Number }
 func (b *Block) Nr() uint64                     { return b.header.Nr() }
 func (b *Block) SetNumber(finNr *uint64)        { b.header.Number = finNr }
 func (b *Block) FinalizedHash() common.Hash     { return b.header.FinalizedHash() }
+func (b *Block) CpHash() common.Hash            { return b.header.CpHash }
+func (b *Block) CpNumber() uint64               { return b.header.CpNumber }
+func (b *Block) CpBaseFee() *big.Int            { return b.header.CpBaseFee }
+func (b *Block) CpBloom() Bloom                 { return b.header.CpBloom }
 func (b *Block) CpRoot() common.Hash            { return b.header.CpRoot }
+func (b *Block) CpReceiptHash() common.Hash     { return b.header.CpReceiptHash }
+func (b *Block) CpGasUsed() uint64              { return b.header.CpGasUsed }
 
 func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {
