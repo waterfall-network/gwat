@@ -1277,17 +1277,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		for bi, block := range blockChain {
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.Nr() >= ancientLimit-bc.txLookupLimit {
 				for i, tx := range block.Transactions() {
-					//if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
-					if receiptChain[bi][i].Status == types.ReceiptStatusSuccessful {
-						bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
-					}
+					bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash(), receiptChain[bi][i].Status)
 				}
 			} else if rawdb.ReadTxIndexTail(bc.db) != nil {
 				for i, tx := range block.Transactions() {
-					//if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
-					if receiptChain[bi][i].Status == types.ReceiptStatusSuccessful {
-						bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
-					}
+					bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash(), receiptChain[bi][i].Status)
 				}
 			}
 			stats.processed++
@@ -1370,10 +1364,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 			// Always write tx indices for live blocks, we assume they are needed
 			for j, tx := range block.Transactions() {
-				//if existed := rawdb.ReadTxLookupEntry(bc.db, tx.Hash()); existed == (common.Hash{}) {
-				if receiptChain[i][j].Status == types.ReceiptStatusSuccessful {
-					bc.WriteTxLookupEntry(j, tx.Hash(), block.Hash())
-				}
+				bc.WriteTxLookupEntry(j, tx.Hash(), block.Hash(), receiptChain[i][j].Status)
 			}
 
 			// Write everything belongs to the blocks into the database. So that
@@ -1590,10 +1581,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// create transaction lookup for applied txs.
 	for i, tx := range block.Transactions() {
-		//if receipts[i] != nil {
-		if receipts[i].Status == types.ReceiptStatusSuccessful {
-			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
-		}
+		bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash(), receipts[i].Status)
 	}
 
 	if err := blockBatch.Write(); err != nil {
@@ -2808,7 +2796,7 @@ func (bc *BlockChain) RecommitBlockTransactions(block *types.Block, statedb *sta
 			//coalescedLogs = append(coalescedLogs, logs...)
 			coalescedLogs = append(coalescedLogs, receipt.Logs...)
 			// create transaction lookup
-			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash(), receipt.Status)
 
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
@@ -2870,7 +2858,7 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, receipt.Logs...)
 			// create transaction lookup
-			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash())
+			bc.WriteTxLookupEntry(i, tx.Hash(), block.Hash(), receipt.Status)
 
 			// TODO: check/add validation of tx type
 		case errors.Is(err, ErrTxTypeNotSupported):
@@ -3680,12 +3668,24 @@ func (bc *BlockChain) ReadBockDag(hash common.Hash) *types.BlockDAG {
 }
 
 // WriteTxLookupEntry write TxLookupEntry and cache it.
-func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.Hash) {
-	// create transaction lookup
-	rawdb.WriteTxLookupEntry(bc.db, txHash, blockHash)
-	//cash tx lookup
-	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: uint64(txIndex)}
-	bc.txLookupCache.Add(txHash, lookup)
+func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.Hash, receiptStatus uint64) bool {
+	if receiptStatus == types.ReceiptStatusSuccessful {
+		// create transaction lookup
+		rawdb.WriteTxLookupEntry(bc.db, txHash, blockHash)
+		//cash tx lookup
+		lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: uint64(txIndex)}
+		bc.txLookupCache.Add(txHash, lookup)
+		return true
+	}
+	if existed := rawdb.ReadTxLookupEntry(bc.db, txHash); existed == (common.Hash{}) {
+		// create transaction lookup
+		rawdb.WriteTxLookupEntry(bc.db, txHash, blockHash)
+		//cash tx lookup
+		lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: uint64(txIndex)}
+		bc.txLookupCache.Add(txHash, lookup)
+		return true
+	}
+	return false
 }
 
 func (bc *BlockChain) moveTxToProcessing(tx *types.Transaction) {
