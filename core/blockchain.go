@@ -2007,15 +2007,15 @@ func (bc *BlockChain) verifyLFData(block *types.Block) bool {
 		)
 		return false
 	}
-	LFBlockRoot := CpBlock.Root()
-	if block.CpRoot() != LFBlockRoot {
-		log.Warn("Block verification: LFHash dismatch",
+	CpBlockRoot := CpBlock.Root()
+	if block.CpRoot() != CpBlockRoot {
+		log.Warn("Block verification: CpHash dismatch",
 			"block hash", block.Hash().Hex(),
-			"LFHash", block.CpHash(),
-			"LFNumber", block.CpNumber(),
+			"CpHash", block.CpHash(),
+			"CpNumber", block.CpNumber(),
 			"CpBlock hash", CpBlock.Root().Hex(),
-			"LFRoot", block.CpRoot().Hex(),
-			"CpBlock finHash", LFBlockRoot.Hex(),
+			"CpRoot", block.CpRoot().Hex(),
+			"CpBlock finHash", CpBlockRoot.Hex(),
 		)
 		return false
 	}
@@ -2294,8 +2294,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		if CpBlock == nil {
 			log.Warn("CpBlock not found",
 				"block hash", block.Hash().Hex(),
-				"LFHash", block.CpHash(),
-				"LFNumber", block.CpNumber(),
+				"CpHash", block.CpHash(),
+				"CpNumber", block.CpNumber(),
 			)
 			// TODO: check
 			return it.index, ErrInsertUncompletedDag
@@ -2348,7 +2348,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	}()
 
 	if stateBlock == nil {
-		log.Error("PreFinalizingUpdateState: CpBlock = nil", "LFNumber", block.CpNumber())
+		log.Error("PreFinalizingUpdateState: CpBlock = nil", "CpNumber", block.CpNumber())
 		return fmt.Errorf("PreFinalizingUpdateState: unknown CpBlock, number=%v", block.CpNumber())
 	}
 	statedb, stateErr := bc.StateAt(stateBlock.Root())

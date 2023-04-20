@@ -529,7 +529,7 @@ func (c *Creator) resultHandler(task *task) {
 
 	// Insert the block into the set of pending ones to resultLoop for confirmations
 	log.Info("🔨 created dag block", "slot", task.block.Slot(), "height", task.block.Height(),
-		"hash", hash.Hex(), "parents", task.block.ParentHashes(), "LFHash", task.block.CpHash(), "LFNumber", task.block.CpNumber())
+		"hash", hash.Hex(), "parents", task.block.ParentHashes(), "CpHash", task.block.CpHash(), "CpNumber", task.block.CpNumber())
 }
 
 func (c *Creator) getUnhandledTxs() []*types.Transaction {

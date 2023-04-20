@@ -3831,11 +3831,11 @@ var outputBlockFormatter = function(block) {
     if (block.baseFeePerGas !== undefined) {
       block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
     }
-    if (block.lfBaseFeePerGas !== undefined) {
-      block.lfBaseFeePerGas = utils.toBigNumber(block.lfBaseFeePerGas);
+    if (block.cpBaseFeePerGas !== undefined) {
+      block.cpBaseFeePerGas = utils.toBigNumber(block.cpBaseFeePerGas);
     }
     block.height = utils.toDecimal(block.height);
-    block.lfNumber = utils.toDecimal(block.lfNumber);
+    block.cpNumber = utils.toDecimal(block.cpNumber);
     block.slot = utils.toDecimal(block.slot);
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
