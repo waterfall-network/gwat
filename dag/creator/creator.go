@@ -777,7 +777,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		"baseHash", stateBlock.Hash(),
 	)
 
-	// Use checkpoint spine as LFBlock
+	// Use checkpoint spine as CpBlock
 	checkpoint := c.chain.GetLastCoordinatedCheckpoint()
 	checkpointBlock := c.chain.GetBlock(checkpoint.Spine)
 	if stateBlock == nil {

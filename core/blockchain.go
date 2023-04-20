@@ -1998,8 +1998,8 @@ func (bc *BlockChain) verifyLFData(block *types.Block) bool {
 	if block.CpNumber() > bc.GetLastFinalizedNumber() {
 		return true
 	}
-	LFBlock := bc.GetBlockByNumber(block.CpNumber())
-	if LFBlock == nil {
+	CpBlock := bc.GetBlockByNumber(block.CpNumber())
+	if CpBlock == nil {
 		log.Warn("Block verification: CpBlock not found",
 			"block hash", block.Hash().Hex(),
 			"CpHash", block.CpHash(),
@@ -2007,15 +2007,15 @@ func (bc *BlockChain) verifyLFData(block *types.Block) bool {
 		)
 		return false
 	}
-	LFBlockRoot := LFBlock.Root()
+	LFBlockRoot := CpBlock.Root()
 	if block.CpRoot() != LFBlockRoot {
 		log.Warn("Block verification: LFHash dismatch",
 			"block hash", block.Hash().Hex(),
 			"LFHash", block.CpHash(),
 			"LFNumber", block.CpNumber(),
-			"LFBlock hash", LFBlock.Root().Hex(),
+			"CpBlock hash", CpBlock.Root().Hex(),
 			"LFRoot", block.CpRoot().Hex(),
-			"LFBlock finHash", LFBlockRoot.Hex(),
+			"CpBlock finHash", LFBlockRoot.Hex(),
 		)
 		return false
 	}
@@ -2290,9 +2290,9 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
-		LFBlock := bc.GetBlockByHash(block.CpHash())
-		if LFBlock == nil {
-			log.Warn("LFBlock not found",
+		CpBlock := bc.GetBlockByHash(block.CpHash())
+		if CpBlock == nil {
+			log.Warn("CpBlock not found",
 				"block hash", block.Hash().Hex(),
 				"LFHash", block.CpHash(),
 				"LFNumber", block.CpNumber(),
@@ -2303,7 +2303,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 
 		dagChainHashes := common.HashArray{}
 
-		dagChainHashes = append(dagChainHashes, LFBlock.ParentHashes()...)
+		dagChainHashes = append(dagChainHashes, CpBlock.ParentHashes()...)
 
 		//bc.RemoveTips(block.ParentHashes())
 		dagBlock := &types.BlockDAG{
@@ -2348,8 +2348,8 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	}()
 
 	if stateBlock == nil {
-		log.Error("PreFinalizingUpdateState: LFBlock = nil", "LFNumber", block.CpNumber())
-		return fmt.Errorf("PreFinalizingUpdateState: unknown LFBlock, number=%v", block.CpNumber())
+		log.Error("PreFinalizingUpdateState: CpBlock = nil", "LFNumber", block.CpNumber())
+		return fmt.Errorf("PreFinalizingUpdateState: unknown CpBlock, number=%v", block.CpNumber())
 	}
 	statedb, stateErr := bc.StateAt(stateBlock.Root())
 	if stateErr != nil && stateBlock == nil {
