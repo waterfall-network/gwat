@@ -1309,12 +1309,12 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"height":           hexutil.Uint64(head.Height),
 		"number":           head.Number,
 		"parentHashes":     head.ParentHashes,
-		"lfHash":           head.LFHash,
-		"lfNumber":         hexutil.Uint64(head.LFNumber),
-		"lfGasUsed":        hexutil.Uint64(head.LFGasUsed),
-		"lfReceiptsRoot":   head.LFReceiptHash,
-		"lfStateRoot":      head.LFRoot,
-		"lflLogsBloom":     head.LFBloom,
+		"cpHash":           head.CpHash,
+		"cpNumber":         hexutil.Uint64(head.CpNumber),
+		"cpGasUsed":        hexutil.Uint64(head.CpGasUsed),
+		"cpReceiptsRoot":   head.CpReceiptHash,
+		"cpStateRoot":      head.CpRoot,
+		"cpLogsBloom":      head.CpBloom,
 		"miner":            head.Coinbase,
 		"transactionsRoot": head.TxHash,
 		"gasLimit":         hexutil.Uint64(head.GasLimit),
@@ -1331,8 +1331,8 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
-	if head.LFBaseFee != nil {
-		result["lflBaseFeePerGas"] = (*hexutil.Big)(head.LFBaseFee)
+	if head.CpBaseFee != nil {
+		result["lflBaseFeePerGas"] = (*hexutil.Big)(head.CpBaseFee)
 	}
 	if head.Number != nil {
 		result["number"] = hexutil.Uint64(head.Nr())

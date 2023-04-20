@@ -19,13 +19,13 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ParentHashes []common.Hash   `json:"parentHashes"     gencodec:"required"`
 		Slot         hexutil.Uint64  `json:"slot"             gencodec:"required"`
 		Height       hexutil.Uint64  `json:"height"           gencodec:"required"`
-		LFNumber     uint64          `json:"lfNumber"         gencodec:"required"`
-		LFHash       common.Hash     `json:"lfHash"           gencodec:"required"`
-		LFBaseFee     *hexutil.Big     `json:"lfBaseFeePerGas"  gencodec:"required"`
-		LFRoot        common.Hash      `json:"lfStateRoot"      gencodec:"required"`
-		LFReceiptHash common.Hash      `json:"lfReceiptsRoot"   gencodec:"required"`
-		LFGasUsed     hexutil.Uint64   `json:"lfGasUsed"        gencodec:"required"`
-		LFBloom       Bloom            `json:"lfLogsBloom"      gencodec:"required"`
+		CpNumber     uint64          `json:"cpNumber"         gencodec:"required"`
+		CpHash       common.Hash     `json:"cpHash"           gencodec:"required"`
+		CpBaseFee     *hexutil.Big     `json:"cpBaseFeePerGas"  gencodec:"required"`
+		CpRoot        common.Hash      `json:"cpStateRoot"      gencodec:"required"`
+		CpReceiptHash common.Hash      `json:"cpReceiptsRoot"   gencodec:"required"`
+		CpGasUsed     hexutil.Uint64   `json:"cpGasUsed"        gencodec:"required"`
+		CpBloom       Bloom            `json:"cpLogsBloom"      gencodec:"required"`
 		Coinbase     common.Address  `json:"miner"            gencodec:"required"`
 		TxHash       common.Hash     `json:"transactionsRoot" gencodec:"required"`
 		BodyHash     common.Hash     `json:"bodyRoot" 		  gencodec:"required"`
@@ -52,13 +52,13 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.GasLimit = hexutil.Uint64(h.GasLimit)
 	enc.Time = hexutil.Uint64(h.Time)
 	enc.Extra = h.Extra
-	enc.LFHash = h.LFHash
-	enc.LFNumber = h.LFNumber
-	enc.LFBaseFee = (*hexutil.Big)(h.LFBaseFee)
-	enc.LFRoot = h.LFRoot
-	enc.LFReceiptHash = h.LFReceiptHash
-	enc.LFGasUsed = hexutil.Uint64(h.LFGasUsed)
-	enc.LFBloom = h.LFBloom
+	enc.CpHash = h.CpHash
+	enc.CpNumber = h.CpNumber
+	enc.CpBaseFee = (*hexutil.Big)(h.CpBaseFee)
+	enc.CpRoot = h.CpRoot
+	enc.CpReceiptHash = h.CpReceiptHash
+	enc.CpGasUsed = hexutil.Uint64(h.CpGasUsed)
+	enc.CpBloom = h.CpBloom
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee)
 	if h.Number != nil {
 		nr := hexutil.Uint64(*h.Number)
@@ -78,13 +78,13 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		ParentHashes *[]common.Hash  `json:"parentHashes"     gencodec:"required"`
 		Slot         *hexutil.Uint64 `json:"slot"             gencodec:"required"`
 		Height       *hexutil.Uint64 `json:"height"           gencodec:"required"`
-		LFHash       *common.Hash    `json:"lfHash"           gencodec:"required"`
-		LFNumber     *hexutil.Uint64 `json:"lfNumber"         gencodec:"required"`
-		LFBaseFee     *hexutil.Big      `json:"lfBaseFeePerGas"  gencodec:"required"`
-		LFRoot        *common.Hash      `json:"lfStateRoot"      gencodec:"required"`
-		LFReceiptHash *common.Hash      `json:"lfReceiptsRoot"   gencodec:"required"`
-		LFGasUsed     *hexutil.Uint64   `json:"lfGasUsed"        gencodec:"required"`
-		LFBloom       *Bloom            `json:"lfLogsBloom"      gencodec:"required"`
+		CpHash       *common.Hash    `json:"cpHash"           gencodec:"required"`
+		CpNumber     *hexutil.Uint64 `json:"cpNumber"         gencodec:"required"`
+		CpBaseFee     *hexutil.Big      `json:"cpBaseFeePerGas"  gencodec:"required"`
+		CpRoot        *common.Hash      `json:"cpStateRoot"      gencodec:"required"`
+		CpReceiptHash *common.Hash      `json:"cpReceiptsRoot"   gencodec:"required"`
+		CpGasUsed     *hexutil.Uint64   `json:"cpGasUsed"        gencodec:"required"`
+		CpBloom       *Bloom            `json:"cpLogsBloom"      gencodec:"required"`
 		Coinbase     *common.Address `json:"miner"            gencodec:"required"`
 		TxHash       *common.Hash    `json:"transactionsRoot" gencodec:"required"`
 		BodyHash     *common.Hash    `json:"bodyRoot" 		  gencodec:"required"`
@@ -114,8 +114,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'height' for Header")
 	}
 	h.Height = uint64(*dec.Height)
-	if dec.LFHash == nil {
-		return errors.New("missing required field 'LFHash' for Header")
+	if dec.CpHash == nil {
+		return errors.New("missing required field 'CpHash' for Header")
 	}
 	if dec.Coinbase == nil {
 		return errors.New("missing required field 'miner' for Header")
@@ -149,34 +149,34 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'extraData' for Header")
 	}
 	h.Extra = *dec.Extra
-	if dec.LFHash == nil {
-		return errors.New("missing required field 'lfHash' for Header")
+	if dec.CpHash == nil {
+		return errors.New("missing required field 'cpHash' for Header")
 	}
-	h.LFHash = *dec.LFHash
-	if dec.LFNumber == nil {
-		return errors.New("missing required field 'lfNumber' for Header")
+	h.CpHash = *dec.CpHash
+	if dec.CpNumber == nil {
+		return errors.New("missing required field 'cpNumber' for Header")
 	}
-	h.LFNumber = uint64(*dec.LFNumber)
-	if dec.LFBaseFee == nil {
+	h.CpNumber = uint64(*dec.CpNumber)
+	if dec.CpBaseFee == nil {
 		return errors.New("missing required field 'lfBaseFeePerGas' for Header")
 	}
-	h.LFBaseFee = (*big.Int)(dec.LFBaseFee)
-	if dec.LFRoot == nil {
-		return errors.New("missing required field 'lfStateRoot' for Header")
+	h.CpBaseFee = (*big.Int)(dec.CpBaseFee)
+	if dec.CpRoot == nil {
+		return errors.New("missing required field 'cpStateRoot' for Header")
 	}
-	h.LFRoot = *dec.LFRoot
-	if dec.LFReceiptHash == nil {
-		return errors.New("missing required field 'lfReceiptsRoot' for Header")
+	h.CpRoot = *dec.CpRoot
+	if dec.CpReceiptHash == nil {
+		return errors.New("missing required field 'cpReceiptsRoot' for Header")
 	}
-	h.LFReceiptHash = *dec.LFReceiptHash
-	if dec.LFGasUsed == nil {
-		return errors.New("missing required field 'lfGasUsed' for Header")
+	h.CpReceiptHash = *dec.CpReceiptHash
+	if dec.CpGasUsed == nil {
+		return errors.New("missing required field 'cpGasUsed' for Header")
 	}
-	h.LFGasUsed = uint64(*dec.LFGasUsed)
-	if dec.LFBloom == nil {
-		return errors.New("missing required field 'lfLogsBloom' for Header")
+	h.CpGasUsed = uint64(*dec.CpGasUsed)
+	if dec.CpBloom == nil {
+		return errors.New("missing required field 'cpLogsBloom' for Header")
 	}
-	h.LFBloom = *dec.LFBloom
+	h.CpBloom = *dec.CpBloom
 	if dec.BaseFee != nil {
 		h.BaseFee = (*big.Int)(dec.BaseFee)
 	}

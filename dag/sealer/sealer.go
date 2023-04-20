@@ -639,8 +639,8 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	enc := []interface{}{
 		header.ParentHashes,
 		header.Height,
-		header.LFHash,
-		header.LFNumber,
+		header.CpHash,
+		header.CpNumber,
 		header.Coinbase,
 		header.Root,
 		header.TxHash,

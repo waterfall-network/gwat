@@ -241,10 +241,10 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	if dag == nil {
 		dag = &common.HashArray{}
 	}
-	if block.LFNumber() > lastFinNr {
-		lastFinNr = block.LFNumber()
+	if block.CpNumber() > lastFinNr {
+		lastFinNr = block.CpNumber()
 	}
-	lfb := h.chain.GetBlockByHash(block.LFHash())
+	lfb := h.chain.GetBlockByHash(block.CpHash())
 	if lfb != nil {
 		*dag = dag.Difference(append(lfb.ParentHashes(), lfb.Hash()))
 	}

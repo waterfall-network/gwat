@@ -513,8 +513,8 @@ func (c *Creator) resultHandler(task *task) {
 		Hash:                task.block.Hash(),
 		Height:              task.block.Height(),
 		Slot:                task.block.Slot(),
-		LastFinalizedHash:   task.block.LFHash(),
-		LastFinalizedHeight: task.block.LFNumber(),
+		LastFinalizedHash:   task.block.CpHash(),
+		LastFinalizedHeight: task.block.CpNumber(),
 		DagChainHashes:      tmpDagChainHashes,
 	}
 	c.chain.AddTips(newBlockDag)
@@ -529,7 +529,7 @@ func (c *Creator) resultHandler(task *task) {
 
 	// Insert the block into the set of pending ones to resultLoop for confirmations
 	log.Info("🔨 created dag block", "slot", task.block.Slot(), "height", task.block.Height(),
-		"hash", hash.Hex(), "parents", task.block.ParentHashes(), "LFHash", task.block.LFHash(), "LFNumber", task.block.LFNumber())
+		"hash", hash.Hex(), "parents", task.block.ParentHashes(), "LFHash", task.block.CpHash(), "LFNumber", task.block.CpNumber())
 }
 
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
@@ -701,8 +701,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 						Hash:                ph,
 						Height:              parentBlock.Height(),
 						Slot:                parentBlock.Slot(),
-						LastFinalizedHash:   parentBlock.LFHash(),
-						LastFinalizedHeight: parentBlock.LFNumber(),
+						LastFinalizedHash:   parentBlock.CpHash(),
+						LastFinalizedHeight: parentBlock.CpNumber(),
 						DagChainHashes:      dagChainHashes,
 					}
 				}
@@ -793,13 +793,13 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		Extra:        c.extra,
 		Time:         uint64(time.Now().Unix()),
 		// Checkpoint spine block
-		LFHash:        checkpointBlock.Hash(),
-		LFNumber:      checkpointBlock.Nr(),
-		LFBaseFee:     checkpointBlock.BaseFee(),
-		LFBloom:       checkpointBlock.Bloom(),
-		LFGasUsed:     checkpointBlock.GasUsed(),
-		LFReceiptHash: checkpointBlock.ReceiptHash(),
-		LFRoot:        checkpointBlock.Root(),
+		CpHash:        checkpointBlock.Hash(),
+		CpNumber:      checkpointBlock.Nr(),
+		CpBaseFee:     checkpointBlock.BaseFee(),
+		CpBloom:       checkpointBlock.Bloom(),
+		CpGasUsed:     checkpointBlock.GasUsed(),
+		CpReceiptHash: checkpointBlock.ReceiptHash(),
+		CpRoot:        checkpointBlock.Root(),
 	}
 
 	// Get active validators number
@@ -880,9 +880,9 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
-	if c.appendTransactions(txs, c.coinbase, &header.LFNumber) {
+	if c.appendTransactions(txs, c.coinbase, &header.CpNumber) {
 		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-			if err := c.processValidatorTxs(stateBlock.Hash(), syncData, header.LFNumber); err != nil {
+			if err := c.processValidatorTxs(stateBlock.Hash(), syncData, header.CpNumber); err != nil {
 				return
 			}
 
@@ -898,7 +898,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-		if err := c.processValidatorTxs(stateBlock.Hash(), syncData, header.LFNumber); err != nil {
+		if err := c.processValidatorTxs(stateBlock.Hash(), syncData, header.CpNumber); err != nil {
 			return
 		}
 	}
