@@ -98,10 +98,10 @@ type Header struct {
 // field type overrides for gencodec
 type headerMarshaling struct {
 	Height    *hexutil.Big
-	LFHash    common.Hash
-	LFNumber  hexutil.Uint64
-	LFBaseFee *hexutil.Big
-	LFGasUsed hexutil.Uint64
+	CpHash    common.Hash
+	CpNumber  hexutil.Uint64
+	CpBaseFee *hexutil.Big
+	CpGasUsed hexutil.Uint64
 	GasLimit  hexutil.Uint64
 	GasUsed   hexutil.Uint64
 	Time      hexutil.Uint64

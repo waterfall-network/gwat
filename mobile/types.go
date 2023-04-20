@@ -126,8 +126,8 @@ func (h *Header) String() string {
 	return encodeOrError(h)
 }
 
-func (h *Header) GetLFHash() *Hash                   { return &Hash{h.header.LFHash} }
-func (h *Header) GetLFNumber() int64                 { return int64(h.header.LFNumber) }
+func (h *Header) GetCpHash() *Hash                   { return &Hash{h.header.CpHash} }
+func (h *Header) GetCpNumber() int64                 { return int64(h.header.CpNumber) }
 func (h *Header) GetParentHashes() *common.HashArray { return &h.header.ParentHashes }
 func (h *Header) GetCoinbase() *Address              { return &Address{h.header.Coinbase} }
 func (h *Header) GetRoot() *Hash                     { return &Hash{h.header.Root} }
@@ -199,8 +199,8 @@ func (b *Block) EncodeJSON() (string, error) {
 func (b *Block) String() string {
 	return encodeOrError(b)
 }
-func (b *Block) GetLFHash() *Hash                  { return &Hash{b.block.LFHash()} }
-func (b *Block) GetLFNumber() int64                { return int64(b.block.LFNumber()) }
+func (b *Block) GetCpHash() *Hash                  { return &Hash{b.block.CpHash()} }
+func (b *Block) GetCpNumber() int64                { return int64(b.block.CpNumber()) }
 func (b *Block) GetParentHashes() common.HashArray { return b.block.ParentHashes() }
 func (b *Block) GetCoinbase() *Address             { return &Address{b.block.Coinbase()} }
 func (b *Block) GetRoot() *Hash                    { return &Hash{b.block.Root()} }
