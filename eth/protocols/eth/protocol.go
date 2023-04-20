@@ -120,11 +120,12 @@ type TransactionsPacket []*types.Transaction
 
 // GetBlockHeadersPacket represents a block header query.
 type GetBlockHeadersPacket struct {
-	Hashes  *common.HashArray // хеши блоков по которым запрашиваются заголовки
+	Hashes  *common.HashArray // request headers by hashes
 	Origin  *HashOrNumber     // Block from which to retrieve headers
 	Amount  uint64            // Maximum number of headers to retrieve
 	Skip    uint64            // Blocks to skip between consecutive headers
 	Reverse bool              // Query direction (false = rising towards latest, true = falling towards genesis)
+	Base    bool              // request of headers without of state-fields
 }
 
 // GetBlockHeadersPacket66 represents a block header query over wfdag/66

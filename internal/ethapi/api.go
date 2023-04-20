@@ -1332,7 +1332,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
 	if head.CpBaseFee != nil {
-		result["lflBaseFeePerGas"] = (*hexutil.Big)(head.CpBaseFee)
+		result["cpBaseFeePerGas"] = (*hexutil.Big)(head.CpBaseFee)
 	}
 	if head.Number != nil {
 		result["number"] = hexutil.Uint64(head.Nr())

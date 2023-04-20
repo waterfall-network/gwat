@@ -73,7 +73,7 @@ type HeaderRetrievalFn func(common.Hash) *types.Header
 type blockRetrievalFn func(common.Hash) *types.Block
 
 // headerRequesterFn is a callback type for sending a header retrieval request.
-type headerRequesterFn func(common.Hash) error
+type headerRequesterFn func(common.Hash, bool) error
 
 // bodyRequesterFn is a callback type for sending a body retrieval request.
 type bodyRequesterFn func([]common.Hash) error
@@ -488,7 +488,7 @@ func (f *BlockFetcher) loop() {
 					}
 					for _, hash := range _hashes {
 						headerFetchMeter.Mark(1)
-						fetchHeader(hash) // Suboptimal, but protocol doesn't allow batch header retrievals
+						fetchHeader(hash, true) // Suboptimal, but protocol doesn't allow batch header retrievals
 					}
 				}()
 			}

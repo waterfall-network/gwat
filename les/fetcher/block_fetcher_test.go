@@ -191,11 +191,15 @@ func (f *fetcherTester) makeHeaderFetcher(peer string, blocks map[common.Hash]*t
 		closure[hash] = block
 	}
 	// Create a function that return a header from the closure
-	return func(hash common.Hash) error {
+	return func(hash common.Hash, baseFieldOnly bool) error {
 		// Gather the blocks to return
 		headers := make([]*types.Header, 0, 1)
 		if block, ok := closure[hash]; ok {
-			headers = append(headers, block.Header())
+			if baseFieldOnly {
+				headers = append(headers, block.Header().GetBaseHeader())
+			} else {
+				headers = append(headers, block.Header())
+			}
 		}
 		// Return on a new thread
 		go f.fetcher.FilterHeaders(peer, headers, time.Now().Add(drift))
@@ -362,13 +366,13 @@ func testConcurrentAnnouncements(t *testing.T, light bool) {
 	secondBodyFetcher := tester.makeBodyFetcher("second", blocks, 0)
 
 	counter := uint32(0)
-	firstHeaderWrapper := func(hash common.Hash) error {
+	firstHeaderWrapper := func(hash common.Hash, baseFieldOnly bool) error {
 		atomic.AddUint32(&counter, 1)
-		return firstHeaderFetcher(hash)
+		return firstHeaderFetcher(hash, false)
 	}
-	secondHeaderWrapper := func(hash common.Hash) error {
+	secondHeaderWrapper := func(hash common.Hash, baseFieldOnly bool) error {
 		atomic.AddUint32(&counter, 1)
-		return secondHeaderFetcher(hash)
+		return secondHeaderFetcher(hash, false)
 	}
 	// Iteratively announce blocks until all are imported
 	imported := make(chan interface{})
@@ -462,13 +466,13 @@ func testPendingDeduplication(t *testing.T, light bool) {
 
 	delay := 50 * time.Millisecond
 	counter := uint32(0)
-	headerWrapper := func(hash common.Hash) error {
+	headerWrapper := func(hash common.Hash, baseFieldOnly bool) error {
 		atomic.AddUint32(&counter, 1)
 
 		// Simulate a long running fetch
 		go func() {
 			time.Sleep(delay)
-			headerFetcher(hash)
+			headerFetcher(hash, false)
 		}()
 		return nil
 	}

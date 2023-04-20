@@ -345,7 +345,7 @@ func (p *Peer) ReplyDagData(id uint64, dag common.HashArray) error {
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
-func (p *Peer) RequestOneHeader(hash common.Hash) error {
+func (p *Peer) RequestOneHeader(hash common.Hash, baseFieldOnly bool) error {
 	p.Log().Debug("Fetching single header", "hash", hash)
 	id := rand.Uint64()
 
@@ -357,13 +357,14 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 			Amount:  uint64(1),
 			Skip:    uint64(0),
 			Reverse: false,
+			Base:    baseFieldOnly,
 		},
 	})
 }
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
-func (p *Peer) RequestHeadersByHashes(hashes common.HashArray) error {
+func (p *Peer) RequestHeadersByHashes(hashes common.HashArray, baseFieldOnly bool) error {
 	p.Log().Debug("Fetching batch of headers", "peerId", p.ID(), "count", len(hashes), "hashes", hashes)
 	id := rand.Uint64()
 	requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
@@ -375,13 +376,14 @@ func (p *Peer) RequestHeadersByHashes(hashes common.HashArray) error {
 			Amount:  uint64(len(hashes)),
 			Skip:    uint64(0),
 			Reverse: false,
+			Base:    baseFieldOnly,
 		},
 	})
 }
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
-func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool, baseFieldOnly bool) error {
 	p.Log().Info("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
 	id := rand.Uint64()
 
@@ -393,13 +395,14 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 			Amount:  uint64(amount),
 			Skip:    uint64(skip),
 			Reverse: reverse,
+			Base:    baseFieldOnly,
 		},
 	})
 }
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
-func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool, baseFieldOnly bool) error {
 	p.Log().Info("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	id := rand.Uint64()
 
@@ -411,6 +414,7 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 			Amount:  uint64(amount),
 			Skip:    uint64(skip),
 			Reverse: reverse,
+			Base:    baseFieldOnly,
 		},
 	})
 }

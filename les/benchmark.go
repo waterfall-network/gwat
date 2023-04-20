@@ -76,7 +76,7 @@ func (b *benchmarkBlockHeaders) request(peer *serverPeer, index int) error {
 	if b.byHash {
 		return peer.requestHeadersByHash(0, b.hashes[index], b.amount, b.skip, b.reverse)
 	}
-	return peer.requestHeadersByNumber(0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse)
+	return peer.requestHeadersByNumber(0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse, false)
 }
 
 // benchmarkBodiesOrReceipts implements requestBenchmark

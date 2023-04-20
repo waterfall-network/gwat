@@ -341,7 +341,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If we have a trusted CHT, reject all peers below that (avoid fast sync eclipse)
 	if h.checkpointHash != (common.Hash{}) {
 		// Request the peer's checkpoint header for chain height/weight validation
-		if err := peer.RequestHeadersByNumber(h.checkpointNumber, 1, 0, false); err != nil {
+		if err := peer.RequestHeadersByNumber(h.checkpointNumber, 1, 0, false, false); err != nil {
 			return err
 		}
 		// Start a timer to disconnect if the peer doesn't reply in time
@@ -362,7 +362,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 		peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "number", number)
 
-		if err := peer.RequestHeadersByNumber(number, 1, 0, false); err != nil {
+		if err := peer.RequestHeadersByNumber(number, 1, 0, false, false); err != nil {
 
 			peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "err", err)
 

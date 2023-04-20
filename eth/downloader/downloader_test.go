@@ -68,6 +68,11 @@ type downloadTester struct {
 	lock sync.RWMutex
 }
 
+func (dl *downloadTester) GetLastCoordinatedCheckpoint() *types.Checkpoint {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (dl *downloadTester) GetLastCoordinatedHeader() *types.Header {
 	//TODO implement me
 	panic("implement me")
@@ -496,12 +501,12 @@ func (dlp *downloadTesterPeer) GetDagInfo() (uint64, *common.HashArray) {
 	panic("implement me")
 }
 
-func (dlp *downloadTesterPeer) RequestHeadersByHashes(array common.HashArray) error {
+func (dlp *downloadTesterPeer) RequestHeadersByHashes(array common.HashArray, baseFieldOnly bool) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (dlp *downloadTesterPeer) RequestDag(u uint64) error {
+func (dlp *downloadTesterPeer) RequestDag(u uint64, toCpEpoch uint64, spine common.Hash) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -516,7 +521,7 @@ func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
 // RequestHeadersByHash constructs a GetBlockHeaders function based on a hashed
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
-func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool, baseFieldOnly bool) error {
 	result := dlp.chain.headersByHash(origin, amount, skip, reverse)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
@@ -525,7 +530,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount i
 // RequestHeadersByNumber constructs a GetBlockHeaders function based on a numbered
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
-func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool, baseFieldOnly bool) error {
 	result := dlp.chain.headersByNumber(origin, amount, skip, reverse)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
@@ -1554,19 +1559,19 @@ func (ftp *floodingTestPeer) GetDagInfo() (uint64, *common.HashArray) {
 	panic("implement me")
 }
 
-func (ftp *floodingTestPeer) RequestHeadersByHashes(array common.HashArray) error {
+func (ftp *floodingTestPeer) RequestHeadersByHashes(array common.HashArray, baseFieldOnly bool) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (ftp *floodingTestPeer) RequestDag(u uint64) error {
+func (ftp *floodingTestPeer) RequestDag(u uint64, toCpEpoch uint64, spine common.Hash) error {
 	//TODO implement me
 	panic("implement me")
 }
 
 //func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
-func (ftp *floodingTestPeer) RequestHeadersByHash(hash common.Hash, count int, skip int, reverse bool) error {
-	return ftp.peer.RequestHeadersByHash(hash, count, skip, reverse)
+func (ftp *floodingTestPeer) RequestHeadersByHash(hash common.Hash, count int, skip int, reverse bool, baseFieldOnly bool) error {
+	return ftp.peer.RequestHeadersByHash(hash, count, skip, reverse, baseFieldOnly)
 }
 func (ftp *floodingTestPeer) RequestBodies(hashes []common.Hash) error {
 	return ftp.peer.RequestBodies(hashes)
@@ -1578,7 +1583,7 @@ func (ftp *floodingTestPeer) RequestNodeData(hashes []common.Hash) error {
 	return ftp.peer.RequestNodeData(hashes)
 }
 
-func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int, reverse bool) error {
+func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int, reverse bool, baseFieldOnly bool) error {
 	deliveriesDone := make(chan struct{}, 500)
 	for i := 0; i < cap(deliveriesDone)-1; i++ {
 		peer := fmt.Sprintf("fake-peer%d", i)
@@ -1598,7 +1603,7 @@ func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int
 				// Start delivering the requested headers
 				// after one of the flooding responses has arrived.
 				go func() {
-					ftp.peer.RequestHeadersByNumber(from, count, skip, reverse)
+					ftp.peer.RequestHeadersByNumber(from, count, skip, reverse, false)
 					deliveriesDone <- struct{}{}
 				}()
 				launched = true
