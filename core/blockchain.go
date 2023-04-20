@@ -2275,14 +2275,18 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
-		// TODO: UNCOMMENT
-		//if ok, err := bc.VerifyBlock(block); !ok {
-		//	if err != nil {
-		//		return it.index, err
-		//	}
-		//	bc.CacheInvalidBlock(block)
-		//	continue
-		//}
+		if ok, err := bc.VerifyBlock(block); !ok {
+			if err != nil {
+				return it.index, err
+			}
+			bc.CacheInvalidBlock(block)
+			continue
+		}
+
+		// validate node is synced by spine nr
+		if !bc.handleIsSynced(block.CpHash()) {
+			return it.index, ErrInsertUncompletedDag
+		}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
 
@@ -2322,6 +2326,34 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 	}
 
 	return it.index, err
+}
+
+// handleIsSynced start sync in case spine is not finalized
+func (bc *BlockChain) handleIsSynced(cpHash common.Hash) bool {
+	if cpHeader := bc.GetHeaderByHash(cpHash); cpHeader != nil {
+		if cpHeader.Nr() == 0 {
+			log.Info("*********** insertPropagatedBlocks , cp not finalized",
+				"height", cpHeader.Height,
+				"hash", cpHash,
+				"number", cpHeader.Nr(),
+			)
+
+			bc.SetIsSynced(false)
+			return false
+		} else {
+			log.Warn("*********** ( else strange!!!) insertPropagatedBlocks")
+			bc.SetIsSynced(true)
+			return true
+		}
+	} else {
+		log.Warn("*********** insertPropagatedBlocks, cp not found",
+			"height", cpHeader.Height,
+			"hash", cpHash,
+			"number", cpHeader.Nr(),
+		)
+		bc.SetIsSynced(false)
+		return false
+	}
 }
 
 func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *types.Block) error {
