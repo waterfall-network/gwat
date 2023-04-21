@@ -125,33 +125,6 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(cpy)
 }
 
-// GetBaseHeader returns Header with base-fields only (no state-fields)
-func (h *Header) GetBaseHeader() *Header {
-	var cpy *Header = nil
-	if h != nil {
-		cpy = &Header{
-			ParentHashes:  h.ParentHashes,
-			Slot:          h.Slot,
-			Era:           h.Era,
-			Height:        h.Height,
-			Coinbase:      h.Coinbase,
-			TxHash:        h.TxHash,
-			BodyHash:      h.BodyHash,
-			GasLimit:      h.GasLimit,
-			Time:          h.Time,
-			Extra:         h.Extra,
-			CpHash:        h.CpHash,
-			CpNumber:      h.CpNumber,
-			CpBaseFee:     h.CpBaseFee,
-			CpBloom:       h.CpBloom,
-			CpRoot:        h.CpRoot,
-			CpReceiptHash: h.CpReceiptHash,
-			CpGasUsed:     h.CpGasUsed,
-		}
-	}
-	return cpy
-}
-
 // Copy creates copy of Header
 func (h *Header) Copy() *Header {
 	var cpy *Header = nil

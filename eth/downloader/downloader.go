@@ -965,7 +965,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 		fetch = 2 // head + pivot headers
 	}
 	// from spine hash to spine hash
-	go p.peer.RequestHeadersByHash(lcp.Spine, fetch, fsMinFullBlocks-1, true, false)
+	go p.peer.RequestHeadersByHash(lcp.Spine, fetch, fsMinFullBlocks-1, true)
 	//go p.peer.RequestHeadersByNumber(lastFinNr, fetch, fsMinFullBlocks-1, true)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -1207,7 +1207,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
 	p.log.Info("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
-	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false, false)
+	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
 
 	// Wait for the remote response to the head fetch
 	// init by genesis
@@ -1317,7 +1317,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		ttl := d.peers.rates.TargetTimeout()
 		timeout := time.After(ttl)
 
-		go p.peer.RequestHeadersByNumber(check, 1, 0, false, false)
+		go p.peer.RequestHeadersByNumber(check, 1, 0, false)
 
 		// Wait until a reply arrives to this request
 		for arrived := false; !arrived; {
@@ -1419,10 +1419,10 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 
 		if skeleton {
 			p.log.Info("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false, false)
+			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
 		} else {
 			p.log.Info("Fetching full headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false, false)
+			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
 		}
 	}
 	getNextPivot := func() {
@@ -1437,7 +1437,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 		d.pivotLock.RUnlock()
 
 		p.log.Debug("Fetching next pivot header", "number", pivot+uint64(fsMinFullBlocks))
-		go p.peer.RequestHeadersByNumber(pivot+uint64(fsMinFullBlocks), 2, fsMinFullBlocks-9, false, false) // move +64 when it's 2x64-8 deep
+		go p.peer.RequestHeadersByNumber(pivot+uint64(fsMinFullBlocks), 2, fsMinFullBlocks-9, false) // move +64 when it's 2x64-8 deep
 	}
 	// Start pulling the header chain skeleton until all is done
 	ancestor := from
@@ -2450,7 +2450,7 @@ func (d *Downloader) fetchDagHashes(p *peerConnection, fromCpEpoch, toCpEpoch ui
 // fetchDagHeaders retrieves the dag headers by hashes from a remote peer.
 func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray) (headers []*types.Header, err error) {
 	p.log.Info("Retrieving remote dag headers: start", "hashes", hashes)
-	go p.peer.RequestHeadersByHashes(hashes, true)
+	go p.peer.RequestHeadersByHashes(hashes)
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)

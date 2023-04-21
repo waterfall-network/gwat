@@ -1994,7 +1994,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 	return it.index, err
 }
 
-func (bc *BlockChain) verifyLFData(block *types.Block) bool {
+func (bc *BlockChain) verifyCpData(block *types.Block) bool {
 	if block.CpNumber() > bc.GetLastFinalizedNumber() {
 		return true
 	}
@@ -2189,7 +2189,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	return bc.verifyBlockParents(block) && bc.verifyLFData(block), nil
+	return bc.verifyBlockParents(block) && bc.verifyCpData(block), nil
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
@@ -2283,9 +2283,15 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			continue
 		}
 
-		// validate node is synced by spine nr
-		if !bc.handleIsSynced(block.CpHash()) {
-			return it.index, ErrInsertUncompletedDag
+		// if checkpoint of propagated block is not finalized - set IsSynced=false
+		if cpHeader := bc.GetHeaderByHash(block.CpHash()); cpHeader != nil {
+			if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+				log.Info("*********** Check is synchronized: cp not finalized", "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
+				bc.SetIsSynced(false)
+			}
+		} else {
+			log.Info("*********** Check is synchronized: cp not found", "cpHash", block.CpHash())
+			bc.SetIsSynced(false)
 		}
 
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
@@ -2326,34 +2332,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 	}
 
 	return it.index, err
-}
-
-// handleIsSynced start sync in case spine is not finalized
-func (bc *BlockChain) handleIsSynced(cpHash common.Hash) bool {
-	if cpHeader := bc.GetHeaderByHash(cpHash); cpHeader != nil {
-		if cpHeader.Nr() == 0 {
-			log.Info("*********** insertPropagatedBlocks , cp not finalized",
-				"height", cpHeader.Height,
-				"hash", cpHash,
-				"number", cpHeader.Nr(),
-			)
-
-			bc.SetIsSynced(false)
-			return false
-		} else {
-			log.Warn("*********** ( else strange!!!) insertPropagatedBlocks")
-			bc.SetIsSynced(true)
-			return true
-		}
-	} else {
-		log.Warn("*********** insertPropagatedBlocks, cp not found",
-			"height", cpHeader.Height,
-			"hash", cpHash,
-			"number", cpHeader.Nr(),
-		)
-		bc.SetIsSynced(false)
-		return false
-	}
 }
 
 func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *types.Block) error {

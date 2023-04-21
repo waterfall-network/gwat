@@ -34,18 +34,11 @@ func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	var response, heeaders []*types.Header
+	var response []*types.Header
 	if len(*query.Hashes) > 0 {
-		heeaders = backend.Chain().GetHeadersByHashes(*query.Hashes).RmEmpty().ToArray()
+		response = backend.Chain().GetHeadersByHashes(*query.Hashes).RmEmpty().ToArray()
 	} else {
-		heeaders = answerGetBlockHeadersQuery(backend, query.GetBlockHeadersPacket, peer)
-	}
-	response = heeaders
-	if query.Base {
-		response = make([]*types.Header, len(heeaders))
-		for i, hd := range heeaders {
-			response[i] = hd.GetBaseHeader()
-		}
+		response = answerGetBlockHeadersQuery(backend, query.GetBlockHeadersPacket, peer)
 	}
 	return peer.ReplyBlockHeaders(query.RequestId, response)
 }

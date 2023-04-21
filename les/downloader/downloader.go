@@ -653,7 +653,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 	if mode == FastSync {
 		fetch = 2 // head + pivot headers
 	}
-	go p.peer.RequestHeadersByHash(latest, fetch, fsMinFullBlocks-1, true, false)
+	go p.peer.RequestHeadersByHash(latest, fetch, fsMinFullBlocks-1, true)
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
@@ -835,7 +835,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
 	p.log.Trace("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
-	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false, true)
+	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
 
 	// Wait for the remote response to the head fetch
 	number, hash := uint64(0), common.Hash{}
@@ -932,7 +932,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 		ttl := d.peers.rates.TargetTimeout()
 		timeout := time.After(ttl)
 
-		go p.peer.RequestHeadersByNumber(check, 1, 0, false, false)
+		go p.peer.RequestHeadersByNumber(check, 1, 0, false)
 
 		// Wait until a reply arrives to this request
 		for arrived := false; !arrived; {
@@ -1026,10 +1026,10 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false, false)
+			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
 		} else {
 			p.log.Trace("Fetching full headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false, false)
+			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
 		}
 	}
 	getNextPivot := func() {
@@ -1044,7 +1044,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 		d.pivotLock.RUnlock()
 
 		p.log.Trace("Fetching next pivot header", "number", pivot+uint64(fsMinFullBlocks))
-		go p.peer.RequestHeadersByNumber(pivot+uint64(fsMinFullBlocks), 2, fsMinFullBlocks-9, false, false) // move +64 when it's 2x64-8 deep
+		go p.peer.RequestHeadersByNumber(pivot+uint64(fsMinFullBlocks), 2, fsMinFullBlocks-9, false) // move +64 when it's 2x64-8 deep
 	}
 	// Start pulling the header chain skeleton until all is done
 	ancestor := from

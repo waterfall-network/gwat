@@ -125,7 +125,6 @@ type GetBlockHeadersPacket struct {
 	Amount  uint64            // Maximum number of headers to retrieve
 	Skip    uint64            // Blocks to skip between consecutive headers
 	Reverse bool              // Query direction (false = rising towards latest, true = falling towards genesis)
-	Base    bool              // request of headers without of state-fields
 }
 
 // GetBlockHeadersPacket66 represents a block header query over wfdag/66
