@@ -108,6 +108,11 @@ func (bc *BlockChain) SetLastCoordinatedSlot(lastSlot uint64) {
 	bc.lastCoordinatedSlot = lastSlot
 }
 
+// GetBlockHashesBySlot retrieves all block hashes for a given slot.
+func (bc *BlockChain) GetBlockHashesBySlot(slot uint64) common.HashArray {
+	return rawdb.ReadSlotBlocksHashes(bc.db, slot)
+}
+
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
 func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
