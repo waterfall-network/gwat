@@ -20,7 +20,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/headsync"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/slotticker"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
@@ -98,8 +97,6 @@ type Dag struct {
 	creator *creator.Creator
 	//finalizer
 	finalizer *finalizer.Finalizer
-	//headsync
-	headsync *headsync.Headsync
 
 	busy int32
 
@@ -118,9 +115,10 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		downloader:  eth.Downloader(),
 		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
 		finalizer:   fin,
-		headsync:    headsync.New(chainConfig, eth, mux, fin),
-		exitChan:    make(chan struct{}),
-		errChan:     make(chan error),
+		// TODO: rm deprecated
+		//headsync:    headsync.New(chainConfig, eth, mux, fin),
+		exitChan: make(chan struct{}),
+		errChan:  make(chan error),
 	}
 	atomic.StoreInt32(&d.busy, 0)
 	return d
@@ -208,7 +206,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	// finalization
 	if len(data.Spines) > 0 {
-		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
+		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
 				// Start syncing if spine or parent is unloaded
 				//d.synchronizeUnloadedBlocks(data.pines)

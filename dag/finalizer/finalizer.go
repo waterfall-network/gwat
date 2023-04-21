@@ -58,11 +58,7 @@ func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux) *Fina
 }
 
 // Finalize start finalization procedure
-func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, isHeadSync bool) error {
-
-	if f.isSyncing() && !isHeadSync {
-		return ErrSyncing
-	}
+func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) error {
 	if atomic.LoadInt32(&f.busy) == 1 {
 		log.Info("⌛ Finalization is skipped: process busy")
 		return ErrBusy
@@ -109,7 +105,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		spine := spinesMap[slot]
 		orderedChain := types.SpineGetDagChain(f.eth.BlockChain(), spine)
 
-		log.Info("Finalization spine chain calculated", "isHeadSync", isHeadSync, "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
+		log.Info("Finalization spine chain calculated", "isHeadSync", f.isSyncing(), "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
 		if len(orderedChain) == 0 {
 			log.Warn("⌛ Finalization skip finalized spine: (must never happened)", "slot", spine.Slot(), "nr", spine.Nr(), "height", spine.Height(), "hash", spine.Hash().Hex())
@@ -117,7 +113,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 		}
 
 		// TODO: check
-		if isHeadSync {
+		if f.eth.BlockChain().IsSynced() {
 			//validate blocks while head sync
 			for _, block := range orderedChain {
 				if ok, err := bc.VerifyBlock(block); !ok {
