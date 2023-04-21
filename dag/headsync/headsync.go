@@ -143,8 +143,9 @@ func (hs *Headsync) SetReadyState(checkpoint *types.Checkpoint) (bool, error) {
 	}
 	bc.WriteCurrentTips()
 
+	// TODO: rm deprecated
 	// update LastCoordinatedHash to checkpoint
-	bc.WriteLastCoordinatedHash(cpBlock.Hash())
+	//bc.WriteLastCoordinatedHash(cpBlock.Hash())
 
 	// set ready state
 	atomic.StoreInt32(&hs.ready, 1)

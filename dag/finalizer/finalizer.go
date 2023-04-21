@@ -116,6 +116,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash, i
 			continue
 		}
 
+		// TODO: check
 		if isHeadSync {
 			//validate blocks while head sync
 			for _, block := range orderedChain {
@@ -418,7 +419,9 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	}
 	bc.WriteCurrentTips()
 
+	// TODO: rm deprecated
 	// update LastCoordinatedHash to spineHash
-	bc.WriteLastCoordinatedHash(spineBlock.Hash())
+	//bc.WriteLastCoordinatedHash(spineBlock.Hash())
+
 	return nil
 }

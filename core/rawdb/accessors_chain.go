@@ -907,18 +907,20 @@ func ReadLastFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 
 /**** Coordinated state ***/
 
+// TODO: rm deprecated
 // ReadLastCoordinatedHash retrieves the hash of the last Coordinated block.
-func ReadLastCoordinatedHash(db ethdb.KeyValueReader) common.Hash {
-	data, _ := db.Get(lastCoordHashKey)
-	return common.BytesToHash(data)
-}
+//func ReadLastCoordinatedHash(db ethdb.KeyValueReader) common.Hash {
+//	data, _ := db.Get(lastCoordHashKey)
+//	return common.BytesToHash(data)
+//}
 
+// TODO: rm deprecated
 // WriteLastCoordinatedHash stores the hash of the last Coordinated block
-func WriteLastCoordinatedHash(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Put(lastCoordHashKey, hash.Bytes()); err != nil {
-		log.Crit("Failed to store the Last Coordinated Hash", "err", err)
-	}
-}
+//func WriteLastCoordinatedHash(db ethdb.KeyValueWriter, hash common.Hash) {
+//	if err := db.Put(lastCoordHashKey, hash.Bytes()); err != nil {
+//		log.Crit("Failed to store the Last Coordinated Hash", "err", err)
+//	}
+//}
 
 // ReadLastCoordinatedCheckpoint retrieves the last Coordinated checkpoint.
 func ReadLastCoordinatedCheckpoint(db ethdb.KeyValueReader) *types.Checkpoint {

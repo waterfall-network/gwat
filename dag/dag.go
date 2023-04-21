@@ -52,7 +52,7 @@ type blockChain interface {
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
 	GetHeaderByHash(hash common.Hash) *types.Header
-	WriteLastCoordinatedHash(hash common.Hash)
+	//WriteLastCoordinatedHash(hash common.Hash)
 	GetBlock(hash common.Hash) *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetLastFinalizedNumber() uint64
@@ -236,9 +236,13 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
 			res.Error = &mrg
 		}
-	} else {
-		d.bc.WriteLastCoordinatedHash(lfHeader.Hash())
 	}
+
+	// TODO: rm deprecated
+	//else {
+	//	d.bc.WriteLastCoordinatedHash(lfHeader.Hash())
+	//}
+
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash
 

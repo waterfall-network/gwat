@@ -73,10 +73,11 @@ func (dl *downloadTester) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	panic("implement me")
 }
 
-func (dl *downloadTester) GetLastCoordinatedHeader() *types.Header {
-	//TODO implement me
-	panic("implement me")
-}
+// TODO: rm deprecated
+//func (dl *downloadTester) GetLastCoordinatedHeader() *types.Header {
+//	//TODO implement me
+//	panic("implement me")
+//}
 
 func (dl *downloadTester) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
 	//TODO implement me
