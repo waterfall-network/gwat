@@ -670,6 +670,11 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
+// GetSlotHashes retrieves all block hashes for a given slot.
+func (s *PublicBlockChainAPI) GetSlotHashes(ctx context.Context, slot uint64) common.HashArray {
+	return s.b.BlockHashesBySlot(ctx, slot)
+}
+
 // Result structs for GetProof
 type AccountResult struct {
 	Address      common.Address  `json:"address"`

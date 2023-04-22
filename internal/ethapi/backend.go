@@ -78,6 +78,7 @@ type Backend interface {
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
+	BlockHashesBySlot(ctx context.Context, slot uint64) common.HashArray
 
 	// Dag API
 	Dag() *dag.Dag

@@ -415,3 +415,7 @@ func (b *EthAPIBackend) Genesis() *types.Block {
 func (b *EthAPIBackend) BlockChain() *core.BlockChain {
 	return b.eth.blockchain
 }
+
+func (b *EthAPIBackend) BlockHashesBySlot(ctx context.Context, slot uint64) common.HashArray {
+	return b.eth.blockchain.GetBlockHashesBySlot(slot)
+}

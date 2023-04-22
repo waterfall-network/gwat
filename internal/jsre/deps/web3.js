@@ -5468,7 +5468,8 @@ var methods = function () {
         compileLLL,
         compileSerpent,
         submitWork,
-        getWork
+        getWork,
+        getSlotHashes,
     ];
 };
 
