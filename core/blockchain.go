@@ -1990,31 +1990,63 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 }
 
 func (bc *BlockChain) verifyCpData(block *types.Block) bool {
-	if block.CpNumber() > bc.GetLastFinalizedNumber() {
-		return true
-	}
 	CpBlock := bc.GetBlockByNumber(block.CpNumber())
-	if CpBlock == nil {
-		log.Warn("Block verification: CpBlock not found",
-			"block hash", block.Hash().Hex(),
-			"CpHash", block.CpHash(),
-			"CpNumber", block.CpNumber(),
-		)
-		return false
-	}
-	CpBlockRoot := CpBlock.Root()
-	if block.CpRoot() != CpBlockRoot {
-		log.Warn("Block verification: CpHash dismatch",
-			"block hash", block.Hash().Hex(),
-			"CpHash", block.CpHash(),
-			"CpNumber", block.CpNumber(),
-			"CpBlock hash", CpBlock.Root().Hex(),
-			"CpRoot", block.CpRoot().Hex(),
-			"CpBlock finHash", CpBlockRoot.Hex(),
-		)
+	return bc.validateCpNumber(block) &&
+		bc.validateCpBlock(block, CpBlock) &&
+		bc.validateCpHash(block, CpBlock) &&
+		bc.validateCpRoot(block, CpBlock) &&
+		bc.validateCpReceiptHash(block, CpBlock)
+}
+
+func (bc *BlockChain) validateCpNumber(block *types.Block) bool {
+	if block.CpNumber() > bc.GetLastFinalizedNumber() {
+		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
 		return false
 	}
 	return true
+}
+
+func (bc *BlockChain) validateCpBlock(block *types.Block, CpBlock *types.Block) bool {
+	if CpBlock == nil {
+		logValidationIssue("CpBlock not found", block)
+		return false
+	}
+	return true
+}
+
+func (bc *BlockChain) validateCpHash(block *types.Block, CpBlock *types.Block) bool {
+	if block.CpHash() != CpBlock.Hash() {
+		logValidationIssue("Hash mismatch", block)
+		return false
+	}
+	return true
+}
+
+func (bc *BlockChain) validateCpRoot(block *types.Block, CpBlock *types.Block) bool {
+	CpBlockRoot := CpBlock.Root()
+	if block.CpRoot() != CpBlockRoot {
+		logValidationIssue("CpHash mismatch", block)
+		return false
+	}
+	return true
+}
+
+func (bc *BlockChain) validateCpReceiptHash(block *types.Block, CpBlock *types.Block) bool {
+	if block.CpReceiptHash() != CpBlock.ReceiptHash() {
+		logValidationIssue("ReceiptHash mismatch", block)
+		return false
+	}
+	return true
+}
+
+func logValidationIssue(issue string, block *types.Block) {
+	log.Warn("Block verification: "+issue,
+		"block hash", block.Hash().Hex(),
+		"CpHash", block.CpHash(),
+		"CpNumber", block.CpNumber(),
+		"CpReceiptHash", block.CpReceiptHash(),
+		"CpRoot", block.CpRoot(),
+	)
 }
 
 // verifyCreators return false if creator is unassigned
@@ -2088,11 +2120,11 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	}
 
 	// Verify block era
-	bc.verifyBlockEra(block)
-	//if !isValidEra {
-	//	log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
-	//	return false, false, nil
-	//}
+	isValidEra := bc.verifyBlockEra(block)
+	if !isValidEra {
+		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
+		return false, nil
+	}
 
 	unknownParent := false
 	for _, parentHash := range block.ParentHashes() {
