@@ -103,9 +103,9 @@ type SyncProgress struct {
 	HighestBlock  uint64 // Highest alleged block number in the chain
 	PulledStates  uint64 // Number of state trie entries already downloaded
 	KnownStates   uint64 // Total number of state trie entries known about
-	Stage         string // stage of sync process (finalized, dag, head, resync)
-	MaxBlockSlot  uint64
-	LastCoordSlot uint64
+	FinalizedSlot uint64
+	MaxDagSlot    uint64
+	CurrentSlot   uint64
 }
 
 // ChainSyncReader wraps access to the node's current sync status. If there's no

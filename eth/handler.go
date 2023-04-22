@@ -427,33 +427,6 @@ func (h *handler) unregisterPeer(id string) {
 	}
 }
 
-func (h *handler) StartSync(hashes common.HashArray, lastFinNr uint64) error {
-
-	log.Info("******* func (h *handler) SyncUnloadedHashes( *******", "hashes", hashes, "lastFinNr", lastFinNr, "len(h.peers)", len(h.peers.peers))
-
-	if len(h.peers.peers) == 0 {
-
-		log.Error("******* func (h *handler) SyncUnloadedHashes( *******", "hashes", hashes, "lastFinNr", lastFinNr, "len(h.peers)", len(h.peers.peers))
-
-		return errors.New("No peers")
-	}
-
-	peerId := h.peers.getPeer(false).ID()
-	err := h.downloader.Synchronise(peerId, hashes, lastFinNr, downloader.FullSync, true)
-	if err != nil {
-		return err
-	}
-	if atomic.LoadUint32(&h.fastSync) == 1 {
-		log.Info("Fast sync complete, auto disabling")
-		atomic.StoreUint32(&h.fastSync, 0)
-	}
-	if atomic.LoadUint32(&h.snapSync) == 1 {
-		log.Info("Snap sync complete, auto disabling")
-		atomic.StoreUint32(&h.snapSync, 0)
-	}
-	return nil
-}
-
 func (h *handler) Start(maxPeers int) {
 	h.maxPeers = maxPeers
 

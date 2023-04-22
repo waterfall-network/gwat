@@ -105,11 +105,6 @@ func (lc *LightChain) DagSynchronising() bool {
 	panic("implement me")
 }
 
-func (lc *LightChain) HeadSynchronising() bool {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (lc *LightChain) IsRollbackActive() bool {
 	//TODO implement me
 	panic("implement me")

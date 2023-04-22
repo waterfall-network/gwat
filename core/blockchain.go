@@ -201,7 +201,6 @@ type BlockChain struct {
 
 	lastFinalizedBlock     atomic.Value // Current last finalized block of the blockchain
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
-	lastCoordinatedSlot    uint64       // Last slot received from coordinating network
 	eraInfo                era.EraInfo  // Current Era
 	lastCoordinatedCp      atomic.Value // Current last coordinated checkpoint
 	notProcValSyncOps      map[[28]byte]*types.ValidatorSync
@@ -3649,14 +3648,9 @@ func (bc *BlockChain) SetSyncProvider(provider types.SyncProvider) {
 	bc.syncProvider = provider
 }
 
-// todo RM/check
 // Synchronising returns whether the downloader is currently synchronising.
 func (bc *BlockChain) Synchronising() bool {
 	return !bc.isSynced
-	//if bc.syncProvider == nil {
-	//	return false
-	//}
-	//return bc.syncProvider.Synchronising()
 }
 
 // FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
@@ -3673,14 +3667,6 @@ func (bc *BlockChain) DagSynchronising() bool {
 		return false
 	}
 	return bc.syncProvider.DagSynchronising()
-}
-
-// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
-func (bc *BlockChain) HeadSynchronising() bool {
-	if bc.syncProvider == nil {
-		return false
-	}
-	return bc.syncProvider.HeadSynchronising()
 }
 
 func (bc *BlockChain) ValidatorStorage() valStore.Storage {

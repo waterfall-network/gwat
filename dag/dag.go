@@ -42,7 +42,6 @@ type Backend interface {
 	CreatorAuthorize(creator common.Address) error
 	IsDevMode() bool
 	AccountManager() *accounts.Manager
-	SyncUnloadedHashes(hashes common.HashArray, lastFinNr uint64) error
 }
 
 type blockChain interface {

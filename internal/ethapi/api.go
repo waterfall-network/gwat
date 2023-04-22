@@ -123,15 +123,10 @@ func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.Decim
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
 func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
-	progress := s.b.SyncProgress()
-
-	//// Return not syncing if the synchronisation already completed
-	//if progress.CurrentBlock >= progress.HighestBlock {
-	//	return false, nil
-	//}
-	if progress.Stage == "none" {
+	if s.b.BlockChain().IsSynced() {
 		return false, nil
 	}
+	progress := s.b.SyncProgress()
 	// Otherwise gather the block sync stats
 	return map[string]interface{}{
 		"startingBlock": hexutil.Uint64(progress.StartingBlock),
@@ -139,9 +134,9 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 		"highestBlock":  hexutil.Uint64(progress.HighestBlock),
 		"pulledStates":  hexutil.Uint64(progress.PulledStates),
 		"knownStates":   hexutil.Uint64(progress.KnownStates),
-		"stage":         progress.Stage,
-		"lastCoordSlot": progress.LastCoordSlot,
-		"maxBlockSlot":  progress.MaxBlockSlot,
+		"finalizedSlot": hexutil.Uint64(progress.FinalizedSlot),
+		"maxDagSlot":    hexutil.Uint64(progress.FinalizedSlot),
+		"currentSlot":   hexutil.Uint64(progress.CurrentSlot),
 	}, nil
 }
 

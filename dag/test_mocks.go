@@ -160,6 +160,36 @@ type MockblockChain struct {
 	recorder *MockblockChainMockRecorder
 }
 
+func (m *MockblockChain) GetBlockByHash(hash common.Hash) *types.Block {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) GetLastFinalizedNumber() uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) ExploreChainRecursive(hash common.Hash, resultMap ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) SetIsSynced(synced bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) IsSynced() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 // MockblockChainMockRecorder is the mock recorder for MockblockChain.
 type MockblockChainMockRecorder struct {
 	mock *MockblockChain
@@ -488,6 +518,11 @@ func (mr *MockblockChainMockRecorder) ValidatorStorage() *gomock.Call {
 type MockethDownloader struct {
 	ctrl     *gomock.Controller
 	recorder *MockethDownloaderMockRecorder
+}
+
+func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray) (fullySynced bool, err error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 // MockethDownloaderMockRecorder is the mock recorder for MockethDownloader.

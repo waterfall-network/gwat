@@ -68,6 +68,11 @@ type downloadTester struct {
 	lock sync.RWMutex
 }
 
+func (dl *downloadTester) IsSynced() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (dl *downloadTester) GetSlotInfo() *types.SlotInfo {
 	//TODO implement me
 	panic("implement me")
@@ -78,23 +83,12 @@ func (dl *downloadTester) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	panic("implement me")
 }
 
-// TODO: rm deprecated
-//func (dl *downloadTester) GetLastCoordinatedHeader() *types.Header {
-//	//TODO implement me
-//	panic("implement me")
-//}
-
 func (dl *downloadTester) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
 	//TODO implement me
 	panic("implement me")
 }
 
 func (dl *downloadTester) SetSyncProvider(provider types.SyncProvider) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (dl *downloadTester) GetLastCoordinatedSlot() uint64 {
 	//TODO implement me
 	panic("implement me")
 }

@@ -569,8 +569,3 @@ func (s *Ethereum) Stop() error {
 
 	return nil
 }
-
-func (s *Ethereum) SyncUnloadedHashes(hashes common.HashArray, lastFinNr uint64) error {
-	// todo rename
-	return s.handler.StartSync(hashes, lastFinNr)
-}

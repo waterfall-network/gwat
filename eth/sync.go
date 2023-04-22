@@ -106,6 +106,7 @@ func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer, kind peerEvtKind) bool {
 	}
 }
 
+// TODO: deprecated
 // loop runs in its own goroutine and launches the sync when necessary.
 func (cs *chainSyncer) loop() {
 	defer cs.handler.wg.Done()
@@ -122,7 +123,6 @@ func (cs *chainSyncer) loop() {
 	defer cs.force.Stop()
 	var pevt peerEvt
 	for {
-		// TODO: check deprecated
 		si := cs.handler.chain.GetSlotInfo()
 		if si != nil {
 			//var op *chainSyncOp
@@ -132,7 +132,7 @@ func (cs *chainSyncer) loop() {
 			//	op = cs.explicitSyncOp()
 			//	log.Warn("111111111111 SYNC LOOP start", "op", op)
 			//	// check sync is busy
-			//	if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
+			//	if op != nil && !op.dagOnly || cs.handler.downloader.DagSynchronising() {
 			//		log.Warn("Synchronization canceled (process busy)", "op", op)
 			//		op = nil
 			//	}

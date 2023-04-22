@@ -88,6 +88,11 @@ type testBlockChain struct {
 	genesisBlock       *types.Block
 }
 
+func (bc *testBlockChain) IsSynced() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (bc *testBlockChain) Genesis() *types.Block {
 	return bc.genesisBlock
 }
@@ -102,11 +107,6 @@ func (bc *testBlockChain) FinSynchronising() bool {
 }
 
 func (bc *testBlockChain) DagSynchronising() bool {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (bc *testBlockChain) HeadSynchronising() bool {
 	//TODO implement me
 	panic("implement me")
 }
