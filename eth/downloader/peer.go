@@ -83,7 +83,7 @@ type Peer interface {
 	RequestBodies([]common.Hash) error
 	RequestReceipts([]common.Hash) error
 	RequestNodeData([]common.Hash) error
-	RequestDag(uint64, uint64, common.Hash) error
+	RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error
 }
 
 // lightPeerWrapper wraps a LightPeer struct, stubbing out the Peer-only methods.
@@ -91,7 +91,7 @@ type lightPeerWrapper struct {
 	peer LightPeer
 }
 
-func (w *lightPeerWrapper) RequestDag(fromCpEpoch uint64, toCpEpoch uint64, spine common.Hash) error {
+func (w *lightPeerWrapper) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error {
 	panic("RequestReceipts not supported in light client mode sync")
 }
 func (w *lightPeerWrapper) GetDagInfo() (uint64, *common.HashArray) {
@@ -209,14 +209,14 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 }
 
 // FetchDag sends a dag hashes retrieval request to the remote peer.
-func (p *peerConnection) FetchDag(fromCpEpoch, toCpEpoch uint64, spine common.Hash) error {
+func (p *peerConnection) FetchDag(baseSpine common.Hash, terminalSpine common.Hash) error {
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.dagIdle, 0, 1) {
 		return errAlreadyFetching
 	}
 	p.dagStarted = time.Now()
 	// Issue the header retrieval request (absolute upwards without gaps)
-	go p.peer.RequestDag(fromCpEpoch, toCpEpoch, spine)
+	go p.peer.RequestDag(baseSpine, terminalSpine)
 	return nil
 }
 

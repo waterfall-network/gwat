@@ -18,9 +18,9 @@ package eth
 
 import (
 	"fmt"
+	"sort"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
@@ -426,7 +426,7 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	dag, _, _, err := answerGetDagQuery(backend, query.GetDagPacket)
+	dag, err := answerGetDagQuery(backend, query.GetDagPacket)
 	if err != nil {
 		return err
 	}
@@ -434,45 +434,84 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyDagData(query.RequestId, dag)
 }
 
-func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, uint64, uint64, error) {
+func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, error) {
 	// Gather dag data
 	dag := common.HashArray{}
 	finalized := common.HashArray{}
-	toCp := &types.Checkpoint{}
-	fromCp := &types.Checkpoint{}
-
-	spine := query.Spine
-	fromCpEpoch := query.FromEpoch
-	toCpEpoch := query.ToEpoch
-
-	dag = backend.Chain().GetTips().GetOrderedDagChainHashes()
-	if toCp = rawdb.ReadCoordinatedCheckpoint(backend.Chain().Database(), toCpEpoch); toCp == nil {
-		toCp = backend.Chain().GetLastCoordinatedCheckpoint()
+	baseHeader := backend.Chain().GetHeaderByHash(query.BaseSpine)
+	if baseHeader == nil || (baseHeader.Height > 0 && baseHeader.Nr() == 0) {
+		return dag, fmt.Errorf("%w", errInvalidDag)
 	}
 
-	if fromCpEpoch > toCp.Epoch {
-		return dag, 0, 0, fmt.Errorf("%w", errInvalidDag)
-	}
-
-	if fromCp = rawdb.ReadCoordinatedCheckpoint(backend.Chain().Database(), fromCpEpoch); fromCp != nil || fromCp.Spine != spine {
-		return dag, 0, 0, fmt.Errorf("%w", errInvalidDag)
-	}
-
-	spineCpHeader := backend.Chain().GetHeader(fromCp.Spine)
-	fromFinBlNr := spineCpHeader.Nr()
-
-	toFinNr := backend.Chain().GetLastFinalizedNumber()
-	for i := uint64(0); fromCpEpoch+i <= toCp.Epoch; i++ {
-		for b := uint64(1); fromFinBlNr+b <= toFinNr; b++ {
-			finHash := backend.Chain().ReadFinalizedHashByNumber(fromFinBlNr + b)
-			if finHash != (common.Hash{}) {
-				finalized = append(finalized, finHash)
+	var terminalSpine common.Hash
+	if query.TerminalSpine != (common.Hash{}) {
+		terminalSpine = query.TerminalSpine
+	} else {
+		tSlot := uint64(0)
+		for h, t := range backend.Chain().GetTips() {
+			if t.Slot >= tSlot {
+				terminalSpine = h
 			}
 		}
-		dag = finalized.Concat(dag)
+		if terminalSpine == (common.Hash{}) {
+			return dag, fmt.Errorf("%w", errInvalidDag)
+		}
+	}
+	terminalHeader := backend.Chain().GetHeaderByHash(terminalSpine)
+	if terminalHeader == nil {
+		return dag, fmt.Errorf("%w", errInvalidDag)
+	}
+	terminalSlot := terminalHeader.Slot
+	incDag := terminalHeader.Height > 0 && terminalHeader.Nr() == 0
+	toFinNr := terminalHeader.Nr()
+	if incDag {
+		toFinNr = backend.Chain().GetLastFinalizedNumber()
+		//collect dag hashes by slot
+		dagHeaders := backend.Chain().GetHeadersByHashes(backend.Chain().GetTips().GetOrderedDagChainHashes())
+		if dagHeaders[terminalSpine] == nil {
+			return dag, fmt.Errorf("%w", errInvalidDag)
+		}
+		slotMap := map[uint64]common.HashArray{}
+		for h, header := range dagHeaders {
+			if header == nil {
+				return dag, fmt.Errorf("%w", errInvalidDag)
+			}
+			if header.Slot <= terminalSlot {
+				//if header.Slot < terminalSlot {
+				if slotMap[header.Slot] == nil {
+					slotMap[header.Slot] = common.HashArray{}
+				}
+				slotMap[header.Slot] = append(slotMap[header.Slot], h)
+			}
+		}
+		//sort by slots
+		slots := common.SorterAscU64{}
+		for s := range slotMap {
+			slots = append(slots, s)
+		}
+		sort.Sort(slots)
+		for _, slot := range slots {
+			dag = append(dag, slotMap[slot]...)
+		}
+		//dag = append(dag, terminalHeader.Hash())
+	}
+	baseNr := baseHeader.Nr()
+	//check data length limit
+	dataLen := uint64(len(dag)) + (toFinNr - baseNr)
+	if dataLen > LimitDagHashes {
+		return dag, fmt.Errorf("%w: %v > %v (LimitDagHashes)", errMsgTooLarge, dataLen, LimitDagHashes)
+		return dag, fmt.Errorf("%w", errMsgTooLarge)
 	}
 
-	return dag, fromCpEpoch, toCpEpoch, nil
+	for nr := uint64(1); baseNr+nr <= toFinNr; nr++ {
+		finHash := backend.Chain().ReadFinalizedHashByNumber(baseNr + nr)
+		if finHash != (common.Hash{}) {
+			finalized = append(finalized, finHash)
+		}
+	}
+
+	dag = finalized.Concat(dag)
+	return dag, nil
 }
 
 func handleDag66(backend Backend, msg Decoder, peer *Peer) error {

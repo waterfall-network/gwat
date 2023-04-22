@@ -414,10 +414,5 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		bc.AddTips(tip)
 	}
 	bc.WriteCurrentTips()
-
-	// TODO: rm deprecated
-	// update LastCoordinatedHash to spineHash
-	//bc.WriteLastCoordinatedHash(spineBlock.Hash())
-
 	return nil
 }

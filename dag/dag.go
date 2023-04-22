@@ -51,7 +51,6 @@ type blockChain interface {
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
 	GetHeaderByHash(hash common.Hash) *types.Header
-	//WriteLastCoordinatedHash(hash common.Hash)
 	GetBlock(hash common.Hash) *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetLastFinalizedNumber() uint64
@@ -81,6 +80,7 @@ type blockChain interface {
 
 type ethDownloader interface {
 	Synchronising() bool
+	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray) (fullySynced bool, err error)
 }
 
 type Dag struct {
@@ -115,10 +115,8 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		downloader:  eth.Downloader(),
 		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
 		finalizer:   fin,
-		// TODO: rm deprecated
-		//headsync:    headsync.New(chainConfig, eth, mux, fin),
-		exitChan: make(chan struct{}),
-		errChan:  make(chan error),
+		exitChan:    make(chan struct{}),
+		errChan:     make(chan error),
 	}
 	atomic.StoreInt32(&d.busy, 0)
 	return d
@@ -154,23 +152,12 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	// todo check it
-	// check is synchronized
-	if data.Checkpoint.Spine != (common.Hash{}) {
-		cpHeader := d.bc.GetHeaderByHash(data.Checkpoint.Spine)
-		if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
-			d.bc.SetIsSynced(false)
-		} else {
-			d.bc.SetIsSynced(true)
-		}
-	}
-
 	if data.BaseSpine != nil {
 		log.Info("Handle Finalize: start",
 			"baseSpine", fmt.Sprintf("%#x", data.BaseSpine),
 			"spines", data.Spines,
 			"cp.Epoch", data.Checkpoint.Epoch,
-			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
 			"cp.Root", fmt.Sprintf("%#x", data.Checkpoint.Root),
 			"ValSyncData", data.ValSyncData,
 			"\u2692", params.BuildId)
@@ -179,8 +166,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			"baseSpine", nil,
 			"spines", data.Spines,
 			"cp.Epoch", data.Checkpoint.Epoch,
-			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
-			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
 			"ValSyncData", data.ValSyncData,
 			"\u2692", params.BuildId)
 	}
@@ -197,7 +184,14 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
-	if err := d.syncUnloadedBlocksRecursive(data.Spines); err != nil {
+	baseSpine := *data.BaseSpine
+	spines := data.Spines
+	// if baseSpine is in spines - remove
+	if bi := spines.IndexOf(baseSpine); bi >= 0 {
+		spines = spines[bi+1:]
+	}
+
+	if err := d.handlSyncUnloadedBlocks(baseSpine, spines); err != nil {
 		strErr := err.Error()
 		res.Error = &strErr
 		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
@@ -206,7 +200,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	// finalization
 	if len(data.Spines) > 0 {
-		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine); err != nil {
+		if err := d.finalizer.Finalize(&spines, &baseSpine); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
 				// Start syncing if spine or parent is unloaded
 				//d.synchronizeUnloadedBlocks(data.pines)
@@ -236,11 +230,6 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
-	// TODO: rm deprecated
-	//else {
-	//	d.bc.WriteLastCoordinatedHash(lfHeader.Hash())
-	//}
-
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash
 
@@ -253,49 +242,57 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	return res
 }
 
-// todo optimize
-func (d *Dag) syncUnloadedBlocksRecursive(spines common.HashArray) error {
+// handlSyncUnloadedBlocks:
+// 1. check is synchronization required
+// 2. switch on sync mode
+// 3. start sync process
+// 4. if chain head reached - switch off sync mode
+func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray) error {
 	if len(spines) == 0 {
 		return nil
 	}
-	unloaded, err := d.filterUnloadedBlocks(spines)
+	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {
 		return err
 	}
-	if len(unloaded) == 0 {
+	if !isSync {
 		return nil
 	}
+	d.bc.SetIsSynced(false)
+
 	lfNr := d.bc.GetLastFinalizedNumber()
-	if err = d.eth.SyncUnloadedHashes(unloaded, lfNr); err != nil {
+	err = d.finalizer.SetSpineState(&baseSpine, lfNr)
+	if err != nil {
 		return err
 	}
 
-	unloaded, err = d.filterUnloadedBlocks(spines)
-	if err != nil {
+	var fullySynced bool
+	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines); err != nil {
 		return err
 	}
-	if len(unloaded) > 0 {
-		d.syncUnloadedBlocksRecursive(unloaded)
+	if fullySynced {
+		d.bc.SetIsSynced(true)
+		log.Info("Node fully synced: head reached")
 	}
 	return nil
 }
 
-func (d *Dag) filterUnloadedBlocks(spines common.HashArray) (common.HashArray, error) {
+func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 	var (
 		expCache core.ExploreResultMap
-		unloaded common.HashArray
 		unl      common.HashArray
 		err      error
 	)
-
-	for _, spine := range spines {
+	for _, spine := range spines.Reverse() {
 		unl, _, _, _, expCache, err = d.bc.ExploreChainRecursive(spine, expCache)
 		if err != nil {
-			return unloaded, err
+			return false, err
 		}
-		unloaded = append(unloaded, unl...)
+		if len(unl) > 0 {
+			return true, nil
+		}
 	}
-	return unloaded, nil
+	return false, nil
 }
 
 // HandleCoordinatedState return coordinated state
@@ -459,7 +456,7 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
+	log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
 

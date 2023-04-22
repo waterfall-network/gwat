@@ -248,16 +248,6 @@ func (bc *BlockChain) GetLastFinalizedHeader() *types.Header {
 	return bc.hc.GetLastFinalizedHeader()
 }
 
-// TODO: rm deprecated
-//// GetLastCoordinatedHeader retrieves the latest coordinated header.
-//func (bc *BlockChain) GetLastCoordinatedHeader() *types.Header {
-//	lchash := rawdb.ReadLastCoordinatedHash(bc.db)
-//	if lchash == (common.Hash{}) {
-//		return nil
-//	}
-//	return bc.GetHeader(lchash)
-//}
-
 // GetHeadersByHashes retrieves a blocks headers from the database by hashes, caching it if found.
 func (bc *BlockChain) GetHeadersByHashes(hashes common.HashArray) types.HeaderMap {
 	headers := types.HeaderMap{}

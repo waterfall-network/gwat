@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 
@@ -465,14 +466,18 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	})
 }
 
-// RequestDag fetches a batch of transaction receipts from a remote node.
-func (p *Peer) RequestDag(fromCpEpoch, toCpEpoch uint64, spine common.Hash) error {
-	p.Log().Info("Fetching dag chain", "fromCpEpoch", fromCpEpoch, "toCpEpoch", toCpEpoch)
+// RequestDag fetches a batch of hashes in range from baseSpine to terminalSpine.
+// include hashes of dag
+func (p *Peer) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error {
+	p.Log().Info("Fetching dag chain", "baseSpine", baseSpine, "terminalSpine", fmt.Sprintf("%#x", terminalSpine))
 	id := rand.Uint64()
 	requestTracker.Track(p.id, p.version, GetDagMsg, DagMsg, id)
 	return p2p.Send(p.rw, GetDagMsg, &GetDagPacket66{
-		RequestId:    id,
-		GetDagPacket: GetDagPacket{spine, fromCpEpoch, toCpEpoch},
+		RequestId: id,
+		GetDagPacket: GetDagPacket{
+			BaseSpine:     baseSpine,
+			TerminalSpine: terminalSpine,
+		},
 	})
 }
 

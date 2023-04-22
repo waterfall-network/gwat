@@ -68,6 +68,11 @@ type downloadTester struct {
 	lock sync.RWMutex
 }
 
+func (dl *downloadTester) GetSlotInfo() *types.SlotInfo {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (dl *downloadTester) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	//TODO implement me
 	panic("implement me")
@@ -507,7 +512,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByHashes(array common.HashArray) er
 	panic("implement me")
 }
 
-func (dlp *downloadTesterPeer) RequestDag(u uint64, toCpEpoch uint64, spine common.Hash) error {
+func (dlp *downloadTesterPeer) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -1565,7 +1570,7 @@ func (ftp *floodingTestPeer) RequestHeadersByHashes(array common.HashArray) erro
 	panic("implement me")
 }
 
-func (ftp *floodingTestPeer) RequestDag(u uint64, toCpEpoch uint64, spine common.Hash) error {
+func (ftp *floodingTestPeer) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error {
 	//TODO implement me
 	panic("implement me")
 }

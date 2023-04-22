@@ -1678,11 +1678,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
-// TODO: rm deprecated
-//func (bc *BlockChain) WriteLastCoordinatedHash(hash common.Hash) {
-//	rawdb.WriteLastCoordinatedHash(bc.db, hash)
-//}
-
 func (bc *BlockChain) WriteBlockDag(blockDag *types.BlockDAG) {
 	rawdb.WriteBlockDag(bc.db, blockDag)
 }

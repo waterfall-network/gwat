@@ -484,20 +484,6 @@ func (mr *MockblockChainMockRecorder) ValidatorStorage() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorStorage", reflect.TypeOf((*MockblockChain)(nil).ValidatorStorage))
 }
 
-// TODO: rm deprecated
-// WriteLastCoordinatedHash mocks base method.
-//func (m *MockblockChain) WriteLastCoordinatedHash(hash common.Hash) {
-//	m.ctrl.T.Helper()
-//	m.ctrl.Call(m, "WriteLastCoordinatedHash", hash)
-//}
-
-// TODO: rm deprecated
-//// WriteLastCoordinatedHash indicates an expected call of WriteLastCoordinatedHash.
-//func (mr *MockblockChainMockRecorder) WriteLastCoordinatedHash(hash interface{}) *gomock.Call {
-//	mr.mock.ctrl.T.Helper()
-//	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteLastCoordinatedHash", reflect.TypeOf((*MockblockChain)(nil).WriteLastCoordinatedHash), hash)
-//}
-
 // MockethDownloader is a mock of ethDownloader interface.
 type MockethDownloader struct {
 	ctrl     *gomock.Controller
