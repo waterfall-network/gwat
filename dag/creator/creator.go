@@ -67,8 +67,9 @@ type environment struct {
 	cumutativeGas uint64        // tx count in cycle
 	gasPool       *core.GasPool // available gas used to pack transactions
 
-	header *types.Header
-	txs    []*types.Transaction
+	header   *types.Header
+	txs      []*types.Transaction
+	expCache core.CollectAncestorsResultMap
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -479,7 +480,7 @@ func (c *Creator) resultHandler(task *task) {
 	//// Commit block and state to database.
 	_, err := c.chain.WriteMinedBlock(task.block) // TODO: delete delete receipts
 	if err != nil {
-		log.Error("Failed writing block to chain", "err", err)
+		log.Error("Failed writing block to chain (creator)", "err", err)
 		return
 	}
 
@@ -487,24 +488,42 @@ func (c *Creator) resultHandler(task *task) {
 
 	//1. remove stale tips
 	c.chain.RemoveTips(task.block.ParentHashes())
-	//2. create for new blockDag
 
+	//2. create for new blockDag
+	finHashes := common.HashArray{}
 	tips := task.tips.Copy()
 	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
-	finDag := tips.GetFinalizingDag()
-
+	ancHeaders, _, _, err := c.chain.CollectAncestorsToCpRecursive(task.block.Hash(), task.block.CpHash(), c.current.expCache)
+	// err here is not critical
 	// after reorg tips can content hashes of finalized blocks
-	finHashes := common.HashArray{}
-	for _, h := range tmpDagChainHashes.Copy() {
-		blk := c.eth.BlockChain().GetBlock(h)
-		finNr := blk.Number()
-		if finNr != nil {
-			finHashes = append(finHashes, h)
+	if err == nil {
+		tmpDagChainHashes = common.HashArray{}
+		delete(ancHeaders, task.block.Hash())
+		for h, hdr := range ancHeaders {
+			if hdr == nil {
+				continue
+			}
+			if hdr.Nr() > 0 {
+				finHashes = append(finHashes, h)
+			} else {
+				tmpDagChainHashes = append(tmpDagChainHashes, h)
+			}
+		}
+	} else {
+		for _, h := range tmpDagChainHashes.Copy() {
+			blk := c.eth.BlockChain().GetBlock(h)
+			finNr := blk.Number()
+			if finNr != nil {
+				finHashes = append(finHashes, h)
+			}
 		}
 	}
+
 	if len(finHashes) > 0 {
 		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
 	}
+
+	finDag := tips.GetFinalizingDag()
 	if finDag.Hash == c.chain.Genesis().Hash() {
 		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
 	}
@@ -537,16 +556,17 @@ func (c *Creator) getUnhandledTxs() []*types.Transaction {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (c *Creator) makeCurrent(header *types.Header, recommitBlocks []*types.Block) error {
+func (c *Creator) makeCurrent(header *types.Header, expCache core.CollectAncestorsResultMap) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 
 	// state.StartPrefetcher("miner") // Merge v0.6-fix-height-calc-validate
 
 	env := &environment{
-		signer: types.MakeSigner(c.chainConfig),
-		header: header,
-		txs:    []*types.Transaction{},
+		signer:   types.MakeSigner(c.chainConfig),
+		header:   header,
+		txs:      []*types.Transaction{},
+		expCache: expCache,
 	}
 
 	// Keep track of transactions which return errors so they can be removed
@@ -678,7 +698,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	slotInfo := c.getAssignment()
 	tipsBlocks := c.chain.GetBlocksByHashes(tips.GetHashes())
 	blocks := c.eth.BlockChain().GetBlocksByHashes(tipsBlocks.Hashes())
-	expCache := core.ExploreResultMap{}
+	//expCache := core.ExploreResultMap{}
+	expCache := core.CollectAncestorsResultMap{}
 	for _, bl := range blocks {
 		if bl.Slot() >= slotInfo.Slot {
 			for _, ph := range bl.ParentHashes() {
@@ -692,10 +713,28 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 					dagChainHashes := common.HashArray{}
 					//if block not finalized
 					if parentBlock.Height() > 0 && parentBlock.Nr() == 0 {
+						var (
+							ancestors types.HeaderMap
+							err       error
+							unl       common.HashArray
+						)
 						log.Warn("Creator reorg tips: active BlockDag not found", "parent", ph.Hex(), "parent.slot", parentBlock.Slot(), "parent.height", parentBlock.Height(), "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex())
-						_, loaded, _, _, exc, _ := c.eth.BlockChain().ExploreChainRecursive(bl.Hash(), expCache)
-						expCache = exc
-						dagChainHashes = loaded
+						ancestors, unl, expCache, err = c.eth.BlockChain().CollectAncestorsToCpRecursive(bl.Hash(), bl.CpHash(), expCache)
+						if err != nil {
+							c.errWorkCh <- &err
+							return
+						}
+						if len(unl) > 0 {
+							c.errWorkCh <- &core.ErrInsertUncompletedDag
+							return
+						}
+						delete(ancestors, bl.Hash())
+						for h, hdr := range ancestors {
+							if hdr.Nr() > 0 {
+								delete(ancestors, h)
+							}
+						}
+						dagChainHashes = ancestors.Hashes()
 					}
 					_dag = &types.BlockDAG{
 						Hash:                ph,
@@ -725,7 +764,14 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 			if block.Hash() == ancestor {
 				continue
 			}
-			if c.chain.IsAncestorRecursive(block, ancestor) {
+
+			isAncestor, err := c.eth.BlockChain().IsAncestorRecursive(block.Header(), ancestor, expCache)
+			if err != nil {
+				c.errWorkCh <- &err
+				return
+			}
+			//if c.chain.IsAncestorRecursive(block, ancestor) {
+			if isAncestor {
 				log.Warn("Creator remove ancestor tips",
 					"block", block.Hash().Hex(),
 					"ancestor", ancestor.Hex(),
@@ -733,6 +779,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 				)
 				delete(tips, ancestor) // TODO check sometimes panic
 				delete(tipsBlocks, ancestor)
+				c.chain.RemoveTips(common.HashArray{ancestor})
 			}
 		}
 	}
@@ -746,11 +793,9 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 	log.Info("Creator: start tips", "tips", tips.Print())
 
-	//calc new block height
-	lastFinBlock := c.chain.GetLastFinalizedBlock()
-
 	// if max slot of parents is less or equal to last finalized block slot
 	// - add last finalized block to parents
+	lastFinBlock := c.chain.GetLastFinalizedBlock()
 	maxParentSlot := uint64(0)
 	for _, blk := range tipsBlocks {
 		if blk.Slot() > maxParentSlot {
@@ -763,26 +808,35 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	parentHashes := tipsBlocks.Hashes().Sort()
 
-	//calc new block height
-	_, stateBlock, recommitBlocks, newHeight, stateErr := c.chain.CollectStateDataByParents(parentHashes)
-	if stateErr != nil {
-		log.Error("Failed to make block creation context", "err", stateErr)
-		c.errWorkCh <- &stateErr
-		return
-	}
-
-	log.Info("Creator calculate block height", "newHeight", newHeight,
-		"recommitsCount", len(recommitBlocks),
-		"baseHeight", stateBlock.Height(),
-		"baseHash", stateBlock.Hash(),
-	)
-
 	// Use checkpoint spine as CpBlock
 	checkpoint := c.chain.GetLastCoordinatedCheckpoint()
 	checkpointBlock := c.chain.GetBlock(checkpoint.Spine)
-	if stateBlock == nil {
-		log.Error("Error while get checkpoint spine block", "epoch", checkpoint.Epoch, "root", checkpoint.Root, "spine", checkpoint.Spine)
+
+	//todo RM
+	//calc new block height
+	//_, stateBlock, recommitBlocks, newHeight, stateErr := c.chain.CollectStateDataByParents(parentHashes)
+	//if stateErr != nil {
+	//	log.Error("Failed to make block creation context", "err", stateErr)
+	//	c.errWorkCh <- &stateErr
+	//	return
+	//}
+	//if stateBlock == nil {
+	//	log.Error("Error while get checkpoint spine block", "epoch", checkpoint.Epoch, "root", checkpoint.Root, "spine", checkpoint.Spine)
+	//}
+	//log.Info("Creator calculate block height", "newHeight", newHeight,
+	//	"recommitsCount", len(recommitBlocks),
+	//	"baseHeight", stateBlock.Height(),
+	//	"baseHash", stateBlock.Hash(),
+	//)
+
+	newHeight, err := c.chain.CalcBlockHeightByParents(parentHashes, checkpointBlock.Hash())
+	if err != nil {
+		log.Error("Failed to make block creation context", "err", err)
+		c.errWorkCh <- &err
+		return
 	}
+
+	log.Info("Creator calculate block height", "newHeight", newHeight)
 
 	header := &types.Header{
 		ParentHashes: parentHashes,
@@ -822,14 +876,14 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	//todo fix c.engine.Prepare
-	if err := c.engine.Prepare(c.chain, header); err != nil {
+	if err = c.engine.Prepare(c.chain, header); err != nil {
 		log.Error("Failed to prepare header for creating block", "err", err)
 		c.errWorkCh <- &err
 		return
 	}
 
 	// Could potentially happen if starting to mine in an odd state.
-	err := c.makeCurrent(header, recommitBlocks)
+	err = c.makeCurrent(header, expCache)
 	if err != nil {
 		log.Error("Failed to make block creation context", "err", err)
 		c.errWorkCh <- &err
@@ -882,7 +936,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
 	if c.appendTransactions(txs, c.coinbase, &header.CpNumber) {
 		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-			if err := c.processValidatorTxs(stateBlock.Hash(), syncData, header.CpNumber); err != nil {
+			if err := c.processValidatorTxs(header.CpHash, syncData, header.CpNumber); err != nil {
 				return
 			}
 
@@ -898,7 +952,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-		if err := c.processValidatorTxs(stateBlock.Hash(), syncData, header.CpNumber); err != nil {
+		if err := c.processValidatorTxs(header.CpHash, syncData, header.CpNumber); err != nil {
 			return
 		}
 	}

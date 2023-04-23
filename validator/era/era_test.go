@@ -18,6 +18,26 @@ type mockBlockchain struct {
 	db                         ethdb.Database
 }
 
+func (m mockBlockchain) GetHeaderByHash(hash common.Hash) *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m mockBlockchain) EnterNextEra(hash common.Hash) *Era {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m mockBlockchain) StartTransitionPeriod() {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m mockBlockchain) SyncEraToSlot(slot uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (m mockBlockchain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	//TODO implement me
 	panic("implement me")

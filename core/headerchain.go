@@ -884,3 +884,84 @@ func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
 func (hc *HeaderChain) GetBlock(hash common.Hash) *types.Block {
 	return nil
 }
+
+type CollectAncestorsResult struct {
+	ancestors types.HeaderMap
+	unloaded  common.HashArray
+	cache     CollectAncestorsResultMap
+	err       error
+}
+type CollectAncestorsResultMap map[common.Hash]*CollectAncestorsResult
+
+// CollectAncestorsToCpRecursive recursively collect chain info about
+func (hc *HeaderChain) CollectAncestorsToCpRecursive(headHash common.Hash, cpHeader *types.Header, memo ...CollectAncestorsResultMap) (
+	ancestors types.HeaderMap,
+	unloaded common.HashArray,
+	cache CollectAncestorsResultMap,
+	err error,
+) {
+	if ancestors == nil {
+		ancestors = types.HeaderMap{}
+	}
+	if len(memo) == 0 {
+		memo = append(memo, make(CollectAncestorsResultMap))
+	}
+	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+		return ancestors, common.HashArray{}, memo[0], ErrCpNotFinalized
+	}
+	headHeader := hc.GetHeader(headHash)
+	// if headHeader is not found
+	if headHeader == nil {
+		return ancestors, common.HashArray{headHash}, memo[0], nil
+	}
+	// if headHeader is checkpoint
+	if headHeader.Hash() == cpHeader.Hash() {
+		return ancestors, common.HashArray{}, memo[0], nil
+	}
+	// if headHeader is finalized before checkpoint
+	if nr := headHeader.Nr(); !(headHeader.Height > 0 && nr == 0) && nr < cpHeader.Nr() {
+		return ancestors, common.HashArray{}, memo[0], nil
+	}
+
+	if headHeader.ParentHashes == nil || len(headHeader.ParentHashes) == 0 {
+		if headHeader.Hash() == hc.genesisHeader.Hash() {
+			return ancestors, common.HashArray{}, memo[0], nil
+		}
+		log.Warn("Detect headHeader without parents", "hash", headHeader.Hash().Hex(), "height", headHeader.Height, "slot", headHeader.Slot)
+		err = fmt.Errorf("Detect headHeader without parents hash=%s, height=%d", headHeader.Hash().Hex(), headHeader.Height)
+		return ancestors, common.HashArray{}, memo[0], err
+	}
+	ancestors[headHash] = headHeader
+	for _, ph := range headHeader.ParentHashes {
+		var (
+			_ancestors types.HeaderMap
+			_unloaded  common.HashArray
+			_cache     CollectAncestorsResultMap
+			_err       error
+		)
+
+		if memo[0][ph] != nil {
+			_ancestors = memo[0][ph].ancestors
+			_unloaded = memo[0][ph].unloaded
+			_cache = memo[0]
+			_err = memo[0][ph].err
+		} else {
+			_ancestors, _unloaded, _cache, _err = hc.CollectAncestorsToCpRecursive(ph, cpHeader, memo[0])
+			if memo[0] == nil {
+				memo[0] = make(CollectAncestorsResultMap, 1)
+			}
+			memo[0][ph] = &CollectAncestorsResult{
+				ancestors: _ancestors,
+				unloaded:  _unloaded,
+				cache:     _cache,
+				err:       _err,
+			}
+		}
+		unloaded = unloaded.Concat(_unloaded).Uniq()
+		for h, hd := range _ancestors {
+			ancestors[h] = hd
+		}
+		err = _err
+	}
+	return ancestors, unloaded, cache, err
+}

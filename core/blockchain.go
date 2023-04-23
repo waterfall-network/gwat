@@ -2177,7 +2177,8 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	}
 
 	//validate height
-	_, stateBlock, _, calcHeight, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
+	calcHeight, stateErr := bc.CalcBlockHeightByParents(block.ParentHashes(), block.CpHash())
+	//_, stateBlock, _, calcHeight, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
 	if stateErr != nil {
 		log.Error("Block verification: calc height err", "block hash", block.Hash().Hex())
 		return false, stateErr
@@ -2187,7 +2188,8 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"calcHeight", calcHeight,
 			"height", block.Height(),
 			"hash", block.Hash().Hex(),
-			"stateBlock", stateBlock,
+			"cpHeight", block.CpNumber(),
+			//"stateBlock", stateBlock,
 		)
 	}
 
@@ -2196,16 +2198,23 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"calcHeight", calcHeight,
 			"height", block.Height(),
 			"hash", block.Hash().Hex(),
-			"stateBlock", stateBlock,
+			"cpHeight", block.CpNumber(),
+			//"stateBlock", stateBlock,
 		)
 		return false, nil
 	}
 
-	return bc.verifyBlockParents(block) && bc.verifyCpData(block), nil
+	isValid, err := bc.verifyBlockParents(block)
+	if err != nil {
+		return false, err
+	}
+
+	return isValid && bc.verifyCpData(block), nil
 }
 
-func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
+func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 	parents := bc.GetBlocksByHashes(block.ParentHashes())
+	expCache := CollectAncestorsResultMap{}
 	for ph, parent := range parents {
 		if parent.Nr() > 0 || parent.Height() == 0 {
 			continue
@@ -2214,13 +2223,21 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) bool {
 			if ph == pph {
 				continue
 			}
-			if bc.IsAncestorRecursive(parent, pparent.Hash()) {
-				log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parent.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
-				return false
+			isAncestor, err := bc.IsAncestorRecursive(parent.Header(), pparent.Hash(), expCache)
+			if err != nil {
+				return false, err
 			}
+			if isAncestor {
+				log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parent.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
+				return false, nil
+			}
+			//if bc.IsAncestorRecursive(parent, pparent.Hash()) {
+			//	log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parent.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
+			//	return false
+			//}
 		}
 	}
-	return true
+	return true, nil
 }
 
 // insertPropagatedBlocks inserts propagated block
@@ -2508,6 +2525,44 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 	defer bc.chainmu.Unlock()
 	return bc.insertChain(chain)
+}
+
+func (bc *BlockChain) CalcBlockHeightByParents(parents common.HashArray, cpHash common.Hash) (uint64, error) {
+	var (
+		ancs      types.HeaderMap
+		unl       common.HashArray
+		expCache  = CollectAncestorsResultMap{}
+		err       error
+		ancestors = types.HeaderMap{}
+	)
+	cpHead := bc.GetHeader(cpHash)
+	if cpHead == nil || cpHead.Height > 0 && cpHead.Nr() == 0 {
+		return 0, ErrCpNotFinalized
+	}
+	for _, ph := range parents {
+		ancs, unl, expCache, err = bc.CollectAncestorsToCpRecursive(ph, cpHash, expCache)
+		if err != nil {
+			return 0, err
+		}
+		if len(unl) > 0 {
+			return 0, ErrInsertUncompletedDag
+		}
+		for h, hdr := range ancs {
+			ancestors[h] = hdr
+		}
+	}
+	if len(ancestors) != len(ancestors.RmEmpty()) {
+		return 0, ErrInsertUncompletedDag
+	}
+	baseHeight := cpHead.Height
+	recommitsLen := len(ancestors)
+	height := baseHeight + uint64(recommitsLen) + 1
+	log.Info("Calculate block height by parents",
+		"cpHeight", height,
+		"recommitsLen", recommitsLen,
+		"cpHeight", baseHeight,
+	)
+	return height, nil
 }
 
 func (bc *BlockChain) calcBlockHeight(stateBlock *types.Block, recommitBlocks []*types.Block) uint64 {
@@ -3491,62 +3546,96 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 	return unloaded, loaded, finalized, graph, cache, err
 }
 
+// CollectAncestorsToCpRecursive recursively collect chain info about
+func (bc *BlockChain) CollectAncestorsToCpRecursive(headHash, cpHash common.Hash, memo ...CollectAncestorsResultMap) (ancestors types.HeaderMap, unloaded common.HashArray, cache CollectAncestorsResultMap, err error) {
+	cpHeader := bc.GetHeader(cpHash)
+	return bc.hc.CollectAncestorsToCpRecursive(headHash, cpHeader, memo[0])
+}
+
 // IsAncestorRecursive checks the passed ancestorHash is an acesstor of the given block.
-func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash common.Hash) bool {
-	if block.Hash() == ancestorHash {
-		return false
+func (bc *BlockChain) IsAncestorRecursive(header *types.Header, ancestorHash common.Hash, expCache CollectAncestorsResultMap) (bool, error) {
+	if header.Hash() == ancestorHash {
+		return false, nil
 	}
 	//if ancestorHash is genesis
 	if bc.genesisBlock.Hash() == ancestorHash {
-		return true
+		return true, nil
 	}
 	// if ancestorHash in parents
-	if block.ParentHashes().Has(ancestorHash) {
-		return true
+	if header.ParentHashes.Has(ancestorHash) {
+		return true, nil
 	}
-	// if ancestor not exists
-	ancestor := bc.GetBlockByHash(ancestorHash)
-	if ancestor == nil {
-		return false
+	ancestors, unl, expCache, err := bc.CollectAncestorsToCpRecursive(header.Hash(), header.CpHash, expCache)
+	if err != nil {
+		return false, err
 	}
-	//if ancestor slot is greater or equal that block slot
-	if ancestor.Slot() >= block.Slot() {
-		return false
+	if len(unl) > 0 {
+		return false, ErrInsertUncompletedDag
 	}
-	//if ancestor is finalised and block is not finalised
-	if ancestor.Number() != nil && block.Number() == nil {
-		_, _, f, _, _, err := bc.ExploreChainRecursive(block.Hash())
-		if err != nil {
-			return false
-		}
-		finBls := bc.GetBlocksByHashes(f)
-		maxFinNr := uint64(0)
-		for _, b := range finBls {
-			if maxFinNr < b.Nr() {
-				maxFinNr = b.Nr()
-			}
-		}
-		return ancestor.Nr() <= maxFinNr
+	isAncestor := ancestors[ancestorHash] != nil
+	if isAncestor {
+		return isAncestor, nil
 	}
-	//if ancestor is not finalised and block is finalised
-	if ancestor.Number() == nil && block.Number() != nil {
-		return false
-	}
-	//if ancestor is finalised and block is finalised
-	if ancestor.Number() != nil && block.Number() != nil {
-		if ancestor.Nr() > block.Nr() {
-			return false
-		}
-	}
-	// otherwise, recursive check parents
-	for _, pHash := range block.ParentHashes() {
-		pBlock := bc.GetBlock(pHash)
-		if pBlock != nil && bc.IsAncestorRecursive(pBlock, ancestorHash) {
-			return true
-		}
-	}
-	return false
+	return isAncestor, nil
 }
+
+// todo RM
+//// IsAncestorRecursive checks the passed ancestorHash is an acesstor of the given block.
+//func (bc *BlockChain) IsAncestorRecursive(block *types.Block, ancestorHash common.Hash) bool {
+//	if block.Hash() == ancestorHash {
+//		return false
+//	}
+//	//if ancestorHash is genesis
+//	if bc.genesisBlock.Hash() == ancestorHash {
+//		return true
+//	}
+//	// if ancestorHash in parents
+//	if block.ParentHashes().Has(ancestorHash) {
+//		return true
+//	}
+//	// if ancestor not exists
+//	ancestor := bc.GetBlockByHash(ancestorHash)
+//	if ancestor == nil {
+//		return false
+//	}
+//	//if ancestor slot is greater or equal that block slot
+//	if ancestor.Slot() >= block.Slot() {
+//		return false
+//	}
+//	//if ancestor is finalised and block is not finalised
+//	if ancestor.Number() != nil && block.Number() == nil {
+//		_, _, f, _, _, err := bc.ExploreChainRecursive(block.Hash())
+//		if err != nil {
+//			return false
+//		}
+//		finBls := bc.GetBlocksByHashes(f)
+//		maxFinNr := uint64(0)
+//		for _, b := range finBls {
+//			if maxFinNr < b.Nr() {
+//				maxFinNr = b.Nr()
+//			}
+//		}
+//		return ancestor.Nr() <= maxFinNr
+//	}
+//	//if ancestor is not finalised and block is finalised
+//	if ancestor.Number() == nil && block.Number() != nil {
+//		return false
+//	}
+//	//if ancestor is finalised and block is finalised
+//	if ancestor.Number() != nil && block.Number() != nil {
+//		if ancestor.Nr() > block.Nr() {
+//			return false
+//		}
+//	}
+//	// otherwise, recursive check parents
+//	for _, pHash := range block.ParentHashes() {
+//		pBlock := bc.GetBlock(pHash)
+//		if pBlock != nil && bc.IsAncestorRecursive(pBlock, ancestorHash) {
+//			return true
+//		}
+//	}
+//	return false
+//}
 
 // GetTips retrieves active tips headers:
 // - no descendants

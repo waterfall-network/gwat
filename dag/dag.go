@@ -45,11 +45,11 @@ type Backend interface {
 }
 
 type blockChain interface {
+	era.Blockchain
 	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
-	GetHeaderByHash(hash common.Hash) *types.Header
 	GetBlock(hash common.Hash) *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetLastFinalizedNumber() uint64
@@ -75,6 +75,8 @@ type blockChain interface {
 
 	SetIsSynced(synced bool)
 	IsSynced() bool
+
+	CollectAncestorsToCpRecursive(headHash, cpHash common.Hash, memo ...core.CollectAncestorsResultMap) (ancestors types.HeaderMap, unloaded common.HashArray, cache core.CollectAncestorsResultMap, err error)
 }
 
 type ethDownloader interface {
@@ -278,12 +280,18 @@ func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashA
 
 func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 	var (
-		expCache core.ExploreResultMap
+		//expCache core.ExploreResultMap
+		expCache core.CollectAncestorsResultMap
 		unl      common.HashArray
 		err      error
 	)
 	for _, spine := range spines.Reverse() {
-		unl, _, _, _, expCache, err = d.bc.ExploreChainRecursive(spine, expCache)
+		spHeader := d.bc.GetHeaderByHash(spine)
+		if spHeader == nil {
+			return true, nil
+		}
+		_, unl, expCache, err = d.bc.CollectAncestorsToCpRecursive(spine, spHeader.CpHash, expCache)
+		//unl, _, _, _, expCache, err = d.bc.ExploreChainRecursive(spine, expCache)
 		if err != nil {
 			return false, err
 		}
@@ -337,6 +345,14 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	defer d.bc.DagMuUnlock()
 
 	tstart := time.Now()
+
+	////todo rm
+	//cache := core.CollectAncestorsResultMap{}
+	////testHash := common.HexToHash("0x3f1903f15744e2a168c28494b9e902242c01d337f86572b51c5ad738478c6159")
+	//testHash := common.HexToHash("0xdf53d62d8b9756f19b6fce9a1082239682186d0c4388cbd6d53ca0e7422f8fe3")
+	//testBlock := d.bc.GetBlock(testHash)
+	//ancestors, unloaded, cache, err := d.bc.CollectAncestorsToCpRecursive(testBlock.Hash(), testBlock.CpHash(), cache)
+	//log.Info("=== CollectAncestorsToCpRecursive ===", "ancestors", ancestors, "unloaded", unloaded, "cache", cache, "err", err)
 
 	// collect next finalization candidates
 	candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
@@ -549,7 +565,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				"transEpoch", d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod,
 				"transSlot", transitionSlot)
 
-			d.handleEra(slot)
+			era.HandleEra(d.bc, slot)
+			//d.handleEra(slot)
 
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
@@ -646,38 +663,4 @@ func (d *Dag) countDagSlots(tips *types.Tips) int {
 		return -1
 	}
 	return len(candidates)
-}
-
-func (d *Dag) handleEra(slot uint64) {
-	currentEpoch := d.bc.GetSlotInfo().SlotToEpoch(slot)
-	newEpoch := d.bc.GetSlotInfo().IsEpochStart(slot)
-
-	if newEpoch {
-		// New era
-		if d.bc.GetEraInfo().ToEpoch()+1 == currentEpoch {
-			// Checkpoint
-			checkpoint := d.bc.GetLastCoordinatedCheckpoint()
-			spineRoot := common.Hash{}
-			if checkpoint != nil {
-				header := d.bc.GetHeaderByHash(checkpoint.Spine)
-				spineRoot = header.Root
-			} else {
-				log.Error("Invalid checkpoint: write new era error")
-			}
-
-			d.bc.EnterNextEra(spineRoot)
-
-			return
-		}
-
-		// Transition period
-		if d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
-			d.bc.StartTransitionPeriod()
-		}
-	}
-
-	// Sync era to current slot
-	if currentEpoch > (d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod) && !d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
-		d.bc.SyncEraToSlot(slot)
-	}
 }

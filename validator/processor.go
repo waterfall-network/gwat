@@ -66,6 +66,7 @@ type Ref interface {
 }
 
 type blockchain interface {
+	era.Blockchain
 	GetSlotInfo() *types.SlotInfo
 	GetEraInfo() *era.EraInfo
 	Config() *params.ChainConfig

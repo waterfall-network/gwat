@@ -39,6 +39,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 var (
@@ -187,6 +188,7 @@ type LightChain interface {
 // BlockChain encapsulates functions required to sync a (full or fast) blockchain.
 type BlockChain interface {
 	LightChain
+	era.Blockchain
 
 	// HasBlock verifies a block's presence in the local chain.
 	HasBlock(common.Hash) bool
@@ -743,7 +745,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 		if spine.Slot() > lastFinBlock.Slot() {
 			_, err = d.blockchain.WriteSyncDagBlock(spine)
 			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
+				log.Error("Failed writing block to chain (sync dep)", "err", err)
 				return err
 			}
 			slotBlocks = slotBlocks[1:]
@@ -757,7 +759,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 			// Commit block and state to database.
 			_, err = d.blockchain.WriteSyncDagBlock(block)
 			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
+				log.Error("Failed writing block to chain (sync dep)", "err", err)
 				return err
 			}
 
@@ -814,7 +816,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		for _, block := range slotBlocks {
 			_, err = d.blockchain.WriteSyncDagBlock(block)
 			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
+				log.Error("Failed writing block to chain  (sync unl)", "err", err)
 				return err
 			}
 		}
@@ -2749,6 +2751,7 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 	sort.Sort(slots)
 
 	for _, slot := range slots {
+		era.HandleEra(d.blockchain, slot)
 		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
 		if len(slotBlocks) == 0 {
 			continue
@@ -2757,7 +2760,7 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 		if spine.Slot() > baseBlock.Slot() {
 			_, err = d.blockchain.WriteSyncDagBlock(spine)
 			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
+				log.Error("Failed writing block to chain  (sync 0)", "err", err)
 				return false, err
 			}
 			slotBlocks = slotBlocks[1:]
@@ -2771,10 +2774,9 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 			// Commit block and state to database.
 			_, err = d.blockchain.WriteSyncDagBlock(block)
 			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
+				log.Error("Failed writing block to chain  (sync 1)", "err", err)
 				return false, err
 			}
-
 		}
 	}
 	return fullySynced, err

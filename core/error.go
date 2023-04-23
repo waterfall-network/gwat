@@ -98,4 +98,7 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// ErrCpNotFinalized is returned if the checkpoint is not finalized yet.
+	ErrCpNotFinalized = errors.New("checkpoint is not finalized")
 )

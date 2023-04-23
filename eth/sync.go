@@ -156,7 +156,7 @@ func (cs *chainSyncer) loop() {
 				cs.forced = true
 
 			case <-cs.handler.quitSync:
-				log.Debug("sync: quit")
+				log.Warn("sync: quit")
 				// Disable all insertion on the blockchain. This needs to happen before
 				// terminating the downloader because the downloader waits for blockchain
 				// inserts, and these can take a long time to finish.

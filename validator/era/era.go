@@ -1,16 +1,27 @@
 package era
 
 import (
+	"errors"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
-type blockchain interface {
+var (
+	ErrCheckpointInvalid = errors.New("invalid checkpoint")
+)
+
+type Blockchain interface {
 	GetSlotInfo() *types.SlotInfo
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	GetEraInfo() *EraInfo
 	Config() *params.ChainConfig
+	GetHeaderByHash(common.Hash) *types.Header
+	EnterNextEra(common.Hash) *Era
+	StartTransitionPeriod()
+	SyncEraToSlot(slot uint64)
 }
 
 type Era struct {
@@ -30,7 +41,7 @@ func NewEra(number, from, to uint64, root common.Hash) *Era {
 	}
 }
 
-func NextEra(bc blockchain, root common.Hash, numValidators uint64) *Era {
+func NextEra(bc Blockchain, root common.Hash, numValidators uint64) *Era {
 	nextEraNumber := bc.GetEraInfo().Number() + 1
 	nextEraLength := EstimateEraLength(bc, numValidators)
 	nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
@@ -82,7 +93,7 @@ func (ei *EraInfo) EpochsPerEra() uint64 {
 func (ei *EraInfo) FirstEpoch() uint64 {
 	return ei.FromEpoch()
 }
-func (ei *EraInfo) FirstSlot(bc blockchain) uint64 {
+func (ei *EraInfo) FirstSlot(bc Blockchain) uint64 {
 	slot, err := bc.GetSlotInfo().SlotOfEpochStart(ei.FirstEpoch())
 	if err != nil {
 		return 0
@@ -95,7 +106,7 @@ func (ei *EraInfo) LastEpoch() uint64 {
 	return ei.ToEpoch()
 }
 
-func (ei *EraInfo) LastSlot(bc blockchain) uint64 {
+func (ei *EraInfo) LastSlot(bc Blockchain) uint64 {
 	slot, err := bc.GetSlotInfo().SlotOfEpochEnd(ei.LastEpoch())
 	if err != nil {
 		return 0
@@ -104,15 +115,15 @@ func (ei *EraInfo) LastSlot(bc blockchain) uint64 {
 	return slot
 }
 
-func (ei *EraInfo) IsTransitionPeriodEpoch(bc blockchain, epoch uint64) bool {
+func (ei *EraInfo) IsTransitionPeriodEpoch(bc Blockchain, epoch uint64) bool {
 	return epoch >= ei.ToEpoch()-bc.Config().TransitionPeriod && epoch <= ei.ToEpoch()
 }
 
-func (ei *EraInfo) IsTransitionPeriodStartEpoch(bc blockchain, epoch uint64) bool {
+func (ei *EraInfo) IsTransitionPeriodStartEpoch(bc Blockchain, epoch uint64) bool {
 	return epoch == (ei.ToEpoch() - bc.Config().TransitionPeriod)
 }
 
-func (ei *EraInfo) IsTransitionPeriodStartSlot(bc blockchain, slot uint64) bool {
+func (ei *EraInfo) IsTransitionPeriodStartSlot(bc Blockchain, slot uint64) bool {
 	transitionEpoch := (ei.ToEpoch() - bc.Config().TransitionPeriod)
 	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 
@@ -129,7 +140,7 @@ func (ei *EraInfo) NextEraFirstEpoch() uint64 {
 	return ei.ToEpoch() + 1
 }
 
-func (ei *EraInfo) NextEraFirstSlot(bc blockchain) uint64 {
+func (ei *EraInfo) NextEraFirstSlot(bc Blockchain) uint64 {
 	slot, err := bc.GetSlotInfo().SlotOfEpochStart(ei.NextEraFirstEpoch())
 	if err != nil {
 		return 0
@@ -153,7 +164,7 @@ func (ei *EraInfo) IsContainsEpoch(epoch uint64) bool {
 	return false
 }
 
-func EstimateEraLength(bc blockchain, numberOfValidators uint64) (eraLength uint64) {
+func EstimateEraLength(bc Blockchain, numberOfValidators uint64) (eraLength uint64) {
 	var (
 		epochsPerEra  = bc.Config().EpochsPerEra
 		slotsPerEpoch = bc.GetSlotInfo().SlotsPerEpoch
@@ -162,4 +173,36 @@ func EstimateEraLength(bc blockchain, numberOfValidators uint64) (eraLength uint
 	eraLength = epochsPerEra * (1 + (numberOfValidators / (epochsPerEra * slotsPerEpoch)))
 
 	return
+}
+
+func HandleEra(bc Blockchain, slot uint64) error {
+	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	newEpoch := bc.GetSlotInfo().IsEpochStart(slot)
+
+	if newEpoch {
+		// New era
+		if bc.GetEraInfo().ToEpoch()+1 == currentEpoch {
+			// Checkpoint
+			checkpoint := bc.GetLastCoordinatedCheckpoint()
+			spineRoot := common.Hash{}
+			if checkpoint != nil {
+				header := bc.GetHeaderByHash(checkpoint.Spine)
+				spineRoot = header.Root
+			} else {
+				log.Error("Write new era error", "err", ErrCheckpointInvalid)
+				return ErrCheckpointInvalid
+			}
+			bc.EnterNextEra(spineRoot)
+			return nil
+		}
+		// Transition period
+		if bc.GetEraInfo().IsTransitionPeriodStartSlot(bc, slot) {
+			bc.StartTransitionPeriod()
+		}
+	}
+	// Sync era to current slot
+	if currentEpoch > (bc.GetEraInfo().ToEpoch()-bc.Config().TransitionPeriod) && !bc.GetEraInfo().IsTransitionPeriodStartSlot(bc, slot) {
+		bc.SyncEraToSlot(slot)
+	}
+	return nil
 }
