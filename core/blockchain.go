@@ -1681,6 +1681,7 @@ func (bc *BlockChain) WriteBlockDag(blockDag *types.BlockDAG) {
 	rawdb.WriteBlockDag(bc.db, blockDag)
 }
 
+// deprecated, used for tests only
 // SyncInsertChain attempts to insert the given batch of blocks in chain
 // received while synchronization process
 func (bc *BlockChain) SyncInsertChain(chain types.Blocks) (int, error) {
@@ -1769,6 +1770,7 @@ func IsAddressAssigned(address common.Address, creators []common.Address, creato
 	return pos == creatorNr
 }
 
+// deprecated, used for tests only
 // syncInsertChain is the internal implementation of SyncInsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
@@ -2009,6 +2011,14 @@ func (bc *BlockChain) verifyCpData(block *types.Block) bool {
 	}
 	if block.CpReceiptHash() != CpBlock.ReceiptHash() {
 		logValidationIssue("ReceiptHash mismatch", block)
+		return false
+	}
+	if block.CpGasUsed() != CpBlock.GasUsed() {
+		logValidationIssue("GasUsed mismatch", block)
+		return false
+	}
+	if block.CpBloom() != CpBlock.Bloom() {
+		logValidationIssue("Bloom mismatch", block)
 		return false
 	}
 	return true
