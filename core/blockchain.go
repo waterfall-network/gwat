@@ -1995,7 +1995,7 @@ func (bc *BlockChain) verifyCpData(block *types.Block) bool {
 		logValidationIssue("CpBlock not found", block)
 		return false
 	}
-	if block.CpNumber() == CpBlock.Nr() {
+	if block.CpNumber() != CpBlock.Nr() {
 		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
 		return false
 	}

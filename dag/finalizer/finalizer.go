@@ -112,8 +112,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 			continue
 		}
 
-		// TODO: check
-		if f.eth.BlockChain().IsSynced() {
+		if !f.eth.BlockChain().IsSynced() {
 			//validate blocks while head sync
 			for _, block := range orderedChain {
 				if ok, err := bc.VerifyBlock(block); !ok {
