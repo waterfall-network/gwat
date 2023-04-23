@@ -1991,47 +1991,22 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 
 func (bc *BlockChain) verifyCpData(block *types.Block) bool {
 	CpBlock := bc.GetBlockByNumber(block.CpNumber())
-	return bc.validateCpNumber(block) &&
-		bc.validateCpBlock(block, CpBlock) &&
-		bc.validateCpHash(block, CpBlock) &&
-		bc.validateCpRoot(block, CpBlock) &&
-		bc.validateCpReceiptHash(block, CpBlock)
-}
-
-func (bc *BlockChain) validateCpNumber(block *types.Block) bool {
-	if block.CpNumber() > bc.GetLastFinalizedNumber() {
-		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
-		return false
-	}
-	return true
-}
-
-func (bc *BlockChain) validateCpBlock(block *types.Block, CpBlock *types.Block) bool {
 	if CpBlock == nil {
 		logValidationIssue("CpBlock not found", block)
 		return false
 	}
-	return true
-}
-
-func (bc *BlockChain) validateCpHash(block *types.Block, CpBlock *types.Block) bool {
+	if block.CpNumber() == CpBlock.Nr() {
+		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
+		return false
+	}
 	if block.CpHash() != CpBlock.Hash() {
 		logValidationIssue("Hash mismatch", block)
 		return false
 	}
-	return true
-}
-
-func (bc *BlockChain) validateCpRoot(block *types.Block, CpBlock *types.Block) bool {
-	CpBlockRoot := CpBlock.Root()
-	if block.CpRoot() != CpBlockRoot {
+	if block.CpRoot() != CpBlock.Root() {
 		logValidationIssue("CpHash mismatch", block)
 		return false
 	}
-	return true
-}
-
-func (bc *BlockChain) validateCpReceiptHash(block *types.Block, CpBlock *types.Block) bool {
 	if block.CpReceiptHash() != CpBlock.ReceiptHash() {
 		logValidationIssue("ReceiptHash mismatch", block)
 		return false
