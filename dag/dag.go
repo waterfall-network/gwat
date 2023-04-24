@@ -76,7 +76,7 @@ type blockChain interface {
 	SetIsSynced(synced bool)
 	IsSynced() bool
 
-	CollectAncestorsToCpRecursive(headHash, cpHash common.Hash, memo ...core.CollectAncestorsResultMap) (ancestors types.HeaderMap, unloaded common.HashArray, cache core.CollectAncestorsResultMap, err error)
+	CollectAncestorsAftCpByParents(common.HashArray, common.Hash, ...core.CollectAncestorsResultMap) (bool, types.HeaderMap, common.HashArray, core.CollectAncestorsResultMap, error)
 }
 
 type ethDownloader interface {
@@ -141,7 +141,6 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		return res
 	}
 
-	// todo deprecated
 	//skip if synchronising
 	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
@@ -290,8 +289,7 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 		if spHeader == nil {
 			return true, nil
 		}
-		_, unl, expCache, err = d.bc.CollectAncestorsToCpRecursive(spine, spHeader.CpHash, expCache)
-		//unl, _, _, _, expCache, err = d.bc.ExploreChainRecursive(spine, expCache)
+		_, _, unl, expCache, err = d.bc.CollectAncestorsAftCpByParents(spHeader.ParentHashes, spHeader.CpHash, expCache)
 		if err != nil {
 			return false, err
 		}
@@ -345,14 +343,6 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	defer d.bc.DagMuUnlock()
 
 	tstart := time.Now()
-
-	////todo rm
-	//cache := core.CollectAncestorsResultMap{}
-	////testHash := common.HexToHash("0x3f1903f15744e2a168c28494b9e902242c01d337f86572b51c5ad738478c6159")
-	//testHash := common.HexToHash("0xdf53d62d8b9756f19b6fce9a1082239682186d0c4388cbd6d53ca0e7422f8fe3")
-	//testBlock := d.bc.GetBlock(testHash)
-	//ancestors, unloaded, cache, err := d.bc.CollectAncestorsToCpRecursive(testBlock.Hash(), testBlock.CpHash(), cache)
-	//log.Info("=== CollectAncestorsToCpRecursive ===", "ancestors", ancestors, "unloaded", unloaded, "cache", cache, "err", err)
 
 	// collect next finalization candidates
 	candidates, err := d.finalizer.GetFinalizingCandidates(&slot)

@@ -2111,28 +2111,51 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	unknownParent := false
-	for _, parentHash := range block.ParentHashes() {
-		parent := bc.GetBlockByHash(parentHash)
-
-		if parent == nil {
-			if _, ok := bc.invalidBlocksCache.Get(parentHash); ok {
-				log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
+	isCpAncestor, ancestors, unloaded, _, err := bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash(), nil)
+	if err != nil {
+		log.Error("Block verification: check ancestors err", "err", err, "block hash", block.Hash().Hex())
+		return false, err
+	}
+	// cp must be an ancestor of the block
+	if !isCpAncestor {
+		log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
+		return false, nil
+	}
+	//check is block's chain synced and does not content rejected blocks
+	if len(unloaded) > 0 {
+		for _, unh := range unloaded {
+			if _, ok := bc.invalidBlocksCache.Get(unh); ok {
+				log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", unh.Hex())
 				return false, nil
 			}
-			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
-			unknownParent = true
+			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", unh.Hex())
 			continue
 		}
-
-		if parent.Height() >= block.Height() || parent.Slot() >= block.Slot() {
-			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height(), "parent slot", parent.Slot())
+		return false, ErrInsertUncompletedDag
+	}
+	// parents' heights must be less than block height
+	for _, parentHash := range block.ParentHashes() {
+		parent := bc.GetHeader(parentHash)
+		if parent == nil {
+			// should never happen
+			log.Crit("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
+		}
+		if parent.Height >= block.Height() || parent.Slot >= block.Slot() {
+			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height, "parent slot", parent.Slot)
 			return false, nil
 		}
 	}
-
-	if unknownParent {
-		return false, ErrInsertUncompletedDag
+	//validate height
+	cpHeader := bc.GetHeader(block.CpHash())
+	calcHeight := bc.calcBlockHeight(cpHeader.Height, len(ancestors))
+	if block.Height() != calcHeight {
+		log.Warn("Block verification: block invalid height",
+			"calcHeight", calcHeight,
+			"height", block.Height(),
+			"hash", block.Hash().Hex(),
+			"cpHeight", block.CpNumber(),
+		)
+		return false, nil
 	}
 
 	intrGasSum := uint64(0)
@@ -2176,34 +2199,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	//validate height
-	calcHeight, stateErr := bc.CalcBlockHeightByParents(block.ParentHashes(), block.CpHash())
-	//_, stateBlock, _, calcHeight, stateErr := bc.CollectStateDataByParents(block.ParentHashes())
-	if stateErr != nil {
-		log.Error("Block verification: calc height err", "block hash", block.Hash().Hex())
-		return false, stateErr
-	}
-	if block.Height() != calcHeight {
-		log.Warn("Block verification: block invalid height",
-			"calcHeight", calcHeight,
-			"height", block.Height(),
-			"hash", block.Hash().Hex(),
-			"cpHeight", block.CpNumber(),
-			//"stateBlock", stateBlock,
-		)
-	}
-
-	if block.Height() > calcHeight {
-		log.Warn("Block verification: block invalid height (critical)",
-			"calcHeight", calcHeight,
-			"height", block.Height(),
-			"hash", block.Hash().Hex(),
-			"cpHeight", block.CpNumber(),
-			//"stateBlock", stateBlock,
-		)
-		return false, nil
-	}
-
 	isValid, err := bc.verifyBlockParents(block)
 	if err != nil {
 		return false, err
@@ -2231,10 +2226,6 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 				log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parent.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
 				return false, nil
 			}
-			//if bc.IsAncestorRecursive(parent, pparent.Hash()) {
-			//	log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parent.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
-			//	return false
-			//}
 		}
 	}
 	return true, nil
@@ -2529,9 +2520,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 func (bc *BlockChain) CalcBlockHeightByParents(parents common.HashArray, cpHash common.Hash) (uint64, error) {
 	var (
-		ancs      types.HeaderMap
 		unl       common.HashArray
-		expCache  = CollectAncestorsResultMap{}
 		err       error
 		ancestors = types.HeaderMap{}
 	)
@@ -2539,42 +2528,21 @@ func (bc *BlockChain) CalcBlockHeightByParents(parents common.HashArray, cpHash 
 	if cpHead == nil || cpHead.Height > 0 && cpHead.Nr() == 0 {
 		return 0, ErrCpNotFinalized
 	}
-	for _, ph := range parents {
-		ancs, unl, expCache, err = bc.CollectAncestorsToCpRecursive(ph, cpHash, expCache)
-		if err != nil {
-			return 0, err
-		}
-		if len(unl) > 0 {
-			return 0, ErrInsertUncompletedDag
-		}
-		for h, hdr := range ancs {
-			ancestors[h] = hdr
-		}
+	_, ancestors, unl, _, err = bc.CollectAncestorsAftCpByParents(parents, cpHash, nil)
+	if err != nil {
+		return 0, err
+	}
+	if len(unl) > 0 {
+		return 0, ErrInsertUncompletedDag
 	}
 	if len(ancestors) != len(ancestors.RmEmpty()) {
 		return 0, ErrInsertUncompletedDag
 	}
-	baseHeight := cpHead.Height
-	recommitsLen := len(ancestors)
-	height := baseHeight + uint64(recommitsLen) + 1
-	log.Info("Calculate block height by parents",
-		"cpHeight", height,
-		"recommitsLen", recommitsLen,
-		"cpHeight", baseHeight,
-	)
-	return height, nil
+	return bc.calcBlockHeight(cpHead.Height, len(ancestors)), nil
 }
 
-func (bc *BlockChain) calcBlockHeight(stateBlock *types.Block, recommitBlocks []*types.Block) uint64 {
-	baseHeight := stateBlock.Height()
-	recommitsLen := len(recommitBlocks)
-	height := baseHeight + uint64(recommitsLen) + 1
-	log.Info("Calculate block height",
-		"height", height,
-		"recommitsLen", recommitsLen,
-		"baseHeight", baseHeight,
-	)
-	return height
+func (bc *BlockChain) calcBlockHeight(baseHeight uint64, ancestorsCount int) uint64 {
+	return baseHeight + uint64(ancestorsCount) + 1
 }
 
 // CollectStateDataByParents collects state data of current dag chain to insert block.
@@ -2605,7 +2573,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	//		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
 	//	}
 	//	recommitBlocks = sortedBlocks[1:]
-	//	calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	//	calcHeight = bc.calcBlockHeight(stateBlock.Height(), len(recommitBlocks))
 	//	return statedb, stateBlock, recommitBlocks, calcHeight, nil
 	//} else {
 	//	//if state is finalized block - search first spine in ancestors
@@ -2616,7 +2584,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	//	}
 	//	if statedb != nil {
 	//		recommitBlocks = sortedBlocks[1:]
-	//		calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	//		calcHeight = bc.calcBlockHeight(stateBlock.Height(), len(recommitBlocks))
 	//		return statedb, stateBlock, recommitBlocks, calcHeight, nil
 	//	}
 	//}
@@ -2649,7 +2617,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 			recommitBlocks = append(recommitBlocks, rb)
 		}
 
-		calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+		calcHeight = bc.calcBlockHeight(stateBlock.Height(), len(recommitBlocks))
 		return statedb, stateBlock, recommitBlocks, calcHeight, nil
 	}
 	//if state is last finalized block
@@ -2670,7 +2638,7 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 		return statedb, stateBlock, recommitBlocks, calcHeight, err
 	}
 	recommitBlocks = append(recomFinBlocks, sortedBlocks[1:]...)
-	calcHeight = bc.calcBlockHeight(stateBlock, recommitBlocks)
+	calcHeight = bc.calcBlockHeight(stateBlock.Height(), len(recommitBlocks))
 	return statedb, stateBlock, recommitBlocks, calcHeight, nil
 }
 
@@ -3546,13 +3514,14 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 	return unloaded, loaded, finalized, graph, cache, err
 }
 
-// CollectAncestorsToCpRecursive recursively collect chain info about
-func (bc *BlockChain) CollectAncestorsToCpRecursive(headHash, cpHash common.Hash, memo ...CollectAncestorsResultMap) (ancestors types.HeaderMap, unloaded common.HashArray, cache CollectAncestorsResultMap, err error) {
+// CollectAncestorsAftCpByParents recursively collect ancestors by block parents
+// which have to be finalized after checkpoint up to block.
+func (bc *BlockChain) CollectAncestorsAftCpByParents(parents common.HashArray, cpHash common.Hash, memo ...CollectAncestorsResultMap) (isCpAncestor bool, ancestors types.HeaderMap, unloaded common.HashArray, cache CollectAncestorsResultMap, err error) {
 	cpHeader := bc.GetHeader(cpHash)
-	return bc.hc.CollectAncestorsToCpRecursive(headHash, cpHeader, memo[0])
+	return bc.hc.CollectAncestorsAftCpByParents(parents, cpHeader, memo[0])
 }
 
-// IsAncestorRecursive checks the passed ancestorHash is an acesstor of the given block.
+// IsAncestorRecursive checks the passed ancestorHash is an ancestor of the given block.
 func (bc *BlockChain) IsAncestorRecursive(header *types.Header, ancestorHash common.Hash, expCache CollectAncestorsResultMap) (bool, error) {
 	if header.Hash() == ancestorHash {
 		return false, nil
@@ -3565,18 +3534,21 @@ func (bc *BlockChain) IsAncestorRecursive(header *types.Header, ancestorHash com
 	if header.ParentHashes.Has(ancestorHash) {
 		return true, nil
 	}
-	ancestors, unl, expCache, err := bc.CollectAncestorsToCpRecursive(header.Hash(), header.CpHash, expCache)
+	ancestorHead := bc.GetHeader(ancestorHash)
+	if ancestorHead == nil {
+		return false, ErrInsertUncompletedDag
+	}
+	if ancestorHead.Nr() > 0 && ancestorHead.Nr() < header.CpNumber {
+		return true, nil
+	}
+	_, ancestors, unl, _, err := bc.CollectAncestorsAftCpByParents(header.ParentHashes, header.CpHash, expCache)
 	if err != nil {
 		return false, err
 	}
 	if len(unl) > 0 {
 		return false, ErrInsertUncompletedDag
 	}
-	isAncestor := ancestors[ancestorHash] != nil
-	if isAncestor {
-		return isAncestor, nil
-	}
-	return isAncestor, nil
+	return ancestors[ancestorHash] != nil, nil
 }
 
 // todo RM

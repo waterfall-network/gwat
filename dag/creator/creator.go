@@ -493,12 +493,11 @@ func (c *Creator) resultHandler(task *task) {
 	finHashes := common.HashArray{}
 	tips := task.tips.Copy()
 	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
-	ancHeaders, _, _, err := c.chain.CollectAncestorsToCpRecursive(task.block.Hash(), task.block.CpHash(), c.current.expCache)
+	_, ancHeaders, _, _, err := c.chain.CollectAncestorsAftCpByParents(task.block.ParentHashes(), task.block.CpHash(), c.current.expCache)
 	// err here is not critical
 	// after reorg tips can content hashes of finalized blocks
 	if err == nil {
 		tmpDagChainHashes = common.HashArray{}
-		delete(ancHeaders, task.block.Hash())
 		for h, hdr := range ancHeaders {
 			if hdr == nil {
 				continue
@@ -698,7 +697,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	slotInfo := c.getAssignment()
 	tipsBlocks := c.chain.GetBlocksByHashes(tips.GetHashes())
 	blocks := c.eth.BlockChain().GetBlocksByHashes(tipsBlocks.Hashes())
-	//expCache := core.ExploreResultMap{}
 	expCache := core.CollectAncestorsResultMap{}
 	for _, bl := range blocks {
 		if bl.Slot() >= slotInfo.Slot {
@@ -714,21 +712,44 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 					//if block not finalized
 					if parentBlock.Height() > 0 && parentBlock.Nr() == 0 {
 						var (
-							ancestors types.HeaderMap
-							err       error
-							unl       common.HashArray
+							isCpAncestor bool
+							ancestors    types.HeaderMap
+							err          error
+							unl          common.HashArray
 						)
 						log.Warn("Creator reorg tips: active BlockDag not found", "parent", ph.Hex(), "parent.slot", parentBlock.Slot(), "parent.height", parentBlock.Height(), "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex())
-						ancestors, unl, expCache, err = c.eth.BlockChain().CollectAncestorsToCpRecursive(bl.Hash(), bl.CpHash(), expCache)
+						isCpAncestor, ancestors, unl, expCache, err = c.eth.BlockChain().CollectAncestorsAftCpByParents(bl.ParentHashes(), bl.CpHash(), expCache)
 						if err != nil {
 							c.errWorkCh <- &err
 							return
 						}
 						if len(unl) > 0 {
+							log.Error("Creator reorg tips: should never happen",
+								"err", core.ErrInsertUncompletedDag,
+								"parent", ph.Hex(),
+								"parent.slot", parentBlock.Slot(),
+								"parent.height", parentBlock.Height(),
+								"slot", bl.Slot(),
+								"height", bl.Height(),
+								"hash", bl.Hash().Hex(),
+							)
 							c.errWorkCh <- &core.ErrInsertUncompletedDag
 							return
 						}
-						delete(ancestors, bl.Hash())
+						if !isCpAncestor {
+							log.Error("Creator reorg tips: should never happen",
+								"err", core.ErrCpIsnotAncestor,
+								"parent", ph.Hex(),
+								"parent.slot", parentBlock.Slot(),
+								"parent.height", parentBlock.Height(),
+								"slot", bl.Slot(),
+								"height", bl.Height(),
+								"hash", bl.Hash().Hex(),
+							)
+							c.errWorkCh <- &core.ErrCpIsnotAncestor
+							return
+						}
+						//delete(ancestors, bl.Hash())
 						for h, hdr := range ancestors {
 							if hdr.Nr() > 0 {
 								delete(ancestors, h)
@@ -811,23 +832,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	// Use checkpoint spine as CpBlock
 	checkpoint := c.chain.GetLastCoordinatedCheckpoint()
 	checkpointBlock := c.chain.GetBlock(checkpoint.Spine)
-
-	//todo RM
-	//calc new block height
-	//_, stateBlock, recommitBlocks, newHeight, stateErr := c.chain.CollectStateDataByParents(parentHashes)
-	//if stateErr != nil {
-	//	log.Error("Failed to make block creation context", "err", stateErr)
-	//	c.errWorkCh <- &stateErr
-	//	return
-	//}
-	//if stateBlock == nil {
-	//	log.Error("Error while get checkpoint spine block", "epoch", checkpoint.Epoch, "root", checkpoint.Root, "spine", checkpoint.Spine)
-	//}
-	//log.Info("Creator calculate block height", "newHeight", newHeight,
-	//	"recommitsCount", len(recommitBlocks),
-	//	"baseHeight", stateBlock.Height(),
-	//	"baseHash", stateBlock.Hash(),
-	//)
 
 	newHeight, err := c.chain.CalcBlockHeightByParents(parentHashes, checkpointBlock.Hash())
 	if err != nil {

@@ -37,6 +37,9 @@ var (
 	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.
 	ErrInsertUncompletedDag = errors.New("insert uncompleted dag chain")
 
+	// ErrCpIsnotAncestor is returned when checkpoint is not in past of block.
+	ErrCpIsnotAncestor = errors.New("checkpoint is not ancestor")
+
 	// ErrSpineStateNF is returned when spine state not found.
 	ErrSpineStateNF = errors.New("spine state not found")
 )
