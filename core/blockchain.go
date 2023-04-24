@@ -570,7 +570,7 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
-		bc.HandleCheckpointsForEpoch(cp)
+		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
 
 		// Handle era
 		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
@@ -578,22 +578,6 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
 		}
 		bc.SyncEraToSlot(epochStartSlot)
-	}
-}
-
-// HandleCheckpointsForEpoch adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
-func (bc *BlockChain) HandleCheckpointsForEpoch(targetCp *types.Checkpoint) {
-	// TODO: add panic sanity check
-	currCp := bc.GetLastCoordinatedCheckpoint()
-	epochNum := currCp.Epoch
-	for epochNum < targetCp.Epoch {
-		epochNum++ // Increment the epoch number
-		currCp.Epoch = epochNum
-		rawdb.WriteCoordinatedCheckpoint(bc.db, currCp)
-	}
-
-	if epochNum == targetCp.Epoch {
-		rawdb.WriteCoordinatedCheckpoint(bc.db, targetCp)
 	}
 }
 
