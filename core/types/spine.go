@@ -186,6 +186,8 @@ func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
 		}
 		orderedBlocks = append(orderedBlocks, slotBlocks...)
 	}
+
+	log.Info("!!!!!!    !!!!orderedBlocks = append(orderedBlocks, slotBlocks...) before spineProcessBlock panic", "orderedBlocks", orderedBlocks)
 	// todo rm
 	// check that spine is the last in chain
 	if len(orderedBlocks) > 0 {

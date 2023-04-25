@@ -708,9 +708,13 @@ func (si *SlotInfo) SlotOfEpochEnd(epoch uint64) (uint64, error) {
 }
 
 func (si *SlotInfo) Copy() *SlotInfo {
-	return &SlotInfo{
-		GenesisTime:    si.GenesisTime,
-		SecondsPerSlot: si.SecondsPerSlot,
-		SlotsPerEpoch:  si.SlotsPerEpoch,
+	if si != nil {
+		return &SlotInfo{
+			GenesisTime:    si.GenesisTime,
+			SecondsPerSlot: si.SecondsPerSlot,
+			SlotsPerEpoch:  si.SlotsPerEpoch,
+		}
+	} else {
+		return nil
 	}
 }

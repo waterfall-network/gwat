@@ -153,29 +153,29 @@ func (c *Sealer) VerifyHeader(chain consensus.ChainHeaderReader, header *types.H
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
 // method returns a quit channel to abort the operations and a results channel to
 // retrieve the async verifications (the order is that of the input slice).
-func (c *Sealer) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (c *Sealer) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
 	go func() {
 		//todo
-		//for i, header := range headers {
-		//	err := c.verifyHeader(chain, header, headers[:i])
-		//
-		//	select {
-		//	case <-abort:
-		//		return
-		//	case results <- err:
-		//	}
-		//}
-		for range headers {
-			var err error = nil
+		for i, header := range headers {
+			err := c.verifyHeader(chain, header, headers[:i])
+
 			select {
 			case <-abort:
 				return
 			case results <- err:
 			}
 		}
+		//for range headers {
+		//	var err error = nil
+		//	select {
+		//	case <-abort:
+		//		return
+		//	case results <- err:
+		//	}
+		//}
 	}()
 	return abort, results
 }
@@ -309,7 +309,7 @@ func (c *Sealer) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	//	}
 	//}
 	// All basic checks passed, verify the seal and return
-	return c.verifySeal(chain, header, parents)
+	return nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -521,6 +521,7 @@ func (c *Sealer) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	header.Root = state.IntermediateRoot(true)
 }
 
+// TODO: deprecated
 // FinalizeAndAssemble implements consensus.Engine
 // nor block rewards given, and returns the final block.
 func (c *Sealer) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
@@ -541,6 +542,7 @@ func (c *Sealer) Authorize(signer common.Address, signFn SignerFn) {
 	c.signFn = signFn
 }
 
+// TODO: deprecated
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Sealer) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
@@ -637,8 +639,8 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	enc := []interface{}{
 		header.ParentHashes,
 		header.Height,
-		header.LFHash,
-		header.LFNumber,
+		header.CpHash,
+		header.CpNumber,
 		header.Coinbase,
 		header.Root,
 		header.TxHash,

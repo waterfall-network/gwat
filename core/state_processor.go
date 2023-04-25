@@ -102,7 +102,12 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, tokenProcessor, validatorProcessor, msg, gp)
 	if err != nil {
-		return nil, err
+		result = &ExecutionResult{
+			UsedGas:    0,
+			Err:        err,
+			ReturnData: nil,
+		}
+		addErrLog(statedb, msg, blockHash, err)
 	}
 
 	// Update the state with pending changes.
@@ -122,7 +127,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
-	if msg.To() == nil {
+	if msg.To() == nil && !result.Failed() {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
@@ -132,6 +137,19 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt.BlockHash = blockHash
 	receipt.TransactionIndex = uint(statedb.TxIndex())
 	return receipt, err
+}
+
+func addErrLog(statedb *state.StateDB, msg types.Message, blockHash common.Hash, err error) {
+	if statedb.GetLogs(msg.TxHash(), blockHash) != nil {
+		return
+	}
+	topics := []common.Hash{types.EvtErrorLogSignature}
+	data := []byte(err.Error())
+	statedb.AddLog(&types.Log{
+		Address: msg.From(),
+		Topics:  topics,
+		Data:    data,
+	})
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database

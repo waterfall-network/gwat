@@ -98,14 +98,9 @@ func (bc *BlockChain) GetLastFinalizedNumber() uint64 {
 	return rawdb.ReadLastFinalizedNumber(bc.db)
 }
 
-// GetLastCoordinatedSlot returns last slot received from coordinating network.
-func (bc *BlockChain) GetLastCoordinatedSlot() uint64 {
-	return bc.lastCoordinatedSlot
-}
-
-// SetLastCoordinatedSlot set last slot received from coordinating network.
-func (bc *BlockChain) SetLastCoordinatedSlot(lastSlot uint64) {
-	bc.lastCoordinatedSlot = lastSlot
+// GetBlockHashesBySlot retrieves all block hashes for a given slot.
+func (bc *BlockChain) GetBlockHashesBySlot(slot uint64) common.HashArray {
+	return rawdb.ReadSlotBlocksHashes(bc.db, slot)
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database by
@@ -246,15 +241,6 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 // header is retrieved from the HeaderChain's internal cache.
 func (bc *BlockChain) GetLastFinalizedHeader() *types.Header {
 	return bc.hc.GetLastFinalizedHeader()
-}
-
-// GetLastCoordinatedHeader retrieves the latest coordinated header.
-func (bc *BlockChain) GetLastCoordinatedHeader() *types.Header {
-	lchash := rawdb.ReadLastCoordinatedHash(bc.db)
-	if lchash == (common.Hash{}) {
-		return nil
-	}
-	return bc.GetHeader(lchash)
 }
 
 // GetHeadersByHashes retrieves a blocks headers from the database by hashes, caching it if found.

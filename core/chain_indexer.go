@@ -62,6 +62,9 @@ type ChainIndexerChain interface {
 
 	// IsRollbackActive returns true if rollback proc of chain head is running.
 	IsRollbackActive() bool
+
+	// IsSynced returns true if node fully synchronized
+	IsSynced() bool
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
@@ -230,7 +233,7 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 				return
 			}
 			// check any proc to reorg chain
-			if c.syncProvider.HeadSynchronising() || c.syncProvider.IsRollbackActive() {
+			if !c.syncProvider.IsSynced() || c.syncProvider.IsRollbackActive() {
 				continue
 			}
 			header := ev.Block.Header()

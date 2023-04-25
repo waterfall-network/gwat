@@ -106,6 +106,7 @@ func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer, kind peerEvtKind) bool {
 	}
 }
 
+// TODO: deprecated
 // loop runs in its own goroutine and launches the sync when necessary.
 func (cs *chainSyncer) loop() {
 	defer cs.handler.wg.Done()
@@ -122,76 +123,52 @@ func (cs *chainSyncer) loop() {
 	defer cs.force.Stop()
 	var pevt peerEvt
 	for {
-		var op *chainSyncOp
-		if pevt.kind == evtBroadcast {
-			//TODO rm deprecated
-			//// if no finalization while defined slots number - start resync
-			//if cs.isResync() {
-			//	op = cs.getResyncOp()
-			//	log.Warn("Resync required", "op", op)
+		si := cs.handler.chain.GetSlotInfo()
+		if si != nil {
+			//var op *chainSyncOp
+			if pevt.kind == evtBroadcast {
+			}
+			//else {
+			//	op = cs.explicitSyncOp()
+			//	log.Warn("111111111111 SYNC LOOP start", "op", op)
+			//	// check sync is busy
+			//	if op != nil && !op.dagOnly || cs.handler.downloader.DagSynchronising() {
+			//		log.Warn("Synchronization canceled (process busy)", "op", op)
+			//		op = nil
+			//	}
 			//}
-		} else {
-			op = cs.nextSyncOp()
-			// check sync is busy
-			if op != nil && !op.dagOnly && cs.handler.downloader.HeadSynchronising() || cs.handler.downloader.DagSynchronising() {
-				log.Warn("Synchronization canceled (process busy)", "op", op)
-				op = nil
+			//if op != nil {
+			//	log.Warn("Synchronization start", "op", op)
+			//	cs.startSync(op)
+			//}
+			pevt.kind = evtDefault
+			select {
+			case pevt = <-cs.peerEventCh:
+				log.Debug("sync: peer evt", "kind", pevt.kind)
+				// Peer information changed, recheck.
+			case <-cs.doneCh:
+				log.Debug("sync: done ch")
+				cs.doneCh = nil
+				cs.force.Reset(forceSyncCycle)
+				cs.forced = false
+			case <-cs.force.C:
+				log.Debug("sync: force timer")
+				cs.forced = true
+
+			case <-cs.handler.quitSync:
+				log.Warn("sync: quit")
+				// Disable all insertion on the blockchain. This needs to happen before
+				// terminating the downloader because the downloader waits for blockchain
+				// inserts, and these can take a long time to finish.
+				cs.handler.chain.StopInsert()
+				cs.handler.downloader.Terminate()
+				if cs.doneCh != nil {
+					<-cs.doneCh
+				}
+				return
 			}
 		}
-		if op != nil {
-			log.Warn("Synchronization start", "op", op)
-			cs.startSync(op)
-		}
-		pevt.kind = evtDefault
-		select {
-		case pevt = <-cs.peerEventCh:
-			log.Debug("sync: peer evt", "kind", pevt.kind)
-			// Peer information changed, recheck.
-		case <-cs.doneCh:
-			log.Debug("sync: done ch")
-			cs.doneCh = nil
-			cs.force.Reset(forceSyncCycle)
-			cs.forced = false
-		case <-cs.force.C:
-			log.Debug("sync: force timer")
-			cs.forced = true
-
-		case <-cs.handler.quitSync:
-			log.Debug("sync: quit")
-			// Disable all insertion on the blockchain. This needs to happen before
-			// terminating the downloader because the downloader waits for blockchain
-			// inserts, and these can take a long time to finish.
-			cs.handler.chain.StopInsert()
-			cs.handler.downloader.Terminate()
-			if cs.doneCh != nil {
-				<-cs.doneCh
-			}
-			return
-		}
 	}
-}
-
-// TODO rm deprecated
-func (cs *chainSyncer) isResync() bool {
-	if cs.handler.downloader.Synchronising() {
-		return false
-	}
-	tips := cs.handler.chain.GetTips()
-	dagHashes := tips.GetOrderedDagChainHashes()
-	blocks := cs.handler.chain.GetBlocksByHashes(dagHashes)
-	mapSlot := make(map[uint64]int, 0)
-	dagHeshCount := 0
-	for _, b := range blocks {
-		if b != nil && b.Nr() == 0 && b.Height() > 0 {
-			mapSlot[b.Slot()]++
-			dagHeshCount++
-		}
-	}
-	slotsCount := len(mapSlot)
-
-	log.Debug("is resync", "slotsCount", slotsCount, "dagSlotsLimit", dagSlotsLimit, "len(blocks)", len(blocks), "mapSlot", mapSlot)
-
-	return slotsCount > dagSlotsLimit
 }
 
 // getResyncOp determines whether resync is required.
@@ -211,7 +188,7 @@ func (cs *chainSyncer) getResyncOp() *chainSyncOp {
 		return nil
 	}
 	// We have enough peers, select peer to sync
-	peer := cs.handler.peers.getHighestPeer(false)
+	peer := cs.handler.peers.getPeer(false)
 	if peer == nil {
 		return nil
 	}
@@ -248,10 +225,11 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		minPeers = cs.handler.maxPeers
 	}
 	if cs.handler.peers.len() < minPeers {
+		log.Info("Count of active peers is less then minPeers")
 		return nil
 	}
 	// We have enough peers, select peer to sync
-	peer := cs.handler.peers.getHighestPeer(true)
+	peer := cs.handler.peers.getPeer(true)
 	if peer == nil {
 		return nil
 	}
@@ -331,24 +309,24 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
-	if op.mode == downloader.FastSync || op.mode == downloader.SnapSync {
-		// Before launch the fast sync, we have to ensure user uses the same
-		// txlookup limit.
-		// The main concern here is: during the fast sync Geth won't index the
-		// block(generate tx indices) before the HEAD-limit. But if user changes
-		// the limit in the next fast sync(e.g. user kill Geth manually and
-		// restart) then it will be hard for Geth to figure out the oldest block
-		// has been indexed. So here for the user-experience wise, it's non-optimal
-		// that user can't change limit during the fast sync. If changed, Geth
-		// will just blindly use the original one.
-		limit := h.chain.TxLookupLimit()
-		if stored := rawdb.ReadFastTxLookupLimit(h.database); stored == nil {
-			rawdb.WriteFastTxLookupLimit(h.database, limit)
-		} else if *stored != limit {
-			h.chain.SetTxLookupLimit(*stored)
-			log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
-		}
-	}
+	//if op.mode == downloader.FastSync || op.mode == downloader.SnapSync {
+	//	// Before launch the fast sync, we have to ensure user uses the same
+	//	// txlookup limit.
+	//	// The main concern here is: during the fast sync Geth won't index the
+	//	// block(generate tx indices) before the HEAD-limit. But if user changes
+	//	// the limit in the next fast sync(e.g. user kill Geth manually and
+	//	// restart) then it will be hard for Geth to figure out the oldest block
+	//	// has been indexed. So here for the user-experience wise, it's non-optimal
+	//	// that user can't change limit during the fast sync. If changed, Geth
+	//	// will just blindly use the original one.
+	//	limit := h.chain.TxLookupLimit()
+	//	if stored := rawdb.ReadFastTxLookupLimit(h.database); stored == nil {
+	//		rawdb.WriteFastTxLookupLimit(h.database, limit)
+	//	} else if *stored != limit {
+	//		h.chain.SetTxLookupLimit(*stored)
+	//		log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
+	//	}
+	//}
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
 	err := h.downloader.Synchronise(op.peer.ID(), op.dag, op.lastFinNr, op.mode, op.dagOnly)
 	if err != nil {
@@ -364,28 +342,28 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	}
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
-	lastFinalizedBlock := h.chain.GetLastFinalizedBlock()
-	lastFinalizedNr := h.chain.GetLastFinalizedNumber()
+	//lastFinalizedBlock := h.chain.GetLastFinalizedBlock()
+	//lastFinalizedNr := h.chain.GetLastFinalizedNumber()
 
-	log.Info("Sync process",
-		"lastFinalizedBlock", lastFinalizedBlock,
-		"lastFinalizedNr", lastFinalizedNr,
-		"h.checkpointNumber", h.checkpointNumber,
-		"lastFinalizedNr >= h.checkpointNumber", lastFinalizedNr >= h.checkpointNumber,
-	)
+	//log.Info("Sync process",
+	//	"lastFinalizedBlock", lastFinalizedBlock,
+	//	"lastFinalizedNr", lastFinalizedNr,
+	//	"h.checkpointNumber", h.checkpointNumber,
+	//	"lastFinalizedNr >= h.checkpointNumber", lastFinalizedNr >= h.checkpointNumber,
+	//)
 
-	if lastFinalizedNr >= h.checkpointNumber {
-		// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
-		// for non-checkpointed (number = 0) private networks.
-		if lastFinalizedBlock.Time() >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
-			atomic.StoreUint32(&h.acceptTxs, 1)
-		}
-	}
-	atomic.StoreUint32(&h.acceptTxs, 1)
+	//if lastFinalizedNr >= h.checkpointNumber {
+	//	// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
+	//	// for non-checkpointed (number = 0) private networks.
+	//	if lastFinalizedBlock.Time() >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
+	//		atomic.StoreUint32(&h.acceptTxs, 1)
+	//	}
+	//}
+	//atomic.StoreUint32(&h.acceptTxs, 1)
 
-	bTips := h.chain.GetBlocksByHashes(h.chain.GetTips().GetHashes())
-	for _, block := range bTips {
-		h.BroadcastBlock(block, false)
-	}
+	//bTips := h.chain.GetBlocksByHashes(h.chain.GetTips().GetHashes())
+	//for _, block := range bTips {
+	//	h.BroadcastBlock(block, false)
+	//}
 	return nil
 }

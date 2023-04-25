@@ -201,6 +201,13 @@ func (h *ethHandler) handleDag(peer *eth.Peer, dag common.HashArray) error {
 // handleBlockAnnounces is invoked from a peer's message handler when it transmits a
 // batch of block announcements for the local node to process.
 func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
+
+	// todo check it
+	if !h.chain.IsSynced() {
+		log.Warn("*********** skip handle: handleBlockAnnounces", "!h.chain.IsSynced()", !h.chain.IsSynced())
+		return nil
+	}
+
 	// Schedule all the unknown hashes for retrieval
 	var (
 		unknownHashes  = make([]common.Hash, 0, len(hashes))
@@ -221,6 +228,12 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
 func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
+	// todo check it
+	if !h.chain.IsSynced() {
+		log.Warn("*********** skip handle: handleBlockBroadcast", "!h.chain.IsSynced()", !h.chain.IsSynced())
+		return nil
+	}
+
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block, peer.RequestOneHeader, peer.RequestBodies)
 	// Update the peer's status info if better than the previous
@@ -228,10 +241,10 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	if dag == nil {
 		dag = &common.HashArray{}
 	}
-	if block.LFNumber() > lastFinNr {
-		lastFinNr = block.LFNumber()
+	if block.CpNumber() > lastFinNr {
+		lastFinNr = block.CpNumber()
 	}
-	lfb := h.chain.GetBlockByHash(block.LFHash())
+	lfb := h.chain.GetBlockByHash(block.CpHash())
 	if lfb != nil {
 		*dag = dag.Difference(append(lfb.ParentHashes(), lfb.Hash()))
 	}
@@ -246,6 +259,6 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	}
 	upDag = append(upDag, block.Hash())
 	peer.SetDagInfo(lastFinNr, &upDag)
-	h.chainSync.handlePeerEvent(peer, evtBroadcast)
+	//h.chainSync.handlePeerEvent(peer, evtBroadcast)
 	return nil
 }

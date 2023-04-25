@@ -37,6 +37,9 @@ var (
 	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.
 	ErrInsertUncompletedDag = errors.New("insert uncompleted dag chain")
 
+	// ErrCpIsnotAncestor is returned when checkpoint is not in past of block.
+	ErrCpIsnotAncestor = errors.New("checkpoint is not ancestor")
+
 	// ErrSpineStateNF is returned when spine state not found.
 	ErrSpineStateNF = errors.New("spine state not found")
 )
@@ -98,4 +101,7 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// ErrCpNotFinalized is returned if the checkpoint is not finalized yet.
+	ErrCpNotFinalized = errors.New("checkpoint is not finalized")
 )

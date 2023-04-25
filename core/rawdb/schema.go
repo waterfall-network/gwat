@@ -36,10 +36,6 @@ var (
 	// lastCanonicalHashKey tracks the latest known canonical full block's hash.
 	lastCanonicalHashKey = []byte("LCHash")
 
-	// lastCoordHashKey tracks the latest known hash from coordinator.
-	// TODO replace usage by lastCoordCpKey
-	lastCoordHashKey = []byte("LCoordHash")
-
 	// lastCoordCpKey tracks the latest known hash from coordinator.
 	lastCoordCpKey = []byte("LCoordCp")
 

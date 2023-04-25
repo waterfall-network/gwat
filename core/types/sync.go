@@ -7,6 +7,4 @@ type SyncProvider interface {
 	FinSynchronising() bool
 	// DagSynchronising returns whether the downloader is currently retrieving dag chain blocks.
 	DagSynchronising() bool
-	// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
-	HeadSynchronising() bool
 }

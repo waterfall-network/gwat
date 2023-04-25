@@ -152,19 +152,16 @@ type blockChain interface {
 	GetDagHashes() *common.HashArray
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 	Genesis() *types.Block
-
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription
 	SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription
-	// Synchronising returns whether the downloader is currently synchronising.
-	Synchronising() bool
 	// FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
 	FinSynchronising() bool
 	// DagSynchronising returns whether the downloader is currently retrieving dag chain blocks.
 	DagSynchronising() bool
-	// HeadSynchronising returns whether the downloader is currently synchronising with coordinating network.
-	HeadSynchronising() bool
 	ValidatorStorage() valStore.Storage
+	// IsSynced returns tru if node fully synchronized
+	IsSynced() bool
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -1441,7 +1438,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		promoteAddrs = dirtyAccounts.flatten()
 	}
 	pool.mu.Lock()
-	if reset != nil && !pool.chain.Synchronising() {
+	if reset != nil && !pool.chain.IsSynced() {
 		// Reset from the old head to the new, rescheduling any reorged transactions
 		pool.reset(reset.oldHead, reset.newHead)
 

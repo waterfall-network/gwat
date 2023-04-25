@@ -350,8 +350,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			hashNumPairings.Add(size)
 		case bytes.HasPrefix(key, lastCanonicalHashKey) && len(key) == (len(lastCanonicalHashKey)+common.HashLength):
 			hashNumPairings.Add(size)
-		case bytes.HasPrefix(key, lastCoordHashKey) && len(key) == len(lastCoordHashKey):
-			hashNumPairings.Add(size)
 		case bytes.HasPrefix(key, lastCoordCpKey) && len(key) == len(lastCoordCpKey):
 			hashNumPairings.Add(size)
 		case len(key) == common.HashLength:
@@ -385,8 +383,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
-				lastFinalizedHashKey, lastCanonicalHashKey, lastCoordHashKey, lastCoordCpKey,
-				databaseVersionKey, tipsHashesKey, headFastBlockKey, lastPivotKey,
+				lastFinalizedHashKey, lastCanonicalHashKey, lastCoordCpKey,
+				databaseVersionKey, tipsHashesKey, lastPivotKey,
 				fastTrieProgressKey, snapshotDisabledKey, snapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey,
 				fastTxLookupLimitKey, uncleanShutdownKey, badBlockKey,

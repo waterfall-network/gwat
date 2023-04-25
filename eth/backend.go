@@ -542,6 +542,7 @@ func (s *Ethereum) Start() error {
 		}
 		maxPeers -= s.config.LightPeers
 	}
+	// todo rm/comment
 	// Start the networking layer and the light server if requested
 	s.handler.Start(maxPeers)
 	return nil

@@ -18,6 +18,7 @@ package eth
 
 import (
 	"fmt"
+	"sort"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -425,7 +426,7 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	dag, _, err := answerGetDagQuery(backend, query.GetDagPacket, peer)
+	dag, err := answerGetDagQuery(backend, query.GetDagPacket)
 	if err != nil {
 		return err
 	}
@@ -433,46 +434,84 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyDagData(query.RequestId, dag)
 }
 
-func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.HashArray, uint64, error) {
+func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, error) {
 	// Gather dag data
 	dag := common.HashArray{}
 	finalized := common.HashArray{}
-	fromFinNr := uint64(query)
-
-	//expCache := core.ExploreResultMap{}
-	//for _, h := range backend.Chain().GetTips().GetHashes() {
-	//	unloaded, loaded, _, _, exc, err := backend.Chain().ExploreChainRecursive(h, expCache)
-	//	if err != nil {
-	//		return dag, 0, err
-	//	}
-	//	expCache = exc
-	//	if len(unloaded) > 0 {
-	//		return dag, 0, fmt.Errorf("%w", errInvalidDag)
-	//	}
-	//	dag = dag.Concat(loaded)
-	//
-	//	// if tips set to last finalized block - add it
-	//	if len(loaded) == 0 {
-	//		lfBlock := backend.Chain().GetLastFinalizedBlock()
-	//		if lfBlock.Hash() == h {
-	//			dag = append(dag, h)
-	//		}
-	//	}
-	//}
-
-	dag = backend.Chain().GetTips().GetOrderedDagChainHashes()
-	lastFinNr := backend.Chain().GetLastFinalizedNumber()
-	if fromFinNr > lastFinNr {
-		return dag, 0, fmt.Errorf("%w", errInvalidDag)
+	baseHeader := backend.Chain().GetHeaderByHash(query.BaseSpine)
+	if baseHeader == nil || (baseHeader.Height > 0 && baseHeader.Nr() == 0) {
+		return dag, fmt.Errorf("%w", errInvalidDag)
 	}
-	for i := uint64(1); fromFinNr+i <= lastFinNr; i++ {
-		finHash := backend.Chain().ReadFinalizedHashByNumber(fromFinNr + i)
+
+	var terminalSpine common.Hash
+	if query.TerminalSpine != (common.Hash{}) {
+		terminalSpine = query.TerminalSpine
+	} else {
+		tSlot := uint64(0)
+		for h, t := range backend.Chain().GetTips() {
+			if t.Slot >= tSlot {
+				terminalSpine = h
+			}
+		}
+		if terminalSpine == (common.Hash{}) {
+			return dag, fmt.Errorf("%w", errInvalidDag)
+		}
+	}
+	terminalHeader := backend.Chain().GetHeaderByHash(terminalSpine)
+	if terminalHeader == nil {
+		return dag, fmt.Errorf("%w", errInvalidDag)
+	}
+	terminalSlot := terminalHeader.Slot
+	incDag := terminalHeader.Height > 0 && terminalHeader.Nr() == 0
+	toFinNr := terminalHeader.Nr()
+	if incDag {
+		toFinNr = backend.Chain().GetLastFinalizedNumber()
+		//collect dag hashes by slot
+		dagHeaders := backend.Chain().GetHeadersByHashes(backend.Chain().GetTips().GetOrderedDagChainHashes())
+		if dagHeaders[terminalSpine] == nil {
+			return dag, fmt.Errorf("%w", errInvalidDag)
+		}
+		slotMap := map[uint64]common.HashArray{}
+		for h, header := range dagHeaders {
+			if header == nil {
+				return dag, fmt.Errorf("%w", errInvalidDag)
+			}
+			if header.Slot <= terminalSlot {
+				//if header.Slot < terminalSlot {
+				if slotMap[header.Slot] == nil {
+					slotMap[header.Slot] = common.HashArray{}
+				}
+				slotMap[header.Slot] = append(slotMap[header.Slot], h)
+			}
+		}
+		//sort by slots
+		slots := common.SorterAscU64{}
+		for s := range slotMap {
+			slots = append(slots, s)
+		}
+		sort.Sort(slots)
+		for _, slot := range slots {
+			dag = append(dag, slotMap[slot]...)
+		}
+		//dag = append(dag, terminalHeader.Hash())
+	}
+	baseNr := baseHeader.Nr()
+	//check data length limit
+	dataLen := uint64(len(dag)) + (toFinNr - baseNr)
+	if dataLen > LimitDagHashes {
+		return dag, fmt.Errorf("%w: %v > %v (LimitDagHashes)", errMsgTooLarge, dataLen, LimitDagHashes)
+		return dag, fmt.Errorf("%w", errMsgTooLarge)
+	}
+
+	for nr := uint64(1); baseNr+nr <= toFinNr; nr++ {
+		finHash := backend.Chain().ReadFinalizedHashByNumber(baseNr + nr)
 		if finHash != (common.Hash{}) {
 			finalized = append(finalized, finHash)
 		}
 	}
+
 	dag = finalized.Concat(dag)
-	return dag, fromFinNr, nil
+	return dag, nil
 }
 
 func handleDag66(backend Backend, msg Decoder, peer *Peer) error {

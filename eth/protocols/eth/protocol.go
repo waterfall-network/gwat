@@ -46,6 +46,7 @@ var protocolLengths = map[uint]uint64{ETH66: 19}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
+const LimitDagHashes = 32 * 16 * 8 //32slot * 16 blocks * 8 epoches
 
 const (
 	StatusMsg                     = 0x00
@@ -120,7 +121,7 @@ type TransactionsPacket []*types.Transaction
 
 // GetBlockHeadersPacket represents a block header query.
 type GetBlockHeadersPacket struct {
-	Hashes  *common.HashArray // хеши блоков по которым запрашиваются заголовки
+	Hashes  *common.HashArray // request headers by hashes
 	Origin  *HashOrNumber     // Block from which to retrieve headers
 	Amount  uint64            // Maximum number of headers to retrieve
 	Skip    uint64            // Blocks to skip between consecutive headers
@@ -313,7 +314,10 @@ type PooledTransactionsRLPPacket66 struct {
 }
 
 // GetDagPacket represents a dag query.
-type GetDagPacket uint64
+type GetDagPacket struct {
+	BaseSpine     common.Hash
+	TerminalSpine common.Hash // if zero hash - include full dag chain
+}
 
 // GetDagPacket represents a dag query over wfdag/66.
 type GetDagPacket66 struct {

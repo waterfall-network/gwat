@@ -160,6 +160,36 @@ type MockblockChain struct {
 	recorder *MockblockChainMockRecorder
 }
 
+func (m *MockblockChain) GetBlockByHash(hash common.Hash) *types.Block {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) GetLastFinalizedNumber() uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) ExploreChainRecursive(hash common.Hash, resultMap ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) SetIsSynced(synced bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockblockChain) IsSynced() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 // MockblockChainMockRecorder is the mock recorder for MockblockChain.
 type MockblockChainMockRecorder struct {
 	mock *MockblockChain
@@ -484,22 +514,15 @@ func (mr *MockblockChainMockRecorder) ValidatorStorage() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorStorage", reflect.TypeOf((*MockblockChain)(nil).ValidatorStorage))
 }
 
-// WriteLastCoordinatedHash mocks base method.
-func (m *MockblockChain) WriteLastCoordinatedHash(hash common.Hash) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "WriteLastCoordinatedHash", hash)
-}
-
-// WriteLastCoordinatedHash indicates an expected call of WriteLastCoordinatedHash.
-func (mr *MockblockChainMockRecorder) WriteLastCoordinatedHash(hash interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteLastCoordinatedHash", reflect.TypeOf((*MockblockChain)(nil).WriteLastCoordinatedHash), hash)
-}
-
 // MockethDownloader is a mock of ethDownloader interface.
 type MockethDownloader struct {
 	ctrl     *gomock.Controller
 	recorder *MockethDownloaderMockRecorder
+}
+
+func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray) (fullySynced bool, err error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 // MockethDownloaderMockRecorder is the mock recorder for MockethDownloader.

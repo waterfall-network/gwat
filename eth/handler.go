@@ -213,6 +213,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash().Hex())
 			return 0, nil, nil
 		}
+
+		if !h.chain.IsSynced() {
+			return 0, nil, nil
+		}
+
 		n, err := h.chain.InsertPropagatedBlocks(blocks)
 		if err == core.ErrInsertUncompletedDag {
 			unloaded := common.HashArray{}
@@ -264,10 +269,10 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Snapshot extension barrier failed", "err", err)
 		return err
 	}
-	// TODO(karalabe): Not sure why this is needed
-	if !h.chainSync.handlePeerEvent(peer, evtPeerRun) {
-		return p2p.DiscQuitting
-	}
+	//// TODO(karalabe): Not sure why this is needed
+	//if !h.chainSync.handlePeerEvent(peer, evtPeerRun) {
+	//	return p2p.DiscQuitting
+	//}
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
 
@@ -283,7 +288,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.GetLastFinalizedBlock().Nr())
 	if err := peer.Handshake(h.networkID, lastFinNr, dag, genesis.Hash(), forkID, h.forkFilter); err != nil {
-		peer.Log().Debug("Ethereum handshake failed", "err", err)
+		peer.Log().Error("Ethereum handshake failed", "err", err)
 		return err
 	}
 	reject := false // reserved peer slots
@@ -303,7 +308,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return p2p.DiscTooManyPeers
 		}
 	}
-	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
+	peer.Log().Info("Ethereum peer connected", "name", peer.Name(), "ID", peer.ID())
 
 	// Register the peer locally
 	if err := h.peers.registerPeer(peer, snap); err != nil {
@@ -327,7 +332,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return err
 		}
 	}
-	h.chainSync.handlePeerEvent(peer, evtPeerRun)
+	//h.chainSync.handlePeerEvent(peer, evtPeerRun)
 
 	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.
@@ -354,7 +359,13 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	// If we have any explicit whitelist block hashes, request them
 	for number := range h.whitelist {
+
+		peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "number", number)
+
 		if err := peer.RequestHeadersByNumber(number, 1, 0, false); err != nil {
+
+			peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "err", err)
+
 			return err
 		}
 	}

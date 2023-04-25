@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 
@@ -130,7 +131,7 @@ func (p *Peer) Version() uint {
 	return p.version
 }
 
-// GetDagInfo retrieves the current dag hashes and max lastFinNr of the peer.
+// GetDagInfo retrieves the current DAG hashes and the last coordinated checkpoint epoch of the peer.
 func (p *Peer) GetDagInfo() (lastFinNr uint64, dag *common.HashArray) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
@@ -138,7 +139,6 @@ func (p *Peer) GetDagInfo() (lastFinNr uint64, dag *common.HashArray) {
 	lastFinNr = p.lastFinNr
 	if p.dag != nil {
 		dag = p.dag
-		//dag =
 	}
 	return lastFinNr, dag
 }
@@ -466,14 +466,18 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	})
 }
 
-// RequestDag fetches a batch of transaction receipts from a remote node.
-func (p *Peer) RequestDag(fromFinNr uint64) error {
-	p.Log().Info("Fetching dag chain", "fromFinNr", fromFinNr)
+// RequestDag fetches a batch of hashes in range from baseSpine to terminalSpine.
+// include hashes of dag
+func (p *Peer) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error {
+	p.Log().Info("Fetching dag chain", "baseSpine", baseSpine, "terminalSpine", fmt.Sprintf("%#x", terminalSpine))
 	id := rand.Uint64()
 	requestTracker.Track(p.id, p.version, GetDagMsg, DagMsg, id)
 	return p2p.Send(p.rw, GetDagMsg, &GetDagPacket66{
-		RequestId:    id,
-		GetDagPacket: GetDagPacket(fromFinNr),
+		RequestId: id,
+		GetDagPacket: GetDagPacket{
+			BaseSpine:     baseSpine,
+			TerminalSpine: terminalSpine,
+		},
 	})
 }
 

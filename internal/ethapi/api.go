@@ -123,15 +123,10 @@ func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.Decim
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
 func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
-	progress := s.b.SyncProgress()
-
-	//// Return not syncing if the synchronisation already completed
-	//if progress.CurrentBlock >= progress.HighestBlock {
-	//	return false, nil
-	//}
-	if progress.Stage == "none" {
+	if s.b.BlockChain().IsSynced() {
 		return false, nil
 	}
+	progress := s.b.SyncProgress()
 	// Otherwise gather the block sync stats
 	return map[string]interface{}{
 		"startingBlock": hexutil.Uint64(progress.StartingBlock),
@@ -139,9 +134,9 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 		"highestBlock":  hexutil.Uint64(progress.HighestBlock),
 		"pulledStates":  hexutil.Uint64(progress.PulledStates),
 		"knownStates":   hexutil.Uint64(progress.KnownStates),
-		"stage":         progress.Stage,
-		"lastCoordSlot": progress.LastCoordSlot,
-		"maxBlockSlot":  progress.MaxBlockSlot,
+		"finalizedSlot": hexutil.Uint64(progress.FinalizedSlot),
+		"maxDagSlot":    hexutil.Uint64(progress.FinalizedSlot),
+		"currentSlot":   hexutil.Uint64(progress.CurrentSlot),
 	}, nil
 }
 
@@ -673,6 +668,11 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 		return nil, err
 	}
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+}
+
+// GetSlotHashes retrieves all block hashes for a given slot.
+func (s *PublicBlockChainAPI) GetSlotHashes(ctx context.Context, slot uint64) common.HashArray {
+	return s.b.BlockHashesBySlot(ctx, slot)
 }
 
 // Result structs for GetProof
@@ -1309,8 +1309,12 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"height":           hexutil.Uint64(head.Height),
 		"number":           head.Number,
 		"parentHashes":     head.ParentHashes,
-		"lfHash":           head.LFHash,
-		"lfNumber":         hexutil.Uint64(head.LFNumber),
+		"cpHash":           head.CpHash,
+		"cpNumber":         hexutil.Uint64(head.CpNumber),
+		"cpGasUsed":        hexutil.Uint64(head.CpGasUsed),
+		"cpReceiptsRoot":   head.CpReceiptHash,
+		"cpStateRoot":      head.CpRoot,
+		"cpLogsBloom":      head.CpBloom,
 		"miner":            head.Coinbase,
 		"transactionsRoot": head.TxHash,
 		"gasLimit":         hexutil.Uint64(head.GasLimit),
@@ -1326,6 +1330,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
+	}
+	if head.CpBaseFee != nil {
+		result["cpBaseFeePerGas"] = (*hexutil.Big)(head.CpBaseFee)
 	}
 	if head.Number != nil {
 		result["number"] = hexutil.Uint64(head.Nr())
@@ -2243,16 +2250,6 @@ func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types
 // GetOptimisticSpines retrieves optimistic spines.
 func (api *PublicDagAPI) GetOptimisticSpines(ctx context.Context, lastFinSpine common.Hash) (*types.OptimisticSpinesResult, error) {
 	return api.b.Dag().HandleGetOptimisticSpines(lastFinSpine), nil
-}
-
-// HeadSyncReady set initial state to start head sync with coordinating network.
-func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
-	return api.b.Dag().HandleHeadSyncReady(checkpoint)
-}
-
-// HeadSync run head sync with coordinating network.
-func (api *PublicDagAPI) HeadSync(ctx context.Context, data []types.ConsensusInfo) (bool, error) {
-	return api.b.Dag().HandleHeadSync(data)
 }
 
 // ValidateSpines validate given sequence of spines.

@@ -20,7 +20,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/finalizer"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/headsync"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/slotticker"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
@@ -46,13 +45,15 @@ type Backend interface {
 }
 
 type blockChain interface {
+	era.Blockchain
 	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
-	GetHeaderByHash(hash common.Hash) *types.Header
-	WriteLastCoordinatedHash(hash common.Hash)
 	GetBlock(hash common.Hash) *types.Block
+	GetBlockByHash(hash common.Hash) *types.Block
+	GetLastFinalizedNumber() uint64
+	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 	GetLastFinalizedBlock() *types.Block
 	GetTips() types.Tips
 	Database() ethdb.Database
@@ -70,10 +71,17 @@ type blockChain interface {
 	DagMuUnlock()
 	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
+	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
+
+	SetIsSynced(synced bool)
+	IsSynced() bool
+
+	CollectAncestorsAftCpByParents(common.HashArray, common.Hash, ...core.CollectAncestorsResultMap) (bool, types.HeaderMap, common.HashArray, core.CollectAncestorsResultMap, error)
 }
 
 type ethDownloader interface {
 	Synchronising() bool
+	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray) (fullySynced bool, err error)
 }
 
 type Dag struct {
@@ -81,8 +89,6 @@ type Dag struct {
 
 	// events
 	mux *event.TypeMux
-
-	consensusInfoFeed event.Feed
 
 	eth        Backend
 	bc         blockChain
@@ -92,8 +98,6 @@ type Dag struct {
 	creator *creator.Creator
 	//finalizer
 	finalizer *finalizer.Finalizer
-	//headsync
-	headsync *headsync.Headsync
 
 	busy int32
 
@@ -112,7 +116,6 @@ func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creat
 		downloader:  eth.Downloader(),
 		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
 		finalizer:   fin,
-		headsync:    headsync.New(chainConfig, eth, mux, fin),
 		exitChan:    make(chan struct{}),
 		errChan:     make(chan error),
 	}
@@ -127,12 +130,23 @@ func (d *Dag) Creator() *creator.Creator {
 
 // HandleFinalize run blocks finalization procedure
 func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.FinalizationResult {
+	res := &types.FinalizationResult{
+		Error: nil,
+	}
+
+	if d.bc.GetSlotInfo() == nil {
+		errStr := "no slot info"
+		res.Error = &errStr
+		log.Error("Handle Finalize: response (no slot info)", "result", res, "err", errStr)
+		return res
+	}
+
 	//skip if synchronising
 	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
-		return &types.FinalizationResult{
-			Error: &errStr,
-		}
+		res.Error = &errStr
+		log.Error("Handle Finalize: response (busy)", "result", res, "err", errStr)
+		return res
 	}
 
 	d.bc.DagMuLock()
@@ -143,8 +157,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			"baseSpine", fmt.Sprintf("%#x", data.BaseSpine),
 			"spines", data.Spines,
 			"cp.Epoch", data.Checkpoint.Epoch,
-			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
-			"cp.Roor", fmt.Sprintf("%#x", data.Checkpoint.Root),
+			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.Root", fmt.Sprintf("%#x", data.Checkpoint.Root),
 			"ValSyncData", data.ValSyncData,
 			"\u2692", params.BuildId)
 	} else {
@@ -152,8 +166,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			"baseSpine", nil,
 			"spines", data.Spines,
 			"cp.Epoch", data.Checkpoint.Epoch,
-			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
-			"cp.Spine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
+			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
 			"ValSyncData", data.ValSyncData,
 			"\u2692", params.BuildId)
 	}
@@ -170,12 +184,29 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
-	res := &types.FinalizationResult{
-		Error: nil,
+	baseSpine := *data.BaseSpine
+	spines := data.Spines
+	// if baseSpine is in spines - remove
+	if bi := spines.IndexOf(baseSpine); bi >= 0 {
+		spines = spines[bi+1:]
 	}
+
+	if err := d.handlSyncUnloadedBlocks(baseSpine, spines); err != nil {
+		strErr := err.Error()
+		res.Error = &strErr
+		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
+		return res
+	}
+
 	// finalization
 	if len(data.Spines) > 0 {
-		if err := d.finalizer.Finalize(&data.Spines, data.BaseSpine, false); err != nil {
+		if err := d.finalizer.Finalize(&spines, &baseSpine); err != nil {
+			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
+				// Start syncing if spine or parent is unloaded
+				//d.synchronizeUnloadedBlocks(data.pines)
+				log.Error("Handle Finalize: response (finalize failed)", "result", res, "err", err)
+				return res
+			}
 			e := err.Error()
 			res.Error = &e
 		} else {
@@ -197,9 +228,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
 			res.Error = &mrg
 		}
-	} else {
-		d.bc.WriteLastCoordinatedHash(lfHeader.Hash())
 	}
+
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash
 
@@ -210,6 +240,64 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	log.Info("Handle Finalize: response", "result", res)
 	return res
+}
+
+// handlSyncUnloadedBlocks:
+// 1. check is synchronization required
+// 2. switch on sync mode
+// 3. start sync process
+// 4. if chain head reached - switch off sync mode
+func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray) error {
+	if len(spines) == 0 {
+		return nil
+	}
+	isSync, err := d.hasUnloadedBlocks(spines)
+	if err != nil {
+		return err
+	}
+	if !isSync {
+		return nil
+	}
+	d.bc.SetIsSynced(false)
+
+	lfNr := d.bc.GetLastFinalizedNumber()
+	err = d.finalizer.SetSpineState(&baseSpine, lfNr)
+	if err != nil {
+		return err
+	}
+
+	var fullySynced bool
+	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines); err != nil {
+		return err
+	}
+	if fullySynced {
+		d.bc.SetIsSynced(true)
+		log.Info("Node fully synced: head reached")
+	}
+	return nil
+}
+
+func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
+	var (
+		//expCache core.ExploreResultMap
+		expCache core.CollectAncestorsResultMap
+		unl      common.HashArray
+		err      error
+	)
+	for _, spine := range spines.Reverse() {
+		spHeader := d.bc.GetHeaderByHash(spine)
+		if spHeader == nil {
+			return true, nil
+		}
+		_, _, unl, expCache, err = d.bc.CollectAncestorsAftCpByParents(spHeader.ParentHashes, spHeader.CpHash, expCache)
+		if err != nil {
+			return false, err
+		}
+		if len(unl) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // HandleCoordinatedState return coordinated state
@@ -341,15 +429,6 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 	return optimisticSpines, nil
 }
 
-// HandleHeadSyncReady set initial state to start head sync with coordinating network.
-func (d *Dag) HandleHeadSyncReady(checkpoint *types.ConsensusInfo) (bool, error) {
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
-
-	log.Info("Handle Head Sync Ready", "checkpoint", checkpoint)
-	return d.headsync.SetReadyState(checkpoint)
-}
-
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 	d.bc.DagMuLock()
@@ -357,12 +436,17 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 
 	log.Info("Handle Sync Slot info", "params", slotInfo)
 	si := d.bc.GetSlotInfo()
-	if si.GenesisTime == slotInfo.GenesisTime &&
+	if si == nil {
+		err := d.bc.SetSlotInfo(&slotInfo)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	} else if si.GenesisTime == slotInfo.GenesisTime &&
 		si.SecondsPerSlot == slotInfo.SecondsPerSlot &&
 		si.SlotsPerEpoch == slotInfo.SlotsPerEpoch {
 		return true, nil
-	}
-	if d.eth.IsDevMode() {
+	} else if d.eth.IsDevMode() {
 		err := d.bc.SetSlotInfo(&slotInfo)
 		if err != nil {
 			return false, err
@@ -372,50 +456,53 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 	return false, nil
 }
 
-// HandleHeadSync run head sync with coordinating network.
-func (d *Dag) HandleHeadSync(data []types.ConsensusInfo) (bool, error) {
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
-
-	log.Info("Handle Head Sync", "len(data)", len(data), "data", data)
-	return d.headsync.Sync(data)
-}
-
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	log.Info("Handle Validate Spines", "spines", spines, "\u2692", params.BuildId)
+	log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
 
-// SubscribeConsensusInfoEvent registers a subscription for consensusInfo updated event
-func (d *Dag) SubscribeConsensusInfoEvent(ch chan<- types.Tips) event.Subscription {
-	return d.consensusInfoFeed.Subscribe(ch)
-}
-
 func (d *Dag) StartWork(accounts []common.Address) {
-	startTicker := time.NewTicker(500 * time.Millisecond)
+	startTicker := time.NewTicker(2000 * time.Millisecond)
 
 	tickSec := 0
 	for {
+		si := d.bc.GetSlotInfo()
 		currentTime := time.Now()
-		genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
+		if si != nil {
+			genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
 
-		if currentTime.Before(genesisTime) {
-			if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
-				timeRemaining := genesisTime.Sub(currentTime)
-				log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+			if currentTime.Before(genesisTime) {
+				if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
+					timeRemaining := genesisTime.Sub(currentTime)
+					log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+				}
+			} else {
+				log.Info("Chain genesis time reached")
+				startTicker.Stop()
+				go d.workLoop(accounts)
+
+				return
 			}
-		} else {
-			log.Info("Chain genesis time reached")
-			startTicker.Stop()
-			go d.workLoop(accounts)
-
-			return
+			tickSec = currentTime.Second()
 		}
-		tickSec = currentTime.Second()
+		//else {
+		//	lcp := d.bc.GetLastCoordinatedCheckpoint()
+		//	// revert to LastCoordinatedCheckpoint
+		//	if lcp.Spine != d.bc.GetLastFinalizedBlock().Hash() {
+		//		spineBlock := d.bc.GetBlock(lcp.Spine)
+		//		if err := d.finalizer.SetSpineState(&lcp.Spine, spineBlock.Nr()); err != nil {
+		//			log.Error("Revert to checkpoint spine error", "error", err)
+		//		}
+		//		//d.bc..SetLastFinalisedHeader(genesisHeader, genesisHeight)
+		//		//d.bc.Set
+		//	}
+		//
+		//	log.Info("Waiting for slot info from coordinator")
+		//}
 
 		<-startTicker.C
 	}
@@ -443,6 +530,11 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			if slot == 0 {
 				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, common.Hash{})
 				d.bc.SetNewEraInfo(*newEra)
+				d.bc.SetIsSynced(true)
+				continue
+			}
+
+			if !d.bc.IsSynced() {
 				continue
 			}
 			var (
@@ -463,7 +555,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				"transEpoch", d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod,
 				"transSlot", transitionSlot)
 
-			d.handleEra(slot)
+			era.HandleEra(d.bc, slot)
+			//d.handleEra(slot)
 
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
@@ -486,7 +579,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	//skip if synchronising
-	if d.downloader.Synchronising() {
+	//if d.downloader.Synchronising() {
+	if !d.bc.IsSynced() {
 		return
 	}
 
@@ -559,38 +653,4 @@ func (d *Dag) countDagSlots(tips *types.Tips) int {
 		return -1
 	}
 	return len(candidates)
-}
-
-func (d *Dag) handleEra(slot uint64) {
-	currentEpoch := d.bc.GetSlotInfo().SlotToEpoch(slot)
-	newEpoch := d.bc.GetSlotInfo().IsEpochStart(slot)
-
-	if newEpoch {
-		// New era
-		if d.bc.GetEraInfo().ToEpoch()+1 == currentEpoch {
-			// Checkpoint
-			checkpoint := d.bc.GetLastCoordinatedCheckpoint()
-			spineRoot := common.Hash{}
-			if checkpoint != nil {
-				header := d.bc.GetHeaderByHash(checkpoint.Spine)
-				spineRoot = header.Root
-			} else {
-				log.Error("Invalid checkpoint: write new era error")
-			}
-
-			d.bc.EnterNextEra(spineRoot)
-
-			return
-		}
-
-		// Transition period
-		if d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
-			d.bc.StartTransitionPeriod()
-		}
-	}
-
-	// Sync era to current slot
-	if currentEpoch > (d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod) && !d.bc.GetEraInfo().IsTransitionPeriodStartSlot(d.bc, slot) {
-		d.bc.SyncEraToSlot(slot)
-	}
 }
