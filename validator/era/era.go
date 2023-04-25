@@ -184,7 +184,7 @@ func HandleEra(bc Blockchain, slot uint64) error {
 		if bc.GetEraInfo().ToEpoch()+1 == currentEpoch {
 			// Checkpoint
 			checkpoint := bc.GetLastCoordinatedCheckpoint()
-			spineRoot := common.Hash{}
+			var spineRoot common.Hash
 			if checkpoint != nil {
 				header := bc.GetHeaderByHash(checkpoint.Spine)
 				spineRoot = header.Root
