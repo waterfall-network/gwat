@@ -67,9 +67,8 @@ type environment struct {
 	cumutativeGas uint64        // tx count in cycle
 	gasPool       *core.GasPool // available gas used to pack transactions
 
-	header   *types.Header
-	txs      []*types.Transaction
-	expCache core.CollectAncestorsResultMap
+	header *types.Header
+	txs    []*types.Transaction
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -107,7 +106,6 @@ type Creator struct {
 
 	// Channels
 	newWorkCh    chan *newWorkReq
-	taskCh       chan *task
 	resultCh     chan *task
 	finishWorkCh chan *types.Block
 	errWorkCh    chan *error
@@ -121,9 +119,6 @@ type Creator struct {
 	coinbase common.Address
 	extra    []byte
 
-	pendingMu    sync.RWMutex
-	pendingTasks map[common.Hash]*task
-
 	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock    *types.Block
 	snapshotReceipts types.Receipts
@@ -134,7 +129,6 @@ type Creator struct {
 	newTxs  int32 // New arrival transaction count since last sealing work submitting.
 
 	// Test hooks
-	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
@@ -156,11 +150,9 @@ func New(config *Config, chainConfig *params.ChainConfig, engine consensus.Engin
 		chain:       eth.BlockChain(),
 
 		unconfirmed:  newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
-		pendingTasks: make(map[common.Hash]*task),
 		txsCh:        make(chan core.NewTxsEvent, txChanSize),
 		chainSideCh:  make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:    make(chan *newWorkReq),
-		taskCh:       make(chan *task),
 		resultCh:     make(chan *task),
 		finishWorkCh: make(chan *types.Block),
 		errWorkCh:    make(chan *error),
@@ -178,7 +170,6 @@ func New(config *Config, chainConfig *params.ChainConfig, engine consensus.Engin
 
 	go creator.mainLoop()
 	go creator.resultLoop()
-	go creator.taskLoop()
 
 	return creator
 }
@@ -395,58 +386,6 @@ func (c *Creator) mainLoop() {
 	}
 }
 
-// taskLoop is a standalone goroutine to fetch sealing task from the generator and
-// push them to consensus engine.
-func (c *Creator) taskLoop() {
-	var (
-		stopCh chan struct{}
-		//prev   common.Hash
-	)
-
-	// interrupt aborts the in-flight sealing task.
-	interrupt := func() {
-		if stopCh != nil {
-			close(stopCh)
-			stopCh = nil
-		}
-	}
-	for {
-		select {
-		case task := <-c.taskCh:
-			log.Info("Creator start", "c.newTaskHook", c.newTaskHook != nil, "c.skipSealHook", c.skipSealHook != nil)
-			if c.newTaskHook != nil {
-				c.newTaskHook(task)
-			}
-			// Reject duplicate sealing work due to resubmitting.
-			//sealHash := c.engine.SealHash(task.block.Header())
-
-			//if sealHash == prev {
-			//	continue
-			//}
-
-			// Interrupt previous sealing operation
-			interrupt()
-			//stopCh, prev = make(chan struct{}), sealHash
-
-			//if c.skipSealHook != nil && c.skipSealHook(task) {
-			//	continue
-			//}
-			// TODO: resultCh
-			c.pendingMu.Lock()
-			//c.pendingTasks[sealHash] = task
-			c.pendingMu.Unlock()
-			//if err := c.engine.Seal(c.chain, task.block, c.resultCh, stopCh); err != nil {
-			//	log.Warn("Block sealing failed", "err", err)
-			//	c.errWorkCh <- &err
-			//}
-
-		case <-c.exitCh:
-			interrupt()
-			return
-		}
-	}
-}
-
 // resultLoop is a standalone goroutine to handle sealing result submitting
 // and flush relative data to the database.
 func (c *Creator) resultLoop() {
@@ -473,12 +412,8 @@ func (c *Creator) resultHandler(task *task) {
 	var (
 		hash = task.block.Hash()
 	)
-
-	c.pendingMu.RLock()
-	c.pendingMu.RUnlock()
-
-	//// Commit block and state to database.
-	_, err := c.chain.WriteMinedBlock(task.block) // TODO: delete delete receipts
+	// Commit block to database.
+	_, err := c.chain.WriteMinedBlock(task.block)
 	if err != nil {
 		log.Error("Failed writing block to chain (creator)", "err", err)
 		return
@@ -490,41 +425,19 @@ func (c *Creator) resultHandler(task *task) {
 	c.chain.RemoveTips(task.block.ParentHashes())
 
 	//2. create for new blockDag
-	finHashes := common.HashArray{}
 	tips := task.tips.Copy()
 	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
-	_, ancHeaders, _, _, err := c.chain.CollectAncestorsAftCpByParents(task.block.ParentHashes(), task.block.CpHash(), c.current.expCache)
-	// err here is not critical
+
 	// after reorg tips can content hashes of finalized blocks
-	if err == nil {
-		tmpDagChainHashes = common.HashArray{}
-		for h, hdr := range ancHeaders {
-			if hdr == nil {
-				continue
-			}
-			if hdr.Nr() > 0 {
-				finHashes = append(finHashes, h)
-			} else {
-				tmpDagChainHashes = append(tmpDagChainHashes, h)
-			}
-		}
-	} else {
-		for _, h := range tmpDagChainHashes.Copy() {
-			blk := c.eth.BlockChain().GetBlock(h)
-			finNr := blk.Number()
-			if finNr != nil {
-				finHashes = append(finHashes, h)
-			}
+	finHashes := common.HashArray{}
+	for _, h := range tmpDagChainHashes.Copy() {
+		blk := c.eth.BlockChain().GetHeader(h)
+		if !(blk.Height > 0 && blk.Nr() == 0) {
+			finHashes = append(finHashes, h)
 		}
 	}
-
 	if len(finHashes) > 0 {
 		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
-	}
-
-	finDag := tips.GetFinalizingDag()
-	if finDag.Hash == c.chain.Genesis().Hash() {
-		tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{c.chain.Genesis().Hash()})
 	}
 
 	newBlockDag := &types.BlockDAG{
@@ -555,17 +468,14 @@ func (c *Creator) getUnhandledTxs() []*types.Transaction {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (c *Creator) makeCurrent(header *types.Header, expCache core.CollectAncestorsResultMap) error {
+func (c *Creator) makeCurrent(header *types.Header) error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 
-	// state.StartPrefetcher("miner") // Merge v0.6-fix-height-calc-validate
-
 	env := &environment{
-		signer:   types.MakeSigner(c.chainConfig),
-		header:   header,
-		txs:      []*types.Transaction{},
-		expCache: expCache,
+		signer: types.MakeSigner(c.chainConfig),
+		header: header,
+		txs:    []*types.Transaction{},
 	}
 
 	// Keep track of transactions which return errors so they can be removed
@@ -887,7 +797,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	// Could potentially happen if starting to mine in an odd state.
-	err = c.makeCurrent(header, expCache)
+	err = c.makeCurrent(header)
 	if err != nil {
 		log.Error("Failed to make block creation context", "err", err)
 		c.errWorkCh <- &err
@@ -896,13 +806,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	// Fill the block with all available pending transactions.
 	pending := c.getPending()
-
-	// if len(pending) > 0 {
-	// 	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pending, header.BaseFee)
-	// 	if c.appendTransactions(txs, c.coinbase, &header.LFNumber) {
-	// 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
-	// 		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
-	// 		c.errWorkCh <- &ErrNoTxs
 	filterPending, err := c.filterPendingTxs(pending)
 	if err != nil {
 		log.Error("can`t filter pending transactions", "error", err)

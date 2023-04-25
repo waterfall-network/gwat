@@ -112,22 +112,6 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 			continue
 		}
 
-		//todo RM
-		//if !f.eth.BlockChain().IsSynced() {
-		//	//validate blocks while head sync
-		//	for _, block := range orderedChain {
-		//		if ok, err := bc.VerifyBlock(block); !ok {
-		//			if err != nil {
-		//				bc.CacheInvalidBlock(block)
-		//				err = ErrInvalidBlock
-		//			}
-		//			log.Error("Block finalization failed (validation)", "valid", ok, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
-		//			//  Block finalization failed (validation)   valid=false slot=2 height=1 hash=0x3cd223ad4661cd19bf278f67c28afab8b20de7f310c6effa2a287b021af78643 err=nil
-		//			return err
-		//		}
-		//	}
-		//}
-
 		// blocks finalizing
 		for i, block := range orderedChain {
 			nr := lastFinNr + uint64(i) + 1

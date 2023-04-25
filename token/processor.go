@@ -331,8 +331,6 @@ type WRC721PropertiesResult struct {
 // Properties performs the token properties operation
 // It returns WRC20PropertiesResult or WRC721PropertiesResult according to the token type.
 func (p *Processor) Properties(op operation.Properties) (interface{}, error) {
-	log.Info("Token properties", "address", op.Address())
-
 	storage, standard, err := p.newStorageWithoutStdCheck(op.Address())
 	if err != nil {
 		return nil, err
