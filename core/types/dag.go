@@ -106,7 +106,7 @@ func (cp *Checkpoint) UnmarshalJSON(input []byte) error {
 		cp.Epoch = uint64(*dec.Epoch)
 	}
 	if dec.StartEpoch != nil {
-		cp.Epoch = uint64(*dec.StartEpoch)
+		cp.StartEpoch = uint64(*dec.StartEpoch)
 	}
 	if dec.Root != nil {
 		cp.Root = *dec.Root
