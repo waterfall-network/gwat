@@ -921,11 +921,29 @@ func ReadLastCoordinatedCheckpoint(db ethdb.KeyValueReader) *types.Checkpoint {
 }
 
 // WriteCoordinatedCheckpoint writes a Coordinated Checkpoint to a key-value database.
-func WriteCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
-	key := coordCpKey(checkpoint.Epoch)
+func WriteCoordinatedCheckpoint(db ethdb.KeyValueWriter, epoch uint64, checkpoint *types.Checkpoint) {
+	key := coordCpKey(epoch)
 
 	if err := db.Put(key, checkpoint.Bytes()); err != nil {
 		log.Crit("Failed to store the Coordinated Checkpoint", "err", err, "epoch", checkpoint.Epoch)
+	}
+}
+
+// WriteCheckpointsBetweenEpochs adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
+func WriteCheckpointsBetweenEpochs(db ethdb.KeyValueWriter, currentCp, targetCp *types.Checkpoint) {
+	epochNum := currentCp.Epoch
+
+	// Iterate from currCp.Epoch+1 to targetCp.Epoch-1
+	for epochNum < targetCp.Epoch {
+		epochNum++ // Increment the epoch number
+
+		if epochNum == targetCp.Epoch {
+			// Write the target checkpoint to the database
+			WriteCoordinatedCheckpoint(db, targetCp.Epoch, targetCp)
+		} else {
+			// Write the missing checkpoint to the database
+			WriteCoordinatedCheckpoint(db, epochNum, currentCp)
+		}
 	}
 }
 
