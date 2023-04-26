@@ -324,10 +324,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	// Use genesis hash as seed for first and second epochs
 	rawdb.WriteLastCoordinatedCheckpoint(db, &types.Checkpoint{
-		Epoch:      0,
-		StartEpoch: 0,
-		Root:       common.Hash{},
-		Spine:      genesisBlock.Hash(),
+		Epoch:    0,
+		FinEpoch: 0,
+		Root:     common.Hash{},
+		Spine:    genesisBlock.Hash(),
 	})
 
 	genesisEra := era.Era{0, 0, g.Config.EpochsPerEra - 1, genesisBlock.Root()}
