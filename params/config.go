@@ -296,9 +296,7 @@ func (c *ChainConfig) Validate() error {
 		return fmt.Errorf("no epochs per era parameter")
 	}
 
-	if c.ForkSlotSubNet1 == 0 {
-		return fmt.Errorf("no ForkSlotSubNet parameter")
-	}
+	// TODO: add ForkSlotSubnet parameter checking for subnet support
 
 	if c.ValidatorsPerSlot == 0 {
 		return fmt.Errorf("no validators per slot parameter")
