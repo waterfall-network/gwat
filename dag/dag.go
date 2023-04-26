@@ -99,7 +99,8 @@ type Dag struct {
 	//finalizer
 	finalizer *finalizer.Finalizer
 
-	busy int32
+	busy           int32
+	lastFinApiSlot uint64
 
 	exitChan chan struct{}
 	errChan  chan error
@@ -140,6 +141,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		log.Error("Handle Finalize: response (no slot info)", "result", res, "err", errStr)
 		return res
 	}
+	d.setLastFinalizeApiSlot()
 
 	//skip if synchronising
 	if d.downloader.Synchronising() {
@@ -537,6 +539,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			if !d.bc.IsSynced() {
 				continue
 			}
+			if d.isCoordinatorConnectionLost() {
+				d.bc.SetIsSynced(false)
+				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
+				continue
+			}
+
 			var (
 				err      error
 				creators []common.Address
@@ -653,4 +661,28 @@ func (d *Dag) countDagSlots(tips *types.Tips) int {
 		return -1
 	}
 	return len(candidates)
+}
+
+// getLastFinalizeApiSlot returns the slot of last HandleFinalize api call.
+func (d *Dag) getLastFinalizeApiSlot() uint64 {
+	return atomic.LoadUint64(&d.lastFinApiSlot)
+}
+
+// setLastFinalizeApiSlot set the slot of last HandleFinalize api call.
+func (d *Dag) setLastFinalizeApiSlot() {
+	slot := uint64(0)
+	if si := d.bc.GetSlotInfo(); si != nil {
+		slot = si.CurrentSlot()
+	}
+	atomic.StoreUint64(&d.lastFinApiSlot, slot)
+}
+
+// isCoordinatorConnectionLost returns true if the difference of
+// current slot and the last coord slot grater than 1.
+func (d *Dag) isCoordinatorConnectionLost() bool {
+	slot := uint64(0)
+	if si := d.bc.GetSlotInfo(); si != nil {
+		slot = si.CurrentSlot()
+	}
+	return (slot - d.getLastFinalizeApiSlot()) > 1
 }

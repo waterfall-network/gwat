@@ -570,7 +570,7 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
-		bc.HandleCheckpointsForEpoch(cp)
+		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
 
 		// Handle era
 		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
@@ -578,22 +578,6 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
 		}
 		bc.SyncEraToSlot(epochStartSlot)
-	}
-}
-
-// HandleCheckpointsForEpoch adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
-func (bc *BlockChain) HandleCheckpointsForEpoch(targetCp *types.Checkpoint) {
-	// TODO: add panic sanity check
-	currCp := bc.GetLastCoordinatedCheckpoint()
-	epochNum := currCp.Epoch
-	for epochNum < targetCp.Epoch {
-		epochNum++ // Increment the epoch number
-		currCp.Epoch = epochNum
-		rawdb.WriteCoordinatedCheckpoint(bc.db, currCp)
-	}
-
-	if epochNum == targetCp.Epoch {
-		rawdb.WriteCoordinatedCheckpoint(bc.db, targetCp)
 	}
 }
 
@@ -2295,6 +2279,18 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
+		// if checkpoint of propagated block is not finalized - set IsSynced=false
+		if cpHeader := bc.GetHeaderByHash(block.CpHash()); cpHeader != nil {
+			if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+				log.Warn("Check is synchronized: cp not finalized", "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
+				bc.SetIsSynced(false)
+			}
+		} else {
+			log.Warn("Check is synchronized: cp not found", "cpHash", block.CpHash())
+			bc.SetIsSynced(false)
+			return it.index, ErrInsertUncompletedDag
+		}
+
 		if ok, err := bc.VerifyBlock(block); !ok {
 			if err != nil {
 				return it.index, err
@@ -2303,39 +2299,13 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			continue
 		}
 
-		// if checkpoint of propagated block is not finalized - set IsSynced=false
-		if cpHeader := bc.GetHeaderByHash(block.CpHash()); cpHeader != nil {
-			if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
-				log.Info("*********** Check is synchronized: cp not finalized", "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
-				bc.SetIsSynced(false)
-			}
-		} else {
-			log.Info("*********** Check is synchronized: cp not found", "cpHash", block.CpHash())
-			bc.SetIsSynced(false)
-		}
-
 		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
 
 		rawdb.WriteBlock(bc.db, block)
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
-		CpBlock := bc.GetBlockByHash(block.CpHash())
-		if CpBlock == nil {
-			log.Warn("CpBlock not found",
-				"block hash", block.Hash().Hex(),
-				"CpHash", block.CpHash(),
-				"CpNumber", block.CpNumber(),
-			)
-			// TODO: check
-			return it.index, ErrInsertUncompletedDag
-		}
-
-		dagChainHashes := common.HashArray{}
-
-		dagChainHashes = append(dagChainHashes, CpBlock.ParentHashes()...)
-
-		//bc.RemoveTips(block.ParentHashes())
+		dagChainHashes := append(common.HashArray{}, block.ParentHashes()...)
 		dagBlock := &types.BlockDAG{
 			Hash:                block.Hash(),
 			Height:              block.Height(),
@@ -2346,6 +2316,43 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		}
 		bc.AddTips(dagBlock)
 		bc.RemoveTips(dagBlock.DagChainHashes)
+
+		//check tips
+		tips := bc.GetTips()
+		if len(tips) > 1 {
+			expCache := CollectAncestorsResultMap{}
+			for _, th := range tips.GetHashes() {
+				tHeader := bc.GetHeader(th)
+				if tHeader == nil {
+					continue
+				}
+				for _, ancestor := range tips.GetHashes() {
+					if tHeader.Hash() == ancestor {
+						continue
+					}
+					isAncestor, err := bc.IsAncestorRecursive(tHeader, ancestor, expCache)
+					if err != nil {
+						log.Error("Insert propagated block: check tips failed",
+							"err", err,
+							"hash", block.Hash().Hex(),
+							"tips", th,
+							"ancestor", ancestor,
+							"tips", tips.Print(),
+						)
+						return it.index, err
+					}
+					if isAncestor {
+						log.Warn("Insert propagated block: check tips ancestor detected",
+							"hash", block.Hash().Hex(),
+							"tips", th,
+							"ancestor", ancestor,
+							"tips", tips.Print(),
+						)
+						bc.RemoveTips(common.HashArray{ancestor})
+					}
+				}
+			}
+		}
 		bc.WriteCurrentTips()
 
 		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())

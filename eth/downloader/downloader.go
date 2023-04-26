@@ -2725,8 +2725,6 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 		return false, err
 	}
 
-	baseBlock := d.blockchain.GetBlockByHash(baseSpine)
-
 	// rm deprecated dag info
 	d.ClearBlockDag()
 	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
@@ -2736,8 +2734,6 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 		block := types.NewBlockWithHeader(header).WithBody(txs)
 		blocks[i] = block
 	}
-	// add existed blocks
-	blocks = append(blocks, existedBlocks...)
 
 	blocksBySlot, err := (&blocks).GroupBySlot()
 	if err != nil {
@@ -2752,29 +2748,16 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 
 	for _, slot := range slots {
 		era.HandleEra(d.blockchain, slot)
-		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
+		slotBlocks := blocksBySlot[slot]
 		if len(slotBlocks) == 0 {
 			continue
 		}
-		spine := slotBlocks[0]
-		if spine.Slot() > baseBlock.Slot() {
-			_, err = d.blockchain.WriteSyncDagBlock(spine)
-			if err != nil {
-				log.Error("Failed writing block to chain  (sync 0)", "err", err)
-				return false, err
-			}
-			slotBlocks = slotBlocks[1:]
-		}
 		//handle by reverse order
 		for _, block := range slotBlocks {
-			// if block is finalized
-			if block.Nr() != 0 && block.Height() > 0 && block.Nr() < baseBlock.Nr() || block.Height() == 0 {
-				continue
-			}
-			// Commit block and state to database.
+			// Commit block to database.
 			_, err = d.blockchain.WriteSyncDagBlock(block)
 			if err != nil {
-				log.Error("Failed writing block to chain  (sync 1)", "err", err)
+				log.Error("Failed writing block to chain (sync)", "err", err)
 				return false, err
 			}
 		}

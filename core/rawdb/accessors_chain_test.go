@@ -920,7 +920,7 @@ func TestWriteAndReadCoordinatedCheckpoint(t *testing.T) {
 	}
 
 	// Write the checkpoint to the database
-	WriteCoordinatedCheckpoint(memDB, checkpoint)
+	WriteCoordinatedCheckpoint(memDB, checkpoint.Epoch, checkpoint)
 
 	// Read the checkpoint back from the database
 	readCheckpoint := ReadCoordinatedCheckpoint(memDB, checkpoint.Epoch)
@@ -937,6 +937,39 @@ func TestWriteAndReadCoordinatedCheckpoint(t *testing.T) {
 	}
 	if checkpoint.Spine != readCheckpoint.Spine {
 		t.Errorf("Expected checkpoint spine to be %v, but got %v", checkpoint.Spine, readCheckpoint.Spine)
+	}
+}
+
+func TestWriteCheckpointsBetweenEpochs(t *testing.T) {
+	// Create an in-memory database for testing
+	memDB := NewMemoryDatabase()
+
+	// Create a checkpoint to write to the database
+	currentCp := &types.Checkpoint{
+		Epoch: 2,
+		Root:  common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+		Spine: common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
+	}
+
+	targetCp := &types.Checkpoint{
+		Epoch: 10,
+		Root:  common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcfed"),
+		Spine: common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcde10101010101"),
+	}
+
+	// Write the checkpoint to the database
+	WriteCheckpointsBetweenEpochs(memDB, currentCp, targetCp)
+
+	// Check that the checkpoints were added correctly
+	for i := currentCp.Epoch + 1; i <= targetCp.Epoch; i++ {
+		storedCp := ReadCoordinatedCheckpoint(memDB, i)
+		if storedCp == nil {
+			t.Errorf("Checkpoint not found for epoch %d", i)
+		} else if i < targetCp.Epoch {
+			testutils.AssertEqual(t, storedCp, currentCp)
+		} else if i == targetCp.Epoch {
+			testutils.AssertEqual(t, storedCp, targetCp)
+		}
 	}
 }
 

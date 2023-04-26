@@ -13,31 +13,36 @@ import (
 // Checkpoint represents a coordinated checkpoint
 // of coorinator and gwat nodes
 type Checkpoint struct {
-	Epoch uint64
-	Root  common.Hash
-	Spine common.Hash
+	Epoch      uint64
+	StartEpoch uint64
+	Root       common.Hash
+	Spine      common.Hash
 }
 
 type checkpointMarshaling struct {
-	Epoch *hexutil.Uint64 `json:"epoch"`
-	Root  *common.Hash    `json:"root"`
-	Spine *common.Hash    `json:"spine"`
+	Epoch      *hexutil.Uint64 `json:"epoch"`
+	StartEpoch *hexutil.Uint64 `json:"startEpoch"`
+	Root       *common.Hash    `json:"root"`
+	Spine      *common.Hash    `json:"spine"`
 }
 
 // Bytes gets the byte representation.
 func (cp *Checkpoint) Bytes() []byte {
-	cpLen := 8 + common.HashLength + common.HashLength
+	cpLen := 8 + 8 + common.HashLength + common.HashLength
 	res := make([]byte, 0, cpLen)
 	epoch := make([]byte, 8)
 	binary.BigEndian.PutUint64(epoch, cp.Epoch)
+	startEpoch := make([]byte, 8)
+	binary.BigEndian.PutUint64(startEpoch, cp.StartEpoch)
 	res = append(res, epoch...)
+	res = append(res, startEpoch...)
 	res = append(res, cp.Root.Bytes()...)
 	res = append(res, cp.Spine.Bytes()...)
 	return res
 }
 
 func (cp *Checkpoint) SetBytes(data []byte) error {
-	cpLen := 8 + common.HashLength + common.HashLength
+	cpLen := 8 + 8 + common.HashLength + common.HashLength
 	if len(data) != cpLen {
 		return fmt.Errorf("bad bitlen: got=%d req=%d", len(data), cpLen)
 	}
@@ -45,6 +50,10 @@ func (cp *Checkpoint) SetBytes(data []byte) error {
 	start = 0
 	end += 8
 	cp.Epoch = binary.BigEndian.Uint64(data[start:end])
+
+	start = end
+	end += 8
+	cp.StartEpoch = binary.BigEndian.Uint64(data[start:end])
 
 	start = end
 	end += common.HashLength
@@ -69,8 +78,9 @@ func BytesToCheckpoint(b []byte) (*Checkpoint, error) {
 
 func (cp *Checkpoint) Copy() *Checkpoint {
 	cpy := &Checkpoint{
-		Epoch: cp.Epoch,
-		Spine: cp.Spine,
+		Epoch:      cp.Epoch,
+		StartEpoch: cp.StartEpoch,
+		Spine:      cp.Spine,
 	}
 	copy(cpy.Root[:], cp.Root[:])
 	copy(cpy.Spine[:], cp.Spine[:])
@@ -79,9 +89,10 @@ func (cp *Checkpoint) Copy() *Checkpoint {
 
 func (cp *Checkpoint) MarshalJSON() ([]byte, error) {
 	out := checkpointMarshaling{
-		Epoch: (*hexutil.Uint64)(&cp.Epoch),
-		Root:  &cp.Root,
-		Spine: &cp.Spine,
+		Epoch:      (*hexutil.Uint64)(&cp.Epoch),
+		StartEpoch: (*hexutil.Uint64)(&cp.StartEpoch),
+		Root:       &cp.Root,
+		Spine:      &cp.Spine,
 	}
 	return json.Marshal(out)
 }
@@ -93,6 +104,9 @@ func (cp *Checkpoint) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Epoch != nil {
 		cp.Epoch = uint64(*dec.Epoch)
+	}
+	if dec.StartEpoch != nil {
+		cp.StartEpoch = uint64(*dec.StartEpoch)
 	}
 	if dec.Root != nil {
 		cp.Root = *dec.Root
