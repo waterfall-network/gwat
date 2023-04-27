@@ -2144,34 +2144,8 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
-		var (
-			intrGas uint64
-			err     error
-		)
-		var isTokenOp, isValidatorOp bool
-		if tx.To() == nil {
-			if _, err = operation.GetOpCode(tx.Data()); err == nil {
-				isTokenOp = true
-			}
-		} else {
-			isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
-		}
-
-		var txData []byte
-		if !isTokenOp && !isValidatorOp {
-			txData = tx.Data()
-		}
-
-		contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
-		if len(tx.Data()) > 0 {
-			intrGas, err = bc.TxEstimateGas(tx, nil)
-			if err != nil {
-				log.Warn("Block verification: gas usage error", "err", err)
-				return false, err
-			}
-		} else {
-			intrGas, err = IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
-		}
+		var intrGas uint64
+		intrGas, err = bc.TxEstimateGas(tx, nil)
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
 			return false, nil
@@ -2856,21 +2830,31 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	return statedb, receipts, rlogs, *gasUsed
 }
 
-// TODO: rm
-//// recommitBlockTransaction applies single transactions wile recommit block process.
-//func (bc *BlockChain) recommitBlockTransaction(tx *types.Transaction, statedb *state.StateDB, block *types.Block, gasPool *GasPool, gasUsed *uint64) (*types.Receipt, []*types.Log, error) {
-//	receipt, err := ApplyTransaction(bc.chainConfig, bc, &block.Header().Coinbase, gasPool, statedb, block.Header(), tx, gasUsed, *bc.GetVMConfig(), bc)
-//	//snap := statedb.Snapshot()
-//	//if err != nil {
-//	//	log.Trace("Error: Recommit block transaction", "height", block.Height(), "hash", block.Hash().Hex(), "tx", tx.Hash().Hex(), "err", err)
-//	//	statedb.RevertToSnapshot(snap)
-//	//	return nil, nil, err
-//	//}
-//	return receipt, receipt.Logs, err
-//}
-
 func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
-	defer func(start time.Time) { log.Info("+++ Executing EVM call finished +++", "runtime", time.Since(start)) }(time.Now())
+	defer func(start time.Time) { log.Info("+++ TxEstimateGas finished +++", "runtime", time.Since(start)) }(time.Now())
+	var err error
+	var isTokenOp, isValidatorOp bool
+	if tx.To() == nil {
+		if _, err = operation.GetOpCode(tx.Data()); err == nil {
+			isTokenOp = true
+		}
+	} else {
+		isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
+	}
+	var txData []byte
+	if !isTokenOp && !isValidatorOp {
+		txData = tx.Data()
+	}
+	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
+
+	if len(tx.Data()) > 0 {
+		return bc.TxEstimateGasByEvm(tx, nil)
+	}
+	return IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
+}
+
+func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
+	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 	header := bc.GetLastFinalizedHeader()
 	if lfNumber != nil {
 		header = bc.GetHeaderByNumber(*lfNumber)
@@ -2894,10 +2878,10 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (ui
 
 	receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig(), bc)
 	if err != nil {
-		log.Error("Tx Estimate Gas: Error", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "err", err)
+		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "err", err)
 		return 0, err
 	}
-	log.Info("Tx Estimate Gas: success", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "txGas", tx.Gas(), "calcGas", receipt.GasUsed)
+	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "txGas", tx.Gas(), "calcGas", receipt.GasUsed)
 	return receipt.GasUsed, nil
 }
 
