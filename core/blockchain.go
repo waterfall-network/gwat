@@ -2299,7 +2299,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			continue
 		}
 
-		log.Info("Insert propagated block", "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
+		log.Info("Insert propagated block", "Slot", block.Slot(), "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
 
 		rawdb.WriteBlock(bc.db, block)
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())

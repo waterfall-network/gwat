@@ -813,13 +813,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	// Fill the block with all available pending transactions.
-	pending := c.getPending()
-	filterPending, err := c.filterPendingTxs(pending)
-	if err != nil {
-		log.Error("can`t filter pending transactions", "error", err)
-
-		return
-	}
+	pendingTxs := c.getPending()
 
 	syncData := validatorsync.GetPendingValidatorSyncData(c.chain)
 
@@ -839,10 +833,10 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		)
 	}
 
-	log.Info("Block creation: assigned txs", "len(pending)", len(pending), "len(filterPending)", len(filterPending), "len(syncData)", len(syncData))
+	log.Info("Block creation: assigned txs", "len(pendingTxs)", len(pendingTxs), "len(syncData)", len(syncData))
 
 	// Short circuit if no pending transactions
-	if len(filterPending) == 0 && len(syncData) == 0 {
+	if len(pendingTxs) == 0 && len(syncData) == 0 {
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs (short circuit)", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		c.errWorkCh <- &ErrNoTxs
@@ -850,7 +844,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		return
 	}
 
-	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, filterPending, header.BaseFee)
+	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pendingTxs, header.BaseFee)
 	if c.appendTransactions(txs, c.coinbase, &header.CpNumber) {
 		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
 			if err := c.processValidatorTxs(header.CpHash, syncData, header.CpNumber); err != nil {
@@ -939,15 +933,28 @@ func (c *Creator) isCreatorActive(assigned *Assignment) bool {
 // getPending returns all pending transactions for current miner
 func (c *Creator) getPending() map[common.Address]types.Transactions {
 	pending := c.eth.TxPool().Pending(true)
-	for k, txs := range pending {
+
+	// to correct handling validators' sync transactions
+	// each creators handle own transactions while assigned slot
+	// here removing all txs of other creators
+	currCreators := c.getAssignment().Creators
+	for address := range pending {
+		for _, creator := range currCreators {
+			if address == creator && creator != c.coinbase {
+				delete(pending, address)
+			}
+		}
+	}
+
+	for fromAdr, txs := range pending {
 		_txs := types.Transactions{}
-		if c.isAddressAssigned(k) {
+		if c.isAddressAssigned(fromAdr) || fromAdr == c.coinbase {
 			_txs = txs
 		}
 		if len(_txs) > 0 {
-			pending[k] = _txs
+			pending[fromAdr] = _txs
 		} else {
-			delete(pending, k)
+			delete(pending, fromAdr)
 		}
 	}
 	return pending
@@ -1005,23 +1012,6 @@ func (c *Creator) getAssignment() Assignment {
 // setAssignment
 func (c *Creator) setAssignment(assigned *Assignment) {
 	c.cacheAssignment = assigned
-}
-
-func (c *Creator) filterPendingTxs(pending map[common.Address]types.Transactions) (map[common.Address]types.Transactions, error) {
-	slotCreators, err := c.chain.ValidatorStorage().GetCreatorsBySlot(c.chain, c.chain.GetSlotInfo().CurrentSlot())
-	if err != nil {
-		return nil, err
-	}
-
-	for address := range pending {
-		for _, creator := range slotCreators {
-			if address == creator && creator != c.coinbase {
-				delete(pending, address)
-			}
-		}
-	}
-
-	return pending, nil
 }
 
 func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync, lfNumber uint64) error {
