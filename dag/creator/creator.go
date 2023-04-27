@@ -272,9 +272,10 @@ func (c *Creator) SetGasCeil(ceil uint64) {
 // isSyncing returns tru while sync pocess
 func (c *Creator) isSyncing() bool {
 	//check tips
-	if tips := c.chain.GetTips(); len(tips) == 0 {
-		return true
-	}
+	//depracated
+	//if tips := c.chain.GetTips(); len(tips) == 0 {
+	//	return true
+	//}
 	if badTips := c.chain.GetUnsynchronizedTipsHashes(); len(badTips) > 0 {
 		return true
 	}
@@ -723,14 +724,14 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		}
 	}
 
-	finDag := tips.GetFinalizingDag()
-	if finDag == nil {
-		log.Error("Tips empty, skipping block creation", "Initial", c.chain.GetTips().Print(), "uncompleted", c.chain.GetUnsynchronizedTipsHashes())
-		err := errors.New("tips empty, skipping block creation")
-		c.errWorkCh <- &err
-		return
-	}
-	log.Info("Creator: start tips", "tips", tips.Print())
+	//depracated
+	//finDag := tips.GetFinalizingDag()
+	//if finDag == nil {
+	//	log.Error("Tips empty, skipping block creation", "Initial", c.chain.GetTips().Print(), "uncompleted", c.chain.GetUnsynchronizedTipsHashes())
+	//	err := errors.New("tips empty, skipping block creation")
+	//	c.errWorkCh <- &err
+	//	return
+	//}
 
 	// if max slot of parents is less or equal to last finalized block slot
 	// - add last finalized block to parents
@@ -744,6 +745,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	if maxParentSlot <= lastFinBlock.Slot() {
 		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
 	}
+
+	log.Info("Creator: start tips", "tips", tips.Print(), "parents", tipsBlocks.Hashes())
 
 	parentHashes := tipsBlocks.Hashes().Sort()
 
