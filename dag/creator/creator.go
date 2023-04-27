@@ -525,6 +525,7 @@ func (c *Creator) appendTransaction(tx *types.Transaction, lfNumber *uint64, isV
 func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, lfNumber *uint64) bool {
 	// Short circuit if current is nil
 	if c.current == nil {
+		log.Warn("Skipping block creation: no current environment", "env", c.current)
 		return true
 	}
 
@@ -538,12 +539,18 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coi
 	for {
 		// If we don't have enough gas for any further transactions then we're done
 		if c.current.gasPool.Gas() < params.TxGas || c.current.cumutativeGas > c.current.header.GasLimit {
-			log.Trace("Not enough gas for further transactions", "have", c.current.gasPool, "want", params.TxGas)
+			log.Warn("Not enough gas for further transactions",
+				"have", c.current.gasPool,
+				"want", params.TxGas,
+				"cumutativeGas", c.current.cumutativeGas,
+				"GasLimit", c.current.header.GasLimit,
+			)
 			break
 		}
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {
+			log.Info("Creator: adding txs to block end")
 			break
 		}
 		// Error may be ignored here. The error has already been checked
@@ -575,6 +582,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coi
 	}
 
 	if c.current.tcount == 0 {
+		log.Warn("Skipping block creation: no txs", "count", c.current.tcount)
 		return true
 	}
 
@@ -831,10 +839,12 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		)
 	}
 
+	log.Info("Block creation: assigned txs", "len(pending)", len(pending), "len(filterPending)", len(filterPending), "len(syncData)", len(syncData))
+
 	// Short circuit if no pending transactions
 	if len(filterPending) == 0 && len(syncData) == 0 {
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
-		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
+		log.Warn("Skipping block creation: no assigned txs (short circuit)", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		c.errWorkCh <- &ErrNoTxs
 
 		return
@@ -844,6 +854,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	if c.appendTransactions(txs, c.coinbase, &header.CpNumber) {
 		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
 			if err := c.processValidatorTxs(header.CpHash, syncData, header.CpNumber); err != nil {
+				log.Warn("Skipping block creation: processing validator txs err 0", "creator", c.coinbase, "err", err)
 				return
 			}
 
@@ -860,6 +871,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 
 	if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
 		if err := c.processValidatorTxs(header.CpHash, syncData, header.CpNumber); err != nil {
+			log.Warn("Skipping block creation: processing validator txs err 1", "creator", c.coinbase, "err", err)
 			return
 		}
 	}

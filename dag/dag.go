@@ -608,6 +608,7 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
 		"dagSlots", dagSlots,
+		"creators", creators,
 	)
 
 	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
