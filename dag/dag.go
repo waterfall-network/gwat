@@ -580,7 +580,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				d.errChan <- err
 			}
 
-			d.work(slot, creators, accounts)
+			// todo check
+			go d.work(slot, creators, accounts)
 		}
 	}
 }
@@ -602,15 +603,15 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	)
 	// create block
 	tips := d.bc.GetTips()
-	dagSlots := d.countDagSlots(&tips)
 	log.Info("Creator processing: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit,
+		"condition", d.creator.IsRunning() && len(errs) == 0,
 		"IsRunning", d.creator.IsRunning(),
 		"errs", errs,
-		"dagSlots", dagSlots,
+		"creators", creators,
+		"accounts", accounts,
 	)
 
-	if d.creator.IsRunning() && len(errs) == 0 && dagSlots != -1 && dagSlots <= finalizer.CreateDagSlotsLimit {
+	if d.creator.IsRunning() && len(errs) == 0 {
 		assigned := &creator.Assignment{
 			Slot:     slot,
 			Creators: creators,
@@ -629,13 +630,13 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 				}
 			}
 			if coinbase == (common.Address{}) {
-				return
+				continue
 			}
 
 			d.eth.SetEtherbase(coinbase)
 			if err = d.eth.CreatorAuthorize(coinbase); err != nil {
 				log.Error("Creator authorize err", "err", err, "creator", coinbase)
-				return
+				continue
 			}
 			log.Info("Creator assigned", "creator", coinbase)
 
@@ -648,19 +649,9 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 				crtInfo["newBlock"] = block.Hash().Hex()
 			}
 
-			log.Info("Creator processing: create block", "dagSlots", dagSlots, "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+			log.Info("Creator processing: create block", "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
 		}
 	}
-}
-
-// countDagSlots count number of slots in dag chain
-// if error returns  -1
-func (d *Dag) countDagSlots(tips *types.Tips) int {
-	candidates, err := d.finalizer.GetFinalizingCandidates(nil)
-	if err != nil {
-		return -1
-	}
-	return len(candidates)
 }
 
 // getLastFinalizeApiSlot returns the slot of last HandleFinalize api call.
@@ -681,8 +672,13 @@ func (d *Dag) setLastFinalizeApiSlot() {
 // current slot and the last coord slot grater than 1.
 func (d *Dag) isCoordinatorConnectionLost() bool {
 	slot := uint64(0)
-	if si := d.bc.GetSlotInfo(); si != nil {
-		slot = si.CurrentSlot()
+	si := d.bc.GetSlotInfo()
+	if si == nil {
+		return true
 	}
-	return (slot - d.getLastFinalizeApiSlot()) > 1
+	slot = si.CurrentSlot()
+	if si.IsEpochStart(slot) {
+		return (slot - d.getLastFinalizeApiSlot()) > 1
+	}
+	return (slot - d.getLastFinalizeApiSlot()) > si.SlotsPerEpoch
 }
