@@ -2289,7 +2289,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			DagChainHashes:      dagChainHashes.Uniq(),
 		}
 		bc.AddTips(dagBlock)
-		bc.RemoveTips(dagBlock.DagChainHashes)
+		bc.RemoveTips(dagBlock.DagChainHashes) // TODO: check
+		bc.MoveTxsToProcessing(types.Blocks{block})
 
 		//check tips
 		tips := bc.GetTips()
