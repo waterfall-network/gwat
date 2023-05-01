@@ -222,15 +222,17 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	d.bc.AppendNotProcessedValidatorSyncData(data.ValSyncData)
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
-	if lfHeader.Height != lfHeader.Nr() {
-		err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
-		if res.Error == nil {
-			res.Error = &err
-		} else {
-			mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
-			res.Error = &mrg
-		}
-	}
+
+	// TODO: deprecated
+	//if lfHeader.Height != lfHeader.Nr() {
+	//	err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
+	//	if res.Error == nil {
+	//		res.Error = &err
+	//	} else {
+	//		mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
+	//		res.Error = &mrg
+	//	}
+	//}
 
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash

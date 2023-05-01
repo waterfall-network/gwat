@@ -134,19 +134,24 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 
-		if lastBlock.Height() > lastBlock.Nr() {
-			log.Error("☠ finalizing: mismatch nr and height (critical)", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-			return f.SetSpineState(&successSpine, lastFinNr)
-		}
-		if lastBlock.Height() != lastBlock.Nr() {
-			log.Warn("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		}
+		// TODO: deprecated
+		//if lastBlock.Height() > lastBlock.Nr() {
+		//	log.Error("☠ finalizing: mismatch nr and height (critical)", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		//	return f.SetSpineState(&successSpine, lastFinNr)
+		//}
+		//if lastBlock.Height() != lastBlock.Nr() {
+		//	log.Warn("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		//}
+
 		lastFinNr = lastBlock.Nr()
 		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
 		log.Info("⛓ Finalization of spine completed (updateTips)", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		if lastBlock.Height() != lastBlock.Nr() {
-			log.Warn("☠ finalizing: mismatch nr and height (aft updateTips)", "calc.nr", lastFinNr, "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		}
+
+		// TODO: deprecated
+		//if lastBlock.Height() != lastBlock.Nr() {
+		//	log.Warn("☠ finalizing: mismatch nr and height (aft updateTips)", "calc.nr", lastFinNr, "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		//}
+
 		successSpine = spine.Hash()
 	}
 	return nil
@@ -327,7 +332,7 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		return ErrSpineNotFound
 	}
 
-	// TODO: UNCOMMENT
+	// TODO: depreacted
 	//if spineBlock.Height() != spineBlock.Nr() {
 	//	log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
 	//}
