@@ -2603,7 +2603,7 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
-				log.Error(fmt.Sprintf("%w: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
+				log.Error(fmt.Sprintf("%s: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
 				return nil, errBadPeer
 			}
 			header = headers[0]
@@ -2643,7 +2643,7 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
-				log.Error(fmt.Sprintf("%w: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
+				log.Error(fmt.Sprintf("%s: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
 				return nil, errBadPeer
 			}
 			header = headers[0]
