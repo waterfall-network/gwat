@@ -567,7 +567,7 @@ func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 // SetLastCoordinatedCheckpoint set last coordinated checkpoint.
 func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	currCp := bc.GetLastCoordinatedCheckpoint()
-	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch || cp.Epoch != currCp.Epoch {
+	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
 		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
