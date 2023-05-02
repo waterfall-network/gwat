@@ -931,15 +931,15 @@ func WriteCoordinatedCheckpoint(db ethdb.KeyValueWriter, epoch uint64, checkpoin
 
 // WriteCheckpointsBetweenEpochs adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
 func WriteCheckpointsBetweenEpochs(db ethdb.KeyValueWriter, currentCp, targetCp *types.Checkpoint) {
-	epochNum := currentCp.Epoch
+	epochNum := currentCp.FinEpoch
 
-	// Iterate from currCp.Epoch+1 to targetCp.Epoch-1
-	for epochNum < targetCp.Epoch {
+	// Iterate from currCp.FinEpoch+1 to targetCp.FinEpoch-1
+	for epochNum < targetCp.FinEpoch {
 		epochNum++ // Increment the epoch number
 
-		if epochNum == targetCp.Epoch {
+		if epochNum == targetCp.FinEpoch {
 			// Write the target checkpoint to the database
-			WriteCoordinatedCheckpoint(db, targetCp.Epoch, targetCp)
+			WriteCoordinatedCheckpoint(db, targetCp.FinEpoch, targetCp)
 		} else {
 			// Write the missing checkpoint to the database
 			WriteCoordinatedCheckpoint(db, epochNum, currentCp)

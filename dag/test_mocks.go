@@ -520,7 +520,7 @@ type MockethDownloader struct {
 	recorder *MockethDownloaderMockRecorder
 }
 
-func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray) (fullySynced bool, err error) {
+func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) (fullySynced bool, err error) {
 	//TODO implement me
 	panic("implement me")
 }

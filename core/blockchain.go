@@ -567,15 +567,15 @@ func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 // SetLastCoordinatedCheckpoint set last coordinated checkpoint.
 func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	currCp := bc.GetLastCoordinatedCheckpoint()
-	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch {
+	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
 		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
 
 		// Handle era
-		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
+		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.FinEpoch)
 		if err != nil {
-			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
+			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.FinEpoch)
 		}
 		bc.SyncEraToSlot(epochStartSlot)
 	}
@@ -3996,6 +3996,8 @@ func (bc *BlockChain) removeOptimisticSpinesFromCache(slot uint64) {
 func (bc *BlockChain) SetIsSynced(synced bool) {
 	bc.isSyncedM.Lock()
 	defer bc.isSyncedM.Unlock()
+
+	log.Info("Switched sync status to", "isSynced", synced)
 	bc.isSynced = synced
 }
 

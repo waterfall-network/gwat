@@ -81,7 +81,7 @@ type blockChain interface {
 
 type ethDownloader interface {
 	Synchronising() bool
-	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray) (fullySynced bool, err error)
+	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) (fullySynced bool, err error)
 }
 
 type Dag struct {
@@ -151,6 +151,14 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		return res
 	}
 
+	si := d.bc.GetSlotInfo()
+	currEpoch := si.SlotToEpoch(si.CurrentSlot())
+	// is cp head fin epoch reached
+	if currEpoch == data.Checkpoint.FinEpoch {
+		d.bc.SetIsSynced(true)
+		log.Info("HandleFinalize SetIsSynced curEpoch == finEpoch", "currEpoch", currEpoch, "finEpoch", data.Checkpoint.FinEpoch)
+	}
+
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
@@ -195,7 +203,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		spines = spines[bi+1:]
 	}
 
-	if err := d.handlSyncUnloadedBlocks(baseSpine, spines); err != nil {
+	if err := d.handlSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint.FinEpoch); err != nil {
 		strErr := err.Error()
 		res.Error = &strErr
 		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
@@ -238,7 +246,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	res.LFSpine = &lfHash
 
 	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
-		res.CpEpoch = &cp.Epoch
+		res.CpEpoch = &cp.FinEpoch
 		res.CpRoot = &cp.Root
 	}
 
@@ -251,7 +259,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 // 2. switch on sync mode
 // 3. start sync process
 // 4. if chain head reached - switch off sync mode
-func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray) error {
+func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) error {
 	if len(spines) == 0 {
 		return nil
 	}
@@ -271,7 +279,7 @@ func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashA
 	}
 
 	var fullySynced bool
-	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines); err != nil {
+	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines, finEpoch); err != nil {
 		return err
 	}
 	if fullySynced {
@@ -325,9 +333,9 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 	}
 	var cpepoch uint64
 	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
-		res.CpEpoch = &cp.Epoch
+		res.CpEpoch = &cp.FinEpoch
 		res.CpRoot = &cp.Root
-		cpepoch = cp.Epoch
+		cpepoch = cp.FinEpoch
 	}
 	log.Info("Handle CoordinatedState: response", "epoch", cpepoch, "result", res)
 	return res
@@ -539,13 +547,14 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			}
 
 			if !d.bc.IsSynced() {
+				log.Info("dag workloop !d.bc.IsSynced()", "IsSynced", d.bc.IsSynced())
 				continue
 			}
-			if d.isCoordinatorConnectionLost() {
-				d.bc.SetIsSynced(false)
-				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
-				continue
-			}
+			// if d.isCoordinatorConnectionLost() {
+			// 	d.bc.SetIsSynced(false)
+			// 	log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
+			// 	continue
+			// }
 
 			var (
 				err      error
