@@ -961,13 +961,13 @@ func TestWriteCheckpointsBetweenEpochs(t *testing.T) {
 	WriteCheckpointsBetweenEpochs(memDB, currentCp, targetCp)
 
 	// Check that the checkpoints were added correctly
-	for i := currentCp.Epoch + 1; i <= targetCp.Epoch; i++ {
+	for i := currentCp.FinEpoch + 1; i <= targetCp.FinEpoch; i++ {
 		storedCp := ReadCoordinatedCheckpoint(memDB, i)
 		if storedCp == nil {
 			t.Errorf("Checkpoint not found for epoch %d", i)
-		} else if i < targetCp.Epoch {
+		} else if i < targetCp.FinEpoch {
 			testutils.AssertEqual(t, storedCp, currentCp)
-		} else if i == targetCp.Epoch {
+		} else if i == targetCp.FinEpoch {
 			testutils.AssertEqual(t, storedCp, targetCp)
 		}
 	}
