@@ -63,6 +63,9 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	)
 
 	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress)
+	if err != nil {
+		return nil, err
+	}
 
 	txData := &types.DynamicFeeTx{
 		To:         valStateAddr,
