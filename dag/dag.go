@@ -550,11 +550,11 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				log.Info("dag workloop !d.bc.IsSynced()", "IsSynced", d.bc.IsSynced())
 				continue
 			}
-			// if d.isCoordinatorConnectionLost() {
-			// 	d.bc.SetIsSynced(false)
-			// 	log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
-			// 	continue
-			// }
+			if d.isCoordinatorConnectionLost() {
+				d.bc.SetIsSynced(false)
+				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
+				continue
+			}
 
 			var (
 				err      error
