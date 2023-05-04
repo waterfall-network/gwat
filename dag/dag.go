@@ -357,10 +357,24 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	tstart := time.Now()
 
 	// collect next finalization candidates
-	candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
-	if len(candidates) == 0 {
-		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
+	//candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
+	optSpines, err := d.GetOptimisticSpines(slot)
+	if len(optSpines) == 0 {
+		log.Info("No spines found", "tips", d.bc.GetTips().Print(), "slot", slot)
 	}
+
+	// take the first element of each record in the input slice.
+	var candidates common.HashArray
+	for _, candidate := range optSpines {
+		if len(candidate) > 0 {
+			candidates = append(candidates, candidate[0])
+		}
+	}
+
+	if len(candidates) == 0 {
+		log.Info("No candidates found", "slot", slot)
+	}
+
 	log.Info("Handle GetCandidates: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	res := &types.CandidatesResult{
 		Error:      nil,
