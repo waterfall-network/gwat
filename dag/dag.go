@@ -358,7 +358,8 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 
 	// collect next finalization candidates
 	//candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
-	optSpines, err := d.GetOptimisticSpines(slot)
+	fromSlot := d.bc.GetLastFinalizedHeader().Slot
+	optSpines, err := d.GetOptimisticSpines(fromSlot)
 	if len(optSpines) == 0 {
 		log.Info("No spines found", "tips", d.bc.GetTips().Print(), "slot", slot)
 	}
@@ -367,7 +368,10 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	var candidates common.HashArray
 	for _, candidate := range optSpines {
 		if len(candidate) > 0 {
-			candidates = append(candidates, candidate[0])
+			header := d.bc.GetHeaderByHash(candidate[0])
+			if header.Slot <= slot {
+				candidates = append(candidates, candidate[0])
+			}
 		}
 	}
 
