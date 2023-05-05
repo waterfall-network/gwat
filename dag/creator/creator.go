@@ -203,10 +203,14 @@ func (c *Creator) Pending() (*types.Block, *state.StateDB) {
 	// return a snapshot to avoid contention on currentMu mutex
 	c.snapshotMu.RLock()
 	defer c.snapshotMu.RUnlock()
-	if c.snapshotState == nil {
+
+	block := c.chain.GetLastFinalizedBlock()
+	state, err := c.chain.StateAt(block.Root())
+	if err != nil {
+		log.Error("Get pending block and state failed", "err", err)
 		return nil, nil
 	}
-	return c.snapshotBlock, c.snapshotState.Copy()
+	return block, state.Copy()
 }
 
 // PendingBlock returns the currently pending block.
