@@ -443,7 +443,7 @@ func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 	//currentSlot := d.bc.GetSlotInfo().CurrentSlot()
 	currentSlot := d.bc.GetTips().GetMaxSlot()
 	if currentSlot <= gtSlot {
-		return []common.HashArray{}, errWrongInputSlot
+		return []common.HashArray{}, nil
 	}
 
 	var err error
