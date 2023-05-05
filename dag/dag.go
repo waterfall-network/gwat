@@ -359,10 +359,24 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	tstart := time.Now()
 
 	// collect next finalization candidates
-	candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
-	if len(candidates) == 0 {
-		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
+	//candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
+	optSpines, err := d.GetOptimisticSpines(slot)
+	if len(optSpines) == 0 {
+		log.Info("No spines found", "tips", d.bc.GetTips().Print(), "slot", slot)
 	}
+
+	// take the first element of each record in the input slice.
+	var candidates common.HashArray
+	for _, candidate := range optSpines {
+		if len(candidate) > 0 {
+			candidates = append(candidates, candidate[0])
+		}
+	}
+
+	if len(candidates) == 0 {
+		log.Info("No candidates found", "slot", slot)
+	}
+
 	log.Info("Handle GetCandidates: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	res := &types.CandidatesResult{
 		Error:      nil,
@@ -376,9 +390,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	return res
 }
 
-func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.OptimisticSpinesResult {
-	spineBlock := d.bc.GetBlock(lastFinSpine)
-	spineSlot := spineBlock.Slot()
+func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.OptimisticSpinesResult {
 	//skip if synchronising
 	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
@@ -392,13 +404,25 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 
 	tstart := time.Now()
 
+	log.Info("Handle GetOptimisticSpines: start", "fromSpine", fromSpine.Hex())
+
+	spineBlock := d.bc.GetBlock(fromSpine)
+	if spineBlock == nil {
+		err := errors.New("bad params: spine not found").Error()
+		return &types.OptimisticSpinesResult{
+			Error: &err,
+			Data:  nil,
+		}
+	}
+
+	spineSlot := spineBlock.Slot()
+
 	// collect optimistic spines
 	spines, err := d.GetOptimisticSpines(spineSlot)
 	if len(spines) == 0 {
 		log.Info("No spines for tips", "tips", d.bc.GetTips().Print())
 	}
 
-	log.Info("Handle GetOptimisticSpines: get finalizing spines", "err", err, "spines", spines, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	res := &types.OptimisticSpinesResult{
 		Error: nil,
 		Data:  spines,
@@ -407,12 +431,13 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle GetOptimisticSpines: response", "result", res, "\u2692", params.BuildId)
+	log.Info("Handle GetOptimisticSpines: response", "result", res, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	return res
 }
 
 func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
-	currentSlot := d.bc.GetSlotInfo().CurrentSlot()
+	//currentSlot := d.bc.GetSlotInfo().CurrentSlot()
+	currentSlot := d.bc.GetTips().GetMaxSlot()
 	if currentSlot <= gtSlot {
 		return []common.HashArray{}, errWrongInputSlot
 	}

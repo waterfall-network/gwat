@@ -3368,28 +3368,28 @@ func (bc *BlockChain) GetDagHashes() *common.HashArray {
 	dagHashes := common.HashArray{}
 	tips := *bc.hc.GetTips()
 
-	tipsHashes := tips.GetOrderedDagChainHashes()
-	dagBlocks := bc.GetBlocksByHashes(tipsHashes)
-	for hash, bl := range dagBlocks {
-		if bl != nil && bl.Nr() == 0 && bl.Height() > 0 {
-			dagHashes = append(dagHashes, hash)
-		}
-	}
-	if len(dagHashes) == 0 {
-		dagHashes = common.HashArray{bc.GetLastFinalizedBlock().Hash()}
-	}
-
-	//expCache := ExploreResultMap{}
-	//for hash, tip := range tips {
-	//	if hash == tip.LastFinalizedHash {
+	//tipsHashes := tips.GetOrderedDagChainHashes()
+	//dagBlocks := bc.GetBlocksByHashes(tipsHashes)
+	//for hash, bl := range dagBlocks {
+	//	if bl != nil && bl.Nr() == 0 && bl.Height() > 0 {
 	//		dagHashes = append(dagHashes, hash)
-	//		continue
 	//	}
-	//	_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
-	//	expCache = c
-	//	dagHashes = dagHashes.Concat(loaded)
 	//}
-	//dagHashes = dagHashes.Uniq().Sort()
+	//if len(dagHashes) == 0 {
+	//	dagHashes = common.HashArray{bc.GetLastFinalizedBlock().Hash()}
+	//}
+
+	expCache := ExploreResultMap{}
+	for hash, tip := range tips {
+		if hash == tip.LastFinalizedHash {
+			dagHashes = append(dagHashes, hash)
+			continue
+		}
+		_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
+		expCache = c
+		dagHashes = dagHashes.Concat(loaded)
+	}
+	dagHashes = dagHashes.Uniq().Sort()
 	return &dagHashes
 }
 
