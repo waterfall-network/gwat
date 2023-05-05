@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	spineBlock = types.NewBlock(&types.Header{
+	spineBlockTest = types.NewBlock(&types.Header{
 		Slot:   11,
 		Height: 11,
 		TxHash: common.BytesToHash(testutils.RandomData(32)),
