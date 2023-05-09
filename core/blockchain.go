@@ -4007,3 +4007,36 @@ func (bc *BlockChain) IsSynced() bool {
 	defer bc.isSyncedM.Unlock()
 	return bc.isSynced
 }
+
+func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
+	//currentSlot := d.bc.GetSlotInfo().CurrentSlot()
+	currentSlot := bc.GetTips().GetMaxSlot()
+	if currentSlot <= gtSlot {
+		return []common.HashArray{}, nil
+	}
+
+	var err error
+	optimisticSpines := make([]common.HashArray, 0)
+
+	for i := gtSlot + 1; i <= currentSlot; i++ {
+		slotSpines := bc.GetOptimisticSpinesFromCache(i)
+		if slotSpines == nil {
+			slotBlocks := make(types.Blocks, 0)
+			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(bc.Database(), i)
+			for _, hash := range slotBlocksHashes {
+				block := bc.GetBlock(hash)
+				slotBlocks = append(slotBlocks, block)
+			}
+			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
+			if err != nil {
+				return []common.HashArray{}, err
+			}
+
+			bc.SetOptimisticSpinesToCache(i, slotSpines)
+		}
+
+		optimisticSpines = append(optimisticSpines, slotSpines)
+	}
+
+	return optimisticSpines, nil
+}

@@ -239,6 +239,7 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		bc            = f.eth.BlockChain()
 		hasNotFin     = false          //has any not finalized items
 		dagCandidates common.HashArray // current dag candidates
+		optSpines     []common.HashArray
 		err           error
 	)
 
@@ -260,9 +261,20 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 	}
 
 	if hasNotFin {
-		dagCandidates, err = f.GetFinalizingCandidates(nil)
+		fromSlot := f.eth.BlockChain().GetLastFinalizedHeader().Slot
+		optSpines, err = f.eth.BlockChain().GetOptimisticSpines(fromSlot)
 		if err != nil {
 			return false, err
+		}
+		if len(optSpines) == 0 {
+			log.Info("No spines found", "tips", f.eth.BlockChain().GetTips().Print(), "slot", fromSlot)
+		}
+
+		for _, candidate := range optSpines {
+			if len(candidate) > 0 {
+				//header := d.bc.GetHeaderByHash(candidate[0])
+				dagCandidates = append(dagCandidates, candidate[0])
+			}
 		}
 	}
 
