@@ -430,20 +430,20 @@ func (c *Creator) resultHandler(task *task) {
 	c.chain.RemoveTips(task.block.ParentHashes())
 
 	//2. create for new blockDag
-	tips := task.tips.Copy()
-	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
+	//tips := task.tips.Copy()
+	tmpDagChainHashes := c.chain.GetDagHashes()
 
-	// after reorg tips can content hashes of finalized blocks
-	finHashes := common.HashArray{}
-	for _, h := range tmpDagChainHashes.Copy() {
-		blk := c.eth.BlockChain().GetHeader(h)
-		if !(blk.Height > 0 && blk.Nr() == 0) {
-			finHashes = append(finHashes, h)
-		}
-	}
-	if len(finHashes) > 0 {
-		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
-	}
+	//// after reorg tips can content hashes of finalized blocks
+	//finHashes := common.HashArray{}
+	//for _, h := range tmpDagChainHashes.Copy() {
+	//	blk := c.eth.BlockChain().GetHeader(h)
+	//	if !(blk.Height > 0 && blk.Nr() == 0) {
+	//		finHashes = append(finHashes, h)
+	//	}
+	//}
+	//if len(finHashes) > 0 {
+	//	tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
+	//}
 
 	newBlockDag := &types.BlockDAG{
 		Hash:                task.block.Hash(),
@@ -451,7 +451,7 @@ func (c *Creator) resultHandler(task *task) {
 		Slot:                task.block.Slot(),
 		LastFinalizedHash:   task.block.CpHash(),
 		LastFinalizedHeight: task.block.CpNumber(),
-		DagChainHashes:      tmpDagChainHashes,
+		DagChainHashes:      *tmpDagChainHashes,
 	}
 	c.chain.AddTips(newBlockDag)
 	c.chain.WriteCurrentTips()

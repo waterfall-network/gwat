@@ -15,7 +15,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
@@ -71,6 +70,7 @@ type blockChain interface {
 	DagMuUnlock()
 	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
+	GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error)
 	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
 
 	SetIsSynced(synced bool)
@@ -361,7 +361,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	// collect next finalization candidates
 	//candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
 	fromSlot := d.bc.GetLastFinalizedHeader().Slot
-	optSpines, err := d.GetOptimisticSpines(fromSlot)
+	optSpines, err := d.bc.GetOptimisticSpines(fromSlot)
 	if len(optSpines) == 0 {
 		log.Info("No spines found", "tips", d.bc.GetTips().Print(), "slot", slot)
 	}
@@ -422,7 +422,7 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 	spineSlot := spineBlock.Slot()
 
 	// collect optimistic spines
-	spines, err := d.GetOptimisticSpines(spineSlot)
+	spines, err := d.bc.GetOptimisticSpines(spineSlot)
 	if len(spines) == 0 {
 		log.Info("No spines for tips", "tips", d.bc.GetTips().Print())
 	}
@@ -439,38 +439,6 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 	return res
 }
 
-func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
-	//currentSlot := d.bc.GetSlotInfo().CurrentSlot()
-	currentSlot := d.bc.GetTips().GetMaxSlot()
-	if currentSlot <= gtSlot {
-		return []common.HashArray{}, nil
-	}
-
-	var err error
-	optimisticSpines := make([]common.HashArray, 0)
-
-	for i := gtSlot + 1; i <= currentSlot; i++ {
-		slotSpines := d.bc.GetOptimisticSpinesFromCache(i)
-		if slotSpines == nil {
-			slotBlocks := make(types.Blocks, 0)
-			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
-			for _, hash := range slotBlocksHashes {
-				block := d.bc.GetBlock(hash)
-				slotBlocks = append(slotBlocks, block)
-			}
-			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
-			if err != nil {
-				return []common.HashArray{}, err
-			}
-
-			d.bc.SetOptimisticSpinesToCache(i, slotSpines)
-		}
-
-		optimisticSpines = append(optimisticSpines, slotSpines)
-	}
-
-	return optimisticSpines, nil
-}
 
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
