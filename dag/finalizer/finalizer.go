@@ -247,6 +247,7 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 	for _, b := range mapHeaders {
 		// if not found
 		if b == nil {
+			log.Error("IsValidSequenceOfSpines header not found", "b.Nr()", b.Nr(), "b.Nr()", b.Height, "hash", b.Hash())
 			return false, nil
 		}
 		// if block is not finalized
@@ -254,8 +255,10 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 			hasNotFin = true
 		} else {
 			// if block is finalized - check is it spine
+			// TODO: check
 			if b.Nr() != b.Height {
-				return false, nil
+				log.Warn("?????? IsValidSequenceOfSpines b.Nr() != b.Height", "b.Nr()", b.Nr(), "b.Nr()", b.Height, "hash", b.Hash())
+				//return false, nil
 			}
 		}
 	}
@@ -264,6 +267,7 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		fromSlot := f.eth.BlockChain().GetLastFinalizedHeader().Slot
 		optSpines, err = f.eth.BlockChain().GetOptimisticSpines(fromSlot)
 		if err != nil {
+			log.Error("GetOptimisticSpines error", "slot", fromSlot, "err", err)
 			return false, err
 		}
 		if len(optSpines) == 0 {
