@@ -571,11 +571,11 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
 		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
-
+		log.Info("####### SetLastCoordinatedCheckpoint ", "cp", cp)
 		// Handle era
-		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.FinEpoch)
+		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
 		if err != nil {
-			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.FinEpoch)
+			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
 		}
 		bc.SyncEraToSlot(epochStartSlot)
 	}
@@ -867,6 +867,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		}
 
 		delBlock := bc.GetBlockByHash(hash)
+		log.Info("@@@@@@@@@ OptimisticSpines cache Deleteblock from db!!!!!", "slot", delBlock.Slot(), "hash", hash)
 		rawdb.DeleteSlotBlockHash(bc.Database(), delBlock.Slot(), hash)
 
 		if num != nil {
@@ -2089,6 +2090,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	// TODO: check whether we need it???
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
 	if !isValidEra {
@@ -3750,7 +3752,13 @@ func (bc *BlockChain) GetEraInfo() *era.EraInfo {
 
 // SetNewEraInfo sets new era info.
 func (bc *BlockChain) SetNewEraInfo(newEra era.Era) {
-	log.Info("New era", "num", newEra.Number, "begin", newEra.From, "end", newEra.To, "root", newEra.Root)
+	log.Info("New era",
+		"num", newEra.Number,
+		"begin", newEra.From,
+		"end", newEra.To,
+		"root", newEra.Root,
+	)
+
 	bc.eraInfo = era.NewEraInfo(newEra)
 }
 
@@ -3766,7 +3774,13 @@ func (bc *BlockChain) SyncEraToSlot(slot uint64) {
 		} else {
 			log.Error("Invalid checkpoint: sync to era error")
 		}
-
+		log.Info("######## SyncEraToSlot", "toEpoch", toEpoch,
+			"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
+			"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
+			"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
+			"cpSlot", slot,
+			"currSlot", bc.GetSlotInfo().CurrentSlot(),
+		)
 		bc.EnterNextEra(spineRoot)
 	}
 }
@@ -3787,12 +3801,29 @@ func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 	// Get the epoch of the block
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
 
+	fEpochSl, _ := bc.slotInfo.SlotOfEpochStart(bc.eraInfo.FirstEpoch())
+	lEpochSl, _ := bc.slotInfo.SlotOfEpochEnd(bc.eraInfo.LastEpoch())
+
 	// Get the era that the block belongs to
 	var valEra *era.Era
 	if bc.GetEraInfo().GetEra().Number == block.Era() {
+		log.Info("@@@@@@@@@ verifyBlockEra",
+			"bc.GetEraInfo().GetEra()", bc.GetEraInfo().GetEra(),
+			"blEra", block.Era(),
+			"blEpoch", blockEpoch,
+			"blSlot", block.Slot(),
+			"blHash", block.Hash(),
+			"blNr", block.Nr(),
+			"FirsEpoch", bc.eraInfo.FirstEpoch(),
+			"LastEpoch", bc.eraInfo.LastEpoch(),
+			"FirstEpochEraSlot", fEpochSl,
+			"LastEpochEraSlot", lEpochSl,
+		)
+
 		valEra = bc.GetEraInfo().GetEra()
 	} else {
 		valEra = rawdb.ReadEra(bc.db, block.Era())
+		log.Info("@@@@@@@@@ verifyBlockEra", "rawdb.ReadEra(bc.db, block.Era())", valEra, "blEra", block.Era(), "blockEpoch", blockEpoch, "blSlot", block.Slot(), "hash", block.Hash(), "blNr", block.Nr())
 	}
 
 	// Check if the block epoch is within the era
@@ -3803,6 +3834,14 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
 	if nextEra != nil {
 		rawdb.WriteCurrentEra(bc.db, nextEra.Number)
+		log.Info("######### if nextEra != nil EnterNextEra",
+			"num", nextEra.Number,
+			"begin", nextEra.From,
+			"end", nextEra.To,
+			"root", nextEra.Root,
+			"currSlot", bc.GetSlotInfo().CurrentSlot(),
+			"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+		)
 		bc.SetNewEraInfo(*nextEra)
 		return nextEra
 	}
@@ -3811,6 +3850,14 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 	nextEra = era.NextEra(bc, root, uint64(len(validators)))
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
+	log.Info("######### if nextEra == nil EnterNextEra",
+		"num", nextEra.Number,
+		"begin", nextEra.From,
+		"end", nextEra.To,
+		"root", nextEra.Root,
+		"currSlot", bc.GetSlotInfo().CurrentSlot(),
+		"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+	)
 	bc.SetNewEraInfo(*nextEra)
 	return nextEra
 }

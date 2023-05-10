@@ -464,8 +464,17 @@ func (c *Creator) resultHandler(task *task) {
 	c.mux.Post(core.NewMinedBlockEvent{Block: task.block})
 
 	// Insert the block into the set of pending ones to resultLoop for confirmations
-	log.Info("🔨 created dag block", "slot", task.block.Slot(), "height", task.block.Height(),
-		"hash", hash.Hex(), "parents", task.block.ParentHashes(), "CpHash", task.block.CpHash(), "CpNumber", task.block.CpNumber())
+	log.Info("🔨 created dag block",
+		"slot", task.block.Slot(),
+		"epoch", c.chain.GetSlotInfo().SlotToEpoch(task.block.Slot()),
+		"era", task.block.Era(),
+		"height", task.block.Height(),
+		"hash", hash.Hex(),
+		"parents", task.block.ParentHashes(),
+		"CpHash", task.block.CpHash(),
+		"CpNumber", task.block.CpNumber(),
+	)
+
 }
 
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
@@ -766,6 +775,16 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	log.Info("Creator calculate block height", "newHeight", newHeight)
+	log.Info("########## CREATOR slot epoch era",
+		"blHeight", newHeight,
+		"blEpoch", c.chain.GetSlotInfo().SlotToEpoch(slotInfo.Slot),
+		"blSlot", slotInfo.Slot,
+		"currSlot", c.chain.GetSlotInfo().CurrentSlot(),
+		"currEpoch", c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()),
+		"eraNum", c.chain.GetEraInfo().Number(),
+		"from", c.chain.GetEraInfo().FromEpoch(),
+		"to", c.chain.GetEraInfo().ToEpoch(),
+	)
 
 	header := &types.Header{
 		ParentHashes: parentHashes,

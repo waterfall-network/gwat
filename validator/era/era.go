@@ -55,6 +55,7 @@ func (e *Era) Length() uint64 {
 }
 
 func (e *Era) IsContainsEpoch(epoch uint64) bool {
+	log.Info("@@@@@@@@@ IsContainsEpoch valEra", "epoch", epoch, "eraNum", e.Number, "to", e.To, "from", e.From)
 	return epoch >= e.From && epoch <= e.To
 }
 
@@ -192,6 +193,11 @@ func HandleEra(bc Blockchain, slot uint64) error {
 				log.Error("Write new era error", "err", ErrCheckpointInvalid)
 				return ErrCheckpointInvalid
 			}
+			log.Info("######## HandleEra", "currentEpoch", currentEpoch,
+				"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
+				"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
+				"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
+			)
 			bc.EnterNextEra(spineRoot)
 			return nil
 		}
