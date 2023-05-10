@@ -444,7 +444,7 @@ func (c *Creator) resultHandler(task *task) {
 	//if len(finHashes) > 0 {
 	//	tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
 	//}
-
+	log.Info("@@@@@@@@@ Creator tmpDagChainHashes", "hash", task.block.Hash(), "spines", tmpDagChainHashes)
 	newBlockDag := &types.BlockDAG{
 		Hash:                task.block.Hash(),
 		Height:              task.block.Height(),
