@@ -244,6 +244,7 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 	)
 
 	mapHeaders := bc.GetHeadersByHashes(spines)
+	log.Info("@@@@@@@@@ Candidates HandleValidateSpines IsValidSequenceOfSpines GetHeadersByHashes", "candidates", mapHeaders)
 	for _, b := range mapHeaders {
 		// if not found
 		if b == nil {
@@ -343,8 +344,16 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	bc := f.eth.BlockChain()
 	spineBlock := bc.GetBlock(*spineHash)
 
+	// TODO: remove
+	lfHead := bc.GetLastFinalizedHeader()
+	log.Info("########  SetSpineState lfheader", "spineHash", fmt.Sprintf("%#x", spineHash),
+		"lfSlot", lfHead.Slot,
+		"lfNr", lfHead.Nr(),
+		"lfCp", lfHead.CpHash,
+	)
+
 	if spineBlock == nil {
-		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash))
+		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash), "lfNr", lfNr)
 		return ErrSpineNotFound
 	}
 

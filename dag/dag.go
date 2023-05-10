@@ -381,7 +381,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		log.Info("No candidates found", "slot", slot)
 	}
 
-	log.Info("Handle GetCandidates: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
+	log.Info("@@@@@@@@@ Candidates HandleGetCandidates: get finalizing candidates", "err", err, "toSlot", slot, "fromSlot", fromSlot, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	res := &types.CandidatesResult{
 		Error:      nil,
 		Candidates: candidates,
@@ -390,7 +390,6 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle GetCandidates: response", "result", res, "\u2692", params.BuildId)
 	return res
 }
 
@@ -472,7 +471,8 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
+	log.Info("@@@@@@@@@ Candidates HandleValidateSpines req", "candidates", spines, "elapsed", "\u2692", params.BuildId)
+	//log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
 

@@ -898,7 +898,8 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 	bc.receiptsCache.Purge()
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
-	bc.optimisticSpinesCache.Purge()
+	log.Info("@@@@@@@@@ OptimisticSpines cache Purge!!!!!", "head", head.Hex())
+	bc.optimisticSpinesCache.Purge() //TODO: check
 
 	return rootNumber, bc.loadLastState()
 }
@@ -3971,6 +3972,7 @@ func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, recei
 }
 
 func (bc *BlockChain) SetOptimisticSpinesToCache(slot uint64, spines common.HashArray) {
+	log.Info("@@@@@@@@@ OptimisticSpines Set", "slot", slot, "spines", spines)
 	bc.optimisticSpinesCache.Add(slot, spines)
 }
 
@@ -4020,6 +4022,7 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 
 	for i := gtSlot + 1; i <= currentSlot; i++ {
 		slotSpines := bc.GetOptimisticSpinesFromCache(i)
+		log.Info("@@@@@@@@@ OptimisticSpines FromCache", "slot", i, "spines", slotSpines)
 		if slotSpines == nil {
 			slotBlocks := make(types.Blocks, 0)
 			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(bc.Database(), i)
@@ -4031,7 +4034,7 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 			if err != nil {
 				return []common.HashArray{}, err
 			}
-
+			log.Info("@@@@@@@@@ OptimisticSpines FromDb", "slot", i, "spines", slotSpines)
 			bc.SetOptimisticSpinesToCache(i, slotSpines)
 		}
 
