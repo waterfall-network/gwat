@@ -248,7 +248,7 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 	for _, b := range mapHeaders {
 		// if not found
 		if b == nil {
-			log.Error("IsValidSequenceOfSpines header not found", "b.Nr()", b.Nr(), "b.Nr()", b.Height, "hash", b.Hash())
+			log.Error("IsValidSequenceOfSpines header not found", "headers", mapHeaders)
 			return false, nil
 		}
 		// if block is not finalized
