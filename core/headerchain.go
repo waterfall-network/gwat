@@ -904,6 +904,8 @@ func (hc *HeaderChain) CollectAncestorsAftCpByParents(parents common.HashArray, 
 	cache CollectAncestorsResultMap,
 	err error,
 ) {
+	start := time.Now()
+
 	if len(memo) == 0 {
 		memo = append(memo, make(CollectAncestorsResultMap))
 	}
@@ -929,6 +931,10 @@ func (hc *HeaderChain) CollectAncestorsAftCpByParents(parents common.HashArray, 
 			unloaded = append(unloaded, unl...).Uniq()
 		}
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME func: CollectAncestorsAftCpByParents",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+	)
 	return isCpAncestor, ancestors, unloaded, cache, err
 }
 

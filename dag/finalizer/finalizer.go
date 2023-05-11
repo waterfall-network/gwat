@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"sync/atomic"
+	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
@@ -242,6 +243,7 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		optSpines     []common.HashArray
 		err           error
 	)
+	start := time.Now()
 
 	mapHeaders := bc.GetHeadersByHashes(spines)
 	log.Info("@@@@@@@@@ Candidates HandleValidateSpines IsValidSequenceOfSpines GetHeadersByHashes", "candidates", mapHeaders)
@@ -331,6 +333,10 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		}
 		prevBlock = bl
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME func: ValidateCandidates",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+	)
 	return true, nil
 }
 

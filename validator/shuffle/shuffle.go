@@ -3,8 +3,10 @@ package shuffle
 import (
 	"encoding/binary"
 	"fmt"
+	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 const seedSize = int8(32)
@@ -18,11 +20,16 @@ var maxShuffleListSize uint64 = 1 << 40
 
 // ShuffleValidators returns list of shuffled addresses in a pseudorandom permutation `p` of `0...list_size - 1` with “seed“ as entropy.
 func ShuffleValidators(validators []common.Address, seed common.Hash) ([]common.Address, error) {
+	start := time.Now()
+
 	shuffledList, err := unshuffleList(validators, seed)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Info("^^^^^^^^^^^^ TIME func: ShuffleValidators",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+	)
 	return shuffledList, nil
 }
 
