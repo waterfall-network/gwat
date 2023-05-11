@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/binary"
+	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -170,6 +171,8 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 // Input parameters are list of uint64 (slot, subnet). Sequence is required!!!
 func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error) {
 	// TODO: improve this function for subnet supporting.
+	start := time.Now()
+
 	if len(filter) > 2 {
 		return nil, ErrInvalidValidatorsFilter
 	}
@@ -231,6 +234,10 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		return nil, err
 	}
 
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "GetCreatorsBySlot",
+	)
 	return s.validatorsCache.getShuffledValidators(params)
 }
 

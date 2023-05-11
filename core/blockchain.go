@@ -2082,6 +2082,8 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 
 // VerifyBlock validate block
 func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
+	start := time.Now()
+
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
@@ -2165,6 +2167,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, err
 	}
 
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "VerifyBlock",
+	)
 	return isValid && bc.verifyCpData(block), nil
 }
 

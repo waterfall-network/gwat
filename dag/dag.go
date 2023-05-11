@@ -134,6 +134,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	res := &types.FinalizationResult{
 		Error: nil,
 	}
+	start := time.Now()
 
 	if d.bc.GetSlotInfo() == nil {
 		errStr := "no slot info"
@@ -253,6 +254,10 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	}
 
 	log.Info("Handle Finalize: response", "result", res)
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "Finalize",
+	)
 	return res
 }
 
@@ -265,6 +270,8 @@ func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashA
 	if len(spines) == 0 {
 		return nil
 	}
+
+	start := time.Now()
 	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {
 		return err
@@ -288,6 +295,7 @@ func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashA
 		d.bc.SetIsSynced(true)
 		log.Info("Node fully synced: head reached")
 	}
+	log.Info("@@@@@@@@@@@ handlSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
@@ -298,6 +306,7 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 		unl      common.HashArray
 		err      error
 	)
+	start := time.Now()
 	for _, spine := range spines.Reverse() {
 		spHeader := d.bc.GetHeaderByHash(spine)
 		if spHeader == nil {
@@ -311,6 +320,8 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 			return true, nil
 		}
 	}
+	log.Info("@@@@@@@@@@@ hasUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
+
 	return false, nil
 }
 
@@ -390,6 +401,11 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		estr := err.Error()
 		res.Error = &estr
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(tstart)),
+		"func:", "GetCandidates",
+	)
 	return res
 }
 
@@ -437,7 +453,6 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 	log.Info("Handle GetOptimisticSpines: response", "result", res, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	return res
 }
-
 
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
