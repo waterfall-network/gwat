@@ -928,8 +928,9 @@ func (c *Creator) commit(tips types.Tips, interval func(), update bool, start ti
 				"tips", tips.GetHashes(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 			)
-			log.Info("^^^^^^^^^^^^ TIME func: CreateBlock",
+			log.Info("^^^^^^^^^^^^ TIME",
 				"elapsed", common.PrettyDuration(time.Since(start)),
+				"func:", "CreateBlock",
 			)
 
 		case <-c.exitCh:

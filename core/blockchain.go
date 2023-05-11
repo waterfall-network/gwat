@@ -2167,8 +2167,9 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, err
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME func: VerifyBlock",
+	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "VerifyBlock",
 	)
 	return isValid && bc.verifyCpData(block), nil
 }

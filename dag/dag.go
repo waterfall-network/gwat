@@ -254,8 +254,9 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	}
 
 	log.Info("Handle Finalize: response", "result", res)
-	log.Info("^^^^^^^^^^^^ TIME func: Finalize",
+	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "Finalize",
 	)
 	return res
 }
@@ -401,8 +402,9 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		res.Error = &estr
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME func: GetCandidates",
+	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(tstart)),
+		"func:", "GetCandidates",
 	)
 	return res
 }

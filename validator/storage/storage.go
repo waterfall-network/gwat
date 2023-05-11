@@ -234,8 +234,9 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		return nil, err
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME func: GetCreatorsBySlot",
+	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "GetCreatorsBySlot",
 	)
 	return s.validatorsCache.getShuffledValidators(params)
 }

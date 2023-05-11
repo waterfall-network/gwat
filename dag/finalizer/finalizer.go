@@ -334,8 +334,9 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		prevBlock = bl
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME func: ValidateCandidates",
+	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "ValidateCandidates",
 	)
 	return true, nil
 }

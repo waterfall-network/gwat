@@ -932,8 +932,9 @@ func (hc *HeaderChain) CollectAncestorsAftCpByParents(parents common.HashArray, 
 		}
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME func: CollectAncestorsAftCpByParents",
+	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "CollectAncestorsAftCpByParents",
 	)
 	return isCpAncestor, ancestors, unloaded, cache, err
 }

@@ -27,8 +27,9 @@ func ShuffleValidators(validators []common.Address, seed common.Hash) ([]common.
 		return nil, err
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME func: ShuffleValidators",
+	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "ShuffleValidators",
 	)
 	return shuffledList, nil
 }
