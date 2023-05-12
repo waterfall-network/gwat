@@ -996,12 +996,14 @@ func (hc *HeaderChain) collectAncestorsAftCpByParents(headHash common.Hash, cpHe
 		}
 
 		if memo[0][ph] != nil && memo[0][ph].cpHash == cpHeader.Hash() {
+			log.Info("%%%%%%%% collectAncestorsAftCpByParents: cached", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
 			_isCpAncestor = memo[0][ph].isCpAncestor
 			_ancestors = memo[0][ph].ancestors
 			_unloaded = memo[0][ph].unloaded
 			_cache = memo[0]
 			_err = memo[0][ph].err
 		} else {
+			log.Info("%%%%%%%% collectAncestorsAftCpByParents: recursive call", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
 			_isCpAncestor, _ancestors, _unloaded, _cache, _err = hc.collectAncestorsAftCpByParents(ph, cpHeader, memo[0])
 			if memo[0] == nil {
 				memo[0] = make(CollectAncestorsResultMap, 1)
