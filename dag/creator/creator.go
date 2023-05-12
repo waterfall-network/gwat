@@ -203,10 +203,14 @@ func (c *Creator) Pending() (*types.Block, *state.StateDB) {
 	// return a snapshot to avoid contention on currentMu mutex
 	c.snapshotMu.RLock()
 	defer c.snapshotMu.RUnlock()
-	if c.snapshotState == nil {
+
+	block := c.chain.GetLastFinalizedBlock()
+	state, err := c.chain.StateAt(block.Root())
+	if err != nil {
+		log.Error("Get pending block and state failed", "err", err)
 		return nil, nil
 	}
-	return c.snapshotBlock, c.snapshotState.Copy()
+	return block, state.Copy()
 }
 
 // PendingBlock returns the currently pending block.
@@ -426,28 +430,28 @@ func (c *Creator) resultHandler(task *task) {
 	c.chain.RemoveTips(task.block.ParentHashes())
 
 	//2. create for new blockDag
-	tips := task.tips.Copy()
-	tmpDagChainHashes := tips.GetOrderedDagChainHashes()
+	//tips := task.tips.Copy()
+	tmpDagChainHashes := c.chain.GetDagHashes()
 
-	// after reorg tips can content hashes of finalized blocks
-	finHashes := common.HashArray{}
-	for _, h := range tmpDagChainHashes.Copy() {
-		blk := c.eth.BlockChain().GetHeader(h)
-		if !(blk.Height > 0 && blk.Nr() == 0) {
-			finHashes = append(finHashes, h)
-		}
-	}
-	if len(finHashes) > 0 {
-		tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
-	}
-
+	//// after reorg tips can content hashes of finalized blocks
+	//finHashes := common.HashArray{}
+	//for _, h := range tmpDagChainHashes.Copy() {
+	//	blk := c.eth.BlockChain().GetHeader(h)
+	//	if !(blk.Height > 0 && blk.Nr() == 0) {
+	//		finHashes = append(finHashes, h)
+	//	}
+	//}
+	//if len(finHashes) > 0 {
+	//	tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
+	//}
+	log.Info("@@@@@@@@@ Creator tmpDagChainHashes", "hash", task.block.Hash(), "spines", tmpDagChainHashes)
 	newBlockDag := &types.BlockDAG{
 		Hash:                task.block.Hash(),
 		Height:              task.block.Height(),
 		Slot:                task.block.Slot(),
 		LastFinalizedHash:   task.block.CpHash(),
 		LastFinalizedHeight: task.block.CpNumber(),
-		DagChainHashes:      tmpDagChainHashes,
+		DagChainHashes:      *tmpDagChainHashes,
 	}
 	c.chain.AddTips(newBlockDag)
 	c.chain.WriteCurrentTips()
@@ -460,8 +464,17 @@ func (c *Creator) resultHandler(task *task) {
 	c.mux.Post(core.NewMinedBlockEvent{Block: task.block})
 
 	// Insert the block into the set of pending ones to resultLoop for confirmations
-	log.Info("🔨 created dag block", "slot", task.block.Slot(), "height", task.block.Height(),
-		"hash", hash.Hex(), "parents", task.block.ParentHashes(), "CpHash", task.block.CpHash(), "CpNumber", task.block.CpNumber())
+	log.Info("🔨 created dag block",
+		"slot", task.block.Slot(),
+		"epoch", c.chain.GetSlotInfo().SlotToEpoch(task.block.Slot()),
+		"era", task.block.Era(),
+		"height", task.block.Height(),
+		"hash", hash.Hex(),
+		"parents", task.block.ParentHashes(),
+		"CpHash", task.block.CpHash(),
+		"CpNumber", task.block.CpNumber(),
+	)
+
 }
 
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
@@ -762,6 +775,16 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	log.Info("Creator calculate block height", "newHeight", newHeight)
+	log.Info("########## CREATOR slot epoch era",
+		"blHeight", newHeight,
+		"blEpoch", c.chain.GetSlotInfo().SlotToEpoch(slotInfo.Slot),
+		"blSlot", slotInfo.Slot,
+		"currSlot", c.chain.GetSlotInfo().CurrentSlot(),
+		"currEpoch", c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()),
+		"eraNum", c.chain.GetEraInfo().Number(),
+		"from", c.chain.GetEraInfo().FromEpoch(),
+		"to", c.chain.GetEraInfo().ToEpoch(),
+	)
 
 	header := &types.Header{
 		ParentHashes: parentHashes,
@@ -904,6 +927,10 @@ func (c *Creator) commit(tips types.Tips, interval func(), update bool, start ti
 				"gas", block.GasUsed(), "fees", c.current.cumutativeGas,
 				"tips", tips.GetHashes(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
+			)
+			log.Info("^^^^^^^^^^^^ TIME",
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"func:", "CreateBlock",
 			)
 
 		case <-c.exitCh:

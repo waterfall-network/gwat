@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"sync/atomic"
+	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
@@ -134,19 +135,24 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 		lastBlock := bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 
-		if lastBlock.Height() > lastBlock.Nr() {
-			log.Error("☠ finalizing: mismatch nr and height (critical)", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-			return f.SetSpineState(&successSpine, lastFinNr)
-		}
-		if lastBlock.Height() != lastBlock.Nr() {
-			log.Warn("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		}
+		// TODO: deprecated
+		//if lastBlock.Height() > lastBlock.Nr() {
+		//	log.Error("☠ finalizing: mismatch nr and height (critical)", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		//	return f.SetSpineState(&successSpine, lastFinNr)
+		//}
+		//if lastBlock.Height() != lastBlock.Nr() {
+		//	log.Warn("☠ finalizing: mismatch nr and height", "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		//}
+
 		lastFinNr = lastBlock.Nr()
 		f.updateTips(*orderedChain.GetHashes(), *lastBlock)
 		log.Info("⛓ Finalization of spine completed (updateTips)", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		if lastBlock.Height() != lastBlock.Nr() {
-			log.Warn("☠ finalizing: mismatch nr and height (aft updateTips)", "calc.nr", lastFinNr, "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
-		}
+
+		// TODO: deprecated
+		//if lastBlock.Height() != lastBlock.Nr() {
+		//	log.Warn("☠ finalizing: mismatch nr and height (aft updateTips)", "calc.nr", lastFinNr, "slot", lastBlock.Slot(), "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
+		//}
+
 		successSpine = spine.Hash()
 	}
 	return nil
@@ -234,13 +240,17 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		bc            = f.eth.BlockChain()
 		hasNotFin     = false          //has any not finalized items
 		dagCandidates common.HashArray // current dag candidates
+		optSpines     []common.HashArray
 		err           error
 	)
+	start := time.Now()
 
 	mapHeaders := bc.GetHeadersByHashes(spines)
+	log.Info("@@@@@@@@@ Candidates HandleValidateSpines IsValidSequenceOfSpines GetHeadersByHashes", "candidates", mapHeaders)
 	for _, b := range mapHeaders {
 		// if not found
 		if b == nil {
+			log.Error("IsValidSequenceOfSpines header not found", "headers", mapHeaders)
 			return false, nil
 		}
 		// if block is not finalized
@@ -248,16 +258,30 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 			hasNotFin = true
 		} else {
 			// if block is finalized - check is it spine
+			// TODO: check
 			if b.Nr() != b.Height {
-				return false, nil
+				log.Warn("?????? IsValidSequenceOfSpines b.Nr() != b.Height", "b.Nr()", b.Nr(), "b.Nr()", b.Height, "hash", b.Hash())
+				//return false, nil
 			}
 		}
 	}
 
 	if hasNotFin {
-		dagCandidates, err = f.GetFinalizingCandidates(nil)
+		fromSlot := f.eth.BlockChain().GetLastFinalizedHeader().Slot
+		optSpines, err = f.eth.BlockChain().GetOptimisticSpines(fromSlot)
 		if err != nil {
+			log.Error("GetOptimisticSpines error", "slot", fromSlot, "err", err)
 			return false, err
+		}
+		if len(optSpines) == 0 {
+			log.Info("No spines found", "tips", f.eth.BlockChain().GetTips().Print(), "slot", fromSlot)
+		}
+
+		for _, candidate := range optSpines {
+			if len(candidate) > 0 {
+				//header := d.bc.GetHeaderByHash(candidate[0])
+				dagCandidates = append(dagCandidates, candidate[0])
+			}
 		}
 	}
 
@@ -309,6 +333,11 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		}
 		prevBlock = bl
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "ValidateCandidates",
+	)
 	return true, nil
 }
 
@@ -322,12 +351,20 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	bc := f.eth.BlockChain()
 	spineBlock := bc.GetBlock(*spineHash)
 
+	// TODO: remove
+	lfHead := bc.GetLastFinalizedHeader()
+	log.Info("########  SetSpineState lfheader", "spineHash", fmt.Sprintf("%#x", spineHash),
+		"lfSlot", lfHead.Slot,
+		"lfNr", lfHead.Nr(),
+		"lfCp", lfHead.CpHash,
+	)
+
 	if spineBlock == nil {
-		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash))
+		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash), "lfNr", lfNr)
 		return ErrSpineNotFound
 	}
 
-	// TODO: UNCOMMENT
+	// TODO: depreacted
 	//if spineBlock.Height() != spineBlock.Nr() {
 	//	log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
 	//}

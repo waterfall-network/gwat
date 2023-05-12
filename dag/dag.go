@@ -15,7 +15,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
@@ -71,6 +70,7 @@ type blockChain interface {
 	DagMuUnlock()
 	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
+	GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error)
 	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
 
 	SetIsSynced(synced bool)
@@ -81,7 +81,7 @@ type blockChain interface {
 
 type ethDownloader interface {
 	Synchronising() bool
-	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray) (fullySynced bool, err error)
+	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) (fullySynced bool, err error)
 }
 
 type Dag struct {
@@ -134,6 +134,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	res := &types.FinalizationResult{
 		Error: nil,
 	}
+	start := time.Now()
 
 	if d.bc.GetSlotInfo() == nil {
 		errStr := "no slot info"
@@ -151,6 +152,14 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		return res
 	}
 
+	si := d.bc.GetSlotInfo()
+	currEpoch := si.SlotToEpoch(si.CurrentSlot())
+	// is cp head fin epoch reached
+	if currEpoch == data.Checkpoint.FinEpoch {
+		d.bc.SetIsSynced(true)
+		log.Info("HandleFinalize SetIsSynced curEpoch == finEpoch", "currEpoch", currEpoch, "finEpoch", data.Checkpoint.FinEpoch)
+	}
+
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
@@ -158,6 +167,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		log.Info("Handle Finalize: start",
 			"baseSpine", fmt.Sprintf("%#x", data.BaseSpine),
 			"spines", data.Spines,
+			"cp.FinEpoch", data.Checkpoint.FinEpoch,
 			"cp.Epoch", data.Checkpoint.Epoch,
 			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
 			"cp.Root", fmt.Sprintf("%#x", data.Checkpoint.Root),
@@ -167,6 +177,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		log.Info("Handle Finalize: start",
 			"baseSpine", nil,
 			"spines", data.Spines,
+			"cp.FinEpoch", data.Checkpoint.FinEpoch,
 			"cp.Epoch", data.Checkpoint.Epoch,
 			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
 			"cp.BaseSpine", fmt.Sprintf("%#x", data.Checkpoint.Spine),
@@ -193,7 +204,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		spines = spines[bi+1:]
 	}
 
-	if err := d.handlSyncUnloadedBlocks(baseSpine, spines); err != nil {
+	if err := d.handlSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint.FinEpoch); err != nil {
 		strErr := err.Error()
 		res.Error = &strErr
 		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
@@ -222,25 +233,31 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	d.bc.AppendNotProcessedValidatorSyncData(data.ValSyncData)
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
-	if lfHeader.Height != lfHeader.Nr() {
-		err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
-		if res.Error == nil {
-			res.Error = &err
-		} else {
-			mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
-			res.Error = &mrg
-		}
-	}
+
+	// TODO: deprecated
+	//if lfHeader.Height != lfHeader.Nr() {
+	//	err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
+	//	if res.Error == nil {
+	//		res.Error = &err
+	//	} else {
+	//		mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
+	//		res.Error = &mrg
+	//	}
+	//}
 
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash
 
 	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
-		res.CpEpoch = &cp.Epoch
+		res.CpEpoch = &cp.FinEpoch
 		res.CpRoot = &cp.Root
 	}
 
 	log.Info("Handle Finalize: response", "result", res)
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "Finalize",
+	)
 	return res
 }
 
@@ -249,10 +266,12 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 // 2. switch on sync mode
 // 3. start sync process
 // 4. if chain head reached - switch off sync mode
-func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray) error {
+func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) error {
 	if len(spines) == 0 {
 		return nil
 	}
+
+	start := time.Now()
 	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {
 		return err
@@ -269,13 +288,14 @@ func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashA
 	}
 
 	var fullySynced bool
-	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines); err != nil {
+	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines, finEpoch); err != nil {
 		return err
 	}
 	if fullySynced {
 		d.bc.SetIsSynced(true)
 		log.Info("Node fully synced: head reached")
 	}
+	log.Info("@@@@@@@@@@@ handlSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
@@ -286,6 +306,7 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 		unl      common.HashArray
 		err      error
 	)
+	start := time.Now()
 	for _, spine := range spines.Reverse() {
 		spHeader := d.bc.GetHeaderByHash(spine)
 		if spHeader == nil {
@@ -299,6 +320,8 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 			return true, nil
 		}
 	}
+	log.Info("@@@@@@@@@@@ hasUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
+
 	return false, nil
 }
 
@@ -323,9 +346,9 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 	}
 	var cpepoch uint64
 	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
-		res.CpEpoch = &cp.Epoch
+		res.CpEpoch = &cp.FinEpoch
 		res.CpRoot = &cp.Root
-		cpepoch = cp.Epoch
+		cpepoch = cp.FinEpoch
 	}
 	log.Info("Handle CoordinatedState: response", "epoch", cpepoch, "result", res)
 	return res
@@ -347,11 +370,29 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	tstart := time.Now()
 
 	// collect next finalization candidates
-	candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
-	if len(candidates) == 0 {
-		log.Info("No candidates for tips", "tips", d.bc.GetTips().Print())
+	//candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
+	fromSlot := d.bc.GetLastFinalizedHeader().Slot
+	optSpines, err := d.bc.GetOptimisticSpines(fromSlot)
+	if len(optSpines) == 0 {
+		log.Info("No spines found", "tips", d.bc.GetTips().Print(), "slot", slot)
 	}
-	log.Info("Handle GetCandidates: get finalizing candidates", "err", err, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
+
+	// take the first element of each record in the input slice.
+	var candidates common.HashArray
+	for _, candidate := range optSpines {
+		if len(candidate) > 0 {
+			header := d.bc.GetHeaderByHash(candidate[0])
+			if header.Slot <= slot {
+				candidates = append(candidates, candidate[0])
+			}
+		}
+	}
+
+	if len(candidates) == 0 {
+		log.Info("No candidates found", "slot", slot)
+	}
+
+	log.Info("@@@@@@@@@ Candidates HandleGetCandidates: get finalizing candidates", "err", err, "toSlot", slot, "fromSlot", fromSlot, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	res := &types.CandidatesResult{
 		Error:      nil,
 		Candidates: candidates,
@@ -360,13 +401,15 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle GetCandidates: response", "result", res, "\u2692", params.BuildId)
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(tstart)),
+		"func:", "GetCandidates",
+	)
 	return res
 }
 
-func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.OptimisticSpinesResult {
-	spineBlock := d.bc.GetBlock(lastFinSpine)
-	spineSlot := spineBlock.Slot()
+func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.OptimisticSpinesResult {
 	//skip if synchronising
 	if d.downloader.Synchronising() {
 		errStr := creator.ErrSynchronization.Error()
@@ -380,13 +423,25 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 
 	tstart := time.Now()
 
+	log.Info("Handle GetOptimisticSpines: start", "fromSpine", fromSpine.Hex())
+
+	spineBlock := d.bc.GetBlock(fromSpine)
+	if spineBlock == nil {
+		err := errors.New("bad params: spine not found").Error()
+		return &types.OptimisticSpinesResult{
+			Error: &err,
+			Data:  nil,
+		}
+	}
+
+	spineSlot := spineBlock.Slot()
+
 	// collect optimistic spines
-	spines, err := d.GetOptimisticSpines(spineSlot)
+	spines, err := d.bc.GetOptimisticSpines(spineSlot)
 	if len(spines) == 0 {
 		log.Info("No spines for tips", "tips", d.bc.GetTips().Print())
 	}
 
-	log.Info("Handle GetOptimisticSpines: get finalizing spines", "err", err, "spines", spines, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	res := &types.OptimisticSpinesResult{
 		Error: nil,
 		Data:  spines,
@@ -395,40 +450,8 @@ func (d *Dag) HandleGetOptimisticSpines(lastFinSpine common.Hash) *types.Optimis
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle GetOptimisticSpines: response", "result", res, "\u2692", params.BuildId)
+	log.Info("Handle GetOptimisticSpines: response", "result", res, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	return res
-}
-
-func (d *Dag) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
-	currentSlot := d.bc.GetSlotInfo().CurrentSlot()
-	if currentSlot <= gtSlot {
-		return []common.HashArray{}, errWrongInputSlot
-	}
-
-	var err error
-	optimisticSpines := make([]common.HashArray, 0)
-
-	for i := gtSlot + 1; i <= currentSlot; i++ {
-		slotSpines := d.bc.GetOptimisticSpinesFromCache(i)
-		if slotSpines == nil {
-			slotBlocks := make(types.Blocks, 0)
-			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(d.bc.Database(), i)
-			for _, hash := range slotBlocksHashes {
-				block := d.bc.GetBlock(hash)
-				slotBlocks = append(slotBlocks, block)
-			}
-			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
-			if err != nil {
-				return []common.HashArray{}, err
-			}
-
-			d.bc.SetOptimisticSpinesToCache(i, slotSpines)
-		}
-
-		optimisticSpines = append(optimisticSpines, slotSpines)
-	}
-
-	return optimisticSpines, nil
 }
 
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
@@ -463,7 +486,8 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
+	log.Info("@@@@@@@@@ Candidates HandleValidateSpines req", "candidates", spines, "elapsed", "\u2692", params.BuildId)
+	//log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
 
@@ -537,6 +561,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			}
 
 			if !d.bc.IsSynced() {
+				log.Info("dag workloop !d.bc.IsSynced()", "IsSynced", d.bc.IsSynced())
 				continue
 			}
 			if d.isCoordinatorConnectionLost() {

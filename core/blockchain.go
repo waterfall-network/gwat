@@ -567,11 +567,11 @@ func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 // SetLastCoordinatedCheckpoint set last coordinated checkpoint.
 func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	currCp := bc.GetLastCoordinatedCheckpoint()
-	if currCp == nil || cp.Root != currCp.Root || cp.Spine != currCp.Spine || cp.Epoch != currCp.Epoch {
+	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
 		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
-
+		log.Info("####### SetLastCoordinatedCheckpoint ", "cp", cp)
 		// Handle era
 		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
 		if err != nil {
@@ -867,6 +867,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		}
 
 		delBlock := bc.GetBlockByHash(hash)
+		log.Info("@@@@@@@@@ OptimisticSpines cache Deleteblock from db!!!!!", "slot", delBlock.Slot(), "hash", hash)
 		rawdb.DeleteSlotBlockHash(bc.Database(), delBlock.Slot(), hash)
 
 		if num != nil {
@@ -898,7 +899,8 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 	bc.receiptsCache.Purge()
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
-	bc.optimisticSpinesCache.Purge()
+	log.Info("@@@@@@@@@ OptimisticSpines cache Purge!!!!!", "head", head.Hex())
+	bc.optimisticSpinesCache.Purge() //TODO: check
 
 	return rootNumber, bc.loadLastState()
 }
@@ -2080,6 +2082,8 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 
 // VerifyBlock validate block
 func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
+	start := time.Now()
+
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
@@ -2088,6 +2092,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	// TODO: check whether we need it???
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
 	if !isValidEra {
@@ -2162,6 +2167,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, err
 	}
 
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "VerifyBlock",
+	)
 	return isValid && bc.verifyCpData(block), nil
 }
 
@@ -2279,6 +2288,9 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
+        log.Info("** Remove optimistic spines from cache", "slot", block.Slot())
+        bc.removeOptimisticSpinesFromCache(block.Slot())
+
 		dagChainHashes := append(common.HashArray{}, block.ParentHashes()...)
 		dagBlock := &types.BlockDAG{
 			Hash:                block.Hash(),
@@ -2289,7 +2301,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			DagChainHashes:      dagChainHashes.Uniq(),
 		}
 		bc.AddTips(dagBlock)
-		bc.RemoveTips(dagBlock.DagChainHashes)
+		bc.RemoveTips(dagBlock.DagChainHashes) // TODO: check
+		bc.MoveTxsToProcessing(types.Blocks{block})
 
 		//check tips
 		tips := bc.GetTips()
@@ -3367,28 +3380,28 @@ func (bc *BlockChain) GetDagHashes() *common.HashArray {
 	dagHashes := common.HashArray{}
 	tips := *bc.hc.GetTips()
 
-	tipsHashes := tips.GetOrderedDagChainHashes()
-	dagBlocks := bc.GetBlocksByHashes(tipsHashes)
-	for hash, bl := range dagBlocks {
-		if bl != nil && bl.Nr() == 0 && bl.Height() > 0 {
-			dagHashes = append(dagHashes, hash)
-		}
-	}
-	if len(dagHashes) == 0 {
-		dagHashes = common.HashArray{bc.GetLastFinalizedBlock().Hash()}
-	}
-
-	//expCache := ExploreResultMap{}
-	//for hash, tip := range tips {
-	//	if hash == tip.LastFinalizedHash {
+	//tipsHashes := tips.GetOrderedDagChainHashes()
+	//dagBlocks := bc.GetBlocksByHashes(tipsHashes)
+	//for hash, bl := range dagBlocks {
+	//	if bl != nil && bl.Nr() == 0 && bl.Height() > 0 {
 	//		dagHashes = append(dagHashes, hash)
-	//		continue
 	//	}
-	//	_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
-	//	expCache = c
-	//	dagHashes = dagHashes.Concat(loaded)
 	//}
-	//dagHashes = dagHashes.Uniq().Sort()
+	//if len(dagHashes) == 0 {
+	//	dagHashes = common.HashArray{bc.GetLastFinalizedBlock().Hash()}
+	//}
+
+	expCache := ExploreResultMap{}
+	for hash, tip := range tips {
+		if hash == tip.LastFinalizedHash {
+			dagHashes = append(dagHashes, hash)
+			continue
+		}
+		_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
+		expCache = c
+		dagHashes = dagHashes.Concat(loaded)
+	}
+	dagHashes = dagHashes.Uniq().Sort()
 	return &dagHashes
 }
 
@@ -3748,7 +3761,13 @@ func (bc *BlockChain) GetEraInfo() *era.EraInfo {
 
 // SetNewEraInfo sets new era info.
 func (bc *BlockChain) SetNewEraInfo(newEra era.Era) {
-	log.Info("New era", "num", newEra.Number, "begin", newEra.From, "end", newEra.To, "root", newEra.Root)
+	log.Info("New era",
+		"num", newEra.Number,
+		"begin", newEra.From,
+		"end", newEra.To,
+		"root", newEra.Root,
+	)
+
 	bc.eraInfo = era.NewEraInfo(newEra)
 }
 
@@ -3764,7 +3783,13 @@ func (bc *BlockChain) SyncEraToSlot(slot uint64) {
 		} else {
 			log.Error("Invalid checkpoint: sync to era error")
 		}
-
+		log.Info("######## SyncEraToSlot", "toEpoch", toEpoch,
+			"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
+			"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
+			"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
+			"cpSlot", slot,
+			"currSlot", bc.GetSlotInfo().CurrentSlot(),
+		)
 		bc.EnterNextEra(spineRoot)
 	}
 }
@@ -3785,12 +3810,29 @@ func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 	// Get the epoch of the block
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
 
+	fEpochSl, _ := bc.slotInfo.SlotOfEpochStart(bc.eraInfo.FirstEpoch())
+	lEpochSl, _ := bc.slotInfo.SlotOfEpochEnd(bc.eraInfo.LastEpoch())
+
 	// Get the era that the block belongs to
 	var valEra *era.Era
 	if bc.GetEraInfo().GetEra().Number == block.Era() {
+		log.Info("@@@@@@@@@ verifyBlockEra",
+			"bc.GetEraInfo().GetEra()", bc.GetEraInfo().GetEra(),
+			"blEra", block.Era(),
+			"blEpoch", blockEpoch,
+			"blSlot", block.Slot(),
+			"blHash", block.Hash(),
+			"blNr", block.Nr(),
+			"FirsEpoch", bc.eraInfo.FirstEpoch(),
+			"LastEpoch", bc.eraInfo.LastEpoch(),
+			"FirstEpochEraSlot", fEpochSl,
+			"LastEpochEraSlot", lEpochSl,
+		)
+
 		valEra = bc.GetEraInfo().GetEra()
 	} else {
 		valEra = rawdb.ReadEra(bc.db, block.Era())
+		log.Info("@@@@@@@@@ verifyBlockEra", "rawdb.ReadEra(bc.db, block.Era())", valEra, "blEra", block.Era(), "blockEpoch", blockEpoch, "blSlot", block.Slot(), "hash", block.Hash(), "blNr", block.Nr())
 	}
 
 	// Check if the block epoch is within the era
@@ -3801,6 +3843,14 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
 	if nextEra != nil {
 		rawdb.WriteCurrentEra(bc.db, nextEra.Number)
+		log.Info("######### if nextEra != nil EnterNextEra",
+			"num", nextEra.Number,
+			"begin", nextEra.From,
+			"end", nextEra.To,
+			"root", nextEra.Root,
+			"currSlot", bc.GetSlotInfo().CurrentSlot(),
+			"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+		)
 		bc.SetNewEraInfo(*nextEra)
 		return nextEra
 	}
@@ -3809,6 +3859,14 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 	nextEra = era.NextEra(bc, root, uint64(len(validators)))
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
+	log.Info("######### if nextEra == nil EnterNextEra",
+		"num", nextEra.Number,
+		"begin", nextEra.From,
+		"end", nextEra.To,
+		"root", nextEra.Root,
+		"currSlot", bc.GetSlotInfo().CurrentSlot(),
+		"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+	)
 	bc.SetNewEraInfo(*nextEra)
 	return nextEra
 }
@@ -3970,6 +4028,7 @@ func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, recei
 }
 
 func (bc *BlockChain) SetOptimisticSpinesToCache(slot uint64, spines common.HashArray) {
+	log.Info("@@@@@@@@@ OptimisticSpines Set", "slot", slot, "spines", spines)
 	bc.optimisticSpinesCache.Add(slot, spines)
 }
 
@@ -3995,6 +4054,8 @@ func (bc *BlockChain) removeOptimisticSpinesFromCache(slot uint64) {
 func (bc *BlockChain) SetIsSynced(synced bool) {
 	bc.isSyncedM.Lock()
 	defer bc.isSyncedM.Unlock()
+
+	log.Info("Switched sync status to", "isSynced", synced)
 	bc.isSynced = synced
 }
 
@@ -4003,4 +4064,38 @@ func (bc *BlockChain) IsSynced() bool {
 	bc.isSyncedM.Lock()
 	defer bc.isSyncedM.Unlock()
 	return bc.isSynced
+}
+
+func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
+	//currentSlot := d.bc.GetSlotInfo().CurrentSlot()
+	currentSlot := bc.GetTips().GetMaxSlot()
+	if currentSlot <= gtSlot {
+		return []common.HashArray{}, nil
+	}
+
+	var err error
+	optimisticSpines := make([]common.HashArray, 0)
+
+	for i := gtSlot + 1; i <= currentSlot; i++ {
+		slotSpines := bc.GetOptimisticSpinesFromCache(i)
+		log.Info("@@@@@@@@@ OptimisticSpines FromCache", "slot", i, "spines", slotSpines)
+		if slotSpines == nil {
+			slotBlocks := make(types.Blocks, 0)
+			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(bc.Database(), i)
+			for _, hash := range slotBlocksHashes {
+				block := bc.GetBlock(hash)
+				slotBlocks = append(slotBlocks, block)
+			}
+			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
+			if err != nil {
+				return []common.HashArray{}, err
+			}
+			log.Info("@@@@@@@@@ OptimisticSpines FromDb", "slot", i, "spines", slotSpines)
+			bc.SetOptimisticSpinesToCache(i, slotSpines)
+		}
+
+		optimisticSpines = append(optimisticSpines, slotSpines)
+	}
+
+	return optimisticSpines, nil
 }

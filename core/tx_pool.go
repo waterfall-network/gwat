@@ -713,7 +713,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		return fmt.Errorf("%#s\n(validation: bal=%#s < gasPrice=%#s * gas=%d + val=%#s)",
+		return fmt.Errorf("%s\n(validation: bal=%s < gasPrice=%s * gas=%d + val=%s)",
 			ErrInsufficientFunds,
 			pool.currentState.GetBalance(from).String(),
 			tx.GasPrice().String(),
