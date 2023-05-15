@@ -903,6 +903,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'validateFinalization',
+			call: 'dag_validateFinalization',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'syncSlotInfo',
 			call: 'dag_syncSlotInfo',
 			params: 1
