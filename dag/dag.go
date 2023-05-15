@@ -481,6 +481,30 @@ func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
 	return false, nil
 }
 
+// HandleValidateFinalization validate given spines sequence of finalization.
+// Checks existence and order by slot of finalization sequence.
+func (d *Dag) HandleValidateFinalization(spines common.HashArray) (bool, error) {
+	log.Info("Handle validate finalisation: start", "spines", spines)
+
+	headers := d.bc.GetBlocksByHashes(spines)
+	lastSlot := uint64(0)
+
+	for _, s := range spines {
+		spine := headers[s]
+		if spine == nil {
+			err := fmt.Errorf("spine not found: %#x", s)
+			log.Warn("Handle validate finalisation: failed", "err", err)
+			return false, err
+		}
+		if lastSlot >= spine.Slot() {
+			err := fmt.Errorf("bad order by slot: %#x slot=%d prevSlot=%d", s, spine.Slot(), lastSlot)
+			log.Warn("Handle validate finalisation: failed", "err", err)
+			return false, err
+		}
+	}
+	return true, nil
+}
+
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	d.bc.DagMuLock()
