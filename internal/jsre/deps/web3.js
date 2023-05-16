@@ -3838,6 +3838,7 @@ var outputBlockFormatter = function(block) {
     block.cpGasUsed = utils.toDecimal(block.cpGasUsed);
     block.height = utils.toDecimal(block.height);
     block.slot = utils.toDecimal(block.slot);
+    block.era = utils.toDecimal(block.era);
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);

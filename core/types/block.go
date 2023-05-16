@@ -393,6 +393,7 @@ func (b *Block) BaseHeader() *Header {
 		cpy = &Header{
 			ParentHashes:  b.header.ParentHashes,
 			Slot:          b.header.Slot,
+			Era:           b.header.Era,
 			Height:        b.header.Height,
 			CpHash:        b.header.CpHash,
 			CpNumber:      b.header.CpNumber,
