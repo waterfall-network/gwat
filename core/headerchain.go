@@ -70,6 +70,8 @@ type HeaderChain struct {
 	headerCache *lru.Cache // Cache for the most recent block headers
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
+	ancestorCache CollectAncestorsResultMap // Cache for ancestors
+
 	procInterrupt func() bool
 
 	rand   *mrand.Rand
@@ -906,9 +908,6 @@ func (hc *HeaderChain) CollectAncestorsAftCpByParents(parents common.HashArray, 
 ) {
 	start := time.Now()
 
-	if len(memo) == 0 {
-		memo = append(memo, make(CollectAncestorsResultMap))
-	}
 	ancestors = types.HeaderMap{}
 	for _, h := range parents {
 		var (
@@ -916,7 +915,7 @@ func (hc *HeaderChain) CollectAncestorsAftCpByParents(parents common.HashArray, 
 			anc     types.HeaderMap
 			unl     common.HashArray
 		)
-		isCpAnc, anc, unl, cache, err = hc.collectAncestorsAftCpByParents(h, cpHeader, cache)
+		isCpAnc, anc, unl, err = hc.collectAncestorsAftCpByParents(h, cpHeader)
 		if err != nil {
 			log.Error("Collect ancestors by parents err", "err", err, "hash", h)
 			return isCpAncestor, ancestors, unloaded, cache, err
@@ -939,10 +938,93 @@ func (hc *HeaderChain) CollectAncestorsAftCpByParents(parents common.HashArray, 
 	return isCpAncestor, ancestors, unloaded, cache, err
 }
 
+func (hc *HeaderChain) collectAncestorsAftCpByParents(headHash common.Hash, cpHeader *types.Header) (
+	isCpAncestor bool,
+	ancestors types.HeaderMap,
+	unloaded common.HashArray,
+	err error,
+) {
+	if ancestors == nil {
+		ancestors = types.HeaderMap{}
+	}
+	if hc.ancestorCache == nil {
+		hc.ancestorCache = make(CollectAncestorsResultMap)
+	}
+	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+		return false, ancestors, common.HashArray{}, ErrCpNotFinalized
+	}
+	headHeader := hc.GetHeader(headHash)
+	// if headHeader is not found
+	if headHeader == nil {
+		return false, ancestors, common.HashArray{headHash}, nil
+	}
+	// if headHeader is checkpoint
+	if headHeader.Hash() == cpHeader.Hash() {
+		return true, ancestors, common.HashArray{}, nil
+	}
+	// if headHeader is finalized before checkpoint
+	if nr := headHeader.Nr(); !(headHeader.Height > 0 && nr == 0) && nr < cpHeader.Nr() {
+		return false, ancestors, common.HashArray{}, nil
+	}
+
+	if headHeader.ParentHashes == nil || len(headHeader.ParentHashes) == 0 {
+		if headHeader.Hash() == hc.genesisHeader.Hash() {
+			return false, ancestors, common.HashArray{}, nil
+		}
+		log.Warn("Detect headHeader without parents", "hash", headHeader.Hash().Hex(), "height", headHeader.Height, "slot", headHeader.Slot)
+		err = fmt.Errorf("Detect headHeader without parents hash=%s, height=%d", headHeader.Hash().Hex(), headHeader.Height)
+		return false, ancestors, common.HashArray{}, err
+	}
+	ancestors[headHash] = headHeader
+	for _, ph := range headHeader.ParentHashes {
+		var (
+			_isCpAncestor bool
+			_ancestors    types.HeaderMap
+			_unloaded     common.HashArray
+			_err          error
+		)
+
+		if hc.ancestorCache[ph] != nil && hc.ancestorCache[ph].cpHash != cpHeader.Hash() {
+			//todo debug
+			log.Warn("collectAncAftCpRecursive: Detect deprecated cache", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
+		}
+
+		if hc.ancestorCache[ph] != nil && hc.ancestorCache[ph].cpHash == cpHeader.Hash() {
+			log.Info("%%%%%%%% collectAncestorsAftCpByParents: cached", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
+			_isCpAncestor = hc.ancestorCache[ph].isCpAncestor
+			_ancestors = hc.ancestorCache[ph].ancestors
+			_unloaded = hc.ancestorCache[ph].unloaded
+			_err = hc.ancestorCache[ph].err
+		} else {
+			log.Info("%%%%%%%% collectAncestorsAftCpByParents: recursive call", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
+			_isCpAncestor, _ancestors, _unloaded, _err = hc.collectAncestorsAftCpByParents(ph, cpHeader)
+			if hc.ancestorCache == nil {
+				hc.ancestorCache = make(CollectAncestorsResultMap, 1)
+			}
+			hc.ancestorCache[ph] = &CollectAncestorsResult{
+				cpHash:       cpHeader.Hash(),
+				isCpAncestor: _isCpAncestor,
+				ancestors:    _ancestors,
+				unloaded:     _unloaded,
+				err:          _err,
+			}
+		}
+		unloaded = unloaded.Concat(_unloaded).Uniq()
+		for h, hd := range _ancestors {
+			ancestors[h] = hd
+		}
+		if _isCpAncestor {
+			isCpAncestor = true
+		}
+		err = _err
+	}
+	return isCpAncestor, ancestors, unloaded, err
+}
+
 // collectAncestorsAftCpByParents recursively collect ancestors of head
 // which have to be finalized after checkpoint up to head.
 // head included
-func (hc *HeaderChain) collectAncestorsAftCpByParents(headHash common.Hash, cpHeader *types.Header, memo ...CollectAncestorsResultMap) (
+func (hc *HeaderChain) collectAncestorsAftCpByParentsDep(headHash common.Hash, cpHeader *types.Header, memo ...CollectAncestorsResultMap) (
 	isCpAncestor bool,
 	ancestors types.HeaderMap,
 	unloaded common.HashArray,
@@ -996,13 +1078,15 @@ func (hc *HeaderChain) collectAncestorsAftCpByParents(headHash common.Hash, cpHe
 		}
 
 		if memo[0][ph] != nil && memo[0][ph].cpHash == cpHeader.Hash() {
+			log.Info("%%%%%%%% collectAncestorsAftCpByParents: cached", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
 			_isCpAncestor = memo[0][ph].isCpAncestor
 			_ancestors = memo[0][ph].ancestors
 			_unloaded = memo[0][ph].unloaded
 			_cache = memo[0]
 			_err = memo[0][ph].err
 		} else {
-			_isCpAncestor, _ancestors, _unloaded, _cache, _err = hc.collectAncestorsAftCpByParents(ph, cpHeader, memo[0])
+			log.Info("%%%%%%%% collectAncestorsAftCpByParents: recursive call", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
+			_isCpAncestor, _ancestors, _unloaded, _cache, _err = hc.collectAncestorsAftCpByParentsDep(ph, cpHeader, memo[0])
 			if memo[0] == nil {
 				memo[0] = make(CollectAncestorsResultMap, 1)
 			}
