@@ -204,7 +204,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		spines = spines[bi+1:]
 	}
 
-	if err := d.handlSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint.FinEpoch); err != nil {
+	if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint.FinEpoch); err != nil {
 		strErr := err.Error()
 		res.Error = &strErr
 		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
@@ -261,12 +261,12 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	return res
 }
 
-// handlSyncUnloadedBlocks:
+// handleSyncUnloadedBlocks:
 // 1. check is synchronization required
 // 2. switch on sync mode
 // 3. start sync process
 // 4. if chain head reached - switch off sync mode
-func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) error {
+func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) error {
 	if len(spines) == 0 {
 		return nil
 	}
@@ -295,7 +295,7 @@ func (d *Dag) handlSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashA
 		d.bc.SetIsSynced(true)
 		log.Info("Node fully synced: head reached")
 	}
-	log.Info("@@@@@@@@@@@ handlSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("@@@@@@@@@@@ handleSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
