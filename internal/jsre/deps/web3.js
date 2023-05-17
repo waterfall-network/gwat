@@ -5470,7 +5470,6 @@ var methods = function () {
         compileSerpent,
         submitWork,
         getWork,
-        getSlotHashes,
     ];
 };
 
