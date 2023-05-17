@@ -1306,6 +1306,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
 		"hash":             head.Hash(),
 		"slot":             hexutil.Uint64(head.Slot),
+		"era":              hexutil.Uint64(head.Era),
 		"height":           hexutil.Uint64(head.Height),
 		"number":           head.Number,
 		"parentHashes":     head.ParentHashes,

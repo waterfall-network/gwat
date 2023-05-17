@@ -18,6 +18,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	type Header struct {
 		ParentHashes []common.Hash   `json:"parentHashes"     gencodec:"required"`
 		Slot         hexutil.Uint64  `json:"slot"             gencodec:"required"`
+		Era          hexutil.Uint64  `json:"era"              gencodec:"required"`
 		Height       hexutil.Uint64  `json:"height"           gencodec:"required"`
 		CpNumber     uint64          `json:"cpNumber"         gencodec:"required"`
 		CpHash       common.Hash     `json:"cpHash"           gencodec:"required"`
@@ -43,6 +44,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	var enc Header
 	enc.ParentHashes = h.ParentHashes
 	enc.Slot = hexutil.Uint64(h.Slot)
+	enc.Era = hexutil.Uint64(h.Era)
 	enc.Height = hexutil.Uint64(h.Height)
 	enc.Coinbase = h.Coinbase
 	enc.TxHash = h.TxHash
@@ -77,6 +79,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	type Header struct {
 		ParentHashes *[]common.Hash  `json:"parentHashes"     gencodec:"required"`
 		Slot         *hexutil.Uint64 `json:"slot"             gencodec:"required"`
+		Era          *hexutil.Uint64 `json:"era"              gencodec:"required"`
 		Height       *hexutil.Uint64 `json:"height"           gencodec:"required"`
 		CpHash       *common.Hash    `json:"cpHash"           gencodec:"required"`
 		CpNumber     *hexutil.Uint64 `json:"cpNumber"         gencodec:"required"`
@@ -110,6 +113,10 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'slot' for Header")
 	}
 	h.Slot = uint64(*dec.Slot)
+	if dec.Era == nil {
+		return errors.New("missing required field 'era' for Header")
+	}
+	h.Era = uint64(*dec.Era)
 	if dec.Height == nil {
 		return errors.New("missing required field 'height' for Header")
 	}
