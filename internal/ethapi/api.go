@@ -2258,6 +2258,11 @@ func (api *PublicDagAPI) ValidateSpines(ctx context.Context, data common.HashArr
 	return api.b.Dag().HandleValidateSpines(data)
 }
 
+// ValidateFinalization validate given spines sequence of finalization.
+func (api *PublicDagAPI) ValidateFinalization(ctx context.Context, data common.HashArray) (bool, error) {
+	return api.b.Dag().HandleValidateFinalization(data)
+}
+
 // SyncSlotInfo sync slot info.
 func (api *PublicDagAPI) SyncSlotInfo(ctx context.Context, data types.SlotInfo) (bool, error) {
 	return api.b.Dag().HandleSyncSlotInfo(data)

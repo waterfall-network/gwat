@@ -2289,6 +2289,9 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
+        log.Info("** Remove optimistic spines from cache", "slot", block.Slot())
+        bc.removeOptimisticSpinesFromCache(block.Slot())
+
 		dagChainHashes := append(common.HashArray{}, block.ParentHashes()...)
 		dagBlock := &types.BlockDAG{
 			Hash:                block.Hash(),
