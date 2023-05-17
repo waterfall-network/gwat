@@ -4096,7 +4096,10 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 			bc.SetOptimisticSpinesToCache(i, slotSpines)
 		}
 
-		optimisticSpines = append(optimisticSpines, slotSpines)
+		// Only append slotSpines if it's not empty
+		if len(slotSpines) > 0 {
+			optimisticSpines = append(optimisticSpines, slotSpines)
+		}
 	}
 
 	return optimisticSpines, nil
