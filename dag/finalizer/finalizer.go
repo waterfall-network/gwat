@@ -356,10 +356,12 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 
 	// TODO: remove
 	lfHead := bc.GetLastFinalizedHeader()
-	log.Info("########  SetSpineState lfheader", "spineHash", fmt.Sprintf("%#x", spineHash),
+	log.Info("########  SetSpineState lfheader",
+		"spineHash", fmt.Sprintf("%#x", spineHash),
+		"lfHash", fmt.Sprintf("%#x", lfHead.Hash()),
 		"lfSlot", lfHead.Slot,
 		"lfNr", lfHead.Nr(),
-		"lfCp", lfHead.CpHash,
+		"lfCp", lfHead.CpHash.Hex(),
 	)
 
 	if spineBlock == nil {
