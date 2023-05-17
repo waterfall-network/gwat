@@ -76,6 +76,9 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 	bc := f.eth.BlockChain()
 	lastFinBlock := bc.GetLastFinalizedBlock()
 
+	// skip correctly finalized block
+	spines, baseSpine = f.forwardFinalization(spines, baseSpine)
+
 	if err := f.SetSpineState(baseSpine, lastFinBlock.Nr()); err != nil {
 		return err
 	}
@@ -353,10 +356,12 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 
 	// TODO: remove
 	lfHead := bc.GetLastFinalizedHeader()
-	log.Info("########  SetSpineState lfheader", "spineHash", fmt.Sprintf("%#x", spineHash),
+	log.Info("########  SetSpineState lfheader",
+		"spineHash", fmt.Sprintf("%#x", spineHash),
+		"lfHash", fmt.Sprintf("%#x", lfHead.Hash()),
 		"lfSlot", lfHead.Slot,
 		"lfNr", lfHead.Nr(),
-		"lfCp", lfHead.CpHash,
+		"lfCp", lfHead.CpHash.Hex(),
 	)
 
 	if spineBlock == nil {
@@ -437,4 +442,50 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	}
 	bc.WriteCurrentTips()
 	return nil
+}
+
+// forwardFinalization recalculate finalization params by skipping correctly finalized spines.
+func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *common.Hash) (*common.HashArray, *common.Hash) {
+	if baseSpine == nil || spines == nil || len(*spines) == 0 {
+		return spines, baseSpine
+	}
+
+	log.Info("forward finalization: start",
+		"baseSpine", fmt.Sprintf("%#x", baseSpine),
+		"spines", *spines,
+	)
+
+	bc := f.eth.BlockChain()
+	lfNr := bc.GetLastFinalizedNumber()
+	baseHeader := bc.GetHeader(*baseSpine)
+	curSlot := baseHeader.Slot
+	curNr := baseHeader.Nr()
+	curIndex := 0
+
+	for nr := curNr + 1; nr <= lfNr; nr++ {
+		header := bc.GetHeaderByNumber(nr)
+		//each slot increasing have to
+		//correspond to the next spine
+		if header.Slot > curSlot {
+			curSlot = header.Slot
+			curSpine := (*spines)[curIndex]
+			if curSpine != header.Hash() {
+				break
+			}
+			if curIndex == len(*spines)-1 {
+				break
+			}
+			curIndex++
+			baseSpine = &curSpine
+		}
+	}
+
+	resSpine := (*spines)[curIndex:]
+
+	log.Info("forward finalization: result",
+		"baseSpine", fmt.Sprintf("%#x", baseSpine),
+		"spines", resSpine,
+	)
+
+	return &resSpine, baseSpine
 }
