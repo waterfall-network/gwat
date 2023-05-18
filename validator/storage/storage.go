@@ -96,7 +96,9 @@ func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
 
 	validators := make([]common.Address, 0)
 	for i := uint64Size; i+common.AddressLength <= len(buf); i += common.AddressLength {
-		validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
+		if (common.BytesToAddress(buf[i:i+common.AddressLength]) != common.Address{}) {
+			validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
+		}
 	}
 
 	return validators
