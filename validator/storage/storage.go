@@ -147,7 +147,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 		for _, valAddress := range valList {
 			val, err := s.GetValidator(stateDb, valAddress)
 			if err != nil {
-				log.Error("can`t get validator from state", "error", err)
+				log.Error("can`t get validator from state", "error", err, "address", valAddress.Hex())
 				continue
 			}
 			validators = append(validators, *val)
