@@ -990,13 +990,13 @@ func (hc *HeaderChain) collectAncestorsAftCpByParents(headHash common.Hash, cpHe
 		}
 
 		if hc.ancestorCache[ph] != nil && hc.ancestorCache[ph].cpHash == cpHeader.Hash() {
-			log.Info("%%%%%%%% collectAncestorsAftCpByParents: cached", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
+			log.Debug("%%%%%%%% collectAncestorsAftCpByParents: cached", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
 			_isCpAncestor = hc.ancestorCache[ph].isCpAncestor
 			_ancestors = hc.ancestorCache[ph].ancestors
 			_unloaded = hc.ancestorCache[ph].unloaded
 			_err = hc.ancestorCache[ph].err
 		} else {
-			log.Info("%%%%%%%% collectAncestorsAftCpByParents: recursive call", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
+			log.Debug("%%%%%%%% collectAncestorsAftCpByParents: recursive call", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
 			_isCpAncestor, _ancestors, _unloaded, _err = hc.collectAncestorsAftCpByParents(ph, cpHeader)
 			if hc.ancestorCache == nil {
 				hc.ancestorCache = make(CollectAncestorsResultMap, 1)

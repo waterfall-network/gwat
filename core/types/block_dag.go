@@ -687,7 +687,7 @@ func (si *SlotInfo) SlotInEpoch(slot uint64) uint64 {
 // SlotOfEpochStart returns the first slot number of the
 // current epoch.
 func (si *SlotInfo) SlotOfEpochStart(epoch uint64) (uint64, error) {
-	overflows, slot := bits.Mul64(si.SlotsPerEpoch, epoch+1)
+	overflows, slot := bits.Mul64(si.SlotsPerEpoch, epoch)
 	if overflows > 0 {
 		return slot, errors.New("start slot calculation overflows: multiplication overflows")
 	}
@@ -700,7 +700,7 @@ func (si *SlotInfo) SlotOfEpochEnd(epoch uint64) (uint64, error) {
 	if epoch == math.MaxUint64 {
 		return 0, errors.New("start slot calculation overflows")
 	}
-	slot, err := si.SlotOfEpochStart(epoch)
+	slot, err := si.SlotOfEpochStart(epoch + 1)
 	if err != nil {
 		return 0, err
 	}

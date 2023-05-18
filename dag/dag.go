@@ -599,18 +599,23 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				creators []common.Address
 			)
 
-			transitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(d.bc.GetEraInfo().ToEpoch() - d.chainConfig.TransitionPeriod)
+			startTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(d.bc.GetEraInfo().ToEpoch() + 1 - d.chainConfig.TransitionPeriod)
 			if err != nil {
-				log.Error("Error calculating transition slot", "error", err)
+				log.Error("Error calculating start transition slot", "error", err)
 				return
 			}
+
+			endTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochEnd(d.bc.GetEraInfo().ToEpoch())
 
 			log.Info("New slot",
 				"slot", slot,
 				"epoch", d.bc.GetSlotInfo().SlotToEpoch(slot),
 				"era", d.bc.GetEraInfo().Number(),
-				"transEpoch", d.bc.GetEraInfo().ToEpoch()-d.chainConfig.TransitionPeriod,
-				"transSlot", transitionSlot)
+				"startTransEpoch", d.bc.GetEraInfo().ToEpoch()+1-d.chainConfig.TransitionPeriod,
+				"startTransSlot", startTransitionSlot,
+				"endTransEpoch", d.bc.GetEraInfo().ToEpoch(),
+				"endTransSlot", endTransitionSlot,
+			)
 
 			era.HandleEra(d.bc, slot)
 			//d.handleEra(slot)
