@@ -295,7 +295,7 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 		d.bc.SetIsSynced(true)
 		log.Info("Node fully synced: head reached")
 	}
-	log.Info("@@@@@@@@@@@ handleSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("@@@@@@@@@@@ handleSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
@@ -320,7 +320,7 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 			return true, nil
 		}
 	}
-	log.Info("@@@@@@@@@@@ hasUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("@@@@@@@@@@@ hasUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
 
 	return false, nil
 }
@@ -392,7 +392,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		log.Info("No candidates found", "slot", slot)
 	}
 
-	log.Info("@@@@@@@@@ Candidates HandleGetCandidates: get finalizing candidates", "err", err, "toSlot", slot, "fromSlot", fromSlot, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
+	log.Debug("@@@@@@@@@ Candidates HandleGetCandidates: get finalizing candidates", "err", err, "toSlot", slot, "fromSlot", fromSlot, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	res := &types.CandidatesResult{
 		Error:      nil,
 		Candidates: candidates,
@@ -510,7 +510,7 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	log.Info("@@@@@@@@@ Candidates HandleValidateSpines req", "candidates", spines, "elapsed", "\u2692", params.BuildId)
+	log.Debug("@@@@@@@@@ Candidates HandleValidateSpines req", "candidates", spines, "elapsed", "\u2692", params.BuildId)
 	//log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
@@ -607,6 +607,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 			endTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochEnd(d.bc.GetEraInfo().ToEpoch())
 
+			era.HandleEra(d.bc, slot)
+
 			log.Info("New slot",
 				"slot", slot,
 				"epoch", d.bc.GetSlotInfo().SlotToEpoch(slot),
@@ -616,9 +618,6 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				"endTransEpoch", d.bc.GetEraInfo().ToEpoch(),
 				"endTransSlot", endTransitionSlot,
 			)
-
-			era.HandleEra(d.bc, slot)
-			//d.handleEra(slot)
 
 			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
 			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {

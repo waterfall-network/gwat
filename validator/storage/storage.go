@@ -96,7 +96,9 @@ func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
 
 	validators := make([]common.Address, 0)
 	for i := uint64Size; i+common.AddressLength <= len(buf); i += common.AddressLength {
-		validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
+		if (common.BytesToAddress(buf[i:i+common.AddressLength]) != common.Address{}) {
+			validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
+		}
 	}
 
 	return validators
@@ -145,7 +147,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 		for _, valAddress := range valList {
 			val, err := s.GetValidator(stateDb, valAddress)
 			if err != nil {
-				log.Error("can`t get validator from state", "error", err)
+				log.Error("can`t get validator from state", "error", err, "address", valAddress.Hex())
 				continue
 			}
 			validators = append(validators, *val)
