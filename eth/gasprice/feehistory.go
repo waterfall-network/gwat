@@ -92,7 +92,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	// Get active validators number
 	bc := oracle.backend.BlockChain()
 	genesisGasLimit := oracle.backend.Genesis().GasLimit()
-	validators, _ := bc.ValidatorStorage().GetValidators(oracle.backend.BlockChain(), bf.block.Slot(), true, false)
+	validators, _ := bc.ValidatorStorage().GetValidators(oracle.backend.BlockChain(), bf.block.Slot(), true, false, "processBlock")
 	creatorsPerSlotCount := oracle.backend.ChainConfig().ValidatorsPerSlot
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, bf.header.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))

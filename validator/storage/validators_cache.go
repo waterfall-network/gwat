@@ -75,7 +75,7 @@ func (c *ValidatorsCache) getAllValidatorsByEpoch(epoch uint64) ([]Validator, er
 	return validators, nil
 }
 
-func (c *ValidatorsCache) getActiveValidatorsByEpoch(epoch uint64) []Validator {
+func (c *ValidatorsCache) getActiveValidatorsByEpoch(bc blockchain, epoch uint64) []Validator {
 	validators := make([]Validator, 0)
 	validatorsList, ok := c.allValidatorsCache[epoch]
 	if !ok {
@@ -83,8 +83,10 @@ func (c *ValidatorsCache) getActiveValidatorsByEpoch(epoch uint64) []Validator {
 		return nil
 	}
 
+	era := bc.EpochToEra(epoch)
+
 	for _, validator := range validatorsList {
-		if validator.ActivationEpoch <= epoch && validator.ExitEpoch > epoch {
+		if validator.ActivationEra <= era.Number && validator.ExitEra > era.Number {
 			validators = append(validators, validator)
 		}
 	}
@@ -219,7 +221,7 @@ func (c *ValidatorsCache) getShuffledValidators(filter []uint64) ([]common.Addre
 	}
 }
 
-func (c *ValidatorsCache) getValidatorsAddresses(epoch uint64, activeOnly bool) []common.Address {
+func (c *ValidatorsCache) getValidatorsAddresses(bc blockchain, epoch uint64, activeOnly bool) []common.Address {
 	addresses := make([]common.Address, 0)
 	validators := c.allValidatorsCache[epoch]
 
@@ -231,8 +233,10 @@ func (c *ValidatorsCache) getValidatorsAddresses(epoch uint64, activeOnly bool) 
 		return addresses
 	}
 
+	era := bc.EpochToEra(epoch)
+
 	for _, validator := range validators {
-		if validator.ActivationEpoch <= epoch && validator.ExitEpoch > epoch {
+		if validator.ActivationEra <= era.Number && validator.ExitEra > era.Number {
 			addresses = append(addresses, validator.Address)
 		}
 	}

@@ -164,7 +164,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false)
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "Content")
 	numValidators := uint64(len(validators))
 	genesisGasLimit := bc.Genesis().GasLimit()
 	// Flatten the pending transactions
@@ -203,7 +203,7 @@ func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false)
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "ContentFrom")
 	numValidators := uint64(len(validators))
 	genesisGasLimit := bc.Genesis().GasLimit()
 
@@ -1717,7 +1717,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 			creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 		}
-		validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false)
+		validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "GetTransactionByHash")
 		numValidators := uint64(len(validators))
 		genesisGasLimit := bc.Genesis().GasLimit()
 		return newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount), nil
@@ -1989,7 +1989,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false)
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "PendingTransactions")
 	numValidators := uint64(len(validators))
 	genesisGasLimit := bc.Genesis().GasLimit()
 	for _, tx := range pending {

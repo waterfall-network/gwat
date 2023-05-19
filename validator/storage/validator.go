@@ -13,9 +13,9 @@ const (
 	creatorAddressOffset    = common.BlsPubKeyLength
 	withdrawalAddressOffset = creatorAddressOffset + common.AddressLength
 	validatorIndexOffset    = withdrawalAddressOffset + common.AddressLength
-	activationEpochOffset   = validatorIndexOffset + uint64Size
-	exitEpochOffset         = activationEpochOffset + uint64Size
-	balanceLengthOffset     = exitEpochOffset + uint64Size
+	activationEraOffset     = validatorIndexOffset + uint64Size
+	exitEraOffset           = activationEraOffset + uint64Size
+	balanceLengthOffset     = exitEraOffset + uint64Size
 	balanceOffset           = balanceLengthOffset + uint64Size
 	metricOffset            = balanceOffset // TODO: add balance length to calculate offset
 )
@@ -25,8 +25,8 @@ type Validator struct {
 	Address           common.Address
 	WithdrawalAddress *common.Address
 	Index             uint64
-	ActivationEpoch   uint64
-	ExitEpoch         uint64
+	ActivationEra     uint64
+	ExitEra           uint64
 	Balance           *big.Int
 }
 
@@ -36,8 +36,8 @@ func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *c
 		Address:           address,
 		WithdrawalAddress: withdrawal,
 		Index:             math.MaxUint64,
-		ActivationEpoch:   math.MaxUint64,
-		ExitEpoch:         math.MaxUint64,
+		ActivationEra:     math.MaxUint64,
+		ExitEra:           math.MaxUint64,
 		Balance:           new(big.Int),
 	}
 }
@@ -64,9 +64,9 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 
 	binary.BigEndian.PutUint64(data[validatorIndexOffset:validatorIndexOffset+uint64Size], v.Index)
 
-	binary.BigEndian.PutUint64(data[activationEpochOffset:activationEpochOffset+uint64Size], v.ActivationEpoch)
+	binary.BigEndian.PutUint64(data[activationEraOffset:activationEraOffset+uint64Size], v.ActivationEra)
 
-	binary.BigEndian.PutUint64(data[exitEpochOffset:exitEpochOffset+uint64Size], v.ExitEpoch)
+	binary.BigEndian.PutUint64(data[exitEraOffset:exitEraOffset+uint64Size], v.ExitEra)
 
 	binary.BigEndian.PutUint64(data[balanceLengthOffset:balanceOffset], uint64(len(balance)))
 
@@ -86,9 +86,9 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 
 	v.Index = binary.BigEndian.Uint64(data[validatorIndexOffset : validatorIndexOffset+uint64Size])
 
-	v.ActivationEpoch = binary.BigEndian.Uint64(data[activationEpochOffset : activationEpochOffset+uint64Size])
+	v.ActivationEra = binary.BigEndian.Uint64(data[activationEraOffset : activationEraOffset+uint64Size])
 
-	v.ExitEpoch = binary.BigEndian.Uint64(data[exitEpochOffset : exitEpochOffset+uint64Size])
+	v.ExitEra = binary.BigEndian.Uint64(data[exitEraOffset : exitEraOffset+uint64Size])
 
 	balanceLen := binary.BigEndian.Uint64(data[balanceLengthOffset:balanceOffset])
 
@@ -128,20 +128,20 @@ func (v *Validator) SetIndex(index uint64) {
 	v.Index = index
 }
 
-func (v *Validator) GetActivationEpoch() uint64 {
-	return v.ActivationEpoch
+func (v *Validator) GetActivationEra() uint64 {
+	return v.ActivationEra
 }
 
-func (v *Validator) SetActivationEpoch(epoch uint64) {
-	v.ActivationEpoch = epoch
+func (v *Validator) SetActivationEra(era uint64) {
+	v.ActivationEra = era
 }
 
-func (v *Validator) GetExitEpoch() uint64 {
-	return v.ExitEpoch
+func (v *Validator) GetExitEra() uint64 {
+	return v.ExitEra
 }
 
-func (v *Validator) SetExitEpoch(epoch uint64) {
-	v.ExitEpoch = epoch
+func (v *Validator) SetExitEra(era uint64) {
+	v.ExitEra = era
 }
 
 func (v *Validator) GetBalance() *big.Int {

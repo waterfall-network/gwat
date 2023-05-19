@@ -3855,7 +3855,7 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 		return nextEra
 	}
 
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false, "EnterNextEra")
 	nextEra = era.NextEra(bc, root, uint64(len(validators)))
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
@@ -3872,7 +3872,14 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 }
 
 func (bc *BlockChain) StartTransitionPeriod() {
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false)
+	log.Info("GetValidators StartTransitionPeriod", "slot", bc.GetSlotInfo().CurrentSlot(),
+		"curEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+		"curEra", bc.GetEraInfo().GetEra().Number,
+		"fromEp", bc.GetEraInfo().GetEra().From,
+		"toEp", bc.GetEraInfo().GetEra().To,
+		"nextEraFirstEpoch", bc.GetEraInfo().NextEraFirstEpoch(),
+		"nextEraFirstSlot", bc.GetEraInfo().NextEraFirstSlot(bc),
+	)
 
 	// Checkpoint
 	checkpoint := bc.GetLastCoordinatedCheckpoint()
@@ -3883,7 +3890,7 @@ func (bc *BlockChain) StartTransitionPeriod() {
 	} else {
 		log.Error("Invalid checkpoint: write new era error")
 	}
-
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetSlotInfo().CurrentSlot(), true, false, "StartTransitionPeriod")
 	nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
 
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
@@ -4028,7 +4035,6 @@ func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, recei
 }
 
 func (bc *BlockChain) SetOptimisticSpinesToCache(slot uint64, spines common.HashArray) {
-	log.Info("@@@@@@@@@ OptimisticSpines Set", "slot", slot, "spines", spines)
 	bc.optimisticSpinesCache.Add(slot, spines)
 }
 
@@ -4078,7 +4084,6 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 
 	for i := gtSlot + 1; i <= currentSlot; i++ {
 		slotSpines := bc.GetOptimisticSpinesFromCache(i)
-		log.Info("@@@@@@@@@ OptimisticSpines FromCache", "slot", i, "spines", slotSpines)
 		if slotSpines == nil {
 			slotBlocks := make(types.Blocks, 0)
 			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(bc.Database(), i)
@@ -4090,7 +4095,6 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 			if err != nil {
 				return []common.HashArray{}, err
 			}
-			log.Info("@@@@@@@@@ OptimisticSpines FromDb", "slot", i, "spines", slotSpines)
 			bc.SetOptimisticSpinesToCache(i, slotSpines)
 		}
 
@@ -4101,4 +4105,28 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 	}
 
 	return optimisticSpines, nil
+}
+
+func (bc *BlockChain) EpochToEra(epoch uint64) *era.Era {
+	curEra := bc.eraInfo.GetEra()
+	if curEra.IsContainsEpoch(epoch) {
+		return curEra
+	}
+
+	eraNumber := curEra.Number
+	findingEra := new(era.Era)
+
+	if epoch < curEra.From {
+		for !findingEra.IsContainsEpoch(epoch) {
+			eraNumber--
+			findingEra = rawdb.ReadEra(bc.db, eraNumber)
+		}
+	} else if epoch > curEra.To {
+		for !findingEra.IsContainsEpoch(epoch) {
+			eraNumber++
+			findingEra = rawdb.ReadEra(bc.db, eraNumber)
+		}
+	}
+
+	return findingEra
 }

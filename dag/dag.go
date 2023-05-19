@@ -72,6 +72,8 @@ type blockChain interface {
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
 	GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error)
 	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
+	EpochToEra(uint64) *era.Era
+	Genesis() *types.Block
 
 	SetIsSynced(synced bool)
 	IsSynced() bool
@@ -578,7 +580,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
-				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, common.Hash{})
+				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, d.bc.Genesis().Root())
 				d.bc.SetNewEraInfo(*newEra)
 				d.bc.SetIsSynced(true)
 				continue
