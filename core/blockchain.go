@@ -218,7 +218,6 @@ type BlockChain struct {
 	validatorStorage valStore.Storage
 
 	insBlockCache []*types.Block   // Cache for blocks to insert late
-	ancestorCache ExploreResultMap // Cache for ancestors
 
 	wg            sync.WaitGroup //
 	quit          chan struct{}  // shutdown signal, closed in Stop.
@@ -3437,15 +3436,14 @@ type ExploreResultMap map[common.Hash]*ExploreResult
 // locally unknown, existed and latest finalized parent blocks,
 // creates GraphDag structure until latest finalized ancestors.
 func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache ExploreResultMap, err error) {
-	if bc.ancestorCache == nil {
-		bc.ancestorCache = make(ExploreResultMap)
+	if len(memo) == 0 {
+		memo = append(memo, make(ExploreResultMap))
 	}
-
 	lfNr := bc.GetLastFinalizedBlock().Nr()
 
 	block := bc.GetBlockByHash(headHash)
 	if block == nil {
-		return common.HashArray{headHash}, loaded, finalized, graph, bc.ancestorCache, err
+		return common.HashArray{headHash}, loaded, finalized, graph, memo[0], err
 	}
 	if block.Nr() > lfNr {
 		block.SetNumber(nil)
@@ -3458,7 +3456,7 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 	}
 	if block == nil {
 		// if block not loaded
-		return common.HashArray{headHash}, loaded, finalized, graph, bc.ancestorCache, nil
+		return common.HashArray{headHash}, loaded, finalized, graph, memo[0], nil
 	}
 	graph.State = types.BSS_LOADED
 	graph.Height = block.Height()
@@ -3466,16 +3464,16 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 		// if finalized
 		graph.State = types.BSS_FINALIZED
 		graph.Number = *nr
-		return unloaded, loaded, common.HashArray{headHash}, graph, bc.ancestorCache, nil
+		return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
 	}
 	loaded = common.HashArray{headHash}
 	if block.ParentHashes() == nil || len(block.ParentHashes()) < 1 {
 		if block.Hash() == bc.genesisBlock.Hash() {
-			return unloaded, loaded, common.HashArray{headHash}, graph, bc.ancestorCache, nil
+			return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
 		}
 		log.Warn("Detect block without parents", "hash", block.Hash().Hex(), "height", block.Height(), "slot", block.Slot())
 		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
-		return unloaded, loaded, finalized, graph, bc.ancestorCache, err
+		return unloaded, loaded, finalized, graph, memo[0], err
 	}
 
 	//parentHashes := types.GetOrderedParentHashes(bc, block)
@@ -3490,19 +3488,19 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 			_err       error
 		)
 
-		if bc.ancestorCache[ph] != nil {
-			_unloaded = bc.ancestorCache[ph].unloaded
-			_loaded = bc.ancestorCache[ph].loaded
-			_finalized = bc.ancestorCache[ph].finalized
-			_graph = bc.ancestorCache[ph].graph
-			_cache = bc.ancestorCache
-			_err = bc.ancestorCache[ph].err
+		if memo[0][ph] != nil {
+			_unloaded = memo[0][ph].unloaded
+			_loaded = memo[0][ph].loaded
+			_finalized = memo[0][ph].finalized
+			_graph = memo[0][ph].graph
+			_cache = memo[0]
+			_err = memo[0][ph].err
 		} else {
-			_unloaded, _loaded, _finalized, _graph, _cache, _err = bc.ExploreChainRecursive(ph, bc.ancestorCache)
-			if bc.ancestorCache == nil {
-				bc.ancestorCache = make(ExploreResultMap, 1)
+			_unloaded, _loaded, _finalized, _graph, _cache, _err = bc.ExploreChainRecursive(ph, memo[0])
+			if memo[0] == nil {
+				memo[0] = make(ExploreResultMap, 1)
 			}
-			bc.ancestorCache[ph] = &ExploreResult{
+			memo[0][ph] = &ExploreResult{
 				unloaded:  _unloaded,
 				loaded:    _loaded,
 				finalized: _finalized,
@@ -4096,7 +4094,10 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 			bc.SetOptimisticSpinesToCache(i, slotSpines)
 		}
 
-		optimisticSpines = append(optimisticSpines, slotSpines)
+		// Only append slotSpines if it's not empty
+		if len(slotSpines) > 0 {
+			optimisticSpines = append(optimisticSpines, slotSpines)
+		}
 	}
 
 	return optimisticSpines, nil

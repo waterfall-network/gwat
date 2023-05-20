@@ -12,6 +12,7 @@ import (
 var (
 	ErrInvalidValidatorsFilter = errors.New("invalid validators filter")
 	errNoSubnetValidators      = errors.New("there are no validators for subnet")
+	errNoStateValidatorInfo    = errors.New("there is no validator in the state")
 	errNoEpochValidators       = errors.New("there are no validators for epoch")
 )
 

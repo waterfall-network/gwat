@@ -67,7 +67,7 @@ func (s *storage) GetValidator(stateDb vm.StateDB, address common.Address) (*Val
 
 	valData = stateDb.GetCode(address)
 	if valData == nil {
-		return nil, nil
+		return nil, errNoStateValidatorInfo
 	}
 
 	return valData.ToValidator()
@@ -96,7 +96,9 @@ func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
 
 	validators := make([]common.Address, 0)
 	for i := uint64Size; i+common.AddressLength <= len(buf); i += common.AddressLength {
-		validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
+		if (common.BytesToAddress(buf[i:i+common.AddressLength]) != common.Address{}) {
+			validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
+		}
 	}
 
 	return validators
@@ -131,37 +133,43 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 	var err error
 	var validators []Validator
 
-	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-	validators, err = s.validatorsCache.getAllValidatorsByEpoch(currentEpoch)
+	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	validators, err = s.validatorsCache.getAllValidatorsByEpoch(slotEpoch)
 
 	if err != nil {
-		log.Error("get validators", "error", err, "epoch", currentEpoch)
+		log.Error("get validators", "error", err, "epoch", slotEpoch)
 		checkpointBlock := bc.GetBlock(bc.GetLastCoordinatedCheckpoint().Spine)
 
 		stateDb, _ := bc.StateAt(checkpointBlock.Root())
 
 		valList := s.GetValidatorsList(stateDb)
+		log.Info("GetValidators from state", "validators", valList, "slot", slot, "epoch", slotEpoch, "cpBlock", checkpointBlock.Hash().Hex())
 		for _, valAddress := range valList {
 			val, err := s.GetValidator(stateDb, valAddress)
 			if err != nil {
-				log.Error("can`t get validator from state", "error", err)
+				log.Error("can`t get validator from state", "error", err, "address", valAddress.Hex())
 				continue
 			}
 			validators = append(validators, *val)
 		}
 
-		s.validatorsCache.addAllValidatorsByEpoch(currentEpoch, validators)
+		s.validatorsCache.addAllValidatorsByEpoch(slotEpoch, validators)
 	}
+
+	log.Info("GetValidators", "all", len(validators),
+		"active", len(s.validatorsCache.getActiveValidatorsByEpoch(slotEpoch)),
+		"slot", slot, "epoch", slotEpoch,
+	)
 
 	switch {
 	case !activeOnly && !needAddresses:
 		return validators, nil
 	case !activeOnly && needAddresses:
-		return validators, s.validatorsCache.getValidatorsAddresses(currentEpoch, false)
+		return validators, s.validatorsCache.getValidatorsAddresses(slotEpoch, false)
 	case activeOnly && !needAddresses:
-		return s.validatorsCache.getActiveValidatorsByEpoch(currentEpoch), nil
+		return s.validatorsCache.getActiveValidatorsByEpoch(slotEpoch), nil
 	case activeOnly && needAddresses:
-		return s.validatorsCache.getActiveValidatorsByEpoch(currentEpoch), s.validatorsCache.getValidatorsAddresses(currentEpoch, true)
+		return s.validatorsCache.getActiveValidatorsByEpoch(slotEpoch), s.validatorsCache.getValidatorsAddresses(slotEpoch, true)
 	}
 
 	return nil, nil
