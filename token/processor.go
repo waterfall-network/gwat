@@ -90,6 +90,7 @@ const (
 var (
 	//Events signatures. Copied from eip-20 and eip-721 for having the same topic 0 hash
 	//Same for the eip-20 and eip-721
+	createWRC721EventSignature   = crypto.Keccak256Hash([]byte("Create(address,address,uint256)"))
 	transferEventSignature       = crypto.Keccak256Hash([]byte("Transfer(address,address,uint256)"))
 	approvalEventSignature       = crypto.Keccak256Hash([]byte("Approval(address,address,uint256)"))
 	approvalForAllEventSignature = crypto.Keccak256Hash([]byte("ApprovalForAll(address,address,bool)"))
@@ -294,6 +295,8 @@ func (p *Processor) tokenCreate(caller Ref, tokenAddr common.Address, op operati
 		if err != nil {
 			return nil, err
 		}
+
+		defer p.eventEmmiter.CreateWrc721(tokenAddr, caller.Address(), v)
 	default:
 		return nil, operation.ErrStandardNotValid
 	}
@@ -1231,6 +1234,15 @@ type EventEmmiter struct {
 
 func NewEventEmmiter(state vm.StateDB) *EventEmmiter {
 	return &EventEmmiter{state: state}
+}
+
+func (e *EventEmmiter) CreateWrc721(tokenAddr common.Address, from common.Address, baseUri []byte) {
+	e.addLog(
+		tokenAddr,
+		createWRC721EventSignature,
+		newIndexedAddressLogEntry("from", from.Bytes()),
+		newUint256LogEntry("value", baseUri),
+	)
 }
 
 func (e *EventEmmiter) TransferWrc20(tokenAddr common.Address, from, to common.Address, value *big.Int) {
