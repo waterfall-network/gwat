@@ -203,6 +203,8 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	if bi := spines.IndexOf(baseSpine); bi >= 0 {
 		spines = spines[bi+1:]
 	}
+	//forward finalization
+	spines, baseSpine = d.finalizer.ForwardFinalization(spines, baseSpine)
 
 	if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint.FinEpoch); err != nil {
 		strErr := err.Error()
