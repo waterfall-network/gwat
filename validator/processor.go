@@ -27,6 +27,7 @@ var (
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
 	ErrInvalidFromAddresses         = errors.New("withdrawal and sender addresses are mismatch")
 	ErrUnknownValidator             = errors.New("unknown validator")
+	ErrMismatchPulicKey             = errors.New("validators public key mismatch")
 	ErrNotActivatedValidator        = errors.New("validator not activated yet")
 	ErrValidatorIsOut               = errors.New("validator is exited")
 	ErrInvalidToAddress             = errors.New("address to must be validators state address")
@@ -231,6 +232,10 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 
 	if validator == nil {
 		return nil, ErrUnknownValidator
+	}
+
+	if validator.GetPubKey() != op.PubKey() {
+		return nil, ErrMismatchPulicKey
 	}
 
 	if op.ExitAfterEpoch() == nil {
