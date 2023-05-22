@@ -125,7 +125,7 @@ func (ei *EraInfo) IsTransitionPeriodStartEpoch(bc Blockchain, epoch uint64) boo
 }
 
 func (ei *EraInfo) IsTransitionPeriodStartSlot(bc Blockchain, slot uint64) bool {
-	transitionEpoch := (ei.ToEpoch() - bc.Config().TransitionPeriod)
+	transitionEpoch := (ei.ToEpoch() + 1 - bc.Config().TransitionPeriod)
 	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 
 	if currentEpoch == transitionEpoch {
@@ -193,12 +193,14 @@ func HandleEra(bc Blockchain, slot uint64) error {
 				log.Error("Write new era error", "err", ErrCheckpointInvalid)
 				return ErrCheckpointInvalid
 			}
+			bc.EnterNextEra(spineRoot)
+
 			log.Info("######## HandleEra", "currentEpoch", currentEpoch,
 				"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
 				"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
 				"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
 			)
-			bc.EnterNextEra(spineRoot)
+
 			return nil
 		}
 		// Transition period
