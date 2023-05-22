@@ -76,9 +76,6 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 	bc := f.eth.BlockChain()
 	lastFinBlock := bc.GetLastFinalizedBlock()
 
-	// skip correctly finalized block
-	spines, baseSpine = f.forwardFinalization(spines, baseSpine)
-
 	if err := f.SetSpineState(baseSpine, lastFinBlock.Nr()); err != nil {
 		return err
 	}
@@ -444,6 +441,12 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	return nil
 }
 
+// ForwardFinalization recalculate finalization params by skipping correctly finalized spines.
+func (f *Finalizer) ForwardFinalization(spines common.HashArray, baseSpine common.Hash) (common.HashArray, common.Hash) {
+	spn, bSpine := f.forwardFinalization(&spines, &baseSpine)
+	return *spn, *bSpine
+}
+
 // forwardFinalization recalculate finalization params by skipping correctly finalized spines.
 func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *common.Hash) (*common.HashArray, *common.Hash) {
 	if baseSpine == nil || spines == nil || len(*spines) == 0 {
@@ -458,11 +461,15 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 	bc := f.eth.BlockChain()
 	lfNr := bc.GetLastFinalizedNumber()
 	baseHeader := bc.GetHeader(*baseSpine)
+	if baseHeader == nil {
+		return spines, baseSpine
+	}
+
 	curSlot := baseHeader.Slot
 	curNr := baseHeader.Nr()
 	curIndex := 0
 
-	for nr := curNr + 1; nr <= lfNr; nr++ {
+	for nr := curNr + 1; nr <= lfNr && curIndex < len(*spines); nr++ {
 		header := bc.GetHeaderByNumber(nr)
 		//each slot increasing have to
 		//correspond to the next spine
@@ -470,9 +477,6 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 			curSlot = header.Slot
 			curSpine := (*spines)[curIndex]
 			if curSpine != header.Hash() {
-				break
-			}
-			if curIndex == len(*spines)-1 {
 				break
 			}
 			curIndex++
