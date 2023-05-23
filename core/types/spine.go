@@ -91,7 +91,7 @@ func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
 	return spines, nil
 }
 
-func CalculateOptimisticSpines(slotBlocks Blocks) (common.HashArray, error) {
+func CalculateOptimisticSpines(slotBlocks Headers) (common.HashArray, error) {
 	optimisticSpines := make(common.HashArray, 0)
 	slotSpines := selectSpinesByMaxHeight(slotBlocks)
 
@@ -108,11 +108,11 @@ func CalculateOptimisticSpines(slotBlocks Blocks) (common.HashArray, error) {
 	return optimisticSpines, nil
 }
 
-func selectSpinesByMaxParentsCount(blocks Blocks) Blocks {
+func selectSpinesByMaxParentsCount(headers Headers) Headers {
 	var maxParents uint64
-	maxParentsBlocks := make(Blocks, 0)
-	for _, block := range blocks {
-		blockParents := uint64(len(block.ParentHashes()))
+	maxParentsBlocks := make(Headers, 0)
+	for _, header := range headers {
+		blockParents := uint64(len(header.ParentHashes))
 
 		if blockParents < maxParents {
 			continue
@@ -120,43 +120,44 @@ func selectSpinesByMaxParentsCount(blocks Blocks) Blocks {
 
 		if blockParents > maxParents {
 			maxParents = blockParents
-			maxParentsBlocks = make(Blocks, 0)
+			maxParentsBlocks = make(Headers, 0)
 		}
 
-		maxParentsBlocks = append(maxParentsBlocks, block)
+		maxParentsBlocks = append(maxParentsBlocks, header)
 	}
 
 	return maxParentsBlocks
 }
 
-func sortByHash(blocks Blocks) {
-	sort.Slice(blocks, func(i, j int) bool {
-		return bytes.Compare(blocks[i].Hash().Bytes(), blocks[j].Hash().Bytes()) < 0
+func sortByHash(headers Headers) {
+	sort.Slice(headers, func(i, j int) bool {
+		ih := headers[i].Hash().Hex()
+		jh := headers[j].Hash().Hex()
+		if ih != jh {
+		}
+		cmp := bytes.Compare(headers[i].Hash().Bytes(), headers[j].Hash().Bytes()) < 0
+		return cmp
 	})
 }
 
-func selectSpinesByMaxHeight(blocks Blocks) Blocks {
+func selectSpinesByMaxHeight(blocks Headers) Headers {
 	if len(blocks) == 0 {
-		return Blocks{}
+		return Headers{}
 	}
 
 	var maxHeight uint64
-	maxHeightBlocks := make(Blocks, 0)
-	for _, block := range blocks {
-		blockHeight := block.Height()
-
+	maxHeightBlocks := make(Headers, 0)
+	for _, header := range blocks {
+		blockHeight := header.Height
 		if blockHeight < maxHeight {
 			continue
 		}
-
 		if blockHeight > maxHeight {
 			maxHeight = blockHeight
-			maxHeightBlocks = make(Blocks, 0)
+			maxHeightBlocks = make(Headers, 0)
 		}
-
-		maxHeightBlocks = append(maxHeightBlocks, block)
+		maxHeightBlocks = append(maxHeightBlocks, header)
 	}
-
 	return maxHeightBlocks
 }
 
