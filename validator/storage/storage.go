@@ -208,6 +208,9 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 	}
 
 	allValidators, _ := s.GetValidators(bc, slot, false, false, "GetCreatorsBySlot")
+	if len(allValidators) == 0 {
+		return nil, errNoValidators
+	}
 
 	s.validatorsCache.addAllValidatorsByEpoch(epoch, allValidators)
 
