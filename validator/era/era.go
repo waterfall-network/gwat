@@ -20,7 +20,7 @@ type Blockchain interface {
 	Config() *params.ChainConfig
 	GetHeaderByHash(common.Hash) *types.Header
 	EnterNextEra(common.Hash) *Era
-	StartTransitionPeriod()
+	StartTransitionPeriod(slot uint64)
 	SyncEraToSlot(slot uint64)
 }
 
@@ -205,7 +205,7 @@ func HandleEra(bc Blockchain, slot uint64) error {
 		}
 		// Transition period
 		if bc.GetEraInfo().IsTransitionPeriodStartSlot(bc, slot) {
-			bc.StartTransitionPeriod()
+			bc.StartTransitionPeriod(slot)
 		}
 	}
 	// Sync era to current slot

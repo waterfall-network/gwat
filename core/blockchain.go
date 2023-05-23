@@ -3871,7 +3871,7 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 	return nextEra
 }
 
-func (bc *BlockChain) StartTransitionPeriod() {
+func (bc *BlockChain) StartTransitionPeriod(slot uint64) {
 	log.Info("GetValidators StartTransitionPeriod", "slot", bc.GetSlotInfo().CurrentSlot(),
 		"curEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
 		"curEra", bc.GetEraInfo().GetEra().Number,
@@ -3890,7 +3890,7 @@ func (bc *BlockChain) StartTransitionPeriod() {
 	} else {
 		log.Error("Invalid checkpoint: write new era error")
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetSlotInfo().CurrentSlot(), true, false, "StartTransitionPeriod")
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, slot, true, false, "StartTransitionPeriod")
 	nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
 
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
