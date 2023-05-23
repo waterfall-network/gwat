@@ -44,11 +44,11 @@ type Backend interface {
 }
 
 type blockChain interface {
-	era.Blockchain
 	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
+	GetHeaderByHash(common.Hash) *types.Header
 	GetBlock(hash common.Hash) *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetLastFinalizedNumber() uint64
@@ -62,7 +62,7 @@ type blockChain interface {
 	GetEraInfo() *era.EraInfo
 	SetNewEraInfo(newEra era.Era)
 	EnterNextEra(root common.Hash) *era.Era
-	StartTransitionPeriod()
+	StartTransitionPeriod(slot uint64)
 	SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
