@@ -44,11 +44,11 @@ type Backend interface {
 }
 
 type blockChain interface {
-	era.Blockchain
 	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
+	GetHeaderByHash(common.Hash) *types.Header
 	GetBlock(hash common.Hash) *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetLastFinalizedNumber() uint64
@@ -62,7 +62,7 @@ type blockChain interface {
 	GetEraInfo() *era.EraInfo
 	SetNewEraInfo(newEra era.Era)
 	EnterNextEra(root common.Hash) *era.Era
-	StartTransitionPeriod()
+	StartTransitionPeriod(slot uint64)
 	SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
@@ -429,19 +429,17 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 
 	log.Info("Handle GetOptimisticSpines: start", "fromSpine", fromSpine.Hex())
 
-	spineBlock := d.bc.GetBlock(fromSpine)
+	spineBlock := d.bc.GetHeaderByHash(fromSpine)
 	if spineBlock == nil {
-		err := errors.New("bad params: spine not found").Error()
+		err := errors.New("bad params: base spine not found").Error()
 		return &types.OptimisticSpinesResult{
 			Error: &err,
 			Data:  nil,
 		}
 	}
 
-	spineSlot := spineBlock.Slot()
-
 	// collect optimistic spines
-	spines, err := d.bc.GetOptimisticSpines(spineSlot)
+	spines, err := d.bc.GetOptimisticSpines(spineBlock.Slot)
 	if len(spines) == 0 {
 		log.Info("No spines for tips", "tips", d.bc.GetTips().Print())
 	}

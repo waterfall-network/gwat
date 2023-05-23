@@ -217,7 +217,7 @@ type BlockChain struct {
 
 	validatorStorage valStore.Storage
 
-	insBlockCache []*types.Block   // Cache for blocks to insert late
+	insBlockCache []*types.Block // Cache for blocks to insert late
 
 	wg            sync.WaitGroup //
 	quit          chan struct{}  // shutdown signal, closed in Stop.
@@ -2288,8 +2288,8 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
-        log.Info("** Remove optimistic spines from cache", "slot", block.Slot())
-        bc.removeOptimisticSpinesFromCache(block.Slot())
+		log.Info("** Remove optimistic spines from cache", "slot", block.Slot())
+		bc.removeOptimisticSpinesFromCache(block.Slot())
 
 		dagChainHashes := append(common.HashArray{}, block.ParentHashes()...)
 		dagBlock := &types.BlockDAG{
@@ -3871,7 +3871,7 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 	return nextEra
 }
 
-func (bc *BlockChain) StartTransitionPeriod() {
+func (bc *BlockChain) StartTransitionPeriod(slot uint64) {
 	log.Info("GetValidators StartTransitionPeriod", "slot", bc.GetSlotInfo().CurrentSlot(),
 		"curEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
 		"curEra", bc.GetEraInfo().GetEra().Number,
@@ -3890,7 +3890,7 @@ func (bc *BlockChain) StartTransitionPeriod() {
 	} else {
 		log.Error("Invalid checkpoint: write new era error")
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetSlotInfo().CurrentSlot(), true, false, "StartTransitionPeriod")
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, slot, true, false, "StartTransitionPeriod")
 	nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
 
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
@@ -4073,7 +4073,6 @@ func (bc *BlockChain) IsSynced() bool {
 }
 
 func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
-	//currentSlot := d.bc.GetSlotInfo().CurrentSlot()
 	currentSlot := bc.GetTips().GetMaxSlot()
 	if currentSlot <= gtSlot {
 		return []common.HashArray{}, nil
@@ -4082,20 +4081,20 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 	var err error
 	optimisticSpines := make([]common.HashArray, 0)
 
-	for i := gtSlot + 1; i <= currentSlot; i++ {
-		slotSpines := bc.GetOptimisticSpinesFromCache(i)
+	for slot := gtSlot + 1; slot <= currentSlot; slot++ {
+		slotSpines := bc.GetOptimisticSpinesFromCache(slot)
 		if slotSpines == nil {
-			slotBlocks := make(types.Blocks, 0)
-			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(bc.Database(), i)
+			slotBlocks := make(types.Headers, 0)
+			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(bc.Database(), slot)
 			for _, hash := range slotBlocksHashes {
-				block := bc.GetBlock(hash)
+				block := bc.GetHeader(hash)
 				slotBlocks = append(slotBlocks, block)
 			}
 			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
 			if err != nil {
 				return []common.HashArray{}, err
 			}
-			bc.SetOptimisticSpinesToCache(i, slotSpines)
+			bc.SetOptimisticSpinesToCache(slot, slotSpines)
 		}
 
 		// Only append slotSpines if it's not empty

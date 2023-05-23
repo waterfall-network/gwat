@@ -47,6 +47,8 @@ type BlockNonce [8]byte
 type SlotBlocksMap map[uint64]Blocks // slot: blocks
 type SlotSpineMap map[uint64]*Block  // slot: block
 
+type SlotHeadersMap map[uint64]Headers // slot: blocks
+
 // Uint64 returns the integer value of a block nonce.
 func (n BlockNonce) Uint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
@@ -562,6 +564,23 @@ func (bs *Blocks) GroupBySlot() (SlotBlocksMap, error) {
 	return res, nil
 }
 
+func (bs *Blocks) GetBlockByHash(hash common.Hash) *Block {
+	for _, block := range *bs {
+		if block.Hash() == hash {
+			return block
+		}
+	}
+	return nil
+}
+
+func (bs *Blocks) GetHashes() *common.HashArray {
+	hashes := make(common.HashArray, 0, len(*bs))
+	for _, block := range *bs {
+		hashes = append(hashes, block.Hash())
+	}
+	return &hashes
+}
+
 func (shm *SlotBlocksMap) GetMinSlot() uint64 {
 	minSlot := uint64(math.MaxUint64)
 	for k := range *shm {
@@ -580,15 +599,6 @@ func (shm *SlotBlocksMap) GetMaxSlot() uint64 {
 		}
 	}
 	return minSlot
-}
-
-func (bs *Blocks) GetBlockByHash(hash common.Hash) *Block {
-	for _, block := range *bs {
-		if block.Hash() == hash {
-			return block
-		}
-	}
-	return nil
 }
 
 func (shm *SlotSpineMap) GetMaxSlot() uint64 {
@@ -628,14 +638,6 @@ func (shm *SlotSpineMap) GetOrderedHashes() *common.HashArray {
 	return &hashes
 }
 
-func (bs *Blocks) GetHashes() *common.HashArray {
-	hashes := make(common.HashArray, 0, len(*bs))
-	for _, block := range *bs {
-		hashes = append(hashes, block.Hash())
-	}
-	return &hashes
-}
-
 // BlockDerivableBody implements BodyHash functionality
 type BlockDerivableBody struct {
 	transactions Transactions
@@ -663,4 +665,98 @@ func CalcBlockBodyHash(txs []*Transaction, hasher TrieHasher) common.Hash {
 	}
 	body := NewBlockDerivableBody(txs)
 	return DeriveSha(body, hasher)
+}
+
+type Headers []*Header
+
+func (hs *Headers) GetMaxHeight() uint64 {
+	maxHeight := uint64(0)
+	for _, header := range *hs {
+		if height := header.Height; height > maxHeight {
+			maxHeight = height
+		}
+	}
+	return maxHeight
+}
+
+func (hs *Headers) GetMaxParentHashesLen() int {
+	maxLen := 0
+	for _, header := range *hs {
+		if phLen := len(header.ParentHashes); phLen > maxLen {
+			maxLen = phLen
+		}
+	}
+	return maxLen
+}
+
+func (hs *Headers) GetMaxHeightBlocks() Headers {
+	if len(*hs) == 0 {
+		return nil
+	}
+
+	res := make(Headers, 0, 1)
+	maxHeight := hs.GetMaxHeight()
+	for _, header := range *hs {
+		if header.Height == maxHeight {
+			res = append(res, header)
+		}
+	}
+	return res
+}
+
+func (hs *Headers) GetMaxParentHashesLenBlocks() Headers {
+	if len(*hs) == 0 {
+		return nil
+	}
+
+	res := make(Headers, 0, 1)
+	maxParentHashesLen := hs.GetMaxParentHashesLen()
+	for _, header := range *hs {
+		if len(header.ParentHashes) == maxParentHashesLen {
+			res = append(res, header)
+		}
+	}
+	return res
+}
+
+func (hs *Headers) GroupBySlot() (SlotHeadersMap, error) {
+	if len(*hs) == 0 {
+		return SlotHeadersMap{}, nil
+	}
+
+	res := make(SlotHeadersMap)
+	for _, header := range *hs {
+		if header == nil {
+			return nil, errors.New("nil header found")
+		}
+
+		if header == nil {
+			log.Error("nil header found", "header", header)
+			return nil, errors.New("nil header found")
+		}
+
+		blockSlot := header.Slot
+		if _, exists := res[blockSlot]; !exists {
+			res[blockSlot] = make(Headers, 0, 1)
+		}
+		res[blockSlot] = append(res[blockSlot], header)
+	}
+	return res, nil
+}
+
+func (hs *Headers) GetBlockByHash(hash common.Hash) *Header {
+	for _, header := range *hs {
+		if header.Hash() == hash {
+			return header
+		}
+	}
+	return nil
+}
+
+func (hs *Headers) GetHashes() *common.HashArray {
+	hashes := make(common.HashArray, 0, len(*hs))
+	for _, header := range *hs {
+		hashes = append(hashes, header.Hash())
+	}
+	return &hashes
 }
