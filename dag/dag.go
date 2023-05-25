@@ -61,9 +61,9 @@ type blockChain interface {
 	Config() *params.ChainConfig
 	GetEraInfo() *era.EraInfo
 	SetNewEraInfo(newEra era.Era)
-	EnterNextEra(root common.Hash) *era.Era
-	StartTransitionPeriod(slot uint64)
-	SyncEraToSlot(slot uint64)
+	EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era
+	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
+	//SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
 	DagMuLock()
@@ -228,9 +228,16 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			res.Error = &e
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
+			go era.HandleEra(d.bc, data.Checkpoint)
+			//epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch - 2 - 1)
+			//if err != nil {
+			//	log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
+			//}
+			//bc.SyncEraToSlot(epochStartSlot)
 		}
 	} else {
 		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
+		go era.HandleEra(d.bc, data.Checkpoint)
 	}
 
 	// handle validator sync data
@@ -599,6 +606,9 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
 				continue
 			}
+			epoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
+			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", epoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
+			//if d.bc.GetEraInfo().ToEpoch() >= epoch { // TODO: check ???
 
 			var (
 				err      error
@@ -613,7 +623,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 			endTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochEnd(d.bc.GetEraInfo().ToEpoch())
 
-			era.HandleEra(d.bc, slot)
+			//era.HandleEra(d.bc, slot)
 
 			log.Info("New slot",
 				"slot", slot,
@@ -641,6 +651,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 			// todo check
 			go d.work(slot, creators, accounts)
+			//}
 		}
 	}
 }
