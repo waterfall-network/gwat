@@ -80,7 +80,7 @@ func (c *ValidatorsCache) getActiveValidatorsByEpoch(bc blockchain, epoch uint64
 	validators := make([]Validator, 0)
 	validatorsList, ok := c.allValidatorsCache[epoch]
 	if !ok {
-		log.Error(errNoEpochValidators.Error(), "epoch", epoch)
+		log.Warn(errNoEpochValidators.Error(), "epoch", epoch)
 		return nil
 	}
 
