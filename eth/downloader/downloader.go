@@ -2748,7 +2748,7 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 	sort.Sort(slots)
 
 	for _, slot := range slots {
-		era.HandleEra(d.blockchain, slot)
+		// era.HandleEra(d.blockchain, slot)
 		slotBlocks := blocksBySlot[slot]
 		if len(slotBlocks) == 0 {
 			continue

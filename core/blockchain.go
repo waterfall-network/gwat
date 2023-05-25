@@ -572,12 +572,12 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
 		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
 		log.Info("####### SetLastCoordinatedCheckpoint ", "cp", cp)
-		// Handle era
-		epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
-		if err != nil {
-			log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
-		}
-		bc.SyncEraToSlot(epochStartSlot)
+		//// Handle era
+		//epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
+		//if err != nil {
+		//	log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
+		//}
+		//bc.SyncEraToSlot(epochStartSlot)
 	}
 }
 
@@ -3771,28 +3771,28 @@ func (bc *BlockChain) SetNewEraInfo(newEra era.Era) {
 	bc.eraInfo = era.NewEraInfo(newEra)
 }
 
-func (bc *BlockChain) SyncEraToSlot(slot uint64) {
-	toEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-	// Sync era from current epoch to slot
-	for !bc.GetEraInfo().GetEra().IsContainsEpoch(toEpoch) && bc.GetEraInfo().GetEra().To < toEpoch {
-		checkpoint := rawdb.ReadCoordinatedCheckpoint(bc.db, bc.GetSlotInfo().SlotToEpoch(slot))
-		spineRoot := common.Hash{}
-		if checkpoint != nil {
-			header := bc.GetHeaderByHash(checkpoint.Spine)
-			spineRoot = header.Root
-		} else {
-			log.Error("Invalid checkpoint: sync to era error")
-		}
-		log.Info("######## SyncEraToSlot", "toEpoch", toEpoch,
-			"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
-			"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
-			"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
-			"cpSlot", slot,
-			"currSlot", bc.GetSlotInfo().CurrentSlot(),
-		)
-		bc.EnterNextEra(spineRoot)
-	}
-}
+//func (bc *BlockChain) SyncEraToSlot(slot uint64) {
+//	toEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+//	// Sync era from current epoch to slot
+//	for !bc.GetEraInfo().GetEra().IsContainsEpoch(toEpoch) && bc.GetEraInfo().GetEra().To < toEpoch {
+//		checkpoint := rawdb.ReadCoordinatedCheckpoint(bc.db, bc.GetSlotInfo().SlotToEpoch(slot))
+//		spineRoot := common.Hash{}
+//		if checkpoint != nil {
+//			header := bc.GetHeaderByHash(checkpoint.Spine)
+//			spineRoot = header.Root
+//		} else {
+//			log.Error("Invalid checkpoint: sync to era error")
+//		}
+//		log.Info("######## SyncEraToSlot", "toEpoch", toEpoch,
+//			"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
+//			"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
+//			"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
+//			"cpSlot", slot,
+//			"currSlot", bc.GetSlotInfo().CurrentSlot(),
+//		)
+//		bc.EnterNextEra(cp, spineRoot)
+//	}
+//}
 
 func (bc *BlockChain) Database() ethdb.Database {
 	return bc.db
@@ -3839,7 +3839,7 @@ func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 	return valEra != nil && valEra.IsContainsEpoch(blockEpoch)
 }
 
-func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
+func (bc *BlockChain) EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era {
 	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
 	if nextEra != nil {
 		rawdb.WriteCurrentEra(bc.db, nextEra.Number)
@@ -3855,7 +3855,12 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 		return nextEra
 	}
 
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, bc.GetEraInfo().NextEraFirstSlot(bc), true, false, "EnterNextEra")
+	epochSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.FinEpoch - bc.Config().TransitionPeriod)
+	if err != nil {
+		log.Error("EnterNextEra slot of cp finEpoch start error", "err", err)
+	}
+
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, epochSlot, true, false, "EnterNextEra")
 	nextEra = era.NextEra(bc, root, uint64(len(validators)))
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
@@ -3871,31 +3876,39 @@ func (bc *BlockChain) EnterNextEra(root common.Hash) *era.Era {
 	return nextEra
 }
 
-func (bc *BlockChain) StartTransitionPeriod(slot uint64) {
-	log.Info("GetValidators StartTransitionPeriod", "slot", bc.GetSlotInfo().CurrentSlot(),
-		"curEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
-		"curEra", bc.GetEraInfo().GetEra().Number,
-		"fromEp", bc.GetEraInfo().GetEra().From,
-		"toEp", bc.GetEraInfo().GetEra().To,
-		"nextEraFirstEpoch", bc.GetEraInfo().NextEraFirstEpoch(),
-		"nextEraFirstSlot", bc.GetEraInfo().NextEraFirstSlot(bc),
-	)
+func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) {
+	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
+	if nextEra == nil {
+		log.Info("GetValidators StartTransitionPeriod", "slot", bc.GetSlotInfo().CurrentSlot(),
+			"curEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+			"curEra", bc.GetEraInfo().GetEra().Number,
+			"fromEp", bc.GetEraInfo().GetEra().From,
+			"toEp", bc.GetEraInfo().GetEra().To,
+			"nextEraFirstEpoch", bc.GetEraInfo().NextEraFirstEpoch(),
+			"nextEraFirstSlot", bc.GetEraInfo().NextEraFirstSlot(bc),
+		)
 
-	// Checkpoint
-	checkpoint := bc.GetLastCoordinatedCheckpoint()
-	spineRoot := common.Hash{}
-	if checkpoint != nil {
-		header := bc.GetHeaderByHash(checkpoint.Spine)
-		spineRoot = header.Root
+		cpEpochSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.FinEpoch - bc.Config().TransitionPeriod)
+		if err != nil {
+			panic("StartTransitionPeriod slot of epoch start error")
+		}
+
+		validators, _ := bc.ValidatorStorage().GetValidators(bc, cpEpochSlot, true, false, "StartTransitionPeriod")
+		nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
+
+		rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
+
+		log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
 	} else {
-		log.Error("Invalid checkpoint: write new era error")
+		log.Info("######## HandleEra transitionPeriod skipped already done", "cpEpoch", cp.Epoch,
+			"cpFinEpoch", cp.FinEpoch,
+			"curEpoch", bc.GetSlotInfo().SlotInEpoch(bc.GetSlotInfo().CurrentSlot()),
+			"curSlot", bc.GetSlotInfo().CurrentSlot(),
+			"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
+			"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
+			"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
+		)
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, slot, true, false, "StartTransitionPeriod")
-	nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
-
-	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
-
-	log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
 }
 
 func (bc *BlockChain) IsTxValidatorSync(tx *types.Transaction) bool {
