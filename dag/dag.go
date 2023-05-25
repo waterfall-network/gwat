@@ -257,7 +257,11 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		res.CpRoot = &cp.Root
 	}
 
-	log.Info("Handle Finalize: response", "result", res)
+	log.Info("Handle Finalize: response",
+		"resEpoch", *res.CpEpoch,
+		"resSpine", res.LFSpine.Hex(),
+		"resRoot", res.CpRoot.Hex(),
+	)
 	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
 		"func:", "Finalize",
