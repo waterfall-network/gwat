@@ -1908,7 +1908,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 
 		// Write the block to the chain and get the status.
 		substart = time.Now()
-		log.Error(" >>>>>>>>>>>>> SyncInsert schain <<<<<<<<<<<<<<", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
+		log.Info(" >>>>>>>>>>>>> SyncInsert schain <<<<<<<<<<<<<<", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "syncInsertChain")
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
@@ -2430,7 +2430,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 
 	// Write the block to the chain and get the status.
 	subStart = time.Now()
-	log.Error(">>>>>>>>> UpdateFinalizingState <<<<<<", "height", block.Height(), "hash", block.Hash().Hex())
+	log.Info(">>>>>>>>> UpdateFinalizingState <<<<<<", "height", block.Height(), "hash", block.Hash().Hex())
 	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
 	if err != nil {
 		return err

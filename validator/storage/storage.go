@@ -140,7 +140,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 
 	if err != nil {
 		eraEra := bc.EpochToEra(slotEpoch)
-		log.Error("get validators", "error", err, "epoch", slotEpoch, "era", eraEra.Number, "root", eraEra.Root.Hex())
+		log.Warn("get validators", "error", err, "epoch", slotEpoch, "era", eraEra.Number, "root", eraEra.Root.Hex())
 
 		stateDb, _ := bc.StateAt(eraEra.Root)
 
