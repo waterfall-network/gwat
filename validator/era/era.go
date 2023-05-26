@@ -192,7 +192,7 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 
 	//if newEpoch {
 	// New era
-	if bc.GetEraInfo().ToEpoch()+1 == cp.FinEpoch || bc.GetEraInfo().ToEpoch()+1 <= cp.FinEpoch {
+	if bc.GetEraInfo().ToEpoch()+1 <= cp.FinEpoch {
 		// Checkpoint
 		// checkpoint := bc.GetLastCoordinatedCheckpoint()
 
