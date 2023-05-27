@@ -182,16 +182,17 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 	if len(blocks) == 0 || bc == nil {
 		return
 	}
-	LFB := bc.GetLastFinalizedBlock()
+	lcp := bc.GetLastCoordinatedCheckpoint()
+	cpBlock := bc.GetBlock(lcp.Spine)
 	bc.AddTips(&types.BlockDAG{
-		Hash:                LFB.Hash(),
-		Height:              LFB.Height(),
-		Slot:                LFB.Slot(),
-		LastFinalizedHash:   LFB.Hash(),
-		LastFinalizedHeight: LFB.Nr(),
-		DagChainHashes:      common.HashArray{},
+		Hash:           cpBlock.Hash(),
+		Height:         cpBlock.Height(),
+		Slot:           cpBlock.Slot(),
+		CpHash:         cpBlock.Hash(),
+		CpHeight:       cpBlock.Height(),
+		DagChainHashes: common.HashArray{},
 	})
-	tips := bc.GetTips()
+	tips := bc.GetTips().Copy()
 
 	for _, block := range blocks {
 		//update state of tips
@@ -204,12 +205,12 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 			tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{bc.Genesis().Hash()})
 		}
 		blockDag := &types.BlockDAG{
-			Hash:                block.Hash(),
-			Height:              block.Height(),
-			Slot:                block.Slot(),
-			LastFinalizedHash:   block.CpHash(),
-			LastFinalizedHeight: block.CpNumber(),
-			DagChainHashes:      tmpDagChainHashes,
+			Hash:           block.Hash(),
+			Height:         block.Height(),
+			Slot:           block.Slot(),
+			CpHash:         cpBlock.Hash(),
+			CpHeight:       cpBlock.Height(),
+			DagChainHashes: tmpDagChainHashes,
 		}
 		rawdb.WriteBlockDag(bc.db, blockDag)
 		bc.AddTips(blockDag)

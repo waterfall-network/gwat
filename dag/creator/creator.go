@@ -425,38 +425,33 @@ func (c *Creator) resultHandler(task *task) {
 	}
 
 	//update state of tips
-
+	bc := c.chain
 	//1. remove stale tips
-	c.chain.RemoveTips(task.block.ParentHashes())
+	bc.RemoveTips(task.block.ParentHashes())
 
-	//2. create for new blockDag
-	//tips := task.tips.Copy()
-	tmpDagChainHashes := c.chain.GetDagHashes()
-
-	//// after reorg tips can content hashes of finalized blocks
-	//finHashes := common.HashArray{}
-	//for _, h := range tmpDagChainHashes.Copy() {
-	//	blk := c.eth.BlockChain().GetHeader(h)
-	//	if !(blk.Height > 0 && blk.Nr() == 0) {
-	//		finHashes = append(finHashes, h)
-	//	}
-	//}
-	//if len(finHashes) > 0 {
-	//	tmpDagChainHashes = tmpDagChainHashes.Difference(finHashes)
-	//}
-	log.Info("@@@@@@@@@ Creator tmpDagChainHashes", "hash", task.block.Hash(), "spines", tmpDagChainHashes)
+	//create new blockDag
+	cpHeader := bc.GetHeader(task.block.CpHash())
+	tips := task.tips.Copy()
+	dagChainHashes, err := bc.CollectDagChainHashesByTips(tips, cpHeader.Hash())
+	if err != nil {
+		log.Error("Creator failed", "err", err)
+		return
+	}
 	newBlockDag := &types.BlockDAG{
-		Hash:                task.block.Hash(),
-		Height:              task.block.Height(),
-		Slot:                task.block.Slot(),
-		LastFinalizedHash:   task.block.CpHash(),
-		LastFinalizedHeight: task.block.CpNumber(),
-		DagChainHashes:      *tmpDagChainHashes,
+		Hash:           task.block.Hash(),
+		Height:         task.block.Height(),
+		Slot:           task.block.Slot(),
+		CpHash:         task.block.CpHash(),
+		CpHeight:       cpHeader.Height,
+		DagChainHashes: dagChainHashes,
 	}
 	c.chain.AddTips(newBlockDag)
 	c.chain.WriteCurrentTips()
 
-	log.Info("Creator: end tips", "tips", c.chain.GetTips().Print())
+	log.Info("Creator: end tips",
+		"tipsHashes", c.chain.GetTips().GetHashes(),
+		//"tips", c.chain.GetTips().Print(),
+	)
 
 	c.chain.MoveTxsToProcessing(types.Blocks{task.block})
 
@@ -630,73 +625,66 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	slotInfo := c.getAssignment()
 	tipsBlocks := bc.GetBlocksByHashes(tips.GetHashes())
 	blocks := bc.GetBlocksByHashes(tipsBlocks.Hashes())
-	expCache := core.CollectAncestorsResultMap{}
 	for _, bl := range blocks {
 		if bl.Slot() >= slotInfo.Slot {
 			for _, ph := range bl.ParentHashes() {
 				_dag := bc.ReadBockDag(ph)
 				if _dag == nil {
-					parentBlock := bc.GetBlock(ph)
+					parentBlock := bc.GetHeader(ph)
+					cpHeader := bc.GetHeader(parentBlock.CpHash)
 					if parentBlock == nil {
 						log.Warn("Creator reorg tips failed: bad parent in dag", "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
 						continue
 					}
 					dagChainHashes := common.HashArray{}
 					//if block not finalized
-					if parentBlock.Height() > 0 && parentBlock.Nr() == 0 {
-						var (
-							isCpAncestor bool
-							ancestors    types.HeaderMap
-							err          error
-							unl          common.HashArray
-						)
-						log.Warn("Creator reorg tips: active BlockDag not found", "parent", ph.Hex(), "parent.slot", parentBlock.Slot(), "parent.height", parentBlock.Height(), "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex())
-						isCpAncestor, ancestors, unl, expCache, err = bc.CollectAncestorsAftCpByParents(bl.ParentHashes(), bl.CpHash(), expCache)
-						if err != nil {
-							c.errWorkCh <- &err
-							return
-						}
-						if len(unl) > 0 {
-							log.Error("Creator reorg tips: should never happen",
-								"err", core.ErrInsertUncompletedDag,
-								"parent", ph.Hex(),
-								"parent.slot", parentBlock.Slot(),
-								"parent.height", parentBlock.Height(),
-								"slot", bl.Slot(),
-								"height", bl.Height(),
-								"hash", bl.Hash().Hex(),
-							)
-							c.errWorkCh <- &core.ErrInsertUncompletedDag
-							return
-						}
-						if !isCpAncestor {
-							log.Error("Creator reorg tips: should never happen",
-								"err", core.ErrCpIsnotAncestor,
-								"parent", ph.Hex(),
-								"parent.slot", parentBlock.Slot(),
-								"parent.height", parentBlock.Height(),
-								"slot", bl.Slot(),
-								"height", bl.Height(),
-								"hash", bl.Hash().Hex(),
-							)
-							c.errWorkCh <- &core.ErrCpIsnotAncestor
-							return
-						}
-						//delete(ancestors, bl.Hash())
-						for h, hdr := range ancestors {
-							if hdr.Nr() > 0 {
-								delete(ancestors, h)
-							}
-						}
-						dagChainHashes = ancestors.Hashes()
+					var (
+						isCpAncestor bool
+						ancestors    types.HeaderMap
+						err          error
+						unl          common.HashArray
+					)
+					log.Warn("Creator reorg tips: active BlockDag not found", "parent", ph.Hex(), "parent.slot", parentBlock.Slot, "parent.height", parentBlock.Height, "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex())
+					isCpAncestor, ancestors, unl, err = bc.CollectAncestorsAftCpByParents(bl.ParentHashes(), bl.CpHash())
+					if err != nil {
+						c.errWorkCh <- &err
+						return
 					}
+					if len(unl) > 0 {
+						log.Error("Creator reorg tips: should never happen",
+							"err", core.ErrInsertUncompletedDag,
+							"parent", ph.Hex(),
+							"parent.slot", parentBlock.Slot,
+							"parent.height", parentBlock.Height,
+							"slot", bl.Slot(),
+							"height", bl.Height(),
+							"hash", bl.Hash().Hex(),
+						)
+						c.errWorkCh <- &core.ErrInsertUncompletedDag
+						return
+					}
+					if !isCpAncestor {
+						log.Error("Creator reorg tips: should never happen",
+							"err", core.ErrCpIsnotAncestor,
+							"parent", ph.Hex(),
+							"parent.slot", parentBlock.Slot,
+							"parent.height", parentBlock.Height,
+							"slot", bl.Slot(),
+							"height", bl.Height(),
+							"hash", bl.Hash().Hex(),
+						)
+						c.errWorkCh <- &core.ErrCpIsnotAncestor
+						return
+					}
+					delete(ancestors, cpHeader.Hash())
+					dagChainHashes = ancestors.Hashes()
 					_dag = &types.BlockDAG{
-						Hash:                ph,
-						Height:              parentBlock.Height(),
-						Slot:                parentBlock.Slot(),
-						LastFinalizedHash:   parentBlock.CpHash(),
-						LastFinalizedHeight: parentBlock.CpNumber(),
-						DagChainHashes:      dagChainHashes,
+						Hash:           ph,
+						Height:         parentBlock.Height,
+						Slot:           parentBlock.Slot,
+						CpHash:         parentBlock.CpHash,
+						CpHeight:       cpHeader.Height,
+						DagChainHashes: dagChainHashes,
 					}
 				}
 				_dag.DagChainHashes = _dag.DagChainHashes.Difference(common.HashArray{genesis})
@@ -719,7 +707,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 				continue
 			}
 
-			isAncestor, err := bc.IsAncestorRecursive(block.Header(), ancestor, expCache)
+			isAncestor, err := bc.IsAncestorRecursive(block.Header(), ancestor)
 			if err != nil {
 				c.errWorkCh <- &err
 				return
@@ -737,15 +725,6 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		}
 	}
 
-	//depracated
-	//finDag := tips.GetFinalizingDag()
-	//if finDag == nil {
-	//	log.Error("Tips empty, skipping block creation", "Initial", bc.GetTips().Print(), "uncompleted", bc.GetUnsynchronizedTipsHashes())
-	//	err := errors.New("tips empty, skipping block creation")
-	//	c.errWorkCh <- &err
-	//	return
-	//}
-
 	// if max slot of parents is less or equal to last finalized block slot
 	// - add last finalized block to parents
 	lastFinBlock := bc.GetLastFinalizedBlock()
@@ -759,15 +738,19 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
 	}
 
-	log.Info("Creator: start tips", "tips", tips.Print(), "parents", tipsBlocks.Hashes())
+	log.Info("Creator: start tips",
+		"tipsHashes", tipsBlocks.Hashes(),
+		//"tips", tips.Print(),
+	)
 
 	parentHashes := tipsBlocks.Hashes().Sort()
 
 	// Use checkpoint spine as CpBlock
 	checkpoint := bc.GetLastCoordinatedCheckpoint()
-	checkpointBlock := bc.GetBlock(checkpoint.Spine)
+	cpHeader := bc.GetHeader(checkpoint.Spine)
 
-	newHeight, err := bc.CalcBlockHeightByParents(parentHashes, checkpointBlock.Hash())
+	//newHeight, err := bc.CalcBlockHeightByParents(parentHashes, cpHeader.Hash())
+	newHeight, err := bc.CalcBlockHeightByTips(tips, cpHeader.Hash())
 	if err != nil {
 		log.Error("Failed to make block creation context", "err", err)
 		c.errWorkCh <- &err
@@ -801,13 +784,13 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		Extra:        c.extra,
 		Time:         uint64(time.Now().Unix()),
 		// Checkpoint spine block
-		CpHash:        checkpointBlock.Hash(),
-		CpNumber:      checkpointBlock.Nr(),
-		CpBaseFee:     checkpointBlock.BaseFee(),
-		CpBloom:       checkpointBlock.Bloom(),
-		CpGasUsed:     checkpointBlock.GasUsed(),
-		CpReceiptHash: checkpointBlock.ReceiptHash(),
-		CpRoot:        checkpointBlock.Root(),
+		CpHash:        cpHeader.Hash(),
+		CpNumber:      cpHeader.Nr(),
+		CpBaseFee:     cpHeader.BaseFee,
+		CpBloom:       cpHeader.Bloom,
+		CpGasUsed:     cpHeader.GasUsed,
+		CpReceiptHash: cpHeader.ReceiptHash,
+		CpRoot:        cpHeader.Root,
 	}
 
 	// Get active validators number

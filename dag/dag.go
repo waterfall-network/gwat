@@ -78,7 +78,7 @@ type blockChain interface {
 	SetIsSynced(synced bool)
 	IsSynced() bool
 
-	CollectAncestorsAftCpByParents(common.HashArray, common.Hash, ...core.CollectAncestorsResultMap) (bool, types.HeaderMap, common.HashArray, core.CollectAncestorsResultMap, error)
+	CollectAncestorsAftCpByParents(common.HashArray, common.Hash) (bool, types.HeaderMap, common.HashArray, error)
 }
 
 type ethDownloader interface {
@@ -316,10 +316,8 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 
 func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 	var (
-		//expCache core.ExploreResultMap
-		expCache core.CollectAncestorsResultMap
-		unl      common.HashArray
-		err      error
+		unl common.HashArray
+		err error
 	)
 	start := time.Now()
 	for _, spine := range spines.Reverse() {
@@ -327,7 +325,7 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 		if spHeader == nil {
 			return true, nil
 		}
-		_, _, unl, expCache, err = d.bc.CollectAncestorsAftCpByParents(spHeader.ParentHashes, spHeader.CpHash, expCache)
+		_, _, unl, err = d.bc.CollectAncestorsAftCpByParents(spHeader.ParentHashes, spHeader.CpHash)
 		if err != nil {
 			return false, err
 		}

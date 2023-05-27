@@ -92,7 +92,7 @@ func TestLastFinalizedBlockWf(t *testing.T) {
 		t.Fatalf("finBlock hash mismatch: have %v, want %v", entry, finBlock1.Hash())
 	}
 
-	// Check LastFinalizedHash
+	// Check CpHash
 	if entry := ReadLastFinalizedHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non empty hash: %v", entry)
 	}
@@ -102,7 +102,7 @@ func TestLastFinalizedBlockWf(t *testing.T) {
 		t.Fatalf("lastFinBlock hash mismatch: have %v, want %v", entry, lastFinBlock.Hash())
 	}
 
-	// Check LastFinalizedHeight WriteFinalizedHashNumber
+	// Check CpHeight WriteFinalizedHashNumber
 	if entry := ReadLastFinalizedNumber(db); entry != uint64(0) {
 		t.Fatalf("Non empty hash: %v", entry)
 	}
@@ -128,11 +128,11 @@ func TestBlockDAGWf(t *testing.T) {
 	finBlock := types.NewBlockWithHeader(&types.Header{Extra: []byte("test FinBlock")})
 
 	blockDag := &types.BlockDAG{
-		Hash:                finBlock.Hash(),
-		Height:              finBlock.Height(),
-		LastFinalizedHash:   finBlock.Hash(),
-		LastFinalizedHeight: 1455646545646,
-		DagChainHashes:      common.HashArray{common.Hash{}, finBlock.Hash(), common.Hash{}},
+		Hash:           finBlock.Hash(),
+		Height:         finBlock.Height(),
+		CpHash:         finBlock.Hash(),
+		CpHeight:       1455646545646,
+		DagChainHashes: common.HashArray{common.Hash{}, finBlock.Hash(), common.Hash{}},
 	}
 
 	WriteBlockDag(db, blockDag)

@@ -366,15 +366,6 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		return ErrSpineNotFound
 	}
 
-	// TODO: depreacted
-	//if spineBlock.Height() != spineBlock.Nr() {
-	//	log.Error("Set spine state: bad spine", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
-	//}
-	//if spineBlock.Height() > spineBlock.Nr() {
-	//	log.Error("Set spine state: bad spine (critical)", "height", spineBlock.Height(), "nr", spineBlock.Nr(), "spineHash", fmt.Sprintf("%#x", spineHash))
-	//	return ErrSpineNotFound
-	//}
-
 	lastFinBlock := bc.GetLastFinalizedBlock()
 	if spineBlock.Hash() == lastFinBlock.Hash() && spineBlock.Nr() >= lfNr {
 		return nil
@@ -384,60 +375,37 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 	defer bc.ResetRollbackActive()
 
 	//reorg finalized and dag chains in accordance with spineHash
-	//lfNr := lastFinBlock.Nr()
-	blockDagList := []types.BlockDAG{}
 	for i := lfNr; i > spineBlock.Nr(); i-- {
-		block := bc.GetBlockByNumber(i)
-		if block == nil {
+		blockHeader := bc.GetHeaderByNumber(i)
+		if blockHeader == nil {
 			log.Warn("Set spine state: rollback block not found", "finNr", i)
 			continue
 		}
-		blockDagList = append(blockDagList, types.BlockDAG{
-			Hash:                block.Hash(),
-			Height:              block.Height(),
-			Slot:                block.Slot(),
-			LastFinalizedHash:   block.CpHash(),
-			LastFinalizedHeight: block.CpNumber(),
-			DagChainHashes:      block.ParentHashes(),
-		})
+		//check blockDag record exists
+		if bc.ReadBockDag(blockHeader.Hash()) == nil {
+			_, loaded, _, err := bc.CollectAncestorsAftCpByParents(blockHeader.ParentHashes, blockHeader.CpHash)
+			if err != nil {
+				return err
+			}
+			cpHeader := bc.GetHeader(blockHeader.CpHash)
+			bc.WriteBlockDag(&types.BlockDAG{
+				Hash:           blockHeader.Hash(),
+				Height:         blockHeader.Height,
+				Slot:           blockHeader.Slot,
+				CpHash:         blockHeader.CpHash,
+				CpHeight:       cpHeader.Height,
+				DagChainHashes: loaded.Hashes(),
+			})
+		}
 		err := bc.RollbackFinalization(i)
 		if err != nil {
-			log.Error("Prepare to head synchronising error (rollback)", "finNr", i, "hash", block.Hash().Hex(), "err", err)
+			log.Error("Prepare to head synchronising error (rollback)", "finNr", i, "hash", blockHeader.Hash().Hex(), "err", err)
 		}
 	}
 	// update head of finalized chain
 	if err := bc.WriteFinalizedBlock(spineBlock.Nr(), spineBlock, nil, nil, nil, true); err != nil {
 		return err
 	}
-	// update BlockDags
-	expCache := core.ExploreResultMap{}
-	for _, bdag := range blockDagList {
-		_, loaded, _, _, exc, err := bc.ExploreChainRecursive(bdag.Hash, expCache)
-		if err != nil {
-			return err
-		}
-		expCache = exc
-		bdag.DagChainHashes = loaded
-		//if dch := graph.GetDagChainHashes(); dch != nil {
-		//	bdag.DagChainHashes = *dch
-		//}
-		bc.WriteBlockDag(&bdag)
-	}
-	// update tips
-	tips := bc.GetTips()
-	for _, tip := range tips {
-		_, loaded, _, _, exc, err := bc.ExploreChainRecursive(tip.Hash, expCache)
-		if err != nil {
-			return err
-		}
-		expCache = exc
-		tip.DagChainHashes = loaded
-		//if dch := graph.GetDagChainHashes(); dch != nil {
-		//	tip.DagChainHashes = *dch
-		//}
-		bc.AddTips(tip)
-	}
-	bc.WriteCurrentTips()
 	return nil
 }
 
