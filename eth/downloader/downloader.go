@@ -279,13 +279,13 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 	return dl
 }
 
-// ClearBlockDag removes all BlockDag records
-func (d *Downloader) ClearBlockDag() {
-	dagHashes := rawdb.ReadAllBlockDagHashes(d.stateDB)
-	for _, hash := range dagHashes {
-		rawdb.DeleteBlockDag(d.stateDB, hash)
-	}
-}
+//// ClearBlockDag removes all BlockDag records
+//func (d *Downloader) ClearBlockDag() {
+//	dagHashes := rawdb.ReadAllBlockDagHashes(d.stateDB)
+//	for _, hash := range dagHashes {
+//		rawdb.DeleteBlockDag(d.stateDB, hash)
+//	}
+//}
 
 // Progress retrieves the synchronisation boundaries, specifically the origin
 // block where synchronisation started at (may have failed/suspended); the block
@@ -717,7 +717,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 		return err
 	}
 	// rm deprecated dag info
-	d.ClearBlockDag()
+	//d.ClearBlockDag()
 	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
 	blocks := make(types.Blocks, len(headers))
 	for i, header := range headers {
@@ -2727,7 +2727,7 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 	}
 
 	// rm deprecated dag info
-	d.ClearBlockDag()
+	//d.ClearBlockDag()
 	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
 	blocks := make(types.Blocks, len(headers), len(dagBlocks))
 	for i, header := range headers {

@@ -378,13 +378,13 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 			continue
 		}
 		//check blockDag record exists
-		if bc.ReadBockDag(blockHeader.Hash()) == nil {
+		if bc.GetBlockDag(blockHeader.Hash()) == nil {
 			_, loaded, _, err := bc.CollectAncestorsAftCpByParents(blockHeader.ParentHashes, blockHeader.CpHash)
 			if err != nil {
 				return err
 			}
 			cpHeader := bc.GetHeader(blockHeader.CpHash)
-			bc.WriteBlockDag(&types.BlockDAG{
+			bc.SaveBlockDag(&types.BlockDAG{
 				Hash:           blockHeader.Hash(),
 				Height:         blockHeader.Height,
 				Slot:           blockHeader.Slot,

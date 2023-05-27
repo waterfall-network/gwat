@@ -628,7 +628,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	for _, bl := range blocks {
 		if bl.Slot() >= slotInfo.Slot {
 			for _, ph := range bl.ParentHashes() {
-				_dag := bc.ReadBockDag(ph)
+				_dag := bc.GetBlockDag(ph)
 				if _dag == nil {
 					parentBlock := bc.GetHeader(ph)
 					cpHeader := bc.GetHeader(parentBlock.CpHash)
@@ -706,8 +706,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 			if block.Hash() == ancestor {
 				continue
 			}
-
-			isAncestor, err := bc.IsAncestorRecursive(block.Header(), ancestor)
+			//isAncestor, err := bc.IsAncestorRecursive(block.Header(), ancestor)
+			isAncestor, err := bc.IsAncestorByTips(block.Header(), ancestor)
 			if err != nil {
 				c.errWorkCh <- &err
 				return
@@ -718,7 +718,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 					"ancestor", ancestor.Hex(),
 					"tips", tips.Print(),
 				)
-				delete(tips, ancestor) // TODO check sometimes panic
+				tips.Remove(ancestor)
 				delete(tipsBlocks, ancestor)
 				bc.RemoveTips(common.HashArray{ancestor})
 			}

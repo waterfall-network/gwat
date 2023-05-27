@@ -41,6 +41,7 @@ const (
 	ancestorCacheLimit = 32 * 8 * 4 //slotsPerEpoch * blocksPerSlot * epochs
 	headerCacheLimit   = 32 * 8 * 8 //slotsPerEpoch * blocksPerSlot * epochs
 	numberCacheLimit   = 2048
+	blockDagCacheLimit = 32
 )
 
 // HeaderChain implements the basic block header chain logic that is shared by
@@ -72,6 +73,7 @@ type HeaderChain struct {
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
 	ancestorCache *lru.Cache // Cache for ancestors
+	blockDagCache *lru.Cache
 
 	procInterrupt func() bool
 
@@ -87,6 +89,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	ancestorCache, _ := lru.New(ancestorCacheLimit)
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
+	blockDagCache, _ := lru.New(blockDagCacheLimit)
 
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
@@ -103,6 +106,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		rand:          mrand.New(mrand.NewSource(seed.Int64())),
 		engine:        engine,
 		ancestorCache: ancestorCache,
+		blockDagCache: blockDagCache,
 	}
 
 	heihgt := uint64(0)
@@ -541,7 +545,7 @@ func (hc *HeaderChain) ResetTips() error {
 		CpHeight:       cpHeader.Height,
 		DagChainHashes: dagChainHashes,
 	}
-	rawdb.WriteBlockDag(hc.chainDb, dag)
+	hc.SaveBlockDag(dag)
 	rawdb.WriteTipsHashes(hc.chainDb, common.HashArray{dag.Hash})
 	rawdb.DeleteChildren(hc.chainDb, dag.Hash)
 
@@ -568,7 +572,7 @@ func (hc *HeaderChain) loadTips() error {
 		if tipHeader.Nr() > 0 && tipHeader.Height > 0 {
 			continue
 		}
-		bdag := rawdb.ReadBlockDag(hc.chainDb, th)
+		bdag := hc.GetBlockDag(th)
 		if bdag == nil {
 			return fmt.Errorf("block dag not found")
 		}
@@ -652,7 +656,7 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 
 	//if tips is empty - set last fin block
 	if len(*tips) == 0 {
-		bdag := rawdb.ReadBlockDag(hc.chainDb, lastFinHash)
+		bdag := hc.GetBlockDag(lastFinHash)
 		if bdag == nil {
 			tHeader := hc.GetHeaderByHash(lastFinHash)
 			cpHeader := hc.GetHeaderByHash(tHeader.CpHash)
@@ -684,7 +688,7 @@ func (hc *HeaderChain) writeCurrentTips(skipLock ...bool) {
 	tips := hc.GetTips(true)
 	//1. save blockDags of tips
 	for _, dag := range *tips {
-		rawdb.WriteBlockDag(batch, dag)
+		hc.SaveBlockDag(dag)
 	}
 	//2. save tips hashes
 	rawdb.WriteTipsHashes(batch, tips.GetHashes())
@@ -820,6 +824,63 @@ type CollectAncestorsResult struct {
 }
 type CollectAncestorsResultMap map[common.Hash]*CollectAncestorsResult
 
+// CollectAncestorsAftCpByTips collect ancestors by block parent tips
+// which have to be finalized after checkpoint up to block.
+// the method is not recursive, and strong depends on correct state of tips.
+func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpHash common.Hash) (
+	isCpAncestor bool,
+	ancestors types.HeaderMap,
+	unloaded common.HashArray,
+	tips types.Tips,
+	err error,
+) {
+	defer func(start time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "CollectAncestorsAftCpByTips",
+			"cache.len", hc.ancestorCache.Len(),
+		)
+	}(time.Now())
+
+	ancHashes := common.HashArray{}
+	tips = types.Tips{}
+	ancestors = types.HeaderMap{}
+	for _, parentHash := range parents {
+		bdag := hc.GetBlockDag(parentHash)
+		if bdag == nil {
+			log.Warn("Collect ancestors by tips: block dag not found", "parent", parentHash.Hex())
+			unloaded = append(unloaded, parentHash)
+		} else {
+			tips.Add(bdag)
+		}
+	}
+	// check isCpAncestor
+	for _, tip := range tips {
+		if tip.CpHash == cpHash || tip.DagChainHashes.Has(cpHash) {
+			isCpAncestor = true
+		}
+		ancHashes = append(ancHashes, tip.DagChainHashes...)
+		ancHashes = append(ancHashes, tip.Hash).Uniq()
+	}
+	//collect ancestors
+	cpHead := hc.GetHeader(cpHash)
+	ancestors = hc.GetHeadersByHashes(ancHashes)
+	for h, anc := range ancestors {
+		if anc == nil {
+			continue
+		}
+		// exclude finalized before cp
+		if anc.Hash() == cpHash {
+			delete(ancestors, h)
+			continue
+		}
+		if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() <= cpHead.Nr() {
+			delete(ancestors, h)
+		}
+	}
+	return isCpAncestor, ancestors, unloaded, tips, err
+}
+
 // CollectAncestorsAftCpByParents recursively collect ancestors by block parents
 // which have to be finalized after checkpoint up to block.
 func (hc *HeaderChain) CollectAncestorsAftCpByParents(parents common.HashArray, cpHeader *types.Header) (
@@ -941,4 +1002,36 @@ func (hc *HeaderChain) collectAncestorsAftCpByParents(headHash common.Hash, cpHe
 		err = _err
 	}
 	return isCpAncestor, ancestors, unloaded, err
+}
+
+// GetBlockDag retrieves a block dag from the database by hash, caching it if found.
+func (hc *HeaderChain) GetBlockDag(hash common.Hash) *types.BlockDAG {
+	//check in cache
+	if v, ok := hc.blockDagCache.Get(hash); ok {
+		return v.(*types.BlockDAG)
+	}
+	bdag := rawdb.ReadBlockDag(hc.chainDb, hash)
+	if bdag == nil {
+		return nil
+	}
+	// Cache the found bdag for next time and return
+	hc.blockDagCache.Add(hash, bdag)
+	return bdag
+}
+
+// SaveBlockDag save a block dag to the database by hash, and caching it.
+func (hc *HeaderChain) SaveBlockDag(bdag *types.BlockDAG) {
+	if bdag == nil {
+		hc.DeleteBlockDag(bdag.Hash)
+		return
+	}
+	rawdb.WriteBlockDag(hc.chainDb, bdag)
+	// Cache the bdag for next time and return
+	hc.blockDagCache.Add(bdag.Hash, bdag)
+}
+
+// DeleteBlockDag remove a block dag from the database and cache.
+func (hc *HeaderChain) DeleteBlockDag(hash common.Hash) {
+	rawdb.DeleteBlockDag(hc.chainDb, hash)
+	hc.blockDagCache.Remove(hash)
 }

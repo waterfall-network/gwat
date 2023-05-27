@@ -445,7 +445,7 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle GetOptimisticSpines: response", "result", res, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
+	log.Info("Handle GetOptimisticSpines: response", "result", len(res.Data), "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	return res
 }
 

@@ -594,7 +594,7 @@ func (bc *BlockChain) ClearStaleBlockDags(uptoNr uint64) {
 		if h == (common.Hash{}) {
 			return
 		}
-		bdag := bc.ReadBockDag(h)
+		bdag := bc.GetBlockDag(h)
 		if bdag == nil {
 			return
 		}
@@ -833,7 +833,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 
 			// update tips
 			//bc.ResetTips()
-			newBlockDag := bc.ReadBockDag(newHeadBlock.CpHash())
+			newBlockDag := bc.GetBlockDag(newHeadBlock.CpHash())
 			if newBlockDag == nil {
 				cpHeader := bc.GetHeader(newHeadBlock.CpHash())
 				dagChainHashes := common.HashArray{}
@@ -1697,10 +1697,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
-func (bc *BlockChain) WriteBlockDag(blockDag *types.BlockDAG) {
-	rawdb.WriteBlockDag(bc.db, blockDag)
-}
-
 // deprecated, used for tests only
 // SyncInsertChain attempts to insert the given batch of blocks in chain
 // received while synchronization process
@@ -1991,7 +1987,8 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 		// update tips
 		tmpTips := types.Tips{}
 		for _, h := range block.ParentHashes() {
-			bdag := bc.ReadBockDag(h)
+			bdag := bc.GetBlockDag(h)
+			// should never happen
 			if bdag == nil {
 				pHeader := bc.GetHeader(h)
 				_, anc, _, err := bc.CollectAncestorsAftCpByParents(pHeader.ParentHashes, pHeader.CpHash)
@@ -2141,7 +2138,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	// TODO: check whether we need it???
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
 	if !isValidEra {
@@ -2149,7 +2145,8 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	isCpAncestor, ancestors, unloaded, err := bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
+	//isCpAncestor, ancestors, unloaded, err := bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
+	isCpAncestor, ancestors, unloaded, _, err := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
 	if err != nil {
 		log.Error("Block verification: check ancestors err", "err", err, "block hash", block.Hash().Hex())
 		return false, err
@@ -2174,9 +2171,9 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	// parents' heights must be less than block height
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetHeader(parentHash)
-		if parent == nil {
-			// should never happen
-			log.Crit("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", parentHash.Hex())
+		if _, ok := bc.invalidBlocksCache.Get(parent); ok {
+			log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
+			return false, nil
 		}
 		if parent.Height >= block.Height() || parent.Slot >= block.Slot() {
 			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height, "parent slot", parent.Slot)
@@ -2233,7 +2230,8 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 			if ph == pph {
 				continue
 			}
-			isAncestor, err := bc.IsAncestorRecursive(parent.Header(), pparent.Hash())
+			//isAncestor, err := bc.IsAncestorRecursive(parent.Header(), pparent.Hash())
+			isAncestor, err := bc.IsAncestorByTips(parent.Header(), pparent.Hash())
 			if err != nil {
 				return false, err
 			}
@@ -2341,21 +2339,23 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 
 		tmpTips := types.Tips{}
 		for _, h := range block.ParentHashes() {
-			bdag := bc.ReadBockDag(h)
+			bdag := bc.GetBlockDag(h)
 			if bdag == nil {
-				pHeader := bc.GetHeader(h)
-				_, anc, _, err := bc.CollectAncestorsAftCpByParents(pHeader.ParentHashes, pHeader.CpHash)
-				if err != nil {
-					return it.index, err
-				}
-				bdag = &types.BlockDAG{
-					Hash:           pHeader.Hash(),
-					Height:         pHeader.Height,
-					Slot:           pHeader.Slot,
-					CpHash:         pHeader.CpHash,
-					CpHeight:       bc.GetHeader(pHeader.CpHash).Height,
-					DagChainHashes: anc.Hashes(),
-				}
+				//should never happen
+				panic("should never happen")
+				//pHeader := bc.GetHeader(h)
+				//_, anc, _, err := bc.CollectAncestorsAftCpByParents(pHeader.ParentHashes, pHeader.CpHash)
+				//if err != nil {
+				//	return it.index, err
+				//}
+				//bdag = &types.BlockDAG{
+				//	Hash:           pHeader.Hash(),
+				//	Height:         pHeader.Height,
+				//	Slot:           pHeader.Slot,
+				//	CpHash:         pHeader.CpHash,
+				//	CpHeight:       bc.GetHeader(pHeader.CpHash).Height,
+				//	DagChainHashes: anc.Hashes(),
+				//}
 			}
 			tmpTips.Add(bdag)
 		}
@@ -2372,44 +2372,44 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			DagChainHashes: dagChainHashes,
 		}
 		bc.AddTips(dagBlock)
-		bc.RemoveTips(dagBlock.DagChainHashes) // TODO: check
+		bc.RemoveTips(dagBlock.DagChainHashes)
 		bc.MoveTxsToProcessing(types.Blocks{block})
 
-		//check tips
-		tips := bc.GetTips()
-		if len(tips) > 1 {
-			for _, th := range tips.GetHashes() {
-				tHeader := bc.GetHeader(th)
-				if tHeader == nil {
-					continue
-				}
-				for _, ancestor := range tips.GetHashes() {
-					if tHeader.Hash() == ancestor {
-						continue
-					}
-					isAncestor, err := bc.IsAncestorRecursive(tHeader, ancestor)
-					if err != nil {
-						log.Error("Insert propagated block: check tips failed",
-							"err", err,
-							"hash", block.Hash().Hex(),
-							"tips", th,
-							"ancestor", ancestor,
-							"tips", tips.Print(),
-						)
-						return it.index, err
-					}
-					if isAncestor {
-						log.Warn("Insert propagated block: check tips ancestor detected",
-							"hash", block.Hash().Hex(),
-							"tips", th,
-							"ancestor", ancestor,
-							"tips", tips.Print(),
-						)
-						bc.RemoveTips(common.HashArray{ancestor})
-					}
-				}
-			}
-		}
+		////check tips
+		//tips := bc.GetTips()
+		//if len(tips) > 1 {
+		//	for _, th := range tips.GetHashes() {
+		//		tHeader := bc.GetHeader(th)
+		//		if tHeader == nil {
+		//			continue
+		//		}
+		//		for _, ancestor := range tips.GetHashes() {
+		//			if tHeader.Hash() == ancestor {
+		//				continue
+		//			}
+		//			isAncestor, err := bc.IsAncestorRecursive(tHeader, ancestor)
+		//			if err != nil {
+		//				log.Error("Insert propagated block: check tips failed",
+		//					"err", err,
+		//					"hash", block.Hash().Hex(),
+		//					"tips", th,
+		//					"ancestor", ancestor,
+		//					"tips", tips.Print(),
+		//				)
+		//				return it.index, err
+		//			}
+		//			if isAncestor {
+		//				log.Warn("Insert propagated block: check tips ancestor detected",
+		//					"hash", block.Hash().Hex(),
+		//					"tips", th,
+		//					"ancestor", ancestor,
+		//					"tips", tips.Print(),
+		//				)
+		//				bc.RemoveTips(common.HashArray{ancestor})
+		//			}
+		//		}
+		//	}
+		//}
 		bc.WriteCurrentTips()
 
 		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
@@ -3642,6 +3642,48 @@ func (bc *BlockChain) CollectAncestorsAftCpByParents(parents common.HashArray, c
 	return bc.hc.CollectAncestorsAftCpByParents(parents, cpHeader)
 }
 
+// CollectAncestorsAftCpByTips recursively collect ancestors by block parents
+// which have to be finalized after checkpoint up to block.
+func (bc *BlockChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpHash common.Hash) (
+	isCpAncestor bool,
+	ancestors types.HeaderMap,
+	unloaded common.HashArray,
+	tips types.Tips,
+	err error,
+) {
+	return bc.hc.CollectAncestorsAftCpByTips(parents, cpHash)
+}
+
+// IsAncestorRecursive checks the passed ancestorHash is an ancestor of the given block.
+func (bc *BlockChain) IsAncestorByTips(header *types.Header, ancestorHash common.Hash) (bool, error) {
+	if header.Hash() == ancestorHash {
+		return false, nil
+	}
+	//if ancestorHash is genesis
+	if bc.genesisBlock.Hash() == ancestorHash {
+		return true, nil
+	}
+	// if ancestorHash in parents
+	if header.ParentHashes.Has(ancestorHash) {
+		return true, nil
+	}
+	ancestorHead := bc.GetHeader(ancestorHash)
+	if ancestorHead == nil {
+		return false, ErrInsertUncompletedDag
+	}
+	if ancestorHead.Nr() > 0 && ancestorHead.Nr() < header.CpNumber {
+		return true, nil
+	}
+	_, ancestors, unl, _, err := bc.CollectAncestorsAftCpByTips(header.ParentHashes, header.CpHash)
+	if err != nil {
+		return false, err
+	}
+	if len(unl) > 0 {
+		return false, ErrInsertUncompletedDag
+	}
+	return ancestors[ancestorHash] != nil, nil
+}
+
 // IsAncestorRecursive checks the passed ancestorHash is an ancestor of the given block.
 func (bc *BlockChain) IsAncestorRecursive(header *types.Header, ancestorHash common.Hash) (bool, error) {
 	if header.Hash() == ancestorHash {
@@ -3723,14 +3765,18 @@ func (bc *BlockChain) ReadChildren(hash common.Hash) common.HashArray {
 	return rawdb.ReadChildren(bc.db, hash)
 }
 
-// DeleteBlockDag removes BlockDag by hash.
-func (bc *BlockChain) DeleteBlockDag(hash common.Hash) {
-	rawdb.DeleteBlockDag(bc.db, hash)
+// GetBlockDag retrieves BlockDag by hash.
+func (bc *BlockChain) GetBlockDag(hash common.Hash) *types.BlockDAG {
+	return bc.hc.GetBlockDag(hash)
 }
 
-// ReadBockDag retrieves BlockDag by hash.
-func (bc *BlockChain) ReadBockDag(hash common.Hash) *types.BlockDAG {
-	return rawdb.ReadBlockDag(bc.db, hash)
+func (bc *BlockChain) SaveBlockDag(blockDag *types.BlockDAG) {
+	bc.hc.SaveBlockDag(blockDag)
+}
+
+// DeleteBlockDag removes BlockDag by hash.
+func (bc *BlockChain) DeleteBlockDag(hash common.Hash) {
+	bc.hc.DeleteBlockDag(hash)
 }
 
 // WriteTxLookupEntry write TxLookupEntry and cache it.
