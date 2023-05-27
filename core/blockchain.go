@@ -578,6 +578,28 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		//	log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
 		//}
 		//bc.SyncEraToSlot(epochStartSlot)
+
+		// rm stale blockDags
+		go func() {
+			cpHeader := bc.GetHeader(currCp.Spine)
+			uptoNr := cpHeader.CpNumber
+			bc.ClearStaleBlockDags(uptoNr)
+		}()
+	}
+}
+
+func (bc *BlockChain) ClearStaleBlockDags(uptoNr uint64) {
+	for nr := uptoNr; uptoNr > 0; nr-- {
+		h := bc.ReadFinalizedHashByNumber(nr)
+		if h == (common.Hash{}) {
+			return
+		}
+		bdag := bc.ReadBockDag(h)
+		if bdag == nil {
+			return
+		}
+		log.Debug("Rm blockDag", "nr", nr, "slot", bdag.Slot, "height", bdag.Height, "cpHeight", bdag.CpHeight, "hash", h.Hex())
+		bc.DeleteBlockDag(h)
 	}
 }
 

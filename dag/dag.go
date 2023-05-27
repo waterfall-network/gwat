@@ -229,11 +229,6 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 			go era.HandleEra(d.bc, data.Checkpoint)
-			//epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch - 2 - 1)
-			//if err != nil {
-			//	log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
-			//}
-			//bc.SyncEraToSlot(epochStartSlot)
 		}
 	} else {
 		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
@@ -244,17 +239,6 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	d.bc.AppendNotProcessedValidatorSyncData(data.ValSyncData)
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
-
-	// TODO: deprecated
-	//if lfHeader.Height != lfHeader.Nr() {
-	//	err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
-	//	if res.Error == nil {
-	//		res.Error = &err
-	//	} else {
-	//		mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
-	//		res.Error = &mrg
-	//	}
-	//}
 
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash

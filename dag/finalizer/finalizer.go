@@ -162,10 +162,6 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 func (f *Finalizer) updateTips(finHashes common.HashArray, lastBlock types.Block) {
 	bc := f.eth.BlockChain()
 	bc.FinalizeTips(finHashes, lastBlock.Hash(), lastBlock.Height())
-	//remove stale blockDags
-	for _, h := range finHashes {
-		bc.DeleteBlockDag(h)
-	}
 }
 
 // finalizeBlock finalize block
