@@ -99,6 +99,7 @@ const (
 	TriesInMemory              = 128
 	invBlocksCacheLimit        = 512
 	optimisticSpinesCacheLimit = 128
+	checkpointCacheLimit       = 16
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
 	// Changelog:
@@ -214,6 +215,7 @@ type BlockChain struct {
 	txLookupCache         *lru.Cache     // Cache for the most recent transaction lookup data.
 	invalidBlocksCache    *lru.Cache     // Cache for the blocks with unknown parents
 	optimisticSpinesCache *lru.Cache
+	checkpointCache       *lru.Cache
 
 	validatorStorage valStore.Storage
 
@@ -249,6 +251,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	invBlocksCache, _ := lru.New(invBlocksCacheLimit)
 	optimisticSpinesCache, _ := lru.New(optimisticSpinesCacheLimit)
+	checkpointCache, _ := lru.New(checkpointCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -270,6 +273,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		txLookupCache:         txLookupCache,
 		invalidBlocksCache:    invBlocksCache,
 		optimisticSpinesCache: optimisticSpinesCache,
+		checkpointCache:       checkpointCache,
 		engine:                engine,
 		vmConfig:              vmConfig,
 		syncProvider:          nil,
@@ -569,6 +573,13 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	currCp := bc.GetLastCoordinatedCheckpoint()
 	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
+		// reset checkpoint cache
+		for _, k := range bc.checkpointCache.Keys() {
+			epoch := k.(uint64)
+			if epoch > currCp.FinEpoch {
+				bc.checkpointCache.Remove(epoch)
+			}
+		}
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
 		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
 		log.Info("####### SetLastCoordinatedCheckpoint ", "cp", cp)
@@ -614,6 +625,25 @@ func (bc *BlockChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 		bc.lastCoordinatedCp.Store(cp.Copy())
 	}
 	return bc.lastCoordinatedCp.Load().(*types.Checkpoint)
+}
+
+// GetCoordinatedCheckpoint retrieves a checkpoint dag from the database by hash, caching it if found.
+func (bc *BlockChain) GetCoordinatedCheckpoint(epoch uint64) *types.Checkpoint {
+	//check in cache
+	if v, ok := bc.checkpointCache.Get(epoch); ok {
+		val := v.(*types.Checkpoint)
+		if val != nil {
+			return val
+		}
+		bc.checkpointCache.Remove(epoch)
+	}
+	cp := rawdb.ReadCoordinatedCheckpoint(bc.db, epoch)
+	if cp == nil {
+		return nil
+	}
+	// Cache the found cp for next time and return
+	bc.checkpointCache.Add(epoch, cp)
+	return cp
 }
 
 // GetValidatorSyncData retrieves a validator sync data from the database by
@@ -2188,8 +2218,15 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"calcHeight", calcHeight,
 			"height", block.Height(),
 			"hash", block.Hash().Hex(),
-			"cpHeight", block.CpNumber(),
+			"cpHeight", cpHeader.Height,
 		)
+		return false, nil
+	}
+
+	// Verify block checkpoint
+	isValidCp := bc.verifyCheckpoint(block)
+	if !isValidCp {
+		log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
 		return false, nil
 	}
 
@@ -3942,6 +3979,96 @@ func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 
 	// Check if the block epoch is within the era
 	return valEra != nil && valEra.IsContainsEpoch(blockEpoch)
+}
+
+func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
+	// check cp exists
+	cpHeader := bc.GetHeader(block.CpHash())
+	if cpHeader == nil {
+		log.Warn("Block verification: cp block not found",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	// cp must be finalized
+	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+		log.Warn("Block verification: cp is not finalized",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	// cp must be correct finalized
+	if block.CpNumber() != cpHeader.Nr() {
+		log.Warn("Block verification: cp mismatch fin numbers",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	// cp must be coordinated (received from coordinator)
+	coordFinEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+	coordCp := bc.GetLastCoordinatedCheckpoint()
+	if coordCp.Spine != block.CpHash() {
+		coordCp = bc.GetCoordinatedCheckpoint(coordFinEpoch)
+	}
+	if coordCp == nil {
+		log.Warn("Block verification: cp no coordinated data",
+			"coordEpoch", coordFinEpoch,
+			"coordEpoch", coordFinEpoch,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	// cp must be coordinated (received from coordinator)
+	if block.CpHash() != coordCp.Spine {
+		log.Warn("Block verification: cp hash mismatch to coordinated hash",
+			"coordEpoch", coordFinEpoch,
+			"coord.FinEpoch", coordCp.FinEpoch,
+			"coord.Epoch", coordCp.Epoch,
+			"coord.Hash", coordCp.Spine,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	// check accordance to parent checkpoints
+	for _, ph := range block.ParentHashes() {
+		parBdag := bc.GetBlockDag(ph)
+		// block cp must be same or greater than parents
+		if block.CpHash() == parBdag.CpHash {
+			continue
+		}
+		if cpHeader.Height <= parBdag.CpHeight {
+			log.Warn("Block verification: cp height less of parent cp",
+				"parent.CpHeight", parBdag.CpHeight,
+				"cp.Height", cpHeader.Height,
+				"parent.Hash", ph.Hex(),
+				"cp.Hash", block.CpHash().Hex(),
+				"bl.Hash", block.Hash().Hex(),
+			)
+			return false
+		}
+		// otherwise block cp must be in past of parent and grater parent cp
+		if !parBdag.DagChainHashes.Has(block.CpHash()) {
+			log.Warn("Block verification: cp not found in range from parent cp",
+				"parent.Hash", ph.Hex(),
+				"range", parBdag.DagChainHashes,
+				"cp.Hash", block.CpHash().Hex(),
+				"bl.Hash", block.Hash().Hex(),
+			)
+			return false
+		}
+	}
+	return true
 }
 
 func (bc *BlockChain) EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era {

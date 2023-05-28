@@ -69,11 +69,10 @@ type HeaderChain struct {
 	lastFinalisedHeader atomic.Value // Current head of the header chain (may be above the block chain!)
 	lastFinalisedHash   common.Hash  // Hash of the current head of the header chain (prevent recomputing all the time)
 
-	headerCache *lru.Cache // Cache for the most recent block headers
-	numberCache *lru.Cache // Cache for the most recent block numbers
-
+	headerCache   *lru.Cache // Cache for the most recent block headers
+	numberCache   *lru.Cache // Cache for the most recent block numbers
 	ancestorCache *lru.Cache // Cache for ancestors
-	blockDagCache *lru.Cache
+	blockDagCache *lru.Cache // Blockdag cache
 
 	procInterrupt func() bool
 
@@ -867,15 +866,17 @@ func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpH
 	ancestors = hc.GetHeadersByHashes(ancHashes)
 	for h, anc := range ancestors {
 		if anc == nil {
+			delete(ancestors, h)
 			continue
 		}
 		// exclude finalized before cp
-		if anc.Hash() == cpHash {
+		if h == cpHash {
 			delete(ancestors, h)
 			continue
 		}
 		if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() <= cpHead.Nr() {
 			delete(ancestors, h)
+			continue
 		}
 	}
 	return isCpAncestor, ancestors, unloaded, tips, err
