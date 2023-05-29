@@ -570,33 +570,27 @@ func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 
 // SetLastCoordinatedCheckpoint set last coordinated checkpoint.
 func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
+	// save new checkpoint and cache it.
+	if epCp := bc.GetCoordinatedCheckpoint(cp.Spine); epCp == nil {
+		rawdb.WriteCoordinatedCheckpoint(bc.db, cp)
+		bc.checkpointCache.Add(cp.Spine, cp)
+	}
+	//update current cp and apoch data.
 	currCp := bc.GetLastCoordinatedCheckpoint()
 	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
-		// reset checkpoint cache
-		for _, k := range bc.checkpointCache.Keys() {
-			epoch := k.(uint64)
-			if epoch > currCp.FinEpoch {
-				bc.checkpointCache.Remove(epoch)
-			}
-		}
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
-		rawdb.WriteCheckpointsBetweenEpochs(bc.db, currCp, cp)
-		log.Info("####### SetLastCoordinatedCheckpoint ", "cp", cp)
-		//// Handle era
-		//epochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.Epoch)
-		//if err != nil {
-		//	log.Error("Handle sync era to checkpoint epoch", "toEpoch", cp.Epoch)
-		//}
-		//bc.SyncEraToSlot(epochStartSlot)
-
-		// rm stale blockDags
-		go func() {
+		rawdb.WriteEpoch(bc.db, cp.FinEpoch, cp.Spine)
+		log.Info("Update coordinated checkpoint ", "cp", cp)
+	}
+	// rm stale blockDags
+	go func() {
+		if currCp != nil && cp.Root != currCp.Root {
 			cpHeader := bc.GetHeader(currCp.Spine)
 			uptoNr := cpHeader.CpNumber
 			bc.ClearStaleBlockDags(uptoNr)
-		}()
-	}
+		}
+	}()
 }
 
 func (bc *BlockChain) ClearStaleBlockDags(uptoNr uint64) {
@@ -609,7 +603,7 @@ func (bc *BlockChain) ClearStaleBlockDags(uptoNr uint64) {
 		if bdag == nil {
 			return
 		}
-		log.Debug("Rm blockDag", "nr", nr, "slot", bdag.Slot, "height", bdag.Height, "cpHeight", bdag.CpHeight, "hash", h.Hex())
+		log.Info("Rm blockDag", "nr", nr, "slot", bdag.Slot, "height", bdag.Height, "cpHeight", bdag.CpHeight, "hash", h.Hex())
 		bc.DeleteBlockDag(h)
 	}
 }
@@ -628,22 +622,27 @@ func (bc *BlockChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 }
 
 // GetCoordinatedCheckpoint retrieves a checkpoint dag from the database by hash, caching it if found.
-func (bc *BlockChain) GetCoordinatedCheckpoint(epoch uint64) *types.Checkpoint {
+func (bc *BlockChain) GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Checkpoint {
 	//check in cache
-	if v, ok := bc.checkpointCache.Get(epoch); ok {
+	if v, ok := bc.checkpointCache.Get(cpSpine); ok {
 		val := v.(*types.Checkpoint)
 		if val != nil {
 			return val
 		}
-		bc.checkpointCache.Remove(epoch)
+		bc.checkpointCache.Remove(cpSpine)
 	}
-	cp := rawdb.ReadCoordinatedCheckpoint(bc.db, epoch)
+	cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
 	if cp == nil {
 		return nil
 	}
 	// Cache the found cp for next time and return
-	bc.checkpointCache.Add(epoch, cp)
+	bc.checkpointCache.Add(cpSpine, cp)
 	return cp
+}
+
+// GetEpoch retrieves the checkpoint spine by epoch.
+func (bc *BlockChain) GetEpoch(epoch uint64) common.Hash {
+	return rawdb.ReadEpoch(bc.db, epoch)
 }
 
 // GetValidatorSyncData retrieves a validator sync data from the database by
@@ -2380,19 +2379,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			if bdag == nil {
 				//should never happen
 				panic("should never happen")
-				//pHeader := bc.GetHeader(h)
-				//_, anc, _, err := bc.CollectAncestorsAftCpByParents(pHeader.ParentHashes, pHeader.CpHash)
-				//if err != nil {
-				//	return it.index, err
-				//}
-				//bdag = &types.BlockDAG{
-				//	Hash:           pHeader.Hash(),
-				//	Height:         pHeader.Height,
-				//	Slot:           pHeader.Slot,
-				//	CpHash:         pHeader.CpHash,
-				//	CpHeight:       bc.GetHeader(pHeader.CpHash).Height,
-				//	DagChainHashes: anc.Hashes(),
-				//}
 			}
 			tmpTips.Add(bdag)
 		}
@@ -2411,42 +2397,6 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		bc.AddTips(dagBlock)
 		bc.RemoveTips(dagBlock.DagChainHashes)
 		bc.MoveTxsToProcessing(types.Blocks{block})
-
-		////check tips
-		//tips := bc.GetTips()
-		//if len(tips) > 1 {
-		//	for _, th := range tips.GetHashes() {
-		//		tHeader := bc.GetHeader(th)
-		//		if tHeader == nil {
-		//			continue
-		//		}
-		//		for _, ancestor := range tips.GetHashes() {
-		//			if tHeader.Hash() == ancestor {
-		//				continue
-		//			}
-		//			isAncestor, err := bc.IsAncestorRecursive(tHeader, ancestor)
-		//			if err != nil {
-		//				log.Error("Insert propagated block: check tips failed",
-		//					"err", err,
-		//					"hash", block.Hash().Hex(),
-		//					"tips", th,
-		//					"ancestor", ancestor,
-		//					"tips", tips.Print(),
-		//				)
-		//				return it.index, err
-		//			}
-		//			if isAncestor {
-		//				log.Warn("Insert propagated block: check tips ancestor detected",
-		//					"hash", block.Hash().Hex(),
-		//					"tips", th,
-		//					"ancestor", ancestor,
-		//					"tips", tips.Print(),
-		//				)
-		//				bc.RemoveTips(common.HashArray{ancestor})
-		//			}
-		//		}
-		//	}
-		//}
 		bc.WriteCurrentTips()
 
 		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
@@ -3344,7 +3294,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// all raised events and logs from notifications since we're too heavy on the
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
-			log.Info("====== Importing heavy sidechain segment (TODO CHECK)======", "blocks", len(blocks), "start", blocks[0].Hash().Hex(), "end", block.Hash().Hex())
+			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].Hash().Hex(), "end", block.Hash().Hex())
 			if _, err := bc.insertChain(blocks); err != nil {
 				return 0, err
 			}
@@ -3352,13 +3302,13 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 
 			// If the chain is terminating, stop processing blocks
 			if bc.insertStopped() {
-				log.Info("====== Abort during blocks processing (TODO CHECK)======")
+				log.Info("Abort during blocks processing")
 				return 0, nil
 			}
 		}
 	}
 	if len(blocks) > 0 {
-		log.Info("====== Importing sidechain segment (TODO CHECK)======", "start", blocks[0].Nr(), "end", blocks[len(blocks)-1].Nr(), "start", blocks[0].Hash().Hex(), "end", blocks[len(blocks)-1].Hash().Hex())
+		log.Info("Importing sidechain segment", "start", blocks[0].Nr(), "end", blocks[len(blocks)-1].Nr(), "start", blocks[0].Hash().Hex(), "end", blocks[len(blocks)-1].Hash().Hex())
 		return bc.insertChain(blocks)
 	}
 	return 0, nil
@@ -3498,36 +3448,6 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 }
 
 /********** BlockDAG **********/
-
-// GetDagHashes retrieves all non finalized block's hashes
-func (bc *BlockChain) GetUnloadedDagHashes() *common.HashArray {
-	dagHashes := common.HashArray{}
-	tips := *bc.hc.GetTips()
-
-	tipsHashes := tips.GetOrderedDagChainHashes()
-	dagBlocks := bc.GetBlocksByHashes(tipsHashes)
-	for hash, bl := range dagBlocks {
-		if bl != nil && bl.Nr() == 0 && bl.Height() > 0 {
-			dagHashes = append(dagHashes, hash)
-		}
-	}
-	if len(dagHashes) == 0 {
-		dagHashes = common.HashArray{bc.GetLastFinalizedBlock().Hash()}
-	}
-
-	//expCache := ExploreResultMap{}
-	//for hash, tip := range tips {
-	//	if hash == tip.CpHash {
-	//		dagHashes = append(dagHashes, hash)
-	//		continue
-	//	}
-	//	_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
-	//	expCache = c
-	//	dagHashes = dagHashes.Concat(loaded)
-	//}
-	//dagHashes = dagHashes.Uniq().Sort()
-	return &dagHashes
-}
 
 // GetDagHashes retrieves all non finalized block's hashes
 func (bc *BlockChain) GetDagHashes() *common.HashArray {
@@ -3913,29 +3833,6 @@ func (bc *BlockChain) SetNewEraInfo(newEra era.Era) {
 	bc.eraInfo = era.NewEraInfo(newEra)
 }
 
-//func (bc *BlockChain) SyncEraToSlot(slot uint64) {
-//	toEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-//	// Sync era from current epoch to slot
-//	for !bc.GetEraInfo().GetEra().IsContainsEpoch(toEpoch) && bc.GetEraInfo().GetEra().To < toEpoch {
-//		checkpoint := rawdb.ReadCoordinatedCheckpoint(bc.db, bc.GetSlotInfo().SlotToEpoch(slot))
-//		spineRoot := common.Hash{}
-//		if checkpoint != nil {
-//			header := bc.GetHeaderByHash(checkpoint.Spine)
-//			spineRoot = header.Root
-//		} else {
-//			log.Error("Invalid checkpoint: sync to era error")
-//		}
-//		log.Info("######## SyncEraToSlot", "toEpoch", toEpoch,
-//			"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
-//			"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
-//			"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
-//			"cpSlot", slot,
-//			"currSlot", bc.GetSlotInfo().CurrentSlot(),
-//		)
-//		bc.EnterNextEra(cp, spineRoot)
-//	}
-//}
-
 func (bc *BlockChain) Database() ethdb.Database {
 	return bc.db
 }
@@ -3958,8 +3855,8 @@ func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 	// Get the era that the block belongs to
 	var valEra *era.Era
 	if bc.GetEraInfo().GetEra().Number == block.Era() {
-		log.Info("@@@@@@@@@ verifyBlockEra",
-			"bc.GetEraInfo().GetEra()", bc.GetEraInfo().GetEra(),
+		log.Info("Block verification: era",
+			"eraInfo", bc.GetEraInfo().GetEra(),
 			"blEra", block.Era(),
 			"blEpoch", blockEpoch,
 			"blSlot", block.Slot(),
@@ -3974,7 +3871,7 @@ func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 		valEra = bc.GetEraInfo().GetEra()
 	} else {
 		valEra = rawdb.ReadEra(bc.db, block.Era())
-		log.Info("@@@@@@@@@ verifyBlockEra", "rawdb.ReadEra(bc.db, block.Era())", valEra, "blEra", block.Era(), "blockEpoch", blockEpoch, "blSlot", block.Slot(), "hash", block.Hash(), "blNr", block.Nr())
+		log.Info("Block verification: era", "eraInfo", valEra, "blEra", block.Era(), "blockEpoch", blockEpoch, "blSlot", block.Slot(), "hash", block.Hash(), "blNr", block.Nr())
 	}
 
 	// Check if the block epoch is within the era
@@ -3982,7 +3879,16 @@ func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 }
 
 func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
-	// check cp exists
+	// cp must be coordinated (received from coordinator)
+	coordCp := bc.GetCoordinatedCheckpoint(block.CpHash())
+	if coordCp == nil {
+		log.Warn("Block verification: cp not found",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	// check cp block exists
 	cpHeader := bc.GetHeader(block.CpHash())
 	if cpHeader == nil {
 		log.Warn("Block verification: cp block not found",
@@ -4008,33 +3914,6 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 			"bl.CpNumber", block.CpNumber(),
 			"cp.Number", cpHeader.Nr(),
 			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
-		return false
-	}
-	// cp must be coordinated (received from coordinator)
-	coordFinEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-	coordCp := bc.GetLastCoordinatedCheckpoint()
-	if coordCp.Spine != block.CpHash() {
-		coordCp = bc.GetCoordinatedCheckpoint(coordFinEpoch)
-	}
-	if coordCp == nil {
-		log.Warn("Block verification: cp no coordinated data",
-			"coordEpoch", coordFinEpoch,
-			"coordEpoch", coordFinEpoch,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
-		return false
-	}
-	// cp must be coordinated (received from coordinator)
-	if block.CpHash() != coordCp.Spine {
-		log.Warn("Block verification: cp hash mismatch to coordinated hash",
-			"coordEpoch", coordFinEpoch,
-			"coord.FinEpoch", coordCp.FinEpoch,
-			"coord.Epoch", coordCp.Epoch,
-			"coord.Hash", coordCp.Spine,
 			"cp.Hash", block.CpHash().Hex(),
 			"bl.Hash", block.Hash().Hex(),
 		)

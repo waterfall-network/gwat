@@ -20,6 +20,7 @@ type blockchain interface {
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	GetEpoch(epoch uint64) common.Hash
 	EpochToEra(uint64) *era.Era
 }
 
@@ -216,9 +217,8 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 
 	activeEpochValidators := s.validatorsCache.getValidatorsAddresses(bc, epoch, true)
 
-	checkpointEpoch := bc.GetLastCoordinatedCheckpoint()
-
-	seed, err := s.seed(epoch, checkpointEpoch.Spine)
+	epochSpine := bc.GetEpoch(epoch - 1)
+	seed, err := s.seed(epoch, epochSpine)
 	if err != nil {
 		return nil, err
 	}

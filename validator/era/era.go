@@ -55,7 +55,6 @@ func (e *Era) Length() uint64 {
 }
 
 func (e *Era) IsContainsEpoch(epoch uint64) bool {
-	log.Info("@@@@@@@@@ IsContainsEpoch valEra", "epoch", epoch, "eraNum", e.Number, "to", e.To, "from", e.From)
 	return epoch >= e.From && epoch <= e.To
 }
 
