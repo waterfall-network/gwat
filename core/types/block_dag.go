@@ -144,11 +144,11 @@ func (tips Tips) GetMaxSlot() uint64 {
 // BlockDAG represents a currently no descendants block
 // of directed acyclic graph and related data.
 type BlockDAG struct {
-	Hash                common.Hash
-	Height              uint64
-	Slot                uint64
-	LastFinalizedHash   common.Hash
-	LastFinalizedHeight uint64
+	Hash     common.Hash
+	Height   uint64
+	Slot     uint64
+	CpHash   common.Hash
+	CpHeight uint64
 	// ordered non-finalized ancestors hashes
 	DagChainHashes common.HashArray
 }
@@ -167,9 +167,9 @@ func (b *BlockDAG) ToBytes() []byte {
 	binary.BigEndian.PutUint64(slot, b.Slot)
 	res = append(res, slot...)
 
-	res = append(res, b.LastFinalizedHash.Bytes()...)
+	res = append(res, b.CpHash.Bytes()...)
 	lastFinHeight := make([]byte, 8)
-	binary.BigEndian.PutUint64(lastFinHeight, b.LastFinalizedHeight)
+	binary.BigEndian.PutUint64(lastFinHeight, b.CpHeight)
 	res = append(res, lastFinHeight...)
 
 	lenDC := make([]byte, 4)
@@ -196,11 +196,11 @@ func (b *BlockDAG) SetBytes(data []byte) *BlockDAG {
 
 	start = end
 	end += common.HashLength
-	b.LastFinalizedHash = common.BytesToHash(data[start:end])
+	b.CpHash = common.BytesToHash(data[start:end])
 
 	start = end
 	end += 8
-	b.LastFinalizedHeight = binary.BigEndian.Uint64(data[start:end])
+	b.CpHeight = binary.BigEndian.Uint64(data[start:end])
 
 	start = end
 	end += 4

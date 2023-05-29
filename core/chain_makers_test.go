@@ -72,7 +72,7 @@ func addBlocksToDag(bc *BlockChain, blocks []*types.Block) error {
 		if blc.Number() != nil {
 			return errors.New("block is finalised")
 		}
-		bd := bc.ReadBockDag(block.Hash())
+		bd := bc.GetBlockDag(block.Hash())
 		if bd == nil || bd.Hash != block.Hash() || bd.Height != block.Height() {
 			return errors.New("BlockDag does not response block")
 		}

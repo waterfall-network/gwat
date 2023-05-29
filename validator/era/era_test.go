@@ -23,20 +23,20 @@ func (m mockBlockchain) GetHeaderByHash(hash common.Hash) *types.Header {
 	panic("implement me")
 }
 
-func (m mockBlockchain) EnterNextEra(hash common.Hash) *Era {
+func (m mockBlockchain) EnterNextEra(cp *types.Checkpoint, hash common.Hash) *Era {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m mockBlockchain) StartTransitionPeriod() {
+func (m mockBlockchain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m mockBlockchain) SyncEraToSlot(slot uint64) {
-	//TODO implement me
-	panic("implement me")
-}
+//func (m mockBlockchain) SyncEraToSlot(slot uint64) {
+//	//TODO implement me
+//	panic("implement me")
+//}
 
 func (m mockBlockchain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	//TODO implement me
