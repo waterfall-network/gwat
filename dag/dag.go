@@ -44,6 +44,7 @@ type Backend interface {
 }
 
 type blockChain interface {
+	GetEpoch(epoch uint64) common.Hash
 	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
