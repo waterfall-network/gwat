@@ -39,8 +39,11 @@ var (
 	// lastCoordCpKey tracks the latest known hash from coordinator.
 	lastCoordCpKey = []byte("LCoordCp")
 
-	// coordCpPrefix + epoch.
+	// coordCpPrefix + cpSpine.
 	coordCpPrefix = []byte("CoordCp")
+
+	// epochCpPrefix + epoch.
+	epochCpPrefix = []byte("EpochCp")
 
 	// tipsHashesKey tracks the latest known tips hashes.
 	tipsHashesKey = []byte("TipsHashes")
@@ -88,7 +91,7 @@ var (
 	headerPrefix     = []byte("h") // headerPrefix + hash -> header
 	headerHashSuffix = []byte("n") // headerPrefix + headerHashSuffix -> hash
 
-	childrenPrefix              = []byte("C")   // childrenPrefix + parentHash -> children (HashArray)
+	childrenPrefix              = []byte("Cld") // childrenPrefix + parentHash -> children (HashArray)
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
 	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
@@ -267,9 +270,14 @@ func validatorSyncKey(creator common.Address, op uint64) []byte {
 	return append(append(valSyncOpPrefix, encodeBlockNumber(op)...), creator.Bytes()...)
 }
 
-// coordCpKey = coordCpPrefix + epoch
-func coordCpKey(epoch uint64) []byte {
-	return append(coordCpPrefix, Uint64ToByteSlice(epoch)...)
+// coordCpKey = coordCpPrefix + cpSpine
+func coordCpKey(cpSpine common.Hash) []byte {
+	return append(coordCpPrefix, cpSpine.Bytes()...)
+}
+
+// epochCpKey = coordCpPrefix + epoch
+func epochCpKey(epoch uint64) []byte {
+	return append(epochCpPrefix, Uint64ToByteSlice(epoch)...)
 }
 
 func slotBlocksKey(slot uint64) []byte {
