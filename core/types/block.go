@@ -18,7 +18,6 @@
 package types
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -32,6 +31,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
@@ -212,10 +212,37 @@ func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash == EmptyRootHash
 }
 
+const uint32Length = 4
+
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
 type Body struct {
-	Transactions []*Transaction
+	Transactions Transactions
+}
+
+func (b *Body) ToBytes() ([]byte, error) {
+	txsBytes, err := rlp.EncodeToBytes(b.Transactions)
+	if err != nil {
+		log.Error("can`t encode transactions from body", "error", err)
+		return nil, err
+	}
+
+	txsLen := len(txsBytes)
+
+	res := make([]byte, txsLen+uint32Length, txsLen+uint32Length)
+	copy(res[:uint32Length], common.Uint64ToBytes(uint64(txsLen)))
+	copy(res[uint32Length:], txsBytes)
+
+	return res, err
+}
+
+func (b *Body) CalculateHash() common.Hash {
+	bodyBytes, err := b.ToBytes()
+	if err != nil {
+		return EmptyRootHash
+	}
+
+	return crypto.Keccak256Hash(bodyBytes)
 }
 
 // Block represents an entire block in the Ethereum blockchain.
@@ -264,7 +291,7 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher Tr
 		b.header.Bloom = CreateBloom(receipts)
 	}
 	// calc BodyHash
-	b.header.BodyHash = CalcBlockBodyHash(txs, hasher)
+	b.header.BodyHash = b.Body().CalculateHash()
 	return b
 }
 
@@ -286,7 +313,7 @@ func NewStatelessBlock(header *Header, txs []*Transaction, hasher TrieHasher) *B
 		copy(b.transactions, txs)
 
 		// calc BodyHash
-		b.header.BodyHash = CalcBlockBodyHash(txs, hasher)
+		b.header.BodyHash = b.Body().CalculateHash()
 	}
 
 	return b
@@ -636,35 +663,6 @@ func (shm *SlotSpineMap) GetOrderedHashes() *common.HashArray {
 		hashes = append(hashes, (*shm)[slot].Hash())
 	}
 	return &hashes
-}
-
-// BlockDerivableBody implements BodyHash functionality
-type BlockDerivableBody struct {
-	transactions Transactions
-}
-
-func NewBlockDerivableBody(txs []*Transaction) BlockDerivableBody {
-	return BlockDerivableBody{
-		transactions: Transactions(txs),
-	}
-}
-
-func (b BlockDerivableBody) Len() int {
-	return len(b.transactions)
-}
-
-func (b BlockDerivableBody) EncodeIndex(i int, buffer *bytes.Buffer) {
-	if i < len(b.transactions) {
-		b.transactions.EncodeIndex(i, buffer)
-	}
-}
-
-func CalcBlockBodyHash(txs []*Transaction, hasher TrieHasher) common.Hash {
-	if len(txs) == 0 {
-		return EmptyRootHash
-	}
-	body := NewBlockDerivableBody(txs)
-	return DeriveSha(body, hasher)
 }
 
 type Headers []*Header
