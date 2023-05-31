@@ -272,7 +272,7 @@ func (mr *MockblockChainMockRecorder) Database() *gomock.Call {
 }
 
 // EnterNextEra mocks base method.
-func (m *MockblockChain) EnterNextEra(root common.Hash) *era.Era {
+func (m *MockblockChain) EnterNextEra(cp *types.Checkpoint,root common.Hash) *era.Era {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EnterNextEra", root)
 	ret0, _ := ret[0].(*era.Era)
@@ -280,7 +280,7 @@ func (m *MockblockChain) EnterNextEra(root common.Hash) *era.Era {
 }
 
 // EnterNextEra indicates an expected call of EnterNextEra.
-func (mr *MockblockChainMockRecorder) EnterNextEra(root interface{}) *gomock.Call {
+func (mr *MockblockChainMockRecorder) EnterNextEra(cp *types.Checkpoint,root interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnterNextEra", reflect.TypeOf((*MockblockChain)(nil).EnterNextEra), root)
 }
@@ -462,13 +462,13 @@ func (mr *MockblockChainMockRecorder) SetSlotInfo(si interface{}) *gomock.Call {
 }
 
 // StartTransitionPeriod mocks base method.
-func (m *MockblockChain) StartTransitionPeriod() {
+func (m *MockblockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "StartTransitionPeriod")
 }
 
 // StartTransitionPeriod indicates an expected call of StartTransitionPeriod.
-func (mr *MockblockChainMockRecorder) StartTransitionPeriod() *gomock.Call {
+func (mr *MockblockChainMockRecorder) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTransitionPeriod", reflect.TypeOf((*MockblockChain)(nil).StartTransitionPeriod))
 }
@@ -488,17 +488,17 @@ func (mr *MockblockChainMockRecorder) StateAt(root interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateAt", reflect.TypeOf((*MockblockChain)(nil).StateAt), root)
 }
 
-// SyncEraToSlot mocks base method.
-func (m *MockblockChain) SyncEraToSlot(slot uint64) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SyncEraToSlot", slot)
-}
+//// SyncEraToSlot mocks base method.
+//func (m *MockblockChain) SyncEraToSlot(slot uint64) {
+//	m.ctrl.T.Helper()
+//	m.ctrl.Call(m, "SyncEraToSlot", slot)
+//}
 
-// SyncEraToSlot indicates an expected call of SyncEraToSlot.
-func (mr *MockblockChainMockRecorder) SyncEraToSlot(slot interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncEraToSlot", reflect.TypeOf((*MockblockChain)(nil).SyncEraToSlot), slot)
-}
+//// SyncEraToSlot indicates an expected call of SyncEraToSlot.
+//func (mr *MockblockChainMockRecorder) SyncEraToSlot(slot interface{}) *gomock.Call {
+//	mr.mock.ctrl.T.Helper()
+//	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncEraToSlot", reflect.TypeOf((*MockblockChain)(nil).SyncEraToSlot), slot)
+//}
 
 // ValidatorStorage mocks base method.
 func (m *MockblockChain) ValidatorStorage() storage.Storage {

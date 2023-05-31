@@ -44,11 +44,12 @@ type Backend interface {
 }
 
 type blockChain interface {
-	era.Blockchain
+	GetEpoch(epoch uint64) common.Hash
 	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
+	GetHeaderByHash(common.Hash) *types.Header
 	GetBlock(hash common.Hash) *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetLastFinalizedNumber() uint64
@@ -61,9 +62,9 @@ type blockChain interface {
 	Config() *params.ChainConfig
 	GetEraInfo() *era.EraInfo
 	SetNewEraInfo(newEra era.Era)
-	EnterNextEra(root common.Hash) *era.Era
-	StartTransitionPeriod()
-	SyncEraToSlot(slot uint64)
+	EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era
+	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
+	//SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
 	DagMuLock()
@@ -78,7 +79,7 @@ type blockChain interface {
 	SetIsSynced(synced bool)
 	IsSynced() bool
 
-	CollectAncestorsAftCpByParents(common.HashArray, common.Hash, ...core.CollectAncestorsResultMap) (bool, types.HeaderMap, common.HashArray, core.CollectAncestorsResultMap, error)
+	CollectAncestorsAftCpByParents(common.HashArray, common.Hash) (bool, types.HeaderMap, common.HashArray, error)
 }
 
 type ethDownloader interface {
@@ -228,26 +229,17 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			res.Error = &e
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
+			go era.HandleEra(d.bc, data.Checkpoint)
 		}
 	} else {
 		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
+		go era.HandleEra(d.bc, data.Checkpoint)
 	}
 
 	// handle validator sync data
 	d.bc.AppendNotProcessedValidatorSyncData(data.ValSyncData)
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
-
-	// TODO: deprecated
-	//if lfHeader.Height != lfHeader.Nr() {
-	//	err := fmt.Sprintf("☠ bad last finalized block: mismatch nr=%d and height=%d", lfHeader.Nr(), lfHeader.Height)
-	//	if res.Error == nil {
-	//		res.Error = &err
-	//	} else {
-	//		mrg := fmt.Sprintf("error[0]=%s\nerror[1]: %s", *res.Error, err)
-	//		res.Error = &mrg
-	//	}
-	//}
 
 	lfHash := lfHeader.Hash()
 	res.LFSpine = &lfHash
@@ -257,7 +249,11 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		res.CpRoot = &cp.Root
 	}
 
-	log.Info("Handle Finalize: response", "result", res)
+	log.Info("Handle Finalize: response",
+		"resEpoch", *res.CpEpoch,
+		"resSpine", res.LFSpine.Hex(),
+		"resRoot", res.CpRoot.Hex(),
+	)
 	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
 		"func:", "Finalize",
@@ -305,10 +301,8 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 
 func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 	var (
-		//expCache core.ExploreResultMap
-		expCache core.CollectAncestorsResultMap
-		unl      common.HashArray
-		err      error
+		unl common.HashArray
+		err error
 	)
 	start := time.Now()
 	for _, spine := range spines.Reverse() {
@@ -316,7 +310,7 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 		if spHeader == nil {
 			return true, nil
 		}
-		_, _, unl, expCache, err = d.bc.CollectAncestorsAftCpByParents(spHeader.ParentHashes, spHeader.CpHash, expCache)
+		_, _, unl, err = d.bc.CollectAncestorsAftCpByParents(spHeader.ParentHashes, spHeader.CpHash)
 		if err != nil {
 			return false, err
 		}
@@ -429,19 +423,17 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 
 	log.Info("Handle GetOptimisticSpines: start", "fromSpine", fromSpine.Hex())
 
-	spineBlock := d.bc.GetBlock(fromSpine)
+	spineBlock := d.bc.GetHeaderByHash(fromSpine)
 	if spineBlock == nil {
-		err := errors.New("bad params: spine not found").Error()
+		err := errors.New("bad params: base spine not found").Error()
 		return &types.OptimisticSpinesResult{
 			Error: &err,
 			Data:  nil,
 		}
 	}
 
-	spineSlot := spineBlock.Slot()
-
 	// collect optimistic spines
-	spines, err := d.bc.GetOptimisticSpines(spineSlot)
+	spines, err := d.bc.GetOptimisticSpines(spineBlock.Slot)
 	if len(spines) == 0 {
 		log.Info("No spines for tips", "tips", d.bc.GetTips().Print())
 	}
@@ -454,7 +446,7 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 		estr := err.Error()
 		res.Error = &estr
 	}
-	log.Info("Handle GetOptimisticSpines: response", "result", res, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
+	log.Info("Handle GetOptimisticSpines: response", "result", len(res.Data), "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
 	return res
 }
 
@@ -597,6 +589,9 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
 				continue
 			}
+			epoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
+			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", epoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
+			//if d.bc.GetEraInfo().ToEpoch() >= epoch { // TODO: check ???
 
 			var (
 				err      error
@@ -611,7 +606,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 			endTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochEnd(d.bc.GetEraInfo().ToEpoch())
 
-			era.HandleEra(d.bc, slot)
+			//era.HandleEra(d.bc, slot)
 
 			log.Info("New slot",
 				"slot", slot,
@@ -639,6 +634,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 			// todo check
 			go d.work(slot, creators, accounts)
+			//}
 		}
 	}
 }
