@@ -243,9 +243,8 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		exitAftEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.blockchain.GetSlotInfo().CurrentSlot()) + 1
 		op.SetExitAfterEpoch(&exitAftEpoch)
 	}
-	exitEra := p.blockchain.EpochToEra(*op.ExitAfterEpoch())
 
-	if validator.GetActivationEra() > exitEra.Number {
+	if validator.GetActivationEra() > p.blockchain.GetEraInfo().Number() {
 		return nil, ErrNotActivatedValidator
 	}
 

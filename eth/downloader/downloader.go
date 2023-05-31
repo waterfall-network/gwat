@@ -2318,7 +2318,10 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 
 // fetchDagHashes retrieves the dag chain hashes beginning from finalized block (excluded from response).
 func (d *Downloader) fetchDagHashes(p *peerConnection, baseSpine common.Hash, terminalSpine common.Hash) (dag common.HashArray, err error) {
-	p.log.Info("Retrieving remote dag hashes: start", "baseSpine", fmt.Sprintf("%#x", baseSpine), "terminalSpine", fmt.Sprintf("%#x", terminalSpine))
+	p.log.Info("Retrieving remote dag hashes: start",
+		"baseSpine", fmt.Sprintf("%#x", baseSpine),
+		"terminalSpine", fmt.Sprintf("%#x", terminalSpine),
+	)
 
 	go p.peer.RequestDag(baseSpine, terminalSpine)
 
@@ -2358,7 +2361,7 @@ func (d *Downloader) fetchDagHashes(p *peerConnection, baseSpine common.Hash, te
 
 // fetchDagHeaders retrieves the dag headers by hashes from a remote peer.
 func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray) (headers []*types.Header, err error) {
-	p.log.Info("Retrieving remote dag headers: start", "hashes", hashes)
+	p.log.Info("Retrieving remote dag headers: start", "hashes", len(hashes))
 	go p.peer.RequestHeadersByHashes(hashes)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -2392,7 +2395,7 @@ func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray)
 // fetchDagTxs retrieves the dag transactions by blocks hashes from a remote peer.
 func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (map[common.Hash][]*types.Transaction, error) {
 
-	p.log.Info("Retrieving remote dag block txs: start", "hashes", hashes)
+	p.log.Info("Retrieving remote dag block txs: start", "hashes", len(hashes))
 
 	go p.peer.RequestBodies(hashes)
 
@@ -2424,7 +2427,7 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 }
 
 func (d *Downloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) (fullySynced bool, err error) {
-	log.Info("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", spines, "len(d.peers)", len(d.peers.peers))
+	log.Info("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", len(spines), "len(d.peers)", len(d.peers.peers))
 	if d.peers.Len() == 0 {
 		log.Error("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", spines, "peers.Len", d.peers.Len(), "err", errNoPeers)
 		return false, errNoPeers
@@ -2711,17 +2714,17 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 		}
 	}
 
-	log.Info("Synchronization of dag chain: dag hashes retrieved", "dag", dag, "err", err)
+	log.Info("Synchronization of dag chain: dag hashes retrieved", "dag", len(dag), "err", err)
 	if err != nil {
 		return false, err
 	}
 	headers, err := d.fetchDagHeaders(p, dag)
-	log.Info("Synchronization of dag chain: dag headers retrieved", "count", len(headers), "headers", headers, "err", err)
+	log.Info("Synchronization of dag chain: dag headers retrieved", "count", len(headers), "headers", len(headers), "err", err)
 	if err != nil {
 		return false, err
 	}
 	txsMap, err := d.fetchDagTxs(p, dag)
-	log.Info("Synchronization of dag chain: dag transactions retrieved", "count", len(txsMap), "txs", txsMap, "err", err)
+	log.Info("Synchronization of dag chain: dag transactions retrieved", "count", len(txsMap), "txs", len(txsMap), "err", err)
 	if err != nil {
 		return false, err
 	}

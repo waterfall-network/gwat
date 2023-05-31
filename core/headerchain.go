@@ -834,7 +834,7 @@ func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpH
 	err error,
 ) {
 	defer func(start time.Time) {
-		log.Info("^^^^^^^^^^^^ TIME",
+		log.Debug("TIME",
 			"elapsed", common.PrettyDuration(time.Since(start)),
 			"func:", "CollectAncestorsAftCpByTips",
 			"cache.len", hc.ancestorCache.Len(),
@@ -915,7 +915,7 @@ func (hc *HeaderChain) CollectAncestorsAftCpByParents(parents common.HashArray, 
 		}
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME",
+	log.Debug("TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
 		"func:", "CollectAncestorsAftCpByParents",
 		"cache.len", hc.ancestorCache.Len(),
@@ -971,13 +971,8 @@ func (hc *HeaderChain) collectAncestorsAftCpByParents(headHash common.Hash, cpHe
 			ancCache = cache.(*CollectAncestorsResult)
 		}
 
-		if ancCache != nil && ancCache.cpHash != cpHeader.Hash() {
-			//todo debug
-			log.Warn("collectAncAftCpRecursive: Detect deprecated cache", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
-		}
-
 		if ancCache != nil && ancCache.cpHash == cpHeader.Hash() {
-			log.Debug("collectAncestorsAftCpByParents: cached", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
+			log.Debug("collectAncestorsAftCpByParents: find cached data", "hash", headHeader.Hash().Hex(), "cpHash", cpHeader.Hash())
 			_isCpAncestor = ancCache.isCpAncestor
 			_ancestors = ancCache.ancestors
 			_unloaded = ancCache.unloaded
