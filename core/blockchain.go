@@ -603,7 +603,7 @@ func (bc *BlockChain) ClearStaleBlockDags(uptoNr uint64) {
 		if bdag == nil {
 			return
 		}
-		log.Info("Rm blockDag", "nr", nr, "slot", bdag.Slot, "height", bdag.Height, "cpHeight", bdag.CpHeight, "hash", h.Hex())
+		//log.Info("Rm blockDag", "nr", nr, "slot", bdag.Slot, "height", bdag.Height, "cpHeight", bdag.CpHeight, "hash", h.Hex())
 		bc.DeleteBlockDag(h)
 	}
 }
@@ -2370,7 +2370,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
-		log.Info("** Remove optimistic spines from cache", "slot", block.Slot())
+		log.Debug("Remove optimistic spines from cache", "slot", block.Slot())
 		bc.removeOptimisticSpinesFromCache(block.Slot())
 
 		tmpTips := types.Tips{}
@@ -2948,7 +2948,7 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 }
 
 func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
-	defer func(start time.Time) { log.Info("+++ TxEstimateGas finished +++", "runtime", time.Since(start)) }(time.Now())
+	//defer func(start time.Time) { log.Info("TxEstimateGas finished", "runtime", time.Since(start)) }(time.Now())
 	var err error
 	var isTokenOp, isValidatorOp bool
 	if tx.To() == nil {
