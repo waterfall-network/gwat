@@ -239,11 +239,11 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		return nil, ErrMismatchPulicKey
 	}
 
-	exitEra := p.blockchain.EpochToEra(*op.ExitAfterEpoch())
 	if op.ExitAfterEpoch() == nil {
 		exitAftEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.blockchain.GetSlotInfo().CurrentSlot()) + 1
 		op.SetExitAfterEpoch(&exitAftEpoch)
 	}
+	exitEra := p.blockchain.EpochToEra(*op.ExitAfterEpoch())
 
 	if validator.GetActivationEra() > exitEra.Number {
 		return nil, ErrNotActivatedValidator
