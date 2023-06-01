@@ -1048,6 +1048,7 @@ func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]by
 				log.Error("can`t commit validator sync tx", "error", err)
 				return err
 			}
+			nonce++
 		}
 	}
 
