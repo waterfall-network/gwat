@@ -14,6 +14,7 @@ var (
 	errNoSubnetValidators      = errors.New("there are no validators for subnet")
 	errNoStateValidatorInfo    = errors.New("there is no validator in the state")
 	errNoEpochValidators       = errors.New("there are no validators for epoch")
+	errNoValidators            = errors.New("there ara no validators")
 )
 
 const (
@@ -79,7 +80,7 @@ func (c *ValidatorsCache) getActiveValidatorsByEpoch(bc blockchain, epoch uint64
 	validators := make([]Validator, 0)
 	validatorsList, ok := c.allValidatorsCache[epoch]
 	if !ok {
-		log.Error(errNoEpochValidators.Error(), "epoch", epoch)
+		log.Warn(errNoEpochValidators.Error(), "epoch", epoch)
 		return nil
 	}
 

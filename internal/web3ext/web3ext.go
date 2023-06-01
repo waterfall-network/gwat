@@ -1163,6 +1163,10 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputDefaultBlockNumberFormatter],
 			outputFormatter: web3._extend.utils.toDecimal
 		}),
+		new web3._extend.Method({
+			name: 'validator.depositAddress',
+			call: 'wat_validator_DepositAddress',
+		}),
 	]
 });
 `

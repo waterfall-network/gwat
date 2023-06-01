@@ -11,10 +11,10 @@ stages:
   script: &job_build |-
     cp -r params/version.go /tmp/version.go
     sed -i "s/\\\u2692/${CI_COMMIT_SHORT_SHA}/g" params/version.go
-    go run build/ci.go install ./cmd/geth ./cmd/bootnode
+    go run build/ci.go install ./cmd/gwat ./cmd/bootnode
     mkdir -p ./dist
     cp ./build/bin/bootnode ./dist/gwat-bootnode
-    cp ./build/bin/geth ./dist/gwat
+    cp ./build/bin/gwat ./dist/gwat
     cp -r /tmp/version.go params/version.go
 
 

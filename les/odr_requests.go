@@ -115,7 +115,7 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
-	if r.Header.BodyHash != types.CalcBlockBodyHash(body.Transactions, trie.NewStackTrie(nil)) {
+	if r.Header.BodyHash != body.CalculateHash() {
 		return errBodyHashMismatch
 	}
 	// Validations passed, encode and store RLP

@@ -323,12 +323,15 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	genesisBlock := types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
 
 	// Use genesis hash as seed for first and second epochs
-	rawdb.WriteLastCoordinatedCheckpoint(db, &types.Checkpoint{
+	genesisCp := &types.Checkpoint{
 		Epoch:    0,
 		FinEpoch: 0,
 		Root:     common.Hash{},
 		Spine:    genesisBlock.Hash(),
-	})
+	}
+	rawdb.WriteLastCoordinatedCheckpoint(db, genesisCp)
+	rawdb.WriteCoordinatedCheckpoint(db, genesisCp)
+	rawdb.WriteEpoch(db, 0, genesisCp.Spine)
 
 	genesisEra := era.Era{0, 0, g.Config.EpochsPerEra - 1, genesisBlock.Root()}
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
@@ -363,12 +366,12 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.AddSlotBlockHash(db, block.Slot(), block.Hash())
 	//set genesis blockDag
 	genesisDag := &types.BlockDAG{
-		Hash:                block.Hash(),
-		Height:              0,
-		Slot:                0,
-		LastFinalizedHash:   block.Hash(),
-		LastFinalizedHeight: 0,
-		DagChainHashes:      common.HashArray{},
+		Hash:           block.Hash(),
+		Height:         0,
+		Slot:           0,
+		CpHash:         block.Hash(),
+		CpHeight:       0,
+		DagChainHashes: common.HashArray{},
 	}
 	rawdb.WriteBlockDag(db, genesisDag)
 	rawdb.WriteTipsHashes(db, common.HashArray{genesisDag.Hash})

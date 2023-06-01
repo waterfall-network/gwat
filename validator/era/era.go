@@ -19,9 +19,9 @@ type Blockchain interface {
 	GetEraInfo() *EraInfo
 	Config() *params.ChainConfig
 	GetHeaderByHash(common.Hash) *types.Header
-	EnterNextEra(common.Hash) *Era
-	StartTransitionPeriod(slot uint64)
-	SyncEraToSlot(slot uint64)
+	EnterNextEra(*types.Checkpoint, common.Hash) *Era
+	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
+	//SyncEraToSlot(slot uint64)
 }
 
 type Era struct {
@@ -55,7 +55,6 @@ func (e *Era) Length() uint64 {
 }
 
 func (e *Era) IsContainsEpoch(epoch uint64) bool {
-	log.Info("@@@@@@@@@ IsContainsEpoch valEra", "epoch", epoch, "eraNum", e.Number, "to", e.To, "from", e.From)
 	return epoch >= e.From && epoch <= e.To
 }
 
@@ -176,41 +175,41 @@ func EstimateEraLength(bc Blockchain, numberOfValidators uint64) (eraLength uint
 	return
 }
 
-func HandleEra(bc Blockchain, slot uint64) error {
-	currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-	newEpoch := bc.GetSlotInfo().IsEpochStart(slot)
-
-	if newEpoch {
-		// New era
-		if bc.GetEraInfo().ToEpoch()+1 == currentEpoch {
-			// Checkpoint
-			checkpoint := bc.GetLastCoordinatedCheckpoint()
-			var spineRoot common.Hash
-			if checkpoint != nil {
-				header := bc.GetHeaderByHash(checkpoint.Spine)
-				spineRoot = header.Root
-			} else {
-				log.Error("Write new era error", "err", ErrCheckpointInvalid)
-				return ErrCheckpointInvalid
-			}
-			bc.EnterNextEra(spineRoot)
-
-			log.Info("######## HandleEra", "currentEpoch", currentEpoch,
-				"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
-				"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
-				"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
-			)
-
-			return nil
-		}
-		// Transition period
-		if bc.GetEraInfo().IsTransitionPeriodStartSlot(bc, slot) {
-			bc.StartTransitionPeriod(slot)
-		}
+func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
+	log.Info("$$$$$$$$$ ERA started for new cp", "cp", cp.Epoch, "root", cp.Root, "finEpoch", cp.FinEpoch)
+	//currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	//newEpoch := bc.GetSlotInfo().IsEpochStart(slot)
+	var spineRoot common.Hash
+	// if cp != nil {
+	header := bc.GetHeaderByHash(cp.Spine)
+	if header != nil {
+		spineRoot = header.Root
+	} else {
+		log.Error("Ccheckpoint spine header not found", "err", ErrCheckpointInvalid)
+		return ErrCheckpointInvalid
 	}
-	// Sync era to current slot
-	if currentEpoch > (bc.GetEraInfo().ToEpoch()-bc.Config().TransitionPeriod) && !bc.GetEraInfo().IsTransitionPeriodStartSlot(bc, slot) {
-		bc.SyncEraToSlot(slot)
+
+	//if newEpoch {
+	// New era
+	if bc.GetEraInfo().ToEpoch()+1 <= cp.FinEpoch {
+		// Checkpoint
+		// checkpoint := bc.GetLastCoordinatedCheckpoint()
+
+		bc.EnterNextEra(cp, spineRoot)
+
+		log.Info("######## HandleEra", "cpEpoch", cp.Epoch,
+			"cpFinEpoch", cp.FinEpoch,
+			"curEpoch", bc.GetSlotInfo().SlotInEpoch(bc.GetSlotInfo().CurrentSlot()),
+			"curSlot", bc.GetSlotInfo().CurrentSlot(),
+			"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
+			"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
+			"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
+		)
+
+		return nil
+	} else if (bc.GetEraInfo().ToEpoch()+1)-bc.Config().TransitionPeriod == cp.FinEpoch && cp.FinEpoch <= bc.GetEraInfo().ToEpoch()+1 {
+		bc.StartTransitionPeriod(cp, spineRoot)
 	}
+
 	return nil
 }

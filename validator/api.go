@@ -10,6 +10,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
@@ -19,6 +20,7 @@ type Backend interface {
 	RPCEVMTimeout() time.Duration // global timeout for eth_call over rpc: DoS protection
 	GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*Processor, func() error, error)
 	GetLastFinalizedBlock() *types.Block
+	ChainConfig() *params.ChainConfig
 }
 
 // PublicValidatorAPI provides an API to access validator functions.
@@ -171,4 +173,8 @@ func (s *PublicValidatorAPI) Validator_WithdrawalData(args WithdrawalArgs) (hexu
 	}
 
 	return b, nil
+}
+
+func (s *PublicValidatorAPI) Validator_DepositAddress() hexutil.Bytes {
+	return s.b.ChainConfig().ValidatorsStateAddress[:]
 }

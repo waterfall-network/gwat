@@ -818,9 +818,11 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	trieHasher := trie.NewStackTrie(nil)
 	validate := func(index int, header *types.Header) error {
-		if types.CalcBlockBodyHash(txLists[index], trieHasher) != header.BodyHash {
+		body := types.Body{
+			Transactions: txLists[index],
+		}
+		if body.CalculateHash() != header.BodyHash {
 			return errInvalidBody
 		}
 		return nil

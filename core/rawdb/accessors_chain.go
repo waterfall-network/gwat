@@ -920,47 +920,6 @@ func ReadLastCoordinatedCheckpoint(db ethdb.KeyValueReader) *types.Checkpoint {
 	return cp
 }
 
-// WriteCoordinatedCheckpoint writes a Coordinated Checkpoint to a key-value database.
-func WriteCoordinatedCheckpoint(db ethdb.KeyValueWriter, epoch uint64, checkpoint *types.Checkpoint) {
-	key := coordCpKey(epoch)
-
-	if err := db.Put(key, checkpoint.Bytes()); err != nil {
-		log.Crit("Failed to store the Coordinated Checkpoint", "err", err, "epoch", checkpoint.Epoch)
-	}
-}
-
-// WriteCheckpointsBetweenEpochs adds checkpoints to the database for all missing epochs between the current coordinated checkpoint and the target checkpoint.
-func WriteCheckpointsBetweenEpochs(db ethdb.KeyValueWriter, currentCp, targetCp *types.Checkpoint) {
-	epochNum := currentCp.FinEpoch
-
-	// Iterate from currCp.FinEpoch+1 to targetCp.FinEpoch-1
-	for epochNum < targetCp.FinEpoch {
-		epochNum++ // Increment the epoch number
-
-		if epochNum == targetCp.FinEpoch {
-			// Write the target checkpoint to the database
-			WriteCoordinatedCheckpoint(db, targetCp.FinEpoch, targetCp)
-		} else {
-			// Write the missing checkpoint to the database
-			WriteCoordinatedCheckpoint(db, epochNum, currentCp)
-		}
-	}
-}
-
-// ReadCoordinatedCheckpoint retrieves the Coordinated checkpoint by epoch.
-func ReadCoordinatedCheckpoint(db ethdb.KeyValueReader, epoch uint64) *types.Checkpoint {
-	key := coordCpKey(epoch)
-	data, err := db.Get(key)
-	if err != nil {
-		return nil
-	}
-	cp, err := types.BytesToCheckpoint(data)
-	if err != nil {
-		return nil
-	}
-	return cp
-}
-
 // WriteLastCoordinatedCheckpoint stores the last Coordinated checkpoint.
 func WriteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
 	if checkpoint == nil {
@@ -975,6 +934,59 @@ func WriteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.C
 func DeleteLastCoordinatedCheckpoint(db ethdb.KeyValueWriter) {
 	if err := db.Delete(lastCoordCpKey); err != nil {
 		log.Warn("Failed to delete Last Coordinated Checkpoint", "err", err)
+	}
+}
+
+// ReadCoordinatedCheckpoint retrieves the Coordinated checkpoint by checkpoint spine.
+func ReadCoordinatedCheckpoint(db ethdb.KeyValueReader, cpSpine common.Hash) *types.Checkpoint {
+	key := coordCpKey(cpSpine)
+	data, err := db.Get(key)
+	if err != nil {
+		return nil
+	}
+	cp, err := types.BytesToCheckpoint(data)
+	if err != nil {
+		return nil
+	}
+	return cp
+}
+
+// WriteCoordinatedCheckpoint writes a Coordinated Checkpoint to a key-value database.
+func WriteCoordinatedCheckpoint(db ethdb.KeyValueWriter, checkpoint *types.Checkpoint) {
+	key := coordCpKey(checkpoint.Spine)
+
+	if err := db.Put(key, checkpoint.Bytes()); err != nil {
+		log.Crit("Failed to store the coordinated checkpoint", "err", err, "spine", checkpoint.Spine.Hex())
+	}
+}
+
+// DeleteCoordinatedCheckpoint delete the coordinated checkpoint data.
+func DeleteCoordinatedCheckpoint(db ethdb.KeyValueWriter, cpSpine common.Hash) {
+	key := coordCpKey(cpSpine)
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete coordinated checkpoint", "err", err, "spine", cpSpine.Hex())
+	}
+}
+
+// ReadEpoch retrieves the checkpoint spine by epoch.
+func ReadEpoch(db ethdb.KeyValueReader, epoch uint64) common.Hash {
+	data, _ := db.Get(epochCpKey(epoch))
+	return common.BytesToHash(data)
+}
+
+// WriteEpoch writes an epoch checkpoint spine to a key-value database.
+func WriteEpoch(db ethdb.KeyValueWriter, epoch uint64, cpSpine common.Hash) {
+	key := epochCpKey(epoch)
+	if err := db.Put(key, cpSpine.Bytes()); err != nil {
+		log.Crit("Failed to store the epoch spine", "err", err, "epoch", epoch, "cpSpine", cpSpine)
+	}
+}
+
+// DeleteEpoch removes the epoch's checkpoint spine.
+func DeleteEpoch(db ethdb.KeyValueWriter, epoch uint64) {
+	key := epochCpKey(epoch)
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete the epoch spine", "err", err, "epoch", epoch)
 	}
 }
 
@@ -1052,7 +1064,7 @@ func WriteValidatorSync(db ethdb.KeyValueWriter, vs *types.ValidatorSync) {
 func DeleteValidatorSync(db ethdb.KeyValueWriter, creator common.Address, op types.ValidatorSyncOp) {
 	key := validatorSyncKey(creator, uint64(op))
 	if err := db.Delete(key); err != nil {
-		log.Crit("Failed to delete BlockDAG", "err", err)
+		log.Crit("Failed to delete validators sync data", "err", err)
 	}
 }
 

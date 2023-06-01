@@ -20,6 +20,7 @@ type blockchain interface {
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	GetEpoch(epoch uint64) common.Hash
 	EpochToEra(uint64) *era.Era
 }
 
@@ -140,7 +141,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 
 	if err != nil {
 		eraEra := bc.EpochToEra(slotEpoch)
-		log.Error("get validators", "error", err, "epoch", slotEpoch, "era", eraEra.Number, "root", eraEra.Root.Hex())
+		log.Warn("get validators", "error", err, "epoch", slotEpoch, "era", eraEra.Number, "root", eraEra.Root.Hex())
 
 		stateDb, _ := bc.StateAt(eraEra.Root)
 
@@ -208,14 +209,16 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 	}
 
 	allValidators, _ := s.GetValidators(bc, slot, false, false, "GetCreatorsBySlot")
+	if len(allValidators) == 0 {
+		return nil, errNoValidators
+	}
 
 	s.validatorsCache.addAllValidatorsByEpoch(epoch, allValidators)
 
 	activeEpochValidators := s.validatorsCache.getValidatorsAddresses(bc, epoch, true)
 
-	checkpointEpoch := bc.GetLastCoordinatedCheckpoint()
-
-	seed, err := s.seed(epoch, checkpointEpoch.Spine)
+	epochSpine := bc.GetEpoch(epoch - 1)
+	seed, err := s.seed(epoch, epochSpine)
 	if err != nil {
 		return nil, err
 	}
