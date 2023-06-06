@@ -3952,6 +3952,9 @@ var outputSyncingFormatter = function(result) {
     }
 
     result.startingBlock = utils.toDecimal(result.startingBlock);
+    result.finalizedSlot = utils.toDecimal(result.finalizedSlot);
+    result.currentSlot = utils.toDecimal(result.currentSlot);
+    result.maxDagSlot = utils.toDecimal(result.maxDagSlot);
     result.currentBlock = utils.toDecimal(result.currentBlock);
     result.highestBlock = utils.toDecimal(result.highestBlock);
     if (result.knownStates) {
@@ -5312,6 +5315,13 @@ var methods = function () {
         outputFormatter: formatters.outputBlockFormatter
     });
 
+    var syncing = new Method({
+      name: 'syncing',
+      call: 'eth_syncing',
+      params: 0,
+      outputFormatter: formatters.outputSyncingFormatter
+    });
+
     var getUncle = new Method({
         name: 'getUncle',
         call: uncleCall,
@@ -5470,6 +5480,7 @@ var methods = function () {
         compileSerpent,
         submitWork,
         getWork,
+        syncing,
     ];
 };
 
