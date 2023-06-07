@@ -140,7 +140,7 @@ type NodeInfo struct {
 	Config    *params.ChainConfig `json:"config"`    // Chain configuration for the fork rules
 	LastFinNr uint64              `json:"lastFinNr"` // Last Finalized Number of node
 	Dag       *common.HashArray   `json:"dag"`       // all current dag hashes: nil - has not synchronized tips
-	SlotInfo  *types.SlotInfo     `json:"slotInfo"`  // all current dag hashes: nil - has not synchronized tips
+	SlotInfo  *types.SlotInfo     `json:"slotInfo"`  // slot info
 }
 
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.

@@ -2259,8 +2259,18 @@ func (api *PublicDagAPI) GetOptimisticSpines(ctx context.Context, lastFinSpine c
 }
 
 // GetDagHashes retrieves dag hashes.
-func (api *PublicDagAPI) GetDagHashes() (*common.HashArray, error) {
+func (api *PublicDagAPI) GetDagHashes(ctx context.Context) (*common.HashArray, error) {
 	return api.b.BlockChain().GetDagHashes(), nil
+}
+
+// GetCreatorsBySlot retrieves creators by provided slot.
+func (api *PublicDagAPI) GetCreatorsBySlot(ctx context.Context, slot uint64) ([]common.Address, error) {
+	bc := api.b.BlockChain()
+	creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, slot)
+	if err != nil {
+		return nil, err
+	}
+	return creatorsPerSlot, nil
 }
 
 // ValidateSpines validate given sequence of spines.

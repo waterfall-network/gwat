@@ -883,6 +883,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getCreatorsBySlot',
+			call: 'dag_getCreatorsBySlot',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'getOptimisticSpines',
 			call: 'dag_getOptimisticSpines',
 			params: 1
