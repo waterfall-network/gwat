@@ -888,6 +888,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getDagHashes',
+			call: 'dag_getDagHashes',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'headSyncReady',
 			call: 'dag_headSyncReady',
 			params: 1

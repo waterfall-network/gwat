@@ -2258,6 +2258,11 @@ func (api *PublicDagAPI) GetOptimisticSpines(ctx context.Context, lastFinSpine c
 	return api.b.Dag().HandleGetOptimisticSpines(lastFinSpine), nil
 }
 
+// GetDagHashes retrieves dag hashes.
+func (api *PublicDagAPI) GetDagHashes() (*common.HashArray, error) {
+	return api.b.BlockChain().GetDagHashes(), nil
+}
+
 // ValidateSpines validate given sequence of spines.
 func (api *PublicDagAPI) ValidateSpines(ctx context.Context, data common.HashArray) (bool, error) {
 	return api.b.Dag().HandleValidateSpines(data)
