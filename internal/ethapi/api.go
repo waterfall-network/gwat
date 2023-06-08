@@ -2258,21 +2258,6 @@ func (api *PublicDagAPI) GetOptimisticSpines(ctx context.Context, lastFinSpine c
 	return api.b.Dag().HandleGetOptimisticSpines(lastFinSpine), nil
 }
 
-// GetDagHashes retrieves dag hashes.
-func (api *PublicDagAPI) GetDagHashes(ctx context.Context) (*common.HashArray, error) {
-	return api.b.BlockChain().GetDagHashes(), nil
-}
-
-// GetCreatorsBySlot retrieves creators by provided slot.
-func (api *PublicDagAPI) GetCreatorsBySlot(ctx context.Context, slot uint64) ([]common.Address, error) {
-	bc := api.b.BlockChain()
-	creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, slot)
-	if err != nil {
-		return nil, err
-	}
-	return creatorsPerSlot, nil
-}
-
 // ValidateSpines validate given sequence of spines.
 func (api *PublicDagAPI) ValidateSpines(ctx context.Context, data common.HashArray) (bool, error) {
 	return api.b.Dag().HandleValidateSpines(data)
@@ -2286,4 +2271,20 @@ func (api *PublicDagAPI) ValidateFinalization(ctx context.Context, data common.H
 // SyncSlotInfo sync slot info.
 func (api *PublicDagAPI) SyncSlotInfo(ctx context.Context, data types.SlotInfo) (bool, error) {
 	return api.b.Dag().HandleSyncSlotInfo(data)
+}
+
+// PublicWatAPI provides an API to access the gwat public consensus functionality.
+// It offers only methods that operate on public data that is freely available to anyone.
+type PublicWatAPI struct {
+	b Backend
+}
+
+// NewPublicWatAPI creates a new waterfall blockchain API.
+func NewPublicWatAPI(b Backend) *PublicWatAPI {
+	return &PublicWatAPI{b}
+}
+
+// GetDagHashes retrieves dag hashes.
+func (api *PublicWatAPI) GetDagHashes(ctx context.Context) (*common.HashArray, error) {
+	return api.b.BlockChain().GetDagHashes(), nil
 }

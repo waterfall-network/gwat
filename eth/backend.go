@@ -309,7 +309,7 @@ func (s *Ethereum) APIs() []rpc.API {
 	apis = append(apis, token.GetAPIs(s.APIBackend)...)
 
 	// Append validator APIs
-	apis = append(apis, validator.GetAPIs(s.APIBackend)...)
+	apis = append(apis, validator.GetAPIs(s.APIBackend, s.blockchain)...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
