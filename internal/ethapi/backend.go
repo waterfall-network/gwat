@@ -156,6 +156,11 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:       NewPublicDagAPI(apiBackend),
 			Public:        true,
 			Authenticated: true,
+		}, {
+			Namespace: "wat",
+			Version:   "1.0",
+			Service:   NewPublicWatAPI(apiBackend),
+			Public:    true,
 		},
 	}
 }

@@ -140,6 +140,7 @@ type NodeInfo struct {
 	Config    *params.ChainConfig `json:"config"`    // Chain configuration for the fork rules
 	LastFinNr uint64              `json:"lastFinNr"` // Last Finalized Number of node
 	Dag       *common.HashArray   `json:"dag"`       // all current dag hashes: nil - has not synchronized tips
+	SlotInfo  *types.SlotInfo     `json:"slotInfo"`  // slot info
 }
 
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
@@ -148,6 +149,7 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 		lastFinNr                   = chain.GetLastFinalizedNumber()
 		dagHashes *common.HashArray = nil
 		unsync                      = chain.GetUnsynchronizedTipsHashes()
+		slotInfo                    = chain.GetSlotInfo()
 	)
 	if len(unsync) == 0 {
 		dagHashes = chain.GetDagHashes()
@@ -161,6 +163,7 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 		Config:    chain.Config(),
 		LastFinNr: lastFinNr,
 		Dag:       dagHashes, // nil - has not synchronized tips
+		SlotInfo:  slotInfo,
 	}
 }
 

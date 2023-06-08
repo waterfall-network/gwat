@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
@@ -75,6 +76,10 @@ type blockchain interface {
 	Database() ethdb.Database
 	GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	ValidatorStorage() valStore.Storage
+	StateAt(root common.Hash) (*state.StateDB, error)
+	GetBlock(hash common.Hash) *types.Block
+	GetEpoch(epoch uint64) common.Hash
 }
 
 type message interface {
