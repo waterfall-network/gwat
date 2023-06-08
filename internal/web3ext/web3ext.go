@@ -888,6 +888,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getDagHashes',
+			call: 'dag_getDagHashes',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'headSyncReady',
 			call: 'dag_headSyncReady',
 			params: 1
@@ -1070,6 +1075,40 @@ web3._extend({
 			params: 2,
 			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
 		}),
+
+		// VALIDATOR STORAGE API // 
+		new web3._extend.Method({
+			name: 'getCreatorsBySlot',
+			call: 'wat_getCreatorsBySlot',
+			params: 1
+		}),	
+		new web3._extend.Method({
+			name: 'getValidators',
+			call: 'wat_getValidators',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getValidatorsBySlot',
+			call: 'wat_getValidatorsBySlot',
+			params: 1
+		}),		
+		new web3._extend.Method({
+			name: 'validator.getInfo',
+			call: 'wat_validator_getInfo',
+			params: 1
+		}),	
+
+		// INFO API //
+		new web3._extend.Method({
+			name: 'getEra',
+			call: 'wat_getEra',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getDagHashes',
+			call: 'wat_getDagHashes',
+			params: 0
+		}),	
 
 		// VALIDATOR API //
 		new web3._extend.Method({

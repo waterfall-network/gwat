@@ -2272,3 +2272,19 @@ func (api *PublicDagAPI) ValidateFinalization(ctx context.Context, data common.H
 func (api *PublicDagAPI) SyncSlotInfo(ctx context.Context, data types.SlotInfo) (bool, error) {
 	return api.b.Dag().HandleSyncSlotInfo(data)
 }
+
+// PublicWatAPI provides an API to access the gwat public consensus functionality.
+// It offers only methods that operate on public data that is freely available to anyone.
+type PublicWatAPI struct {
+	b Backend
+}
+
+// NewPublicWatAPI creates a new waterfall blockchain API.
+func NewPublicWatAPI(b Backend) *PublicWatAPI {
+	return &PublicWatAPI{b}
+}
+
+// GetDagHashes retrieves dag hashes.
+func (api *PublicWatAPI) GetDagHashes(ctx context.Context) (*common.HashArray, error) {
+	return api.b.BlockChain().GetDagHashes(), nil
+}

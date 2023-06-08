@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"time"
 
@@ -12,7 +13,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 type Backend interface {
@@ -22,15 +25,25 @@ type Backend interface {
 	GetLastFinalizedBlock() *types.Block
 	ChainConfig() *params.ChainConfig
 }
+type Blockchain interface {
+	ValidatorStorage() valStore.Storage
+	StateAt(root common.Hash) (*state.StateDB, error)
+	GetBlock(hash common.Hash) *types.Block
+	GetSlotInfo() *types.SlotInfo
+	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	GetEpoch(epoch uint64) common.Hash
+	EpochToEra(uint64) *era.Era
+}
 
 // PublicValidatorAPI provides an API to access validator functions.
 type PublicValidatorAPI struct {
-	b Backend
+	b     Backend
+	chain Blockchain
 }
 
 // NewPublicValidatorAPI creates a new validator API.
-func NewPublicValidatorAPI(b Backend) *PublicValidatorAPI {
-	return &PublicValidatorAPI{b}
+func NewPublicValidatorAPI(b Backend, chain Blockchain) *PublicValidatorAPI {
+	return &PublicValidatorAPI{b, chain}
 }
 
 type DepositArgs struct {
@@ -41,12 +54,12 @@ type DepositArgs struct {
 }
 
 // GetAPIs provides api access
-func GetAPIs(apiBackend Backend) []rpc.API {
+func GetAPIs(apiBackend Backend, chain Blockchain) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "wat",
 			Version:   "1.0",
-			Service:   NewPublicValidatorAPI(apiBackend),
+			Service:   NewPublicValidatorAPI(apiBackend, chain),
 			Public:    true,
 		},
 	}
@@ -177,4 +190,17 @@ func (s *PublicValidatorAPI) Validator_WithdrawalData(args WithdrawalArgs) (hexu
 
 func (s *PublicValidatorAPI) Validator_DepositAddress() hexutil.Bytes {
 	return s.b.ChainConfig().ValidatorsStateAddress[:]
+}
+
+// GetCreatorsBySlot retrieves creators by provided slot.
+func (s *PublicValidatorAPI) GetCreatorsBySlot(ctx context.Context, slot uint64) ([]common.Address, error) {
+	if s.chain.GetSlotInfo() == nil {
+		return nil, errors.New("no slot info")
+	}
+
+	creatorsPerSlot, err := s.chain.ValidatorStorage().GetCreatorsBySlot(s.chain, slot)
+	if err != nil {
+		return nil, err
+	}
+	return creatorsPerSlot, nil
 }
