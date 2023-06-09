@@ -6,12 +6,12 @@ import (
 	"math/big"
 	"time"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
@@ -196,8 +196,8 @@ func (s *PublicValidatorAPI) Validator_DepositAddress() hexutil.Bytes {
 	return s.b.ChainConfig().ValidatorsStateAddress[:]
 }
 
-// GetCreatorsBySlot retrieves creators by provided slot.
-func (s *PublicValidatorAPI) GetCreatorsBySlot(ctx context.Context, slot uint64) ([]common.Address, error) {
+// GetValidatorsBySlot retrieves validators by provided slot.
+func (s *PublicValidatorAPI) GetValidatorsBySlot(ctx context.Context, slot uint64) ([]common.Address, error) {
 	if s.chain.GetSlotInfo() == nil {
 		return nil, errors.New("no slot info")
 	}

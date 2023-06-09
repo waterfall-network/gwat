@@ -1071,12 +1071,7 @@ web3._extend({
 			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
 		}),
 
-		// VALIDATOR STORAGE API // 
-		new web3._extend.Method({
-			name: 'getCreatorsBySlot',
-			call: 'wat_getCreatorsBySlot',
-			params: 1
-		}),	
+		// VALIDATOR STORAGE API //
 		new web3._extend.Method({
 			name: 'getValidators',
 			call: 'wat_getValidators',
