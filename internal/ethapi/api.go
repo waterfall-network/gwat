@@ -661,6 +661,23 @@ func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 	return hexutil.Uint64(nr)
 }
 
+// GetCpLFNumber returns the lf block number of the cp spine.
+func (s *PublicBlockChainAPI) GetCpLFNumber() uint64 {
+	var (
+		lastCpFinNr uint64
+	)
+
+	checkpoint := s.b.BlockChain().GetLastCoordinatedCheckpoint()
+	cpHeader := s.b.BlockChain().GetHeader(checkpoint.Spine)
+	if cpHeader != nil {
+		lastCpFinNr = cpHeader.Nr()
+	} else {
+		log.Warn("cp base spine not found", "cpSpine", checkpoint.Spine, "cpEpoch", checkpoint.Epoch)
+	}
+
+	return lastCpFinNr
+}
+
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
