@@ -21,13 +21,13 @@ const (
 )
 
 type Validator struct {
-	PubKey            common.BlsPubKey
-	Address           common.Address
-	WithdrawalAddress *common.Address
-	Index             uint64
-	ActivationEra     uint64
-	ExitEra           uint64
-	Balance           *big.Int
+	PubKey            common.BlsPubKey `json:"pubKey"`
+	Address           common.Address   `json:"address"`
+	WithdrawalAddress *common.Address  `json:"withdrawalAddress"`
+	Index             uint64           `json:"index"`
+	ActivationEra     uint64           `json:"activationEra"`
+	ExitEra           uint64           `json:"exitEra"`
+	Balance           *big.Int         `json:"balance"`
 }
 
 func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {

@@ -36,6 +36,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
@@ -46,6 +47,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -668,11 +670,6 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 		return nil, err
 	}
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
-}
-
-// GetSlotHashes retrieves all block hashes for a given slot.
-func (s *PublicBlockChainAPI) GetSlotHashes(ctx context.Context, slot uint64) common.HashArray {
-	return s.b.BlockHashesBySlot(ctx, slot)
 }
 
 // Result structs for GetProof
@@ -2285,6 +2282,25 @@ func NewPublicWatAPI(b Backend) *PublicWatAPI {
 }
 
 // GetDagHashes retrieves dag hashes.
-func (api *PublicWatAPI) GetDagHashes(ctx context.Context) (*common.HashArray, error) {
-	return api.b.BlockChain().GetDagHashes(), nil
+func (api *PublicWatAPI) GetDagHashes(ctx context.Context) *common.HashArray {
+	return api.b.BlockChain().GetDagHashes()
+}
+
+// GetEra retrieves current era.
+func (api *PublicWatAPI) GetEra(ctx context.Context, era *uint64) (*era.Era, error) {
+	if era == nil {
+		return api.b.BlockChain().GetEraInfo().GetEra(), nil
+	}
+
+	dbEra := rawdb.ReadEra(api.b.ChainDb(), *era)
+	if dbEra == nil {
+		return nil, errors.New("era not found")
+	}
+
+	return dbEra, nil
+}
+
+// GetSlotHashes retrieves all block hashes for a given slot.
+func (s *PublicWatAPI) GetSlotHashes(ctx context.Context, slot uint64) common.HashArray {
+	return s.b.BlockHashesBySlot(ctx, slot)
 }
