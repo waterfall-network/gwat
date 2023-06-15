@@ -3,7 +3,6 @@ package validator
 import (
 	"context"
 	"errors"
-	"math"
 	"math/big"
 	"time"
 
@@ -176,33 +175,6 @@ func (s *PublicValidatorAPI) Validator_WithdrawalData(args WithdrawalArgs) (hexu
 		op  operation.Operation
 		err error
 	)
-
-	cp := s.chain.GetLastCoordinatedCheckpoint()
-	cpState, err := s.chain.StateAt(cp.Root)
-	if err != nil {
-		log.Warn("Failed to read cp state", "err", err, "root", cp.Root, "epoch", cp.Epoch)
-		return nil, err
-	}
-
-	from := args.CreatorAddress
-	validator, err := s.chain.ValidatorStorage().GetValidator(cpState, *args.CreatorAddress)
-	if err != nil {
-		return nil, err
-	}
-
-	if from != validator.GetWithdrawalAddress() {
-		return nil, ErrInvalidFromAddresses
-	}
-
-	if validator.GetActivationEra() == math.MaxUint64 {
-		return nil, ErrNotActivatedValidator
-	}
-
-	currentBalance := validator.GetBalance()
-
-	if currentBalance.Cmp((*big.Int)(args.Amount)) == -1 {
-		return nil, ErrInsufficientFundsForTransfer
-	}
 
 	if op, err = operation.NewWithdrawalOperation(
 		*args.CreatorAddress,
