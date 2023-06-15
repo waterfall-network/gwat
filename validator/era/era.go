@@ -25,10 +25,10 @@ type Blockchain interface {
 }
 
 type Era struct {
-	Number uint64
-	From   uint64
-	To     uint64
-	Root   common.Hash
+	Number uint64      `json:"number"`
+	From   uint64      `json:"fromEpoch"`
+	To     uint64      `json:"toEpoch"`
+	Root   common.Hash `json:"root"`
 }
 
 // New function to create a new Era instance

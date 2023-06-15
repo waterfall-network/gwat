@@ -8,8 +8,10 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
@@ -31,8 +33,10 @@ type Blockchain interface {
 	GetBlock(hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	Database() ethdb.Database
 	GetEpoch(epoch uint64) common.Hash
 	EpochToEra(uint64) *era.Era
+	GetEraInfo() *era.EraInfo
 }
 
 // PublicValidatorAPI provides an API to access validator functions.
@@ -192,8 +196,8 @@ func (s *PublicValidatorAPI) Validator_DepositAddress() hexutil.Bytes {
 	return s.b.ChainConfig().ValidatorsStateAddress[:]
 }
 
-// GetCreatorsBySlot retrieves creators by provided slot.
-func (s *PublicValidatorAPI) GetCreatorsBySlot(ctx context.Context, slot uint64) ([]common.Address, error) {
+// GetValidatorsBySlot retrieves validators by provided slot.
+func (s *PublicValidatorAPI) GetValidatorsBySlot(ctx context.Context, slot uint64) ([]common.Address, error) {
 	if s.chain.GetSlotInfo() == nil {
 		return nil, errors.New("no slot info")
 	}
@@ -203,4 +207,43 @@ func (s *PublicValidatorAPI) GetCreatorsBySlot(ctx context.Context, slot uint64)
 		return nil, err
 	}
 	return creatorsPerSlot, nil
+}
+
+// GetValidators retrieves creators by provided era.
+func (s *PublicValidatorAPI) GetValidators(ctx context.Context, era *uint64) ([]common.Address, error) {
+	slotInfo := s.chain.GetSlotInfo()
+	if slotInfo == nil {
+		return nil, errors.New("no slot info")
+	}
+
+	var startEpoch uint64
+	if era == nil {
+		startEpoch = s.chain.GetEraInfo().FromEpoch()
+	} else {
+		dbEra := rawdb.ReadEra(s.chain.Database(), *era)
+		if dbEra == nil {
+			return nil, errors.New("era not found")
+		}
+		startEpoch = dbEra.From
+	}
+
+	slot, err := slotInfo.SlotOfEpochStart(startEpoch)
+	if err != nil {
+		return nil, err
+	}
+
+	_, addresses := s.chain.ValidatorStorage().GetValidators(s.chain, slot, true, true, "GetValidators")
+	return addresses, nil
+}
+
+// Validator_GetInfo retrieves validator info by provided address.
+func (s *PublicValidatorAPI) Validator_GetInfo(ctx context.Context, address common.Address) (*valStore.Validator, error) {
+	slotInfo := s.chain.GetSlotInfo()
+	if slotInfo == nil {
+		return nil, errors.New("no slot info")
+	}
+
+	stateDb, _ := s.chain.StateAt(s.chain.GetEraInfo().GetEra().Root)
+
+	return s.chain.ValidatorStorage().GetValidator(stateDb, address)
 }

@@ -5446,6 +5446,12 @@ var methods = function () {
         params: 0
     });
 
+  var getCpLFNumber = new Method({
+    name: 'getCpLFNumber',
+    call: 'eth_getCpLFNumber',
+    params: 0
+  });
+
     return [
         getBalance,
         getStorageAt,
@@ -5470,6 +5476,7 @@ var methods = function () {
         compileSerpent,
         submitWork,
         getWork,
+        getCpLFNumber,
     ];
 };
 

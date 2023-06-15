@@ -578,11 +578,6 @@ web3._extend({
 			params: 3,
 			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter, null]
 		}),
-		new web3._extend.Method({
-			name: 'getSlotHashes',
-			call: 'eth_getSlotHashes',
-			params: 1
-		}),
 	],
 	properties: [
 		new web3._extend.Property({
@@ -1076,12 +1071,7 @@ web3._extend({
 			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
 		}),
 
-		// VALIDATOR STORAGE API // 
-		new web3._extend.Method({
-			name: 'getCreatorsBySlot',
-			call: 'wat_getCreatorsBySlot',
-			params: 1
-		}),	
+		// VALIDATOR STORAGE API //
 		new web3._extend.Method({
 			name: 'getValidators',
 			call: 'wat_getValidators',
@@ -1094,7 +1084,7 @@ web3._extend({
 		}),		
 		new web3._extend.Method({
 			name: 'validator.getInfo',
-			call: 'wat_validator_getInfo',
+			call: 'wat_validator_GetInfo',
 			params: 1
 		}),	
 
@@ -1109,6 +1099,11 @@ web3._extend({
 			call: 'wat_getDagHashes',
 			params: 0
 		}),	
+		new web3._extend.Method({
+			name: 'getSlotHashes',
+			call: 'wat_getSlotHashes',
+			params: 1
+		}),
 
 		// VALIDATOR API //
 		new web3._extend.Method({
