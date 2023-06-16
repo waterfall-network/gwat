@@ -35,6 +35,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	val "gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	valOperation "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
@@ -735,6 +737,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		txData = tx.Data()
 	}
 
+	if isValidatorOp {
+		txData = tx.Data()
+		if err := pool.handleValidatorTransaction(txData, from); err != nil {
+			return err
+		}
+	}
+
 	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
 	// Ensure the transaction has more gas than the basic tx fee.
 	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
@@ -744,6 +753,51 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Gas() < intrGas && !isValidatorOp {
 		return ErrIntrinsicGas
 	}
+
+	return nil
+}
+
+// handleValidatorTransaction validates validator transactions
+func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Address) error {
+	if len(txData) > 0 {
+		op, err := valOperation.DecodeBytes(txData)
+		if err != nil {
+			return err
+		}
+
+		switch v := op.(type) {
+		case valOperation.Withdrawal:
+			return pool.checkWithdrawalOperation(v, from)
+		}
+
+		return nil
+	}
+
+	log.Warn("validator transaction has no txData")
+	return nil
+}
+
+func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from common.Address) error {
+	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
+	if err != nil {
+		return err
+	}
+
+	withdrawalAddress := validator.GetWithdrawalAddress()
+	if from != *withdrawalAddress {
+		return val.ErrInvalidFromAddresses
+	}
+
+	if validator.GetActivationEra() == math.MaxUint64 {
+		return val.ErrNotActivatedValidator
+	}
+
+	currentBalance := validator.GetBalance()
+
+	if currentBalance.Cmp(op.Amount()) == -1 {
+		return val.ErrInsufficientFundsForTransfer
+	}
+
 	return nil
 }
 

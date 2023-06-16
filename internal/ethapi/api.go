@@ -47,9 +47,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
-	proc "gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -1893,63 +1891,11 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 	// Assemble the transaction and sign with the wallet
 	tx := args.toTransaction()
 
-	if err := handleSpecialTransaction(s.b.BlockChain(), tx, args); err != nil {
-		return common.Hash{}, err
-	}
-
 	signed, err := wallet.SignTx(account, tx, s.b.ChainConfig().ChainID)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	return SubmitTransaction(ctx, s.b, signed)
-}
-
-func handleSpecialTransaction(bc *core.BlockChain, tx *types.Transaction, args TransactionArgs) error {
-	txTo := tx.To()
-	if txTo != nil && txTo == bc.Config().ValidatorsStateAddress {
-		op, err := operation.DecodeBytes(tx.Data())
-		if err != nil {
-			log.Error(err.Error())
-		}
-
-		switch v := op.(type) {
-		case operation.Withdrawal:
-			return checkWithdrawalOperation(bc, v, args)
-		}
-	}
-
-	return nil
-}
-
-func checkWithdrawalOperation(bc *core.BlockChain, op operation.Withdrawal, args TransactionArgs) error {
-	cp := bc.GetLastCoordinatedCheckpoint()
-	cpState, err := bc.StateAt(cp.Root)
-	if err != nil {
-		log.Warn("Failed to read cp state", "err", err, "root", cp.Root, "epoch", cp.Epoch)
-		return err
-	}
-
-	from := args.From
-	validator, err := bc.ValidatorStorage().GetValidator(cpState, op.CreatorAddress())
-	if err != nil {
-		return err
-	}
-
-	if from != validator.GetWithdrawalAddress() {
-		return proc.ErrInvalidFromAddresses
-	}
-
-	if validator.GetActivationEra() == math.MaxUint64 {
-		return proc.ErrNotActivatedValidator
-	}
-
-	currentBalance := validator.GetBalance()
-
-	if currentBalance.Cmp(op.Amount()) == -1 {
-		return proc.ErrInsufficientFundsForTransfer
-	}
-
-	return nil
 }
 
 // FillTransaction fills the defaults (nonce, gas, gasPrice or 1559 fields)
