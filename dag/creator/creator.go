@@ -466,7 +466,7 @@ func (c *Creator) resultHandler(task *task) {
 		"height", task.block.Height(),
 		"hash", hash.Hex(),
 		"parents", task.block.ParentHashes(),
-		"CpHash", task.block.CpHash(),
+		"CpHash", task.block.CpHash().Hex(),
 		"CpNumber", task.block.CpNumber(),
 	)
 

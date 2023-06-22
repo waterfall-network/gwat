@@ -171,11 +171,11 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) even
 	return bc.chainHeadFeed.Subscribe(ch)
 }
 
-func (bc *testBlockChain) SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription {
+func (bc *testBlockChain) SubscribeProcessing(ch chan<- types.Transactions) event.Subscription {
 	return bc.moveToProcessingFeed.Subscribe(ch)
 }
 
-func (bc *testBlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription {
+func (bc *testBlockChain) SubscribeRemoveTxFromPool(ch chan<- types.Transactions) event.Subscription {
 	return bc.removeTxFromPoolFeed.Subscribe(ch)
 }
 
