@@ -452,6 +452,14 @@ func (pool *TxPool) loop() {
 
 		case txs := <-pool.processingCh:
 			func() {
+				defer func(tStart time.Time) {
+					log.Info("^^^^^^^^^^^^ TIME moveToProcessing",
+						"elapsed", common.PrettyDuration(time.Since(tStart)),
+						"func:", "moveToProcessing",
+						"txs", len(txs),
+					)
+				}(time.Now())
+
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
 				for _, tx := range txs {
@@ -462,6 +470,14 @@ func (pool *TxPool) loop() {
 
 		case txs := <-pool.rmTxCh:
 			func() {
+				defer func(tStart time.Time) {
+					log.Info("^^^^^^^^^^^^ TIME removeProcessedTx",
+						"elapsed", common.PrettyDuration(time.Since(tStart)),
+						"func:", "removeProcessedTx",
+						"txs", len(txs),
+					)
+				}(time.Now())
+
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
 				for _, tx := range txs {
@@ -1322,25 +1338,16 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 }
 
 func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
-	ok := false
 	txNonce := tx.Nonce()
 
 	addr, _ := types.Sender(pool.signer, tx)
 
-	pending := pool.pending[addr]
-	if pending != nil && pending.txs != nil {
-		for _, pendingTx := range pending.txs.items {
-			if pendingTx.Nonce() <= txNonce {
-				pending.Delete(pendingTx)
-				pool.all.Remove(pendingTx.Hash())
-				// Reduce the pending counter
-				pendingGauge.Dec(int64(1))
-
-				if pendingTx.Nonce() == txNonce {
-					ok = true
-				}
-			}
+	if pending := pool.pending[addr]; pending != nil {
+		pendingLteNonce := pending.Forward(txNonce + 1)
+		for _, t := range pendingLteNonce {
+			pending.Delete(t)
 		}
+		// If no more pending transactions are left, remove the list
 		if pending.Empty() {
 			delete(pool.pending, addr)
 		}
@@ -1348,45 +1355,29 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 		pendingGauge.Dec(int64(1))
 	}
 
-	queue := pool.queue[addr]
-	if queue != nil && queue.txs != nil {
-		for _, queueTx := range queue.txs.items {
-			if queueTx.Nonce() <= txNonce {
-				queue.Delete(queueTx)
-				pool.all.Remove(queueTx.Hash())
-				// Reduce the queued counter
-				queuedGauge.Dec(1)
-				if queueTx.Nonce() == txNonce {
-					ok = true
-				}
-			}
+	if queue := pool.queue[addr]; queue != nil {
+		queueLteNonce := queue.Forward(txNonce + 1)
+		for _, t := range queueLteNonce {
+			queue.Delete(t)
 		}
+		// If no more queue transactions are left, remove the list
 		if queue.Empty() {
 			delete(pool.queue, addr)
 			delete(pool.beats, addr)
 		}
-		// Reduce the queued counter
+		// Reduce the queue counter
 		queuedGauge.Dec(1)
 	}
 
-	processing := pool.processing[addr]
-	if processing != nil && processing.txs != nil {
-		for _, procTx := range processing.txs.items {
-			if procTx.Nonce() <= txNonce {
-				processing.Delete(procTx)
-				pool.all.Remove(procTx.Hash())
-				if procTx.Nonce() == txNonce {
-					ok = true
-				}
-			}
+	if processing := pool.processing[addr]; processing != nil {
+		processingLteNonce := processing.Forward(txNonce + 1)
+		for _, t := range processingLteNonce {
+			processing.Delete(t)
 		}
+		// If no more processing transactions are left, remove the list
 		if processing.Empty() {
 			delete(pool.processing, addr)
 		}
-	}
-
-	if !ok {
-		log.Debug("tx pool: cant remove processed tx", "nonce", txNonce, "hash", tx.Hash().Hex())
 	}
 }
 
@@ -1494,6 +1485,14 @@ func (pool *TxPool) scheduleReorgLoop() {
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
+
+	defer func(tStart time.Time) {
+		log.Debug("^^^^^^^^^^^^ TIME runReorg",
+			"elapsed", common.PrettyDuration(time.Since(tStart)),
+			"func:", "runReorg",
+		)
+	}(time.Now())
+
 	//defer func(t0 time.Time) {
 	//	reorgDurationTimer.Update(time.Since(t0))
 	//}(time.Now())
