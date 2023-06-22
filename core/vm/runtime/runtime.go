@@ -59,7 +59,7 @@ func setDefaults(cfg *Config) {
 			SecondsPerSlot:   4,
 			SlotsPerEpoch:    32,
 			ForkSlotSubNet1:  math.MaxUint64,
-			EffectiveBalance: big.NewInt(32000),
+			EffectiveBalance: big.NewInt(3200),
 		}
 	}
 
