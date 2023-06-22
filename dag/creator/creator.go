@@ -525,9 +525,9 @@ func (c *Creator) appendTransaction(tx *types.Transaction, lfNumber *uint64, isV
 
 	expectedGas := c.current.cumutativeGas + gas
 	if expectedGas <= c.current.header.GasLimit {
-		c.current.cumutativeGas = expectedGas
 		c.current.txs = append(c.current.txs, tx)
 	}
+	c.current.cumutativeGas = expectedGas
 	return nil
 }
 
@@ -542,6 +542,14 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coi
 	if c.current.gasPool == nil {
 		c.current.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
+
+	defer func(tStart time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(tStart)),
+			"func:", "appendTransactions",
+			"txs", c.current.tcount,
+		)
+	}(time.Now())
 
 	var coalescedLogs []*types.Log
 
@@ -559,7 +567,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {
-			log.Info("Creator: adding txs to block end")
+			log.Info("Creator: adding txs to block end", "txs", c.current.tcount)
 			break
 		}
 		// Error may be ignored here. The error has already been checked
@@ -578,7 +586,11 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coi
 
 		case errors.Is(err, nil):
 			// Everything ok, shift in the next transaction from the same account
-			log.Info("Tx added", "hash", tx.Hash().Hex(), "err", err)
+			log.Debug("Tx added",
+				"hash", tx.Hash().Hex(),
+				"gasLimit", gasLimit,
+				"cumutativeGas", c.current.cumutativeGas,
+			)
 			c.current.tcount++
 			txs.Shift()
 

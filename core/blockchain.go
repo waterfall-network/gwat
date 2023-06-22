@@ -587,8 +587,10 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	go func() {
 		if currCp != nil && cp.Root != currCp.Root {
 			cpHeader := bc.GetHeader(currCp.Spine)
-			uptoNr := cpHeader.CpNumber
-			bc.ClearStaleBlockDags(uptoNr)
+			if cpHeader != nil {
+				uptoNr := cpHeader.CpNumber
+				bc.ClearStaleBlockDags(uptoNr)
+			}
 		}
 	}()
 }
