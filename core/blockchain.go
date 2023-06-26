@@ -2180,11 +2180,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		log.Error("Block verification: check ancestors err", "err", err, "block hash", block.Hash().Hex())
 		return false, err
 	}
-	// cp must be an ancestor of the block
-	if !isCpAncestor {
-		log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
-		return false, nil
-	}
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
 		for _, unh := range unloaded {
@@ -2196,6 +2191,11 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			continue
 		}
 		return false, ErrInsertUncompletedDag
+	}
+	// cp must be an ancestor of the block
+	if !isCpAncestor {
+		log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
+		return false, nil
 	}
 	// parents' heights must be less than block height
 	for _, parentHash := range block.ParentHashes() {
