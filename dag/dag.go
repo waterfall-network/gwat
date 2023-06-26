@@ -333,8 +333,8 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 		}
 	}
 
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
+	//d.bc.DagMuLock()
+	//defer d.bc.DagMuUnlock()
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
 	lfHash := lfHeader.Hash()
@@ -362,8 +362,8 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		}
 	}
 
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
+	//d.bc.DagMuLock()
+	//defer d.bc.DagMuUnlock()
 
 	tstart := time.Now()
 
@@ -416,8 +416,8 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 		}
 	}
 
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
+	//d.bc.DagMuLock()
+	//defer d.bc.DagMuUnlock()
 
 	tstart := time.Now()
 
@@ -452,8 +452,8 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
+	//d.bc.DagMuLock()
+	//defer d.bc.DagMuUnlock()
 
 	log.Info("Handle Sync Slot info", "params", slotInfo)
 	si := d.bc.GetSlotInfo()
@@ -503,8 +503,8 @@ func (d *Dag) HandleValidateFinalization(spines common.HashArray) (bool, error) 
 
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
+	//d.bc.DagMuLock()
+	//defer d.bc.DagMuUnlock()
 
 	log.Debug("@@@@@@@@@ Candidates HandleValidateSpines req", "candidates", spines, "elapsed", "\u2692", params.BuildId)
 	//log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
@@ -698,11 +698,18 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 				crtInfo["error"] = crtErr.Error()
 			}
 
+			txCount := 0
 			if block != nil {
 				crtInfo["newBlock"] = block.Hash().Hex()
+				txCount = len(block.Transactions())
 			}
 
-			log.Info("Creator processing: create block", "IsRunning", d.creator.IsRunning(), "crtInfo", crtInfo, "elapsed", common.PrettyDuration(time.Since(crtStart)))
+			log.Info("Creator processing: create block",
+				//"IsRunning", d.creator.IsRunning(),
+				//"crtInfo", crtInfo,
+				"txs", txCount,
+				"elapsed", common.PrettyDuration(time.Since(crtStart)),
+			)
 		}
 	}
 }

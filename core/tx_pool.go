@@ -156,8 +156,8 @@ type blockChain interface {
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 	Genesis() *types.Block
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
-	SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription
-	SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription
+	SubscribeProcessing(ch chan<- types.Transactions) event.Subscription
+	SubscribeRemoveTxFromPool(ch chan<- types.Transactions) event.Subscription
 	// FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
 	FinSynchronising() bool
 	// DagSynchronising returns whether the downloader is currently retrieving dag chain blocks.
@@ -277,9 +277,9 @@ type TxPool struct {
 	reqResetCh      chan *txpoolResetRequest
 	reqPromoteCh    chan *accountSet
 	queueTxEventCh  chan *types.Transaction
-	processingCh    chan *types.Transaction
+	processingCh    chan types.Transactions
 	processingSub   event.Subscription
-	rmTxCh          chan *types.Transaction
+	rmTxCh          chan types.Transactions
 	rmTxSub         event.Subscription
 	reorgDoneCh     chan chan struct{}
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
@@ -314,8 +314,8 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reqResetCh:      make(chan *txpoolResetRequest),
 		reqPromoteCh:    make(chan *accountSet),
 		queueTxEventCh:  make(chan *types.Transaction),
-		processingCh:    make(chan *types.Transaction, 1),
-		rmTxCh:          make(chan *types.Transaction, 1),
+		processingCh:    make(chan types.Transactions, 1),
+		rmTxCh:          make(chan types.Transactions, 1),
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		//initDoneCh:      make(chan struct{}),
@@ -450,19 +450,39 @@ func (pool *TxPool) loop() {
 				pool.mu.Unlock()
 			}
 
-		case tx := <-pool.processingCh:
+		case txs := <-pool.processingCh:
 			func() {
+				defer func(tStart time.Time) {
+					log.Info("^^^^^^^^^^^^ TIME moveToProcessing",
+						"elapsed", common.PrettyDuration(time.Since(tStart)),
+						"func:", "moveToProcessing",
+						"txs", len(txs),
+					)
+				}(time.Now())
+
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
-				log.Debug("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-				pool.moveToProcessing(tx)
+				for _, tx := range txs {
+					log.Debug("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
+					pool.moveToProcessing(tx)
+				}
 			}()
 
-		case tx := <-pool.rmTxCh:
+		case txs := <-pool.rmTxCh:
 			func() {
+				defer func(tStart time.Time) {
+					log.Info("^^^^^^^^^^^^ TIME removeProcessedTx",
+						"elapsed", common.PrettyDuration(time.Since(tStart)),
+						"func:", "removeProcessedTx",
+						"txs", len(txs),
+					)
+				}(time.Now())
+
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
-				pool.removeProcessedTx(tx)
+				for _, tx := range txs {
+					pool.removeProcessedTx(tx)
+				}
 			}()
 		}
 	}
@@ -1158,7 +1178,7 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	//move to processing all txs with nonce <= nonce of current tx
 	pendingLteNonce := types.Transactions{}
 	if pending := pool.pending[addr]; pending != nil {
-		pendingLteNonce = pending.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
+		pendingLteNonce = pending.Forward(tx.Nonce() + 1)
 		for _, t := range pendingLteNonce {
 			pending.Delete(t)
 		}
@@ -1170,7 +1190,8 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	//move to processing all txs with nonce <= nonce of current tx
 	queueLteNonce := types.Transactions{}
 	if queue := pool.queue[addr]; queue != nil {
-		queueLteNonce = queue.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
+		queueLteNonce = queue.Forward(tx.Nonce() + 1)
+		//queueLteNonce = queue.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
 		for _, t := range queueLteNonce {
 			queue.Delete(t)
 		}
@@ -1182,13 +1203,12 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	}
 
 	curNonce := pool.currentState.GetNonce(addr)
-	txNonce := tx.Nonce()
-	if curNonce > txNonce {
+	if curNonce > tx.Nonce() {
 		if pool.processing[addr] != nil {
 			pool.processing[addr].Forward(curNonce)
 			// If no more pending transactions are left, remove the list
 			if pool.processing[addr].Empty() {
-				delete(pool.pending, addr)
+				delete(pool.processing, addr)
 			}
 		}
 		return
@@ -1206,43 +1226,47 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 	// Update the account nonce if needed
 	pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
 
-	processingNonce := pool.processing[addr].txs.LastElement().Nonce()
+	processingNonce := tx.Nonce()
 	// check no gap with pending
-	if pending := pool.pending[addr]; pending != nil &&
-		pending.txs.FirstElement().Nonce() > processingNonce+1 {
-		//if gap move all to queue
-		pendingGtNonce := pending.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > processingNonce+1 })
-		for _, t := range pendingGtNonce {
-			pool.pending[addr].Delete(t)
-			if pool.queue[addr] == nil {
-				pool.queue[addr] = newTxList(true)
+	if pending := pool.pending[addr]; pending != nil {
+		pendingNonce := (*pending.txs.index)[0]
+		if pendingNonce > processingNonce+1 {
+			//if gap move all to queue
+			pendingGtNonce := pending.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() > processingNonce+1 })
+			for _, t := range pendingGtNonce {
+				pool.pending[addr].Delete(t)
+				if pool.queue[addr] == nil {
+					pool.queue[addr] = newTxList(true)
+				}
+				pool.queue[addr].Add(t, pool.config.PriceBump)
+				//pool.enqueueTx(t.Hash(), tx, false, false)
 			}
-			pool.queue[addr].Add(t, pool.config.PriceBump)
-			//pool.enqueueTx(t.Hash(), tx, false, false)
-		}
-		// If no more pending transactions are left, remove the list
-		if pending.Empty() {
-			delete(pool.pending, addr)
+			// If no more pending transactions are left, remove the list
+			if pending.Empty() {
+				delete(pool.pending, addr)
+			}
 		}
 	}
 
 	// if no gap to queue - move to pending
-	if queue := pool.queue[addr]; queue != nil &&
-		queue.txs.FirstElement().Nonce() <= processingNonce+1 {
-		lowestNonce := queue.txs.FirstElement().Nonce()
-		for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
-			t := queue.txs.Get(i)
-			queue.Delete(t)
-			if pool.pending[addr] == nil {
-				pool.pending[addr] = newTxList(true)
+	if queue := pool.queue[addr]; queue != nil {
+		//lowestNonce := queue.txs.FirstElement().Nonce()
+		lowestNonce := (*queue.txs.index)[0]
+		if lowestNonce <= processingNonce+1 {
+			for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
+				t := queue.txs.Get(i)
+				queue.Delete(t)
+				if pool.pending[addr] == nil {
+					pool.pending[addr] = newTxList(true)
+				}
+				pool.pending[addr].Add(t, pool.config.PriceBump)
+				//pool.promoteTx(addr, t.Hash(), t)
 			}
-			pool.pending[addr].Add(t, pool.config.PriceBump)
-			//pool.promoteTx(addr, t.Hash(), t)
-		}
-		// If no more queue transactions are left, remove the list
-		if queue.Empty() {
-			delete(pool.queue, addr)
-			delete(pool.beats, addr)
+			// If no more queue transactions are left, remove the list
+			if queue.Empty() {
+				delete(pool.queue, addr)
+				delete(pool.beats, addr)
+			}
 		}
 	}
 
@@ -1314,25 +1338,16 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 }
 
 func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
-	ok := false
 	txNonce := tx.Nonce()
 
 	addr, _ := types.Sender(pool.signer, tx)
 
-	pending := pool.pending[addr]
-	if pending != nil && pending.txs != nil {
-		for _, pendingTx := range pending.txs.items {
-			if pendingTx.Nonce() <= txNonce {
-				pending.Delete(pendingTx)
-				pool.all.Remove(pendingTx.Hash())
-				// Reduce the pending counter
-				pendingGauge.Dec(int64(1))
-
-				if pendingTx.Nonce() == txNonce {
-					ok = true
-				}
-			}
+	if pending := pool.pending[addr]; pending != nil {
+		pendingLteNonce := pending.Forward(txNonce + 1)
+		for _, t := range pendingLteNonce {
+			pending.Delete(t)
 		}
+		// If no more pending transactions are left, remove the list
 		if pending.Empty() {
 			delete(pool.pending, addr)
 		}
@@ -1340,45 +1355,29 @@ func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
 		pendingGauge.Dec(int64(1))
 	}
 
-	queue := pool.queue[addr]
-	if queue != nil && queue.txs != nil {
-		for _, queueTx := range queue.txs.items {
-			if queueTx.Nonce() <= txNonce {
-				queue.Delete(queueTx)
-				pool.all.Remove(queueTx.Hash())
-				// Reduce the queued counter
-				queuedGauge.Dec(1)
-				if queueTx.Nonce() == txNonce {
-					ok = true
-				}
-			}
+	if queue := pool.queue[addr]; queue != nil {
+		queueLteNonce := queue.Forward(txNonce + 1)
+		for _, t := range queueLteNonce {
+			queue.Delete(t)
 		}
+		// If no more queue transactions are left, remove the list
 		if queue.Empty() {
 			delete(pool.queue, addr)
 			delete(pool.beats, addr)
 		}
-		// Reduce the queued counter
+		// Reduce the queue counter
 		queuedGauge.Dec(1)
 	}
 
-	processing := pool.processing[addr]
-	if processing != nil && processing.txs != nil {
-		for _, procTx := range processing.txs.items {
-			if procTx.Nonce() <= txNonce {
-				processing.Delete(procTx)
-				pool.all.Remove(procTx.Hash())
-				if procTx.Nonce() == txNonce {
-					ok = true
-				}
-			}
+	if processing := pool.processing[addr]; processing != nil {
+		processingLteNonce := processing.Forward(txNonce + 1)
+		for _, t := range processingLteNonce {
+			processing.Delete(t)
 		}
+		// If no more processing transactions are left, remove the list
 		if processing.Empty() {
 			delete(pool.processing, addr)
 		}
-	}
-
-	if !ok {
-		log.Debug("tx pool: cant remove processed tx", "nonce", txNonce, "hash", tx.Hash().Hex())
 	}
 }
 
@@ -1486,6 +1485,14 @@ func (pool *TxPool) scheduleReorgLoop() {
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
+
+	defer func(tStart time.Time) {
+		log.Debug("^^^^^^^^^^^^ TIME runReorg",
+			"elapsed", common.PrettyDuration(time.Since(tStart)),
+			"func:", "runReorg",
+		)
+	}(time.Now())
+
 	//defer func(t0 time.Time) {
 	//	reorgDurationTimer.Update(time.Since(t0))
 	//}(time.Now())
