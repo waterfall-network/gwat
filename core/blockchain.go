@@ -1848,7 +1848,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 				maxFinNr = block.Nr()
 			}
 		} else {
-			bc.MoveTxsToProcessing(types.Blocks{block})
+			bc.MoveTxsToProcessing(block)
 		}
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
@@ -1898,7 +1898,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 		rawdb.WriteBlock(bc.db, block)
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
-		bc.MoveTxsToProcessing(types.Blocks{block})
+		bc.MoveTxsToProcessing(block)
 
 		isHead := maxFinNr == block.Nr()
 		bc.writeFinalizedBlock(block.Nr(), block, isHead)
@@ -2396,7 +2396,7 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 		}
 		bc.AddTips(dagBlock)
 		bc.RemoveTips(dagBlock.DagChainHashes)
-		bc.MoveTxsToProcessing(types.Blocks{block})
+		bc.MoveTxsToProcessing(block)
 		bc.WriteCurrentTips()
 
 		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
@@ -3757,23 +3757,23 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	return false
 }
 
-func (bc *BlockChain) moveTxsToProcessing(txs types.Transactions) {
+func (bc *BlockChain) moveTxsToProcessing(txs *types.ProcessingTxs) {
 	bc.processingFeed.Send(txs)
 }
 
-func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
-	txs := make(types.Transactions, 0, len(blocks))
-
-	for _, block := range blocks {
-		if block == nil {
-			continue
-		}
-		bc.handleBlockValidatorSyncTxs(block)
-		txs = append(txs, block.Transactions()...)
+func (bc *BlockChain) MoveTxsToProcessing(block *types.Block) {
+	if block == nil {
+		return
 	}
-	sort.Slice(txs, func(i, j int) bool {
-		return txs[i].Nonce() < txs[j].Nonce()
+
+	txs := types.NewProcessingTxs(block.Hash())
+	bc.handleBlockValidatorSyncTxs(block)
+	txs.Transactions = append(txs.Transactions, block.Transactions()...)
+
+	sort.Slice(txs.Transactions, func(i, j int) bool {
+		return txs.Transactions[i].Nonce() < txs.Transactions[j].Nonce()
 	})
+
 	bc.moveTxsToProcessing(txs)
 }
 

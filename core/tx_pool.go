@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -156,7 +157,7 @@ type blockChain interface {
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 	Genesis() *types.Block
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
-	SubscribeProcessing(ch chan<- types.Transactions) event.Subscription
+	SubscribeProcessing(ch chan<- *types.ProcessingTxs) event.Subscription
 	SubscribeRemoveTxFromPool(ch chan<- types.Transactions) event.Subscription
 	// FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
 	FinSynchronising() bool
@@ -277,7 +278,7 @@ type TxPool struct {
 	reqResetCh      chan *txpoolResetRequest
 	reqPromoteCh    chan *accountSet
 	queueTxEventCh  chan *types.Transaction
-	processingCh    chan types.Transactions
+	processingCh    chan *types.ProcessingTxs
 	processingSub   event.Subscription
 	rmTxCh          chan types.Transactions
 	rmTxSub         event.Subscription
@@ -314,7 +315,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reqResetCh:      make(chan *txpoolResetRequest),
 		reqPromoteCh:    make(chan *accountSet),
 		queueTxEventCh:  make(chan *types.Transaction),
-		processingCh:    make(chan types.Transactions, 1),
+		processingCh:    make(chan *types.ProcessingTxs, 1),
 		rmTxCh:          make(chan types.Transactions, 1),
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
@@ -336,12 +337,14 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	//load processing txs from dag
 	blocks := pool.chain.GetBlocksByHashes(*pool.chain.GetDagHashes()).ToArray()
-	txs := make(types.Transactions, 0, len(blocks))
+	txs := make([]*types.ProcessingTransaction, 0, len(blocks))
 	for _, block := range blocks {
 		if block == nil {
 			continue
 		}
-		txs = append(txs, block.Transactions()...)
+		for _, transaction := range block.Transactions() {
+			txs = append(txs, &types.ProcessingTransaction{Transaction: transaction, BlockHash: block.Hash()})
+		}
 	}
 	sort.Slice(txs, func(i, j int) bool {
 		return txs[i].Nonce() < txs[j].Nonce()
@@ -456,15 +459,18 @@ func (pool *TxPool) loop() {
 					log.Info("^^^^^^^^^^^^ TIME moveToProcessing",
 						"elapsed", common.PrettyDuration(time.Since(tStart)),
 						"func:", "moveToProcessing",
-						"txs", len(txs),
+						"txs", len(txs.Transactions),
 					)
 				}(time.Now())
 
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
-				for _, tx := range txs {
+				for _, tx := range txs.Transactions {
 					log.Debug("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-					pool.moveToProcessing(tx)
+					pool.moveToProcessing(&types.ProcessingTransaction{
+						Transaction: tx,
+						BlockHash:   txs.BlockHash,
+					})
 				}
 			}()
 
@@ -597,7 +603,7 @@ func (pool *TxPool) StatsByAddrs() (map[common.Address]int, map[common.Address]i
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
-func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.ProcessingTransaction) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -609,9 +615,18 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	for addr, list := range pool.queue {
 		queued[addr] = list.Flatten()
 	}
-	processing := make(map[common.Address]types.Transactions)
+	processing := make(map[common.Address][]*types.ProcessingTransaction)
 	for addr, list := range pool.processing {
-		processing[addr] = list.Flatten()
+		for _, transaction := range list.Flatten() {
+			_, ok := processing[addr]
+			if !ok {
+				processing[addr] = make([]*types.ProcessingTransaction, 0)
+			}
+			processing[addr] = append(processing[addr], &types.ProcessingTransaction{
+				Transaction: transaction,
+				BlockHash:   list.GetTxBlockHash(transaction.Hash()),
+			})
+		}
 	}
 	return pending, queued, processing
 }
@@ -1168,8 +1183,8 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
-func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
-	addr, err := types.Sender(pool.signer, tx) // already validated during insertion
+func (pool *TxPool) moveToProcessing(tx *types.ProcessingTransaction) {
+	addr, err := types.Sender(pool.signer, tx.Transaction) // already validated during insertion
 	if err != nil {
 		log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())
 		return
@@ -1218,14 +1233,22 @@ func (pool *TxPool) moveToProcessing(tx *types.Transaction) {
 		pool.processing[addr] = newTxList(true)
 	}
 	moveTxs := append(pendingLteNonce, queueLteNonce...)
-	moveTxs = append(moveTxs, tx)
+	moveTxs = append(moveTxs, tx.Transaction)
 	for _, t := range moveTxs {
 		pool.processing[addr].Add(t, pool.config.PriceBump)
 		pool.all.Add(t, false)
+		if t.Hash() == tx.Hash() {
+			oldBlockHash := pool.processing[addr].GetTxBlockHash(tx.Hash())
+			if !bytes.Equal(oldBlockHash.Bytes(), common.Hash{}.Bytes()) && oldBlockHash != tx.BlockHash {
+				log.Warn("FIX TXPOOL - Tx has block hash, rewrite it", "txHash", tx.Hash().Hex(), "oldBlockHash", oldBlockHash.Hex(), "newBlockHash", tx.BlockHash.Hex())
+			}
+
+			pool.processing[addr].PutTxBlockHash(tx.Hash(), tx.BlockHash)
+		}
 	}
+
 	// Update the account nonce if needed
 	pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
-
 	processingNonce := tx.Nonce()
 	// check no gap with pending
 	if pending := pool.pending[addr]; pending != nil {

@@ -453,7 +453,7 @@ func (c *Creator) resultHandler(task *task) {
 		//"tips", c.chain.GetTips().Print(),
 	)
 
-	c.chain.MoveTxsToProcessing(types.Blocks{task.block})
+	c.chain.MoveTxsToProcessing(task.block)
 
 	// Broadcast the block and announce chain insertion event
 	c.mux.Post(core.NewMinedBlockEvent{Block: task.block})

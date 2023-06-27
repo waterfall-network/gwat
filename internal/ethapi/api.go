@@ -188,7 +188,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	for account, txs := range processing {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCProcessingTransaction(tx, curHeader, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["processing"][account.Hex()] = dump
 	}
@@ -278,7 +278,7 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	for account, txs := range processing {
 		dump := make(map[string]string)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx.Transaction)
 		}
 		content["processing"][account.Hex()] = dump
 	}
@@ -1484,6 +1484,14 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 		baseFee = misc.CalcSlotBaseFee(config, current, numValidators, gasLimit, params.BurnMultiplier, creatorsPerSlot)
 	}
 	return newRPCTransaction(tx, common.Hash{}, nil, 0, baseFee, config)
+}
+
+func newRPCProcessingTransaction(tx *types.ProcessingTransaction, current *types.Header, config *params.ChainConfig, numValidators uint64, gasLimit uint64, creatorsPerSlot uint64) *RPCTransaction {
+	var baseFee *big.Int
+	if current != nil {
+		baseFee = misc.CalcSlotBaseFee(config, current, numValidators, gasLimit, params.BurnMultiplier, creatorsPerSlot)
+	}
+	return newRPCTransaction(tx.Transaction, tx.BlockHash, nil, 0, baseFee, config)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.

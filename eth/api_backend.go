@@ -313,7 +313,7 @@ func (b *EthAPIBackend) Stats() (pending, queued, processing int) {
 	return b.eth.txPool.Stats()
 }
 
-func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.ProcessingTransaction) {
 	return b.eth.TxPool().Content()
 }
 
