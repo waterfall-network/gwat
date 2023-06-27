@@ -282,14 +282,20 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrInvalidFromAddresses
 	}
 
-	if validator.GetActivationEra() == math.MaxUint64 {
-		return nil, ErrNotActivatedValidator
-	}
-
 	currentBalance := validator.GetBalance()
 
 	if currentBalance.Cmp(op.Amount()) == -1 {
 		return nil, ErrInsufficientFundsForTransfer
+	}
+
+	effectiveBalance := p.blockchain.Config().EffectiveBalance
+	if validator.GetActivationEra() == math.MaxUint64 {
+		switch currentBalance.Cmp(effectiveBalance) {
+		case 0, 1: // currentBalance >= effectiveBalance - wait for activation
+			return nil, ErrNotActivatedValidator
+		case -1: // currentBalance < effectiveBalance - withdraw before activation
+			log.Info("validatorWithdrawal before activation and sum < effectiveBalance")
+		}
 	}
 
 	validator.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
