@@ -26,7 +26,6 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/tyler-smith/go-bip39"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
@@ -91,6 +90,10 @@ type feeHistoryResult struct {
 }
 
 func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOrHex, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+	if !s.b.BlockChain().IsSynced() {
+		return nil, fmt.Errorf("node is not synchronized")
+	}
+
 	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, int(blockCount), lastBlock, rewardPercentiles)
 	if err != nil {
 		return nil, err
@@ -819,6 +822,9 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	if state == nil || err != nil {
 		return nil, err
 	}
+	if address == *s.b.ChainConfig().ValidatorsStateAddress || state.IsValidatorAddress(address) {
+		return nil, nil
+	}
 	code := state.GetCode(address)
 	return code, state.Error()
 }
@@ -1250,7 +1256,12 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionA
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGasQuick(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	gas, err := DoEstimateGasQuick(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	// if validator set dummy gas
+	if err == nil && args.To != nil && *args.To == *s.b.ChainConfig().ValidatorsStateAddress && gas == 0 {
+		gas = 21000
+	}
+	return gas, err
 	//return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 }
 
