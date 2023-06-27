@@ -447,10 +447,10 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
 
-func (bc *BlockChain) SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription {
+func (bc *BlockChain) SubscribeProcessing(ch chan<- types.Transactions) event.Subscription {
 	return bc.scope.Track(bc.processingFeed.Subscribe(ch))
 }
 
-func (bc *BlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription {
+func (bc *BlockChain) SubscribeRemoveTxFromPool(ch chan<- types.Transactions) event.Subscription {
 	return bc.scope.Track(bc.rmTxFeed.Subscribe(ch))
 }

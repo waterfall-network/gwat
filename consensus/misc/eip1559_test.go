@@ -34,7 +34,7 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		SlotsPerEpoch:     32,
 		ForkSlotSubNet1:   math.MaxUint64,
 		ValidatorsPerSlot: 4,
-		EffectiveBalance:  big.NewInt(32000),
+		EffectiveBalance:  big.NewInt(3200),
 	}
 }
 
