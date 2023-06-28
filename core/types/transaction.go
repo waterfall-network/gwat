@@ -651,7 +651,7 @@ func copyAddressPtr(a *common.Address) *common.Address {
 
 type ProcessingTransaction struct {
 	*Transaction
-	BlockHash common.Hash
+	BlocksHashes common.HashArray
 }
 
 type ProcessingTxs struct {

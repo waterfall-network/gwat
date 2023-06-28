@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -343,7 +342,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 			continue
 		}
 		for _, transaction := range block.Transactions() {
-			txs = append(txs, &types.ProcessingTransaction{Transaction: transaction, BlockHash: block.Hash()})
+			txs = append(txs, &types.ProcessingTransaction{Transaction: transaction, BlocksHashes: common.HashArray{block.Hash()}})
 		}
 	}
 	sort.Slice(txs, func(i, j int) bool {
@@ -468,8 +467,8 @@ func (pool *TxPool) loop() {
 				for _, tx := range txs.Transactions {
 					log.Debug("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
 					pool.moveToProcessing(&types.ProcessingTransaction{
-						Transaction: tx,
-						BlockHash:   txs.BlockHash,
+						Transaction:  tx,
+						BlocksHashes: common.HashArray{txs.BlockHash},
 					})
 				}
 			}()
@@ -623,8 +622,8 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 				processing[addr] = make([]*types.ProcessingTransaction, 0)
 			}
 			processing[addr] = append(processing[addr], &types.ProcessingTransaction{
-				Transaction: transaction,
-				BlockHash:   list.GetTxBlockHash(transaction.Hash()),
+				Transaction:  transaction,
+				BlocksHashes: list.GetTxBlocksHashes(transaction.Hash()),
 			})
 		}
 	}
@@ -1238,12 +1237,11 @@ func (pool *TxPool) moveToProcessing(tx *types.ProcessingTransaction) {
 		pool.processing[addr].Add(t, pool.config.PriceBump)
 		pool.all.Add(t, false)
 		if t.Hash() == tx.Hash() {
-			oldBlockHash := pool.processing[addr].GetTxBlockHash(tx.Hash())
-			if !bytes.Equal(oldBlockHash.Bytes(), common.Hash{}.Bytes()) && oldBlockHash != tx.BlockHash {
-				log.Warn("FIX TXPOOL - Tx has block hash, rewrite it", "txHash", tx.Hash().Hex(), "oldBlockHash", oldBlockHash.Hex(), "newBlockHash", tx.BlockHash.Hex())
+			for _, hash := range tx.BlocksHashes {
+				if !pool.processing[addr].txs.blocksHashes[tx.Hash()].Has(hash) {
+					pool.processing[addr].PutTxBlockHash(tx.Hash(), tx.BlocksHashes)
+				}
 			}
-
-			pool.processing[addr].PutTxBlockHash(tx.Hash(), tx.BlockHash)
 		}
 	}
 

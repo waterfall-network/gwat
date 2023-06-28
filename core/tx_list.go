@@ -53,7 +53,7 @@ func (h *nonceHeap) Pop() interface{} {
 // iterating over the contents in a nonce-incrementing way.
 type txSortedMap struct {
 	items        map[uint64]*types.Transaction // Hash map storing the transaction data
-	blocksHashes map[common.Hash]common.Hash
+	blocksHashes map[common.Hash]common.HashArray
 	index        *nonceHeap         // Heap of nonces of all the stored transactions (non-strict mode)
 	cache        types.Transactions // Cache of the transactions already sorted
 }
@@ -62,7 +62,7 @@ type txSortedMap struct {
 func newTxSortedMap() *txSortedMap {
 	return &txSortedMap{
 		items:        make(map[uint64]*types.Transaction),
-		blocksHashes: make(map[common.Hash]common.Hash),
+		blocksHashes: make(map[common.Hash]common.HashArray),
 		index:        new(nonceHeap),
 	}
 }
@@ -436,17 +436,22 @@ func (l *txList) LastElement() *types.Transaction {
 	return l.txs.LastElement()
 }
 
-func (l *txList) GetTxBlockHash(txHash common.Hash) common.Hash {
+func (l *txList) GetTxBlocksHashes(txHash common.Hash) common.HashArray {
 	blockHash, ok := l.txs.blocksHashes[txHash]
 	if !ok {
-		return common.Hash{}
+		return nil
 	}
 
 	return blockHash
 }
 
-func (l *txList) PutTxBlockHash(txHash, blockHash common.Hash) {
-	l.txs.blocksHashes[txHash] = blockHash
+func (l *txList) PutTxBlockHash(txHash common.Hash, blockHash common.HashArray) {
+	_, ok := l.txs.blocksHashes[txHash]
+	if !ok {
+		l.txs.blocksHashes[txHash] = make(common.HashArray, 0)
+	}
+
+	l.txs.blocksHashes[txHash] = append(l.txs.blocksHashes[txHash], blockHash...)
 }
 
 // priceHeap is a heap.Interface implementation over transactions for retrieving
