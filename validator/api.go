@@ -2,17 +2,22 @@ package validator
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 type Backend interface {
@@ -22,15 +27,27 @@ type Backend interface {
 	GetLastFinalizedBlock() *types.Block
 	ChainConfig() *params.ChainConfig
 }
+type Blockchain interface {
+	ValidatorStorage() valStore.Storage
+	StateAt(root common.Hash) (*state.StateDB, error)
+	GetBlock(hash common.Hash) *types.Block
+	GetSlotInfo() *types.SlotInfo
+	GetLastCoordinatedCheckpoint() *types.Checkpoint
+	Database() ethdb.Database
+	GetEpoch(epoch uint64) common.Hash
+	EpochToEra(uint64) *era.Era
+	GetEraInfo() *era.EraInfo
+}
 
 // PublicValidatorAPI provides an API to access validator functions.
 type PublicValidatorAPI struct {
-	b Backend
+	b     Backend
+	chain Blockchain
 }
 
 // NewPublicValidatorAPI creates a new validator API.
-func NewPublicValidatorAPI(b Backend) *PublicValidatorAPI {
-	return &PublicValidatorAPI{b}
+func NewPublicValidatorAPI(b Backend, chain Blockchain) *PublicValidatorAPI {
+	return &PublicValidatorAPI{b, chain}
 }
 
 type DepositArgs struct {
@@ -41,12 +58,12 @@ type DepositArgs struct {
 }
 
 // GetAPIs provides api access
-func GetAPIs(apiBackend Backend) []rpc.API {
+func GetAPIs(apiBackend Backend, chain Blockchain) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "wat",
 			Version:   "1.0",
-			Service:   NewPublicValidatorAPI(apiBackend),
+			Service:   NewPublicValidatorAPI(apiBackend, chain),
 			Public:    true,
 		},
 	}
@@ -177,4 +194,56 @@ func (s *PublicValidatorAPI) Validator_WithdrawalData(args WithdrawalArgs) (hexu
 
 func (s *PublicValidatorAPI) Validator_DepositAddress() hexutil.Bytes {
 	return s.b.ChainConfig().ValidatorsStateAddress[:]
+}
+
+// GetValidatorsBySlot retrieves validators by provided slot.
+func (s *PublicValidatorAPI) GetValidatorsBySlot(ctx context.Context, slot uint64) ([]common.Address, error) {
+	if s.chain.GetSlotInfo() == nil {
+		return nil, errors.New("no slot info")
+	}
+
+	creatorsPerSlot, err := s.chain.ValidatorStorage().GetCreatorsBySlot(s.chain, slot)
+	if err != nil {
+		return nil, err
+	}
+	return creatorsPerSlot, nil
+}
+
+// GetValidators retrieves creators by provided era.
+func (s *PublicValidatorAPI) GetValidators(ctx context.Context, era *uint64) ([]common.Address, error) {
+	slotInfo := s.chain.GetSlotInfo()
+	if slotInfo == nil {
+		return nil, errors.New("no slot info")
+	}
+
+	var startEpoch uint64
+	if era == nil {
+		startEpoch = s.chain.GetEraInfo().FromEpoch()
+	} else {
+		dbEra := rawdb.ReadEra(s.chain.Database(), *era)
+		if dbEra == nil {
+			return nil, errors.New("era not found")
+		}
+		startEpoch = dbEra.From
+	}
+
+	slot, err := slotInfo.SlotOfEpochStart(startEpoch)
+	if err != nil {
+		return nil, err
+	}
+
+	_, addresses := s.chain.ValidatorStorage().GetValidators(s.chain, slot, true, true, "GetValidators")
+	return addresses, nil
+}
+
+// Validator_GetInfo retrieves validator info by provided address.
+func (s *PublicValidatorAPI) Validator_GetInfo(ctx context.Context, address common.Address) (*valStore.Validator, error) {
+	slotInfo := s.chain.GetSlotInfo()
+	if slotInfo == nil {
+		return nil, errors.New("no slot info")
+	}
+
+	stateDb, _ := s.chain.StateAt(s.chain.GetEraInfo().GetEra().Root)
+
+	return s.chain.ValidatorStorage().GetValidator(stateDb, address)
 }

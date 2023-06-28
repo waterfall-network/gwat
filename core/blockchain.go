@@ -587,8 +587,10 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	go func() {
 		if currCp != nil && cp.Root != currCp.Root {
 			cpHeader := bc.GetHeader(currCp.Spine)
-			uptoNr := cpHeader.CpNumber
-			bc.ClearStaleBlockDags(uptoNr)
+			if cpHeader != nil {
+				uptoNr := cpHeader.CpNumber
+				bc.ClearStaleBlockDags(uptoNr)
+			}
 		}
 	}()
 }
@@ -1121,9 +1123,7 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 		bc.chainHeadFeed.Send(ChainHeadEvent{Block: block, Type: ET_NETWORK})
 	}
 
-	for _, tx := range block.Transactions() {
-		bc.RemoveTxFromPool(tx)
-	}
+	bc.RemoveTxsFromPool(block.Transactions())
 
 	return nil
 }
@@ -2180,11 +2180,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		log.Error("Block verification: check ancestors err", "err", err, "block hash", block.Hash().Hex())
 		return false, err
 	}
-	// cp must be an ancestor of the block
-	if !isCpAncestor {
-		log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
-		return false, nil
-	}
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
 		for _, unh := range unloaded {
@@ -2196,6 +2191,11 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			continue
 		}
 		return false, ErrInsertUncompletedDag
+	}
+	// cp must be an ancestor of the block
+	if !isCpAncestor {
+		log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
+		return false, nil
 	}
 	// parents' heights must be less than block height
 	for _, parentHash := range block.ParentHashes() {
@@ -3757,8 +3757,8 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	return false
 }
 
-func (bc *BlockChain) moveTxToProcessing(tx *types.Transaction) {
-	bc.processingFeed.Send(tx)
+func (bc *BlockChain) moveTxsToProcessing(txs types.Transactions) {
+	bc.processingFeed.Send(txs)
 }
 
 func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
@@ -3774,13 +3774,10 @@ func (bc *BlockChain) MoveTxsToProcessing(blocks types.Blocks) {
 	sort.Slice(txs, func(i, j int) bool {
 		return txs[i].Nonce() < txs[j].Nonce()
 	})
-
-	for _, tx := range txs {
-		bc.moveTxToProcessing(tx)
-	}
+	bc.moveTxsToProcessing(txs)
 }
 
-func (bc *BlockChain) RemoveTxFromPool(tx *types.Transaction) {
+func (bc *BlockChain) RemoveTxsFromPool(tx types.Transactions) {
 	bc.rmTxFeed.Send(tx)
 }
 

@@ -578,11 +578,6 @@ web3._extend({
 			params: 3,
 			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter, null]
 		}),
-		new web3._extend.Method({
-			name: 'getSlotHashes',
-			call: 'eth_getSlotHashes',
-			params: 1
-		}),
 	],
 	properties: [
 		new web3._extend.Property({
@@ -888,6 +883,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getDagHashes',
+			call: 'dag_getDagHashes',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'headSyncReady',
 			call: 'dag_headSyncReady',
 			params: 1
@@ -1069,6 +1069,40 @@ web3._extend({
 			call: 'wat_buy',
 			params: 2,
 			inputFormatter: [web3._extend.utils.toHex, web3._extend.utils.toHex],
+		}),
+
+		// VALIDATOR STORAGE API //
+		new web3._extend.Method({
+			name: 'getValidators',
+			call: 'wat_getValidators',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getValidatorsBySlot',
+			call: 'wat_getValidatorsBySlot',
+			params: 1
+		}),		
+		new web3._extend.Method({
+			name: 'validator.getInfo',
+			call: 'wat_validator_GetInfo',
+			params: 1
+		}),	
+
+		// INFO API //
+		new web3._extend.Method({
+			name: 'getEra',
+			call: 'wat_getEra',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getDagHashes',
+			call: 'wat_getDagHashes',
+			params: 0
+		}),	
+		new web3._extend.Method({
+			name: 'getSlotHashes',
+			call: 'wat_getSlotHashes',
+			params: 1
 		}),
 
 		// VALIDATOR API //

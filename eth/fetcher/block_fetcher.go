@@ -27,7 +27,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 const (
@@ -639,7 +638,8 @@ func (f *BlockFetcher) loop() {
 							continue
 						}
 						if bodyHash == (common.Hash{}) {
-							bodyHash = types.CalcBlockBodyHash(task.transactions[i], trie.NewStackTrie(nil))
+							body := types.Body{Transactions: task.transactions[i]}
+							bodyHash = body.CalculateHash()
 						}
 						if bodyHash != announce.header.BodyHash {
 							continue

@@ -56,7 +56,7 @@ var (
 		EpochsPerEra:     8,
 		TransitionPeriod: 2,
 		ForkSlotSubNet1:  math.MaxUint64,
-		EffectiveBalance: big.NewInt(32000),
+		EffectiveBalance: big.NewInt(3200),
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -88,7 +88,7 @@ var (
 		EpochsPerEra:     8,
 		TransitionPeriod: 2,
 		ForkSlotSubNet1:  math.MaxUint64,
-		EffectiveBalance: big.NewInt(32000),
+		EffectiveBalance: big.NewInt(3200),
 	}
 
 	// DevNetTrustedCheckpoint contains the light client trusted checkpoint for the DevNet.
@@ -117,16 +117,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(32000)}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
 	TestRules       = TestChainConfig.Rules()
 )
 
