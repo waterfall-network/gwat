@@ -20,7 +20,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		Slot         hexutil.Uint64  `json:"slot"             gencodec:"required"`
 		Era          hexutil.Uint64  `json:"era"              gencodec:"required"`
 		Height       hexutil.Uint64  `json:"height"           gencodec:"required"`
-		CpNumber     uint64          `json:"cpNumber"         gencodec:"required"`
+		CpNumber     hexutil.Uint64  `json:"cpNumber"         gencodec:"required"`
 		CpHash       common.Hash     `json:"cpHash"           gencodec:"required"`
 		CpBaseFee     *hexutil.Big     `json:"cpBaseFeePerGas"  gencodec:"required"`
 		CpRoot        common.Hash      `json:"cpStateRoot"      gencodec:"required"`
@@ -55,7 +55,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.Time = hexutil.Uint64(h.Time)
 	enc.Extra = h.Extra
 	enc.CpHash = h.CpHash
-	enc.CpNumber = h.CpNumber
+	enc.CpNumber = hexutil.Uint64(h.CpNumber)
 	enc.CpBaseFee = (*hexutil.Big)(h.CpBaseFee)
 	enc.CpRoot = h.CpRoot
 	enc.CpReceiptHash = h.CpReceiptHash
