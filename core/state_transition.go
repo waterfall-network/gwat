@@ -24,6 +24,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	cmath "gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
@@ -31,6 +32,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -356,6 +358,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
 		} else if isValidatorOp {
 			ret, vmerr = st.vp.Call(sender, st.to(), st.value, st.msg)
+			op, err := tokenOp.DecodeBytes(msg.Data())
+			if err != nil {
+				return nil, err
+			}
+			if vmerr == nil && op.OpCode() == operation.DepositCode {
+				switch v := op.(type) {
+				case operation.Deposit:
+					rawdb.WriteValidatorDepositTx(st.vp.Db(), v.CreatorAddress(), st.msg.TxHash())
+				}
+			}
+
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

@@ -1106,6 +1106,54 @@ func WriteNotProcessedValidatorSyncOps(db ethdb.KeyValueWriter, valSyncOps []*ty
 	}
 }
 
+// WriteValidatorDepositTx stores creator tx hash.
+func WriteValidatorDepositTx(db ethdb.KeyValueStore, creator common.Address, hash common.Hash) error {
+	key := validatorDepositKey(creator)
+
+	oldData, _ := db.Get(key)
+	var oldHashes common.HashArray
+	if oldData != nil {
+		// Decode old data
+		oldHashes = common.HashArrayFromBytes(oldData)
+	} else {
+		oldHashes = common.HashArray{}
+	}
+
+	// Add new hash to the list
+	oldHashes = oldHashes.Concat(common.HashArray{hash})
+
+	// Encode the new list
+	enc := oldHashes.ToBytes()
+
+	// Store the new list
+	if err := db.Put(key, enc); err != nil {
+		log.Crit("Failed to store tx hashes", "err", err)
+		return err
+	}
+
+	return nil
+}
+
+// ReadValidatorDepositTx retrieves creator's tx hashes.
+func ReadValidatorDepositTx(db ethdb.KeyValueReader, creator common.Address) common.HashArray {
+	key := validatorDepositKey(creator)
+
+	txHashesBytes, err := db.Get(key)
+	if err != nil {
+		log.Error("Failed to get tx hashes", "err", err)
+		return nil
+	}
+
+	var txs common.HashArray
+	if txHashesBytes != nil {
+		// Decode old data
+		txs = common.HashArrayFromBytes(txHashesBytes)
+		return txs
+	}
+
+	return nil
+}
+
 /**** BlockDag ***/
 
 // ReadBlockDag retrieves the BlockDag structure by hash.
