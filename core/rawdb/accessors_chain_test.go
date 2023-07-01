@@ -1021,3 +1021,25 @@ func TestUpdateSlotBlocks(t *testing.T) {
 	updatedHashes = ReadSlotBlocksHashes(db, slot)
 	testutils.AssertEqual(t, blocksHashes, updatedHashes)
 }
+
+func TestWriteAndReadValidatorDepositTx(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	// Set up some addresses and sums for testing
+	addr1 := common.HexToAddress("0x1234")
+	addr2 := common.HexToAddress("0x5678")
+	sum1 := big.NewInt(100)
+	sum2 := big.NewInt(200)
+
+	WriteValidatorDepositBalance(db, addr1, addr2, sum1)
+
+	result := ReadValidatorDepositBalance(db, addr1)
+	testutils.AssertEqual(t, sum1, result[addr2])
+
+	// Add a sum to the existing address
+	WriteValidatorDepositBalance(db, addr1, addr2, sum2)
+
+	// Read back the data and check that the sum
+	result = ReadValidatorDepositBalance(db, addr1)
+	testutils.AssertEqual(t, new(big.Int).Add(sum1, sum2), result[addr2])
+}

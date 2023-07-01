@@ -103,7 +103,7 @@ var (
 	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
 	valSyncNotProcKey = []byte("vsnprockeys") // tracks the not processed validators' sync operation.
 
-	valDepPrefix = []byte("vdep") // validator deposit + .
+	valDepPrefix = []byte("vdep") // validator deposit + address.
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts

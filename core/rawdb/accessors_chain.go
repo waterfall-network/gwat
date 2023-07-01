@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1106,49 +1107,87 @@ func WriteNotProcessedValidatorSyncOps(db ethdb.KeyValueWriter, valSyncOps []*ty
 	}
 }
 
-// WriteValidatorDepositTx stores creator tx hash.
-func WriteValidatorDepositTx(db ethdb.KeyValueStore, creator common.Address, hash common.Hash) error {
-	key := validatorDepositKey(creator)
+func WriteValidatorDepositBalance(db ethdb.KeyValueStore, validator common.Address, from common.Address, sum *big.Int) {
+	key := validatorDepositKey(validator)
 
+	// Retrieve existing data from DB
 	oldData, _ := db.Get(key)
-	var oldHashes common.HashArray
+	fromSums := make(AddressMap)
 	if oldData != nil {
-		// Decode old data
-		oldHashes = common.HashArrayFromBytes(oldData)
+		// If previous data exists, decode it
+		err := json.Unmarshal(oldData, &fromSums)
+		if err != nil {
+			log.Error("Failed to decode user deposit data", "err", err)
+		}
+	}
+
+	// Check if the user already exists in the map and update the sum
+	if oldSum, ok := fromSums[from]; ok {
+		fromSums[from] = new(big.Int).Add(oldSum, sum)
 	} else {
-		oldHashes = common.HashArray{}
+		// If no previous data, create a new entry
+		fromSums[from] = sum
 	}
 
-	// Add new hash to the list
-	oldHashes = oldHashes.Concat(common.HashArray{hash})
+	// Encode the new map
+	enc, err := json.Marshal(fromSums)
+	if err != nil {
+		log.Error("Failed to encode user sums", "err", err)
+	}
 
-	// Encode the new list
-	enc := oldHashes.ToBytes()
-
-	// Store the new list
+	// Store the new map
 	if err := db.Put(key, enc); err != nil {
-		log.Crit("Failed to store tx hashes", "err", err)
-		return err
+		log.Error("Failed to store user sums", "err", err)
 	}
-
-	return nil
 }
 
-// ReadValidatorDepositTx retrieves creator's tx hashes.
-func ReadValidatorDepositTx(db ethdb.KeyValueReader, creator common.Address) common.HashArray {
+// ReadValidatorDepositTx retrieve creator's deposits.
+func ReadValidatorDepositBalance(db ethdb.KeyValueReader, creator common.Address) AddressMap {
 	key := validatorDepositKey(creator)
 
-	txHashesBytes, err := db.Get(key)
+	dbMap, err := db.Get(key)
 	if err != nil {
-		log.Error("Failed to get tx hashes", "err", err)
+		log.Error("Failed to get deposit sums", "err", err)
 		return nil
 	}
 
-	var txs common.HashArray
-	if txHashesBytes != nil {
-		// Decode old data
-		txs = common.HashArrayFromBytes(txHashesBytes)
-		return txs
+	userSums := make(AddressMap)
+	if dbMap != nil {
+		// If data exists, decode it
+		err := json.Unmarshal(dbMap, &userSums)
+		if err != nil {
+			log.Error("Failed to decode deposit sums", "err", err)
+			return nil
+		}
+	}
+
+	return userSums
+}
+
+type AddressMap map[common.Address]*big.Int
+
+// MarshalJSON is a JSON marshaller for AddressMap
+func (am AddressMap) MarshalJSON() ([]byte, error) {
+	out := make(map[string]*big.Int, len(am))
+
+	for key, value := range am {
+		out[key.Hex()] = value
+	}
+
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON is a JSON unmarshaller for AddressMap
+func (am AddressMap) UnmarshalJSON(data []byte) error {
+	in := make(map[string]*big.Int)
+	err := json.Unmarshal(data, &in)
+	if err != nil {
+		return err
+	}
+
+	for key, value := range in {
+		address := common.HexToAddress(key)
+		am[address] = value
 	}
 
 	return nil

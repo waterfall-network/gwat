@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
@@ -128,6 +129,10 @@ func (p *Processor) GetValidatorsStateAddress() common.Address {
 
 func (p *Processor) Storage() valStore.Storage {
 	return p.storage
+}
+
+func (p *Processor) Db() ethdb.Database {
+	return p.blockchain.Database()
 }
 
 // IsValidatorOp returns true if tx is validator operation
@@ -295,6 +300,15 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 			return nil, ErrNotActivatedValidator
 		case -1: // currentBalance < effectiveBalance - withdraw before activation
 			log.Info("validatorWithdrawal before activation and sum < effectiveBalance")
+
+			addressMap := rawdb.ReadValidatorDepositBalance(p.Db(), validator.Address)
+			if addressMap != nil {
+				sum := addressMap[caller.Address()]
+				if sum != nil && sum.Cmp(op.Amount()) >= 0 {
+					sum = sum.Sub(sum, op.Amount())
+					rawdb.WriteValidatorDepositBalance(p.Db(), op.CreatorAddress(), caller.Address(), sum)
+				}
+			}
 		}
 	}
 

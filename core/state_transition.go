@@ -365,7 +365,22 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			if vmerr == nil && op.OpCode() == operation.DepositCode {
 				switch v := op.(type) {
 				case operation.Deposit:
-					rawdb.WriteValidatorDepositTx(st.vp.Db(), v.CreatorAddress(), st.msg.TxHash())
+					db := st.vp.Db()
+					creatorAddress := v.CreatorAddress()
+					fromAddress := st.msg.From()
+					addressMap := rawdb.ReadValidatorDepositBalance(db, creatorAddress)
+
+					sum := new(big.Int)
+					// Check if an entry exists for this creatoe
+					if addressMap != nil {
+						if oldSum := addressMap[fromAddress]; oldSum != nil {
+							sum = oldSum
+						}
+					}
+
+					// Add deposit value to the sum and write to db
+					sum.Add(sum, st.value)
+					rawdb.WriteValidatorDepositBalance(db, creatorAddress, fromAddress, sum)
 				}
 			}
 
