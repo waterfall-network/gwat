@@ -506,7 +506,6 @@ func (d *Downloader) synchronise(id string, dag common.HashArray, lastFinNr uint
 
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
-	log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", p)
 	if p == nil {
 		return errUnknownPeer
 	}
