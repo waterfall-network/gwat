@@ -2,6 +2,7 @@ package era
 
 import (
 	"errors"
+	"math"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -43,7 +44,7 @@ func NewEra(number, from, to uint64, root common.Hash) *Era {
 
 func NextEra(bc Blockchain, root common.Hash, numValidators uint64) *Era {
 	nextEraNumber := bc.GetEraInfo().Number() + 1
-	nextEraLength := EstimateEraLength(bc, numValidators)
+	nextEraLength := EstimateEraLength(bc.Config(), numValidators)
 	nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
 	nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
 
@@ -164,15 +165,20 @@ func (ei *EraInfo) IsContainsEpoch(epoch uint64) bool {
 	return false
 }
 
-func EstimateEraLength(bc Blockchain, numberOfValidators uint64) (eraLength uint64) {
+func EstimateEraLength(chainConfig *params.ChainConfig, numberOfValidators uint64) (eraLength uint64) {
 	var (
-		epochsPerEra  = bc.Config().EpochsPerEra
-		slotsPerEpoch = bc.GetSlotInfo().SlotsPerEpoch
+		epochsPerEra      = chainConfig.EpochsPerEra
+		slotsPerEpoch     = float64(chainConfig.SlotsPerEpoch)
+		validatorsPerSlot = float64(chainConfig.ValidatorsPerSlot)
 	)
 
-	eraLength = epochsPerEra * (1 + (numberOfValidators / (epochsPerEra * slotsPerEpoch)))
+	eraLength = epochsPerEra * roundUp(float64(numberOfValidators)/(float64(epochsPerEra)*slotsPerEpoch*validatorsPerSlot))
 
 	return
+}
+
+func roundUp(num float64) uint64 {
+	return uint64(math.Ceil(num))
 }
 
 func HandleEra(bc Blockchain, cp *types.Checkpoint) error {

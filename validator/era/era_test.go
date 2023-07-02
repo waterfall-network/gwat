@@ -150,13 +150,13 @@ func TestEstimateEraLength(t *testing.T) {
 	}
 
 	// Ensure that the EstimateEraLength function returns the correct era length for different numbers of validators
-	if EstimateEraLength(bc, 640) != 340 {
-		t.Errorf("Expected EstimateEraLength to return 21, but got %v", EstimateEraLength(bc, 640))
+	if EstimateEraLength(bc.Config(), 640) != 340 {
+		t.Errorf("Expected EstimateEraLength to return 21, but got %v", EstimateEraLength(bc.Config(), 640))
 	}
-	if EstimateEraLength(bc, 1024) != 520 {
-		t.Errorf("Expected EstimateEraLength to return 32, but got %v", EstimateEraLength(bc, 1024))
+	if EstimateEraLength(bc.Config(), 1024) != 520 {
+		t.Errorf("Expected EstimateEraLength to return 32, but got %v", EstimateEraLength(bc.Config(), 1024))
 	}
-	if EstimateEraLength(bc, 1500) != 760 {
-		t.Errorf("Expected EstimateEraLength to return 40, but got %v", EstimateEraLength(bc, 1500))
+	if EstimateEraLength(bc.Config(), 1500) != 760 {
+		t.Errorf("Expected EstimateEraLength to return 40, but got %v", EstimateEraLength(bc.Config(), 1500))
 	}
 }
