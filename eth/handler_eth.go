@@ -228,9 +228,8 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
 func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
-	// todo check it
 	if !h.chain.IsSynced() {
-		log.Warn("*********** skip handle: handleBlockBroadcast", "!h.chain.IsSynced()", !h.chain.IsSynced())
+		log.Debug("skip handle: handleBlockBroadcast", "IsSynced()", h.chain.IsSynced())
 		return nil
 	}
 

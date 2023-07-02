@@ -452,19 +452,25 @@ func (pool *TxPool) loop() {
 
 		case txs := <-pool.processingCh:
 			func() {
+				syncMode := !pool.chain.IsSynced()
 				defer func(tStart time.Time) {
 					log.Info("^^^^^^^^^^^^ TIME moveToProcessing",
 						"elapsed", common.PrettyDuration(time.Since(tStart)),
 						"func:", "moveToProcessing",
 						"txs", len(txs),
+						"syncMode", syncMode,
 					)
 				}(time.Now())
 
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
 				for _, tx := range txs {
-					log.Debug("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-					pool.moveToProcessing(tx)
+					// while sync - just removing tx from pool
+					if syncMode {
+						pool.removeProcessedTx(tx)
+					} else {
+						pool.moveToProcessing(tx)
+					}
 				}
 			}()
 

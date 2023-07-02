@@ -353,7 +353,8 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			}
 		}
 		// Retrieve the freezing threshold.
-		hash := ReadLastFinalizedHash(nfdb)
+		cp := ReadLastCoordinatedCheckpoint(nfdb)
+		hash := cp.Spine
 		if hash == (common.Hash{}) {
 			log.Debug("Current full block hash unavailable") // new chain, empty database
 			backoff = true
@@ -475,7 +476,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			"blocks", f.frozen - first, "elapsed", common.PrettyDuration(time.Since(start)), "number", f.frozen - 1,
 		}
 		if n := len(ancients); n > 0 {
-			context = append(context, []interface{}{"hash", ancients[n-1]}...)
+			context = append(context, []interface{}{"hash", ancients[n-1].Hex()}...)
 		}
 		log.Info("Deep froze chain segment", context...)
 

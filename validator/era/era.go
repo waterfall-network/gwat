@@ -182,7 +182,7 @@ func roundUp(num float64) uint64 {
 }
 
 func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
-	log.Info("$$$$$$$$$ ERA started for new cp", "cp", cp.Epoch, "root", cp.Root, "finEpoch", cp.FinEpoch)
+	log.Info("ERA started for new cp", "cp", cp.Epoch, "finEpoch", cp.FinEpoch, "root", cp.Spine.Hex())
 	//currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	//newEpoch := bc.GetSlotInfo().IsEpochStart(slot)
 	var spineRoot common.Hash

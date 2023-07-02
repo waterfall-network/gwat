@@ -381,7 +381,7 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() || !backend.Chain().IsSynced() {
-		log.Warn("node is syncing, handleTransactions transaction cannot be processed at this moment", "AcceptTxs()", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
+		log.Debug("skip handle tx: handleTransactions node is syncing", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
 		return nil
 	}
 	// Transactions can be processed, parse all of them and deliver to the pool
