@@ -333,7 +333,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteCoordinatedCheckpoint(db, genesisCp)
 	rawdb.WriteEpoch(db, 0, genesisCp.Spine)
 
-	genesisEra := era.Era{0, 0, g.Config.EpochsPerEra - 1, genesisBlock.Root()}
+	genesisEraLength := era.EstimateEraLength(g.Config, uint64(len(g.Validators)))
+	genesisEra := era.Era{0, 0, genesisEraLength - 1, genesisBlock.Root()}
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(db, genesisEra.Number)
 
