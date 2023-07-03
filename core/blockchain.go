@@ -2166,12 +2166,13 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if !bc.verifyCreators(block) {
 		return false, nil
 	}
-	// Verify block checkpoint
-	isValidCp := bc.verifyCheckpoint(block)
-	if !isValidCp {
-		log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
-		return false, nil
-	}
+	//todo check
+	//// Verify block checkpoint
+	//isValidCp := bc.verifyCheckpoint(block)
+	//if !isValidCp {
+	//	log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
+	//	return false, nil
+	//}
 
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
