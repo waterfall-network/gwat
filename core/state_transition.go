@@ -33,6 +33,7 @@ import (
 	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
+	validatorOp "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -358,7 +359,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
 		} else if isValidatorOp {
 			ret, vmerr = st.vp.Call(sender, st.to(), st.value, st.msg)
-			op, err := tokenOp.DecodeBytes(msg.Data())
+			op, err := validatorOp.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
 			}
