@@ -578,8 +578,6 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
-				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, d.bc.Genesis().Root())
-				d.bc.SetNewEraInfo(*newEra)
 				d.bc.SetIsSynced(true)
 				continue
 			}
