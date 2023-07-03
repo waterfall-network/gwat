@@ -932,7 +932,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 		}
 
 		delBlock := bc.GetBlockByHash(hash)
-		log.Info("@@@@@@@@@ OptimisticSpines cache Deleteblock from db!!!!!", "slot", delBlock.Slot(), "hash", hash)
+		log.Info("Delete block from db", "slot", delBlock.Slot(), "hash", hash)
 		rawdb.DeleteSlotBlockHash(bc.Database(), delBlock.Slot(), hash)
 
 		if num != nil {
@@ -964,8 +964,8 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 	bc.receiptsCache.Purge()
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
-	log.Info("@@@@@@@@@ OptimisticSpines cache Purge!!!!!", "head", head.Hex())
-	bc.optimisticSpinesCache.Purge() //TODO: check
+	bc.optimisticSpinesCache.Purge()
+	log.Info("Purge caches of blockchain", "head", head.Hex())
 
 	return rootNumber, bc.loadLastState()
 }

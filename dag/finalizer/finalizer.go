@@ -232,6 +232,14 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 	if len(spines) == 0 {
 		return true, nil
 	}
+	defer func(start time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "ValidateCandidates",
+			"spines", len(spines),
+		)
+	}(time.Now())
+
 	var (
 		bc            = f.eth.BlockChain()
 		hasNotFin     = false          //has any not finalized items
@@ -239,10 +247,8 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		optSpines     []common.HashArray
 		err           error
 	)
-	start := time.Now()
 
 	mapHeaders := bc.GetHeadersByHashes(spines)
-	log.Info("@@@@@@@@@ Candidates HandleValidateSpines IsValidSequenceOfSpines GetHeadersByHashes", "candidates", mapHeaders)
 	for _, b := range mapHeaders {
 		// if not found
 		if b == nil {
@@ -256,7 +262,7 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 			// if block is finalized - check is it spine
 			// TODO: check
 			if b.Nr() != b.Height {
-				log.Warn("?????? IsValidSequenceOfSpines b.Nr() != b.Height", "b.Nr()", b.Nr(), "b.Nr()", b.Height, "hash", b.Hash())
+				log.Warn("IsValidSequenceOfSpines b.Nr() != b.Height", "b.Nr()", b.Nr(), "b.Nr()", b.Height, "hash", b.Hash())
 				//return false, nil
 			}
 		}
@@ -329,11 +335,6 @@ func (f *Finalizer) IsValidSequenceOfSpines(spines common.HashArray) (bool, erro
 		}
 		prevBlock = bl
 	}
-
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(start)),
-		"func:", "ValidateCandidates",
-	)
 	return true, nil
 }
 

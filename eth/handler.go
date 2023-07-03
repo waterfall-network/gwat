@@ -192,7 +192,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	heighter := func() uint64 {
 		return h.chain.GetLastFinalizedNumber()
 	}
-	//expCache := core.ExploreResultMap{}
 	inserter := func(peerId string, blocks types.Blocks) (int, error, *common.HashArray) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
 		//
