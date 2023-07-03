@@ -155,14 +155,6 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		return res
 	}
 
-	si := d.bc.GetSlotInfo()
-	currEpoch := si.SlotToEpoch(si.CurrentSlot())
-	// is cp head fin epoch reached
-	if currEpoch == data.Checkpoint.FinEpoch {
-		d.bc.SetIsSynced(true)
-		log.Info("HandleFinalize SetIsSynced curEpoch == finEpoch", "currEpoch", currEpoch, "finEpoch", data.Checkpoint.FinEpoch)
-	}
-
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
@@ -247,6 +239,14 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
 		res.CpEpoch = &cp.FinEpoch
 		res.CpRoot = &cp.Root
+
+		// is cp finalized epoch reached the current epoch - node is synced
+		si := d.bc.GetSlotInfo()
+		currEpoch := si.SlotToEpoch(si.CurrentSlot())
+		if currEpoch == cp.FinEpoch {
+			d.bc.SetIsSynced(true)
+			log.Info("HandleFinalize SetIsSynced curEpoch == finEpoch", "currEpoch", currEpoch, "finEpoch", data.Checkpoint.FinEpoch)
+		}
 	}
 
 	log.Info("Handle Finalize: response",
@@ -295,16 +295,22 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 		d.bc.SetIsSynced(true)
 		log.Info("Node fully synced: head reached")
 	}
-	log.Debug("@@@@@@@@@@@ handleSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("handleSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
 func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
+	defer func(start time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "dag.hasUnloadedBlocks",
+		)
+	}(time.Now())
+
 	var (
 		unl common.HashArray
 		err error
 	)
-	start := time.Now()
 	for _, spine := range spines.Reverse() {
 		spHeader := d.bc.GetHeaderByHash(spine)
 		if spHeader == nil {
@@ -318,7 +324,6 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 			return true, nil
 		}
 	}
-	log.Debug("@@@@@@@@@@@ hasUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
 
 	return false, nil
 }
@@ -362,10 +367,15 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		}
 	}
 
+	defer func(tstart time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(tstart)),
+			"func:", "GetCandidates",
+		)
+	}(time.Now())
+
 	//d.bc.DagMuLock()
 	//defer d.bc.DagMuUnlock()
-
-	tstart := time.Now()
 
 	// collect next finalization candidates
 	//candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
@@ -390,7 +400,7 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		log.Info("No candidates found", "slot", slot)
 	}
 
-	log.Debug("@@@@@@@@@ Candidates HandleGetCandidates: get finalizing candidates", "err", err, "toSlot", slot, "fromSlot", fromSlot, "candidates", candidates, "elapsed", common.PrettyDuration(time.Since(tstart)), "\u2692", params.BuildId)
+	log.Debug("Candidates HandleGetCandidates: get finalizing candidates", "err", err, "toSlot", slot, "fromSlot", fromSlot, "candidates", candidates, "\u2692", params.BuildId)
 	res := &types.CandidatesResult{
 		Error:      nil,
 		Candidates: candidates,
@@ -399,11 +409,6 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 		estr := err.Error()
 		res.Error = &estr
 	}
-
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(tstart)),
-		"func:", "GetCandidates",
-	)
 	return res
 }
 
@@ -506,8 +511,7 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	//d.bc.DagMuLock()
 	//defer d.bc.DagMuUnlock()
 
-	log.Debug("@@@@@@@@@ Candidates HandleValidateSpines req", "candidates", spines, "elapsed", "\u2692", params.BuildId)
-	//log.Info("Handle Validate TerminalSpine", "spines", spines, "\u2692", params.BuildId)
+	log.Debug("Candidates HandleValidateSpines req", "candidates", spines, "elapsed", "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
 
@@ -574,8 +578,6 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
-				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, d.bc.Genesis().Root())
-				d.bc.SetNewEraInfo(*newEra)
 				d.bc.SetIsSynced(true)
 				continue
 			}
