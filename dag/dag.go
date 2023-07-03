@@ -217,7 +217,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	}
 
 	// finalization
-	if len(data.Spines) > 0 {
+	if len(spines) > 0 {
 		if err := d.finalizer.Finalize(&spines, &baseSpine); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
 				// Start syncing if spine or parent is unloaded
@@ -737,8 +737,9 @@ func (d *Dag) isCoordinatorConnectionLost() bool {
 		return true
 	}
 	slot = si.CurrentSlot()
-	if si.IsEpochStart(slot) {
-		return (slot - d.getLastFinalizeApiSlot()) > 1
+	// todo rm tmp log
+	if si.IsEpochStart(slot) && (slot-d.getLastFinalizeApiSlot()) > 1 {
+		log.Info("??? check isSynced=false on epoch start (todo rm)", "currSlot", slot, "lastCoordSlot", d.getLastFinalizeApiSlot(), "epochStart", si.SlotToEpoch(slot))
 	}
 	return (slot - d.getLastFinalizeApiSlot()) > si.SlotsPerEpoch
 }

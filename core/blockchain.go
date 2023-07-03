@@ -2166,6 +2166,12 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if !bc.verifyCreators(block) {
 		return false, nil
 	}
+	// Verify block checkpoint
+	isValidCp := bc.verifyCheckpoint(block)
+	if !isValidCp {
+		log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
+		return false, nil
+	}
 
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
@@ -2219,13 +2225,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"hash", block.Hash().Hex(),
 			"cpHeight", cpHeader.Height,
 		)
-		return false, nil
-	}
-
-	// Verify block checkpoint
-	isValidCp := bc.verifyCheckpoint(block)
-	if !isValidCp {
-		log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
 		return false, nil
 	}
 
@@ -2344,16 +2343,13 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
-		// if checkpoint of propagated block is not finalized - set IsSynced=false
-		if cpHeader := bc.GetHeaderByHash(block.CpHash()); cpHeader != nil {
-			if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
-				log.Warn("Check is synchronized: cp not finalized", "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
-				bc.SetIsSynced(false)
-			}
-		} else {
-			log.Warn("Check is synchronized: cp not found", "cpHash", block.CpHash())
-			bc.SetIsSynced(false)
-			return it.index, ErrInsertUncompletedDag
+		// cp must be coordinated (received from coordinator)
+		if coordCp := bc.GetCoordinatedCheckpoint(block.CpHash()); coordCp == nil {
+			log.Warn("Block verification: block cp not found as coordinated cp",
+				"cp.Hash", block.CpHash().Hex(),
+				"bl.Hash", block.Hash().Hex(),
+			)
+			continue
 		}
 
 		if ok, err := bc.VerifyBlock(block); !ok {
