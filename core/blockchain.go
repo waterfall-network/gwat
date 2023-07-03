@@ -2229,6 +2229,14 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	//todo check
+	// Verify block checkpoint
+	isValidCp := bc.verifyCheckpoint(block)
+	if !isValidCp {
+		log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
+		return false, nil
+	}
+
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
 		var intrGas uint64
@@ -2344,14 +2352,15 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
-		// cp must be coordinated (received from coordinator)
-		if coordCp := bc.GetCoordinatedCheckpoint(block.CpHash()); coordCp == nil {
-			log.Warn("Block verification: block cp not found as coordinated cp",
-				"cp.Hash", block.CpHash().Hex(),
-				"bl.Hash", block.Hash().Hex(),
-			)
-			continue
-		}
+		//todo check
+		//// cp must be coordinated (received from coordinator)
+		//if coordCp := bc.GetCoordinatedCheckpoint(block.CpHash()); coordCp == nil {
+		//	log.Warn("Block verification: block cp not found as coordinated cp",
+		//		"cp.Hash", block.CpHash().Hex(),
+		//		"bl.Hash", block.Hash().Hex(),
+		//	)
+		//	continue
+		//}
 
 		if ok, err := bc.VerifyBlock(block); !ok {
 			if err != nil {
