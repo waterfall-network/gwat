@@ -180,7 +180,7 @@ type LightChain interface {
 	SetHead(array common.Hash) error
 
 	// WriteSyncDagBlock writes the dag block and all associated state to the database for dag synchronization process
-	WriteSyncDagBlock(block *types.Block) (status int, err error)
+	WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error)
 
 	GetSlotInfo() *types.SlotInfo
 }
@@ -742,7 +742,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 		}
 		spine := slotBlocks[0]
 		if spine.Slot() > lastFinBlock.Slot() {
-			_, err = d.blockchain.WriteSyncDagBlock(spine)
+			_, err = d.blockchain.WriteSyncDagBlock(spine, true)
 			if err != nil {
 				log.Error("Failed writing block to chain (sync dep)", "err", err)
 				return err
@@ -756,7 +756,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 				continue
 			}
 			// Commit block and state to database.
-			_, err = d.blockchain.WriteSyncDagBlock(block)
+			_, err = d.blockchain.WriteSyncDagBlock(block, true)
 			if err != nil {
 				log.Error("Failed writing block to chain (sync dep)", "err", err)
 				return err
@@ -813,7 +813,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	for _, slot := range slots {
 		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
 		for _, block := range slotBlocks {
-			_, err = d.blockchain.WriteSyncDagBlock(block)
+			_, err = d.blockchain.WriteSyncDagBlock(block, true)
 			if err != nil {
 				log.Error("Failed writing block to chain  (sync unl)", "err", err)
 				return err
@@ -2758,7 +2758,7 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 		//handle by reverse order
 		for _, block := range slotBlocks {
 			// Commit block to database.
-			_, err = d.blockchain.WriteSyncDagBlock(block)
+			_, err = d.blockchain.WriteSyncDagBlock(block, fullySynced)
 			if err != nil {
 				log.Error("Failed writing block to chain (sync)", "err", err)
 				return false, err

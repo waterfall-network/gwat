@@ -26,17 +26,18 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // Reduce some of the parameters to make the tester faster.
@@ -66,6 +67,26 @@ type downloadTester struct {
 	ancientReceipts map[common.Hash]types.Receipts // Ancient receipts belonging to the tester
 
 	lock sync.RWMutex
+}
+
+func (dl *downloadTester) GetEraInfo() *era.EraInfo {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dl *downloadTester) Config() *params.ChainConfig {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dl *downloadTester) EnterNextEra(checkpoint *types.Checkpoint, hash common.Hash) *era.Era {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dl *downloadTester) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (dl *downloadTester) IsSynced() bool {
@@ -108,7 +129,7 @@ func (dl *downloadTester) GetLastFinalizedHeader() *types.Header {
 	panic("implement me")
 }
 
-func (dl *downloadTester) WriteSyncDagBlock(block *types.Block) (status int, err error) {
+func (dl *downloadTester) WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error) {
 	//TODO implement me
 	panic("implement me")
 }

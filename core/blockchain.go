@@ -1562,7 +1562,7 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 
 // WriteSyncDagBlock writes the dag block and all associated state to the database
 // for dag synchronization process
-func (bc *BlockChain) WriteSyncDagBlock(block *types.Block) (status int, err error) {
+func (bc *BlockChain) WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error) {
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
@@ -1571,14 +1571,14 @@ func (bc *BlockChain) WriteSyncDagBlock(block *types.Block) (status int, err err
 		return 0, errInsertionInterrupted
 	}
 	//n, err := bc.insertPropagatedBlocks(types.Blocks{block}, true, true)
-	n, err := bc.insertPropagatedBlocks(types.Blocks{block})
+	n, err := bc.insertPropagatedBlocks(types.Blocks{block}, validate)
 	bc.chainmu.Unlock()
 
 	if len(bc.insBlockCache) > 0 {
 		log.Info("Insert delayed propagated blocks", "count", len(bc.insBlockCache))
 		insBlockCache := []*types.Block{}
 		for _, bl := range bc.insBlockCache {
-			_, insErr := bc.insertPropagatedBlocks(types.Blocks{bl})
+			_, insErr := bc.insertPropagatedBlocks(types.Blocks{bl}, true)
 			if insErr == ErrInsertUncompletedDag {
 				insBlockCache = append(insBlockCache, bl)
 			} else if insErr != nil {
@@ -1786,7 +1786,7 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
-	n, err := bc.insertPropagatedBlocks(chain)
+	n, err := bc.insertPropagatedBlocks(chain, true)
 	bc.chainmu.Unlock()
 
 	if err == ErrInsertUncompletedDag {
@@ -2289,7 +2289,7 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 }
 
 // insertPropagatedBlocks inserts propagated block
-func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
+func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, validate bool) (int, error) {
 
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
@@ -2352,33 +2352,95 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
-		// if checkpoint of propagated block is not finalized - set IsSynced=false
-		if cpHeader := bc.GetHeaderByHash(block.CpHash()); cpHeader != nil {
-			if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
-				log.Warn("Check is synchronized: cp not finalized", "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
-				bc.SetIsSynced(false)
-			}
-		} else {
-			log.Warn("Check is synchronized: cp not found", "cpHash", block.CpHash())
-			bc.SetIsSynced(false)
-			return it.index, ErrInsertUncompletedDag
-		}
-		//todo check
-		//// cp must be coordinated (received from coordinator)
-		//if coordCp := bc.GetCoordinatedCheckpoint(block.CpHash()); coordCp == nil {
-		//	log.Warn("Block verification: block cp not found as coordinated cp",
-		//		"cp.Hash", block.CpHash().Hex(),
-		//		"bl.Hash", block.Hash().Hex(),
-		//	)
-		//	continue
+		//// if checkpoint of propagated block is not finalized - set IsSynced=false
+		//if cpHeader := bc.GetHeaderByHash(block.CpHash()); cpHeader != nil {
+		//	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+		//		log.Warn("Check is synchronized: cp not finalized", "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
+		//		bc.SetIsSynced(false)
+		//	}
+		//} else {
+		//	log.Warn("Check is synchronized: cp not found", "cpHash", block.CpHash())
+		//	bc.SetIsSynced(false)
+		//	return it.index, ErrInsertUncompletedDag
 		//}
 
-		if ok, err := bc.VerifyBlock(block); !ok {
-			if err != nil {
-				return it.index, err
+		if validate {
+			//todo check
+			// cp must be coordinated (received from coordinator)
+			if coordCp := bc.GetCoordinatedCheckpoint(block.CpHash()); coordCp == nil {
+				log.Warn("Block CP verification: block cp not found as coordinated cp",
+					"cp.Nr", block.CpNumber(),
+					"cp.Hash", block.CpHash().Hex(),
+					"bl.Slot", block.Slot(),
+					"bl.Hash", block.Hash().Hex(),
+				)
+				// if checkpoint of propagated block is not finalized - set IsSynced=false
+				cpHeader := bc.GetHeaderByHash(block.CpHash())
+				if cpHeader != nil {
+					si := bc.GetSlotInfo()
+					lCp := bc.GetLastCoordinatedCheckpoint()
+					cpEpoch := si.SlotToEpoch(cpHeader.Slot)
+					currEpoch := si.SlotToEpoch(si.CurrentSlot())
+					if cpEpoch <= lCp.Epoch && cpEpoch >= currEpoch {
+						log.Error("Block CP verification: block rejected (bad cp epoch)",
+							"cpEpoch", cpEpoch,
+							"lCp.Epoch", lCp.Epoch,
+							"currEpoch", currEpoch,
+							"cp.Nr", block.CpNumber(),
+							"cp.Hash", block.CpHash().Hex(),
+							"bl.Slot", block.Slot(),
+							"bl.Hash", block.Hash().Hex(),
+						)
+						bc.CacheInvalidBlock(block)
+						continue
+					}
+					// if cp is not finalized
+					if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+						lfb := bc.GetLastFinalizedHeader()
+						if block.CpNumber() <= lfb.Nr() {
+							log.Error("Block CP verification: block rejected (bad cp nr)",
+								"bl.CpNr", block.CpNumber(),
+								"lfNr", lfb.Nr(),
+								"cp.Hash", block.CpHash().Hex(),
+								"bl.Slot", block.Slot(),
+								"bl.Hash", block.Hash().Hex(),
+							)
+							bc.CacheInvalidBlock(block)
+							continue
+						}
+						// todo fix the gap here
+						log.Warn("Block CP verification: cp is not finalized",
+							"cpHash", block.CpHash(),
+							"cpSlot", cpHeader.Slot,
+						)
+						bc.SetIsSynced(false)
+					} else {
+						if block.CpNumber() != cpHeader.Nr() {
+							log.Error("Block CP verification: block rejected (bad cp mismatch nr)",
+								"bl.CpNr", block.CpNumber(),
+								"cp.Nr", cpHeader.Nr(),
+								"cp.Hash", block.CpHash().Hex(),
+								"bl.Slot", block.Slot(),
+								"bl.Hash", block.Hash().Hex(),
+							)
+							bc.CacheInvalidBlock(block)
+							continue
+						}
+					}
+				} else {
+					log.Error("Block CP verification: block rejected (cp not found)", "cpHash", block.CpHash())
+					bc.CacheInvalidBlock(block)
+					continue
+				}
 			}
-			bc.CacheInvalidBlock(block)
-			continue
+
+			if ok, err := bc.VerifyBlock(block); !ok {
+				if err != nil {
+					return it.index, err
+				}
+				bc.CacheInvalidBlock(block)
+				continue
+			}
 		}
 
 		log.Info("Insert propagated block", "Slot", block.Slot(), "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())

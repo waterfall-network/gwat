@@ -115,7 +115,7 @@ func (lc *LightChain) CurrentHeader() *types.Header {
 	panic("implement me")
 }
 
-func (lc *LightChain) WriteSyncDagBlock(block *types.Block) (status int, err error) {
+func (lc *LightChain) WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error) {
 	panic("implement me")
 }
 
