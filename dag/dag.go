@@ -221,11 +221,19 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			res.Error = &e
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-			go era.HandleEra(d.bc, data.Checkpoint)
+			if d.bc.IsSynced() {
+				go era.HandleEra(d.bc, data.Checkpoint)
+			} else {
+				era.HandleEra(d.bc, data.Checkpoint)
+			}
 		}
 	} else {
 		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-		go era.HandleEra(d.bc, data.Checkpoint)
+		if d.bc.IsSynced() {
+			go era.HandleEra(d.bc, data.Checkpoint)
+		} else {
+			era.HandleEra(d.bc, data.Checkpoint)
+		}
 	}
 
 	// handle validator sync data
@@ -739,9 +747,5 @@ func (d *Dag) isCoordinatorConnectionLost() bool {
 		return true
 	}
 	slot = si.CurrentSlot()
-	// todo rm tmp log
-	if si.IsEpochStart(slot) && (slot-d.getLastFinalizeApiSlot()) > 1 {
-		log.Info("??? check isSynced=false on epoch start (todo rm)", "currSlot", slot, "lastCoordSlot", d.getLastFinalizeApiSlot(), "epochStart", si.SlotToEpoch(slot))
-	}
 	return (slot - d.getLastFinalizeApiSlot()) > si.SlotsPerEpoch
 }

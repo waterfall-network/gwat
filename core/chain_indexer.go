@@ -415,7 +415,15 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		return common.Hash{}, err
 	}
 
-	for number := section * c.sectionSize; number < (section+1)*c.sectionSize; number++ {
+	cp := rawdb.ReadLastCoordinatedCheckpoint(c.chainDb)
+	if cp == nil {
+		return common.Hash{}, fmt.Errorf("current checkpoint unknown during section processing")
+	}
+	cpNr := rawdb.ReadFinalizedNumberByHash(c.chainDb, cp.Spine)
+	if cpNr == nil {
+		return common.Hash{}, fmt.Errorf("current checkpoint number not found during section processing")
+	}
+	for number := section * c.sectionSize; number < (section+1)*c.sectionSize && number < *cpNr; number++ {
 		hash := rawdb.ReadFinalizedHashByNumber(c.chainDb, number)
 		if hash == (common.Hash{}) {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)

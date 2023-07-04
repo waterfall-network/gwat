@@ -2352,6 +2352,17 @@ func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks) (int, error) {
 			return it.index, ErrBannedHash
 		}
 
+		// if checkpoint of propagated block is not finalized - set IsSynced=false
+		if cpHeader := bc.GetHeaderByHash(block.CpHash()); cpHeader != nil {
+			if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+				log.Warn("Check is synchronized: cp not finalized", "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
+				bc.SetIsSynced(false)
+			}
+		} else {
+			log.Warn("Check is synchronized: cp not found", "cpHash", block.CpHash())
+			bc.SetIsSynced(false)
+			return it.index, ErrInsertUncompletedDag
+		}
 		//todo check
 		//// cp must be coordinated (received from coordinator)
 		//if coordCp := bc.GetCoordinatedCheckpoint(block.CpHash()); coordCp == nil {
