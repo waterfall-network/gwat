@@ -467,7 +467,8 @@ func (pool *TxPool) loop() {
 				for _, tx := range txs {
 					// while sync - just removing tx from pool
 					if syncMode {
-						pool.removeProcessedTx(tx)
+						pool.removeTx(tx.Hash(), true)
+						//pool.removeProcessedTx(tx)
 					} else {
 						pool.moveToProcessing(tx)
 					}
@@ -487,7 +488,8 @@ func (pool *TxPool) loop() {
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
 				for _, tx := range txs {
-					pool.removeProcessedTx(tx)
+					pool.removeTx(tx.Hash(), true)
+					//pool.removeProcessedTx(tx)
 				}
 			}()
 		}
