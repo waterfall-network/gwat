@@ -1570,15 +1570,14 @@ func (bc *BlockChain) WriteSyncDagBlock(block *types.Block, validate bool) (stat
 	if !bc.chainmu.TryLock() {
 		return 0, errInsertionInterrupted
 	}
-	//n, err := bc.insertPropagatedBlocks(types.Blocks{block}, true, true)
-	n, err := bc.insertPropagatedBlocks(types.Blocks{block}, validate)
+	n, err := bc.insertBlocks(types.Blocks{block}, validate)
 	bc.chainmu.Unlock()
 
 	if len(bc.insBlockCache) > 0 {
 		log.Info("Insert delayed propagated blocks", "count", len(bc.insBlockCache))
 		insBlockCache := []*types.Block{}
 		for _, bl := range bc.insBlockCache {
-			_, insErr := bc.insertPropagatedBlocks(types.Blocks{bl}, true)
+			_, insErr := bc.insertBlocks(types.Blocks{bl}, true)
 			if insErr == ErrInsertUncompletedDag {
 				insBlockCache = append(insBlockCache, bl)
 			} else if insErr != nil {
@@ -1591,7 +1590,25 @@ func (bc *BlockChain) WriteSyncDagBlock(block *types.Block, validate bool) (stat
 	return n, err
 }
 
+// WriteCreatedDagBlock writes the dag block created locally.
+func (bc *BlockChain) WriteCreatedDagBlock(block *types.Block) (status int, err error) {
+	bc.blockProcFeed.Send(true)
+	defer bc.blockProcFeed.Send(false)
+
+	// Pre-checks passed, start the full block imports
+	if !bc.chainmu.TryLock() {
+		return 0, errInsertionInterrupted
+	}
+	defer bc.chainmu.Unlock()
+
+	n, err := bc.insertBlocks(types.Blocks{block}, true)
+	bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+
+	return n, err
+}
+
 // WriteMinedBlock writes the block and all associated state to the database.
+// deprecated
 func (bc *BlockChain) WriteMinedBlock(block *types.Block) (status WriteStatus, err error) {
 	if !bc.chainmu.TryLock() {
 		return NonStatTy, errInsertionInterrupted
@@ -1786,7 +1803,7 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
-	n, err := bc.insertPropagatedBlocks(chain, true)
+	n, err := bc.insertBlocks(chain, true)
 	bc.chainmu.Unlock()
 
 	if err == ErrInsertUncompletedDag {
@@ -2288,8 +2305,8 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 	return true, nil
 }
 
-// insertPropagatedBlocks inserts propagated block
-func (bc *BlockChain) insertPropagatedBlocks(chain types.Blocks, validate bool) (int, error) {
+// insertBlocks inserts blocks to chain
+func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, error) {
 
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
@@ -2566,8 +2583,8 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 
 	// Write the block to the chain and get the status.
 	subStart = time.Now()
-	log.Info(">>>>>>>>> UpdateFinalizingState <<<<<<", "height", block.Height(), "hash", block.Hash().Hex())
-	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "insertPropagatedBlocks")
+	log.Info("Finalization: update state", "height", block.Height(), "hash", block.Hash().Hex())
+	status, err := bc.writeBlockWithState(block, receipts, logs, statedb, ET_SKIP, "updateFinalizingState")
 	if err != nil {
 		return err
 	}
