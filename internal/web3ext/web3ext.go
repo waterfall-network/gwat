@@ -1075,7 +1075,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'getValidators',
 			call: 'wat_getValidators',
-			params: 1
+			params: 1,
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'getValidatorsBySlot',
@@ -1092,7 +1093,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'getEra',
 			call: 'wat_getEra',
-			params: 1
+			params: 1,
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'getDagHashes',
