@@ -296,6 +296,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if bc.GetBlockFinalizedNumber(bc.genesisBlock.Hash()) == nil {
 		rawdb.WriteLastFinalizedHash(db, bc.genesisBlock.Hash())
 		rawdb.WriteFinalizedHashNumber(db, bc.genesisBlock.Hash(), uint64(0))
+		log.Info("Save genesis hash", "hash", bc.genesisBlock.Hash(), "fn", "NewBlockChain")
 	}
 
 	var nilBlock *types.Block = bc.genesisBlock
@@ -1084,7 +1085,10 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	// ~Add the block to the canonical chain number scheme and mark as the head~
 	// Add the block to the finalized chain number scheme
 	batch := bc.db.NewBatch()
-
+	if finNr == 0 && block.Hash() != bc.genesisBlock.Hash() {
+		log.Error("Save genesis hash", "hash", block.Hash(), "fn", "writeFinalizedBlock")
+		return fmt.Errorf("received zero finalizing number")
+	}
 	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
