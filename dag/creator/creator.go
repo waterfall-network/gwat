@@ -418,43 +418,11 @@ func (c *Creator) resultHandler(task *task) {
 		hash = task.block.Hash()
 	)
 	// Commit block to database.
-	_, err := c.chain.WriteMinedBlock(task.block)
+	_, err := c.chain.WriteCreatedDagBlock(task.block)
 	if err != nil {
 		log.Error("Failed writing block to chain (creator)", "err", err)
 		return
 	}
-
-	//update state of tips
-	bc := c.chain
-	//1. remove stale tips
-	bc.RemoveTips(task.block.ParentHashes())
-
-	//create new blockDag
-	cpHeader := bc.GetHeader(task.block.CpHash())
-	tips := task.tips.Copy()
-	dagChainHashes, err := bc.CollectDagChainHashesByTips(tips, cpHeader.Hash())
-	if err != nil {
-		log.Error("Creator failed", "err", err)
-		return
-	}
-	newBlockDag := &types.BlockDAG{
-		Hash:           task.block.Hash(),
-		Height:         task.block.Height(),
-		Slot:           task.block.Slot(),
-		CpHash:         task.block.CpHash(),
-		CpHeight:       cpHeader.Height,
-		DagChainHashes: dagChainHashes,
-	}
-	c.chain.AddTips(newBlockDag)
-	c.chain.WriteCurrentTips()
-
-	log.Info("Creator: end tips",
-		"tipsHashes", c.chain.GetTips().GetHashes(),
-		//"tips", c.chain.GetTips().Print(),
-	)
-
-	c.chain.MoveTxsToProcessing(types.Blocks{task.block})
-
 	// Broadcast the block and announce chain insertion event
 	c.mux.Post(core.NewMinedBlockEvent{Block: task.block})
 
@@ -469,6 +437,60 @@ func (c *Creator) resultHandler(task *task) {
 		"CpHash", task.block.CpHash().Hex(),
 		"CpNumber", task.block.CpNumber(),
 	)
+
+	//TODO depracated code memo
+	//// Commit block to database.
+	//_, err := c.chain.WriteMinedBlock(task.block)
+	//if err != nil {
+	//	log.Error("Failed writing block to chain (creator)", "err", err)
+	//	return
+	//}
+	//
+	////update state of tips
+	//bc := c.chain
+	////1. remove stale tips
+	//bc.RemoveTips(task.block.ParentHashes())
+	//
+	////create new blockDag
+	//cpHeader := bc.GetHeader(task.block.CpHash())
+	//tips := task.tips.Copy()
+	//dagChainHashes, err := bc.CollectDagChainHashesByTips(tips, cpHeader.Hash())
+	//if err != nil {
+	//	log.Error("Creator failed", "err", err)
+	//	return
+	//}
+	//newBlockDag := &types.BlockDAG{
+	//	Hash:           task.block.Hash(),
+	//	Height:         task.block.Height(),
+	//	Slot:           task.block.Slot(),
+	//	CpHash:         task.block.CpHash(),
+	//	CpHeight:       cpHeader.Height,
+	//	DagChainHashes: dagChainHashes,
+	//}
+	//c.chain.AddTips(newBlockDag)
+	//c.chain.WriteCurrentTips()
+	//
+	//log.Info("Creator: end tips",
+	//	"tipsHashes", c.chain.GetTips().GetHashes(),
+	//	//"tips", c.chain.GetTips().Print(),
+	//)
+	//
+	//c.chain.MoveTxsToProcessing(types.Blocks{task.block})
+	//
+	//// Broadcast the block and announce chain insertion event
+	//c.mux.Post(core.NewMinedBlockEvent{Block: task.block})
+	//
+	//// Insert the block into the set of pending ones to resultLoop for confirmations
+	//log.Info("🔨 created dag block",
+	//	"slot", task.block.Slot(),
+	//	"epoch", c.chain.GetSlotInfo().SlotToEpoch(task.block.Slot()),
+	//	"era", task.block.Era(),
+	//	"height", task.block.Height(),
+	//	"hash", hash.Hex(),
+	//	"parents", task.block.ParentHashes(),
+	//	"CpHash", task.block.CpHash().Hex(),
+	//	"CpNumber", task.block.CpNumber(),
+	//)
 
 }
 

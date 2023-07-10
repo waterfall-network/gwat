@@ -680,10 +680,28 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 			Creators: creators,
 		}
 
+		// define time to stop of starting new creating process for current slot
+		// as 1/2 of
+		si := d.bc.GetSlotInfo()
+		startSlotT, errt := si.StartSlotTime(slot)
+		if errt != nil {
+			log.Error("Creator calc start slot time failed", "err", err)
+			return
+		}
+		durationLimit := time.Duration(si.SecondsPerSlot*1000/2) * time.Millisecond
+		createExpirationTime := startSlotT.Add(durationLimit)
+
 		crtStart := time.Now()
 		crtInfo := map[string]string{}
 		for _, creator := range assigned.Creators {
-			// if received next slot
+			// break proc if time expired
+			if createExpirationTime.Before(time.Now()) {
+				log.Warn("Creator work time expired",
+					"slot", slot,
+					"expired", common.PrettyDuration(time.Since(createExpirationTime)),
+				)
+				break
+			}
 
 			coinbase := common.Address{}
 			for _, acc := range accounts {
