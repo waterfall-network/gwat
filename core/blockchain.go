@@ -3985,6 +3985,13 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 		)
 		return false
 	}
+	if bc.IsCheckpointOutdated(coordCp) {
+		log.Warn("Block verification: cp is outdated",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
 	// check cp block exists
 	cpHeader := bc.GetHeader(block.CpHash())
 	if cpHeader == nil {
@@ -4044,6 +4051,32 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 			return false
 		}
 	}
+	return true
+}
+
+func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
+	lastCp := bc.GetLastCoordinatedCheckpoint()
+	//if is current cp
+	if cp.Epoch >= lastCp.Epoch {
+		return false
+	}
+	// compare with prev cp
+	lcpHeader := bc.GetHeader(lastCp.Spine)
+	prevCp := bc.GetCoordinatedCheckpoint(lcpHeader.CpHash)
+	if cp.Epoch >= prevCp.Epoch {
+		return false
+	}
+	log.Warn("Outdated cp detected",
+		"cp.Epoch", cp.Epoch,
+		"cp.FinEpoch", cp.FinEpoch,
+		"cp.Spine", cp.Spine.Hex(),
+		"lastCp.Epoch", lastCp.Epoch,
+		"lastCp.FinEpoch", lastCp.FinEpoch,
+		"lastCp.Spine", lastCp.Spine.Hex(),
+		"prevCp.Epoch", prevCp.Epoch,
+		"prevCp.FinEpoch", prevCp.FinEpoch,
+		"prevCp.Spine", prevCp.Spine.Hex(),
+	)
 	return true
 }
 
