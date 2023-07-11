@@ -4057,7 +4057,11 @@ func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
 	}
 	// compare with prev cp
 	lcpHeader := bc.GetHeader(lastCp.Spine)
-	prevCp := bc.GetCoordinatedCheckpoint(lcpHeader.CpHash)
+	prevCpHash := lcpHeader.CpHash
+	if lcpHeader.Hash() == bc.genesisBlock.Hash() {
+		prevCpHash = bc.genesisBlock.Hash()
+	}
+	prevCp := bc.GetCoordinatedCheckpoint(prevCpHash)
 	if cp.Epoch >= prevCp.Epoch {
 		return false
 	}
