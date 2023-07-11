@@ -391,10 +391,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			}
 		}
 	}
-	// The first thing the node will do is reconstruct the verification data for
-	// the head block (ethash cache or clique voting snapshot). Might as well do
-	// it in advance.
-	bc.engine.VerifyHeader(bc, bc.GetLastFinalizedHeader(), true)
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
@@ -2180,6 +2176,13 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	start := time.Now()
 
+	// check future slot
+	curSlot := bc.GetSlotInfo().CurrentSlot()
+	if block.Slot() > curSlot+1 {
+		log.Warn("Block verification: future slot", "curSlot", curSlot, "bl.slot", block.Slot(), "hash", block.Hash().Hex(), "bl.time", block.Time(), "now", time.Now().Unix())
+		return false, nil
+	}
+
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
@@ -2187,13 +2190,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if !bc.verifyCreators(block) {
 		return false, nil
 	}
-	//todo check
-	//// Verify block checkpoint
-	//isValidCp := bc.verifyCheckpoint(block)
-	//if !isValidCp {
-	//	log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
-	//	return false, nil
-	//}
 
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
@@ -2250,7 +2246,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	//todo check
 	// Verify block checkpoint
 	isValidCp := bc.verifyCheckpoint(block)
 	if !isValidCp {
