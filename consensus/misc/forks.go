@@ -16,19 +16,19 @@
 
 package misc
 
-import (
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
-)
-
-// VerifyForkHashes verifies that blocks conforming to network hard-forks do have
-// the correct hashes, to avoid clients going off on different chains. This is an
-// optional feature.
-func VerifyForkHashes(config *params.ChainConfig, header *types.Header, uncle bool) error {
-	// We don't care about uncles
-	if uncle {
-		return nil
-	}
-	// All ok, return
-	return nil
-}
+//import (
+//	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+//	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+//)
+//
+//// VerifyForkHashes verifies that blocks conforming to network hard-forks do have
+//// the correct hashes, to avoid clients going off on different chains. This is an
+//// optional feature.
+//func VerifyForkHashes(config *params.ChainConfig, header *types.Header, uncle bool) error {
+//	// We don't care about uncles
+//	if uncle {
+//		return nil
+//	}
+//	// All ok, return
+//	return nil
+//}
