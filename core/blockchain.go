@@ -2176,6 +2176,13 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	start := time.Now()
 
+	// check future slot
+	curSlot := bc.GetSlotInfo().CurrentSlot()
+	if block.Slot() > curSlot+1 {
+		log.Warn("Block verification: future slot", "curSlot", curSlot, "bl.slot", block.Slot(), "hash", block.Hash().Hex(), "bl.time", block.Time(), "now", time.Now().Unix())
+		return false, nil
+	}
+
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
@@ -2183,13 +2190,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if !bc.verifyCreators(block) {
 		return false, nil
 	}
-	//todo check
-	//// Verify block checkpoint
-	//isValidCp := bc.verifyCheckpoint(block)
-	//if !isValidCp {
-	//	log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
-	//	return false, nil
-	//}
 
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
@@ -2246,7 +2246,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	//todo check
 	// Verify block checkpoint
 	isValidCp := bc.verifyCheckpoint(block)
 	if !isValidCp {
