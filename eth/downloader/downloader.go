@@ -544,8 +544,7 @@ func (d *Downloader) syncWithPeerDagOnly(p *peerConnection) (err error) {
 	}(time.Now())
 
 	// fetch dag hashes
-	//baseSpine := d.lightchain.GetLastCoordinatedCheckpoint().Spine
-	baseSpine := d.lightchain.GetLastFinalizedHeader().Hash()
+	baseSpine := d.lightchain.GetLastCoordinatedCheckpoint().Spine
 
 	log.Info("Synchronising unloaded dag: start", "peer", p.id, "baseSpine", baseSpine.Hex())
 
