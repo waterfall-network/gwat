@@ -394,6 +394,10 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	return nil
 }
 
+func (d *Downloader) SynchroniseDagOnly(id string) error {
+	return d.Synchronise(id, nil, 0, FullSync, true)
+}
+
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) Synchronise(id string, dag common.HashArray, lastFinNr uint64, mode SyncMode, dagOnly bool) error {
@@ -509,7 +513,70 @@ func (d *Downloader) synchronise(id string, dag common.HashArray, lastFinNr uint
 	if p == nil {
 		return errUnknownPeer
 	}
+	if dagOnly {
+		return d.syncWithPeerDagOnly(p)
+	}
 	return d.syncWithPeer(p, dag, lastFinNr, dagOnly)
+}
+
+// syncWithPeer starts a block synchronization based on the hash chain from the
+// specified peer and head hash.
+func (d *Downloader) syncWithPeerDagOnly(p *peerConnection) (err error) {
+	d.mux.Post(StartEvent{})
+	defer func() {
+		// reset on error
+		if err != nil {
+			d.mux.Post(FailedEvent{err})
+		} else {
+			latest := d.lightchain.GetLastFinalizedHeader()
+			d.mux.Post(DoneEvent{latest})
+		}
+	}()
+	if p.version < eth.ETH66 {
+		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, eth.ETH66)
+	}
+
+	defer func(start time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "sync:syncWithPeer",
+		)
+	}(time.Now())
+
+	// fetch dag hashes
+	//baseSpine := d.lightchain.GetLastCoordinatedCheckpoint().Spine
+	baseSpine := d.lightchain.GetLastFinalizedHeader().Hash()
+
+	log.Info("Synchronising unloaded dag: start", "peer", p.id, "baseSpine", baseSpine.Hex())
+
+	remoteDag, err := d.fetchDagHashes(p, baseSpine, common.Hash{})
+	if err != nil {
+		return err
+	}
+
+	log.Info("Synchronising unloaded dag: remoteDag000", "peer", p.id, "baseSpine", baseSpine.Hex(), "remoteDag", remoteDag)
+
+	// filter existed blocks
+	unloaded := make(common.HashArray, 0, len(remoteDag))
+	existedBlocks := make(types.Blocks, 0, len(remoteDag))
+	dagBlocks := d.blockchain.GetBlocksByHashes(remoteDag)
+	for h, b := range dagBlocks {
+		if b == nil {
+			unloaded = append(unloaded, h)
+		} else {
+			existedBlocks = append(existedBlocks, b)
+		}
+	}
+
+	log.Info("Synchronising unloaded dag: unloaded 111", "peer", p.id, "baseSpine", baseSpine.Hex(), "unloaded", unloaded)
+	log.Info("Synchronising unloaded dag: diff     222", "peer", p.id, "baseSpine", baseSpine.Hex(), "dif", remoteDag.Difference(unloaded))
+
+	if err = d.syncWithPeerUnknownDagBlocks(p, unloaded); err != nil {
+		log.Error("Synchronising unloaded dag failed", "err", err)
+		return err
+	}
+	d.Cancel()
+	return nil
 }
 
 func (d *Downloader) getMode() SyncMode {
@@ -675,7 +742,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastF
 	return nil
 }
 
-// todo deprecated
+// deprecated
 // syncWithPeerDagChain downloads and set on current node dag chain from remote peer
 func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	// Make sure only one goroutine is ever allowed past this point at once

@@ -1807,9 +1807,13 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 	bc.chainmu.Unlock()
 
 	if err == ErrInsertUncompletedDag {
+		processing := make(map[common.Hash]bool, len(bc.insBlockCache))
+		for _, b := range bc.insBlockCache {
+			processing[b.Hash()] = true
+		}
 		for i, bl := range chain {
 			log.Info("Delay propagated block", "height", bl.Height(), "hash", bl.Hash().Hex())
-			if i >= n {
+			if i >= n && !processing[bl.Hash()] {
 				bc.insBlockCache = append(bc.insBlockCache, bl)
 			}
 		}

@@ -219,12 +219,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 		n, err := h.chain.InsertPropagatedBlocks(blocks)
 		if err == core.ErrInsertUncompletedDag {
+			// start sync dag
+			h.downloader.SynchroniseDagOnly(peerId)
+
 			unloaded := common.HashArray{}
 			for _, block := range blocks {
-				//unl, _, _, _, exc, _ := h.chain.ExploreChainRecursive(block.Hash(), expCache)
-				//expCache = exc
-				//unloaded = unloaded.Concat(unl)
-
 				parents := h.chain.GetBlocksByHashes(block.ParentHashes())
 				for h, b := range parents {
 					if b == nil {
@@ -233,9 +232,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 				}
 			}
 			log.Warn("Insert propagated blocks: unknown ancestors detected. start sync", "err", err, "unknown", unloaded)
-			lastFinNr := h.chain.GetLastFinalizedNumber()
-			//h.downloader.Synchronise(peerId, unloaded, lastFinNr, downloader.FullSync, false)
-			h.downloader.Synchronise(peerId, unloaded, lastFinNr, downloader.FullSync, true)
+			//lastFinNr := h.chain.GetLastFinalizedNumber()
+			//h.downloader.Synchronise(peerId, unloaded, lastFinNr, downloader.FullSync, true)
 
 			return n, err, &unloaded
 		}
