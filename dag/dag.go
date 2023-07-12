@@ -80,6 +80,10 @@ type blockChain interface {
 	IsSynced() bool
 
 	CollectAncestorsAftCpByParents(common.HashArray, common.Hash) (bool, types.HeaderMap, common.HashArray, error)
+	IsCheckpointOutdated(*types.Checkpoint) bool
+	GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Checkpoint
+	RemoveTips(hashes common.HashArray)
+	WriteCurrentTips()
 }
 
 type ethDownloader interface {
@@ -665,6 +669,9 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		err error
 	)
 	// create block
+	if err = d.removeTipsWithOutdatedCp(); err != nil {
+		return
+	}
 	tips := d.bc.GetTips()
 	log.Info("Creator processing: create condition",
 		"condition", d.creator.IsRunning() && len(errs) == 0,
@@ -766,4 +773,27 @@ func (d *Dag) isCoordinatorConnectionLost() bool {
 	}
 	slot = si.CurrentSlot()
 	return (slot - d.getLastFinalizeApiSlot()) > si.SlotsPerEpoch
+}
+
+// removeTipsWithOutdatedCp remove tips with outdated cp.
+func (d *Dag) removeTipsWithOutdatedCp() error {
+	tips := d.bc.GetTips()
+	rmTips := common.HashArray{}
+	for th, tip := range tips.Copy() {
+		cp := d.bc.GetCoordinatedCheckpoint(tip.CpHash)
+		if cp == nil {
+			err := errors.New("tips checkpoint not found")
+			log.Error("Removing tips with outdated cp failed", "err", err, "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
+			return err
+		}
+		if d.bc.IsCheckpointOutdated(cp) {
+			rmTips = append(rmTips, th)
+			log.Warn("Creator detect outdated cp", "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
+		}
+	}
+	if len(rmTips) > 0 {
+		d.bc.RemoveTips(rmTips)
+		d.bc.WriteCurrentTips()
+	}
+	return nil
 }

@@ -176,16 +176,8 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 
 	var (
 		start = time.Now()
-		//logged = time.Now()
 	)
-	//for i, header := range headers {
 	for _, header := range headers {
-		// Resolve the authorization key and check against signers
-		_, err := ecrecover(header, s.sigcache)
-		if err != nil {
-			return nil, err
-		}
-		//no voting for block - always accept
 		snap.Signers[header.Coinbase] = struct{}{}
 	}
 	if time.Since(start) > 8*time.Second {

@@ -391,10 +391,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			}
 		}
 	}
-	// The first thing the node will do is reconstruct the verification data for
-	// the head block (ethash cache or clique voting snapshot). Might as well do
-	// it in advance.
-	bc.engine.VerifyHeader(bc, bc.GetLastFinalizedHeader(), true)
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
@@ -2180,6 +2176,13 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	start := time.Now()
 
+	// check future slot
+	curSlot := bc.GetSlotInfo().CurrentSlot()
+	if block.Slot() > curSlot+1 {
+		log.Warn("Block verification: future slot", "curSlot", curSlot, "bl.slot", block.Slot(), "hash", block.Hash().Hex(), "bl.time", block.Time(), "now", time.Now().Unix())
+		return false, nil
+	}
+
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
@@ -2187,13 +2190,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	if !bc.verifyCreators(block) {
 		return false, nil
 	}
-	//todo check
-	//// Verify block checkpoint
-	//isValidCp := bc.verifyCheckpoint(block)
-	//if !isValidCp {
-	//	log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
-	//	return false, nil
-	//}
 
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
@@ -2250,7 +2246,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	//todo check
 	// Verify block checkpoint
 	isValidCp := bc.verifyCheckpoint(block)
 	if !isValidCp {
@@ -3985,6 +3980,13 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 		)
 		return false
 	}
+	if bc.IsCheckpointOutdated(coordCp) {
+		log.Warn("Block verification: cp is outdated",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
 	// check cp block exists
 	cpHeader := bc.GetHeader(block.CpHash())
 	if cpHeader == nil {
@@ -4044,6 +4046,36 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 			return false
 		}
 	}
+	return true
+}
+
+func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
+	lastCp := bc.GetLastCoordinatedCheckpoint()
+	//if is current cp
+	if cp.Epoch >= lastCp.Epoch {
+		return false
+	}
+	// compare with prev cp
+	lcpHeader := bc.GetHeader(lastCp.Spine)
+	prevCpHash := lcpHeader.CpHash
+	if lcpHeader.Hash() == bc.genesisBlock.Hash() {
+		prevCpHash = bc.genesisBlock.Hash()
+	}
+	prevCp := bc.GetCoordinatedCheckpoint(prevCpHash)
+	if cp.Epoch >= prevCp.Epoch {
+		return false
+	}
+	log.Warn("Outdated cp detected",
+		"cp.Epoch", cp.Epoch,
+		"cp.FinEpoch", cp.FinEpoch,
+		"cp.Spine", cp.Spine.Hex(),
+		"lastCp.Epoch", lastCp.Epoch,
+		"lastCp.FinEpoch", lastCp.FinEpoch,
+		"lastCp.Spine", lastCp.Spine.Hex(),
+		"prevCp.Epoch", prevCp.Epoch,
+		"prevCp.FinEpoch", prevCp.FinEpoch,
+		"prevCp.Spine", prevCp.Spine.Hex(),
+	)
 	return true
 }
 
