@@ -426,9 +426,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
 	}
 
-	// Start future block processor.
-	bc.wg.Add(1)
-
 	// Start tx indexer/unindexer.
 	if txLookupLimit != nil {
 		bc.txLookupLimit = *txLookupLimit
