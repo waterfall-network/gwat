@@ -173,10 +173,12 @@ func (c *ChainIndexer) Close() error {
 
 	// Tear down the primary update loop
 	errc := make(chan error)
-	c.quit <- errc
-	if err := <-errc; err != nil {
-		errs = append(errs, err)
-	}
+	// TODO: uncomment when use updateLoop
+	//c.quit <- errc
+	//if err := <-errc; err != nil {
+	//	errs = append(errs, err)
+	//}
+
 	// If needed, tear down the secondary event loop
 	if atomic.LoadUint32(&c.active) != 0 {
 		c.quit <- errc
