@@ -517,6 +517,11 @@ type downloadTesterPeer struct {
 	missingStates map[common.Hash]bool // State entries that fast sync should not return
 }
 
+func (dlp *downloadTesterPeer) RequestHashesBySlots(from, to uint64) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (dlp *downloadTesterPeer) GetDagInfo() (uint64, *common.HashArray) {
 	//TODO implement me
 	panic("implement me")
@@ -1573,6 +1578,11 @@ func testDeliverHeadersHang(t *testing.T, protocol uint, mode SyncMode) {
 type floodingTestPeer struct {
 	peer   Peer
 	tester *downloadTester
+}
+
+func (ftp *floodingTestPeer) RequestHashesBySlots(from, to uint64) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (ftp *floodingTestPeer) GetDagInfo() (uint64, *common.HashArray) {
