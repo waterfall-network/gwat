@@ -90,7 +90,7 @@ type chainHeightFn func() uint64
 type headersInsertFn func(headers []*types.Header) (int, error)
 
 // chainInsertFn is a callback type to insert a batch of blocks into the local chain.
-type chainInsertFn func(string, types.Blocks) (int, error, *common.HashArray)
+type chainInsertFn func(string, *types.Block) error
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
@@ -811,16 +811,16 @@ func (f *BlockFetcher) importHeaders(peer string, header *types.Header) {
 // block's number is at the same height as the current import phase, it updates
 // the phase states accordingly.
 func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
-	hash := block.Hash()
-
 	// Run the import on a new thread
-	log.Debug("Importing propagated block", "peer", peer, "number", block.Nr(), "hash", hash.Hex())
+	hash := block.Hash()
+	log.Info("Propagate block: fetched", "peer", peer, "slot", block.Slot(), "hash", block.Hash().Hex(), "txs", len(block.Transactions()), "patents", block.ParentHashes())
+
 	go func() {
 		defer func() { f.done <- hash }()
 
 		// If the no parents, abort insertion
 		if len(block.ParentHashes()) == 0 {
-			log.Debug("No parents of propagated block", "peer", peer, "hash", hash, "parent", block.ParentHashes())
+			log.Error("Propagate block: no parents", "peer", peer, "hash", hash, "parent", block.ParentHashes())
 			return
 		}
 		// Quickly validate the header and propagate the block if it passes
@@ -832,13 +832,13 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 
 		default:
 			// Something went very wrong, drop the peer
-			log.Warn("Propagated block verification failed", "peer", peer, "slot", block.Slot(), "number", block.Nr(), "height", block.Height(), "hash", hash.Hex(), "err", err)
+			log.Warn("Propagate block: verification failed", "peer", peer, "slot", block.Slot(), "number", block.Nr(), "height", block.Height(), "hash", hash.Hex(), "err", err)
 			f.dropPeer(peer)
 			return
 		}
 		// Run the actual import and log any issues
-		if _, err, unl := f.insertChain(peer, types.Blocks{block}); err != nil {
-			log.Error("Propagated block import failed", "peer", peer, "number", block.Nr(), "height", block.Height(), "hash", hash.Hex(), "err", err, "unknown", unl)
+		if err := f.insertChain(peer, block); err != nil {
+			log.Error("Propagate block: import failed", "peer", peer, "number", block.Nr(), "height", block.Height(), "hash", hash.Hex(), "err", err)
 			return
 		}
 		// If import succeeded, broadcast the block

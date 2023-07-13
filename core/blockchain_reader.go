@@ -36,6 +36,15 @@ func (bc *BlockChain) CurrentHeader() *types.Header {
 	panic("implement me")
 }
 
+// GetInsertDelayedHashes retrieves the hashes of blocks delayed to insert to chain after insert parents.
+func (bc *BlockChain) GetInsertDelayedHashes() common.HashArray {
+	res := make(common.HashArray, len(bc.insBlockCache))
+	for i, b := range bc.insBlockCache {
+		res[i] = b.Hash()
+	}
+	return res
+}
+
 // GetLastFinalizedBlock retrieves the current Last Finalized block of the canonical chain. The
 // block is retrieved from the blockchain's internal cache.
 func (bc *BlockChain) GetLastFinalizedBlock() *types.Block {

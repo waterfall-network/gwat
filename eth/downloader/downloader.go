@@ -182,6 +182,10 @@ type LightChain interface {
 	// WriteSyncDagBlock writes the dag block and all associated state to the database for dag synchronization process
 	WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error)
 
+	WriteSyncBlocks(blocks types.Blocks, validate bool) (status int, err error)
+
+	GetInsertDelayedHashes() common.HashArray
+
 	GetSlotInfo() *types.SlotInfo
 }
 
@@ -553,22 +557,22 @@ func (d *Downloader) syncWithPeerDagOnly(p *peerConnection) (err error) {
 		return err
 	}
 
-	log.Info("Synchronising unloaded dag: remoteDag000", "peer", p.id, "baseSpine", baseSpine.Hex(), "remoteDag", remoteDag)
+	log.Info("Synchronising unloaded dag: remoteDag 000", "remoteDag", remoteDag)
+
+	delayed := d.blockchain.GetInsertDelayedHashes()
+	remoteDag = remoteDag.Difference(delayed)
+	log.Info("Synchronising unloaded dag: delayed   111", "remoteDag", remoteDag, "delayedIns", delayed)
 
 	// filter existed blocks
 	unloaded := make(common.HashArray, 0, len(remoteDag))
-	existedBlocks := make(types.Blocks, 0, len(remoteDag))
 	dagBlocks := d.blockchain.GetBlocksByHashes(remoteDag)
 	for h, b := range dagBlocks {
 		if b == nil {
 			unloaded = append(unloaded, h)
-		} else {
-			existedBlocks = append(existedBlocks, b)
 		}
 	}
 
-	log.Info("Synchronising unloaded dag: unloaded 111", "peer", p.id, "baseSpine", baseSpine.Hex(), "unloaded", unloaded)
-	log.Info("Synchronising unloaded dag: diff     222", "peer", p.id, "baseSpine", baseSpine.Hex(), "dif", remoteDag.Difference(unloaded))
+	log.Info("Synchronising unloaded dag: unloaded  222", "peer", p.id, "baseSpine", baseSpine.Hex(), "unloaded", unloaded)
 
 	if err = d.syncWithPeerUnknownDagBlocks(p, unloaded); err != nil {
 		log.Error("Synchronising unloaded dag failed", "err", err)
@@ -876,30 +880,17 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	}
 	sort.Sort(slots)
 
+	insBlocks := make(types.Blocks, 0, len(headers))
 	for _, slot := range slots {
 		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
-		for _, block := range slotBlocks {
-			_, err = d.blockchain.WriteSyncDagBlock(block, true)
-			if err != nil {
-				log.Error("Failed writing block to chain  (sync unl)", "err", err)
-				return err
-			}
-		}
+		insBlocks = append(insBlocks, slotBlocks...)
+	}
+	if i, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
+		bl := insBlocks[i]
+		log.Error("Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+		return err
 	}
 	return nil
-	////clear tips
-	//tips := d.blockchain.GetTips()
-	//ancestors := make(common.HashArray, 0, len(tips))
-	//for hash := range tips {
-	//	block := d.blockchain.GetBlockByHash(hash)
-	//	ancestorss, err := d.GetUnfinalizedParents(block)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	ancestors = append(ancestors, ancestorss...)
-	//}
-	//d.blockchain.RemoveTips(ancestors)
-	//d.blockchain.ResetTips()
 }
 
 // spawnSync runs d.process and all given fetcher functions to completion in
