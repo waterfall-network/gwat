@@ -2111,37 +2111,17 @@ func logValidationIssue(issue string, block *types.Block) {
 
 // verifyCreators return false if creator is unassigned
 func (bc *BlockChain) verifyCreators(block *types.Block) bool {
-	//todo tmp off (remove after gazolandia implementation)
-	if true {
-		return true
-	}
-
 	var (
 		creators []common.Address
 		err      error
 	)
 
-	if bc.Config().IsForkSlotSubNet1(bc.GetSlotInfo().CurrentSlot()) {
-		// TODO: uncomment and transfer subnet to the function GetCreatorsBySlot()
-		//creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot(), blockSubnet)
-		//if err != nil {
-		//	log.Error("can`t get shuffled validators", "error", err)
-		//	return false
-		//}
-	} else {
-	}
-
-	// TODO: move it to the else condition after subnet support
 	creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
 	if err != nil {
 		log.Error("can`t get shuffled validators", "error", err)
 		return false
 	}
 
-	//if no record - skip (actual fo dag sync)
-	if creators == nil {
-		return false
-	}
 	blockCreator := block.Header().Coinbase
 	contains, index := common.Contains(creators, blockCreator)
 	if !contains {
@@ -2149,14 +2129,10 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 		return false
 	} else {
 		signer := types.LatestSigner(bc.chainConfig)
-		addrMap := map[common.Address]bool{}
 		for _, tx := range block.Body().Transactions {
 			from, _ := types.Sender(signer, tx)
-			addrMap[from] = true
-		}
-		for txFrom := range addrMap {
-			if !IsAddressAssigned(txFrom, creators, int64(index)) {
-				log.Warn("Block verification: creator txs assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators, "txFrom", txFrom)
+			if !IsAddressAssigned(from, creators, int64(index)) && from != block.Coinbase() {
+				log.Warn("Block verification: creator txs assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators, "txFrom", from)
 				return false
 			}
 		}
