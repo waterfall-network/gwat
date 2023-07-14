@@ -539,10 +539,14 @@ func handleGetHashesBySlots66(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("%w: %v > %v (get hashes by slots)", errMsgTooLarge, maxHashLen, LimitDagHashes)
 	}
 	hashes := make(common.HashArray, 0, maxHashLen)
+	si := backend.Chain().GetSlotInfo()
 	for slot := from; slot < to; slot++ {
 		slh := backend.Chain().GetBlockHashesBySlot(slot)
 		if len(slh) > 0 {
 			hashes = append(hashes, slh...)
+		}
+		if si != nil && slot >= si.CurrentSlot() {
+			break
 		}
 	}
 	return peer.ReplyDagData(query.RequestId, hashes.Uniq())

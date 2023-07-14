@@ -2827,7 +2827,7 @@ func (d *Downloader) peerSyncDagChainHeadBySlots(p *peerConnection, baseSpine co
 		)
 	}(time.Now())
 
-	step := eth.LimitDagHashes / d.lightchain.Config().ValidatorsPerSlot
+	step := (eth.LimitDagHashes / d.lightchain.Config().ValidatorsPerSlot) / 2
 	baseHeader := d.lightchain.GetHeaderByHash(baseSpine)
 	si := d.lightchain.GetSlotInfo()
 
