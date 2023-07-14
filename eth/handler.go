@@ -218,7 +218,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			return nil
 		}
 
-		log.Info("Propagate block:", "slot", block.Slot(), "hash", block.Hash().Hex(), "txs", len(block.Transactions()), "patents", block.ParentHashes())
+		log.Info("Propagate block:", "slot", block.Slot(), "hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
 
 		_, err := h.chain.InsertPropagatedBlocks(types.Blocks{block})
 		if err == core.ErrInsertUncompletedDag {

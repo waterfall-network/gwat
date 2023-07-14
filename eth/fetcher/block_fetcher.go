@@ -382,8 +382,21 @@ func (f *BlockFetcher) loop() {
 			}
 
 			if f.light {
+				log.Info("Propagate light header: fetched",
+					"peer", op.origin,
+					"slot", op.header.Slot,
+					"hash", op.header.Hash().Hex(),
+					"parents", op.header.ParentHashes)
+
 				f.importHeaders(op.origin, op.header)
 			} else {
+				log.Info("Propagate block: fetched",
+					"peer", op.origin,
+					"slot", op.block.Slot(),
+					"hash", op.block.Hash().Hex(),
+					"txs", len(op.block.Transactions()),
+					"parents", op.block.ParentHashes())
+
 				f.importBlocks(op.origin, op.block)
 			}
 		}
@@ -394,6 +407,7 @@ func (f *BlockFetcher) loop() {
 			return
 
 		case notification := <-f.notify:
+			log.Info("Propagate block: announced", "peer", notification.origin, "hash", notification.hash)
 			// A block was announced, make sure the peer isn't DOSing us
 			blockAnnounceInMeter.Mark(1)
 
@@ -813,7 +827,6 @@ func (f *BlockFetcher) importHeaders(peer string, header *types.Header) {
 func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 	// Run the import on a new thread
 	hash := block.Hash()
-	log.Info("Propagate block: fetched", "peer", peer, "slot", block.Slot(), "hash", block.Hash().Hex(), "txs", len(block.Transactions()), "patents", block.ParentHashes())
 
 	go func() {
 		defer func() { f.done <- hash }()

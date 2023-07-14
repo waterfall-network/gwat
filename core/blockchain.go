@@ -1568,7 +1568,7 @@ func (bc *BlockChain) WriteSyncDagBlock(block *types.Block, validate bool) (stat
 	if !bc.chainmu.TryLock() {
 		return 0, errInsertionInterrupted
 	}
-	n, err := bc.insertBlocks(types.Blocks{block}, validate)
+	n, err := bc.insertBlocks(types.Blocks{block}, validate, "sync")
 	bc.chainmu.Unlock()
 
 	err = bc.insertDalayedBloks()
@@ -1587,7 +1587,7 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (statu
 	if !bc.chainmu.TryLock() {
 		return 0, errInsertionInterrupted
 	}
-	n, err := bc.insertBlocks(blocks, validate)
+	n, err := bc.insertBlocks(blocks, validate, "sync")
 	bc.chainmu.Unlock()
 	if err != nil {
 		return n, err
@@ -1607,7 +1607,7 @@ func (bc *BlockChain) insertDalayedBloks() error {
 			log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
 			continue
 		}
-		_, insErr := bc.insertBlocks(types.Blocks{bl}, true)
+		_, insErr := bc.insertBlocks(types.Blocks{bl}, true, "delay")
 		if insErr == ErrInsertUncompletedDag {
 			insBlockCache = append(insBlockCache, bl)
 			log.Info("Insert delayed blocks: retry", "slot", bl.Slot(), "hash", bl.Hash().Hex(), "err", insErr)
@@ -1631,7 +1631,7 @@ func (bc *BlockChain) WriteCreatedDagBlock(block *types.Block) (status int, err 
 	}
 	defer bc.chainmu.Unlock()
 
-	n, err := bc.insertBlocks(types.Blocks{block}, true)
+	n, err := bc.insertBlocks(types.Blocks{block}, true, "create")
 	bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 
 	return n, err
@@ -1833,7 +1833,7 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
-	n, err := bc.insertBlocks(chain, true)
+	n, err := bc.insertBlocks(chain, true, "propagate")
 	bc.chainmu.Unlock()
 
 	if err == ErrInsertUncompletedDag {
@@ -2319,7 +2319,7 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 }
 
 // insertBlocks inserts blocks to chain
-func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, error) {
+func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string) (int, error) {
 
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
@@ -2359,12 +2359,12 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 	switch {
 	// First block is pruned, insert as sidechain and reorg
 	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("Pruned ancestor, inserting as sidechain", "hash", block.Hash().Hex())
+		log.Warn("Insert blocks: pruned ancestor, inserting as sidechain", "op", op, "hash", block.Hash().Hex())
 		return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
 	case err != nil:
-		log.Error("propagate err", "hash", block.Hash().Hex(), "err", err)
+		log.Error("Insert blocks: err", "hash", block.Hash().Hex(), "err", err)
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
 		return it.index, err
@@ -2373,7 +2373,7 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 	for ; block != nil && err == nil; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
-			log.Debug("Abort during block processing")
+			log.Debug("Insert blocks: abort during block processing", "op", op)
 			break
 		}
 		// If the header is a banned one, straight out abort
@@ -2385,11 +2385,11 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 		//// if checkpoint of propagated block is not finalized - set IsSynced=false
 		//if cpHeader := bc.GetHeaderByHash(block.CpHash()); cpHeader != nil {
 		//	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
-		//		log.Warn("Check is synchronized: cp not finalized", "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
+		//		log.Warn("Insert blocks: Check is synchronized: cp not finalized","op", op, "cpHash", block.CpHash(), "cpSlot", cpHeader.Slot)
 		//		bc.SetIsSynced(false)
 		//	}
 		//} else {
-		//	log.Warn("Check is synchronized: cp not found", "cpHash", block.CpHash())
+		//	log.Warn("Insert blocks: Check is synchronized: cp not found","op", op, "cpHash", block.CpHash())
 		//	bc.SetIsSynced(false)
 		//	return it.index, ErrInsertUncompletedDag
 		//}
@@ -2398,7 +2398,8 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 			//todo check
 			// cp must be coordinated (received from coordinator)
 			if coordCp := bc.GetCoordinatedCheckpoint(block.CpHash()); coordCp == nil {
-				log.Warn("Block CP verification: block cp not found as coordinated cp",
+				log.Warn("Insert blocks: CP verification: CP not found as coordinated cp",
+					"op", op,
 					"cp.Nr", block.CpNumber(),
 					"cp.Hash", block.CpHash().Hex(),
 					"bl.Slot", block.Slot(),
@@ -2412,7 +2413,8 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 					cpEpoch := si.SlotToEpoch(cpHeader.Slot)
 					currEpoch := si.SlotToEpoch(si.CurrentSlot())
 					if cpEpoch <= lCp.Epoch && cpEpoch >= currEpoch {
-						log.Error("Block CP verification: block rejected (bad cp epoch)",
+						log.Error("Insert blocks: CP verification: block rejected (bad cp epoch)",
+							"op", op,
 							"cpEpoch", cpEpoch,
 							"lCp.Epoch", lCp.Epoch,
 							"currEpoch", currEpoch,
@@ -2428,7 +2430,8 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 					if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
 						lfb := bc.GetLastFinalizedHeader()
 						if block.CpNumber() <= lfb.Nr() {
-							log.Error("Block CP verification: block rejected (bad cp nr)",
+							log.Error("Insert blocks: CP verification: block rejected (bad cp nr)",
+								"op", op,
 								"bl.CpNr", block.CpNumber(),
 								"lfNr", lfb.Nr(),
 								"cp.Hash", block.CpHash().Hex(),
@@ -2439,14 +2442,16 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 							continue
 						}
 						// todo fix the gap here
-						log.Warn("Block CP verification: cp is not finalized",
+						log.Warn("Insert blocks: CP verification: cp is not finalized",
+							"op", op,
 							"cpHash", block.CpHash(),
 							"cpSlot", cpHeader.Slot,
 						)
 						bc.SetIsSynced(false)
 					} else {
 						if block.CpNumber() != cpHeader.Nr() {
-							log.Error("Block CP verification: block rejected (bad cp mismatch nr)",
+							log.Error("Insert blocks: CP verification: block rejected (bad cp mismatch nr)",
+								"op", op,
 								"bl.CpNr", block.CpNumber(),
 								"cp.Nr", cpHeader.Nr(),
 								"cp.Hash", block.CpHash().Hex(),
@@ -2458,7 +2463,7 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 						}
 					}
 				} else {
-					log.Error("Block CP verification: block rejected (cp not found)", "cpHash", block.CpHash())
+					log.Error("Insert blocks: CP verification: block rejected (cp not found)", "op", op, "cpHash", block.CpHash())
 					bc.CacheInvalidBlock(block)
 					continue
 				}
@@ -2473,13 +2478,13 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 			}
 		}
 
-		log.Info("Insert propagated block", "Slot", block.Slot(), "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
+		log.Info("Insert blocks:", "op", op, "Slot", block.Slot(), "Height", block.Height(), "Hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
 
 		rawdb.WriteBlock(bc.db, block)
 		rawdb.AddSlotBlockHash(bc.Database(), block.Slot(), block.Hash())
 		bc.AppendToChildren(block.Hash(), block.ParentHashes())
 
-		log.Debug("Remove optimistic spines from cache", "slot", block.Slot())
+		log.Debug("Insert blocks: remove optimistic spines from cache", "op", op, "slot", block.Slot())
 		bc.removeOptimisticSpinesFromCache(block.Slot())
 
 		tmpTips := types.Tips{}
@@ -2508,7 +2513,7 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool) (int, erro
 		bc.MoveTxsToProcessing(types.Blocks{block})
 		bc.WriteCurrentTips()
 
-		log.Info("Insert propagated block", "height", block.Height(), "hash", block.Hash().Hex())
+		log.Info("Insert blocks: success", "op", op, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex())
 	}
 
 	return it.index, err
