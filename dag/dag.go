@@ -570,6 +570,10 @@ func (d *Dag) StartWork(accounts []common.Address) {
 	}
 }
 
+func (d *Dag) StopWork() {
+	d.exitChan <- struct{}{}
+}
+
 func (d *Dag) workLoop(accounts []common.Address) {
 	secPerSlot := d.bc.GetSlotInfo().SecondsPerSlot
 	genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
@@ -578,6 +582,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 	for {
 		select {
 		case <-d.exitChan:
+			log.Info("Dag workLoop stopped")
 			close(d.exitChan)
 			close(d.errChan)
 			slotTicker.Done()
@@ -586,7 +591,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			close(d.errChan)
 			close(d.exitChan)
 			slotTicker.Done()
-			log.Error("dag worker has error", "error", err)
+			log.Error("Dag worker stopped with error", "error", err)
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {

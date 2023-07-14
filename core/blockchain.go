@@ -426,9 +426,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
 	}
 
-	// Start future block processor.
-	bc.wg.Add(1)
-
 	// Start tx indexer/unindexer.
 	if txLookupLimit != nil {
 		bc.txLookupLimit = *txLookupLimit
@@ -1573,21 +1570,53 @@ func (bc *BlockChain) WriteSyncDagBlock(block *types.Block, validate bool) (stat
 	n, err := bc.insertBlocks(types.Blocks{block}, validate)
 	bc.chainmu.Unlock()
 
-	if len(bc.insBlockCache) > 0 {
-		log.Info("Insert delayed propagated blocks", "count", len(bc.insBlockCache))
-		insBlockCache := []*types.Block{}
-		for _, bl := range bc.insBlockCache {
-			_, insErr := bc.insertBlocks(types.Blocks{bl}, true)
-			if insErr == ErrInsertUncompletedDag {
-				insBlockCache = append(insBlockCache, bl)
-			} else if insErr != nil {
-				log.Crit("Insert delayed propagated blocks error", "height", bl.Height(), "hash", bl.Hash().Hex(), "err", insErr)
-			}
-		}
-		bc.insBlockCache = insBlockCache
+	err = bc.insertDalayedBloks()
+	if err != nil {
+		return n, err
 	}
-
 	return n, err
+}
+
+// WriteSyncBlocks writes the blocks and all associated state to the database while synchronization process.
+func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (status int, err error) {
+	bc.blockProcFeed.Send(true)
+	defer bc.blockProcFeed.Send(false)
+
+	// Pre-checks passed, start the full block imports
+	if !bc.chainmu.TryLock() {
+		return 0, errInsertionInterrupted
+	}
+	n, err := bc.insertBlocks(blocks, validate)
+	bc.chainmu.Unlock()
+	if err != nil {
+		return n, err
+	}
+	err = bc.insertDalayedBloks()
+	return n, err
+}
+
+func (bc *BlockChain) insertDalayedBloks() error {
+	if len(bc.insBlockCache) == 0 {
+		return nil
+	}
+	log.Info("Insert delayed blocks: start", "count", len(bc.insBlockCache))
+	insBlockCache := []*types.Block{}
+	for _, bl := range bc.insBlockCache {
+		if hdr := bc.GetHeader(bl.Hash()); hdr != nil {
+			log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
+			continue
+		}
+		_, insErr := bc.insertBlocks(types.Blocks{bl}, true)
+		if insErr == ErrInsertUncompletedDag {
+			insBlockCache = append(insBlockCache, bl)
+			log.Info("Insert delayed blocks: retry", "slot", bl.Slot(), "hash", bl.Hash().Hex(), "err", insErr)
+		} else if insErr != nil {
+			log.Error("Insert delayed blocks: error", "slot", bl.Slot(), "hash", bl.Hash().Hex(), "err", insErr)
+			return insErr
+		}
+	}
+	bc.insBlockCache = insBlockCache
+	return nil
 }
 
 // WriteCreatedDagBlock writes the dag block created locally.
@@ -1807,9 +1836,13 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 	bc.chainmu.Unlock()
 
 	if err == ErrInsertUncompletedDag {
+		processing := make(map[common.Hash]bool, len(bc.insBlockCache))
+		for _, b := range bc.insBlockCache {
+			processing[b.Hash()] = true
+		}
 		for i, bl := range chain {
 			log.Info("Delay propagated block", "height", bl.Height(), "hash", bl.Hash().Hex())
-			if i >= n {
+			if i >= n && !processing[bl.Hash()] {
 				bc.insBlockCache = append(bc.insBlockCache, bl)
 			}
 		}
