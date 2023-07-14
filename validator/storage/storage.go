@@ -223,6 +223,14 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		return nil, err
 	}
 
+	log.Info("CheckShuffle - shuffle params", "slot", slot,
+		"slotEpoch", epoch,
+		"spineEpoch", epoch-1,
+		"spine", epochSpine.Hex(),
+		"seed", seed.Hex(),
+		"validatorsCount", len(activeEpochValidators),
+	)
+
 	shuffledValidators, err := shuffle.ShuffleValidators(activeEpochValidators, seed)
 	if err != nil {
 		return nil, err
