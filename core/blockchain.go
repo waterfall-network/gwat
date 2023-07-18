@@ -2148,10 +2148,6 @@ func logValidationIssue(issue string, block *types.Block) {
 
 // verifyCreators return false if creator is unassigned
 func (bc *BlockChain) verifyCreators(block *types.Block) bool {
-	if true {
-		return true
-	}
-
 	var (
 		creators []common.Address
 		err      error
@@ -2188,7 +2184,14 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 
 // VerifyBlock validate block
 func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
-	start := time.Now()
+	defer func(ts time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(ts)),
+			"func:", "VerifyBlock:Total",
+		)
+	}(time.Now())
+
+	ts := time.Now()
 
 	// check future slot
 	curSlot := bc.GetSlotInfo().CurrentSlot()
@@ -2196,6 +2199,12 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		log.Warn("Block verification: future slot", "curSlot", curSlot, "bl.slot", block.Slot(), "hash", block.Hash().Hex(), "bl.time", block.Time(), "now", time.Now().Unix())
 		return false, nil
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock: check future slot",
+	)
+	ts = time.Now()
 
 	if len(block.ParentHashes()) == 0 {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
@@ -2205,12 +2214,24 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:verifyCreators",
+	)
+	ts = time.Now()
+
 	// Verify block era
 	isValidEra := bc.verifyBlockEra(block)
 	if !isValidEra {
 		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
 		return false, nil
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:verifyBlockEra",
+	)
+	ts = time.Now()
 
 	//isCpAncestor, ancestors, unloaded, err := bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
 	isCpAncestor, ancestors, unloaded, _, err := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
@@ -2235,6 +2256,13 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
 		return false, nil
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:isCpAncestor",
+	)
+	ts = time.Now()
+
 	// parents' heights must be less than block height
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetHeader(parentHash)
@@ -2247,6 +2275,13 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			return false, nil
 		}
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:parents' heights",
+	)
+	ts = time.Now()
+
 	//validate height
 	cpHeader := bc.GetHeader(block.CpHash())
 	calcHeight := bc.calcBlockHeight(cpHeader.Height, len(ancestors))
@@ -2260,12 +2295,24 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:validate height",
+	)
+	ts = time.Now()
+
 	// Verify block checkpoint
 	isValidCp := bc.verifyCheckpoint(block)
 	if !isValidCp {
 		log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
 		return false, nil
 	}
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:Verify block checkpoint",
+	)
+	ts = time.Now()
 
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
@@ -2282,16 +2329,35 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:TxEstimateGas",
+		"txs", len(block.Transactions()),
+	)
+	ts = time.Now()
+
 	isValid, err := bc.verifyBlockParents(block)
 	if err != nil {
 		return false, err
 	}
 
 	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(start)),
-		"func:", "VerifyBlock",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:verifyBlockParents",
+		"parents", len(block.ParentHashes()),
 	)
-	return isValid && bc.verifyCpData(block), nil
+	ts = time.Now()
+
+	// validate cp data
+	isCpValid := bc.verifyCpData(block)
+
+	log.Info("^^^^^^^^^^^^ TIME",
+		"elapsed", common.PrettyDuration(time.Since(ts)),
+		"func:", "VerifyBlock:verifyCpData",
+		"parents", len(block.ParentHashes()),
+	)
+
+	return isValid && isCpValid, nil
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
