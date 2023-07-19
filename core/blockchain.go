@@ -2104,32 +2104,32 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 }
 
 func (bc *BlockChain) verifyCpData(block *types.Block) bool {
-	CpBlock := bc.GetBlockByNumber(block.CpNumber())
-	if CpBlock == nil {
-		logValidationIssue("CpBlock not found", block)
+	CpHeader := bc.GetHeaderByNumber(block.CpNumber())
+	if CpHeader == nil {
+		logValidationIssue("CpBlock header not found", block)
 		return false
 	}
-	if block.CpNumber() != CpBlock.Nr() {
+	if block.CpNumber() != CpHeader.Nr() {
 		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
 		return false
 	}
-	if block.CpHash() != CpBlock.Hash() {
+	if block.CpHash() != CpHeader.Hash() {
 		logValidationIssue("Hash mismatch", block)
 		return false
 	}
-	if block.CpRoot() != CpBlock.Root() {
+	if block.CpRoot() != CpHeader.Root {
 		logValidationIssue("CpHash mismatch", block)
 		return false
 	}
-	if block.CpReceiptHash() != CpBlock.ReceiptHash() {
+	if block.CpReceiptHash() != CpHeader.ReceiptHash {
 		logValidationIssue("ReceiptHash mismatch", block)
 		return false
 	}
-	if block.CpGasUsed() != CpBlock.GasUsed() {
+	if block.CpGasUsed() != CpHeader.GasUsed {
 		logValidationIssue("GasUsed mismatch", block)
 		return false
 	}
-	if block.CpBloom() != CpBlock.Bloom() {
+	if block.CpBloom() != CpHeader.Bloom {
 		logValidationIssue("Bloom mismatch", block)
 		return false
 	}
@@ -2361,27 +2361,53 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
-	parents := bc.GetBlocksByHashes(block.ParentHashes())
-	for ph, parent := range parents {
-		if parent.Nr() > 0 || parent.Height() == 0 {
+	parentsHeaders := bc.GetHeadersByHashes(block.ParentHashes())
+	if bc.AreParentSlotsUniform(block.Slot(), parentsHeaders) {
+		return true, nil
+	}
+
+	for ph, parentHeader := range parentsHeaders {
+		if parentHeader.Nr() > 0 || parentHeader.Height == 0 {
 			continue
 		}
-		for pph, pparent := range parents {
+		for pph, pparent := range parentsHeaders {
 			if ph == pph {
 				continue
 			}
-			//isAncestor, err := bc.IsAncestorRecursive(parent.Header(), pparent.Hash())
-			isAncestor, err := bc.IsAncestorByTips(parent.Header(), pparent.Hash())
+			isAncestor, err := bc.IsAncestorByTips(parentHeader, pparent.Hash())
 			if err != nil {
 				return false, err
 			}
 			if isAncestor {
-				log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parent.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
+				log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parentHeader.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
 				return false, nil
 			}
 		}
 	}
 	return true, nil
+}
+
+// AreParentSlotsUniform checks if all parent headers in the provided map have the same slot value.
+// It returns true if all slots are the same, and false otherwise.
+func (bc *BlockChain) AreParentSlotsUniform(slot uint64, parentsHeaders types.HeaderMap) bool {
+	var lastSlot *uint64 = nil
+	for _, parentHeader := range parentsHeaders {
+		if parentHeader.Slot >= slot {
+			log.Warn("Validation error: The slot of the parent is equal to or larger than the block's slot.",
+				"hash", parentHeader.Hash(),
+				"parSlot", parentHeader.Slot,
+				"slot", slot,
+			)
+			return false
+		}
+
+		if lastSlot == nil {
+			lastSlot = &parentHeader.Slot
+		} else if *lastSlot != parentHeader.Slot {
+			return false
+		}
+	}
+	return true
 }
 
 // insertBlocks inserts blocks to chain
