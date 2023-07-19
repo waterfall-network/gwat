@@ -2363,9 +2363,11 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 	parentsHeaders := bc.GetHeadersByHashes(block.ParentHashes())
 	if bc.AreParentSlotsUniform(block.Slot(), parentsHeaders) {
+		log.Info("##### verifyBlockParents : light")
 		return true, nil
 	}
 
+	log.Info("##### verifyBlockParents : heavy")
 	for ph, parentHeader := range parentsHeaders {
 		if parentHeader.Nr() > 0 || parentHeader.Height == 0 {
 			continue
