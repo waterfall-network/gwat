@@ -84,6 +84,7 @@ type blockChain interface {
 	GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Checkpoint
 	RemoveTips(hashes common.HashArray)
 	WriteCurrentTips()
+	GetBlockHashesBySlot(slot uint64) common.HashArray
 }
 
 type ethDownloader interface {
@@ -652,6 +653,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			}
 
 			// todo check
+			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", creators)
 			go d.work(slot, creators, accounts)
 			//}
 		}

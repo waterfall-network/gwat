@@ -264,3 +264,33 @@ func TestEth66Messages(t *testing.T) {
 		}
 	}
 }
+
+func TestGetHashesBySlotsPacketEncodeDecode(t *testing.T) {
+
+	tests := []struct {
+		packet *GetHashesBySlotsPacket
+		fail   bool
+	}{
+		{fail: false, packet: &GetHashesBySlotsPacket{From: 0, To: 0}},
+		{fail: false, packet: &GetHashesBySlotsPacket{From: 0, To: 77}},
+		{fail: false, packet: &GetHashesBySlotsPacket{From: 77, To: 00}},
+	}
+	// Iterate over each of the tests and try to encode and then decode
+	for i, tt := range tests {
+		bytes, err := rlp.EncodeToBytes(tt.packet)
+		if err != nil && !tt.fail {
+			t.Fatalf("test %d: failed to encode packet: %v", i, err)
+		} else if err == nil && tt.fail {
+			t.Fatalf("test %d: encode should have failed", i)
+		}
+		if !tt.fail {
+			packet := new(GetHashesBySlotsPacket)
+			if err := rlp.DecodeBytes(bytes, packet); err != nil {
+				t.Fatalf("test %d: failed to decode packet: %v", i, err)
+			}
+			if packet.To != tt.packet.To || packet.From != tt.packet.From {
+				t.Fatalf("test %d: encode decode mismatch: have %+v, want %+v", i, packet, tt.packet)
+			}
+		}
+	}
+}

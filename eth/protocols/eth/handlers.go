@@ -502,7 +502,6 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 	dataLen := uint64(len(dag)) + (toFinNr - baseNr)
 	if dataLen > LimitDagHashes {
 		return dag, fmt.Errorf("%w: %v > %v (LimitDagHashes)", errMsgTooLarge, dataLen, LimitDagHashes)
-		return dag, fmt.Errorf("%w", errMsgTooLarge)
 	}
 
 	for nr := uint64(1); baseNr+nr <= toFinNr; nr++ {
@@ -517,11 +516,38 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 }
 
 func handleDag66(backend Backend, msg Decoder, peer *Peer) error {
-	// A gag hashes arrived to one of our previous requests
+	// A dag hashes arrived to one of our previous requests
 	res := new(DagPacket66)
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, DagMsg, res.RequestId)
 	return backend.Handle(peer, &res.DagPacket)
+}
+
+func handleGetHashesBySlots66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode retrieval message
+	var query GetHashesBySlotsPacket66
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	//Gather hashes by slots.
+	from, to := query.From, query.To
+	maxHashLen := (to - from) * backend.Chain().Config().ValidatorsPerSlot
+	// check length limit
+	if maxHashLen > LimitDagHashes {
+		return fmt.Errorf("%w: %v > %v (get hashes by slots)", errMsgTooLarge, maxHashLen, LimitDagHashes)
+	}
+	hashes := make(common.HashArray, 0, maxHashLen)
+	si := backend.Chain().GetSlotInfo()
+	for slot := from; slot < to; slot++ {
+		slh := backend.Chain().GetBlockHashesBySlot(slot)
+		if len(slh) > 0 {
+			hashes = append(hashes, slh...)
+		}
+		if si != nil && slot >= si.CurrentSlot() {
+			break
+		}
+	}
+	return peer.ReplyDagData(query.RequestId, hashes.Uniq())
 }

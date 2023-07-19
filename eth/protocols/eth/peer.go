@@ -481,6 +481,17 @@ func (p *Peer) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) erro
 	})
 }
 
+// RequestHashesBySlots fetches a batch of hashes by slots range.
+func (p *Peer) RequestHashesBySlots(from, to uint64) error {
+	p.Log().Info("Fetching hashes by slots", "from", from, "to", to)
+	id := rand.Uint64()
+	requestTracker.Track(p.id, p.version, GetHashesBySlotsMsg, DagMsg, id)
+	return p2p.Send(p.rw, GetHashesBySlotsMsg, &GetHashesBySlotsPacket66{
+		RequestId:              id,
+		GetHashesBySlotsPacket: GetHashesBySlotsPacket{from, to},
+	})
+}
+
 // knownCache is a cache for known hashes.
 type knownCache struct {
 	hashes mapset.Set

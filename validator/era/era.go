@@ -191,7 +191,7 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 	if header != nil {
 		spineRoot = header.Root
 	} else {
-		log.Error("Ccheckpoint spine header not found", "err", ErrCheckpointInvalid)
+		log.Error("Checkpoint spine header not found", "err", ErrCheckpointInvalid)
 		return ErrCheckpointInvalid
 	}
 

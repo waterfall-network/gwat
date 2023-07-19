@@ -215,6 +215,7 @@ var eth66 = map[uint64]msgHandler{
 	PooledTransactionsMsg:         handlePooledTransactions66,
 	GetDagMsg:                     handleGetDag66,
 	DagMsg:                        handleDag66,
+	GetHashesBySlotsMsg:           handleGetHashesBySlots66,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote
