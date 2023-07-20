@@ -638,10 +638,6 @@ func (bc *BlockChain) getSyncCheckpointCache(cpSpine common.Hash) *types.Checkpo
 
 // GetCoordinatedCheckpoint retrieves a checkpoint dag from the database by hash, caching it if found.
 func (bc *BlockChain) GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Checkpoint {
-	//check in sync cache
-	if cp := bc.getSyncCheckpointCache(cpSpine); cp != nil {
-		return cp
-	}
 	//check in cache
 	if v, ok := bc.checkpointCache.Get(cpSpine); ok {
 		val := v.(*types.Checkpoint)
@@ -652,7 +648,8 @@ func (bc *BlockChain) GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Check
 	}
 	cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
 	if cp == nil {
-		return nil
+		// final check in sync cache
+		return bc.getSyncCheckpointCache(cpSpine)
 	}
 	// Cache the found cp for next time and return
 	bc.checkpointCache.Add(cpSpine, cp)
