@@ -82,6 +82,8 @@ type blockChain interface {
 	CollectAncestorsAftCpByParents(common.HashArray, common.Hash) (bool, types.HeaderMap, common.HashArray, error)
 	IsCheckpointOutdated(*types.Checkpoint) bool
 	GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Checkpoint
+	SetSyncCheckpointCache(cp *types.Checkpoint)
+	ResetSyncCheckpointCache()
 	RemoveTips(hashes common.HashArray)
 	WriteCurrentTips()
 	GetBlockHashesBySlot(slot uint64) common.HashArray
@@ -206,7 +208,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	//forward finalization
 	spines, baseSpine = d.finalizer.ForwardFinalization(spines, baseSpine)
 
-	if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint.FinEpoch); err != nil {
+	if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint); err != nil {
 		strErr := err.Error()
 		res.Error = &strErr
 		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
@@ -279,11 +281,11 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 // 2. switch on sync mode
 // 3. start sync process
 // 4. if chain head reached - switch off sync mode
-func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) error {
+func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, cp *types.Checkpoint) error {
 	if len(spines) == 0 {
 		return nil
 	}
-
+	finEpoch := cp.Epoch
 	start := time.Now()
 	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {
@@ -300,6 +302,8 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 		return err
 	}
 
+	d.bc.SetSyncCheckpointCache(cp)
+	defer d.bc.ResetSyncCheckpointCache()
 	var fullySynced bool
 	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines, finEpoch); err != nil {
 		return err

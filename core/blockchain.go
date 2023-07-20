@@ -216,6 +216,7 @@ type BlockChain struct {
 	invalidBlocksCache    *lru.Cache     // Cache for the blocks with unknown parents
 	optimisticSpinesCache *lru.Cache
 	checkpointCache       *lru.Cache
+	checkpointSyncCache   *types.Checkpoint
 
 	validatorStorage valStore.Storage
 
@@ -618,8 +619,29 @@ func (bc *BlockChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	return bc.lastCoordinatedCp.Load().(*types.Checkpoint)
 }
 
+// SetSyncCheckpointCache set cp to cache for sync purposes.
+func (bc *BlockChain) SetSyncCheckpointCache(cp *types.Checkpoint) {
+	bc.checkpointSyncCache = cp.Copy()
+}
+
+// ResetSyncCheckpointCache reset cp to cache for sync purposes.
+func (bc *BlockChain) ResetSyncCheckpointCache() {
+	bc.checkpointSyncCache = nil
+}
+func (bc *BlockChain) getSyncCheckpointCache(cpSpine common.Hash) *types.Checkpoint {
+	if bc.checkpointSyncCache != nil && bc.checkpointSyncCache.Spine == cpSpine {
+		log.Info("Synchronization cp cache: used", "cpSpine", cpSpine.Hex())
+		return bc.checkpointSyncCache
+	}
+	return nil
+}
+
 // GetCoordinatedCheckpoint retrieves a checkpoint dag from the database by hash, caching it if found.
 func (bc *BlockChain) GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Checkpoint {
+	//check in sync cache
+	if cp := bc.getSyncCheckpointCache(cpSpine); cp != nil {
+		return cp
+	}
 	//check in cache
 	if v, ok := bc.checkpointCache.Get(cpSpine); ok {
 		val := v.(*types.Checkpoint)
