@@ -2786,7 +2786,8 @@ func (bc *BlockChain) CollectDagChainHashesByTips(tips types.Tips, cpHash common
 		}
 		if tip.CpHash == cpHash {
 			dagChainHashes = append(dagChainHashes, tip.DagChainHashes...)
-			dagChainHashes = append(dagChainHashes, tip.Hash).Uniq()
+			dagChainHashes = append(dagChainHashes, tip.Hash)
+			dagChainHashes.Deduplicate()
 			continue
 		}
 		// current cp must be in past of parent
@@ -2810,7 +2811,8 @@ func (bc *BlockChain) CollectDagChainHashesByTips(tips types.Tips, cpHash common
 			}
 			dagChainHashes = append(dagChainHashes, h)
 		}
-		dagChainHashes = append(dagChainHashes, tip.Hash).Uniq()
+		dagChainHashes = append(dagChainHashes, tip.Hash)
+		dagChainHashes.Deduplicate()
 	}
 	return dagChainHashes, nil
 }
@@ -3683,7 +3685,8 @@ func (bc *BlockChain) GetDagHashes() *common.HashArray {
 		expCache = c
 		dagHashes = dagHashes.Concat(loaded)
 	}
-	dagHashes = dagHashes.Uniq().Sort()
+	dagHashes.Deduplicate()
+	dagHashes.Sort()
 	return &dagHashes
 }
 
@@ -3791,9 +3794,12 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 				err:       _err,
 			}
 		}
-		unloaded = unloaded.Concat(_unloaded).Uniq()
-		loaded = loaded.Concat(_loaded).Uniq()
-		finalized = finalized.Concat(_finalized).Uniq()
+		unloaded = unloaded.Concat(_unloaded)
+		unloaded.Deduplicate()
+		loaded = loaded.Concat(_loaded)
+		loaded.Deduplicate()
+		finalized = finalized.Concat(_finalized)
+		finalized.Deduplicate()
 		graph.Graph = append(graph.Graph, _graph)
 		err = _err
 	}

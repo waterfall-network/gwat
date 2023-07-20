@@ -859,7 +859,8 @@ func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpH
 			isCpAncestor = true
 		}
 		ancHashes = append(ancHashes, tip.DagChainHashes...)
-		ancHashes = append(ancHashes, tip.Hash).Uniq()
+		ancHashes = append(ancHashes, tip.Hash)
+		ancHashes.Deduplicate()
 	}
 	//collect ancestors
 	cpHead := hc.GetHeader(cpHash)
