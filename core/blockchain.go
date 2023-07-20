@@ -1072,19 +1072,14 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // writeFinalizedBlock injects a new finalized block into the current block chain.
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHead bool) error {
-	block.SetNumber(&finNr)
-
-	// If the block is on a side chain or an unknown one, force other heads onto it too
-
-	// ~Add the block to the canonical chain number scheme and mark as the head~
-	// Add the block to the finalized chain number scheme
-	batch := bc.db.NewBatch()
 	if finNr == 0 && block.Hash() != bc.genesisBlock.Hash() {
 		log.Error("Save genesis hash", "hash", block.Hash(), "fn", "writeFinalizedBlock")
 		return fmt.Errorf("received zero finalizing number")
 	}
-	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 
+	block.SetNumber(&finNr)
+	batch := bc.db.NewBatch()
+	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
 		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "hash", block.Hash().Hex())
 	}
