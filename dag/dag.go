@@ -533,41 +533,33 @@ func (d *Dag) StartWork(accounts []common.Address) {
 
 	tickSec := 0
 	for {
-		si := d.bc.GetSlotInfo()
-		currentTime := time.Now()
-		if si != nil {
-			genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
+		select {
+		case <-d.exitChan:
+			log.Info("Dag workLoop stopped")
+			close(d.exitChan)
+			close(d.errChan)
+			return
+		case <-startTicker.C:
+			si := d.bc.GetSlotInfo()
+			currentTime := time.Now()
+			if si != nil {
+				genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
 
-			if currentTime.Before(genesisTime) {
-				if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
-					timeRemaining := genesisTime.Sub(currentTime)
-					log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+				if currentTime.Before(genesisTime) {
+					if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
+						timeRemaining := genesisTime.Sub(currentTime)
+						log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+					}
+				} else {
+					log.Info("Chain genesis time reached")
+					startTicker.Stop()
+					go d.workLoop(accounts)
+
+					return
 				}
-			} else {
-				log.Info("Chain genesis time reached")
-				startTicker.Stop()
-				go d.workLoop(accounts)
-
-				return
+				tickSec = currentTime.Second()
 			}
-			tickSec = currentTime.Second()
 		}
-		//else {
-		//	lcp := d.bc.GetLastCoordinatedCheckpoint()
-		//	// revert to LastCoordinatedCheckpoint
-		//	if lcp.Spine != d.bc.GetLastFinalizedBlock().Hash() {
-		//		spineBlock := d.bc.GetBlock(lcp.Spine)
-		//		if err := d.finalizer.SetSpineState(&lcp.Spine, spineBlock.Nr()); err != nil {
-		//			log.Error("Revert to checkpoint spine error", "error", err)
-		//		}
-		//		//d.bc..SetLastFinalisedHeader(genesisHeader, genesisHeight)
-		//		//d.bc.Set
-		//	}
-		//
-		//	log.Info("Waiting for slot info from coordinator")
-		//}
-
-		<-startTicker.C
 	}
 }
 
