@@ -3032,6 +3032,10 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 		}
 	}
 
+	if len(dag) == 0 {
+		return nil
+	}
+
 	log.Info("Synchronization by slots: dag hashes retrieved", "dag", len(dag), "err", err)
 	if err != nil {
 		p.log.Error("Synchronization by slots: error 1", "err", err, "from", from, "to", to)

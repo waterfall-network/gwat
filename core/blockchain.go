@@ -216,6 +216,7 @@ type BlockChain struct {
 	invalidBlocksCache    *lru.Cache     // Cache for the blocks with unknown parents
 	optimisticSpinesCache *lru.Cache
 	checkpointCache       *lru.Cache
+	checkpointSyncCache   *types.Checkpoint
 
 	validatorStorage valStore.Storage
 
@@ -618,6 +619,23 @@ func (bc *BlockChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	return bc.lastCoordinatedCp.Load().(*types.Checkpoint)
 }
 
+// SetSyncCheckpointCache set cp to cache for sync purposes.
+func (bc *BlockChain) SetSyncCheckpointCache(cp *types.Checkpoint) {
+	bc.checkpointSyncCache = cp.Copy()
+}
+
+// ResetSyncCheckpointCache reset cp to cache for sync purposes.
+func (bc *BlockChain) ResetSyncCheckpointCache() {
+	bc.checkpointSyncCache = nil
+}
+func (bc *BlockChain) getSyncCheckpointCache(cpSpine common.Hash) *types.Checkpoint {
+	if bc.checkpointSyncCache != nil && bc.checkpointSyncCache.Spine == cpSpine {
+		log.Info("Synchronization cp cache: used", "cpSpine", cpSpine.Hex())
+		return bc.checkpointSyncCache
+	}
+	return nil
+}
+
 // GetCoordinatedCheckpoint retrieves a checkpoint dag from the database by hash, caching it if found.
 func (bc *BlockChain) GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Checkpoint {
 	//check in cache
@@ -630,7 +648,8 @@ func (bc *BlockChain) GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Check
 	}
 	cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
 	if cp == nil {
-		return nil
+		// final check in sync cache
+		return bc.getSyncCheckpointCache(cpSpine)
 	}
 	// Cache the found cp for next time and return
 	bc.checkpointCache.Add(cpSpine, cp)
@@ -1072,19 +1091,14 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // writeFinalizedBlock injects a new finalized block into the current block chain.
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHead bool) error {
-	block.SetNumber(&finNr)
-
-	// If the block is on a side chain or an unknown one, force other heads onto it too
-
-	// ~Add the block to the canonical chain number scheme and mark as the head~
-	// Add the block to the finalized chain number scheme
-	batch := bc.db.NewBatch()
 	if finNr == 0 && block.Hash() != bc.genesisBlock.Hash() {
 		log.Error("Save genesis hash", "hash", block.Hash(), "fn", "writeFinalizedBlock")
 		return fmt.Errorf("received zero finalizing number")
 	}
-	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 
+	block.SetNumber(&finNr)
+	batch := bc.db.NewBatch()
+	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
 		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "hash", block.Hash().Hex())
 	}
