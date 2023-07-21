@@ -289,12 +289,12 @@ func (ha HashArray) Difference(hashArray HashArray) HashArray {
 // Uniq returns a new HashArray with unique values.
 func (ha HashArray) Uniq() HashArray {
 	c := make(HashArray, 0)
-	m := make(map[Hash]bool)
+	m := make(map[Hash]struct{})
 	for _, item := range ha {
-		if !m[item] {
+		if _, ok := m[item]; !ok {
 			c = append(c, item)
+			m[item] = struct{}{}
 		}
-		m[item] = true
 	}
 	return c
 }

@@ -26,7 +26,7 @@ func (tips Tips) Add(blockDag *BlockDAG) Tips {
 		return tips
 	}
 
-	blockDag.DagChainHashes = blockDag.DagChainHashes.Uniq()
+	blockDag.DagChainHashes.Deduplicate()
 
 	tips[blockDag.Hash] = blockDag
 	return tips
