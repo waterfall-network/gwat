@@ -3187,7 +3187,7 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (ui
 	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
 
 	if len(tx.Data()) > 0 {
-		return bc.TxEstimateGasByEvm(tx, nil)
+		return bc.TxEstimateGasByEvm(tx, lfNumber)
 	}
 	return IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
 }

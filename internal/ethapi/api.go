@@ -1252,17 +1252,19 @@ func DoEstimateGasQuick(ctx context.Context, b Backend, args TransactionArgs, bl
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
+	var blockNumber *uint64 = nil
 	if blockNrOrHash != nil {
-		bNrOrHash = *blockNrOrHash
+		header, err := s.b.HeaderByNumberOrHash(ctx, *blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
+		blockNumber = header.Number
 	}
-	gas, err := DoEstimateGasQuick(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
-	// if validator set dummy gas
-	if err == nil && args.To != nil && *args.To == *s.b.ChainConfig().ValidatorsStateAddress && gas == 0 {
-		gas = 21000
-	}
-	return gas, err
-	//return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+
+	tx := args.ToTransaction()
+	gas, err := s.b.BlockChain().TxEstimateGas(tx, blockNumber)
+
+	return hexutil.Uint64(gas), err
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
