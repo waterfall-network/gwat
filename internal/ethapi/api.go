@@ -1261,6 +1261,11 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionA
 		blockNumber = header.Number
 	}
 
+	err := args.setDefaults(ctx, s.b)
+	if err != nil {
+		return 0, err
+	}
+
 	tx := args.ToTransaction()
 	gas, err := s.b.BlockChain().TxEstimateGas(tx, blockNumber)
 
