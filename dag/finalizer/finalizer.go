@@ -58,7 +58,6 @@ type BlockChain interface {
 	SaveBlockDag(blockDag *types.BlockDAG)
 	RollbackFinalization(finNr uint64) error
 	GetLastFinalizedNumber() uint64
-	CollectAncestorsAftCpByParents(parents common.HashArray, cpHash common.Hash) (isCpAncestor bool, ancestors types.HeaderMap, unloaded common.HashArray, err error)
 }
 
 // Finalizer
@@ -404,12 +403,7 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		}
 		//check blockDag record exists
 		if f.bc.GetBlockDag(blockHeader.Hash()) == nil {
-			_, loaded, _, err := f.bc.CollectAncestorsAftCpByParents(blockHeader.ParentHashes, blockHeader.CpHash)
-			log.Info("TEST SPINE SET", "func", "CollectAncestorsAftCpByParents", "result", loaded.Hashes())
-
-			_, loaded, _, _, err = f.bc.CollectAncestorsAftCpByTips(blockHeader.ParentHashes, blockHeader.CpHash)
-			log.Info("TEST SPINE SET", "func", "CollectAncestorsAftCpByTips", "result", loaded.Hashes())
-
+			_, loaded, _, _, err := f.bc.CollectAncestorsAftCpByTips(blockHeader.ParentHashes, blockHeader.CpHash)
 			if err != nil {
 				return err
 			}

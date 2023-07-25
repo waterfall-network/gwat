@@ -194,7 +194,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	//set slotInfo on startup
+	// set slotInfo on startup
 	if err := eth.blockchain.SetSlotInfo(&types.SlotInfo{
 		GenesisTime:    eth.blockchain.Genesis().Time(),
 		SecondsPerSlot: chainConfig.SecondsPerSlot,
