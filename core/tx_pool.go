@@ -466,20 +466,17 @@ func (pool *TxPool) loop() {
 
 				pool.mu.Lock()
 				defer pool.mu.Unlock()
-				for _, tx := range txs {
+				for _, tx := range txs.Transactions {
 					// while sync - just removing tx from pool
 					if syncMode {
 						pool.removeTx(tx.Hash(), true)
 						//pool.removeProcessedTx(tx)
 					} else {
-						pool.moveToProcessing(tx)
+						pool.moveToProcessing(&types.ProcessingTransaction{
+							Transaction:  tx,
+							BlocksHashes: common.HashArray{txs.BlockHash},
+						})
 					}
-				for _, tx := range txs.Transactions {
-					log.Debug("Move to processing list", "TX hash", tx.Hash(), "TX nonce", tx.Nonce())
-					pool.moveToProcessing(&types.ProcessingTransaction{
-						Transaction:  tx,
-						BlocksHashes: common.HashArray{txs.BlockHash},
-					})
 				}
 			}()
 

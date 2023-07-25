@@ -1498,7 +1498,9 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 }
 
 type RPCProcessingTransaction struct {
-	BlocksHashes string            `json:"blocksHashes"`
+	BlockHash    *common.Hash      `json:"blockHash"`
+	BlockNumber  *hexutil.Uint64   `json:"blockNumber"`
+	BlocksHashes *common.HashArray `json:"blocksHashes"`
 	From         common.Address    `json:"from"`
 	Gas          hexutil.Uint64    `json:"gas"`
 	GasPrice     *hexutil.Big      `json:"gasPrice"`
@@ -1541,7 +1543,10 @@ func newRPCProcessingTransaction(tx *types.ProcessingTransaction, current *types
 		Nonce:    hexutil.Uint64(tx.Nonce()),
 	}
 
-	result.BlocksHashes = strings.Join(tx.BlocksHashes.ToStringsArray(), ", ")
+	result.BlocksHashes = &tx.BlocksHashes
+	if len(tx.BlocksHashes) > 0 {
+		result.BlockHash = &tx.BlocksHashes[0]
+	}
 
 	switch tx.Type() {
 	case types.AccessListTxType:
