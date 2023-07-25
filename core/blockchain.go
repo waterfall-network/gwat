@@ -46,6 +46,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
@@ -3170,26 +3171,26 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 }
 
 func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
-	//defer func(start time.Time) { log.Info("TxEstimateGas finished", "runtime", time.Since(start)) }(time.Now())
-	var err error
-	var isTokenOp, isValidatorOp bool
+	if len(tx.Data()) == 0 {
+		return params.TxGas, nil
+	}
+
+	var isTokenOp, isValidatorOp, isContract bool
 	if tx.To() == nil {
-		if _, err = operation.GetOpCode(tx.Data()); err == nil {
+		if _, err := operation.GetOpCode(tx.Data()); err == nil {
 			isTokenOp = true
 		}
 	} else {
 		isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
 	}
-	var txData []byte
-	if !isTokenOp && !isValidatorOp {
-		txData = tx.Data()
-	}
-	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
 
-	if len(tx.Data()) > 0 {
+	isContract = tx.To() == nil && !isTokenOp && !isValidatorOp
+
+	if isContract {
 		return bc.TxEstimateGasByEvm(tx, lfNumber)
 	}
-	return IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
+
+	return IntrinsicGas(tx.Data(), tx.AccessList(), isContract, isValidatorOp)
 }
 
 func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
@@ -3204,24 +3205,32 @@ func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, lfNumber *uint64
 		return 0, err
 	}
 
-	signer := types.LatestSigner(bc.chainConfig)
-	from, _ := types.Sender(signer, tx)
-	statedb.SetNonce(from, tx.Nonce())
+	msg, err := tx.AsMessage(types.MakeSigner(bc.Config()), header.BaseFee)
+
+	from := msg.From()
+	statedb.SetNonce(from, msg.Nonce())
 	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
-	gasBalance := new(big.Int).Mul(maxGas, tx.GasPrice())
-	reqBalance := new(big.Int).Add(gasBalance, tx.Value())
+	gasBalance := new(big.Int).Mul(maxGas, msg.GasPrice())
+	reqBalance := new(big.Int).Add(gasBalance, msg.Value())
 	statedb.SetBalance(from, reqBalance)
 
 	gasPool := new(GasPool).AddGas(math.MaxUint64)
-	usedGas := uint64(0)
+	//usedGas := uint64(0)
 
-	receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig(), bc)
+	//receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig(), bc)
+
+	blockContext := NewEVMBlockContext(header, bc, &header.Coinbase)
+	evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())
+
+	tokenProcessor := token.NewProcessor(blockContext, statedb)
+	validatorProcessor := validator.NewProcessor(blockContext, statedb, bc)
+	receipt, err := ApplyMessage(evm, tokenProcessor, validatorProcessor, msg, gasPool)
 	if err != nil {
-		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "err", err)
+		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "err", err)
 		return 0, err
 	}
-	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "txGas", tx.Gas(), "calcGas", receipt.GasUsed)
-	return receipt.GasUsed, nil
+	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "txGas", msg.Gas(), "calcGas", receipt.UsedGas)
+	return receipt.UsedGas, nil
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that

@@ -1252,22 +1252,54 @@ func DoEstimateGasQuick(ctx context.Context, b Backend, args TransactionArgs, bl
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	var blockNumber *uint64 = nil
-	if blockNrOrHash != nil {
-		header, err := s.b.HeaderByNumberOrHash(ctx, *blockNrOrHash)
-		if err != nil {
-			return 0, err
-		}
-		blockNumber = header.Number
-	}
-
-	err := args.setDefaults(ctx, s.b)
+	curNonce, err := s.b.GetPoolNonce(ctx, args.from())
 	if err != nil {
 		return 0, err
 	}
 
+	if args.Nonce != nil && uint64(*args.Nonce) < curNonce {
+		return 0, core.ErrNonceTooLow
+	}
+
+	if args.Nonce != nil && uint64(*args.Nonce) > curNonce {
+		return 0, core.ErrNonceTooHigh
+	}
+
+	var (
+		header  *types.Header
+		stateDb *state.StateDB
+	)
+	if blockNrOrHash != nil {
+		stateDb, header, err = s.b.StateAndHeaderByNumberOrHash(ctx, *blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		header = s.b.GetLastFinalizedHeader()
+		bNr := rpc.BlockNumber(header.Nr())
+		blockNrOrHash = &rpc.BlockNumberOrHash{
+			BlockNumber:      &bNr,
+			BlockHash:        nil,
+			RequireCanonical: false,
+		}
+		stateDb, header, err = s.b.StateAndHeaderByNumberOrHash(ctx, *blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	err = args.setDefaults(ctx, s.b)
+	if err != nil {
+		return 0, err
+	}
+
+	curBalance := stateDb.GetBalance(args.from())
+	if curBalance.Cmp(args.Value.ToInt()) < 0 {
+		return 0, vm.ErrInsufficientBalance
+	}
+
 	tx := args.ToTransaction()
-	gas, err := s.b.BlockChain().TxEstimateGas(tx, blockNumber)
+	gas, err := s.b.BlockChain().TxEstimateGas(tx, header.Number)
 
 	return hexutil.Uint64(gas), err
 }

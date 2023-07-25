@@ -31,6 +31,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -130,7 +131,16 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, 
 	if isContractCreation {
 		gas = params.TxGasContractCreation
 	} else if isValidatorOp {
-		gas = 0
+		valOp, err := operation.DecodeBytes(data)
+		if err != nil {
+			return 0, err
+		}
+		switch valOp.(type) {
+		case operation.ValidatorSync:
+			return 0, nil
+		default:
+			gas = params.TxGas
+		}
 	} else {
 		gas = params.TxGas
 	}
