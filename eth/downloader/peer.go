@@ -84,11 +84,17 @@ type Peer interface {
 	RequestReceipts([]common.Hash) error
 	RequestNodeData([]common.Hash) error
 	RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error
+	RequestHashesBySlots(from, to uint64) error
 }
 
 // lightPeerWrapper wraps a LightPeer struct, stubbing out the Peer-only methods.
 type lightPeerWrapper struct {
 	peer LightPeer
+}
+
+func (w *lightPeerWrapper) RequestHashesBySlots(from, to uint64) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (w *lightPeerWrapper) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error {

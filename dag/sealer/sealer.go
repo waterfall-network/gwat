@@ -13,7 +13,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
@@ -51,56 +50,10 @@ var (
 	// errUnknownBlock is returned when the list of signers is requested for a block
 	// that is not part of the local blockchain.
 	errUnknownBlock = errors.New("unknown block")
-
-	// errInvalidCheckpointBeneficiary is returned if a checkpoint/epoch transition
-	// block has a beneficiary set to non-zeroes.
-	errInvalidCheckpointBeneficiary = errors.New("beneficiary in checkpoint block non-zero")
-
-	// errInvalidVote is returned if a nonce value is something else that the two
-	// allowed constants of 0x00..0 or 0xff..f.
-	errInvalidVote = errors.New("vote nonce not 0x00..0 or 0xff..f")
-
-	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
-	errInvalidMixDigest = errors.New("non-zero mix digest")
-
-	// errUnauthorizedSigner is returned if a header is signed by a non-authorized entity.
-	errUnauthorizedSigner = errors.New("unauthorized signer")
-
-	// errRecentlySigned is returned if a header is signed by an authorized entity
-	// that already signed a header recently, thus is temporarily not allowed to.
-	errRecentlySigned = errors.New("recently signed")
 )
 
 // SignerFn hashes and signs the data to be signed by a backing account.
 type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
-
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
-	return header.Coinbase, nil
-	//
-	//// If the signature's already cached, return that
-	//hash := header.Hash()
-	//if address, known := sigcache.Get(hash); known {
-	//	return address.(common.Address), nil
-	//}
-	////todo
-	//// Retrieve the signature from the header extra-data
-	//if len(header.Extra) < extraSeal {
-	//	return common.Address{}, errMissingSignature
-	//}
-	//signature := header.Extra[len(header.Extra)-extraSeal:]
-	//
-	//// Recover the public key and the Ethereum address
-	//pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
-	//if err != nil {
-	//	return common.Address{}, err
-	//}
-	//var signer common.Address
-	//copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	//
-	//sigcache.Add(hash, signer)
-	//return signer, nil
-}
 
 // Sealer is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
@@ -140,14 +93,7 @@ func New(db ethdb.Database) *Sealer {
 // Author implements consensus.Engine, returning the Ethereum address recovered
 // from the signature in the header's extra-data section.
 func (c *Sealer) Author(header *types.Header) (common.Address, error) {
-	return ecrecover(header, c.signatures)
-}
-
-// VerifyHeader checks whether a header conforms to the consensus rules.
-func (c *Sealer) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	//todo
-	//return c.verifyHeader(chain, header, nil)
-	return nil
+	return header.Coinbase, nil
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
@@ -156,26 +102,15 @@ func (c *Sealer) VerifyHeader(chain consensus.ChainHeaderReader, header *types.H
 func (c *Sealer) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
-
 	go func() {
-		//todo
 		for i, header := range headers {
 			err := c.verifyHeader(chain, header, headers[:i])
-
 			select {
 			case <-abort:
 				return
 			case results <- err:
 			}
 		}
-		//for range headers {
-		//	var err error = nil
-		//	select {
-		//	case <-abort:
-		//		return
-		//	case results <- err:
-		//	}
-		//}
 	}()
 	return abort, results
 }
@@ -185,130 +120,11 @@ func (c *Sealer) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*typ
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (c *Sealer) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
-	//if header.Number == nil {
-	//	return errUnknownBlock
-	//}
-	//number := header.Height
-
-	// Don't waste time checking blocks from the future
-	if header.Time > uint64(time.Now().Unix()) {
-		return consensus.ErrFutureBlock
-	}
-	// Checkpoint blocks need to enforce zero beneficiary
-
-	//todo
-	//checkpoint := (number % c.config.Epoch) == 0
-	checkpoint := false
-
-	if checkpoint && header.Coinbase != (common.Address{}) {
-		return errInvalidCheckpointBeneficiary
-	}
-	//// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
-	//if !bytes.Equal(header.Nonce[:], nonceAuthVote) && !bytes.Equal(header.Nonce[:], nonceDropVote) {
-	//	return errInvalidVote
-	//}
-	//if checkpoint && !bytes.Equal(header.Nonce[:], nonceDropVote) {
-	//	return errInvalidCheckpointVote
-	//}
-
-	//// Check that the extra-data contains both the vanity and signature
-	//if len(header.Extra) < extraVanity {
-	//	return errMissingVanity
-	//}
-	//if len(header.Extra) < extraVanity+extraSeal {
-	//	return errMissingSignature
-	//}
-	//
-	//// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
-	//signersBytes := len(header.Extra) - extraVanity - extraSeal
-	//if !checkpoint && signersBytes != 0 {
-	//	return errExtraSigners
-	//}
-	//if checkpoint && signersBytes%common.AddressLength != 0 {
-	//	return errInvalidCheckpointSigners
-	//}
-
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
 	if header.GasLimit > cap {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
 	}
-	// If all checks passed, validate any special fields for hard forks
-	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
-		return err
-	}
-	// All basic checks passed, verify cascading fields
-	return c.verifyCascadingFields(chain, header, parents)
-}
-
-// verifyCascadingFields verifies all the header fields that are not standalone,
-// rather depend on a batch of previous headers. The caller may optionally pass
-// in a batch of parents (ascending order) to avoid looking those up from the
-// database. This is useful for concurrently verifying a batch of new headers.
-func (c *Sealer) verifyCascadingFields(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
-	// The genesis block is the always valid dead-end
-	//todo
-	//number := header.Number.Uint64()
-	number := uint64(0)
-	if number == 0 {
-		return nil
-	}
-	// Ensure that the block's timestamp isn't too close to its parent
-	var parent *types.Header
-	if len(parents) > 0 {
-		parent = parents[len(parents)-1]
-	} else {
-		parent = chain.GetHeader(header.ParentHashes[0])
-	}
-	//if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHashes[0] {
-	//	return consensus.ErrUnknownAncestor
-	//}
-
-	//if parent.Time+c.config.Period > header.Time {
-	//	return errInvalidTimestamp
-	//}
-
-	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed > header.GasLimit {
-		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
-	}
-	//// always IsLondon = true
-	//if !chain.Config().IsLondon(header.Number) {
-	//	// Verify BaseFee not present before EIP-1559 fork.
-	//	if header.BaseFee != nil {
-	//		return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
-	//	}
-	//	if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
-	//		return err
-	//	}
-	//} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
-	//	// Verify the header's EIP-1559 attributes.
-	//	return err
-	//}
-	// Get active validators number
-	/// TODO: pass number of validators, max gas per block and creators per slot, when code will become reachable
-	if err := misc.VerifyEip1559Header(chain.Config(), parent, header, 0, 0, 0); err != nil {
-		// Verify the header's EIP-1559 attributes.
-		return err
-	}
-
-	//// Retrieve the snapshot needed to verify this header and cache it
-	//snap, err := c.snapshot(chain, number-1, header.ParentHashes[0], parents)
-	//if err != nil {
-	//	return err
-	//}
-	//// If the block is a checkpoint block, verify the signer list
-	//if number%c.config.Epoch == 0 {
-	//	signers := make([]byte, len(snap.Signers)*common.AddressLength)
-	//	for i, signer := range snap.signers() {
-	//		copy(signers[i*common.AddressLength:], signer[:])
-	//	}
-	//	extraSuffix := len(header.Extra) - extraSeal
-	//	if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
-	//		return errMismatchingCheckpointSigners
-	//	}
-	//}
-	// All basic checks passed, verify the seal and return
 	return nil
 }
 
@@ -401,59 +217,12 @@ func (c *Sealer) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 	return snap, err
 }
 
-// verifySeal checks whether the signature contained in the header satisfies the
-// consensus protocol requirements. The method accepts an optional list of parent
-// headers that aren't yet part of the local blockchain to generate the snapshots
-// from.
-func (c *Sealer) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
-	//todo
-	//// Verifying the genesis block is not supported
-	//number := header.Number.Uint64()
-	//if number == 0 {
-	//	return errUnknownBlock
-	//}
-	//// Retrieve the snapshot needed to verify this header and cache it
-	//snap, err := c.snapshot(chain, number-1, header.ParentHashes[0], parents)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//// Resolve the authorization key and check against signers
-	//signer, err := ecrecover(header, c.signatures)
-	//if err != nil {
-	//	return err
-	//}
-	//if _, ok := snap.Signers[signer]; !ok {
-	//	return errUnauthorizedSigner
-	//}
-	//for seen, recent := range snap.Recents {
-	//	if recent == signer {
-	//		// Signer is among recents, only fail if the current block doesn't shift it out
-	//		if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
-	//			return errRecentlySigned
-	//		}
-	//	}
-	//}
-	//// Ensure that the difficulty corresponds to the turn-ness of the signer
-	//if !c.fakeDiff {
-	//	inturn := snap.inturn(header.Number.Uint64(), signer)
-	//	if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
-	//		return errWrongDifficulty
-	//	}
-	//	if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
-	//		return errWrongDifficulty
-	//	}
-	//}
-	return nil
-}
-
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (c *Sealer) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
 	//// If the block isn't a checkpoint, cast a random vote (good enough for now)
 	//header.Coinbase = common.Address{}
 	//header.Nonce = types.BlockNonce{}
-	////todo
 	//number := header.Height
 	//// Assemble the voting snapshot to check which votes make sense
 	//snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
@@ -501,7 +270,6 @@ func (c *Sealer) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
 	//// Ensure the timestamp has the correct delay
-	////todo
 	//parent := chain.GetHeader(header.ParentHash, number-1)
 	//if parent == nil {
 	//	return consensus.ErrUnknownAncestor

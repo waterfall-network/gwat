@@ -87,6 +87,7 @@ var (
 	errNoSyncActive            = errors.New("no sync active")
 	errTooOld                  = errors.New("peer's protocol version too old")
 	errNoAncestorFound         = errors.New("no common ancestor found")
+	errDataSizeLimitExceeded   = errors.New("data size limit exceeded")
 )
 
 type Downloader struct {
@@ -180,9 +181,15 @@ type LightChain interface {
 	SetHead(array common.Hash) error
 
 	// WriteSyncDagBlock writes the dag block and all associated state to the database for dag synchronization process
-	WriteSyncDagBlock(block *types.Block) (status int, err error)
+	WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error)
+
+	WriteSyncBlocks(blocks types.Blocks, validate bool) (status int, err error)
+
+	GetInsertDelayedHashes() common.HashArray
 
 	GetSlotInfo() *types.SlotInfo
+
+	Config() *params.ChainConfig
 }
 
 // BlockChain encapsulates functions required to sync a (full or fast) blockchain.
@@ -394,6 +401,169 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	return nil
 }
 
+func (d *Downloader) SynchroniseDagOnly(id string) error {
+	err := d.synchroniseDagOnly(id)
+	switch err {
+	case nil, errBusy, errCanceled:
+		return err
+	}
+	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
+		errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
+		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
+		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
+		if d.dropPeer == nil {
+			// The dropPeer method is nil when `--copydb` is used for a local copy.
+			// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
+			log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", id)
+		} else {
+			d.dropPeer(id)
+		}
+		return err
+	}
+	log.Warn("Synchronisation failed, retrying", "err", err)
+	return err
+}
+
+func (d *Downloader) synchroniseDagOnly(id string) error {
+	if d.Synchronising() {
+		log.Warn("Synchronization canceled (synchronise process busy)")
+		return errBusy
+	}
+
+	// Make sure only one goroutine is ever allowed past this point at once
+	if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
+		return errBusy
+	}
+	defer func(start time.Time) {
+		atomic.StoreInt32(&d.dagSyncing, 0)
+		log.Info("Synchronisation of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
+	}(time.Now())
+
+	//todo check
+	//// Make sure only one goroutine is ever allowed past this point at once
+	//if !atomic.CompareAndSwapInt32(&d.finSyncing, 0, 1) {
+	//	return errBusy
+	//}
+	//defer atomic.StoreInt32(&d.finSyncing, 0)
+
+	//todo check
+	//// Post a user notification of the sync (only once per session)
+	//if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
+	//	log.Info("Block synchronisation started")
+	//}
+
+	// If we are already full syncing, but have a fast-sync bloom filter laying
+	// around, make sure it doesn't use memory any more. This is a special case
+	// when the user attempts to fast sync a new empty network.
+	if d.stateBloom != nil {
+		d.stateBloom.Close()
+	}
+
+	//todo check
+	//// Reset the queue, peer set and wake channels to clean any internal leftover state
+	//d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
+	//d.peers.Reset()
+
+	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+		select {
+		case <-ch:
+		default:
+		}
+	}
+	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh, d.receiptCh, d.dagCh} {
+		for empty := false; !empty; {
+			select {
+			case <-ch:
+			default:
+				empty = true
+			}
+		}
+	}
+	for empty := false; !empty; {
+		select {
+		case <-d.headerProcCh:
+		default:
+			empty = true
+		}
+	}
+	// Create cancel channel for aborting mid-flight and mark the master peer
+	d.cancelLock.Lock()
+	d.cancelCh = make(chan struct{})
+	d.cancelPeer = id
+	d.cancelLock.Unlock()
+	defer d.Cancel() // No matter what, we can't leave the cancel channel open
+
+	//todo check
+	//// Atomically set the requested sync mode
+	//atomic.StoreUint32(&d.mode, uint32(FullSync))
+
+	// Retrieve the origin peer and initiate the downloading process
+	p := d.peers.Peer(id)
+	if p == nil {
+		return errUnknownPeer
+	}
+	return d.syncWithPeerDagOnly(p)
+}
+
+// syncWithPeer starts a block synchronization based on the hash chain from the
+// specified peer and head hash.
+func (d *Downloader) syncWithPeerDagOnly(p *peerConnection) (err error) {
+	d.mux.Post(StartEvent{})
+	defer func() {
+		// reset on error
+		if err != nil {
+			d.mux.Post(FailedEvent{err})
+		} else {
+			latest := d.lightchain.GetLastFinalizedHeader()
+			d.mux.Post(DoneEvent{latest})
+		}
+	}()
+	if p.version < eth.ETH66 {
+		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, eth.ETH66)
+	}
+
+	defer func(start time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "sync:syncWithPeer",
+		)
+	}(time.Now())
+
+	// fetch dag hashes
+	baseSpine := d.lightchain.GetLastCoordinatedCheckpoint().Spine
+
+	log.Info("Synchronising unloaded dag: start", "peer", p.id, "baseSpine", baseSpine.Hex())
+
+	remoteDag, err := d.fetchDagHashes(p, baseSpine, common.Hash{})
+	if err != nil {
+		return err
+	}
+
+	log.Info("Synchronising unloaded dag: remoteDag 000", "remoteDag", remoteDag)
+
+	delayed := d.blockchain.GetInsertDelayedHashes()
+	remoteDag = remoteDag.Difference(delayed)
+	log.Info("Synchronising unloaded dag: delayed   111", "remoteDag", remoteDag, "delayedIns", delayed)
+
+	// filter existed blocks
+	unloaded := make(common.HashArray, 0, len(remoteDag))
+	dagBlocks := d.blockchain.GetBlocksByHashes(remoteDag)
+	for h, b := range dagBlocks {
+		if b == nil {
+			unloaded = append(unloaded, h)
+		}
+	}
+
+	log.Info("Synchronising unloaded dag: unloaded  222", "peer", p.id, "baseSpine", baseSpine.Hex(), "unloaded", unloaded)
+
+	if err = d.syncWithPeerUnknownDagBlocks(p, unloaded); err != nil {
+		log.Error("Synchronising unloaded dag failed", "err", err)
+		return err
+	}
+	d.Cancel()
+	return nil
+}
+
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) Synchronise(id string, dag common.HashArray, lastFinNr uint64, mode SyncMode, dagOnly bool) error {
@@ -506,9 +676,11 @@ func (d *Downloader) synchronise(id string, dag common.HashArray, lastFinNr uint
 
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
-	log.Warn("±±±±§§§§±±±±± INSIDE Synchronisation , peer", "peer", p)
 	if p == nil {
 		return errUnknownPeer
+	}
+	if dagOnly {
+		return d.syncWithPeerDagOnly(p)
 	}
 	return d.syncWithPeer(p, dag, lastFinNr, dagOnly)
 }
@@ -676,7 +848,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastF
 	return nil
 }
 
-// todo deprecated
+// deprecated
 // syncWithPeerDagChain downloads and set on current node dag chain from remote peer
 func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 	// Make sure only one goroutine is ever allowed past this point at once
@@ -743,7 +915,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 		}
 		spine := slotBlocks[0]
 		if spine.Slot() > lastFinBlock.Slot() {
-			_, err = d.blockchain.WriteSyncDagBlock(spine)
+			_, err = d.blockchain.WriteSyncDagBlock(spine, true)
 			if err != nil {
 				log.Error("Failed writing block to chain (sync dep)", "err", err)
 				return err
@@ -757,7 +929,7 @@ func (d *Downloader) syncWithPeerDagChain(p *peerConnection) (err error) {
 				continue
 			}
 			// Commit block and state to database.
-			_, err = d.blockchain.WriteSyncDagBlock(block)
+			_, err = d.blockchain.WriteSyncDagBlock(block, true)
 			if err != nil {
 				log.Error("Failed writing block to chain (sync dep)", "err", err)
 				return err
@@ -811,30 +983,17 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	}
 	sort.Sort(slots)
 
+	insBlocks := make(types.Blocks, 0, len(headers))
 	for _, slot := range slots {
 		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
-		for _, block := range slotBlocks {
-			_, err = d.blockchain.WriteSyncDagBlock(block)
-			if err != nil {
-				log.Error("Failed writing block to chain  (sync unl)", "err", err)
-				return err
-			}
-		}
+		insBlocks = append(insBlocks, slotBlocks...)
+	}
+	if i, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
+		bl := insBlocks[i]
+		log.Error("Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+		return err
 	}
 	return nil
-	////clear tips
-	//tips := d.blockchain.GetTips()
-	//ancestors := make(common.HashArray, 0, len(tips))
-	//for hash := range tips {
-	//	block := d.blockchain.GetBlockByHash(hash)
-	//	ancestorss, err := d.GetUnfinalizedParents(block)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	ancestors = append(ancestors, ancestorss...)
-	//}
-	//d.blockchain.RemoveTips(ancestors)
-	//d.blockchain.ResetTips()
 }
 
 // spawnSync runs d.process and all given fetcher functions to completion in
@@ -2306,6 +2465,7 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 	cancel := d.cancelCh
 	d.cancelLock.RUnlock()
 	if cancel == nil {
+		log.Error("Sync deliver error", "err", errNoSyncActive)
 		return errNoSyncActive
 	}
 	select {
@@ -2313,6 +2473,50 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 		return nil
 	case <-cancel:
 		return errNoSyncActive
+	}
+}
+
+// fetchDagHashes retrieves the dag chain hashes beginning from finalized block (excluded from response).
+func (d *Downloader) fetchDagHashesBySlots(p *peerConnection, from, to uint64) (dag common.HashArray, err error) {
+	//slots limit 1024
+	slotsLimit := eth.LimitDagHashes / d.lightchain.Config().ValidatorsPerSlot
+	if to-from > slotsLimit {
+		return nil, errDataSizeLimitExceeded
+	}
+	p.log.Info("Retrieving remote dag hashes by slot: start", "from", from, "to", to)
+
+	go p.peer.RequestHashesBySlots(from, to)
+
+	ttl := d.peers.rates.TargetTimeout()
+	timeout := time.After(ttl)
+
+	for {
+		err = nil
+		select {
+		case <-d.cancelCh:
+			return nil, errCanceled
+		case packet := <-d.dagCh:
+			// Discard anything not from the origin peer
+			if packet.PeerId() != p.id {
+				log.Warn("Received dag from incorrect peer", "peer", packet.PeerId(), "fn", "sync:RequestHashesBySlots")
+				break
+			}
+			dag = packet.(*dagPack).dag
+			if len(dag) == 0 {
+				err = errInvalidDag
+			}
+			return dag, err
+		case <-timeout:
+			p.log.Debug("Waiting for dag timed out", "elapsed", ttl)
+			return nil, errTimeout
+		case header := <-d.headerCh:
+			p.log.Warn("Out of bounds delivery, ignore: <-d.headerCh:", "elapsed", ttl, "header", header, "fn", "sync:RequestHashesBySlots")
+		case body := <-d.bodyCh:
+			p.log.Warn("Out of bounds delivery, ignore: <-d.bodyCh:", "elapsed", ttl, "body", body, "fn", "sync:RequestHashesBySlots")
+		case receipt := <-d.receiptCh:
+			p.log.Warn("Out of bounds delivery, ignore: <-d.receiptCh:", "elapsed", ttl, "receipt", receipt, "fn", "sync:RequestHashesBySlots")
+			// Out of bounds delivery, ignore
+		}
 	}
 }
 
@@ -2685,6 +2889,8 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 		fullySynced = true
 		log.Info("peerSyncDagChain SYNC currEpoch == finEpoch", "currEpoch", currEpoch, "finEpoch", finEpoch)
 		log.Info("Synchronisation of chain head detected", "baseSpine", baseSpine.Hex(), "spines", spines)
+
+		return d.peerSyncDagChainHeadBySlots(p, baseSpine)
 	}
 
 	// fetch dag hashes
@@ -2759,7 +2965,7 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 		//handle by reverse order
 		for _, block := range slotBlocks {
 			// Commit block to database.
-			_, err = d.blockchain.WriteSyncDagBlock(block)
+			_, err = d.blockchain.WriteSyncDagBlock(block, fullySynced)
 			if err != nil {
 				log.Error("Failed writing block to chain (sync)", "err", err)
 				return false, err
@@ -2767,4 +2973,120 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 		}
 	}
 	return fullySynced, err
+}
+
+// peerSyncDagChain downloads and set on current node unfinalized chain from remote peer.
+func (d *Downloader) peerSyncDagChainHeadBySlots(p *peerConnection, baseSpine common.Hash) (fullySynced bool, err error) {
+	defer func(ts time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME GetHashesBySlot",
+			"elapsed", common.PrettyDuration(time.Since(ts)),
+			"func:", "peerSyncDagChainHeadBySlots",
+		)
+	}(time.Now())
+
+	step := (eth.LimitDagHashes / d.lightchain.Config().ValidatorsPerSlot) / 2
+	baseHeader := d.lightchain.GetHeaderByHash(baseSpine)
+	si := d.lightchain.GetSlotInfo()
+
+	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
+	for from := baseHeader.Slot; from < si.CurrentSlot(); {
+		to := from + step
+		if err = d.syncBySlots(p, from, to); err != nil {
+			p.log.Error("Synchronization by slots: error", "err", err, "from", from, "to", to)
+			return false, err
+		}
+		from = to
+	}
+	return true, nil
+}
+
+func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
+	var (
+		remoteHashes common.HashArray
+		err          error
+	)
+
+	defer func(ts time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(ts)),
+			"slots", to-from,
+			"len(hashes)", len(remoteHashes),
+			"func:", "syncBySlots",
+		)
+	}(time.Now())
+
+	p.log.Info("Synchronization by slots: start", "from", from, "to", to)
+	// fetch dag hashes
+	remoteHashes, err = d.fetchDagHashesBySlots(p, from, to)
+	if err != nil {
+		p.log.Error("Synchronization by slots: error 0", "err", err, "from", from, "to", to)
+		return err
+	}
+
+	// filter existed blocks
+	dag := make(common.HashArray, 0, len(remoteHashes))
+	dagBlocks := d.blockchain.GetBlocksByHashes(remoteHashes)
+	for h, b := range dagBlocks {
+		if b == nil {
+			dag = append(dag, h)
+		}
+	}
+
+	if len(dag) == 0 {
+		return nil
+	}
+
+	log.Info("Synchronization by slots: dag hashes retrieved", "dag", len(dag), "err", err)
+	if err != nil {
+		p.log.Error("Synchronization by slots: error 1", "err", err, "from", from, "to", to)
+		return err
+	}
+	headers, err := d.fetchDagHeaders(p, dag)
+	log.Info("Synchronization by slots: dag headers retrieved", "count", len(headers), "headers", len(headers), "err", err)
+	if err != nil {
+		p.log.Error("Synchronization by slots: error 2", "err", err, "from", from, "to", to)
+		return err
+	}
+	txsMap, err := d.fetchDagTxs(p, dag)
+	log.Info("Synchronization by slots: dag transactions retrieved", "count", len(txsMap), "txs", len(txsMap), "err", err)
+	if err != nil {
+		p.log.Error("Synchronization by slots: error 3", "err", err, "from", from, "to", to)
+		return err
+	}
+
+	blocks := make(types.Blocks, len(headers), len(dagBlocks))
+	for i, header := range headers {
+		txs := txsMap[header.Hash()]
+		block := types.NewBlockWithHeader(header).WithBody(txs)
+		blocks[i] = block
+	}
+
+	blocksBySlot, err := (&blocks).GroupBySlot()
+	if err != nil {
+		return err
+	}
+	//sort by slots
+	slots := common.SorterAscU64{}
+	for sl, _ := range blocksBySlot {
+		slots = append(slots, sl)
+	}
+	sort.Sort(slots)
+
+	for _, slot := range slots {
+		// era.HandleEra(d.blockchain, slot)
+		slotBlocks := blocksBySlot[slot]
+		if len(slotBlocks) == 0 {
+			continue
+		}
+		//handle by reverse order
+		for _, block := range slotBlocks {
+			// Commit block to database.
+			_, err = d.blockchain.WriteSyncDagBlock(block, true)
+			if err != nil {
+				p.log.Error("Synchronization by slots: error 4", "err", err, "from", from, "to", to)
+				return err
+			}
+		}
+	}
+	return err
 }
