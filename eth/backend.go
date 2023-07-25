@@ -194,15 +194,15 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	// set slotInfo on startup
-	//if err := eth.blockchain.SetSlotInfo(&types.SlotInfo{
-	//	GenesisTime:    eth.blockchain.Genesis().Time(),
-	//	SecondsPerSlot: chainConfig.SecondsPerSlot,
-	//	SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
-	//}); err != nil {
-	//	return nil, err
-	//}
-	//log.Info("Loaded SlotInfo", "info", eth.blockchain.GetSlotInfo())
+	//set slotInfo on startup
+	if err := eth.blockchain.SetSlotInfo(&types.SlotInfo{
+		GenesisTime:    eth.blockchain.Genesis().Time(),
+		SecondsPerSlot: chainConfig.SecondsPerSlot,
+		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
+	}); err != nil {
+		return nil, err
+	}
+	log.Info("Loaded SlotInfo", "info", eth.blockchain.GetSlotInfo())
 
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {

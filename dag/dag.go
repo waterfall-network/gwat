@@ -600,11 +600,11 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				log.Info("dag workloop !d.bc.IsSynced()", "IsSynced", d.bc.IsSynced())
 				continue
 			}
-			//if d.isCoordinatorConnectionLost() {
-			//	d.bc.SetIsSynced(false)
-			//	log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
-			//	continue
-			//}
+			if d.isCoordinatorConnectionLost() {
+				d.bc.SetIsSynced(false)
+				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
+				continue
+			}
 			epoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
 			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", epoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
 			//if d.bc.GetEraInfo().ToEpoch() >= epoch { // TODO: check ???
