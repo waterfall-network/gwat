@@ -45,7 +45,7 @@ type Backend interface {
 
 type blockChain interface {
 	GetEpoch(epoch uint64) common.Hash
-	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
+	SetLastCoordinatedCheckpoint(cp *types.Checkpoint, isSynced bool)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
@@ -87,6 +87,9 @@ type blockChain interface {
 	RemoveTips(hashes common.HashArray)
 	WriteCurrentTips()
 	GetBlockHashesBySlot(slot uint64) common.HashArray
+
+	GetCheckpointToSwitch(slot uint64) (*types.Checkpoint, bool)
+	SwitchCheckpoint(cp *types.Checkpoint, slot uint64)
 }
 
 type ethDownloader interface {
@@ -227,7 +230,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			e := err.Error()
 			res.Error = &e
 		} else {
-			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
+			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint, d.bc.IsSynced())
 			if d.bc.IsSynced() {
 				go era.HandleEra(d.bc, data.Checkpoint)
 			} else {
@@ -235,7 +238,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			}
 		}
 	} else {
-		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
+		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint, d.bc.IsSynced())
 		if d.bc.IsSynced() {
 			go era.HandleEra(d.bc, data.Checkpoint)
 		} else {
@@ -594,6 +597,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			if slot == 0 {
 				d.bc.SetIsSynced(true)
 				continue
+			}
+
+			cp, ok := d.bc.GetCheckpointToSwitch(slot)
+			if ok {
+				log.Info("SwitchCheckpoint", "slot", slot, "checkpoint", cp)
+				d.bc.SwitchCheckpoint(cp, slot)
 			}
 
 			if !d.bc.IsSynced() {
