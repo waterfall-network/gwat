@@ -235,6 +235,8 @@ type BlockChain struct {
 	syncProvider types.SyncProvider
 	isSynced     bool
 	isSyncedM    sync.Mutex
+
+	checkpointToSwitch *CheckpointToSwitch
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -564,7 +566,7 @@ func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 }
 
 // SetLastCoordinatedCheckpoint set last coordinated checkpoint.
-func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
+func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint, isSynced bool) {
 	// save new checkpoint and cache it.
 	if epCp := bc.GetCoordinatedCheckpoint(cp.Spine); epCp == nil {
 		rawdb.WriteCoordinatedCheckpoint(bc.db, cp)
@@ -573,7 +575,12 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	//update current cp and apoch data.
 	currCp := bc.GetLastCoordinatedCheckpoint()
 	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
-		bc.lastCoordinatedCp.Store(cp.Copy())
+		if isSynced {
+			bc.CachingCheckpointForSwitch(bc.GetSlotInfo().CurrentSlot(), cp.Copy())
+		} else {
+			bc.lastCoordinatedCp.Store(cp.Copy())
+		}
+
 		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
 		log.Info("CheckShuffle - write checkpoint to db", "epoch", cp.FinEpoch, "checkpoint", cp)
 		rawdb.WriteEpoch(bc.db, cp.FinEpoch, cp.Spine)
@@ -4508,4 +4515,31 @@ func (bc *BlockChain) EpochToEra(epoch uint64) *era.Era {
 	}
 
 	return findingEra
+}
+
+func (bc *BlockChain) GetCheckpointToSwitch() *CheckpointToSwitch {
+	return bc.checkpointToSwitch
+}
+
+func (bc *BlockChain) CachingCheckpointForSwitch(slot uint64, cp *types.Checkpoint) {
+	if bc.checkpointToSwitch == nil {
+		bc.checkpointToSwitch = &CheckpointToSwitch{
+			checkPoint: cp,
+			slot:       slot,
+		}
+	}
+}
+
+func (bc *BlockChain) SwitchCheckpoint() {
+	bc.lastCoordinatedCp.Store(bc.checkpointToSwitch.checkPoint)
+	bc.checkpointToSwitch = nil
+}
+
+type CheckpointToSwitch struct {
+	checkPoint *types.Checkpoint
+	slot       uint64
+}
+
+func (c *CheckpointToSwitch) Slot() uint64 {
+	return c.slot
 }
