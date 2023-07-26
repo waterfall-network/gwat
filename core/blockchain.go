@@ -236,8 +236,7 @@ type BlockChain struct {
 	isSynced     bool
 	isSyncedM    sync.Mutex
 
-	checkpointSwitchCache map[uint64]*types.Checkpoint
-	switchMu              *sync.Mutex
+	checkpointToSwitch *CheckpointToSwitch
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -282,8 +281,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		vmConfig:              vmConfig,
 		syncProvider:          nil,
 		validatorStorage:      valStore.NewStorage(chainConfig),
-		checkpointSwitchCache: make(map[uint64]*types.Checkpoint),
-		switchMu:              new(sync.Mutex),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -579,7 +576,7 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint, isSynce
 	currCp := bc.GetLastCoordinatedCheckpoint()
 	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
 		if isSynced {
-			bc.CachingCheckpointForSwitch(cp.Copy())
+			bc.CachingCheckpointForSwitch(bc.GetSlotInfo().CurrentSlot(), cp.Copy())
 		} else {
 			bc.lastCoordinatedCp.Store(cp.Copy())
 		}
@@ -4520,31 +4517,29 @@ func (bc *BlockChain) EpochToEra(epoch uint64) *era.Era {
 	return findingEra
 }
 
-func (bc *BlockChain) GetCheckpointToSwitch(slot uint64) (*types.Checkpoint, bool) {
-	bc.switchMu.Lock()
-	defer bc.switchMu.Unlock()
-
-	cp, ok := bc.checkpointSwitchCache[slot]
-	return cp, ok
+func (bc *BlockChain) GetCheckpointToSwitch() *CheckpointToSwitch {
+	return bc.checkpointToSwitch
 }
 
-func (bc *BlockChain) CachingCheckpointForSwitch(cp *types.Checkpoint) {
-	bc.switchMu.Lock()
-	defer bc.switchMu.Unlock()
-
-	for _, checkpoint := range bc.checkpointSwitchCache {
-		if checkpoint.Root == cp.Root && cp.FinEpoch == checkpoint.FinEpoch {
-			return
+func (bc *BlockChain) CachingCheckpointForSwitch(slot uint64, cp *types.Checkpoint) {
+	if bc.checkpointToSwitch == nil {
+		bc.checkpointToSwitch = &CheckpointToSwitch{
+			checkPoint: cp,
+			slot:       slot,
 		}
 	}
-
-	bc.checkpointSwitchCache[bc.GetSlotInfo().CurrentSlot()+2] = cp
 }
 
-func (bc *BlockChain) SwitchCheckpoint(cp *types.Checkpoint, slot uint64) {
-	bc.switchMu.Lock()
-	defer bc.switchMu.Unlock()
+func (bc *BlockChain) SwitchCheckpoint() {
+	bc.lastCoordinatedCp.Store(bc.checkpointToSwitch.checkPoint)
+	bc.checkpointToSwitch = nil
+}
 
-	bc.lastCoordinatedCp.Store(cp)
-	delete(bc.checkpointSwitchCache, slot)
+type CheckpointToSwitch struct {
+	checkPoint *types.Checkpoint
+	slot       uint64
+}
+
+func (c *CheckpointToSwitch) Slot() uint64 {
+	return c.slot
 }

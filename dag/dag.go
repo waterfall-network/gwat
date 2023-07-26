@@ -88,8 +88,8 @@ type blockChain interface {
 	WriteCurrentTips()
 	GetBlockHashesBySlot(slot uint64) common.HashArray
 
-	GetCheckpointToSwitch(slot uint64) (*types.Checkpoint, bool)
-	SwitchCheckpoint(cp *types.Checkpoint, slot uint64)
+	GetCheckpointToSwitch() *core.CheckpointToSwitch
+	SwitchCheckpoint()
 }
 
 type ethDownloader interface {
@@ -599,10 +599,10 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				continue
 			}
 
-			cp, ok := d.bc.GetCheckpointToSwitch(slot)
-			if ok {
-				log.Info("SwitchCheckpoint", "slot", slot, "checkpoint", cp)
-				d.bc.SwitchCheckpoint(cp, slot)
+			cp := d.bc.GetCheckpointToSwitch()
+			if cp != nil && cp.Slot()+2 <= slot {
+				log.Info("Switch checkpoint", "slot", slot, "checkpoint", cp)
+				d.bc.SwitchCheckpoint()
 			}
 
 			if !d.bc.IsSynced() {
