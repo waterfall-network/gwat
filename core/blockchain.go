@@ -3184,7 +3184,7 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (ui
 		isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
 	}
 
-	isContract = tx.To() == nil && !isTokenOp && !isValidatorOp
+	isContract = tx.To() == nil && !isTokenOp && !isValidatorOp || tx.To() != nil && len(tx.Data()) > 0 && !isTokenOp && !isValidatorOp
 
 	if isContract {
 		return bc.TxEstimateGasByEvm(tx, lfNumber)
@@ -3215,9 +3215,6 @@ func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, lfNumber *uint64
 	statedb.SetBalance(from, reqBalance)
 
 	gasPool := new(GasPool).AddGas(math.MaxUint64)
-	//usedGas := uint64(0)
-
-	//receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig(), bc)
 
 	blockContext := NewEVMBlockContext(header, bc, &header.Coinbase)
 	evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())

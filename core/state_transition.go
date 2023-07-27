@@ -319,13 +319,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	sender := vm.AccountRef(msg.From())
 
 	// Check if it's token related operations
-	isTokenCreation := false
-	if msg.To() == nil {
-		opCode, err := tokenOp.GetOpCode(msg.Data())
-		isTokenCreation = err == nil && opCode == tokenOp.CreateCode
-	}
-	isValidatorOp := st.vp.IsValidatorOp(msg.To())
-	isContractCreation := msg.To() == nil && !isTokenCreation
+
+	txType := CheckTxType(msg, st.vp, st.tp)
+
+	isTokenOp := txType == TokenCreationTxType || txType == TokenMethodTxType
+	isValidatorOp := txType == ValidatorMethodTxType || txType == ValidatorSyncTxType
+	isContractCreation := txType == ContractCreationTxType
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation, isValidatorOp)
@@ -357,7 +356,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// check if "to" address belongs to token, otherwise it's a contract
-		if isTokenCreation || st.tp.IsToken(st.to()) {
+		if isTokenOp {
 			// perform token operation if its valid op code
 			op, err := tokenOp.DecodeBytes(msg.Data())
 			if err != nil {
@@ -407,4 +406,50 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
+}
+
+const (
+	DefaultTxType TxType = iota
+	TokenCreationTxType
+	TokenMethodTxType
+	ContractCreationTxType
+	ContractMethodTxType
+	ValidatorMethodTxType
+	ValidatorSyncTxType
+	UnknownTxType
+)
+
+type TxType uint64
+
+func CheckTxType(msg Message, vp *validator.Processor, tp *token.Processor) TxType {
+	if len(msg.Data()) > 0 {
+		if msg.To() == nil {
+			opCode, err := tokenOp.GetOpCode(msg.Data())
+			if err == nil && opCode == tokenOp.CreateCode {
+				return TokenCreationTxType
+			}
+			return ContractCreationTxType
+		}
+
+		if tp.IsToken(*msg.To()) {
+			return TokenMethodTxType
+		}
+
+		if vp.IsValidatorOp(msg.To()) {
+			valOp, err := operation.DecodeBytes(msg.Data())
+			if err != nil {
+				return UnknownTxType
+			}
+			switch valOp.(type) {
+			case operation.ValidatorSync:
+				return ValidatorSyncTxType
+			default:
+				return ValidatorMethodTxType
+			}
+		}
+
+		return ContractMethodTxType
+	}
+
+	return DefaultTxType
 }
