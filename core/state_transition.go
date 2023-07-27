@@ -422,34 +422,34 @@ const (
 type TxType uint64
 
 func CheckTxType(msg Message, vp *validator.Processor, tp *token.Processor) TxType {
-	if len(msg.Data()) > 0 {
-		if msg.To() == nil {
-			opCode, err := tokenOp.GetOpCode(msg.Data())
-			if err == nil && opCode == tokenOp.CreateCode {
-				return TokenCreationTxType
-			}
-			return ContractCreationTxType
-		}
-
-		if tp.IsToken(*msg.To()) {
-			return TokenMethodTxType
-		}
-
-		if vp.IsValidatorOp(msg.To()) {
-			valOp, err := operation.DecodeBytes(msg.Data())
-			if err != nil {
-				return UnknownTxType
-			}
-			switch valOp.(type) {
-			case operation.ValidatorSync:
-				return ValidatorSyncTxType
-			default:
-				return ValidatorMethodTxType
-			}
-		}
-
-		return ContractMethodTxType
+	if len(msg.Data()) == 0 {
+		return DefaultTxType
 	}
 
-	return DefaultTxType
+	if msg.To() == nil {
+		opCode, err := tokenOp.GetOpCode(msg.Data())
+		if err == nil && opCode == tokenOp.CreateCode {
+			return TokenCreationTxType
+		}
+		return ContractCreationTxType
+	}
+
+	if tp.IsToken(*msg.To()) {
+		return TokenMethodTxType
+	}
+
+	if vp.IsValidatorOp(msg.To()) {
+		valOp, err := operation.DecodeBytes(msg.Data())
+		if err != nil {
+			return UnknownTxType
+		}
+		switch valOp.(type) {
+		case operation.ValidatorSync:
+			return ValidatorSyncTxType
+		default:
+			return ValidatorMethodTxType
+		}
+	}
+
+	return ContractMethodTxType
 }
