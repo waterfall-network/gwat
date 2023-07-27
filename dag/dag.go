@@ -260,7 +260,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		currEpoch := si.SlotToEpoch(si.CurrentSlot())
 		if currEpoch == cp.FinEpoch {
 			d.bc.SetIsSynced(true)
-			log.Info("HandleFinalize SetIsSynced curEpoch == finEpoch", "currEpoch", currEpoch, "finEpoch", data.Checkpoint.FinEpoch)
+			log.Info("HandleFinalize SetIsSynced true", "currEpoch", currEpoch, "finEpoch", data.Checkpoint.FinEpoch)
 		}
 	}
 
@@ -282,11 +282,17 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 // 3. start sync process
 // 4. if chain head reached - switch off sync mode
 func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, cp *types.Checkpoint) error {
+	defer func(start time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "dag.handleSyncUnloadedBlocks",
+		)
+	}(time.Now())
+
 	if len(spines) == 0 {
 		return nil
 	}
 	finEpoch := cp.Epoch
-	start := time.Now()
 	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {
 		return err
@@ -312,7 +318,6 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 		d.bc.SetIsSynced(true)
 		log.Info("Node fully synced: head reached")
 	}
-	log.Debug("handleSyncUnloadedBlocks", "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 

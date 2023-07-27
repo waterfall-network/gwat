@@ -214,12 +214,21 @@ func (vs *ValidatorSync) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+type SyncMode uint8
+
+const (
+	NoSync SyncMode = iota
+	MainSync
+	HeadSync
+)
+
 // FinalizationParams represents params of finalization request
 type FinalizationParams struct {
 	Spines      common.HashArray `json:"spines"`
 	BaseSpine   *common.Hash     `json:"baseSpine"`
 	Checkpoint  *Checkpoint      `json:"checkpoint"`
 	ValSyncData []*ValidatorSync `json:"valSyncData"`
+	SyncMode    *SyncMode        `json:"syncMode"`
 }
 
 // Copy duplicates the current storage.
@@ -240,6 +249,7 @@ func (fp *FinalizationParams) Copy() *FinalizationParams {
 			cpy.ValSyncData[i] = vs.Copy()
 		}
 	}
+	cpy.SyncMode = fp.SyncMode
 	return cpy
 }
 
@@ -266,6 +276,7 @@ func (fp *FinalizationParams) UnmarshalJSON(input []byte) error {
 	if dec.ValSyncData != nil {
 		fp.ValSyncData = dec.ValSyncData
 	}
+	fp.ValSyncData = dec.ValSyncData
 	return nil
 }
 
