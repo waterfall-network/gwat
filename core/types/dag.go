@@ -228,7 +228,15 @@ type FinalizationParams struct {
 	BaseSpine   *common.Hash     `json:"baseSpine"`
 	Checkpoint  *Checkpoint      `json:"checkpoint"`
 	ValSyncData []*ValidatorSync `json:"valSyncData"`
-	SyncMode    *SyncMode        `json:"syncMode"`
+	SyncMode    SyncMode         `json:"syncMode"`
+}
+
+type finalizationParamsMarshaling struct {
+	Spines      common.HashArray `json:"spines"`
+	BaseSpine   *common.Hash     `json:"baseSpine"`
+	Checkpoint  *Checkpoint      `json:"checkpoint"`
+	ValSyncData []*ValidatorSync `json:"valSyncData"`
+	SyncMode    *hexutil.Uint8   `json:"syncMode"`
 }
 
 // Copy duplicates the current storage.
@@ -254,12 +262,19 @@ func (fp *FinalizationParams) Copy() *FinalizationParams {
 }
 
 func (fp *FinalizationParams) MarshalJSON() ([]byte, error) {
-	return json.Marshal(*fp)
+	out := finalizationParamsMarshaling{
+		Spines:      fp.Spines,
+		BaseSpine:   fp.BaseSpine,
+		Checkpoint:  fp.Checkpoint,
+		ValSyncData: fp.ValSyncData,
+		SyncMode:    (*hexutil.Uint8)(&fp.SyncMode),
+	}
+	return json.Marshal(out)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (fp *FinalizationParams) UnmarshalJSON(input []byte) error {
-	type Decoding FinalizationParams
+	type Decoding finalizationParamsMarshaling
 	dec := Decoding{}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -276,7 +291,9 @@ func (fp *FinalizationParams) UnmarshalJSON(input []byte) error {
 	if dec.ValSyncData != nil {
 		fp.ValSyncData = dec.ValSyncData
 	}
-	fp.ValSyncData = dec.ValSyncData
+	if dec.SyncMode != nil {
+		fp.SyncMode = SyncMode(*dec.SyncMode)
+	}
 	return nil
 }
 
