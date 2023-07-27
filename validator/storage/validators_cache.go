@@ -77,6 +77,9 @@ func (c *ValidatorsCache) getAllValidatorsByEpoch(epoch uint64) ([]Validator, er
 }
 
 func (c *ValidatorsCache) getActiveValidatorsByEpoch(bc blockchain, epoch uint64) []Validator {
+	c.allMu.Lock()
+	defer c.allMu.Unlock()
+
 	validators := make([]Validator, 0)
 	validatorsList, ok := c.allValidatorsCache[epoch]
 	if !ok {
@@ -189,6 +192,9 @@ func (c *ValidatorsCache) addShuffledValidators(shuffledValidators [][]common.Ad
 // getShuffledValidators return shuffled validators addresses from cache.
 // Input parameters are array of uint64 (epoch, slot, subnet). Sequence is required!!!
 func (c *ValidatorsCache) getShuffledValidators(filter []uint64) ([]common.Address, error) {
+	c.shuffledMu.Lock()
+	defer c.shuffledMu.Unlock()
+
 	var epoch, slot, subnet uint64
 
 	switch len(filter) {
@@ -223,6 +229,9 @@ func (c *ValidatorsCache) getShuffledValidators(filter []uint64) ([]common.Addre
 }
 
 func (c *ValidatorsCache) getValidatorsAddresses(bc blockchain, epoch uint64, activeOnly bool) []common.Address {
+	c.allMu.Lock()
+	defer c.allMu.Unlock()
+
 	addresses := make([]common.Address, 0)
 	validators := c.allValidatorsCache[epoch]
 
