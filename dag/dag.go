@@ -45,7 +45,7 @@ type Backend interface {
 
 type blockChain interface {
 	GetEpoch(epoch uint64) common.Hash
-	SetLastCoordinatedCheckpoint(cp *types.Checkpoint, isSynced bool)
+	SetLastCoordinatedCheckpoint(cp *types.Checkpoint)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
@@ -87,9 +87,6 @@ type blockChain interface {
 	RemoveTips(hashes common.HashArray)
 	WriteCurrentTips()
 	GetBlockHashesBySlot(slot uint64) common.HashArray
-
-	GetCheckpointToSwitch() *core.CheckpointToSwitch
-	SwitchCheckpoint()
 }
 
 type ethDownloader interface {
@@ -230,7 +227,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			e := err.Error()
 			res.Error = &e
 		} else {
-			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint, d.bc.IsSynced())
+			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 			if d.bc.IsSynced() {
 				go era.HandleEra(d.bc, data.Checkpoint)
 			} else {
@@ -238,7 +235,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			}
 		}
 	} else {
-		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint, d.bc.IsSynced())
+		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
 		if d.bc.IsSynced() {
 			go era.HandleEra(d.bc, data.Checkpoint)
 		} else {
@@ -596,17 +593,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 		case slot := <-slotTicker.C():
 			if slot == 0 {
 				d.bc.SetIsSynced(true)
+				d.creator.ResetCheckpoint()
 				continue
 			}
-
-			cp := d.bc.GetCheckpointToSwitch()
-			if cp != nil && cp.Slot()+2 <= slot {
-				log.Info("Switch checkpoint", "slot", slot, "checkpoint", cp)
-				d.bc.SwitchCheckpoint()
-			}
-
 			if !d.bc.IsSynced() {
 				log.Info("dag workloop !d.bc.IsSynced()", "IsSynced", d.bc.IsSynced())
+				d.creator.ResetCheckpoint()
 				continue
 			}
 			if d.isCoordinatorConnectionLost() {
@@ -693,6 +685,10 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		"accounts", accounts,
 	)
 
+	if d.creator.GetCheckpoint() == nil {
+		d.creator.SaveCheckpoint(d.bc.GetLastCoordinatedCheckpoint())
+	}
+
 	if d.creator.IsRunning() && len(errs) == 0 {
 		assigned := &creator.Assignment{
 			Slot:     slot,
@@ -759,6 +755,8 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 			)
 		}
 	}
+
+	d.creator.SaveCheckpoint(d.bc.GetLastCoordinatedCheckpoint())
 }
 
 // getLastFinalizeApiSlot returns the slot of last HandleFinalize api call.

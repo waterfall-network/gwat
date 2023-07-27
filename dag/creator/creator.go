@@ -137,6 +137,8 @@ type Creator struct {
 
 	canStart    bool
 	shouldStart bool
+
+	checkpoint *types.Checkpoint
 }
 
 // New creates new Creator instance
@@ -271,6 +273,18 @@ func (c *Creator) SetGasCeil(ceil uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.config.GasCeil = ceil
+}
+
+func (c *Creator) GetCheckpoint() *types.Checkpoint {
+	return c.checkpoint
+}
+
+func (c *Creator) SaveCheckpoint(cp *types.Checkpoint) {
+	c.checkpoint = cp
+}
+
+func (c *Creator) ResetCheckpoint() {
+	c.checkpoint = nil
 }
 
 // isSyncing returns tru while sync pocess
@@ -780,9 +794,8 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	parentHashes := tipsBlocks.Hashes().Sort()
 
 	// Use checkpoint spine as CpBlock
-	checkpoint := bc.GetLastCoordinatedCheckpoint()
+	checkpoint := c.GetCheckpoint()
 	cpHeader := bc.GetHeader(checkpoint.Spine)
-
 	//newHeight, err := bc.CalcBlockHeightByParents(parentHashes, cpHeader.Hash())
 	newHeight, err := bc.CalcBlockHeightByTips(tips, cpHeader.Hash())
 	if err != nil {
