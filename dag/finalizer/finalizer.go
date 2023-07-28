@@ -15,7 +15,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
@@ -62,11 +61,6 @@ type BlockChain interface {
 
 // Finalizer
 type Finalizer struct {
-	chainConfig *params.ChainConfig
-
-	// events
-	mux *event.TypeMux
-
 	bc      BlockChain
 	eth     Backend
 	running int32 // The indicator whether the finalizer is running or not.
@@ -74,12 +68,10 @@ type Finalizer struct {
 }
 
 // New create new instance of Finalizer
-func New(chainConfig *params.ChainConfig, eth Backend, mux *event.TypeMux) *Finalizer {
+func New(eth Backend) *Finalizer {
 	f := &Finalizer{
-		chainConfig: chainConfig,
-		eth:         eth,
-		bc:          eth.BlockChain(),
-		mux:         mux,
+		eth: eth,
+		bc:  eth.BlockChain(),
 	}
 	atomic.StoreInt32(&f.running, 0)
 	atomic.StoreInt32(&f.busy, 0)

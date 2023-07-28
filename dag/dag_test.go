@@ -1,7 +1,6 @@
 package dag
 
 import (
-	"sync"
 	"testing"
 	"time"
 
@@ -15,8 +14,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
-func TestGetOptimisticSpinesFromDB(t *testing.T) {
-	mu := new(sync.RWMutex)
+func TestHandleGetOptimisticSpines(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	db := rawdb.NewMemoryDatabase()
 	prepareTestBlocks(t, db)
@@ -30,16 +28,14 @@ func TestGetOptimisticSpinesFromDB(t *testing.T) {
 	bc := NewMockblockChain(ctrl)
 	bc.EXPECT().Database().AnyTimes().Return(db)
 	bc.EXPECT().GetBlock(spineBlockTest.Hash()).Return(spineBlockTest)
-	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+	bc.EXPECT().GetSlotInfo().Return(&types.SlotInfo{
 		GenesisTime:    uint64(time.Now().Unix() - 60),
 		SecondsPerSlot: 4,
 		SlotsPerEpoch:  32,
 	})
-	bc.EXPECT().DagMuLock().AnyTimes().Do(mu.Lock)
-	bc.EXPECT().DagMuUnlock().AnyTimes().Do(mu.Unlock)
-	bc.EXPECT().GetOptimisticSpinesFromCache(gomock.AssignableToTypeOf(block.Slot())).AnyTimes().Return(nil)
-	bc.EXPECT().SetOptimisticSpinesToCache(gomock.AssignableToTypeOf(block.Slot()),
-		gomock.AssignableToTypeOf(common.HashArray{block.Hash()})).AnyTimes()
+
+	bc.EXPECT().GetHeaderByHash(spineBlockTest.Hash()).AnyTimes().Return(spineBlockTest.Header())
+	bc.EXPECT().GetOptimisticSpines(spineBlockTest.Slot()).Return([]common.HashArray{{block.Hash()}, {block3.Hash()}, {block5.Hash(), block6.Hash()}, {block7.Hash()}}, nil)
 	for _, testBlock := range testBlocks {
 		bc.EXPECT().GetBlock(testBlock.Hash()).Return(testBlock)
 	}
@@ -60,56 +56,6 @@ func TestGetOptimisticSpinesFromDB(t *testing.T) {
 	expectedErr := creator.ErrSynchronization.Error()
 	expectedResult = types.OptimisticSpinesResult{
 		Error: &expectedErr,
-	}
-	testutils.AssertEqual(t, expectedResult, *result)
-}
-
-func TestGetOptimisticSpinesFromCache(t *testing.T) {
-	mu := new(sync.RWMutex)
-	ctrl := gomock.NewController(t)
-	bc := NewMockblockChain(ctrl)
-	bc.EXPECT().GetSlotInfo().Return(&types.SlotInfo{
-		GenesisTime:    uint64(time.Now().Unix() - 60),
-		SecondsPerSlot: 4,
-		SlotsPerEpoch:  32,
-	})
-	bc.EXPECT().GetBlock(spineBlockTest.Hash()).AnyTimes().Return(spineBlockTest)
-	bc.EXPECT().DagMuLock().AnyTimes().Do(mu.Lock)
-	bc.EXPECT().DagMuUnlock().AnyTimes().Do(mu.Unlock)
-
-	down := NewMockethDownloader(ctrl)
-	down.EXPECT().Synchronising().AnyTimes().Return(false)
-
-	backend := NewMockBackend(ctrl)
-	backend.EXPECT().Downloader().Return(&downloader.Downloader{})
-
-	dag := Dag{eth: backend, bc: bc, downloader: down}
-
-	cachedBlocks := types.Blocks{block, block3, block5, block7}
-	for _, cachedBlock := range cachedBlocks {
-		bc.EXPECT().GetOptimisticSpinesFromCache(cachedBlock.Slot()).Return(common.HashArray{cachedBlock.Hash()})
-	}
-
-	result := dag.HandleGetOptimisticSpines(spineBlockTest.Hash())
-	expectedResult := types.OptimisticSpinesResult{
-		Data:  []common.HashArray{{block.Hash()}, {block3.Hash()}, {block5.Hash()}, {block7.Hash()}},
-		Error: nil,
-	}
-	testutils.AssertEqual(t, expectedResult, *result)
-
-	//	Check if input spine slot is greater that current slot
-	bc.EXPECT().GetSlotInfo().Return(&types.SlotInfo{
-		GenesisTime:    uint64(time.Now().Unix()),
-		SecondsPerSlot: 4,
-		SlotsPerEpoch:  32,
-	})
-	bc.EXPECT().GetTips().Return(types.Tips{})
-
-	result = dag.HandleGetOptimisticSpines(spineBlockTest.Hash())
-	expErrStr := errWrongInputSlot.Error()
-	expectedResult = types.OptimisticSpinesResult{
-		Data:  []common.HashArray{},
-		Error: &expErrStr,
 	}
 	testutils.AssertEqual(t, expectedResult, *result)
 }
