@@ -32,7 +32,6 @@ var (
 	ErrValidatorIsOut               = errors.New("validator is exited")
 	ErrInvalidToAddress             = errors.New("address to must be validators state address")
 	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
-	ErrCtxEraNotFound               = errors.New("context block era not found")
 	ErrTargetEraNotFound            = errors.New("target era not found")
 	ErrNoSavedValSyncOp             = errors.New("no coordinated confirmation of validator sync data")
 	ErrMismatchTxHashes             = errors.New("validator sync tx already exists")
@@ -389,42 +388,6 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
-
-	////retrieve block eraInfo
-	//eraInfo := p.blockchain.GetEraInfo()
-	//var blkEraInfo *era.EraInfo
-	//if eraInfo.Number() == p.ctx.Era {
-	//	blkEraInfo = eraInfo
-	//} else {
-	//	blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era)
-	//	if blkEra == nil {
-	//		log.Error("Validator sync: block era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
-	//		return nil, ErrCtxEraNotFound
-	//	}
-	//	bei := era.NewEraInfo(*blkEra)
-	//	blkEraInfo = &bei
-	//}
-
-	//// calculate activation epoch
-	//var targetEpoch uint64
-	//blkEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
-	//if blkEraInfo.IsTransitionPeriodEpoch(p.blockchain, blkEpoch) {
-	//	var nextEraInfo *era.EraInfo
-	//	if eraInfo.Number() == p.ctx.Era+1 {
-	//		nextEraInfo = eraInfo
-	//	} else {
-	//		blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era+1)
-	//		if blkEra == nil {
-	//			log.Error("Validator sync: target era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
-	//			return nil, ErrTargetEraNotFound
-	//		}
-	//		bei := era.NewEraInfo(*blkEra)
-	//		nextEraInfo = &bei
-	//	}
-	//	targetEpoch = nextEraInfo.NextEraFirstEpoch()
-	//} else {
-	//	targetEpoch = blkEraInfo.NextEraFirstEpoch()
-	//}
 
 	opEra := p.blockchain.EpochToEra(op.ProcEpoch())
 
