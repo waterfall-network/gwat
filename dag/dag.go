@@ -80,6 +80,13 @@ type blockChain interface {
 	IsSynced() bool
 
 	CollectAncestorsAftCpByParents(common.HashArray, common.Hash) (bool, types.HeaderMap, common.HashArray, error)
+	IsCheckpointOutdated(*types.Checkpoint) bool
+	GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Checkpoint
+	SetSyncCheckpointCache(cp *types.Checkpoint)
+	ResetSyncCheckpointCache()
+	RemoveTips(hashes common.HashArray)
+	WriteCurrentTips()
+	GetBlockHashesBySlot(slot uint64) common.HashArray
 }
 
 type ethDownloader interface {
@@ -152,7 +159,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		errStr := creator.ErrSynchronization.Error()
 		res.Error = &errStr
 		log.Error("Handle Finalize: response (busy)", "result", res, "err", errStr)
-		return res
+// 		return res
 	}
 
 	d.bc.DagMuLock()
@@ -201,7 +208,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	//forward finalization
 	spines, baseSpine = d.finalizer.ForwardFinalization(spines, baseSpine)
 
-	if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint.FinEpoch); err != nil {
+	if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint); err != nil {
 		strErr := err.Error()
 		res.Error = &strErr
 		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
@@ -209,7 +216,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	}
 
 	// finalization
-	if len(data.Spines) > 0 {
+	if len(spines) > 0 {
 		if err := d.finalizer.Finalize(&spines, &baseSpine); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
 				// Start syncing if spine or parent is unloaded
@@ -221,11 +228,19 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			res.Error = &e
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-			go era.HandleEra(d.bc, data.Checkpoint)
+			if d.bc.IsSynced() {
+				go era.HandleEra(d.bc, data.Checkpoint)
+			} else {
+				era.HandleEra(d.bc, data.Checkpoint)
+			}
 		}
 	} else {
 		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-		go era.HandleEra(d.bc, data.Checkpoint)
+		if d.bc.IsSynced() {
+			go era.HandleEra(d.bc, data.Checkpoint)
+		} else {
+			era.HandleEra(d.bc, data.Checkpoint)
+		}
 	}
 
 	// handle validator sync data
@@ -266,11 +281,11 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 // 2. switch on sync mode
 // 3. start sync process
 // 4. if chain head reached - switch off sync mode
-func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) error {
+func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, cp *types.Checkpoint) error {
 	if len(spines) == 0 {
 		return nil
 	}
-
+	finEpoch := cp.Epoch
 	start := time.Now()
 	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {
@@ -287,6 +302,8 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 		return err
 	}
 
+	d.bc.SetSyncCheckpointCache(cp)
+	defer d.bc.ResetSyncCheckpointCache()
 	var fullySynced bool
 	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines, finEpoch); err != nil {
 		return err
@@ -520,42 +537,38 @@ func (d *Dag) StartWork(accounts []common.Address) {
 
 	tickSec := 0
 	for {
-		si := d.bc.GetSlotInfo()
-		currentTime := time.Now()
-		if si != nil {
-			genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
+		select {
+		case <-d.exitChan:
+			log.Info("Dag workLoop stopped")
+			close(d.exitChan)
+			close(d.errChan)
+			return
+		case <-startTicker.C:
+			si := d.bc.GetSlotInfo()
+			currentTime := time.Now()
+			if si != nil {
+				genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
 
-			if currentTime.Before(genesisTime) {
-				if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
-					timeRemaining := genesisTime.Sub(currentTime)
-					log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+				if currentTime.Before(genesisTime) {
+					if tickSec != currentTime.Second() && currentTime.Second()%5 == 0 {
+						timeRemaining := genesisTime.Sub(currentTime)
+						log.Info("Time before start", "hour", timeRemaining.Truncate(time.Second))
+					}
+				} else {
+					log.Info("Chain genesis time reached")
+					startTicker.Stop()
+					go d.workLoop(accounts)
+
+					return
 				}
-			} else {
-				log.Info("Chain genesis time reached")
-				startTicker.Stop()
-				go d.workLoop(accounts)
-
-				return
+				tickSec = currentTime.Second()
 			}
-			tickSec = currentTime.Second()
 		}
-		//else {
-		//	lcp := d.bc.GetLastCoordinatedCheckpoint()
-		//	// revert to LastCoordinatedCheckpoint
-		//	if lcp.Spine != d.bc.GetLastFinalizedBlock().Hash() {
-		//		spineBlock := d.bc.GetBlock(lcp.Spine)
-		//		if err := d.finalizer.SetSpineState(&lcp.Spine, spineBlock.Nr()); err != nil {
-		//			log.Error("Revert to checkpoint spine error", "error", err)
-		//		}
-		//		//d.bc..SetLastFinalisedHeader(genesisHeader, genesisHeight)
-		//		//d.bc.Set
-		//	}
-		//
-		//	log.Info("Waiting for slot info from coordinator")
-		//}
-
-		<-startTicker.C
 	}
+}
+
+func (d *Dag) StopWork() {
+	d.exitChan <- struct{}{}
 }
 
 func (d *Dag) workLoop(accounts []common.Address) {
@@ -566,6 +579,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 	for {
 		select {
 		case <-d.exitChan:
+			log.Info("Dag workLoop stopped")
 			close(d.exitChan)
 			close(d.errChan)
 			slotTicker.Done()
@@ -574,18 +588,17 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			close(d.errChan)
 			close(d.exitChan)
 			slotTicker.Done()
-			log.Error("dag worker has error", "error", err)
+			log.Error("Dag worker stopped with error", "error", err)
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
-				newEra := era.NewEra(0, 0, d.bc.Config().EpochsPerEra-1, d.bc.Genesis().Root())
-				d.bc.SetNewEraInfo(*newEra)
 				d.bc.SetIsSynced(true)
+				d.creator.ResetCheckpoint()
 				continue
 			}
-
 			if !d.bc.IsSynced() {
 				log.Info("dag workloop !d.bc.IsSynced()", "IsSynced", d.bc.IsSynced())
+				d.creator.ResetCheckpoint()
 				continue
 			}
 			if d.isCoordinatorConnectionLost() {
@@ -637,6 +650,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			}
 
 			// todo check
+			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", creators)
 			go d.work(slot, creators, accounts)
 			//}
 		}
@@ -659,6 +673,9 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		err error
 	)
 	// create block
+	if err = d.removeTipsWithOutdatedCp(); err != nil {
+		return
+	}
 	tips := d.bc.GetTips()
 	log.Info("Creator processing: create condition",
 		"condition", d.creator.IsRunning() && len(errs) == 0,
@@ -668,16 +685,38 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		"accounts", accounts,
 	)
 
+	if d.creator.GetCheckpoint() == nil {
+		d.creator.SaveCheckpoint(d.bc.GetLastCoordinatedCheckpoint())
+	}
+
 	if d.creator.IsRunning() && len(errs) == 0 {
 		assigned := &creator.Assignment{
 			Slot:     slot,
 			Creators: creators,
 		}
 
+		// define time to stop of starting new creating process for current slot
+		// as 1/2 of
+		si := d.bc.GetSlotInfo()
+		startSlotT, errt := si.StartSlotTime(slot)
+		if errt != nil {
+			log.Error("Creator calc start slot time failed", "err", err)
+			return
+		}
+		durationLimit := time.Duration(si.SecondsPerSlot*1000/2) * time.Millisecond
+		createExpirationTime := startSlotT.Add(durationLimit)
+
 		crtStart := time.Now()
 		crtInfo := map[string]string{}
 		for _, creator := range assigned.Creators {
-			// if received next slot
+			// break proc if time expired
+			if createExpirationTime.Before(time.Now()) {
+				log.Warn("Creator work time expired",
+					"slot", slot,
+					"expired", common.PrettyDuration(time.Since(createExpirationTime)),
+				)
+				break
+			}
 
 			coinbase := common.Address{}
 			for _, acc := range accounts {
@@ -716,6 +755,8 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 			)
 		}
 	}
+
+	d.creator.SaveCheckpoint(d.bc.GetLastCoordinatedCheckpoint())
 }
 
 // getLastFinalizeApiSlot returns the slot of last HandleFinalize api call.
@@ -741,8 +782,28 @@ func (d *Dag) isCoordinatorConnectionLost() bool {
 		return true
 	}
 	slot = si.CurrentSlot()
-	if si.IsEpochStart(slot) {
-		return (slot - d.getLastFinalizeApiSlot()) > 1
-	}
 	return (slot - d.getLastFinalizeApiSlot()) > si.SlotsPerEpoch
+}
+
+// removeTipsWithOutdatedCp remove tips with outdated cp.
+func (d *Dag) removeTipsWithOutdatedCp() error {
+	tips := d.bc.GetTips()
+	rmTips := common.HashArray{}
+	for th, tip := range tips.Copy() {
+		cp := d.bc.GetCoordinatedCheckpoint(tip.CpHash)
+		if cp == nil {
+			err := errors.New("tips checkpoint not found")
+			log.Error("Removing tips with outdated cp failed", "err", err, "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
+			return err
+		}
+		if d.bc.IsCheckpointOutdated(cp) {
+			rmTips = append(rmTips, th)
+			log.Warn("Creator detect outdated cp", "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
+		}
+	}
+	if len(rmTips) > 0 {
+		d.bc.RemoveTips(rmTips)
+		d.bc.WriteCurrentTips()
+	}
+	return nil
 }

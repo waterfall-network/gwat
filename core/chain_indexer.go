@@ -126,6 +126,7 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 	c.loadValidSections()
 	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
 
+	//todo
 	go c.updateLoop()
 
 	return c
@@ -172,10 +173,12 @@ func (c *ChainIndexer) Close() error {
 
 	// Tear down the primary update loop
 	errc := make(chan error)
+	// TODO: uncomment when use updateLoop
 	c.quit <- errc
 	if err := <-errc; err != nil {
 		errs = append(errs, err)
 	}
+
 	// If needed, tear down the secondary event loop
 	if atomic.LoadUint32(&c.active) != 0 {
 		c.quit <- errc
@@ -336,14 +339,16 @@ func (c *ChainIndexer) updateLoop() {
 			return
 
 		case <-c.update:
+			log.Info("Check update loop", "got update event")
 			// Section headers completed (or rolled back), update the index
 			c.lock.Lock()
 			if c.knownSections > c.storedSections {
+				log.Info("Check update loop", "c.knownSections > c.storedSections")
 				// Periodically print an upgrade log message to the user
 				if time.Since(updated) > 8*time.Second {
 					if c.knownSections > c.storedSections+1 {
 						updating = true
-						c.log.Info("Upgrading chain index", "percentage", c.storedSections*100/c.knownSections)
+						c.log.Info("Check update loop - Upgrading chain index", "percentage", c.storedSections*100/c.knownSections)
 					}
 					updated = time.Now()
 				}
@@ -364,32 +369,34 @@ func (c *ChainIndexer) updateLoop() {
 						return
 					default:
 					}
-					c.log.Error("Section processing failed", "error", err)
+					c.log.Error("Check update loop - Section processing failed", "error", err)
 				}
 				c.lock.Lock()
 
 				// If processing succeeded and no reorgs occurred, mark the section completed
 				if err == nil && (section == 0 || oldHead == c.SectionHead(section-1)) {
+					log.Info("Check update loop - setSectionHead")
 					c.setSectionHead(section, newHead)
 					c.setValidSections(section + 1)
 					if c.storedSections == c.knownSections && updating {
 						updating = false
-						c.log.Info("Finished upgrading chain index")
+						c.log.Info("Check update loop - Finished upgrading chain index")
 					}
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
 					for _, child := range c.children {
-						c.log.Trace("Cascading chain index update", "head", c.cascadedHead)
+						c.log.Info("Check update - loop Cascading chain index update", "head", c.cascadedHead)
 						child.newHead(c.cascadedHead, false)
 					}
 				} else {
 					// If processing failed, don't retry until further notification
-					c.log.Debug("Chain index processing failed", "section", section, "err", err)
+					c.log.Info("Check update loop - Chain index processing failed", "section", section, "err", err)
 					c.verifyLastHead()
 					c.knownSections = c.storedSections
 				}
 			}
 			// If there are still further sections to process, reschedule
 			if c.knownSections > c.storedSections {
+				log.Info("Check update loop", "AfterFunc")
 				time.AfterFunc(c.throttling, func() {
 					select {
 					case c.update <- struct{}{}:
@@ -415,7 +422,15 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		return common.Hash{}, err
 	}
 
-	for number := section * c.sectionSize; number < (section+1)*c.sectionSize; number++ {
+	cp := rawdb.ReadLastCoordinatedCheckpoint(c.chainDb)
+	if cp == nil {
+		return common.Hash{}, fmt.Errorf("current checkpoint unknown during section processing")
+	}
+	cpNr := rawdb.ReadFinalizedNumberByHash(c.chainDb, cp.Spine)
+	if cpNr == nil {
+		return common.Hash{}, fmt.Errorf("current checkpoint number not found during section processing")
+	}
+	for number := section * c.sectionSize; number < (section+1)*c.sectionSize && number < *cpNr; number++ {
 		hash := rawdb.ReadFinalizedHashByNumber(c.chainDb, number)
 		if hash == (common.Hash{}) {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
@@ -423,9 +438,10 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		header := rawdb.ReadHeader(c.chainDb, hash)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
-		} else if !header.ParentHashes.Has(lastHead) {
-			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
+		//else if !header.ParentHashes.Has(lastHead) {
+		//	return common.Hash{}, fmt.Errorf("chain reorged during section processing")
+		//}
 		if err := c.backend.Process(c.ctx, header); err != nil {
 			return common.Hash{}, err
 		}

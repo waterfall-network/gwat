@@ -361,6 +361,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.WriteReceipts(db, block.Hash(), nil)
 	rawdb.WriteLastCanonicalHash(db, block.Hash())
 
+	log.Info("Save genesis hash", "hash", block.Hash(), "fn", "Commit(genesis)")
 	rawdb.WriteFinalizedHashNumber(db, block.Hash(), 0)
 	rawdb.WriteLastFinalizedHash(db, block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())

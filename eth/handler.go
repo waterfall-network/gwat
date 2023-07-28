@@ -187,62 +187,49 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
-		return h.chain.Engine().VerifyHeader(h.chain, header, true)
+		return nil
 	}
 	heighter := func() uint64 {
 		return h.chain.GetLastFinalizedNumber()
 	}
-	inserter := func(peerId string, blocks types.Blocks) (int, error, *common.HashArray) {
-		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
+	inserter := func(peerId string, block *types.Block) error {
+		// If sync hasn't reached the checkpoint yet, deny importing weird block.
 		//
 		// Ideally we would also compare the head block's timestamp and similarly reject
 		// the propagated block if the head is too old. Unfortunately there is a corner
 		// case when starting new networks, where the genesis might be ancient (0 unix)
 		// which would prevent full nodes from accepting it.
 		if h.chain.GetLastFinalizedNumber() < h.checkpointNumber {
-			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash())
-			return 0, nil, nil
+			log.Warn("Unsynced yet, discarded propagated block", "number", block.Nr(), "hash", block.Hash())
+			return nil
 		}
-		// If fast sync is running, deny importing weird blocks. This is a problematic
+		// If fast sync is running, deny importing weird block. This is a problematic
 		// clause when starting up a new network, because fast-syncing miners might not
-		// accept each others' blocks until a restart. Unfortunately we haven't figured
+		// accept each other's block until a restart. Unfortunately we haven't figured
 		// out a way yet where nodes can decide unilaterally whether the network is new
 		// or not. This should be fixed if we figure out a solution.
 		if atomic.LoadUint32(&h.fastSync) == 1 {
-			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Nr(), "hash", blocks[0].Hash().Hex())
-			return 0, nil, nil
+			log.Warn("Fast syncing, discarded propagated block", "number", block.Nr(), "hash", block.Hash().Hex())
+			return nil
 		}
 
 		if !h.chain.IsSynced() {
-			return 0, nil, nil
+			log.Debug("Propagate block: skip not synced", "slot", block.Slot(), "hash", block.Hash())
+			return nil
 		}
 
-		n, err := h.chain.InsertPropagatedBlocks(blocks)
+		log.Info("Propagate block:", "slot", block.Slot(), "hash", block.Hash().Hex(), "txs", len(block.Transactions()), "parents", block.ParentHashes())
+
+		_, err := h.chain.InsertPropagatedBlocks(types.Blocks{block})
 		if err == core.ErrInsertUncompletedDag {
-			unloaded := common.HashArray{}
-			for _, block := range blocks {
-				//unl, _, _, _, exc, _ := h.chain.ExploreChainRecursive(block.Hash(), expCache)
-				//expCache = exc
-				//unloaded = unloaded.Concat(unl)
-
-				parents := h.chain.GetBlocksByHashes(block.ParentHashes())
-				for h, b := range parents {
-					if b == nil {
-						unloaded = append(unloaded, h)
-					}
-				}
-			}
-			log.Warn("Insert propagated blocks: unknown ancestors detected. start sync", "err", err, "unknown", unloaded)
-			lastFinNr := h.chain.GetLastFinalizedNumber()
-			//h.downloader.Synchronise(peerId, unloaded, lastFinNr, downloader.FullSync, false)
-			h.downloader.Synchronise(peerId, unloaded, lastFinNr, downloader.FullSync, true)
-
-			return n, err, &unloaded
+			// start sync dag
+			h.downloader.SynchroniseDagOnly(peerId)
+			return err
 		}
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}
-		return n, err, nil
+		return err
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
 

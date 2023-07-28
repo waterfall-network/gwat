@@ -42,7 +42,7 @@ var ProtocolVersions = []uint{ETH66}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 19}
+var protocolLengths = map[uint]uint64{ETH66: 20}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -66,6 +66,7 @@ const (
 	PooledTransactionsMsg         = 0x0a
 	GetDagMsg                     = 0x11
 	DagMsg                        = 0x12
+	GetHashesBySlotsMsg           = 0x13
 )
 
 var (
@@ -334,6 +335,18 @@ type DagPacket66 struct {
 	DagPacket
 }
 
+// GetHashesBySlotsPacket represents a query hashes by slots range.
+type GetHashesBySlotsPacket struct {
+	From uint64
+	To   uint64
+}
+
+// GetHashesBySlotsPacket66 represents a query hashes by slots range over wfdag/66.
+type GetHashesBySlotsPacket66 struct {
+	RequestId uint64
+	GetHashesBySlotsPacket
+}
+
 func (*StatusPacket) Name() string { return "Status" }
 func (*StatusPacket) Kind() byte   { return StatusMsg }
 
@@ -384,3 +397,6 @@ func (*GetDagPacket) Kind() byte   { return GetDagMsg }
 
 func (*DagPacket) Name() string { return "Dag" }
 func (*DagPacket) Kind() byte   { return DagMsg }
+
+func (*GetHashesBySlotsPacket) Name() string { return "GetHashesBySlots" }
+func (*GetHashesBySlotsPacket) Kind() byte   { return GetHashesBySlotsMsg }
