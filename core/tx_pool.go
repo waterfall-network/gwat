@@ -156,7 +156,7 @@ type blockChain interface {
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 	Genesis() *types.Block
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
-	SubscribeProcessing(ch chan<- *types.ProcessingTxs) event.Subscription
+	SubscribeProcessing(ch chan<- *types.BlockTransactions) event.Subscription
 	SubscribeRemoveTxFromPool(ch chan<- types.Transactions) event.Subscription
 	// FinSynchronising returns whether the downloader is currently retrieving finalized blocks.
 	FinSynchronising() bool
@@ -277,7 +277,7 @@ type TxPool struct {
 	reqResetCh      chan *txpoolResetRequest
 	reqPromoteCh    chan *accountSet
 	queueTxEventCh  chan *types.Transaction
-	processingCh    chan *types.ProcessingTxs
+	processingCh    chan *types.BlockTransactions
 	processingSub   event.Subscription
 	rmTxCh          chan types.Transactions
 	rmTxSub         event.Subscription
@@ -314,7 +314,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reqResetCh:      make(chan *txpoolResetRequest),
 		reqPromoteCh:    make(chan *accountSet),
 		queueTxEventCh:  make(chan *types.Transaction),
-		processingCh:    make(chan *types.ProcessingTxs, 1),
+		processingCh:    make(chan *types.BlockTransactions, 1),
 		rmTxCh:          make(chan types.Transactions, 1),
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
@@ -336,13 +336,13 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	//load processing txs from dag
 	blocks := pool.chain.GetBlocksByHashes(*pool.chain.GetDagHashes()).ToArray()
-	txs := make([]*types.ProcessingTransaction, 0, len(blocks))
+	txs := make([]*types.TransactionBlocks, 0, len(blocks))
 	for _, block := range blocks {
 		if block == nil {
 			continue
 		}
 		for _, transaction := range block.Transactions() {
-			txs = append(txs, &types.ProcessingTransaction{Transaction: transaction, BlocksHashes: common.HashArray{block.Hash()}})
+			txs = append(txs, &types.TransactionBlocks{Transaction: transaction, BlocksHashes: common.HashArray{block.Hash()}})
 		}
 	}
 	sort.Slice(txs, func(i, j int) bool {
@@ -472,7 +472,7 @@ func (pool *TxPool) loop() {
 						pool.removeTx(tx.Hash(), true)
 						//pool.removeProcessedTx(tx)
 					} else {
-						pool.moveToProcessing(&types.ProcessingTransaction{
+						pool.moveToProcessing(&types.TransactionBlocks{
 							Transaction:  tx,
 							BlocksHashes: common.HashArray{txs.BlockHash},
 						})
@@ -610,7 +610,7 @@ func (pool *TxPool) StatsByAddrs() (map[common.Address]int, map[common.Address]i
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
-func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.ProcessingTransaction) {
+func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -622,14 +622,14 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	for addr, list := range pool.queue {
 		queued[addr] = list.Flatten()
 	}
-	processing := make(map[common.Address][]*types.ProcessingTransaction)
+	processing := make(map[common.Address][]*types.TransactionBlocks)
 	for addr, list := range pool.processing {
 		for _, transaction := range list.Flatten() {
 			_, ok := processing[addr]
 			if !ok {
-				processing[addr] = make([]*types.ProcessingTransaction, 0)
+				processing[addr] = make([]*types.TransactionBlocks, 0)
 			}
-			processing[addr] = append(processing[addr], &types.ProcessingTransaction{
+			processing[addr] = append(processing[addr], &types.TransactionBlocks{
 				Transaction:  transaction,
 				BlocksHashes: list.GetTxBlocksHashes(transaction.Hash()),
 			})
@@ -1190,7 +1190,7 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
-func (pool *TxPool) moveToProcessing(tx *types.ProcessingTransaction) {
+func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
 	addr, err := types.Sender(pool.signer, tx.Transaction) // already validated during insertion
 	if err != nil {
 		log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())

@@ -3979,7 +3979,7 @@ func (bc *BlockChain) WriteTxLookupEntry(txIndex int, txHash, blockHash common.H
 	return false
 }
 
-func (bc *BlockChain) moveTxsToProcessing(txs *types.ProcessingTxs) {
+func (bc *BlockChain) moveTxsToProcessing(txs *types.BlockTransactions) {
 	bc.processingFeed.Send(txs)
 }
 

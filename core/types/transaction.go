@@ -649,18 +649,18 @@ func copyAddressPtr(a *common.Address) *common.Address {
 	return &cpy
 }
 
-type ProcessingTransaction struct {
+type TransactionBlocks struct {
 	*Transaction
 	BlocksHashes common.HashArray
 }
 
-type ProcessingTxs struct {
+type BlockTransactions struct {
 	Transactions
 	BlockHash common.Hash
 }
 
-func NewProcessingTxs(blockHash common.Hash) *ProcessingTxs {
-	return &ProcessingTxs{
+func NewProcessingTxs(blockHash common.Hash) *BlockTransactions {
+	return &BlockTransactions{
 		Transactions: make(Transactions, 0),
 		BlockHash:    blockHash,
 	}

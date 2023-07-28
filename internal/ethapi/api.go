@@ -1519,7 +1519,7 @@ type RPCProcessingTransaction struct {
 	S            *hexutil.Big      `json:"s"`
 }
 
-func newRPCProcessingTransaction(tx *types.ProcessingTransaction, current *types.Header, config *params.ChainConfig, numValidators uint64, gasLimit uint64, creatorsPerSlot uint64) *RPCProcessingTransaction {
+func newRPCProcessingTransaction(tx *types.TransactionBlocks, current *types.Header, config *params.ChainConfig, numValidators uint64, gasLimit uint64, creatorsPerSlot uint64) *RPCProcessingTransaction {
 	var baseFee *big.Int
 	if current != nil {
 		baseFee = misc.CalcSlotBaseFee(config, current, numValidators, gasLimit, params.BurnMultiplier, creatorsPerSlot)

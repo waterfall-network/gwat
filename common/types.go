@@ -210,15 +210,6 @@ func HashArrayFromBytes(data []byte) HashArray {
 	return ha
 }
 
-func (ha HashArray) ToStringsArray() []string {
-	res := make([]string, len(ha), len(ha))
-	for i, hash := range ha {
-		res[i] = hash.Hex()
-	}
-
-	return res
-}
-
 // ToBytes encodes the HashArray structure
 // to byte representation.
 func (ha HashArray) ToBytes() []byte {
