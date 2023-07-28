@@ -272,7 +272,7 @@ func (mr *MockblockChainMockRecorder) Database() *gomock.Call {
 }
 
 // EnterNextEra mocks base method.
-func (m *MockblockChain) EnterNextEra(cp *types.Checkpoint,root common.Hash) *era.Era {
+func (m *MockblockChain) EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EnterNextEra", root)
 	ret0, _ := ret[0].(*era.Era)
@@ -280,7 +280,7 @@ func (m *MockblockChain) EnterNextEra(cp *types.Checkpoint,root common.Hash) *er
 }
 
 // EnterNextEra indicates an expected call of EnterNextEra.
-func (mr *MockblockChainMockRecorder) EnterNextEra(cp *types.Checkpoint,root interface{}) *gomock.Call {
+func (mr *MockblockChainMockRecorder) EnterNextEra(cp *types.Checkpoint, root interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnterNextEra", reflect.TypeOf((*MockblockChain)(nil).EnterNextEra), root)
 }
@@ -520,7 +520,7 @@ type MockethDownloader struct {
 	recorder *MockethDownloaderMockRecorder
 }
 
-func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) (fullySynced bool, err error) {
+func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) (fullySynced bool, err error) {
 	//TODO implement me
 	panic("implement me")
 }
