@@ -3988,7 +3988,7 @@ func (bc *BlockChain) MoveTxsToProcessing(block *types.Block) {
 		return
 	}
 
-	txs := types.NewProcessingTxs(block.Hash())
+	txs := types.NewBlockTransactions(block.Hash())
 	bc.handleBlockValidatorSyncTxs(block)
 	txs.Transactions = append(txs.Transactions, block.Transactions()...)
 

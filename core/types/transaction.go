@@ -659,7 +659,7 @@ type BlockTransactions struct {
 	BlockHash common.Hash
 }
 
-func NewProcessingTxs(blockHash common.Hash) *BlockTransactions {
+func NewBlockTransactions(blockHash common.Hash) *BlockTransactions {
 	return &BlockTransactions{
 		Transactions: make(Transactions, 0),
 		BlockHash:    blockHash,
