@@ -159,7 +159,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		errStr := creator.ErrSynchronization.Error()
 		res.Error = &errStr
 		log.Error("Handle Finalize: response (busy)", "result", res, "err", errStr)
-		return res
+// 		return res
 	}
 
 	d.bc.DagMuLock()
