@@ -1177,6 +1177,17 @@ func (am AddressMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
+// Stake calculates the total stake for all addresses in the AddressMap.
+// It iterates through the map, summing up the stake values for each address.
+// The result is returned as a pointer to a big.Int representing the total stake.
+func (am AddressMap) Stake() *big.Int {
+	sum := new(big.Int)
+	for _, value := range am {
+		sum.Add(sum, value)
+	}
+	return sum
+}
+
 // UnmarshalJSON is a JSON unmarshaller for AddressMap
 func (am AddressMap) UnmarshalJSON(data []byte) error {
 	in := make(map[string]*big.Int)

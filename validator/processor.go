@@ -287,15 +287,15 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrInvalidFromAddresses
 	}
 
-	currentBalance := validator.GetBalance()
+	stake := rawdb.ReadValidatorDepositBalance(p.Db(), op.CreatorAddress()).Stake()
 
-	if currentBalance.Cmp(op.Amount()) == -1 {
+	if stake.Cmp(op.Amount()) == -1 {
 		return nil, ErrInsufficientFundsForTransfer
 	}
 
 	effectiveBalance := p.blockchain.Config().EffectiveBalance
 	if validator.GetActivationEra() == math.MaxUint64 {
-		switch currentBalance.Cmp(effectiveBalance) {
+		switch stake.Cmp(effectiveBalance) {
 		case 0, 1: // currentBalance >= effectiveBalance - wait for activation
 			return nil, ErrNotActivatedValidator
 		case -1: // currentBalance < effectiveBalance - withdraw before activation
@@ -312,7 +312,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		}
 	}
 
-	validator.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
+	validator.SetBalance(new(big.Int).Sub(stake, op.Amount()))
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err

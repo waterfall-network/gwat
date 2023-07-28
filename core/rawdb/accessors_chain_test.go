@@ -1043,3 +1043,19 @@ func TestWriteAndReadValidatorDepositTx(t *testing.T) {
 	result = ReadValidatorDepositBalance(db, addr1)
 	testutils.AssertEqual(t, new(big.Int).Add(sum1, sum2), result[addr2])
 }
+
+func TestStake(t *testing.T) {
+	// Test case 1: Empty AddressMap should return a stake of zero.
+	am1 := AddressMap{}
+	expectedResult1 := big.NewInt(0)
+	testutils.AssertEqual(t, am1.Stake(), expectedResult1)
+
+	// Test case 2: AddressMap with stakes.
+	am2 := AddressMap{
+		common.Address{0x01}: big.NewInt(100),
+		common.Address{0x02}: big.NewInt(200),
+		common.Address{0x03}: big.NewInt(300),
+	}
+	expectedResult2 := big.NewInt(600)
+	testutils.AssertEqual(t, am2.Stake(), expectedResult2)
+}
