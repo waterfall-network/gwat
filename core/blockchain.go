@@ -47,7 +47,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
@@ -2332,7 +2331,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
 		var intrGas uint64
-		intrGas, err = bc.TxEstimateGas(tx, nil)
+		intrGas, err = bc.TxEstimateGas(tx, block.Header())
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
 			return false, nil
@@ -3170,36 +3169,36 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	return statedb, receipts, rlogs, *gasUsed
 }
 
-func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
+func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header) (uint64, error) {
 	if len(tx.Data()) == 0 {
 		return params.TxGas, nil
 	}
 
-	var isTokenOp, isValidatorOp, isContract bool
-	if tx.To() == nil {
-		if _, err := operation.GetOpCode(tx.Data()); err == nil {
-			isTokenOp = true
-		}
-	} else {
-		isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
+	blockContext := NewEVMBlockContext(header, bc, &header.Coinbase)
+	stateDb, err := bc.StateAt(header.Root)
+	if err != nil {
+		return 0, err
 	}
 
-	isContract = tx.To() == nil && !isTokenOp && !isValidatorOp || tx.To() != nil && len(tx.Data()) > 0 && !isTokenOp && !isValidatorOp
+	signer := types.MakeSigner(bc.Config())
+	msg, err := tx.AsMessage(signer, header.BaseFee)
 
-	if isContract {
-		return bc.TxEstimateGasByEvm(tx, lfNumber)
+	tokenProcessor := token.NewProcessor(blockContext, stateDb)
+	validatorProcessor := validator.NewProcessor(blockContext, stateDb, bc)
+	txType := GetTxType(msg, validatorProcessor, tokenProcessor)
+
+	isValidatorOp := txType == ValidatorMethodTxType || txType == ValidatorSyncTxType
+	isContractCreation := txType == ContractCreationTxType
+	isContractMethod := txType == ContractMethodTxType
+	if isContractMethod {
+		return bc.TxEstimateGasByEvm(tx, header)
 	}
 
-	return IntrinsicGas(tx.Data(), tx.AccessList(), isContract, isValidatorOp)
+	return IntrinsicGas(tx.Data(), tx.AccessList(), isContractCreation, isValidatorOp)
 }
 
-func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
+func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, header *types.Header) (uint64, error) {
 	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	header := bc.GetLastFinalizedHeader()
-	if lfNumber != nil {
-		header = bc.GetHeaderByNumber(*lfNumber)
-	}
-
 	statedb, err := bc.StateAt(header.Root)
 	if err != nil {
 		return 0, err

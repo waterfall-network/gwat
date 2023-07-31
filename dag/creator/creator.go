@@ -533,13 +533,13 @@ func (c *Creator) updateSnapshot() {
 	)
 }
 
-func (c *Creator) appendTransaction(tx *types.Transaction, lfNumber *uint64, isValidatorOp bool) error {
+func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header, isValidatorOp bool) error {
 	if isValidatorOp {
 		c.current.txs = append(c.current.txs, tx)
 		return nil
 	}
 
-	gas, err := c.chain.TxEstimateGas(tx, lfNumber)
+	gas, err := c.chain.TxEstimateGas(tx, header)
 	if err != nil {
 		log.Error("Failed to estimate gas for the transaction", "err", err)
 		return err
@@ -553,7 +553,7 @@ func (c *Creator) appendTransaction(tx *types.Transaction, lfNumber *uint64, isV
 	return nil
 }
 
-func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, lfNumber *uint64) bool {
+func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, header *types.Header) bool {
 	// Short circuit if current is nil
 	if c.current == nil {
 		log.Warn("Skipping block creation: no current environment", "env", c.current)
@@ -598,7 +598,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, coi
 		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(c.current.signer, tx)
 
-		err := c.appendTransaction(tx, lfNumber, false)
+		err := c.appendTransaction(tx, header, false)
 
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
@@ -894,9 +894,9 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pendingTxs, header.BaseFee)
-	if c.appendTransactions(txs, c.coinbase, &header.CpNumber) {
+	if c.appendTransactions(txs, header) {
 		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-			if err := c.processValidatorTxs(header.CpHash, syncData, header.CpNumber); err != nil {
+			if err := c.processValidatorTxs(header.CpHash, syncData, header); err != nil {
 				log.Warn("Skipping block creation: processing validator txs err 0", "creator", c.coinbase, "err", err)
 				return
 			}
@@ -913,7 +913,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 	}
 
 	if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-		if err := c.processValidatorTxs(header.CpHash, syncData, header.CpNumber); err != nil {
+		if err := c.processValidatorTxs(header.CpHash, syncData, header); err != nil {
 			log.Warn("Skipping block creation: processing validator txs err 1", "creator", c.coinbase, "err", err)
 			return
 		}
@@ -1067,7 +1067,7 @@ func (c *Creator) setAssignment(assigned *Assignment) {
 	c.cacheAssignment = assigned
 }
 
-func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync, lfNumber uint64) error {
+func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync, header *types.Header) error {
 	nonce := c.eth.TxPool().Nonce(c.coinbase)
 	for _, validatorSync := range syncData {
 		if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
@@ -1077,7 +1077,7 @@ func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]by
 				continue
 			}
 
-			err = c.appendTransaction(valSyncTx, &lfNumber, true)
+			err = c.appendTransaction(valSyncTx, header, true)
 			if err != nil {
 				log.Error("can`t commit validator sync tx", "error", err)
 				return err

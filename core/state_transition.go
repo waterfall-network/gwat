@@ -320,7 +320,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Check if it's token related operations
 
-	txType := CheckTxType(msg, st.vp, st.tp)
+	txType := GetTxType(msg, st.vp, st.tp)
 
 	isTokenOp := txType == TokenCreationTxType || txType == TokenMethodTxType
 	isValidatorOp := txType == ValidatorMethodTxType || txType == ValidatorSyncTxType
@@ -421,7 +421,7 @@ const (
 
 type TxType uint64
 
-func CheckTxType(msg Message, vp *validator.Processor, tp *token.Processor) TxType {
+func GetTxType(msg Message, vp *validator.Processor, tp *token.Processor) TxType {
 	if len(msg.Data()) == 0 {
 		return DefaultTxType
 	}
