@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
@@ -215,6 +214,8 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		}
 	}
 
+	validator.AddStake(from, value)
+
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
@@ -287,32 +288,41 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrInvalidFromAddresses
 	}
 
-	stake := rawdb.ReadValidatorDepositBalance(p.Db(), op.CreatorAddress()).Stake()
-
-	if stake.Cmp(op.Amount()) == -1 {
-		return nil, ErrInsufficientFundsForTransfer
-	}
-
 	effectiveBalance := p.blockchain.Config().EffectiveBalance
 	if validator.GetActivationEra() == math.MaxUint64 {
+		stake := validator.TotalStake()
+
+		if stake.Cmp(op.Amount()) == -1 {
+			return nil, ErrInsufficientFundsForTransfer
+		}
+
 		switch stake.Cmp(effectiveBalance) {
 		case 0, 1: // currentBalance >= effectiveBalance - wait for activation
 			return nil, ErrNotActivatedValidator
 		case -1: // currentBalance < effectiveBalance - withdraw before activation
 			log.Info("validatorWithdrawal before activation and sum < effectiveBalance")
 
-			addressMap := rawdb.ReadValidatorDepositBalance(p.Db(), validator.Address)
-			if addressMap != nil {
-				sum := addressMap[caller.Address()]
-				if sum != nil && sum.Cmp(op.Amount()) >= 0 {
-					sum = sum.Sub(sum, op.Amount())
-					rawdb.WriteValidatorDepositBalance(p.Db(), op.CreatorAddress(), caller.Address(), sum)
+			stakeByAddr := validator.StakeByAddress(from)
+			if stakeByAddr != nil && stakeByAddr.Cmp(op.Amount()) >= 0 {
+				sum, err := validator.SubtractStake(from, op.Amount())
+				if err != nil {
+					log.Error("Invalid withdraw operation", "op", op, "error", err)
+					return nil, err
+				} else {
+					log.Info("validatorWithdrawal before activation", "creator", op.CreatorAddress(),
+						"address", from,
+						"total", stake,
+						"amount", op.Amount(),
+						"stakeByAddr", stakeByAddr,
+						"balance", sum,
+					)
 				}
 			}
 		}
+	} else {
+		validator.SetBalance(new(big.Int).Sub(validator.Balance, op.Amount()))
 	}
 
-	validator.SetBalance(new(big.Int).Sub(stake, op.Amount()))
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
@@ -590,6 +600,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	}
 
 	validator.SetBalance(op.Amount())
+	validator.UnsetStake()
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
