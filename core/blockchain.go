@@ -3191,14 +3191,16 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header)
 	validatorProcessor := validator.NewProcessor(blockContext, stateDb, bc)
 	txType := GetTxType(msg, validatorProcessor, tokenProcessor)
 
-	isValidatorOp := txType == ValidatorMethodTxType || txType == ValidatorSyncTxType
-	isContractCreation := txType == ContractCreationTxType
-	isContractMethod := txType == ContractMethodTxType
-	if isContractMethod {
+	switch txType {
+	case ValidatorMethodTxType, ValidatorSyncTxType:
+		return IntrinsicGas(tx.Data(), tx.AccessList(), false, true)
+	case ContractCreationTxType:
+		return IntrinsicGas(tx.Data(), tx.AccessList(), true, false)
+	case ContractMethodTxType:
 		return bc.TxEstimateGasByEvm(tx, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
+	default:
+		return IntrinsicGas(tx.Data(), tx.AccessList(), false, false)
 	}
-
-	return IntrinsicGas(tx.Data(), tx.AccessList(), isContractCreation, isValidatorOp)
 }
 
 func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction,

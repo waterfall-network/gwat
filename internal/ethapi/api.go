@@ -1263,6 +1263,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionA
 		}
 	}
 
+	args.Gas = nil
 	err = args.setDefaults(ctx, s.b, header)
 	if err != nil {
 		return 0, err
