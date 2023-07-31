@@ -142,7 +142,9 @@ func TestEstimateEraLength(t *testing.T) {
 	// Create a mock blockchain object for testing purposes
 	bc := mockBlockchain{
 		config: &params.ChainConfig{
-			EpochsPerEra: 20,
+			EpochsPerEra:      20,
+			SlotsPerEpoch:     32,
+			ValidatorsPerSlot: 4,
 		},
 		slotInfo: types.SlotInfo{
 			SlotsPerEpoch: 32,
@@ -150,13 +152,13 @@ func TestEstimateEraLength(t *testing.T) {
 	}
 
 	// Ensure that the EstimateEraLength function returns the correct era length for different numbers of validators
-	if EstimateEraLength(bc.Config(), 640) != 340 {
-		t.Errorf("Expected EstimateEraLength to return 21, but got %v", EstimateEraLength(bc.Config(), 640))
+	if EstimateEraLength(bc.Config(), 1000) != 20 {
+		t.Errorf("Expected EstimateEraLength to return 20, but got %v", EstimateEraLength(bc.Config(), 1000))
 	}
-	if EstimateEraLength(bc.Config(), 1024) != 520 {
-		t.Errorf("Expected EstimateEraLength to return 32, but got %v", EstimateEraLength(bc.Config(), 1024))
+	if EstimateEraLength(bc.Config(), 10000) != 80 {
+		t.Errorf("Expected EstimateEraLength to return 80, but got %v", EstimateEraLength(bc.Config(), 10000))
 	}
-	if EstimateEraLength(bc.Config(), 1500) != 760 {
-		t.Errorf("Expected EstimateEraLength to return 40, but got %v", EstimateEraLength(bc.Config(), 1500))
+	if EstimateEraLength(bc.Config(), 20000) != 160 {
+		t.Errorf("Expected EstimateEraLength to return 160, but got %v", EstimateEraLength(bc.Config(), 20000))
 	}
 }

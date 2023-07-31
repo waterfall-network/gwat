@@ -70,7 +70,7 @@ func (s *storage) GetValidator(stateDb vm.StateDB, address common.Address) (*Val
 
 	valData = stateDb.GetCode(address)
 	if valData == nil {
-		return nil, errNoStateValidatorInfo
+		return nil, ErrNoStateValidatorInfo
 	}
 
 	return valData.ToValidator()
