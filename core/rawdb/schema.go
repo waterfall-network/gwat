@@ -103,8 +103,6 @@ var (
 	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
 	valSyncNotProcKey = []byte("vsnprockeys") // tracks the not processed validators' sync operation.
 
-	valDepPrefix = []byte("vdep") // validator deposit + address.
-
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 
@@ -270,11 +268,6 @@ func eraKey(era uint64) []byte {
 // validatorSyncKey = valSyncOpPrefix + opType + creatorAddr
 func validatorSyncKey(creator common.Address, op uint64) []byte {
 	return append(append(valSyncOpPrefix, encodeBlockNumber(op)...), creator.Bytes()...)
-}
-
-// validatorDepositKey = valDepPrefix + creatorAddr
-func validatorDepositKey(creator common.Address) []byte {
-	return append(valDepPrefix, creator.Bytes()...)
 }
 
 // coordCpKey = coordCpPrefix + cpSpine
