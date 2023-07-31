@@ -46,7 +46,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
@@ -2331,7 +2331,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	intrGasSum := uint64(0)
 	for _, tx := range block.Transactions() {
 		var intrGas uint64
-		intrGas, err = bc.TxEstimateGas(tx, nil)
+		intrGas, err = bc.TxEstimateGas(tx, block.Header())
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
 			return false, nil
@@ -3169,59 +3169,70 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	return statedb, receipts, rlogs, *gasUsed
 }
 
-func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
-	//defer func(start time.Time) { log.Info("TxEstimateGas finished", "runtime", time.Since(start)) }(time.Now())
-	var err error
-	var isTokenOp, isValidatorOp bool
-	if tx.To() == nil {
-		if _, err = operation.GetOpCode(tx.Data()); err == nil {
-			isTokenOp = true
-		}
-	} else {
-		isValidatorOp = tx.To() != nil && bc.Config().ValidatorsStateAddress != nil && *tx.To() == *bc.Config().ValidatorsStateAddress
-	}
-	var txData []byte
-	if !isTokenOp && !isValidatorOp {
-		txData = tx.Data()
-	}
-	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
-
-	if len(tx.Data()) > 0 {
-		return bc.TxEstimateGasByEvm(tx, nil)
-	}
-	return IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
-}
-
-func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, lfNumber *uint64) (uint64, error) {
-	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	header := bc.GetLastFinalizedHeader()
-	if lfNumber != nil {
-		header = bc.GetHeaderByNumber(*lfNumber)
+func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header) (uint64, error) {
+	if len(tx.Data()) == 0 {
+		return params.TxGas, nil
 	}
 
-	statedb, err := bc.StateAt(header.Root)
+	if header == nil {
+		header = bc.GetLastFinalizedHeader()
+	}
+
+	blockContext := NewEVMBlockContext(header, bc, &header.Coinbase)
+	stateDb, err := bc.StateAt(header.Root)
 	if err != nil {
 		return 0, err
 	}
 
-	signer := types.LatestSigner(bc.chainConfig)
-	from, _ := types.Sender(signer, tx)
-	statedb.SetNonce(from, tx.Nonce())
+	signer := types.MakeSigner(bc.Config())
+	msg, err := tx.AsMessage(signer, header.BaseFee)
+
+	tokenProcessor := token.NewProcessor(blockContext, stateDb)
+	validatorProcessor := validator.NewProcessor(blockContext, stateDb, bc)
+	txType := GetTxType(msg, validatorProcessor, tokenProcessor)
+
+	switch txType {
+	case ValidatorMethodTxType, ValidatorSyncTxType:
+		return IntrinsicGas(tx.Data(), tx.AccessList(), false, true)
+	case ContractCreationTxType:
+		return IntrinsicGas(tx.Data(), tx.AccessList(), true, false)
+	case ContractMethodTxType:
+		return bc.TxEstimateGasByEvm(tx, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
+	case TokenCreationTxType, TokenMethodTxType:
+		return IntrinsicGas(tx.Data(), tx.AccessList(), false, false)
+	default:
+		return 0, ErrTxTypeNotSupported
+	}
+}
+
+func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction,
+	header *types.Header,
+	blkCtx vm.BlockContext,
+	statedb *state.StateDB,
+	vp *validator.Processor,
+	tp *token.Processor,
+) (uint64, error) {
+	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+	msg, err := tx.AsMessage(types.MakeSigner(bc.Config()), header.BaseFee)
+
+	from := msg.From()
+	statedb.SetNonce(from, msg.Nonce())
 	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
-	gasBalance := new(big.Int).Mul(maxGas, tx.GasPrice())
-	reqBalance := new(big.Int).Add(gasBalance, tx.Value())
+	gasBalance := new(big.Int).Mul(maxGas, msg.GasPrice())
+	reqBalance := new(big.Int).Add(gasBalance, msg.Value())
 	statedb.SetBalance(from, reqBalance)
 
 	gasPool := new(GasPool).AddGas(math.MaxUint64)
-	usedGas := uint64(0)
 
-	receipt, err := ApplyTransaction(bc.chainConfig, bc, &header.Coinbase, gasPool, statedb, header, tx, &usedGas, *bc.GetVMConfig(), bc)
+	evm := vm.NewEVM(blkCtx, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())
+
+	receipt, err := ApplyMessage(evm, tp, vp, msg, gasPool)
 	if err != nil {
-		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "err", err)
+		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "err", err)
 		return 0, err
 	}
-	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", tx.Hash().Hex(), "txGas", tx.Gas(), "calcGas", receipt.GasUsed)
-	return receipt.GasUsed, nil
+	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "txGas", msg.Gas(), "calcGas", receipt.UsedGas)
+	return receipt.UsedGas, nil
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that

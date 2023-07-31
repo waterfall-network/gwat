@@ -477,7 +477,8 @@ func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args *Transacti
 		return nil, err
 	}
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	head := s.b.GetLastFinalizedBlock().Header()
+	if err := args.setDefaults(ctx, s.b, head); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -1252,17 +1253,23 @@ func DoEstimateGasQuick(ctx context.Context, b Backend, args TransactionArgs, bl
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
+	var err error
+
+	header := s.b.GetLastFinalizedHeader()
 	if blockNrOrHash != nil {
-		bNrOrHash = *blockNrOrHash
+		header, err = s.b.HeaderByNumberOrHash(ctx, *blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
 	}
-	gas, err := DoEstimateGasQuick(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
-	// if validator set dummy gas
-	if err == nil && args.To != nil && *args.To == *s.b.ChainConfig().ValidatorsStateAddress && gas == 0 {
-		gas = 21000
+
+	args.Gas = nil
+	err = args.setDefaults(ctx, s.b, header)
+	if err != nil {
+		return 0, err
 	}
-	return gas, err
-	//return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+
+	return *args.Gas, err
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
@@ -1642,7 +1649,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	nogas := args.Gas == nil
 
 	// Ensure any missing fields are filled, extract the recipient and input data
-	if err := args.setDefaults(ctx, b); err != nil {
+	if err := args.setDefaults(ctx, b, header); err != nil {
 		return nil, 0, nil, err
 	}
 	var to common.Address
@@ -1669,7 +1676,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// and it's convered by the sender only anyway.
 		if nogas {
 			args.Gas = nil
-			if err := args.setDefaults(ctx, b); err != nil {
+			if err := args.setDefaults(ctx, b, header); err != nil {
 				return nil, 0, nil, err // shouldn't happen, just in case
 			}
 		}
@@ -1971,7 +1978,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 	}
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -1989,7 +1996,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 // processing (signing + broadcast).
 func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
@@ -2055,7 +2062,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
 	}
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
@@ -2112,7 +2119,7 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs Transact
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, fmt.Errorf("missing transaction nonce in transaction spec")
 	}
-	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
+	if err := sendArgs.setDefaults(ctx, s.b, nil); err != nil {
 		return common.Hash{}, err
 	}
 	matchTx := sendArgs.toTransaction()
