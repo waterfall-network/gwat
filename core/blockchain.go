@@ -3174,6 +3174,10 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header)
 		return params.TxGas, nil
 	}
 
+	if header == nil {
+		header = bc.GetLastFinalizedHeader()
+	}
+
 	blockContext := NewEVMBlockContext(header, bc, &header.Coinbase)
 	stateDb, err := bc.StateAt(header.Root)
 	if err != nil {
@@ -3191,19 +3195,20 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header)
 	isContractCreation := txType == ContractCreationTxType
 	isContractMethod := txType == ContractMethodTxType
 	if isContractMethod {
-		return bc.TxEstimateGasByEvm(tx, header)
+		return bc.TxEstimateGasByEvm(tx, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
 	}
 
 	return IntrinsicGas(tx.Data(), tx.AccessList(), isContractCreation, isValidatorOp)
 }
 
-func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, header *types.Header) (uint64, error) {
+func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction,
+	header *types.Header,
+	blkCtx vm.BlockContext,
+	statedb *state.StateDB,
+	vp *validator.Processor,
+	tp *token.Processor,
+) (uint64, error) {
 	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	statedb, err := bc.StateAt(header.Root)
-	if err != nil {
-		return 0, err
-	}
-
 	msg, err := tx.AsMessage(types.MakeSigner(bc.Config()), header.BaseFee)
 
 	from := msg.From()
@@ -3215,12 +3220,9 @@ func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction, header *types.He
 
 	gasPool := new(GasPool).AddGas(math.MaxUint64)
 
-	blockContext := NewEVMBlockContext(header, bc, &header.Coinbase)
-	evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())
+	evm := vm.NewEVM(blkCtx, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())
 
-	tokenProcessor := token.NewProcessor(blockContext, statedb)
-	validatorProcessor := validator.NewProcessor(blockContext, statedb, bc)
-	receipt, err := ApplyMessage(evm, tokenProcessor, validatorProcessor, msg, gasPool)
+	receipt, err := ApplyMessage(evm, tp, vp, msg, gasPool)
 	if err != nil {
 		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "err", err)
 		return 0, err
