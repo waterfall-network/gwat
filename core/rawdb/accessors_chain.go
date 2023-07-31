@@ -19,7 +19,6 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1105,103 +1104,6 @@ func WriteNotProcessedValidatorSyncOps(db ethdb.KeyValueWriter, valSyncOps []*ty
 	if err := db.Put(valSyncNotProcKey, data); err != nil {
 		log.Crit("Failed to store the not processed validator sync operations", "err", err)
 	}
-}
-
-func WriteValidatorDepositBalance(db ethdb.KeyValueStore, validator common.Address, from common.Address, sum *big.Int) {
-	key := validatorDepositKey(validator)
-
-	// Retrieve existing data from DB
-	oldData, _ := db.Get(key)
-	fromSums := make(AddressMap)
-	if oldData != nil {
-		// If previous data exists, decode it
-		err := json.Unmarshal(oldData, &fromSums)
-		if err != nil {
-			log.Error("Failed to decode user deposit data", "err", err)
-		}
-	}
-
-	// Check if the user already exists in the map and update the sum
-	if oldSum, ok := fromSums[from]; ok {
-		fromSums[from] = new(big.Int).Add(oldSum, sum)
-	} else {
-		// If no previous data, create a new entry
-		fromSums[from] = sum
-	}
-
-	// Encode the new map
-	enc, err := json.Marshal(fromSums)
-	if err != nil {
-		log.Error("Failed to encode user sums", "err", err)
-	}
-
-	// Store the new map
-	if err := db.Put(key, enc); err != nil {
-		log.Error("Failed to store user sums", "err", err)
-	}
-}
-
-// ReadValidatorDepositTx retrieve creator's deposits.
-func ReadValidatorDepositBalance(db ethdb.KeyValueReader, creator common.Address) AddressMap {
-	key := validatorDepositKey(creator)
-
-	dbMap, err := db.Get(key)
-	if err != nil {
-		log.Error("Failed to get deposit sums", "err", err)
-		return nil
-	}
-
-	userSums := make(AddressMap)
-	if dbMap != nil {
-		// If data exists, decode it
-		err := json.Unmarshal(dbMap, &userSums)
-		if err != nil {
-			log.Error("Failed to decode deposit sums", "err", err)
-			return nil
-		}
-	}
-
-	return userSums
-}
-
-type AddressMap map[common.Address]*big.Int
-
-// MarshalJSON is a JSON marshaller for AddressMap
-func (am AddressMap) MarshalJSON() ([]byte, error) {
-	out := make(map[string]*big.Int, len(am))
-
-	for key, value := range am {
-		out[key.Hex()] = value
-	}
-
-	return json.Marshal(out)
-}
-
-// Stake calculates the total stake for all addresses in the AddressMap.
-// It iterates through the map, summing up the stake values for each address.
-// The result is returned as a pointer to a big.Int representing the total stake.
-func (am AddressMap) Stake() *big.Int {
-	sum := new(big.Int)
-	for _, value := range am {
-		sum.Add(sum, value)
-	}
-	return sum
-}
-
-// UnmarshalJSON is a JSON unmarshaller for AddressMap
-func (am AddressMap) UnmarshalJSON(data []byte) error {
-	in := make(map[string]*big.Int)
-	err := json.Unmarshal(data, &in)
-	if err != nil {
-		return err
-	}
-
-	for key, value := range in {
-		address := common.HexToAddress(key)
-		am[address] = value
-	}
-
-	return nil
 }
 
 /**** BlockDag ***/
