@@ -3198,8 +3198,10 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header)
 		return IntrinsicGas(tx.Data(), tx.AccessList(), true, false)
 	case ContractMethodTxType:
 		return bc.TxEstimateGasByEvm(tx, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
-	default:
+	case TokenCreationTxType, TokenMethodTxType:
 		return IntrinsicGas(tx.Data(), tx.AccessList(), false, false)
+	default:
+		return 0, ErrTxTypeNotSupported
 	}
 }
 
