@@ -44,13 +44,13 @@ func init() {
 		SlotsPerEpoch:          32,
 		ForkSlotSubNet1:        9999999,
 		ValidatorsStateAddress: &validatorsStateAddress,
-		ValidatorsPerSlot:      6,
+		ValidatorsPerSlot:      2,
 		EpochsPerEra:           22,
 		TransitionPeriod:       2,
 	}
 
 	TestEra = era.Era{
-		Number: 5,
+		Number: 7,
 		From:   89,
 		To:     110,
 		Root:   common.BytesToHash(testutils.RandomData(32)),

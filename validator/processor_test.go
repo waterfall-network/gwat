@@ -173,6 +173,7 @@ func TestProcessorActivate(t *testing.T) {
 		Creator:   activateOperation.Creator(),
 		Amount:    activateOperation.Amount(),
 	})
+	bc.EXPECT().EpochToEra(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(&era.Era{Number: 6})
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -189,7 +190,7 @@ func TestProcessorActivate(t *testing.T) {
 				Caller: vm.AccountRef(from),
 				AddrTo: to,
 			},
-			Errs: []error{ErrUnknownValidator},
+			Errs: []error{storage.ErrNoStateValidatorInfo},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
@@ -217,7 +218,7 @@ func TestProcessorActivate(t *testing.T) {
 				if val.GetIndex() != math.MaxUint64 {
 					t.Fatal()
 				}
-				if val.GetActivationEpoch() != math.MaxUint64 {
+				if val.GetActivationEra() != math.MaxUint64 {
 					t.Fatal()
 				}
 
@@ -226,7 +227,7 @@ func TestProcessorActivate(t *testing.T) {
 				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr2)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, val.GetActivationEpoch(), testmodels.TestEra.To+1)
+				testutils.AssertEqual(t, val.GetActivationEra(), testmodels.TestEra.Number+1)
 				testutils.AssertEqual(t, val.GetIndex(), activateOperation.Index())
 
 				valList := processor.Storage().GetValidatorsList(processor.state)
@@ -235,25 +236,6 @@ func TestProcessorActivate(t *testing.T) {
 				}
 
 				testutils.AssertEqual(t, validator.Address, valList[0])
-			},
-		},
-		{
-			CaseName: "Activate: ErrCtxEraNotFound",
-			TestData: testmodels.TestData{
-				Caller: vm.AccountRef(from),
-				AddrTo: to,
-			},
-			Errs: []error{ErrCtxEraNotFound},
-			Fn: func(c *testmodels.TestCase) {
-				v := c.TestData.(testmodels.TestData)
-
-				validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
-
-				err = processor.Storage().SetValidator(processor.state, validator)
-				testutils.AssertNoError(t, err)
-
-				processor.ctx.Era = 3
-				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
 		},
 		{
@@ -277,7 +259,7 @@ func TestProcessorActivate(t *testing.T) {
 				if val.GetIndex() != math.MaxUint64 {
 					t.Fatal()
 				}
-				if val.GetActivationEpoch() != math.MaxUint64 {
+				if val.GetActivationEra() != math.MaxUint64 {
 					t.Fatal()
 				}
 
@@ -294,7 +276,7 @@ func TestProcessorActivate(t *testing.T) {
 				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr2)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, val.GetActivationEpoch(), uint64(81))
+				testutils.AssertEqual(t, val.GetActivationEra(), uint64(8))
 				testutils.AssertEqual(t, val.GetIndex(), activateOperation.Index())
 
 				valList := processor.Storage().GetValidatorsList(processor.state)
@@ -326,7 +308,7 @@ func TestProcessorActivate(t *testing.T) {
 				if val.GetIndex() != math.MaxUint64 {
 					t.Fatal()
 				}
-				if val.GetActivationEpoch() != math.MaxUint64 {
+				if val.GetActivationEra() != math.MaxUint64 {
 					t.Fatal()
 				}
 
@@ -350,7 +332,7 @@ func TestProcessorActivate(t *testing.T) {
 				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr2)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, val.GetActivationEpoch(), testmodels.TestEra.To+1)
+				testutils.AssertEqual(t, val.GetActivationEra(), testmodels.TestEra.Number+1)
 				testutils.AssertEqual(t, val.GetIndex(), activateOperation.Index())
 
 				valList := processor.Storage().GetValidatorsList(processor.state)
@@ -376,8 +358,10 @@ func TestProcessorExit(t *testing.T) {
 
 	msg := NewMockmessage(ctrl)
 
+	eraInfo := era.NewEraInfo(testmodels.TestEra)
 	bc := NewMockblockchain(ctrl)
 	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
+	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -396,7 +380,7 @@ func TestProcessorExit(t *testing.T) {
 				Caller: vm.AccountRef(from),
 				AddrTo: processor.GetValidatorsStateAddress(),
 			},
-			Errs: []error{ErrUnknownValidator},
+			Errs: []error{storage.ErrNoStateValidatorInfo},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
@@ -443,8 +427,8 @@ func TestProcessorExit(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr3, &withdrawalAddress)
-				validator.ActivationEpoch = 0
-				validator.ExitEpoch = procEpoch
+				validator.ActivationEra = 0
+				validator.ExitEra = procEpoch
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -463,7 +447,7 @@ func TestProcessorExit(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr3, &withdrawalAddress)
-				validator.ActivationEpoch = 0
+				validator.ActivationEra = 0
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -482,7 +466,7 @@ func TestProcessorExit(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr3, &withdrawalAddress)
-				validator.ActivationEpoch = 0
+				validator.ActivationEra = 0
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -529,6 +513,7 @@ func TestProcessorDeactivate(t *testing.T) {
 		Creator:   deactivateOp.Creator(),
 		Amount:    deactivateOp.Amount(),
 	})
+	bc.EXPECT().EpochToEra(uint64(100)).AnyTimes().Return(&testmodels.TestEra)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -545,7 +530,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				Caller: vm.AccountRef(from),
 				AddrTo: processor.GetValidatorsStateAddress(),
 			},
-			Errs: []error{ErrUnknownValidator},
+			Errs: []error{storage.ErrNoStateValidatorInfo},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
@@ -580,8 +565,8 @@ func TestProcessorDeactivate(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
-				validator.ActivationEpoch = 0
-				validator.ExitEpoch = procEpoch
+				validator.ActivationEra = 0
+				validator.ExitEra = procEpoch
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -600,7 +585,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
-				validator.ActivationEpoch = 0
+				validator.ActivationEra = 0
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -610,7 +595,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, testmodels.TestEra.To+1, val.GetExitEpoch())
+				testutils.AssertEqual(t, uint64(7), val.GetExitEra())
 			},
 		},
 		{
@@ -624,7 +609,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
-				validator.ActivationEpoch = 0
+				validator.ActivationEra = 0
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
 
@@ -644,7 +629,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, uint64(81), val.GetExitEpoch())
+				testutils.AssertEqual(t, uint64(7), val.GetExitEra())
 			},
 		},
 		{
@@ -658,8 +643,8 @@ func TestProcessorDeactivate(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
-				validator.ActivationEpoch = 0
-				validator.ExitEpoch = math.MaxUint64
+				validator.ActivationEra = 0
+				validator.ExitEra = math.MaxUint64
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
 
@@ -686,7 +671,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, uint64(67), val.GetExitEpoch())
+				testutils.AssertEqual(t, uint64(7), val.GetExitEra())
 			},
 		},
 	}
@@ -776,7 +761,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
-				validator.ActivationEpoch = 0
+				validator.ActivationEra = 0
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -798,7 +783,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
 				validator.Balance = valBalance
-				validator.ActivationEpoch = 0
+				validator.ActivationEra = 0
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -850,6 +835,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 		Creator:   updateBalanceOperation.Creator(),
 		Amount:    updateBalanceOperation.Amount(),
 	})
+	bc.EXPECT().EpochToEra(uint64(100)).AnyTimes().Return(&testmodels.TestEra)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -866,7 +852,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 				Caller: vm.AccountRef(from),
 				AddrTo: to,
 			},
-			Errs: []error{ErrUnknownValidator},
+			Errs: []error{storage.ErrNoStateValidatorInfo},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
@@ -902,7 +888,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
-				validator.ActivationEpoch = 0
+				validator.ActivationEra = 0
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -924,8 +910,8 @@ func TestProcessorUpdateBalance(t *testing.T) {
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
 				validator.Balance = valBalance
-				validator.ActivationEpoch = 0
-				validator.ExitEpoch = procEpoch
+				validator.ActivationEra = 0
+				validator.ExitEra = procEpoch
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)

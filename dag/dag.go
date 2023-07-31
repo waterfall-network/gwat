@@ -29,8 +29,6 @@ import (
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
-var errWrongInputSlot = errors.New("input slot is greater that current slot")
-
 // Backend wraps all methods required for block creation.
 type Backend interface {
 	BlockChain() *core.BlockChain
@@ -118,7 +116,7 @@ type Dag struct {
 
 // New creates new instance of Dag
 func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creatorConfig *creator.Config, engine consensus.Engine) *Dag {
-	fin := finalizer.New(chainConfig, eth, mux)
+	fin := finalizer.New(eth)
 	d := &Dag{
 		chainConfig: chainConfig,
 		eth:         eth,

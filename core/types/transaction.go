@@ -416,6 +416,15 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 }
 
+func (s Transactions) Hashes() common.HashArray {
+	hashes := make(common.HashArray, 0)
+	for _, transaction := range s {
+		hashes = append(hashes, transaction.Hash())
+	}
+
+	return hashes
+}
+
 // TxDifference returns a new set which is the difference between a and b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
@@ -638,4 +647,21 @@ func copyAddressPtr(a *common.Address) *common.Address {
 	}
 	cpy := *a
 	return &cpy
+}
+
+type TransactionBlocks struct {
+	*Transaction
+	BlocksHashes common.HashArray
+}
+
+type BlockTransactions struct {
+	Transactions
+	BlockHash common.Hash
+}
+
+func NewBlockTransactions(blockHash common.Hash) *BlockTransactions {
+	return &BlockTransactions{
+		Transactions: make(Transactions, 0),
+		BlockHash:    blockHash,
+	}
 }

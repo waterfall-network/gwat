@@ -156,11 +156,11 @@ func NewPublicTxPoolAPI(b Backend) *PublicTxPoolAPI {
 }
 
 // Content returns the transactions contained within the transaction pool.
-func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
-	content := map[string]map[string]map[string]*RPCTransaction{
-		"pending":    make(map[string]map[string]*RPCTransaction),
-		"queued":     make(map[string]map[string]*RPCTransaction),
-		"processing": make(map[string]map[string]*RPCTransaction),
+func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]interface{} {
+	content := map[string]map[string]map[string]interface{}{
+		"pending":    make(map[string]map[string]interface{}),
+		"queued":     make(map[string]map[string]interface{}),
+		"processing": make(map[string]map[string]interface{}),
 	}
 	pending, queue, processing := s.b.TxPoolContent()
 	curHeader := s.b.GetLastFinalizedHeader()
@@ -174,7 +174,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	genesisGasLimit := bc.Genesis().GasLimit()
 	// Flatten the pending transactions
 	for account, txs := range pending {
-		dump := make(map[string]*RPCTransaction)
+		dump := make(map[string]interface{})
 		for _, tx := range txs {
 			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 		}
@@ -182,16 +182,16 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	}
 	// Flatten the queued transactions
 	for account, txs := range queue {
-		dump := make(map[string]*RPCTransaction)
+		dump := make(map[string]interface{})
 		for _, tx := range txs {
 			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["queued"][account.Hex()] = dump
 	}
 	for account, txs := range processing {
-		dump := make(map[string]*RPCTransaction)
+		dump := make(map[string]interface{})
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCProcessingTransaction(tx, curHeader, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["processing"][account.Hex()] = dump
 	}
@@ -281,7 +281,7 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	for account, txs := range processing {
 		dump := make(map[string]string)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx.Transaction)
 		}
 		content["processing"][account.Hex()] = dump
 	}
@@ -477,7 +477,8 @@ func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args *Transacti
 		return nil, err
 	}
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	head := s.b.GetLastFinalizedBlock().Header()
+	if err := args.setDefaults(ctx, s.b, head); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -1252,17 +1253,23 @@ func DoEstimateGasQuick(ctx context.Context, b Backend, args TransactionArgs, bl
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
+	var err error
+
+	header := s.b.GetLastFinalizedHeader()
 	if blockNrOrHash != nil {
-		bNrOrHash = *blockNrOrHash
+		header, err = s.b.HeaderByNumberOrHash(ctx, *blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
 	}
-	gas, err := DoEstimateGasQuick(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
-	// if validator set dummy gas
-	if err == nil && args.To != nil && *args.To == *s.b.ChainConfig().ValidatorsStateAddress && gas == 0 {
-		gas = 21000
+
+	args.Gas = nil
+	err = args.setDefaults(ctx, s.b, header)
+	if err != nil {
+		return 0, err
 	}
-	return gas, err
-	//return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+
+	return *args.Gas, err
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
@@ -1497,6 +1504,81 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 	return newRPCTransaction(tx, common.Hash{}, nil, 0, baseFee, config)
 }
 
+type RPCProcessingTransaction struct {
+	BlockHash    *common.Hash      `json:"blockHash"`
+	BlockNumber  *hexutil.Uint64   `json:"blockNumber"`
+	BlocksHashes *common.HashArray `json:"blocksHashes"`
+	From         common.Address    `json:"from"`
+	Gas          hexutil.Uint64    `json:"gas"`
+	GasPrice     *hexutil.Big      `json:"gasPrice"`
+	GasFeeCap    *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	GasTipCap    *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
+	Hash         common.Hash       `json:"hash"`
+	Input        hexutil.Bytes     `json:"input"`
+	Nonce        hexutil.Uint64    `json:"nonce"`
+	To           *common.Address   `json:"to"`
+	Value        *hexutil.Big      `json:"value"`
+	Type         hexutil.Uint64    `json:"type"`
+	Accesses     *types.AccessList `json:"accessList,omitempty"`
+	ChainID      *hexutil.Big      `json:"chainId,omitempty"`
+	V            *hexutil.Big      `json:"v"`
+	R            *hexutil.Big      `json:"r"`
+	S            *hexutil.Big      `json:"s"`
+}
+
+func newRPCProcessingTransaction(tx *types.TransactionBlocks, current *types.Header, config *params.ChainConfig, numValidators uint64, gasLimit uint64, creatorsPerSlot uint64) *RPCProcessingTransaction {
+	var baseFee *big.Int
+	if current != nil {
+		baseFee = misc.CalcSlotBaseFee(config, current, numValidators, gasLimit, params.BurnMultiplier, creatorsPerSlot)
+	}
+
+	signer := types.MakeSigner(config)
+	from, _ := types.Sender(signer, tx.Transaction)
+	v, r, s := tx.RawSignatureValues()
+	result := &RPCProcessingTransaction{
+		Type:     hexutil.Uint64(tx.Type()),
+		From:     from,
+		Gas:      hexutil.Uint64(tx.Gas()),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		Hash:     tx.Hash(),
+		Input:    hexutil.Bytes(tx.Data()),
+		To:       tx.To(),
+		Value:    (*hexutil.Big)(tx.Value()),
+		V:        (*hexutil.Big)(v),
+		R:        (*hexutil.Big)(r),
+		S:        (*hexutil.Big)(s),
+		Nonce:    hexutil.Uint64(tx.Nonce()),
+	}
+
+	result.BlocksHashes = &tx.BlocksHashes
+	if len(tx.BlocksHashes) > 0 {
+		result.BlockHash = &tx.BlocksHashes[0]
+	}
+
+	switch tx.Type() {
+	case types.AccessListTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+	case types.DynamicFeeTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// if the transaction has been mined, compute the effective gas price
+		if baseFee != nil && len(tx.BlocksHashes) > 0 {
+			// price = min(tip, gasFeeCap - baseFee) + baseFee
+			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			result.GasPrice = (*hexutil.Big)(price)
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+	}
+
+	return result
+}
+
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
 func newRPCTransactionFromBlockIndex(b *types.Block, blockFinNr *uint64, index uint64, config *params.ChainConfig) *RPCTransaction {
 	txs := b.Transactions()
@@ -1567,7 +1649,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	nogas := args.Gas == nil
 
 	// Ensure any missing fields are filled, extract the recipient and input data
-	if err := args.setDefaults(ctx, b); err != nil {
+	if err := args.setDefaults(ctx, b, header); err != nil {
 		return nil, 0, nil, err
 	}
 	var to common.Address
@@ -1594,7 +1676,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// and it's convered by the sender only anyway.
 		if nogas {
 			args.Gas = nil
-			if err := args.setDefaults(ctx, b); err != nil {
+			if err := args.setDefaults(ctx, b, header); err != nil {
 				return nil, 0, nil, err // shouldn't happen, just in case
 			}
 		}
@@ -1896,7 +1978,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 	}
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -1914,7 +1996,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 // processing (signing + broadcast).
 func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
@@ -1980,7 +2062,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
 	}
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
@@ -2037,7 +2119,7 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs Transact
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, fmt.Errorf("missing transaction nonce in transaction spec")
 	}
-	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
+	if err := sendArgs.setDefaults(ctx, s.b, nil); err != nil {
 		return common.Hash{}, err
 	}
 	matchTx := sendArgs.toTransaction()
