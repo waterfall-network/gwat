@@ -287,15 +287,14 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrInvalidFromAddresses
 	}
 
-	effectiveBalance := p.blockchain.Config().EffectiveBalance
 	if validator.GetActivationEra() == math.MaxUint64 {
 		stake := validator.TotalStake()
-
 		if stake.Cmp(op.Amount()) == -1 {
 			return nil, ErrInsufficientFundsForTransfer
 		}
 
-		switch stake.Cmp(effectiveBalance) {
+		// Compare the stake with the effective balance to determine the activation status of the validator
+		switch stake.Cmp(p.blockchain.Config().EffectiveBalance) {
 		case 0, 1: // currentBalance >= effectiveBalance - wait for activation
 			return nil, ErrNotActivatedValidator
 		case -1: // currentBalance < effectiveBalance - withdraw before activation
@@ -303,6 +302,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 
 			stakeByAddr := validator.StakeByAddress(from)
 			if stakeByAddr != nil && stakeByAddr.Cmp(op.Amount()) >= 0 {
+				// Subtract the withdrawal amount from the stake associated with the address
 				sum, err := validator.SubtractStake(from, op.Amount())
 				if err != nil {
 					log.Error("Invalid withdraw operation", "op", op, "error", err)
@@ -319,6 +319,12 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 			}
 		}
 	} else {
+		// If the validator is activated, check if the withdrawal amount is more than the validator's balance
+		if validator.Balance.Cmp(op.Amount()) == -1 {
+			return nil, ErrInsufficientFundsForTransfer
+		}
+
+		// Subtract the withdrawal amount from the validator's balance
 		validator.SetBalance(new(big.Int).Sub(validator.Balance, op.Amount()))
 	}
 
@@ -423,6 +429,7 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 
 	validator.SetActivationEra(opEra.Number + postpone)
 	validator.SetIndex(op.Index())
+	validator.UnsetStake()
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
@@ -563,7 +570,6 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	}
 
 	validator.SetBalance(op.Amount())
-	validator.UnsetStake()
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
