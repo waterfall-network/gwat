@@ -9,6 +9,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 )
 
@@ -87,6 +88,12 @@ func TestGetValidators(t *testing.T) {
 		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
 		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
 	})
+	bc.EXPECT().EpochToEra(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(&era.Era{
+		Number: 0,
+		From:   0,
+		To:     0,
+		Root:   common.Hash{},
+	})
 	bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
 	bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
 	bc.EXPECT().GetLastCoordinatedCheckpoint().AnyTimes().Return(&types.Checkpoint{
@@ -149,7 +156,7 @@ func TestGetValidators(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if test.activeOnly {
 				for _, validator := range validatorsList {
-					if validator.ActivationEpoch <= bc.GetSlotInfo().SlotToEpoch(test.slot) && validator.ExitEpoch > bc.GetSlotInfo().SlotToEpoch(test.slot) {
+					if validator.ActivationEra <= bc.GetSlotInfo().SlotToEpoch(test.slot) && validator.ExitEra > bc.GetSlotInfo().SlotToEpoch(test.slot) {
 						test.wantValidators = append(test.wantValidators, validator)
 					}
 				}
@@ -161,7 +168,7 @@ func TestGetValidators(t *testing.T) {
 				}
 			}
 
-			validators, addresses := store.GetValidators(bc, test.slot, test.activeOnly, test.needAddresses)
+			validators, addresses := store.GetValidators(bc, test.slot, test.activeOnly, test.needAddresses, "Tests")
 			testutils.AssertEqual(t, test.wantValidators, validators)
 			testutils.AssertEqual(t, test.wantAddresses, addresses)
 		})
@@ -192,6 +199,13 @@ func TestGetShuffledValidators(t *testing.T) {
 		Root:  common.HexToHash("0xe46fb9c7774e3189b822353c521183f637560dfa199695ed5157d49f989d0c52"),
 		Spine: common.HexToHash("0x5e44e252e7b239ea389a3cb95b112ffccd349852dcfd5b4c5e8f7857f1e730e5"),
 	})
+	bc.EXPECT().EpochToEra(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(&era.Era{
+		Number: 10,
+		From:   0,
+		To:     0,
+		Root:   common.Hash{},
+	})
+	bc.EXPECT().GetEpoch(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(common.Hash{})
 
 	store := NewStorage(testmodels.TestChainConfig)
 	store.SetValidatorsList(stateDb, testmodels.InputValidators)
@@ -199,7 +213,7 @@ func TestGetShuffledValidators(t *testing.T) {
 	validatorList := make([]Validator, len(testmodels.InputValidators))
 	for i, address := range testmodels.InputValidators {
 		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
-		validator.ActivationEpoch = uint64(i)
+		validator.ActivationEra = uint64(i)
 		validatorList[i] = *validator
 		store.SetValidator(stateDb, validator)
 		testutils.AssertNoError(t, err)
@@ -214,10 +228,6 @@ func TestGetShuffledValidators(t *testing.T) {
 	result, err = store.GetCreatorsBySlot(bc, slot)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, []common.Address{
-		testmodels.Addr1,
-		testmodels.Addr4,
 		testmodels.Addr3,
-		testmodels.Addr2,
-		testmodels.Addr5,
 		testmodels.Addr6}, result)
 }

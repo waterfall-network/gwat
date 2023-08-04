@@ -90,7 +90,7 @@ type Backend interface {
 	GetPoolTransaction(txHash common.Hash) *types.Transaction
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	Stats() (pending, queued, processing int)
-	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address]types.Transactions)
+	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks)
 	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions, types.Transactions)
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 

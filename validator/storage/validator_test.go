@@ -32,8 +32,8 @@ func init() {
 
 	testValidator = NewValidator(pubKey, validatorAddress, &withdrawalAddress)
 	testValidator.Index = validatorIndex
-	testValidator.ExitEpoch = exitEpoch
-	testValidator.ActivationEpoch = activationEpoch
+	testValidator.ExitEra = exitEpoch
+	testValidator.ActivationEra = activationEpoch
 	testValidator.Balance = balance
 }
 
@@ -45,9 +45,9 @@ func TestValidatorMarshalBinary(t *testing.T) {
 	copy(expectedData[:common.BlsPubKeyLength], pubKey[:])
 	copy(expectedData[creatorAddressOffset:creatorAddressOffset+common.AddressLength], validatorAddress[:])
 	copy(expectedData[withdrawalAddressOffset:validatorIndexOffset], withdrawalAddress[:])
-	binary.BigEndian.PutUint64(expectedData[validatorIndexOffset:activationEpochOffset], validatorIndex)
-	binary.BigEndian.PutUint64(expectedData[activationEpochOffset:exitEpochOffset], activationEpoch)
-	binary.BigEndian.PutUint64(expectedData[exitEpochOffset:balanceOffset], exitEpoch)
+	binary.BigEndian.PutUint64(expectedData[validatorIndexOffset:activationEraOffset], validatorIndex)
+	binary.BigEndian.PutUint64(expectedData[activationEraOffset:exitEraOffset], activationEpoch)
+	binary.BigEndian.PutUint64(expectedData[exitEraOffset:balanceOffset], exitEpoch)
 	binary.BigEndian.PutUint64(expectedData[balanceLengthOffset:balanceOffset], uint64(len(balance.Bytes())))
 	copy(expectedData[balanceOffset:balanceOffset+len(balance.Bytes())], balance.Bytes())
 
@@ -66,8 +66,8 @@ func TestValidatorUnmarshalBinary(t *testing.T) {
 	testutils.AssertEqual(t, v.Address, validatorAddress)
 	testutils.AssertEqual(t, *v.WithdrawalAddress, withdrawalAddress)
 	testutils.AssertEqual(t, v.Index, validatorIndex)
-	testutils.AssertEqual(t, v.ActivationEpoch, activationEpoch)
-	testutils.AssertEqual(t, v.ExitEpoch, exitEpoch)
+	testutils.AssertEqual(t, v.ActivationEra, activationEpoch)
+	testutils.AssertEqual(t, v.ExitEra, exitEpoch)
 	testutils.AssertEqual(t, v.Balance, balance)
 }
 
@@ -90,12 +90,12 @@ func TestValidatorSettersGetters(t *testing.T) {
 	valIndex := val.GetIndex()
 	testutils.AssertEqual(t, validatorIndex, valIndex)
 
-	val.SetActivationEpoch(activationEpoch)
-	valActive := val.GetActivationEpoch()
+	val.SetActivationEra(activationEpoch)
+	valActive := val.GetActivationEra()
 	testutils.AssertEqual(t, activationEpoch, valActive)
 
-	val.SetExitEpoch(exitEpoch)
-	valExit := val.GetExitEpoch()
+	val.SetExitEra(exitEpoch)
+	valExit := val.GetExitEra()
 	testutils.AssertEqual(t, exitEpoch, valExit)
 
 	val.SetBalance(balance)
