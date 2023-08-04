@@ -93,11 +93,6 @@ type ethDownloader interface {
 }
 
 type Dag struct {
-	chainConfig *params.ChainConfig
-
-	// events
-	mux *event.TypeMux
-
 	eth        Backend
 	bc         blockChain
 	downloader ethDownloader
@@ -107,28 +102,26 @@ type Dag struct {
 	//finalizer
 	finalizer *finalizer.Finalizer
 
-	busy           int32
 	lastFinApiSlot uint64
 
 	exitChan chan struct{}
 	errChan  chan error
+
+	checkpoint *types.Checkpoint
 }
 
 // New creates new instance of Dag
-func New(eth Backend, chainConfig *params.ChainConfig, mux *event.TypeMux, creatorConfig *creator.Config, engine consensus.Engine) *Dag {
+func New(eth Backend, mux *event.TypeMux, creatorConfig *creator.Config, engine consensus.Engine) *Dag {
 	fin := finalizer.New(eth)
 	d := &Dag{
-		chainConfig: chainConfig,
-		eth:         eth,
-		mux:         mux,
-		bc:          eth.BlockChain(),
-		downloader:  eth.Downloader(),
-		creator:     creator.New(creatorConfig, chainConfig, engine, eth, mux),
-		finalizer:   fin,
-		exitChan:    make(chan struct{}),
-		errChan:     make(chan error),
+		eth:        eth,
+		bc:         eth.BlockChain(),
+		downloader: eth.Downloader(),
+		creator:    creator.New(creatorConfig, engine, eth, mux),
+		finalizer:  fin,
+		exitChan:   make(chan struct{}),
+		errChan:    make(chan error),
 	}
-	atomic.StoreInt32(&d.busy, 0)
 	return d
 }
 
@@ -157,7 +150,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		errStr := creator.ErrSynchronization.Error()
 		res.Error = &errStr
 		log.Error("Handle Finalize: response (busy)", "result", res, "err", errStr)
-// 		return res
+		// 		return res
 	}
 
 	d.bc.DagMuLock()
@@ -591,12 +584,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 		case slot := <-slotTicker.C():
 			if slot == 0 {
 				d.bc.SetIsSynced(true)
-				d.creator.ResetCheckpoint()
+				d.resetCheckpoint()
 				continue
 			}
 			if !d.bc.IsSynced() {
 				log.Info("dag workloop !d.bc.IsSynced()", "IsSynced", d.bc.IsSynced())
-				d.creator.ResetCheckpoint()
+				d.resetCheckpoint()
 				continue
 			}
 			if d.isCoordinatorConnectionLost() {
@@ -606,14 +599,13 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			}
 			epoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
 			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", epoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
-			//if d.bc.GetEraInfo().ToEpoch() >= epoch { // TODO: check ???
 
 			var (
 				err      error
 				creators []common.Address
 			)
 
-			startTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(d.bc.GetEraInfo().ToEpoch() + 1 - d.chainConfig.TransitionPeriod)
+			startTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(d.bc.GetEraInfo().ToEpoch() + 1 - d.bc.Config().TransitionPeriod)
 			if err != nil {
 				log.Error("Error calculating start transition slot", "error", err)
 				return
@@ -621,13 +613,11 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 			endTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochEnd(d.bc.GetEraInfo().ToEpoch())
 
-			//era.HandleEra(d.bc, slot)
-
 			log.Info("New slot",
 				"slot", slot,
 				"epoch", d.bc.GetSlotInfo().SlotToEpoch(slot),
 				"era", d.bc.GetEraInfo().Number(),
-				"startTransEpoch", d.bc.GetEraInfo().ToEpoch()+1-d.chainConfig.TransitionPeriod,
+				"startTransEpoch", d.bc.GetEraInfo().ToEpoch()+1-d.bc.Config().TransitionPeriod,
 				"startTransSlot", startTransitionSlot,
 				"endTransEpoch", d.bc.GetEraInfo().ToEpoch(),
 				"endTransSlot", endTransitionSlot,
@@ -650,111 +640,41 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			// todo check
 			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", creators)
 			go d.work(slot, creators, accounts)
-			//}
 		}
 	}
 }
 
 func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
-	//skip if synchronising
-	//if d.downloader.Synchronising() {
 	if !d.bc.IsSynced() {
+		return
+	}
+
+	if d.isSlotLocked(slot) {
 		return
 	}
 
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	errs := map[string]string{}
-
-	var (
-		err error
-	)
-	// create block
-	if err = d.removeTipsWithOutdatedCp(); err != nil {
+	if err := d.removeTipsWithOutdatedCp(); err != nil {
 		return
 	}
+
 	tips := d.bc.GetTips()
-	log.Info("Creator processing: create condition",
-		"condition", d.creator.IsRunning() && len(errs) == 0,
-		"IsRunning", d.creator.IsRunning(),
-		"errs", errs,
-		"creators", creators,
-		"accounts", accounts,
-	)
-
-	if d.creator.GetCheckpoint() == nil {
-		d.creator.SaveCheckpoint(d.bc.GetLastCoordinatedCheckpoint())
+	checkpoint := d.getCheckpoint()
+	if checkpoint == nil {
+		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
+	}
+	if len(accounts) > 0 {
+		d.eth.SetEtherbase(accounts[0])
 	}
 
-	if d.creator.IsRunning() && len(errs) == 0 {
-		assigned := &creator.Assignment{
-			Slot:     slot,
-			Creators: creators,
-		}
-
-		// define time to stop of starting new creating process for current slot
-		// as 1/2 of
-		si := d.bc.GetSlotInfo()
-		startSlotT, errt := si.StartSlotTime(slot)
-		if errt != nil {
-			log.Error("Creator calc start slot time failed", "err", err)
-			return
-		}
-		durationLimit := time.Duration(si.SecondsPerSlot*1000/2) * time.Millisecond
-		createExpirationTime := startSlotT.Add(durationLimit)
-
-		crtStart := time.Now()
-		crtInfo := map[string]string{}
-		for _, creator := range assigned.Creators {
-			// break proc if time expired
-			if createExpirationTime.Before(time.Now()) {
-				log.Warn("Creator work time expired",
-					"slot", slot,
-					"expired", common.PrettyDuration(time.Since(createExpirationTime)),
-				)
-				break
-			}
-
-			coinbase := common.Address{}
-			for _, acc := range accounts {
-				if creator == acc {
-					coinbase = creator
-					break
-				}
-			}
-			if coinbase == (common.Address{}) {
-				continue
-			}
-
-			d.eth.SetEtherbase(coinbase)
-			if err = d.eth.CreatorAuthorize(coinbase); err != nil {
-				log.Error("Creator authorize err", "err", err, "creator", coinbase)
-				continue
-			}
-			log.Info("Creator assigned", "creator", coinbase)
-
-			block, crtErr := d.creator.CreateBlock(assigned, &tips)
-			if crtErr != nil {
-				crtInfo["error"] = crtErr.Error()
-			}
-
-			txCount := 0
-			if block != nil {
-				crtInfo["newBlock"] = block.Hash().Hex()
-				txCount = len(block.Transactions())
-			}
-
-			log.Info("Creator processing: create block",
-				//"IsRunning", d.creator.IsRunning(),
-				//"crtInfo", crtInfo,
-				"txs", txCount,
-				"elapsed", common.PrettyDuration(time.Since(crtStart)),
-			)
-		}
+	err := d.Creator().RunBlockCreation(slot, creators, accounts, tips, checkpoint)
+	if err != nil {
+		log.Error("Create block error", "error", err)
 	}
 
-	d.creator.SaveCheckpoint(d.bc.GetLastCoordinatedCheckpoint())
+	d.saveCheckpoint(d.bc.GetLastCoordinatedCheckpoint())
 }
 
 // getLastFinalizeApiSlot returns the slot of last HandleFinalize api call.
@@ -804,4 +724,25 @@ func (d *Dag) removeTipsWithOutdatedCp() error {
 		d.bc.WriteCurrentTips()
 	}
 	return nil
+}
+
+func (d *Dag) getCheckpoint() *types.Checkpoint {
+	return d.checkpoint
+}
+
+func (d *Dag) saveCheckpoint(cp *types.Checkpoint) {
+	d.checkpoint = cp
+}
+
+func (d *Dag) resetCheckpoint() {
+	d.checkpoint = nil
+}
+
+// isSlotLocked compare incoming epoch/slot with the latest epoch/slot of chain.
+func (d *Dag) isSlotLocked(slot uint64) bool {
+	if slot <= d.bc.GetLastFinalizedHeader().Slot {
+		return true
+	}
+
+	return false
 }

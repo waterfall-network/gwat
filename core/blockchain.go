@@ -1644,9 +1644,7 @@ func (bc *BlockChain) WriteCreatedDagBlock(block *types.Block) (status int, err 
 		return 0, errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
-
 	n, err := bc.insertBlocks(types.Blocks{block}, true, "create")
-	bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 
 	return n, err
 }
@@ -1665,8 +1663,6 @@ func (bc *BlockChain) WriteMinedBlock(block *types.Block) (status WriteStatus, e
 	if err != nil {
 		return NonStatTy, err
 	}
-
-	bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 
 	return
 }
@@ -1781,9 +1777,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if emitHeadEvent != ET_SKIP {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block, Type: emitHeadEvent})
 		}
-	} else {
-		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
+
 	return status, nil
 }
 

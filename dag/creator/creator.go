@@ -24,18 +24,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/validatorsync"
 )
 
-const (
-	// txChanSize is the size of channel listening to NewTxsEvent.
-	// The number is referenced from the size of tx pool.
-	txChanSize = 4096
-
-	// chainSideChanSize is the size of channel listening to ChainSideEvent.
-	chainSideChanSize = 10
-
-	// miningLogAtDepth is the number of confirmations before logging successful block creation.
-	miningLogAtDepth = 7
-)
-
 // Backend wraps all methods required for block creation.
 type Backend interface {
 	BlockChain() *core.BlockChain
@@ -71,107 +59,42 @@ type environment struct {
 	txs    []*types.Transaction
 }
 
-// task contains all information for consensus engine sealing and result submitting.
-type task struct {
-	tips      *types.Tips
-	block     *types.Block
-	createdAt time.Time
-}
-
-// newWorkReq represents a request for new sealing work submitting with relative interrupt notifier.
-type newWorkReq struct {
-	tips      types.Tips
-	timestamp int64
-}
-
 // Creator is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type Creator struct {
-	config      *Config
-	chainConfig *params.ChainConfig
-	engine      consensus.Engine
-	eth         Backend
-	chain       *core.BlockChain
+	config *Config
+	engine consensus.Engine
+	eth    Backend
+	bc     *core.BlockChain
 
 	// Feeds
 	pendingLogsFeed event.Feed
 
 	// Subscriptions
-	mux    *event.TypeMux
-	txsCh  chan core.NewTxsEvent
-	txsSub event.Subscription
-
-	chainSideCh  chan core.ChainSideEvent
-	chainSideSub event.Subscription
-
-	// Channels
-	newWorkCh    chan *newWorkReq
-	resultCh     chan *task
-	finishWorkCh chan *types.Block
-	errWorkCh    chan *error
-	exitCh       chan struct{}
+	mux *event.TypeMux
 
 	current *environment // An environment for current running cycle.
 
-	unconfirmed *unconfirmedBlocks // A set of locally mined blocks pending canonicalness confirmations.
-
-	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
-	coinbase common.Address
-	extra    []byte
+	mu    sync.RWMutex // The lock used to protect the coinbase and extra fields
+	extra []byte
 
 	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock    *types.Block
 	snapshotReceipts types.Receipts
-	snapshotState    *state.StateDB
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
-	newTxs  int32 // New arrival transaction count since last sealing work submitting.
-
-	// Test hooks
-	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
-	fullTaskHook func()                             // Method to call before pushing the full sealing task.
-	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
-
-	cacheAssignment *Assignment
-
-	canStart    bool
-	shouldStart bool
-
-	checkpoint *types.Checkpoint
 }
 
 // New creates new Creator instance
-func New(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux) *Creator {
+func New(config *Config, engine consensus.Engine, eth Backend, mux *event.TypeMux) *Creator {
 	creator := &Creator{
-		config:      config,
-		chainConfig: chainConfig,
-		engine:      engine,
-		eth:         eth,
-		mux:         mux,
-		chain:       eth.BlockChain(),
-
-		unconfirmed:  newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
-		txsCh:        make(chan core.NewTxsEvent, txChanSize),
-		chainSideCh:  make(chan core.ChainSideEvent, chainSideChanSize),
-		newWorkCh:    make(chan *newWorkReq),
-		resultCh:     make(chan *task),
-		finishWorkCh: make(chan *types.Block),
-		errWorkCh:    make(chan *error),
-		exitCh:       make(chan struct{}),
-
-		cacheAssignment: nil,
-		canStart:        true,
-		shouldStart:     false,
+		config: config,
+		engine: engine,
+		eth:    eth,
+		mux:    mux,
+		bc:     eth.BlockChain(),
 	}
-	// Subscribe NewTxsEvent for tx pool
-	creator.txsSub = eth.TxPool().SubscribeNewTxsEvent(creator.txsCh)
-
-	// Subscribe events for blockchain
-	creator.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(creator.chainSideCh)
-
-	go creator.mainLoop()
-	go creator.resultLoop()
 
 	return creator
 }
@@ -180,19 +103,13 @@ func New(config *Config, chainConfig *params.ChainConfig, engine consensus.Engin
 
 // Start prepare to create new blocks
 // sets the running status as 1
-func (c *Creator) Start(coinbase common.Address) {
-	c.SetEtherbase(coinbase)
-	if c.canStart {
-		atomic.StoreInt32(&c.running, 1)
-	}
-	c.shouldStart = true
+func (c *Creator) Start() {
+	atomic.StoreInt32(&c.running, 1)
 }
 
 // Stop sets the running status as 0.
 func (c *Creator) Stop() {
 	atomic.StoreInt32(&c.running, 0)
-	c.shouldStart = false
-	c.cacheAssignment = nil
 }
 
 // IsRunning returns an indicator whether Creator is running or not.
@@ -206,8 +123,8 @@ func (c *Creator) Pending() (*types.Block, *state.StateDB) {
 	c.snapshotMu.RLock()
 	defer c.snapshotMu.RUnlock()
 
-	block := c.chain.GetLastFinalizedBlock()
-	state, err := c.chain.StateAt(block.Root())
+	block := c.bc.GetLastFinalizedBlock()
+	state, err := c.bc.StateAt(block.Root())
 	if err != nil {
 		log.Error("Get pending block and state failed", "err", err)
 		return nil, nil
@@ -249,13 +166,6 @@ func (c *Creator) Hashrate() uint64 {
 	return 0
 }
 
-// SetEtherbase sets the etherbase used to initialize the block coinbase field.
-func (c *Creator) SetEtherbase(addr common.Address) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.coinbase = addr
-}
-
 // SetExtra sets the content used to initialize the block extra field.
 func (c *Creator) SetExtra(extra []byte) error {
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
@@ -275,237 +185,341 @@ func (c *Creator) SetGasCeil(ceil uint64) {
 	c.config.GasCeil = ceil
 }
 
-func (c *Creator) GetCheckpoint() *types.Checkpoint {
-	return c.checkpoint
+// RunBlockCreation starts process of block creation
+func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accounts []common.Address, tips types.Tips, checkpoint *types.Checkpoint) error {
+	if !c.IsRunning() {
+		log.Warn("Creator stopped")
+		return ErrCreatorStopped
+	}
+
+	if c.isSyncing() {
+		log.Warn("Creator skipping due to synchronization")
+		return ErrSynchronization
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	assigned := &Assignment{
+		Slot:     slot,
+		Creators: creators,
+	}
+
+	tipsBlocks, err := c.reorgTips(assigned.Slot, tips)
+	if err != nil {
+		return err
+	}
+
+	header, err := c.prepareBlockHeader(assigned, tipsBlocks, tips, checkpoint)
+	if err != nil {
+		return err
+	}
+
+	// Could potentially happen if starting to mine in an odd state.
+	err = c.makeCurrent(header)
+	if err != nil {
+		log.Error("Failed to make block creation context", "err", err)
+		return err
+	}
+
+	wg := new(sync.WaitGroup)
+	for _, account := range accounts {
+		if c.isCreatorActive(assigned, account) {
+			wg.Add(1)
+			go c.createNewBlock(assigned.Creators, account, header, wg)
+		}
+	}
+
+	wg.Wait()
+	return nil
 }
 
-func (c *Creator) SaveCheckpoint(cp *types.Checkpoint) {
-	c.checkpoint = cp
+func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.BlockMap, tips types.Tips, checkpoint *types.Checkpoint) (*types.Header, error) {
+	// if max slot of parents is less or equal to last finalized block slot
+	// - add last finalized block to parents
+	lastFinBlock := c.bc.GetLastFinalizedBlock()
+	maxParentSlot := uint64(0)
+	for _, blk := range tipsBlocks {
+		if blk.Slot() > maxParentSlot {
+			maxParentSlot = blk.Slot()
+		}
+	}
+	if maxParentSlot <= lastFinBlock.Slot() {
+		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
+	}
+
+	parentHashes := tipsBlocks.Hashes().Sort()
+
+	cpHeader := c.bc.GetHeader(checkpoint.Spine)
+	newHeight, err := c.bc.CalcBlockHeightByTips(tips, cpHeader.Hash())
+	if err != nil {
+		log.Error("Failed to make block creation context", "err", err)
+		return nil, err
+	}
+
+	log.Info("Creator calculate block height", "newHeight", newHeight)
+
+	era := c.bc.GetEraInfo().Number()
+	if c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) >= c.bc.GetEraInfo().NextEraFirstEpoch() {
+		era++
+	}
+
+	header := &types.Header{
+		ParentHashes: parentHashes,
+		Slot:         assigned.Slot,
+		Era:          era,
+		Height:       newHeight,
+		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
+		Extra:        c.extra,
+		Time:         uint64(time.Now().Unix()),
+		// Checkpoint spine block
+		CpHash:        cpHeader.Hash(),
+		CpNumber:      cpHeader.Nr(),
+		CpBaseFee:     cpHeader.BaseFee,
+		CpBloom:       cpHeader.Bloom,
+		CpGasUsed:     cpHeader.GasUsed,
+		CpReceiptHash: cpHeader.ReceiptHash,
+		CpRoot:        cpHeader.Root,
+	}
+
+	// Get active validators number
+	creatorsPerSlotCount := c.bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := c.bc.ValidatorStorage().GetCreatorsBySlot(c.bc, header.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+	validators, _ := c.bc.ValidatorStorage().GetValidators(c.bc, header.Slot, true, false, "RunBlockCreation")
+	header.BaseFee = misc.CalcSlotBaseFee(c.bc.Config(), header, uint64(len(validators)), c.bc.Genesis().GasLimit(), params.BurnMultiplier, creatorsPerSlotCount)
+
+	return header, nil
 }
 
-func (c *Creator) ResetCheckpoint() {
-	c.checkpoint = nil
+func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error) {
+	genesis := c.bc.Genesis().Hash()
+
+	tipsBlocks := c.bc.GetBlocksByHashes(tips.GetHashes())
+	for _, block := range tipsBlocks {
+		if block.Slot() >= slot {
+			for _, hash := range block.ParentHashes() {
+				dagBlock := c.bc.GetBlockDag(hash)
+				if dagBlock == nil {
+					parentBlock := c.bc.GetHeader(hash)
+					cpHeader := c.bc.GetHeader(parentBlock.CpHash)
+					if parentBlock == nil {
+						log.Warn("Creator reorg tips failed: bad parent in dag", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "parent", hash.Hex())
+						continue
+					}
+					dagChainHashes := common.HashArray{}
+					//if block not finalized
+					var (
+						isCpAncestor bool
+						ancestors    types.HeaderMap
+						err          error
+						unl          common.HashArray
+					)
+					log.Warn("Creator reorg tips: active BlockDag not found", "parent", hash.Hex(), "parent.slot", parentBlock.Slot, "parent.height", parentBlock.Height, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex())
+					isCpAncestor, ancestors, unl, err = c.bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
+					if err != nil {
+						return nil, err
+					}
+					if len(unl) > 0 {
+						log.Error("Creator reorg tips: should never happen",
+							"err", core.ErrInsertUncompletedDag,
+							"parent", hash.Hex(),
+							"parent.slot", parentBlock.Slot,
+							"parent.height", parentBlock.Height,
+							"slot", block.Slot(),
+							"height", block.Height(),
+							"hash", block.Hash().Hex(),
+						)
+						return nil, core.ErrInsertUncompletedDag
+					}
+					if !isCpAncestor {
+						log.Error("Creator reorg tips: should never happen",
+							"err", core.ErrCpIsnotAncestor,
+							"parent", hash.Hex(),
+							"parent.slot", parentBlock.Slot,
+							"parent.height", parentBlock.Height,
+							"slot", block.Slot(),
+							"height", block.Height(),
+							"hash", block.Hash().Hex(),
+						)
+						return nil, core.ErrCpIsnotAncestor
+					}
+					delete(ancestors, cpHeader.Hash())
+					dagChainHashes = ancestors.Hashes()
+					dagBlock = &types.BlockDAG{
+						Hash:           hash,
+						Height:         parentBlock.Height,
+						Slot:           parentBlock.Slot,
+						CpHash:         parentBlock.CpHash,
+						CpHeight:       cpHeader.Height,
+						DagChainHashes: dagChainHashes,
+					}
+				}
+				dagBlock.DagChainHashes = dagBlock.DagChainHashes.Difference(common.HashArray{genesis})
+				tips.Add(dagBlock)
+			}
+			delete(tips, block.Hash())
+			log.Info("Creator reorg tips", "blSlot", block.Slot(), "blHeight", block.Height(), "blHash", block.Hash().Hex(), "tips", tips.Print())
+		}
+	}
+	tipsBlocks = c.bc.GetBlocksByHashes(tips.GetHashes())
+
+	// check tips in ancestors other tips [a->b->c , c->...]
+	for _, th := range tips.GetHashes() {
+		block := tipsBlocks[th]
+		if block == nil {
+			continue
+		}
+		for _, ancestor := range tips.GetHashes() {
+			if block.Hash() == ancestor {
+				continue
+			}
+			isAncestor, err := c.bc.IsAncestorByTips(block.Header(), ancestor)
+			if err != nil {
+				return nil, err
+			}
+			if isAncestor {
+				log.Warn("Creator remove ancestor tips",
+					"block", block.Hash().Hex(),
+					"ancestor", ancestor.Hex(),
+					"tips", tips.Print(),
+				)
+				tips.Remove(ancestor)
+				delete(tipsBlocks, ancestor)
+				c.bc.RemoveTips(common.HashArray{ancestor})
+			}
+		}
+	}
+
+	return tipsBlocks, nil
+}
+
+func (c *Creator) createNewBlock(creators []common.Address, coinbase common.Address, header *types.Header, wg *sync.WaitGroup) {
+	log.Info("Try to create new block", "slot", header.Slot, "coinbase", coinbase.Hex())
+	defer wg.Done()
+
+	if coinbase == (common.Address{}) {
+		log.Error("Refusing to create without etherbase")
+		return
+	}
+	header.Coinbase = coinbase
+
+	// Fill the block with all available pending transactions.
+	pendingTxs := c.getPending(creators, coinbase)
+
+	syncData := validatorsync.GetPendingValidatorSyncData(c.bc)
+
+	//syncData log
+	for _, sd := range syncData {
+		amt := new(big.Int)
+		if sd.Amount != nil {
+			amt.Set(sd.Amount)
+		}
+		log.Info("Creator: validator sync data",
+			"OpType", sd.OpType,
+			"ProcEpoch", sd.ProcEpoch,
+			"Index", sd.Index,
+			"Creator", fmt.Sprintf("%#x", sd.Creator),
+			"amount", amt.String(),
+			"TxHash", fmt.Sprintf("%#x", sd.TxHash),
+		)
+	}
+
+	log.Info("Block creation: assigned txs", "len(pendingTxs)", len(pendingTxs), "len(syncData)", len(syncData))
+
+	// Short circuit if no pending transactions
+	if len(pendingTxs) == 0 && len(syncData) == 0 {
+		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+		log.Warn("Skipping block creation: no assigned txs (short circuit)", "creator", coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
+		return
+	}
+
+	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pendingTxs, header.BaseFee)
+	if c.appendTransactions(txs, header) {
+		if len(syncData) > 0 && c.isAddressAssigned(creators, *c.bc.Config().ValidatorsStateAddress, coinbase) {
+			if err := c.processValidatorTxs(coinbase, header.CpHash, syncData, header); err != nil {
+				log.Warn("Skipping block creation: processing validator txs err 0", "creator", coinbase, "err", err)
+				return
+			}
+
+			c.create(true)
+
+			return
+		}
+		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+		log.Warn("Skipping block creation: no assigned txs", "creator", coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
+		return
+	}
+
+	if len(syncData) > 0 && c.isAddressAssigned(creators, *c.bc.Config().ValidatorsStateAddress, coinbase) {
+		if err := c.processValidatorTxs(coinbase, header.CpHash, syncData, header); err != nil {
+			log.Warn("Skipping block creation: processing validator txs err 1", "creator", coinbase, "err", err)
+			return
+		}
+	}
+
+	c.create(true)
+}
+
+func (c *Creator) create(update bool) {
+	block := types.NewStatelessBlock(
+		c.current.header,
+		c.getUnhandledTxs(),
+		trie.NewStackTrie(nil),
+	)
+
+	// Short circuit when receiving empty result.
+	if block == nil {
+		log.Error("Created block is nil")
+		return
+	}
+	// Short circuit when receiving duplicate result caused by resubmitting.
+	if c.bc.HasBlock(block.Hash()) {
+		log.Error("Created block is already creating")
+		return
+	}
+
+	// Commit block to database.
+	_, err := c.bc.WriteCreatedDagBlock(block)
+	if err != nil {
+		log.Error("Failed write dag block", "err", err)
+		return
+	}
+	// Broadcast the block and announce bc insertion event
+	err = c.mux.Post(core.NewMinedBlockEvent{Block: block})
+	if err != nil {
+		log.Error("Failed broadcast the block and announce bc insertion event", "error", err)
+		return
+	}
+	// Insert the block into the set of pending ones to resultLoop for confirmations
+	log.Info("🔨 created dag block",
+		"slot", block.Slot(),
+		"epoch", c.bc.GetSlotInfo().SlotToEpoch(block.Slot()),
+		"era", block.Era(),
+		"height", block.Height(),
+		"hash", block.Hash().Hex(),
+		"creator", block.Coinbase().Hex(),
+		"parents", block.ParentHashes(),
+		"CpHash", block.CpHash().Hex(),
+		"CpNumber", block.CpNumber(),
+	)
+
+	if update {
+		c.updateSnapshot()
+	}
+	return
 }
 
 // isSyncing returns tru while sync pocess
 func (c *Creator) isSyncing() bool {
-	//check tips
-	//depracated
-	//if tips := c.chain.GetTips(); len(tips) == 0 {
-	//	return true
-	//}
-	if badTips := c.chain.GetUnsynchronizedTipsHashes(); len(badTips) > 0 {
+	if badTips := c.bc.GetUnsynchronizedTipsHashes(); len(badTips) > 0 {
 		return true
 	}
 	if c.eth.Downloader().Synchronising() {
 		return true
 	}
 	return false
-}
-
-// isSlotLocked compare incoming epoch/slot with the latest epoch/slot of chain.
-func (c *Creator) isSlotLocked(info *Assignment) bool {
-	// check epoch/slot info of tips and lastFinalized block
-	// if epoch/slot >= in chain
-	// - rewind to correct position
-	assig := c.getAssignment()
-	if assig.Slot > info.Slot {
-		return true
-	}
-	if assig.Slot == info.Slot {
-		tips := c.chain.GetTips()
-		blTips := c.chain.GetBlocksByHashes(tips.GetHashes())
-		//  if current creator have created block in current slot
-		for _, bl := range blTips {
-			if bl.Slot() == assig.Slot && bl.Coinbase() == c.coinbase {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// CreateBlock starts process of block creation
-func (c *Creator) CreateBlock(assigned *Assignment, tips *types.Tips) (*types.Block, error) {
-	if !c.IsRunning() {
-		log.Warn("Creator stopped")
-		return nil, ErrCreatorStopped
-	}
-
-	if c.isSlotLocked(assigned) {
-		log.Warn("Creator skipping due to slot locked", "Slot", assigned.Slot, "lastSlot", c.getAssignment().Slot)
-		return nil, ErrSlotLocked
-	}
-
-	if c.isSyncing() {
-		log.Warn("Creator skipping due to synchronization")
-		return nil, ErrSynchronization
-	}
-
-	if c.canStart {
-		c.setAssignment(assigned)
-		if !c.isCreatorActive(assigned) {
-			log.Info("Creator skipping due to not active")
-			return nil, ErrCreatorNotActive
-		}
-		c.canStart = false
-		c.newWorkCh <- &newWorkReq{tips: tips.Copy(), timestamp: time.Now().Unix()}
-		for {
-			select {
-			case block := <-c.finishWorkCh:
-				c.canStart = true
-				return block, nil
-			case err := <-c.errWorkCh:
-				c.canStart = true
-				return nil, *err
-			case <-c.exitCh:
-				c.canStart = true
-				return nil, ErrCreatorStopped
-			}
-		}
-	}
-	return nil, ErrCreatorStopped
-}
-
-// close terminates all background threads maintained by the Creator.
-// Note the Creator does not support being closed multiple times.
-func (c *Creator) close() {
-	atomic.StoreInt32(&c.running, 0)
-	close(c.exitCh)
-}
-
-// mainLoop is a standalone goroutine to regenerate the sealing task based on the received event.
-func (c *Creator) mainLoop() {
-	defer c.txsSub.Unsubscribe()
-	defer c.chainSideSub.Unsubscribe()
-
-	for {
-		select {
-		case req := <-c.newWorkCh:
-			c.commitNewWork(req.tips, req.timestamp)
-		case <-c.chainSideCh:
-		case <-c.txsCh:
-			// Apply transactions to the pending state if we're not creator.
-			//
-			// Note all transactions received may not be continuous with transactions
-			// already included in the current creating block. These transactions will
-			// be automatically eliminated.
-			continue
-
-		// System stopped
-		case <-c.exitCh:
-			return
-		case err := <-c.txsSub.Err():
-			c.errWorkCh <- &err
-			return
-		case err := <-c.chainSideSub.Err():
-			c.errWorkCh <- &err
-			return
-		}
-	}
-}
-
-// resultLoop is a standalone goroutine to handle sealing result submitting
-// and flush relative data to the database.
-func (c *Creator) resultLoop() {
-	for {
-		select {
-		case task := <-c.resultCh:
-			c.resultHandler(task)
-			c.finishWorkCh <- task.block
-		case <-c.exitCh:
-			return
-		}
-	}
-}
-
-func (c *Creator) resultHandler(task *task) {
-	// Short circuit when receiving empty result.
-	if task.block == nil {
-		return
-	}
-	// Short circuit when receiving duplicate result caused by resubmitting.
-	if c.chain.HasBlock(task.block.Hash()) {
-		return
-	}
-	var (
-		hash = task.block.Hash()
-	)
-	// Commit block to database.
-	_, err := c.chain.WriteCreatedDagBlock(task.block)
-	if err != nil {
-		log.Error("Failed writing block to chain (creator)", "err", err)
-		return
-	}
-	// Broadcast the block and announce chain insertion event
-	c.mux.Post(core.NewMinedBlockEvent{Block: task.block})
-
-	// Insert the block into the set of pending ones to resultLoop for confirmations
-	log.Info("🔨 created dag block",
-		"slot", task.block.Slot(),
-		"epoch", c.chain.GetSlotInfo().SlotToEpoch(task.block.Slot()),
-		"era", task.block.Era(),
-		"height", task.block.Height(),
-		"hash", hash.Hex(),
-		"parents", task.block.ParentHashes(),
-		"CpHash", task.block.CpHash().Hex(),
-		"CpNumber", task.block.CpNumber(),
-	)
-
-	//TODO depracated code memo
-	//// Commit block to database.
-	//_, err := c.chain.WriteMinedBlock(task.block)
-	//if err != nil {
-	//	log.Error("Failed writing block to chain (creator)", "err", err)
-	//	return
-	//}
-	//
-	////update state of tips
-	//bc := c.chain
-	////1. remove stale tips
-	//bc.RemoveTips(task.block.ParentHashes())
-	//
-	////create new blockDag
-	//cpHeader := bc.GetHeader(task.block.CpHash())
-	//tips := task.tips.Copy()
-	//dagChainHashes, err := bc.CollectDagChainHashesByTips(tips, cpHeader.Hash())
-	//if err != nil {
-	//	log.Error("Creator failed", "err", err)
-	//	return
-	//}
-	//newBlockDag := &types.BlockDAG{
-	//	Hash:           task.block.Hash(),
-	//	Height:         task.block.Height(),
-	//	Slot:           task.block.Slot(),
-	//	CpHash:         task.block.CpHash(),
-	//	CpHeight:       cpHeader.Height,
-	//	DagChainHashes: dagChainHashes,
-	//}
-	//c.chain.AddTips(newBlockDag)
-	//c.chain.WriteCurrentTips()
-	//
-	//log.Info("Creator: end tips",
-	//	"tipsHashes", c.chain.GetTips().GetHashes(),
-	//	//"tips", c.chain.GetTips().Print(),
-	//)
-	//
-	//c.chain.MoveTxsToProcessing(types.Blocks{task.block})
-	//
-	//// Broadcast the block and announce chain insertion event
-	//c.mux.Post(core.NewMinedBlockEvent{Block: task.block})
-	//
-	//// Insert the block into the set of pending ones to resultLoop for confirmations
-	//log.Info("🔨 created dag block",
-	//	"slot", task.block.Slot(),
-	//	"epoch", c.chain.GetSlotInfo().SlotToEpoch(task.block.Slot()),
-	//	"era", task.block.Era(),
-	//	"height", task.block.Height(),
-	//	"hash", hash.Hex(),
-	//	"parents", task.block.ParentHashes(),
-	//	"CpHash", task.block.CpHash().Hex(),
-	//	"CpNumber", task.block.CpNumber(),
-	//)
-
 }
 
 func (c *Creator) getUnhandledTxs() []*types.Transaction {
@@ -518,7 +532,7 @@ func (c *Creator) makeCurrent(header *types.Header) error {
 	// the miner to speed block sealing up a bit
 
 	env := &environment{
-		signer: types.MakeSigner(c.chainConfig),
+		signer: types.MakeSigner(c.bc.Config()),
 		header: header,
 		txs:    []*types.Transaction{},
 	}
@@ -537,7 +551,6 @@ func (c *Creator) updateSnapshot() {
 	defer c.snapshotMu.Unlock()
 
 	txs := c.getUnhandledTxs()
-	//receipts := c.getUnhandledReceipts()
 
 	c.snapshotBlock = types.NewBlock(
 		c.current.header,
@@ -553,7 +566,7 @@ func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header,
 		return nil
 	}
 
-	gas, err := c.chain.TxEstimateGas(tx, header)
+	gas, err := c.bc.TxEstimateGas(tx, header)
 	if err != nil {
 		log.Error("Failed to estimate gas for the transaction", "err", err)
 		return err
@@ -661,335 +674,10 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 	return false
 }
 
-// commitNewWork generates several new sealing tasks based on the parent block.
-func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	bc := c.chain
-	genesis := bc.Genesis().Hash()
-	tstart := time.Now()
-
-	slotInfo := c.getAssignment()
-	tipsBlocks := bc.GetBlocksByHashes(tips.GetHashes())
-	blocks := bc.GetBlocksByHashes(tipsBlocks.Hashes())
-	for _, bl := range blocks {
-		if bl.Slot() >= slotInfo.Slot {
-			for _, ph := range bl.ParentHashes() {
-				_dag := bc.GetBlockDag(ph)
-				if _dag == nil {
-					parentBlock := bc.GetHeader(ph)
-					cpHeader := bc.GetHeader(parentBlock.CpHash)
-					if parentBlock == nil {
-						log.Warn("Creator reorg tips failed: bad parent in dag", "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex(), "parent", ph.Hex())
-						continue
-					}
-					dagChainHashes := common.HashArray{}
-					//if block not finalized
-					var (
-						isCpAncestor bool
-						ancestors    types.HeaderMap
-						err          error
-						unl          common.HashArray
-					)
-					log.Warn("Creator reorg tips: active BlockDag not found", "parent", ph.Hex(), "parent.slot", parentBlock.Slot, "parent.height", parentBlock.Height, "slot", bl.Slot(), "height", bl.Height(), "hash", bl.Hash().Hex())
-					isCpAncestor, ancestors, unl, err = bc.CollectAncestorsAftCpByParents(bl.ParentHashes(), bl.CpHash())
-					if err != nil {
-						c.errWorkCh <- &err
-						return
-					}
-					if len(unl) > 0 {
-						log.Error("Creator reorg tips: should never happen",
-							"err", core.ErrInsertUncompletedDag,
-							"parent", ph.Hex(),
-							"parent.slot", parentBlock.Slot,
-							"parent.height", parentBlock.Height,
-							"slot", bl.Slot(),
-							"height", bl.Height(),
-							"hash", bl.Hash().Hex(),
-						)
-						c.errWorkCh <- &core.ErrInsertUncompletedDag
-						return
-					}
-					if !isCpAncestor {
-						log.Error("Creator reorg tips: should never happen",
-							"err", core.ErrCpIsnotAncestor,
-							"parent", ph.Hex(),
-							"parent.slot", parentBlock.Slot,
-							"parent.height", parentBlock.Height,
-							"slot", bl.Slot(),
-							"height", bl.Height(),
-							"hash", bl.Hash().Hex(),
-						)
-						c.errWorkCh <- &core.ErrCpIsnotAncestor
-						return
-					}
-					delete(ancestors, cpHeader.Hash())
-					dagChainHashes = ancestors.Hashes()
-					_dag = &types.BlockDAG{
-						Hash:           ph,
-						Height:         parentBlock.Height,
-						Slot:           parentBlock.Slot,
-						CpHash:         parentBlock.CpHash,
-						CpHeight:       cpHeader.Height,
-						DagChainHashes: dagChainHashes,
-					}
-				}
-				_dag.DagChainHashes = _dag.DagChainHashes.Difference(common.HashArray{genesis})
-				tips.Add(_dag)
-			}
-			delete(tips, bl.Hash())
-			log.Info("Creator reorg tips", "blSlot", bl.Slot(), "blHeight", bl.Height(), "blHash", bl.Hash().Hex(), "tips", tips.Print())
-		}
-	}
-	tipsBlocks = bc.GetBlocksByHashes(tips.GetHashes())
-
-	// check tips in ancestors other tips [a->b->c , c->...]
-	for _, th := range tips.GetHashes() {
-		block := tipsBlocks[th]
-		if block == nil {
-			continue
-		}
-		for _, ancestor := range tips.GetHashes() {
-			if block.Hash() == ancestor {
-				continue
-			}
-			//isAncestor, err := bc.IsAncestorRecursive(block.Header(), ancestor)
-			isAncestor, err := bc.IsAncestorByTips(block.Header(), ancestor)
-			if err != nil {
-				c.errWorkCh <- &err
-				return
-			}
-			if isAncestor {
-				log.Warn("Creator remove ancestor tips",
-					"block", block.Hash().Hex(),
-					"ancestor", ancestor.Hex(),
-					"tips", tips.Print(),
-				)
-				tips.Remove(ancestor)
-				delete(tipsBlocks, ancestor)
-				bc.RemoveTips(common.HashArray{ancestor})
-			}
-		}
-	}
-
-	// if max slot of parents is less or equal to last finalized block slot
-	// - add last finalized block to parents
-	lastFinBlock := bc.GetLastFinalizedBlock()
-	maxParentSlot := uint64(0)
-	for _, blk := range tipsBlocks {
-		if blk.Slot() > maxParentSlot {
-			maxParentSlot = blk.Slot()
-		}
-	}
-	if maxParentSlot <= lastFinBlock.Slot() {
-		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
-	}
-
-	log.Info("Creator: start tips",
-		"tipsHashes", tipsBlocks.Hashes(),
-		//"tips", tips.Print(),
-	)
-
-	parentHashes := tipsBlocks.Hashes().Sort()
-
-	// Use checkpoint spine as CpBlock
-	checkpoint := c.GetCheckpoint()
-	cpHeader := bc.GetHeader(checkpoint.Spine)
-	//newHeight, err := bc.CalcBlockHeightByParents(parentHashes, cpHeader.Hash())
-	newHeight, err := bc.CalcBlockHeightByTips(tips, cpHeader.Hash())
-	if err != nil {
-		log.Error("Failed to make block creation context", "err", err)
-		c.errWorkCh <- &err
-		return
-	}
-
-	si := bc.GetSlotInfo()
-
-	log.Info("Creator calculate block height", "newHeight", newHeight)
-	log.Info("########## CREATOR slot epoch era",
-		"blHeight", newHeight,
-		"blEpoch", si.SlotToEpoch(slotInfo.Slot),
-		"blSlot", slotInfo.Slot,
-		"currSlot", si.CurrentSlot(),
-		"currEpoch", si.SlotToEpoch(si.CurrentSlot()),
-		"eraNum", bc.GetEraInfo().Number(),
-		"from", bc.GetEraInfo().FromEpoch(),
-		"to", bc.GetEraInfo().ToEpoch(),
-	)
-
-	era := bc.GetEraInfo().Number()
-	if si.SlotToEpoch(si.CurrentSlot()) >= bc.GetEraInfo().NextEraFirstEpoch() {
-		era++
-	}
-	header := &types.Header{
-		ParentHashes: parentHashes,
-		Slot:         slotInfo.Slot,
-		Era:          era,
-		Height:       newHeight,
-		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
-		Extra:        c.extra,
-		Time:         uint64(time.Now().Unix()),
-		// Checkpoint spine block
-		CpHash:        cpHeader.Hash(),
-		CpNumber:      cpHeader.Nr(),
-		CpBaseFee:     cpHeader.BaseFee,
-		CpBloom:       cpHeader.Bloom,
-		CpGasUsed:     cpHeader.GasUsed,
-		CpReceiptHash: cpHeader.ReceiptHash,
-		CpRoot:        cpHeader.Root,
-	}
-
-	// Get active validators number
-	creatorsPerSlotCount := c.chainConfig.ValidatorsPerSlot
-	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, header.Slot); err == nil {
-		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
-	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "commitNewWork")
-	header.BaseFee = misc.CalcSlotBaseFee(c.chainConfig, header, uint64(len(validators)), bc.Genesis().GasLimit(), params.BurnMultiplier, creatorsPerSlotCount)
-
-	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
-	if c.IsRunning() {
-		if c.coinbase == (common.Address{}) {
-			log.Error("Refusing to create without etherbase")
-			err := errors.New("refusing to create without etherbase")
-			c.errWorkCh <- &err
-			return
-		}
-		header.Coinbase = c.coinbase
-	}
-
-	//todo fix c.engine.Prepare
-	if err = c.engine.Prepare(bc, header); err != nil {
-		log.Error("Failed to prepare header for creating block", "err", err)
-		c.errWorkCh <- &err
-		return
-	}
-
-	// Could potentially happen if starting to mine in an odd state.
-	err = c.makeCurrent(header)
-	if err != nil {
-		log.Error("Failed to make block creation context", "err", err)
-		c.errWorkCh <- &err
-		return
-	}
-
-	// Fill the block with all available pending transactions.
-	pendingTxs := c.getPending()
-
-	syncData := validatorsync.GetPendingValidatorSyncData(bc)
-
-	//syncData log
-	for _, sd := range syncData {
-		amt := new(big.Int)
-		if sd.Amount != nil {
-			amt.Set(sd.Amount)
-		}
-		log.Info("Creator: validator sync data",
-			"OpType", sd.OpType,
-			"ProcEpoch", sd.ProcEpoch,
-			"Index", sd.Index,
-			"Creator", fmt.Sprintf("%#x", sd.Creator),
-			"amount", amt.String(),
-			"TxHash", fmt.Sprintf("%#x", sd.TxHash),
-		)
-	}
-
-	log.Info("Block creation: assigned txs", "len(pendingTxs)", len(pendingTxs), "len(syncData)", len(syncData))
-
-	// Short circuit if no pending transactions
-	if len(pendingTxs) == 0 && len(syncData) == 0 {
-		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
-		log.Warn("Skipping block creation: no assigned txs (short circuit)", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
-		c.errWorkCh <- &ErrNoTxs
-
-		return
-	}
-
-	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pendingTxs, header.BaseFee)
-	if c.appendTransactions(txs, header) {
-		if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-			if err := c.processValidatorTxs(header.CpHash, syncData, header); err != nil {
-				log.Warn("Skipping block creation: processing validator txs err 0", "creator", c.coinbase, "err", err)
-				return
-			}
-
-			c.commit(tips, c.fullTaskHook, true, tstart)
-
-			return
-		}
-		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
-		log.Warn("Skipping block creation: no assigned txs", "creator", c.coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
-		c.errWorkCh <- &ErrNoTxs
-
-		return
-	}
-
-	if len(syncData) > 0 && c.isAddressAssigned(*c.chainConfig.ValidatorsStateAddress) {
-		if err := c.processValidatorTxs(header.CpHash, syncData, header); err != nil {
-			log.Warn("Skipping block creation: processing validator txs err 1", "creator", c.coinbase, "err", err)
-			return
-		}
-	}
-
-	c.commit(tips, c.fullTaskHook, true, tstart)
-}
-
-// commit runs any post-transaction state modifications, assembles the final block
-// and commits new work if consensus engine is running.
-func (c *Creator) commit(tips types.Tips, interval func(), update bool, start time.Time) error {
-
-	block := types.NewStatelessBlock(
-		c.current.header,
-		c.getUnhandledTxs(),
-		trie.NewStackTrie(nil),
-	)
-
-	task := &task{
-		block:     block,
-		tips:      &tips,
-		createdAt: time.Now(),
-	}
-
-	if c.IsRunning() {
-		if interval != nil {
-			interval()
-		}
-		select {
-
-		case c.resultCh <- task:
-			log.Info("Commit new block creation work",
-				"txs", c.current.tcount,
-				"gas", block.GasUsed(), "fees", c.current.cumutativeGas,
-				"tips", tips.GetHashes(),
-				"elapsed", common.PrettyDuration(time.Since(start)),
-			)
-			log.Info("^^^^^^^^^^^^ TIME",
-				"elapsed", common.PrettyDuration(time.Since(start)),
-				"func:", "CreateBlock",
-			)
-
-		case <-c.exitCh:
-			log.Info("Worker has exited")
-		}
-	}
-	if update {
-		c.updateSnapshot()
-	}
-	return nil
-}
-
 // isCreatorActive returns true if creator is assigned to create blocks in current slot.
-func (c *Creator) isCreatorActive(assigned *Assignment) bool {
-	if assigned == nil {
-		return false
-	}
-	var (
-		currMiner = c.coinbase
-		creators  = assigned.Creators
-	)
-	for _, m := range creators {
-		if m == currMiner {
+func (c *Creator) isCreatorActive(assigned *Assignment, coinbase common.Address) bool {
+	for _, creator := range assigned.Creators {
+		if creator == coinbase {
 			return true
 		}
 	}
@@ -997,16 +685,12 @@ func (c *Creator) isCreatorActive(assigned *Assignment) bool {
 }
 
 // getPending returns all pending transactions for current miner
-func (c *Creator) getPending() map[common.Address]types.Transactions {
+func (c *Creator) getPending(creators []common.Address, coinbase common.Address) map[common.Address]types.Transactions {
 	pending := c.eth.TxPool().Pending(true)
 
-	// to correct handling validators' sync transactions
-	// each creators handle own transactions while assigned slot
-	// here removing all txs of other creators
-	currCreators := c.getAssignment().Creators
 	for address := range pending {
-		for _, creator := range currCreators {
-			if address == creator && creator != c.coinbase {
+		for _, creator := range creators {
+			if address == creator && creator != coinbase {
 				delete(pending, address)
 			}
 		}
@@ -1014,7 +698,7 @@ func (c *Creator) getPending() map[common.Address]types.Transactions {
 
 	for fromAdr, txs := range pending {
 		_txs := types.Transactions{}
-		if c.isAddressAssigned(fromAdr) || fromAdr == c.coinbase {
+		if c.isAddressAssigned(creators, fromAdr, coinbase) || fromAdr == coinbase {
 			_txs = txs
 		}
 		if len(_txs) > 0 {
@@ -1027,18 +711,14 @@ func (c *Creator) getPending() map[common.Address]types.Transactions {
 }
 
 // isAddressAssigned checks if miner is allowed to add transaction from that address
-func (c *Creator) isAddressAssigned(address common.Address) bool {
-	var (
-		currMiner    = c.coinbase
-		creators     = c.getAssignment().Creators
-		creatorCount = len(creators)
-		creatorNr    = int64(-1)
-	)
-	if creatorCount == 0 {
+func (c *Creator) isAddressAssigned(creators []common.Address, address common.Address, coinbase common.Address) bool {
+	var creatorNr = int64(-1)
+
+	if len(creators) == 0 {
 		return false
 	}
-	for i, m := range creators {
-		if m == currMiner {
+	for i, creator := range creators {
+		if creator == coinbase {
 			creatorNr = int64(i)
 			break
 		}
@@ -1046,45 +726,11 @@ func (c *Creator) isAddressAssigned(address common.Address) bool {
 	return core.IsAddressAssigned(address, creators, creatorNr)
 }
 
-// getAssignment returns list of creators and slot
-func (c *Creator) getAssignment() Assignment {
-	if c.cacheAssignment != nil {
-		return *c.cacheAssignment
-	}
-	var (
-		lfb     = c.eth.BlockChain().GetLastFinalizedBlock()
-		maxSlot = lfb.Slot()
-	)
-	tips := c.eth.BlockChain().GetTips()
-	if len(tips) > 0 {
-		tipsBlocks := c.eth.BlockChain().GetBlocksByHashes(tips.GetHashes())
-		for _, bl := range tipsBlocks {
-			if bl.Coinbase() != c.coinbase {
-				continue
-			}
-			if maxSlot > bl.Slot() {
-				maxSlot = bl.Slot()
-				continue
-			}
-		}
-	}
-	c.setAssignment(&Assignment{
-		Slot:     maxSlot,
-		Creators: nil,
-	})
-	return *c.cacheAssignment
-}
-
-// setAssignment
-func (c *Creator) setAssignment(assigned *Assignment) {
-	c.cacheAssignment = assigned
-}
-
-func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync, header *types.Header) error {
-	nonce := c.eth.TxPool().Nonce(c.coinbase)
+func (c *Creator) processValidatorTxs(coinbase common.Address, blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync, header *types.Header) error {
+	nonce := c.eth.TxPool().Nonce(coinbase)
 	for _, validatorSync := range syncData {
-		if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {
-			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, blockHash, c.coinbase, validatorSync, nonce)
+		if validatorSync.ProcEpoch <= c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) {
+			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, blockHash, coinbase, validatorSync, nonce)
 			if err != nil {
 				log.Error("failed to create validator sync tx", "error", err)
 				continue
@@ -1092,7 +738,7 @@ func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]by
 
 			err = c.appendTransaction(valSyncTx, header, true)
 			if err != nil {
-				log.Error("can`t commit validator sync tx", "error", err)
+				log.Error("can`t create validator sync tx", "error", err)
 				return err
 			}
 			nonce++
