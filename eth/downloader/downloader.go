@@ -2630,7 +2630,7 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 	}
 }
 
-func (d *Downloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, finEpoch uint64) (fullySynced bool, err error) {
+func (d *Downloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) (fullySynced bool, err error) {
 	log.Info("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", len(spines), "len(d.peers)", len(d.peers.peers))
 	if d.peers.Len() == 0 {
 		log.Error("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", spines, "peers.Len", d.peers.Len(), "err", errNoPeers)
@@ -2639,7 +2639,7 @@ func (d *Downloader) SyncChainBySpines(baseSpine common.Hash, spines common.Hash
 
 	//select peer
 	for _, con := range d.peers.AllPeers() {
-		fullySynced, err = d.peerSyncChainBySpines(con, baseSpine, spines, finEpoch)
+		fullySynced, err = d.peerSyncChainBySpines(con, baseSpine, spines, syncMode)
 		switch err {
 		case nil:
 			return fullySynced, nil
@@ -2666,7 +2666,7 @@ func (d *Downloader) SyncChainBySpines(baseSpine common.Hash, spines common.Hash
 	return false, errNoPeers
 }
 
-func (d *Downloader) peerSyncChainBySpines(p *peerConnection, baseSpine common.Hash, spines common.HashArray, finEpoch uint64) (fullySynced bool, err error) {
+func (d *Downloader) peerSyncChainBySpines(p *peerConnection, baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) (fullySynced bool, err error) {
 
 	if d.Synchronising() {
 		log.Warn("Synchronization canceled (synchronise process busy)")
@@ -2756,7 +2756,7 @@ func (d *Downloader) peerSyncChainBySpines(p *peerConnection, baseSpine common.H
 	log.Info("Synchronising with the network", "peer", p.id, "eth", p.version, "mode", mode, "baseSpine", baseSpine.Hex(), "spines", spines)
 
 	//Synchronisation of dag chain
-	if fullySynced, err = d.peerSyncDagChain(p, baseSpine, spines, finEpoch); err != nil {
+	if fullySynced, err = d.peerSyncDagChain(p, baseSpine, spines, syncMode); err != nil {
 		log.Error("Synchronization of dag chain failed", "err", err)
 		d.Cancel()
 		return fullySynced, err
@@ -2868,7 +2868,7 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 }
 
 // peerSyncDagChain downloads and set on current node unfinalized chain from remote peer.
-func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, spines common.HashArray, finEpoch uint64) (fullySynced bool, err error) {
+func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) (fullySynced bool, err error) {
 	//check remote peer
 	isPeerAcceptable, _, err := d.checkPeer(p, baseSpine, spines)
 	if err != nil {
@@ -2879,17 +2879,10 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 	}
 	terminalSpine := spines[len(spines)-1]
 
-	si := d.lightchain.GetSlotInfo()
-	currEpoch := si.SlotToEpoch(si.CurrentSlot())
-	//terminalEpoch := si.SlotToEpoch(terminalRemote.Slot)
-	// is head epoch reached
-	if currEpoch == finEpoch {
+	// is head reached
+	if syncMode == types.HeadSync || syncMode == types.NoSync {
 		// set param to load full dag
-		terminalSpine = common.Hash{}
-		fullySynced = true
-		log.Info("peerSyncDagChain SYNC currEpoch == finEpoch", "currEpoch", currEpoch, "finEpoch", finEpoch)
 		log.Info("Synchronisation of chain head detected", "baseSpine", baseSpine.Hex(), "spines", spines)
-
 		return d.peerSyncDagChainHeadBySlots(p, baseSpine)
 	}
 
@@ -2978,7 +2971,7 @@ func (d *Downloader) peerSyncDagChain(p *peerConnection, baseSpine common.Hash, 
 // peerSyncDagChain downloads and set on current node unfinalized chain from remote peer.
 func (d *Downloader) peerSyncDagChainHeadBySlots(p *peerConnection, baseSpine common.Hash) (fullySynced bool, err error) {
 	defer func(ts time.Time) {
-		log.Info("^^^^^^^^^^^^ TIME GetHashesBySlot",
+		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(ts)),
 			"func:", "peerSyncDagChainHeadBySlots",
 		)
@@ -2989,7 +2982,15 @@ func (d *Downloader) peerSyncDagChainHeadBySlots(p *peerConnection, baseSpine co
 	si := d.lightchain.GetSlotInfo()
 
 	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
-	for from := baseHeader.Slot; from < si.CurrentSlot(); {
+
+	p.log.Info("Synchronization by slots: chunking",
+		"CurrSlot", si.CurrentSlot(),
+		"base.Slot", baseHeader.Slot,
+		"baseSpine", baseSpine.Hex(),
+	)
+
+	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
+	for from := baseHeader.Slot; from <= si.CurrentSlot(); {
 		to := from + step
 		if err = d.syncBySlots(p, from, to); err != nil {
 			p.log.Error("Synchronization by slots: error", "err", err, "from", from, "to", to)
