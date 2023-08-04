@@ -289,14 +289,28 @@ func (ha HashArray) Difference(hashArray HashArray) HashArray {
 // Uniq returns a new HashArray with unique values.
 func (ha HashArray) Uniq() HashArray {
 	c := make(HashArray, 0)
-	m := make(map[Hash]bool)
+	m := make(map[Hash]struct{})
 	for _, item := range ha {
-		if !m[item] {
+		if _, ok := m[item]; !ok {
 			c = append(c, item)
+			m[item] = struct{}{}
 		}
-		m[item] = true
 	}
 	return c
+}
+
+// Deduplicate updates the HashArray in-place, removing any duplicate Hash values.
+func (ha *HashArray) Deduplicate() {
+	m := make(map[Hash]struct{})
+	j := 0
+	for _, item := range *ha {
+		if _, ok := m[item]; !ok {
+			(*ha)[j] = item
+			j++
+			m[item] = struct{}{}
+		}
+	}
+	*ha = (*ha)[:j]
 }
 
 // IsUniq returns true if contains only unique values,
