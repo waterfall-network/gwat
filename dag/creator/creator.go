@@ -29,7 +29,6 @@ type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 	Downloader() *downloader.Downloader
-	Etherbase() (eb common.Address, err error)
 	CreatorAuthorize(creator common.Address) error
 	AccountManager() *accounts.Manager
 }
@@ -224,9 +223,9 @@ func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accou
 
 	wg := new(sync.WaitGroup)
 	for _, account := range accounts {
-		if c.isCreatorActive(assigned, account) {
+		if c.isCreatorActive(account, assigned) {
 			wg.Add(1)
-			go c.createNewBlock(assigned.Creators, account, header, wg)
+			go c.createNewBlock(account, assigned.Creators, header, wg)
 		}
 	}
 
@@ -395,7 +394,7 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 	return tipsBlocks, nil
 }
 
-func (c *Creator) createNewBlock(creators []common.Address, coinbase common.Address, header *types.Header, wg *sync.WaitGroup) {
+func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Address, header *types.Header, wg *sync.WaitGroup) {
 	log.Info("Try to create new block", "slot", header.Slot, "coinbase", coinbase.Hex())
 	defer wg.Done()
 
@@ -406,7 +405,7 @@ func (c *Creator) createNewBlock(creators []common.Address, coinbase common.Addr
 	header.Coinbase = coinbase
 
 	// Fill the block with all available pending transactions.
-	pendingTxs := c.getPending(creators, coinbase)
+	pendingTxs := c.getPending(coinbase, creators)
 
 	syncData := validatorsync.GetPendingValidatorSyncData(c.bc)
 
@@ -437,7 +436,7 @@ func (c *Creator) createNewBlock(creators []common.Address, coinbase common.Addr
 
 	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pendingTxs, header.BaseFee)
 	if c.appendTransactions(txs, header) {
-		if len(syncData) > 0 && c.isAddressAssigned(creators, *c.bc.Config().ValidatorsStateAddress, coinbase) {
+		if len(syncData) > 0 && c.isAddressAssigned(coinbase, *c.bc.Config().ValidatorsStateAddress, creators) {
 			if err := c.processValidatorTxs(coinbase, header.CpHash, syncData, header); err != nil {
 				log.Warn("Skipping block creation: processing validator txs err 0", "creator", coinbase, "err", err)
 				return
@@ -452,7 +451,7 @@ func (c *Creator) createNewBlock(creators []common.Address, coinbase common.Addr
 		return
 	}
 
-	if len(syncData) > 0 && c.isAddressAssigned(creators, *c.bc.Config().ValidatorsStateAddress, coinbase) {
+	if len(syncData) > 0 && c.isAddressAssigned(coinbase, *c.bc.Config().ValidatorsStateAddress, creators) {
 		if err := c.processValidatorTxs(coinbase, header.CpHash, syncData, header); err != nil {
 			log.Warn("Skipping block creation: processing validator txs err 1", "creator", coinbase, "err", err)
 			return
@@ -675,7 +674,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 }
 
 // isCreatorActive returns true if creator is assigned to create blocks in current slot.
-func (c *Creator) isCreatorActive(assigned *Assignment, coinbase common.Address) bool {
+func (c *Creator) isCreatorActive(coinbase common.Address, assigned *Assignment) bool {
 	for _, creator := range assigned.Creators {
 		if creator == coinbase {
 			return true
@@ -685,7 +684,7 @@ func (c *Creator) isCreatorActive(assigned *Assignment, coinbase common.Address)
 }
 
 // getPending returns all pending transactions for current miner
-func (c *Creator) getPending(creators []common.Address, coinbase common.Address) map[common.Address]types.Transactions {
+func (c *Creator) getPending(coinbase common.Address, creators []common.Address) map[common.Address]types.Transactions {
 	pending := c.eth.TxPool().Pending(true)
 
 	for address := range pending {
@@ -698,7 +697,7 @@ func (c *Creator) getPending(creators []common.Address, coinbase common.Address)
 
 	for fromAdr, txs := range pending {
 		_txs := types.Transactions{}
-		if c.isAddressAssigned(creators, fromAdr, coinbase) || fromAdr == coinbase {
+		if c.isAddressAssigned(coinbase, fromAdr, creators) || fromAdr == coinbase {
 			_txs = txs
 		}
 		if len(_txs) > 0 {
@@ -711,7 +710,7 @@ func (c *Creator) getPending(creators []common.Address, coinbase common.Address)
 }
 
 // isAddressAssigned checks if miner is allowed to add transaction from that address
-func (c *Creator) isAddressAssigned(creators []common.Address, address common.Address, coinbase common.Address) bool {
+func (c *Creator) isAddressAssigned(coinbase common.Address, address common.Address, creators []common.Address) bool {
 	var creatorNr = int64(-1)
 
 	if len(creators) == 0 {

@@ -508,7 +508,7 @@ func (pool *TxPool) GetTransactions() (txs types.Transactions, err error) {
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and nonce.
-func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
@@ -520,7 +520,7 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	}
 	// There are no queued transactions in a light pool, just return an empty map
 	queued := make(map[common.Address]types.Transactions)
-	processing := make(map[common.Address]types.Transactions)
+	processing := make(map[common.Address][]*types.TransactionBlocks)
 	return pending, queued, processing
 }
 

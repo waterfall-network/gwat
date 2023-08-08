@@ -34,8 +34,6 @@ type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 	Downloader() *downloader.Downloader
-	Etherbase() (eb common.Address, err error)
-	SetEtherbase(etherbase common.Address)
 	CreatorAuthorize(creator common.Address) error
 	IsDevMode() bool
 	AccountManager() *accounts.Manager
@@ -592,11 +590,11 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				d.resetCheckpoint()
 				continue
 			}
-			if d.isCoordinatorConnectionLost() {
-				d.bc.SetIsSynced(false)
-				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
-				continue
-			}
+			//if d.isCoordinatorConnectionLost() {
+			//	d.bc.SetIsSynced(false)
+			//	log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
+			//	continue
+			//}
 			epoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
 			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", epoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
 
@@ -664,9 +662,6 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	checkpoint := d.getCheckpoint()
 	if checkpoint == nil {
 		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
-	}
-	if len(accounts) > 0 {
-		d.eth.SetEtherbase(accounts[0])
 	}
 
 	err := d.Creator().RunBlockCreation(slot, creators, accounts, tips, checkpoint)
