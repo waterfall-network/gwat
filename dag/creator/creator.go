@@ -50,12 +50,15 @@ type Config struct {
 type environment struct {
 	signer types.Signer
 
-	tcount        int           // tx count in cycle
-	cumutativeGas uint64        // tx count in cycle
-	gasPool       *core.GasPool // available gas used to pack transactions
+	gasPool *core.GasPool // available gas used to pack transactions
 
-	header *types.Header
-	txs    []*types.Transaction
+	txsMu *sync.Mutex
+	txs   map[common.Address]*txsWithCumulativeGas
+}
+
+type txsWithCumulativeGas struct {
+	cumulativeGas uint64
+	txs           types.Transactions
 }
 
 // Creator is the main object which takes care of submitting new work to consensus engine
@@ -215,7 +218,7 @@ func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accou
 	}
 
 	// Could potentially happen if starting to mine in an odd state.
-	err = c.makeCurrent(header)
+	err = c.makeCurrent()
 	if err != nil {
 		log.Error("Failed to make block creation context", "err", err)
 		return err
@@ -225,7 +228,8 @@ func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accou
 	for _, account := range accounts {
 		if c.isCreatorActive(account, assigned) {
 			wg.Add(1)
-			go c.createNewBlock(account, assigned.Creators, header, wg)
+			c.current.txs[account] = &txsWithCumulativeGas{}
+			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg)
 		}
 	}
 
@@ -437,12 +441,12 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 	txs := types.NewTransactionsByPriceAndNonce(c.current.signer, pendingTxs, header.BaseFee)
 	if c.appendTransactions(txs, header) {
 		if len(syncData) > 0 && c.isAddressAssigned(coinbase, *c.bc.Config().ValidatorsStateAddress, creators) {
-			if err := c.processValidatorTxs(coinbase, header.CpHash, syncData, header); err != nil {
+			if err := c.processValidatorTxs(syncData, header); err != nil {
 				log.Warn("Skipping block creation: processing validator txs err 0", "creator", coinbase, "err", err)
 				return
 			}
 
-			c.create(true)
+			c.create(header, true)
 
 			return
 		}
@@ -452,19 +456,19 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 	}
 
 	if len(syncData) > 0 && c.isAddressAssigned(coinbase, *c.bc.Config().ValidatorsStateAddress, creators) {
-		if err := c.processValidatorTxs(coinbase, header.CpHash, syncData, header); err != nil {
+		if err := c.processValidatorTxs(syncData, header); err != nil {
 			log.Warn("Skipping block creation: processing validator txs err 1", "creator", coinbase, "err", err)
 			return
 		}
 	}
 
-	c.create(true)
+	c.create(header, true)
 }
 
-func (c *Creator) create(update bool) {
+func (c *Creator) create(header *types.Header, update bool) {
 	block := types.NewStatelessBlock(
-		c.current.header,
-		c.getUnhandledTxs(),
+		header,
+		c.getUnhandledTxs(header.Coinbase),
 		trie.NewStackTrie(nil),
 	)
 
@@ -505,7 +509,7 @@ func (c *Creator) create(update bool) {
 	)
 
 	if update {
-		c.updateSnapshot()
+		c.updateSnapshot(header)
 	}
 	return
 }
@@ -521,23 +525,22 @@ func (c *Creator) isSyncing() bool {
 	return false
 }
 
-func (c *Creator) getUnhandledTxs() []*types.Transaction {
-	return c.current.txs
+func (c *Creator) getUnhandledTxs(coinbase common.Address) types.Transactions {
+	c.current.txsMu.Lock()
+	defer c.current.txsMu.Unlock()
+	return c.current.txs[coinbase].txs
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (c *Creator) makeCurrent(header *types.Header) error {
+func (c *Creator) makeCurrent() error {
 	// Retrieve the stable state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 
 	env := &environment{
 		signer: types.MakeSigner(c.bc.Config()),
-		header: header,
-		txs:    []*types.Transaction{},
+		txs:    make(map[common.Address]*txsWithCumulativeGas),
+		txsMu:  new(sync.Mutex),
 	}
-
-	// Keep track of transactions which return errors so they can be removed
-	env.tcount = 0
 
 	c.current = env
 	return nil
@@ -545,14 +548,14 @@ func (c *Creator) makeCurrent(header *types.Header) error {
 
 // updateSnapshot updates pending snapshot block and state.
 // Note this function assumes the current variable is thread safe.
-func (c *Creator) updateSnapshot() {
+func (c *Creator) updateSnapshot(header *types.Header) {
 	c.snapshotMu.Lock()
 	defer c.snapshotMu.Unlock()
 
-	txs := c.getUnhandledTxs()
+	txs := c.getUnhandledTxs(header.Coinbase)
 
 	c.snapshotBlock = types.NewBlock(
-		c.current.header,
+		header,
 		txs,
 		nil,
 		trie.NewStackTrie(nil),
@@ -561,7 +564,7 @@ func (c *Creator) updateSnapshot() {
 
 func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header, isValidatorOp bool) error {
 	if isValidatorOp {
-		c.current.txs = append(c.current.txs, tx)
+		c.current.txs[header.Coinbase].txs = append(c.current.txs[header.Coinbase].txs, tx)
 		return nil
 	}
 
@@ -571,22 +574,25 @@ func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header,
 		return err
 	}
 
-	expectedGas := c.current.cumutativeGas + gas
-	if expectedGas <= c.current.header.GasLimit {
-		c.current.txs = append(c.current.txs, tx)
+	expectedGas := c.current.txs[header.Coinbase].cumulativeGas + gas
+	if expectedGas <= header.GasLimit {
+		c.current.txs[header.Coinbase].txs = append(c.current.txs[header.Coinbase].txs, tx)
 	}
-	c.current.cumutativeGas = expectedGas
+	c.current.txs[header.Coinbase].cumulativeGas = expectedGas
 	return nil
 }
 
 func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, header *types.Header) bool {
+	c.current.txsMu.Lock()
+	defer c.current.txsMu.Unlock()
+
 	// Short circuit if current is nil
 	if c.current == nil {
 		log.Warn("Skipping block creation: no current environment", "env", c.current)
 		return true
 	}
 
-	gasLimit := c.current.header.GasLimit
+	gasLimit := header.GasLimit
 	if c.current.gasPool == nil {
 		c.current.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
@@ -595,7 +601,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(tStart)),
 			"func:", "appendTransactions",
-			"txs", c.current.tcount,
+			"txs", len(c.current.txs[header.Coinbase].txs),
 		)
 	}(time.Now())
 
@@ -603,19 +609,19 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 
 	for {
 		// If we don't have enough gas for any further transactions then we're done
-		if c.current.gasPool.Gas() < params.TxGas || c.current.cumutativeGas > c.current.header.GasLimit {
+		if c.current.gasPool.Gas() < params.TxGas || c.current.txs[header.Coinbase].cumulativeGas > header.GasLimit {
 			log.Warn("Not enough gas for further transactions",
 				"have", c.current.gasPool,
 				"want", params.TxGas,
-				"cumutativeGas", c.current.cumutativeGas,
-				"GasLimit", c.current.header.GasLimit,
+				"cumulativeGas", header.GasLimit,
+				"GasLimit", gasLimit,
 			)
 			break
 		}
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {
-			log.Info("Creator: adding txs to block end", "txs", c.current.tcount)
+			log.Info("Creator: adding txs to block end", "coinbase", header.Coinbase, "txs", len(c.current.txs[header.Coinbase].txs))
 			break
 		}
 		// Error may be ignored here. The error has already been checked
@@ -637,9 +643,8 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 			log.Debug("Tx added",
 				"hash", tx.Hash().Hex(),
 				"gasLimit", gasLimit,
-				"cumutativeGas", c.current.cumutativeGas,
+				"cumulativeGas", c.current.txs[header.Coinbase].cumulativeGas,
 			)
-			c.current.tcount++
 			txs.Shift()
 
 		default:
@@ -650,8 +655,8 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 		}
 	}
 
-	if c.current.tcount == 0 {
-		log.Warn("Skipping block creation: no txs", "count", c.current.tcount)
+	if len(c.current.txs[header.Coinbase].txs) == 0 {
+		log.Warn("Skipping block creation: no txs", "count", len(c.current.txs[header.Coinbase].txs))
 		return true
 	}
 
@@ -722,24 +727,30 @@ func (c *Creator) isAddressAssigned(coinbase common.Address, address common.Addr
 			break
 		}
 	}
+
+	if creatorNr < 0 {
+		return false
+	}
+
 	return core.IsAddressAssigned(address, creators, creatorNr)
 }
 
-func (c *Creator) processValidatorTxs(coinbase common.Address, blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync, header *types.Header) error {
-	nonce := c.eth.TxPool().Nonce(coinbase)
+func (c *Creator) processValidatorTxs(syncData map[[28]byte]*types.ValidatorSync, header *types.Header) error {
+	nonce := c.eth.TxPool().Nonce(header.Coinbase)
 	for _, validatorSync := range syncData {
 		if validatorSync.ProcEpoch <= c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) {
-			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, blockHash, coinbase, validatorSync, nonce)
+			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, header.CpHash, header.Coinbase, validatorSync, nonce)
 			if err != nil {
 				log.Error("failed to create validator sync tx", "error", err)
 				continue
 			}
-
+			c.current.txsMu.Lock()
 			err = c.appendTransaction(valSyncTx, header, true)
 			if err != nil {
 				log.Error("can`t create validator sync tx", "error", err)
 				return err
 			}
+			c.current.txsMu.Unlock()
 			nonce++
 		}
 	}
