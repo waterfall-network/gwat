@@ -209,7 +209,7 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	fee := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.evm.Context.BaseFee)
+	fee := new(big.Int).Mul(st.msg.GasPrice(), st.evm.Context.BaseFee)
 	balanceCheck := fee
 	if st.gasFeeCap != nil {
 		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
@@ -374,8 +374,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// After EIP-3529: refunds are capped to gasUsed / 5
 	st.refundGas(params.RefundQuotientEIP3529)
 
-	fee := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.evm.Context.BaseFee)
-
+	fee := new(big.Int).Mul(st.msg.GasPrice(), st.evm.Context.BaseFee)
 	validatorPart := big.NewFloat(1 - params.BurnMultiplier)
 	validatorReward := new(big.Int)
 	new(big.Float).Mul(validatorPart, new(big.Float).SetInt(fee)).Int(validatorReward)
