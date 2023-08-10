@@ -73,7 +73,7 @@ type blockchain interface {
 	GetEraInfo() *era.EraInfo
 	Config() *params.ChainConfig
 	Database() ethdb.Database
-	GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync
+	GetValidatorSyncData(InitTxHash common.Hash) *types.ValidatorSync
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
@@ -321,11 +321,10 @@ func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (r
 }
 
 func (p *Processor) validateValSyncOp(op operation.ValidatorSync, msg message) error {
-	savedValSync := p.blockchain.GetValidatorSyncData(op.Creator(), op.OpType())
+	savedValSync := p.blockchain.GetValidatorSyncData(op.InitTxHash())
 	if savedValSync == nil {
 		return ErrNoSavedValSyncOp
 	}
-
 	blockEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
 	if blockEpoch > op.ProcEpoch() {
 		return ErrInvalidOpEpoch
@@ -343,6 +342,11 @@ func (p *Processor) validateValSyncOp(op operation.ValidatorSync, msg message) e
 }
 
 func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
+	if saved.InitTxHash != input.InitTxHash() {
+		log.Warn("check validator sync failed: InitTxHash", "s.InitTxHash", saved.InitTxHash.Hex(), "i.InitTxHash", input.InitTxHash().Hex())
+		return false
+	}
+
 	if saved.OpType != input.OpType() {
 		log.Warn("check validator sync failed: OpType", "s.OpType", saved.OpType, "i.OpType", input.OpType())
 		return false

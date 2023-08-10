@@ -150,22 +150,23 @@ func TestValidatorSyncWf(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	src_1 := &types.ValidatorSync{
-		OpType:    2,
-		ProcEpoch: 45645,
-		Index:     45645,
-		Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-		Amount:    new(big.Int),
-		TxHash:    nil,
+		OpType:     2,
+		ProcEpoch:  45645,
+		Index:      45645,
+		Creator:    common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:     new(big.Int),
+		TxHash:     &common.Hash{1, 2, 3},
+		InitTxHash: common.Hash{1, 2, 3},
 	}
 	src_1.Amount.SetString("32789456000000", 10)
 
 	WriteValidatorSync(db, src_1)
-	if entry := ReadValidatorSync(db, src_1.Creator, src_1.OpType); fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
+	if entry := ReadValidatorSync(db, src_1.InitTxHash); fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
 		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, src_1)
 	}
 
-	DeleteValidatorSync(db, src_1.Creator, src_1.OpType)
-	if entry := ReadValidatorSync(db, src_1.Creator, src_1.OpType); entry != nil {
+	DeleteValidatorSync(db, src_1.InitTxHash)
+	if entry := ReadValidatorSync(db, src_1.InitTxHash); entry != nil {
 		t.Fatalf("ValidatorSync D-R failed:  %#v != nil", entry)
 	}
 }
@@ -174,28 +175,31 @@ func TestNotProcessedValidatorSyncWf(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	src_1 := &types.ValidatorSync{
-		OpType:    types.Activate,
-		ProcEpoch: 45645,
-		Index:     45645,
-		Creator:   common.Address{0x11, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-		Amount:    new(big.Int),
-		TxHash:    nil,
+		OpType:     types.Activate,
+		ProcEpoch:  45645,
+		Index:      45645,
+		Creator:    common.Address{0x11, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:     new(big.Int),
+		TxHash:     nil,
+		InitTxHash: common.Hash{1, 2, 3},
 	}
 	src_2 := &types.ValidatorSync{
-		OpType:    types.Deactivate,
-		ProcEpoch: 45645,
-		Index:     45645,
-		Creator:   common.Address{0x22, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-		Amount:    new(big.Int),
-		TxHash:    nil,
+		OpType:     types.Deactivate,
+		ProcEpoch:  45645,
+		Index:      45645,
+		Creator:    common.Address{0x22, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:     new(big.Int),
+		TxHash:     nil,
+		InitTxHash: common.Hash{1, 2, 3},
 	}
 	src_3 := &types.ValidatorSync{
-		OpType:    types.UpdateBalance,
-		ProcEpoch: 45645,
-		Index:     45645,
-		Creator:   common.Address{0x33, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-		Amount:    new(big.Int),
-		TxHash:    nil,
+		OpType:     types.UpdateBalance,
+		ProcEpoch:  45645,
+		Index:      45645,
+		Creator:    common.Address{0x33, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:     new(big.Int),
+		TxHash:     nil,
+		InitTxHash: common.Hash{1, 2, 3},
 	}
 	src_3.Amount.SetString("32789456000000", 10)
 

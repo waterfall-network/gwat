@@ -128,21 +128,23 @@ const (
 // ValidatorSync represents a data to perform operation of validators synchronization
 // from coordinator
 type ValidatorSync struct {
-	OpType    ValidatorSyncOp
-	ProcEpoch uint64
-	Index     uint64
-	Creator   common.Address
-	Amount    *big.Int
-	TxHash    *common.Hash
+	InitTxHash common.Hash
+	OpType     ValidatorSyncOp
+	ProcEpoch  uint64
+	Index      uint64
+	Creator    common.Address
+	Amount     *big.Int
+	TxHash     *common.Hash
 }
 
 type validatorSyncMarshaling struct {
-	OpType    *hexutil.Uint64 `json:"opType"`
-	ProcEpoch *hexutil.Uint64 `json:"procEpoch"`
-	Index     *hexutil.Uint64 `json:"index"`
-	Creator   *common.Address `json:"creator"`
-	Amount    *hexutil.Big    `json:"amount"`
-	TxHash    *common.Hash    `json:"txHash"`
+	InitTxHash *common.Hash    `json:"initTxHash"`
+	OpType     *hexutil.Uint64 `json:"opType"`
+	ProcEpoch  *hexutil.Uint64 `json:"procEpoch"`
+	Index      *hexutil.Uint64 `json:"index"`
+	Creator    *common.Address `json:"creator"`
+	Amount     *hexutil.Big    `json:"amount"`
+	TxHash     *common.Hash    `json:"txHash"`
 }
 
 func (vs *ValidatorSync) Copy() *ValidatorSync {
@@ -152,35 +154,34 @@ func (vs *ValidatorSync) Copy() *ValidatorSync {
 		Index:     vs.Index,
 	}
 	copy(cpy.Creator[:], vs.Creator[:])
+	copy(cpy.InitTxHash[:], vs.InitTxHash[:])
 	if vs.Amount != nil {
 		cpy.Amount = new(big.Int).Set(vs.Amount)
 	}
 	if vs.TxHash != nil {
+		cpy.TxHash = new(common.Hash)
 		copy(cpy.TxHash[:], vs.TxHash[:])
 	}
 	return cpy
 }
 
-func (vs *ValidatorSync) Key() [28]byte {
-	var key [28]byte
+func (vs *ValidatorSync) Key() common.Hash {
+	var key common.Hash
 	if vs == nil {
 		return key
 	}
-	enc := make([]byte, 8)
-	binary.BigEndian.PutUint64(enc, uint64(vs.OpType))
-	enc = append(enc, vs.Creator.Bytes()...)
-	copy(key[:], enc)
-	return key
+	return vs.InitTxHash
 }
 
 func (vs *ValidatorSync) MarshalJSON() ([]byte, error) {
 	out := validatorSyncMarshaling{
-		OpType:    (*hexutil.Uint64)(&vs.OpType),
-		ProcEpoch: (*hexutil.Uint64)(&vs.ProcEpoch),
-		Index:     (*hexutil.Uint64)(&vs.Index),
-		Creator:   &vs.Creator,
-		Amount:    nil,
-		TxHash:    vs.TxHash,
+		OpType:     (*hexutil.Uint64)(&vs.OpType),
+		ProcEpoch:  (*hexutil.Uint64)(&vs.ProcEpoch),
+		Index:      (*hexutil.Uint64)(&vs.Index),
+		Creator:    &vs.Creator,
+		Amount:     nil,
+		TxHash:     vs.TxHash,
+		InitTxHash: &vs.InitTxHash,
 	}
 	if vs.Amount != nil {
 		out.Amount = (*hexutil.Big)(vs.Amount)
@@ -210,6 +211,9 @@ func (vs *ValidatorSync) UnmarshalJSON(input []byte) error {
 	}
 	if dec.TxHash != nil {
 		vs.TxHash = dec.TxHash
+	}
+	if dec.InitTxHash != nil {
+		vs.InitTxHash = *dec.InitTxHash
 	}
 	return nil
 }

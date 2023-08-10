@@ -1080,7 +1080,7 @@ func (c *Creator) setAssignment(assigned *Assignment) {
 	c.cacheAssignment = assigned
 }
 
-func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[[28]byte]*types.ValidatorSync, header *types.Header) error {
+func (c *Creator) processValidatorTxs(blockHash common.Hash, syncData map[common.Hash]*types.ValidatorSync, header *types.Header) error {
 	nonce := c.eth.TxPool().Nonce(c.coinbase)
 	for _, validatorSync := range syncData {
 		if validatorSync.ProcEpoch <= c.chain.GetSlotInfo().SlotToEpoch(c.chain.GetSlotInfo().CurrentSlot()) {

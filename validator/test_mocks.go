@@ -218,9 +218,9 @@ func (mr *MockblockchainMockRecorder) GetSlotInfo() *gomock.Call {
 }
 
 // GetValidatorSyncData mocks base method.
-func (m *Mockblockchain) GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
+func (m *Mockblockchain) GetValidatorSyncData(initTxHash common.Hash) *types.ValidatorSync {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetValidatorSyncData", creator, op)
+	ret := m.ctrl.Call(m, "GetValidatorSyncData", initTxHash)
 	ret0, _ := ret[0].(*types.ValidatorSync)
 	return ret0
 }

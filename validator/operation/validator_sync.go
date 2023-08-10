@@ -8,9 +8,10 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
-const valSyncOpDataMinLen = 8 + 8 + 8 + common.AddressLength
+const valSyncOpDataMinLen = 8 + 8 + 8 + common.AddressLength + common.HashLength
 
 type validatorSyncOperation struct {
+	initTxHash        common.Hash
 	opType            types.ValidatorSyncOp
 	procEpoch         uint64
 	index             uint64
@@ -20,6 +21,7 @@ type validatorSyncOperation struct {
 }
 
 func (op *validatorSyncOperation) init(
+	initTxHash common.Hash,
 	opType types.ValidatorSyncOp,
 	procEpoch uint64,
 	index uint64,
@@ -27,6 +29,9 @@ func (op *validatorSyncOperation) init(
 	amount *big.Int,
 	withdrawalAddress *common.Address,
 ) error {
+	if initTxHash == (common.Hash{}) {
+		return ErrNoInitTxHash
+	}
 	if creator == (common.Address{}) {
 		return ErrNoCreatorAddress
 	}
@@ -38,6 +43,7 @@ func (op *validatorSyncOperation) init(
 			return ErrNoWithdrawalAddress
 		}
 	}
+	op.initTxHash = initTxHash
 	op.opType = opType
 	op.procEpoch = procEpoch
 	op.index = index
@@ -49,6 +55,7 @@ func (op *validatorSyncOperation) init(
 
 // NewValidatorSyncOperation creates an operation for creating validator sync operation.
 func NewValidatorSyncOperation(
+	initTxHash common.Hash,
 	opType types.ValidatorSyncOp,
 	procEpoch uint64,
 	index uint64,
@@ -57,7 +64,7 @@ func NewValidatorSyncOperation(
 	withdrawalAddress *common.Address,
 ) (ValidatorSync, error) {
 	op := validatorSyncOperation{}
-	if err := op.init(opType, procEpoch, index, creator, amount, withdrawalAddress); err != nil {
+	if err := op.init(initTxHash, opType, procEpoch, index, creator, amount, withdrawalAddress); err != nil {
 		return nil, err
 	}
 	return &op, nil
@@ -71,6 +78,10 @@ func (op *validatorSyncOperation) UnmarshalBinary(b []byte) error {
 	startOffset := 0
 	endOffset := startOffset + 8
 	opType := types.ValidatorSyncOp(binary.BigEndian.Uint64(b[startOffset:endOffset]))
+
+	startOffset = endOffset
+	endOffset = startOffset + common.HashLength
+	initTxHash := common.BytesToHash(b[startOffset:endOffset])
 
 	startOffset = endOffset
 	endOffset = startOffset + 8
@@ -95,7 +106,7 @@ func (op *validatorSyncOperation) UnmarshalBinary(b []byte) error {
 		startOffset = endOffset
 		amount = new(big.Int).SetBytes(b[startOffset:])
 	}
-	return op.init(opType, procEpoch, index, creator, amount, &withdrawal)
+	return op.init(initTxHash, opType, procEpoch, index, creator, amount, &withdrawal)
 }
 
 // MarshalBinary marshals a create operation to byte encoding
@@ -105,6 +116,8 @@ func (op *validatorSyncOperation) MarshalBinary() ([]byte, error) {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, uint64(op.opType))
 	bin = append(bin, enc...)
+
+	bin = append(bin, op.initTxHash.Bytes()...)
 
 	enc = make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, op.procEpoch)
@@ -143,6 +156,10 @@ func (op *validatorSyncOperation) OpCode() Code {
 // It's just a stub for the Operation interface.
 func (op *validatorSyncOperation) Address() common.Address {
 	return common.Address{}
+}
+
+func (op *validatorSyncOperation) InitTxHash() common.Hash {
+	return op.initTxHash
 }
 
 func (op *validatorSyncOperation) OpType() types.ValidatorSyncOp {
