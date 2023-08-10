@@ -96,31 +96,6 @@ func TestBlockGasLimits(t *testing.T) {
 	}
 }
 
-// TestCalcBaseFee assumes all blocks are 1559-blocks
-func TestCalcBaseFee(t *testing.T) {
-	tests := []struct {
-		parentBaseFee   int64
-		parentGasLimit  uint64
-		parentGasUsed   uint64
-		expectedBaseFee int64
-	}{
-		{params.InitialBaseFee, 20000000, 10000000, params.InitialBaseFee}, // usage == target
-		{params.InitialBaseFee, 20000000, 9000000, 987500000},              // usage below target
-		{params.InitialBaseFee, 20000000, 11000000, 1012500000},            // usage above target
-	}
-	for i, test := range tests {
-		parent := &types.Header{
-			Number:   new(uint64),
-			GasLimit: test.parentGasLimit,
-			GasUsed:  test.parentGasUsed,
-			BaseFee:  big.NewInt(test.parentBaseFee),
-		}
-		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
-			t.Errorf("test %d: have %d  want %d, ", i, have, want)
-		}
-	}
-}
-
 // TestCalcSlotBaseFee assumes all blocks are 1559-blocks
 func TestCalcSlotBaseFee(t *testing.T) {
 	tests := []struct {
@@ -131,41 +106,37 @@ func TestCalcSlotBaseFee(t *testing.T) {
 		creatorsPerSlot uint64
 		expectedBaseFee int64
 	}{
-		{10000, 2048, 210000000, 1, 1, 1915015},
-		{10000, 2048, 210000000, 1, 4, 478753},
-		{10000, 2048, 210000000, 1, 8, 239376},
-		{10000, 2048, 210000000, 1, 16, 119688},
-		{10000, 2048, 210000000, 1, 32, 59844},
-		{10000, 4096, 210000000, 1, 4, 677060},
-		{10000, 32000, 210000000, 1, 4, 1892440},
-		{10000, 300000, 210000000, 1, 4, 5794393},
-		{2100000, 2048, 210000000, 1, 4, 100538315},
-		{2100000, 300000, 210000000, 1, 4, 1216822572},
-		{2100000, 300000, 210000000, 0.75, 4, 912616929},
-		{10000, 2048, 210000000, 1, 4, 478753},
-		{10000, 2048, 210000000, 0.25, 4, 119688},
-		{90000, 2048, 100000000, 1, 4, 9048448},
-		{110000, 2048, 100000000, 1, 1, 44236858},
-		{110000, 2048, 100000000, 0.25, 1, 11059214},
-		{110000, 2048, 100000000, 0.5, 1, 22118429},
-		{110000, 2048, 100000000, 0.75, 1, 33177644},
-		{110000, 2048, 100000000, 1, 4, 11059214},
-		{110000, 2048, 100000000, 0.25, 4, 2764803},
-		{110000, 2048, 100000000, 0.5, 4, 5529607},
-		{110000, 2048, 100000000, 0.75, 4, 8294411},
-		{110000, 2048, 100000000, 1, 32, 1382401},
-		{110000, 2048, 100000000, 0.25, 32, 345600},
-		{110000, 2048, 100000000, 0.5, 32, 691200},
-		{110000, 2048, 100000000, 0.75, 32, 1036801},
+		{10000, 2048, 210000000, 1, 1, 603229},
+		{10000, 2048, 210000000, 1, 4, 150807},
+		{10000, 2048, 210000000, 1, 8, 75403},
+		{10000, 2048, 210000000, 1, 16, 37701},
+		{10000, 2048, 210000000, 1, 32, 18850},
+		{10000, 4096, 210000000, 1, 4, 213273},
+		{10000, 32000, 210000000, 1, 4, 596118},
+		{10000, 300000, 210000000, 1, 4, 1825233},
+		{2100000, 2048, 210000000, 1, 4, 150807},
+		{2100000, 300000, 210000000, 1, 4, 1825233},
+		{2100000, 300000, 210000000, 0.75, 4, 1825233},
+		{10000, 2048, 210000000, 1, 4, 150807},
+		{10000, 2048, 210000000, 0.25, 4, 150807},
+		{90000, 2048, 100000000, 1, 4, 316695},
+		{110000, 2048, 100000000, 1, 1, 1266782},
+		{110000, 2048, 100000000, 0.25, 1, 1266782},
+		{110000, 2048, 100000000, 0.5, 1, 1266782},
+		{110000, 2048, 100000000, 0.75, 1, 1266782},
+		{110000, 2048, 100000000, 1, 4, 316695},
+		{110000, 2048, 100000000, 0.25, 4, 316695},
+		{110000, 2048, 100000000, 0.5, 4, 316695},
+		{110000, 2048, 100000000, 0.75, 4, 316695},
+		{110000, 2048, 100000000, 1, 32, 39586},
+		{110000, 2048, 100000000, 0.25, 32, 39586},
+		{110000, 2048, 100000000, 0.5, 32, 39586},
+		{110000, 2048, 100000000, 0.75, 32, 39586},
 		{110000, 0, 100000000, 1, 32, 0},
 		{110000, 2048, 100000000, 1, 0, 0},
 	}
 	for i, test := range tests {
-		current := &types.Header{
-			Number:  new(uint64),
-			GasUsed: test.gasUsed,
-		}
-		if have, want := CalcSlotBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock, test.burnMultiplier, test.creatorsPerSlot), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcSlotBaseFee(config(), test.validatorsNum, test.maxGasPerBlock, test.creatorsPerSlot), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}

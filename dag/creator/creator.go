@@ -846,7 +846,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "commitNewWork")
-	header.BaseFee = misc.CalcSlotBaseFee(c.chainConfig, header, uint64(len(validators)), bc.Genesis().GasLimit(), params.BurnMultiplier, creatorsPerSlotCount)
+	header.BaseFee = misc.CalcSlotBaseFee(c.chainConfig, uint64(len(validators)), bc.Genesis().GasLimit(), creatorsPerSlotCount)
 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if c.IsRunning() {

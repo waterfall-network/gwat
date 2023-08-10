@@ -2668,7 +2668,13 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	header := block.Header()
 
 	// Set baseFee and GasLimit
-	header.BaseFee = misc.CalcBaseFee(bc.chainConfig, stateBlock.Header())
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, header.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "UpdateFinalizingState")
+	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), uint64(len(validators)), bc.Genesis().GasLimit(), creatorsPerSlotCount)
+
 	block.SetHeader(header)
 
 	// Process block using the parent state as reference point

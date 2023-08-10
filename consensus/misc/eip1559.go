@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
@@ -40,7 +38,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 		return fmt.Errorf("header is missing baseFee")
 	}
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcSlotBaseFee(config, header, validatorsNum, maxGasPerBlock, params.BurnMultiplier, creatorsPerSlot)
+	expectedBaseFee := CalcSlotBaseFee(config, validatorsNum, maxGasPerBlock, creatorsPerSlot)
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 			expectedBaseFee, header.BaseFee, parent.BaseFee, parent.GasUsed)
@@ -48,46 +46,10 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 	return nil
 }
 
-// CalcBaseFee calculates the basefee of the header.
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
-	var (
-		parentGasTarget          = parent.GasLimit / params.ElasticityMultiplier
-		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)
-		baseFeeChangeDenominator = new(big.Int).SetUint64(params.BaseFeeChangeDenominator)
-	)
-	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
-	if parent.GasUsed == parentGasTarget {
-		return new(big.Int).Set(parent.BaseFee)
-	}
-	if parent.GasUsed > parentGasTarget {
-		// If the parent block used more gas than its target, the baseFee should increase.
-		gasUsedDelta := new(big.Int).SetUint64(parent.GasUsed - parentGasTarget)
-		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
-		y := x.Div(x, parentGasTargetBig)
-		baseFeeDelta := math.BigMax(
-			x.Div(y, baseFeeChangeDenominator),
-			common.Big1,
-		)
-
-		return x.Add(parent.BaseFee, baseFeeDelta)
-	} else {
-		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
-		gasUsedDelta := new(big.Int).SetUint64(parentGasTarget - parent.GasUsed)
-		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
-		y := x.Div(x, parentGasTargetBig)
-		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
-
-		return math.BigMax(
-			x.Sub(parent.BaseFee, baseFeeDelta),
-			common.Big0,
-		)
-	}
-}
-
 // CalcSlotBaseFee calculates the base fee of the slot.
-func CalcSlotBaseFee(config *params.ChainConfig, current *types.Header, validatorsNum uint64, maxGasPerBlock uint64, burnFactor float64, creatorsPerSlot uint64) *big.Int {
+func CalcSlotBaseFee(config *params.ChainConfig, validatorsNum uint64, maxGasPerBlock uint64, creatorsPerSlot uint64) *big.Int {
 	var (
-		gasUsedBig                = new(big.Float).SetUint64(current.GasUsed)       // G normal transaction gas used
+		gasUsedBig                = new(big.Float).SetUint64(params.TxGas)          // G normal transaction gas used
 		blocksPerSlotBig          = new(big.Float).SetUint64(creatorsPerSlot)       // b i-th in the formula - eq the number of creators\blocks for i-th slot
 		secondsPerSlotBig         = new(big.Float).SetUint64(config.SecondsPerSlot) // t i-th in the formula - the time of i-th slot
 		secondsInYear             = new(big.Float).SetUint64(60 * 60 * 24 * 365.25)
@@ -104,7 +66,7 @@ func CalcSlotBaseFee(config *params.ChainConfig, current *types.Header, validato
 	annualMintedCoins := new(big.Float).Mul(y, x)
 	rewardPerBlock := new(big.Float).Quo(annualMintedCoins, numOfBlocksPerYear)
 	baseFee := new(big.Float).Mul(new(big.Float).Mul(new(big.Float).Quo(gasUsedBig, totalAllowableGasPerBlock), rewardPerBlock), big.NewFloat(params.PriceMultiplier))
-	baseFeeWithBurnFactor := new(big.Int)
-	new(big.Float).Mul(baseFee, new(big.Float).SetFloat64(burnFactor)).Int(baseFeeWithBurnFactor)
-	return baseFeeWithBurnFactor
+	fee := new(big.Int)
+	baseFee.Int(fee)
+	return fee
 }
