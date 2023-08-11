@@ -2673,7 +2673,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "UpdateFinalizingState")
-	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), uint64(len(validators)), bc.Genesis().GasLimit(), creatorsPerSlotCount)
+	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
 
 	block.SetHeader(header)
 

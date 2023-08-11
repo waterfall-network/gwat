@@ -1497,7 +1497,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockFinNr 
 
 // newRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
 func newRPCPendingTransaction(tx *types.Transaction, config *params.ChainConfig, numValidators uint64, gasLimit uint64, creatorsPerSlot uint64) *RPCTransaction {
-	baseFee := misc.CalcSlotBaseFee(config, numValidators, gasLimit, creatorsPerSlot)
+	baseFee := misc.CalcSlotBaseFee(config, creatorsPerSlot, numValidators, gasLimit)
 	return newRPCTransaction(tx, common.Hash{}, nil, 0, baseFee, config)
 }
 
@@ -1524,8 +1524,7 @@ type RPCProcessingTransaction struct {
 }
 
 func newRPCProcessingTransaction(tx *types.TransactionBlocks, config *params.ChainConfig, numValidators uint64, gasLimit uint64, creatorsPerSlot uint64) *RPCProcessingTransaction {
-	baseFee := misc.CalcSlotBaseFee(config, numValidators, gasLimit, creatorsPerSlot)
-
+	baseFee := misc.CalcSlotBaseFee(config, creatorsPerSlot, numValidators, gasLimit)
 	signer := types.MakeSigner(config)
 	from, _ := types.Sender(signer, tx.Transaction)
 	v, r, s := tx.RawSignatureValues()

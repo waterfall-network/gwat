@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
@@ -374,11 +375,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// After EIP-3529: refunds are capped to gasUsed / 5
 	st.refundGas(params.RefundQuotientEIP3529)
 
-	fee := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.evm.Context.BaseFee)
-	validatorPart := big.NewFloat(1 - params.BurnMultiplier)
-	validatorReward := new(big.Int)
-	new(big.Float).Mul(validatorPart, new(big.Float).SetInt(fee)).Int(validatorReward)
-	st.state.AddBalance(st.evm.Context.Coinbase, validatorReward)
+	reword := misc.CalcCreatorReword(st.msg.Gas(), st.evm.Context.BaseFee)
+	st.state.AddBalance(st.evm.Context.Coinbase, reword)
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
