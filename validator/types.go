@@ -12,6 +12,7 @@ const Uint64Length = 8
 const (
 	DepositLogDataLength        = common.BlsPubKeyLength + common.AddressLength + common.AddressLength + Uint64Length + common.BlsSigLength + Uint64Length
 	MinExitRequestLogDataLength = common.BlsPubKeyLength + common.AddressLength + Uint64Length
+	WithdrawalLogDataLength     = common.BlsPubKeyLength + common.AddressLength + Uint64Length + Uint64Length
 )
 
 // PackDepositLogData packs the deposit log.
@@ -31,8 +32,7 @@ func PackDepositLogData(
 	if amount == nil || amount.Sign() < 0 {
 		amount = big.NewInt(1000000000)
 	}
-	gwei := big.NewInt(1000000000)
-	amntGwei := new(big.Int).Div(amount, gwei).Uint64()
+	amntGwei := new(big.Int).Div(amount, common.BigGwei).Uint64()
 	data = append(data, common.Uint64ToBytes(amntGwei)...)
 
 	data = append(data, signature.Bytes()...)
@@ -125,5 +125,46 @@ func UnpackExitRequestLogData(data []byte) (
 		exitEpoch := common.BytesToUint64(rawExitEpoch)
 		exitAfterEpoch = &exitEpoch
 	}
+	return
+}
+
+func PackWithdrawalLogData(
+	pubkey common.BlsPubKey,
+	creatorAddress common.Address,
+	valIndex uint64,
+	amtGwei uint64,
+) []byte {
+	data := make([]byte, 0, WithdrawalLogDataLength)
+	data = append(data, pubkey.Bytes()...)
+	data = append(data, creatorAddress.Bytes()...)
+	data = append(data, common.Uint64ToBytes(valIndex)...)
+	data = append(data, common.Uint64ToBytes(amtGwei)...)
+
+	return data
+}
+
+func UnpackWithdrawalLogData(data []byte) (
+	pubkey common.BlsPubKey,
+	creatorAddress common.Address,
+	valIndex uint64,
+	amtGwei uint64,
+	err error,
+) {
+	if len(data) != WithdrawalLogDataLength {
+		err = operation.ErrBadDataLen
+		return
+	}
+
+	pubkey = common.BytesToBlsPubKey(data[:common.BlsPubKeyLength])
+	offset := common.BlsPubKeyLength
+
+	creatorAddress = common.BytesToAddress(data[offset : offset+common.AddressLength])
+	offset += common.AddressLength
+
+	valIndex = common.BytesToUint64(data[offset : offset+Uint64Length])
+	offset += Uint64Length
+
+	amtGwei = common.BytesToUint64(data[offset : offset+Uint64Length])
+
 	return
 }

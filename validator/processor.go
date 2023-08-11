@@ -42,6 +42,7 @@ var (
 	ErrInvalidReceiptStatus         = errors.New("receipt status is failed")
 	ErrInvalidOpCode                = errors.New("invalid operation code")
 	ErrInvalidCreator               = errors.New("invalid creator address")
+	ErrInvalidAmount                = errors.New("invalid amount")
 )
 
 const (
@@ -62,8 +63,9 @@ var (
 	MinDepositVal, _ = new(big.Int).SetString("1000000000000000000000", 10)
 
 	//Events signatures.
-	EvtDepositLogSignature = crypto.Keccak256Hash([]byte("DepositLog"))
-	EvtExitReqLogSignature = crypto.Keccak256Hash([]byte("ExitRequestLog"))
+	EvtDepositLogSignature    = crypto.Keccak256Hash([]byte("DepositLog"))
+	EvtExitReqLogSignature    = crypto.Keccak256Hash([]byte("ExitRequestLog"))
+	EvtWithdrawalLogSignature = crypto.Keccak256Hash([]byte("WithdrawaRequestLog"))
 )
 
 // Ref represents caller of the validator processor
@@ -189,6 +191,11 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		return nil, ErrInvalidToAddress
 	}
 
+	// check amount can add to log
+	if !common.BnCanCastToUint64(new(big.Int).Div(value, common.BigGwei)) {
+		return nil, ErrInvalidAmount
+	}
+
 	from := caller.Address()
 
 	if value == nil || value.Cmp(MinDepositVal) < 0 {
@@ -278,36 +285,68 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrInvalidToAddress
 	}
 
+	// check amount can add to log
+	if !common.BnCanCastToUint64(new(big.Int).Div(op.Amount(), common.BigGwei)) {
+		return nil, ErrInvalidAmount
+	}
+
 	from := caller.Address()
 	validator, err := p.Storage().GetValidator(p.state, op.CreatorAddress())
 	if err != nil {
 		return nil, err
 	}
 
+	if validator == nil {
+		return nil, ErrUnknownValidator
+	}
 	if from != *validator.GetWithdrawalAddress() {
 		return nil, ErrInvalidFromAddresses
 	}
 
-	if validator.GetActivationEra() == math.MaxUint64 {
-		return nil, ErrNotActivatedValidator
-	}
+	amtGwei := new(big.Int).Div(op.Amount(), common.BigGwei).Uint64()
 
-	currentBalance := validator.GetBalance()
+	logData := PackWithdrawalLogData(validator.GetPubKey(), op.CreatorAddress(), validator.GetIndex(), amtGwei)
 
-	if currentBalance.Cmp(op.Amount()) == -1 {
-		return nil, ErrInsufficientFundsForTransfer
-	}
+	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
 
-	validator.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
-	err = p.Storage().SetValidator(p.state, validator)
-	if err != nil {
-		return nil, err
-	}
-
-	p.state.AddBalance(from, op.Amount())
-
-	return from.Bytes(), nil
+	return op.CreatorAddress().Bytes(), nil
 }
+
+//func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op operation.Withdrawal) ([]byte, error) {
+//	if !p.IsValidatorOp(&toAddr) {
+//		return nil, ErrInvalidToAddress
+//	}
+//
+//	from := caller.Address()
+//	validator, err := p.Storage().GetValidator(p.state, op.CreatorAddress())
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	if from != *validator.GetWithdrawalAddress() {
+//		return nil, ErrInvalidFromAddresses
+//	}
+//
+//	if validator.GetActivationEra() == math.MaxUint64 {
+//		return nil, ErrNotActivatedValidator
+//	}
+//
+//	currentBalance := validator.GetBalance()
+//
+//	if currentBalance.Cmp(op.Amount()) == -1 {
+//		return nil, ErrInsufficientFundsForTransfer
+//	}
+//
+//	validator.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
+//	err = p.Storage().SetValidator(p.state, validator)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	p.state.AddBalance(from, op.Amount())
+//
+//	return from.Bytes(), nil
+//}
 
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {
 	if err = ValidateValidatorSyncOp(p.blockchain, op, p.ctx.Slot, msg.TxHash()); err != nil {
@@ -573,6 +612,10 @@ func (e *EventEmmiter) Deposit(evtAddr common.Address, data []byte) {
 
 func (e *EventEmmiter) ExitRequest(evtAddr common.Address, data []byte) {
 	e.addLog(evtAddr, EvtExitReqLogSignature, data)
+}
+
+func (e *EventEmmiter) WithdrawalRequest(evtAddr common.Address, data []byte) {
+	e.addLog(evtAddr, EvtWithdrawalLogSignature, data)
 }
 
 func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, data []byte, logsEntries ...logEntry) {
