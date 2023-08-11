@@ -174,7 +174,7 @@ func TestCalcSlotBaseFee(t *testing.T) {
 	}
 }
 
-func TestCalcCreatorRewordForBaseTx(t *testing.T) {
+func TestCalcCreatorRewardForBaseTx(t *testing.T) {
 	conf := &params.ChainConfig{
 		SecondsPerSlot:    4,
 		ValidatorsPerSlot: 4,
@@ -185,67 +185,67 @@ func TestCalcCreatorRewordForBaseTx(t *testing.T) {
 
 	testCases := []struct {
 		validatorsCount uint64
-		expectedReword  *big.Int
+		expectedReward  *big.Int
 	}{
 		{
 			validatorsCount: 8,
-			expectedReword:  big.NewInt(19870629390000),
+			expectedReward:  big.NewInt(19870629390000),
 		},
 		{
 			validatorsCount: 248,
-			expectedReword:  big.NewInt(119223776400000),
+			expectedReward:  big.NewInt(119223776400000),
 		},
 		{
 			validatorsCount: 2048,
-			expectedReword:  big.NewInt(317930070300000),
+			expectedReward:  big.NewInt(317930070300000),
 		},
 		{
 			validatorsCount: 5000,
-			expectedReword:  big.NewInt(496765734800000),
+			expectedReward:  big.NewInt(496765734800000),
 		},
 		{
 			validatorsCount: 10000,
-			expectedReword:  big.NewInt(702532839500000),
+			expectedReward:  big.NewInt(702532839500000),
 		},
 		{
 			validatorsCount: 20000,
-			expectedReword:  big.NewInt(993531469700000),
+			expectedReward:  big.NewInt(993531469700000),
 		},
 		{
 			validatorsCount: 50000,
-			expectedReword:  big.NewInt(1570911186000000),
+			expectedReward:  big.NewInt(1570911186000000),
 		},
 		{
 			validatorsCount: 100000,
-			expectedReword:  big.NewInt(2221603904000000),
+			expectedReward:  big.NewInt(2221603904000000),
 		},
 		{
 			validatorsCount: 200000,
-			expectedReword:  big.NewInt(3141822371000000),
+			expectedReward:  big.NewInt(3141822371000000),
 		},
 		{
 			validatorsCount: 500000,
-			expectedReword:  big.NewInt(4967657348000000),
+			expectedReward:  big.NewInt(4967657348000000),
 		},
 		{
 			validatorsCount: 1000000,
-			expectedReword:  big.NewInt(7025328395000000),
+			expectedReward:  big.NewInt(7025328395000000),
 		},
 		{
 			validatorsCount: 3000000,
-			expectedReword:  big.NewInt(12168225720000000),
+			expectedReward:  big.NewInt(12168225720000000),
 		},
 		{
 			validatorsCount: 5000000,
-			expectedReword:  big.NewInt(15709111860000000),
+			expectedReward:  big.NewInt(15709111860000000),
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("validators amount %d", testCase.validatorsCount), func(t *testing.T) {
 			baseFee := CalcSlotBaseFee(conf, 4, testCase.validatorsCount, maxGasAmountPerBlock)
-			reword := CalcCreatorReword(params.TxGas, baseFee)
-			testutils.BigIntEquals(reword, testCase.expectedReword)
+			reward := CalcCreatorReward(params.TxGas, baseFee)
+			testutils.BigIntEquals(reward, testCase.expectedReward)
 		})
 	}
 }

@@ -71,11 +71,11 @@ func CalcSlotBaseFee(config *params.ChainConfig, creatorsPerSlotCount uint64, va
 	return baseFee
 }
 
-func CalcCreatorReword(gas uint64, baseFee *big.Int) *big.Int {
+func CalcCreatorReward(gas uint64, baseFee *big.Int) *big.Int {
 	fee := new(big.Int).Mul(new(big.Int).SetUint64(gas), baseFee)
 	validatorPart := big.NewFloat(1 - params.BurnMultiplier)
-	validatorReword := new(big.Int)
-	new(big.Float).Mul(validatorPart, new(big.Float).SetInt(fee)).Int(validatorReword)
+	validatorReward := new(big.Int)
+	new(big.Float).Mul(validatorPart, new(big.Float).SetInt(fee)).Int(validatorReward)
 
-	return validatorReword
+	return validatorReward
 }

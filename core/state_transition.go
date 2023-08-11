@@ -375,8 +375,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// After EIP-3529: refunds are capped to gasUsed / 5
 	st.refundGas(params.RefundQuotientEIP3529)
 
-	reword := misc.CalcCreatorReword(st.msg.Gas(), st.evm.Context.BaseFee)
-	st.state.AddBalance(st.evm.Context.Coinbase, reword)
+	reward := misc.CalcCreatorReward(st.msg.Gas(), st.evm.Context.BaseFee)
+	st.state.AddBalance(st.evm.Context.Coinbase, reward)
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
