@@ -781,7 +781,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	if isValidatorOp {
 		txData = tx.Data()
-		if err := pool.handleValidatorTransaction(txData, from); err != nil {
+		if err := pool.handleValidatorTransaction(txData, from, tx.Value()); err != nil {
 			return err
 		}
 	}
@@ -800,7 +800,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 }
 
 // handleValidatorTransaction validates validator transactions
-func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Address) error {
+func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Address, value *big.Int) error {
 	if len(txData) > 0 {
 		op, err := valOperation.DecodeBytes(txData)
 		if err != nil {
@@ -810,6 +810,11 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 		switch v := op.(type) {
 		case valOperation.Withdrawal:
 			return pool.checkWithdrawalOperation(v, from)
+		case valOperation.Deposit:
+			// check amount can add to log
+			if !common.BnCanCastToUint64(new(big.Int).Div(value, common.BigGwei)) {
+				return val.ErrInvalidAmount
+			}
 		}
 
 		return nil
@@ -820,6 +825,10 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 }
 
 func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from common.Address) error {
+	// check amount can add to log
+	if !common.BnCanCastToUint64(new(big.Int).Div(op.Amount(), common.BigGwei)) {
+		return val.ErrInvalidAmount
+	}
 	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
 	if err != nil {
 		return err
@@ -828,16 +837,6 @@ func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from co
 	withdrawalAddress := validator.GetWithdrawalAddress()
 	if from != *withdrawalAddress {
 		return val.ErrInvalidFromAddresses
-	}
-
-	if validator.GetActivationEra() == math.MaxUint64 {
-		return val.ErrNotActivatedValidator
-	}
-
-	currentBalance := validator.GetBalance()
-
-	if currentBalance.Cmp(op.Amount()) == -1 {
-		return val.ErrInsufficientFundsForTransfer
 	}
 
 	return nil
