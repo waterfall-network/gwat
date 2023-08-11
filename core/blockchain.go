@@ -4313,20 +4313,7 @@ func (bc *BlockChain) verifyBlockValidatorSyncTx(block *types.Block, tx *types.T
 
 	switch v := op.(type) {
 	case validatorOp.ValidatorSync:
-		savedValSync := bc.GetValidatorSyncData(v.InitTxHash())
-		if savedValSync == nil {
-			return validator.ErrNoSavedValSyncOp
-		}
-		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-		if blockEpoch > v.ProcEpoch() {
-			return validator.ErrInvalidOpEpoch
-		}
-		if !validator.CompareValSync(savedValSync, v) {
-			return validator.ErrMismatchValSyncOp
-		}
-		if savedValSync.TxHash != nil && *savedValSync.TxHash != tx.Hash() {
-			return validator.ErrMismatchTxHashes
-		}
+		validator.ValidateValidatorSyncOp(bc, v, block.Slot(), tx.Hash())
 	}
 	return nil
 }

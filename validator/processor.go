@@ -37,6 +37,11 @@ var (
 	ErrMismatchTxHashes             = errors.New("validator sync tx already exists")
 	ErrMismatchValSyncOp            = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
 	ErrInvalidOpEpoch               = errors.New("epoch to apply tx is not acceptable")
+	ErrTxNF                         = errors.New("tx not found")
+	ErrReceiptNF                    = errors.New("receipt not found")
+	ErrInvalidReceiptStatus         = errors.New("receipt status is failed")
+	ErrInvalidOpCode                = errors.New("invalid operation code")
+	ErrInvalidCreator               = errors.New("invalid creator address")
 )
 
 const (
@@ -74,6 +79,8 @@ type blockchain interface {
 	Config() *params.ChainConfig
 	Database() ethdb.Database
 	GetValidatorSyncData(InitTxHash common.Hash) *types.ValidatorSync
+	GetTransaction(txHash common.Hash) (tx *types.Transaction, blHash common.Hash, index uint64)
+	GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
@@ -303,7 +310,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 }
 
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {
-	if err = p.validateValSyncOp(op, msg); err != nil {
+	if err = ValidateValidatorSyncOp(p.blockchain, op, p.ctx.Slot, msg.TxHash()); err != nil {
 		log.Error("Invalid validator sync op", "op", op, "error", err)
 		return nil, err
 	}
@@ -318,68 +325,6 @@ func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (r
 	}
 
 	return ret, err
-}
-
-func (p *Processor) validateValSyncOp(op operation.ValidatorSync, msg message) error {
-	savedValSync := p.blockchain.GetValidatorSyncData(op.InitTxHash())
-	if savedValSync == nil {
-		return ErrNoSavedValSyncOp
-	}
-	blockEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
-	if blockEpoch > op.ProcEpoch() {
-		return ErrInvalidOpEpoch
-	}
-
-	if !CompareValSync(savedValSync, op) {
-		return ErrMismatchValSyncOp
-	}
-
-	if savedValSync.TxHash != nil && *savedValSync.TxHash != msg.TxHash() {
-		return ErrMismatchTxHashes
-	}
-
-	return nil
-}
-
-func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
-	if saved.InitTxHash != input.InitTxHash() {
-		log.Warn("check validator sync failed: InitTxHash", "s.InitTxHash", saved.InitTxHash.Hex(), "i.InitTxHash", input.InitTxHash().Hex())
-		return false
-	}
-
-	if saved.OpType != input.OpType() {
-		log.Warn("check validator sync failed: OpType", "s.OpType", saved.OpType, "i.OpType", input.OpType())
-		return false
-	}
-
-	if saved.Creator != input.Creator() {
-		log.Warn("check validator sync failed: Creator",
-			"s.Creator", fmt.Sprintf("%#x", saved.Creator),
-			"i.Creator", fmt.Sprintf("%#x", input.Creator()))
-		return false
-	}
-
-	if saved.Index != input.Index() {
-		log.Warn("check validator sync failed: Index", "s.Index", saved.Index, "i.Index", input.Index())
-		return false
-	}
-
-	if saved.ProcEpoch != input.ProcEpoch() {
-		log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
-		return false
-	}
-
-	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
-		log.Warn("check validator sync failed: Amount", "s.Amount", saved.Amount.String(), "i.Amount", input.Amount().String())
-		return false
-	}
-
-	if saved.Amount != nil && input.Amount() == nil || saved.Amount == nil && input.Amount() != nil {
-		log.Warn("check validator sync failed: Amount nil", "s.Amount", saved.Amount, "i.Amount", input.Amount())
-		return false
-	}
-
-	return true
 }
 
 func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error) {
@@ -647,4 +592,114 @@ func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, 
 		Topics:  topics,
 		Data:    data,
 	})
+}
+
+// ValidateValidatorSyncOp validate validator sync op data with context of apply.
+func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, applySlot uint64, txHash common.Hash) error {
+	savedValSync := bc.GetValidatorSyncData(valSyncOp.InitTxHash())
+	if savedValSync == nil {
+		return ErrNoSavedValSyncOp
+	}
+
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(applySlot)
+	if blockEpoch > valSyncOp.ProcEpoch() {
+		return ErrInvalidOpEpoch
+	}
+	if !CompareValSync(savedValSync, valSyncOp) {
+		return ErrMismatchValSyncOp
+	}
+	if savedValSync.TxHash != nil && *savedValSync.TxHash != txHash {
+		return ErrMismatchTxHashes
+	}
+	// check initial tx
+	initTx, _, _ := bc.GetTransaction(valSyncOp.InitTxHash())
+	if initTx == nil {
+		return ErrTxNF
+	}
+	// check init tx data
+	iop, err := operation.DecodeBytes(initTx.Data())
+	if err != nil {
+		log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+		return err
+	}
+	switch initTxData := iop.(type) {
+	case operation.Deposit:
+		if valSyncOp.OpCode() == operation.ActivateCode {
+			return ErrInvalidOpCode
+		}
+		if initTxData.CreatorAddress() == valSyncOp.Creator() {
+			return ErrInvalidCreator
+		}
+	case operation.Exit:
+		if valSyncOp.OpCode() == operation.DeactivateCode {
+			return ErrInvalidOpCode
+		}
+		if initTxData.CreatorAddress() == valSyncOp.Creator() {
+			return ErrInvalidCreator
+		}
+		if *initTxData.ExitAfterEpoch() < valSyncOp.ProcEpoch() {
+			return ErrInvalidOpEpoch
+		}
+	case operation.Withdrawal:
+		if valSyncOp.OpCode() == operation.UpdateBalanceCode {
+			return ErrInvalidOpCode
+		}
+		if initTxData.CreatorAddress() == valSyncOp.Creator() {
+			return ErrInvalidCreator
+		}
+	default:
+		return ErrInvalidOpCode
+	}
+
+	// check initial tx status
+	rc, _, _ := bc.GetTransactionReceipt(valSyncOp.InitTxHash())
+	if rc == nil {
+		return ErrReceiptNF
+	}
+	if rc.Status != types.ReceiptStatusSuccessful {
+		return ErrInvalidReceiptStatus
+	}
+
+	return nil
+}
+
+func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
+	if saved.InitTxHash != input.InitTxHash() {
+		log.Warn("check validator sync failed: InitTxHash", "s.InitTxHash", saved.InitTxHash.Hex(), "i.InitTxHash", input.InitTxHash().Hex())
+		return false
+	}
+
+	if saved.OpType != input.OpType() {
+		log.Warn("check validator sync failed: OpType", "s.OpType", saved.OpType, "i.OpType", input.OpType())
+		return false
+	}
+
+	if saved.Creator != input.Creator() {
+		log.Warn("check validator sync failed: Creator",
+			"s.Creator", fmt.Sprintf("%#x", saved.Creator),
+			"i.Creator", fmt.Sprintf("%#x", input.Creator()))
+		return false
+	}
+
+	if saved.Index != input.Index() {
+		log.Warn("check validator sync failed: Index", "s.Index", saved.Index, "i.Index", input.Index())
+		return false
+	}
+
+	if saved.ProcEpoch != input.ProcEpoch() {
+		log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
+		return false
+	}
+
+	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
+		log.Warn("check validator sync failed: Amount", "s.Amount", saved.Amount.String(), "i.Amount", input.Amount().String())
+		return false
+	}
+
+	if saved.Amount != nil && input.Amount() == nil || saved.Amount == nil && input.Amount() != nil {
+		log.Warn("check validator sync failed: Amount nil", "s.Amount", saved.Amount, "i.Amount", input.Amount())
+		return false
+	}
+
+	return true
 }

@@ -60,6 +60,16 @@ type Mockblockchain struct {
 	recorder *MockblockchainMockRecorder
 }
 
+func (m *Mockblockchain) GetTransaction(txHash common.Hash) (tx *types.Transaction, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *Mockblockchain) GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // MockblockchainMockRecorder is the mock recorder for Mockblockchain.
 type MockblockchainMockRecorder struct {
 	mock *Mockblockchain
