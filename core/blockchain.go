@@ -4371,7 +4371,7 @@ func (bc *BlockChain) handleBlockValidatorSyncTxs(block *types.Block) {
 				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
 				"amount", txValSyncOp.Amount,
 				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
-				"InitTxHash", txValSyncOp.InitTxHash,
+				"InitTxHash", fmt.Sprintf("%#x", txValSyncOp.InitTxHash),
 			)
 			bc.SetValidatorSyncData(txValSyncOp)
 		}

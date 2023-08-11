@@ -233,19 +233,6 @@ func (bc *BlockChain) GetBlockFinalizedNumber(hash common.Hash) *uint64 {
 	return bc.hc.GetBlockFinalizedNumber(hash)
 }
 
-// GetReceiptsByHash retrieves the receipts for all transactions in a given block.
-func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
-	if receipts, ok := bc.receiptsCache.Get(hash); ok {
-		return receipts.(types.Receipts)
-	}
-	receipts := rawdb.ReadReceipts(bc.db, hash, bc.chainConfig)
-	if receipts == nil {
-		return nil
-	}
-	bc.receiptsCache.Add(hash, receipts)
-	return receipts
-}
-
 // GetLastFinalizedHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
 func (bc *BlockChain) GetLastFinalizedHeader() *types.Header {
@@ -281,7 +268,8 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
-// SearchPrevFinalizedBlueHeader searches previous finalized blue block
+// SearchPrevFinalizedBlueHeader searches previous finalized blue block.
+// Deprecated
 func (bc *BlockChain) SearchPrevFinalizedBlueHeader(finNr uint64) *types.Header {
 	for i := finNr - 1; i > 0; i-- {
 		header := bc.GetHeaderByNumber(i)
@@ -306,6 +294,57 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLook
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, Index: txIndex}
 	bc.txLookupCache.Add(hash, lookup)
 	return lookup
+}
+
+// GetTransactionByHash retrieves the transaction by the given transaction
+// hash from the cache or database.
+func (bc *BlockChain) GetTransaction(txHash common.Hash) (tx *types.Transaction, blHash common.Hash, index uint64) {
+	// Short circuit if the txlookup already in the cache, retrieve otherwise
+	if val, exist := bc.txLookupCache.Get(txHash); exist {
+		lookup := val.(*rawdb.LegacyTxLookupEntry)
+		index = lookup.Index
+		blHash = lookup.BlockHash
+		bl := bc.GetBlockByHash(blHash)
+		if bl != nil {
+			tx = bl.Transactions()[index]
+			return
+		}
+	}
+	tx, blHash, index = rawdb.ReadTransaction(bc.db, txHash)
+	if tx != nil {
+		lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blHash, Index: index}
+		bc.txLookupCache.Add(txHash, lookup)
+	}
+	return
+}
+
+// GetTransactionReceipt retrieves the transaction receipt by the given transaction
+// hash from the cache or database.
+func (bc *BlockChain) GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64) {
+	var tx *types.Transaction
+	tx, blHash, index = bc.GetTransaction(txHash)
+	if tx == nil {
+		return
+	}
+	receipts := bc.GetReceiptsByHash(blHash)
+	if receipts.Len() <= int(index) {
+		return
+	}
+	rc = receipts[index]
+	return
+}
+
+// GetReceiptsByHash retrieves the receipts for all transactions in a given block.
+func (bc *BlockChain) GetReceiptsByHash(blHash common.Hash) types.Receipts {
+	if receipts, ok := bc.receiptsCache.Get(blHash); ok {
+		return receipts.(types.Receipts)
+	}
+	receipts := rawdb.ReadReceipts(bc.db, blHash, bc.chainConfig)
+	if receipts == nil {
+		return nil
+	}
+	bc.receiptsCache.Add(blHash, receipts)
+	return receipts
 }
 
 // HasState checks if state trie is fully present in the database or not.
