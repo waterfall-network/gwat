@@ -17,7 +17,6 @@ import (
 // both full and light clients) with access to necessary functions.
 type Backend interface {
 	BlockChain() *core.BlockChain
-	Etherbase() (eb common.Address, err error)
 	CreatorAuthorize(creator common.Address) error
 	AccountManager() *accounts.Manager
 }
