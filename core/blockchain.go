@@ -1933,7 +1933,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 	// Some other error occurred, abort
 	case err != nil:
 		stats.ignored += len(it.chain)
-		bc.reportBlock(block, nil, err)
 		return it.index, err
 	}
 	// No validation errors for the first block (or chain prefix skipped)
@@ -1956,7 +1955,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
-			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
 
@@ -2004,7 +2002,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
-			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
 			log.Error("Error of block insertion to chain while sync (processing)", "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
 			return it.index, err
@@ -2474,7 +2471,6 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 	case err != nil:
 		log.Error("Insert blocks: err", "hash", block.Hash().Hex(), "err", err)
 		stats.ignored += len(it.chain)
-		bc.reportBlock(block, nil, err)
 		return it.index, err
 	}
 
@@ -2486,7 +2482,6 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
-			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
 
@@ -3291,7 +3286,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 	case err != nil:
 		log.Error("insert chain err", "hash", block.Hash().Hex(), "err", err)
 		stats.ignored += len(it.chain)
-		bc.reportBlock(block, nil, err)
 		return it.index, err
 	}
 	// No validation errors for the first block (or chain prefix skipped)
@@ -3314,7 +3308,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
-			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
 
@@ -3360,7 +3353,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
-			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
@@ -3635,29 +3627,6 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 			return
 		}
 	}
-}
-
-// reportBlock logs a bad block error.
-func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
-	rawdb.WriteBadBlock(bc.db, block)
-
-	var receiptString string
-	for i, receipt := range receipts {
-		receiptString += fmt.Sprintf("\t %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x\n",
-			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
-			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
-	}
-	log.Error(fmt.Sprintf(`
-########## BAD BLOCK #########
-Chain config: %v
-
-Number: %v
-Hash: 0x%x
-%d
-
-Error: %v
-##############################
-`, bc.chainConfig, block.Nr(), block.Hash(), len(block.Transactions()), err))
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local
