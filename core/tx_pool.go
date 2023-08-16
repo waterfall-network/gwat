@@ -327,6 +327,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		pool.locals.add(addr)
 	}
 	pool.priced = newTxPricedList(pool.all)
+	pool.priced.SetBaseFee(chain.Genesis().BaseFee())
 	bl := chain.GetLastFinalizedBlock()
 	pool.reset(nil, bl.Header())
 
@@ -674,15 +675,6 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 	for addr, list := range pool.pending {
 		txs := list.Flatten()
 
-		// If the miner requests tip enforcement, cap the lists now
-		if enforceTips && !pool.locals.contains(addr) {
-			for i, tx := range txs {
-				if tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-					txs = txs[:i]
-					break
-				}
-			}
-		}
 		if len(txs) > 0 {
 			pending[addr] = txs
 		}
