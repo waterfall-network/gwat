@@ -47,6 +47,29 @@ import (
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
+type ValidatorData struct {
+	Pubkey            string `json:"pubkey"`
+	CreatorAddress    string `json:"creator_address"`
+	WithdrawalAddress string `json:"withdrawal_address"`
+	Amount            uint64 `json:"amount"`
+}
+
+type DepositData []*ValidatorData
+
+func (d DepositData) Addresses() []common.Address {
+	addresses := make([]common.Address, 0)
+	uniqAddresses := make(map[common.Address]struct{})
+	for _, data := range d {
+		address := common.HexToAddress(data.CreatorAddress)
+		if _, ok := uniqAddresses[address]; !ok {
+			addresses = append(addresses, address)
+			uniqAddresses[address] = struct{}{}
+		}
+	}
+
+	return addresses
+}
+
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
@@ -56,7 +79,7 @@ type Genesis struct {
 	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
 	Coinbase   common.Address      `json:"coinbase"`
 	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
-	Validators []common.Address    `json:"validators"`
+	Validators DepositData
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -299,9 +322,12 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	validatorStorage := valStore.NewStorage(g.Config)
 
-	validatorStorage.SetValidatorsList(statedb, g.Validators)
+	validatorStorage.SetValidatorsList(statedb, g.Validators.Addresses())
 	for _, val := range g.Validators {
-		v := valStore.NewValidator(common.BlsPubKey{}, val, &common.Address{})
+		pubKey := common.HexToBlsPubKey(val.Pubkey)
+		address := common.HexToAddress(val.CreatorAddress)
+		withdrawalAddress := common.HexToAddress(val.WithdrawalAddress)
+		v := valStore.NewValidator(pubKey, address, &withdrawalAddress)
 		v.SetActivationEra(uint64(0))
 
 		err := validatorStorage.SetValidator(statedb, v)
@@ -390,7 +416,7 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 
 func (g *Genesis) GenerateValidatorStateAddress() *common.Address {
 	buf := make([]byte, len(g.Validators)*common.AddressLength)
-	for i, validator := range g.Validators {
+	for i, validator := range g.Validators.Addresses() {
 		beginning := i * common.AddressLength
 		end := beginning + common.AddressLength
 		copy(buf[beginning:end], validator[:])
