@@ -326,9 +326,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		log.Info("Setting new local account", "address", addr)
 		pool.locals.add(addr)
 	}
-	pool.priced = newTxPricedList(pool.all)
-	pool.priced.SetBaseFee(chain.Genesis().BaseFee())
 	bl := chain.GetLastFinalizedBlock()
+	pool.priced = newTxPricedList(pool.all)
+	pool.priced.SetBaseFee(bl.BaseFee())
 	pool.reset(nil, bl.Header())
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
