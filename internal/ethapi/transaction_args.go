@@ -89,10 +89,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, head *t
 		// In this clause, user left some fields unspecified.
 		if args.GasPrice == nil {
 			if args.MaxPriorityFeePerGas == nil {
-				tip, err := b.SuggestGasTipCap(ctx)
-				if err != nil {
-					return err
-				}
+				tip := new(big.Int)
 				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 			}
 			if args.MaxFeePerGas == nil {
