@@ -51,8 +51,7 @@ type LesApiBackend struct {
 }
 
 func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks) {
-	//TODO implement me
-	panic("implement me")
+	return b.eth.txPool.Content()
 }
 
 func (b *LesApiBackend) GetLastFinalizedNumber() uint64 {
