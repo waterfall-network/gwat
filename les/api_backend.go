@@ -25,7 +25,6 @@ import (
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/bloombits"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -51,6 +50,11 @@ type LesApiBackend struct {
 	gpo                 *gasprice.Oracle
 }
 
+func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (b *LesApiBackend) GetLastFinalizedNumber() uint64 {
 	lfHeader := b.eth.blockchain.GetLastFinalizedHeader()
 	if lfHeader == nil {
@@ -61,10 +65,6 @@ func (b *LesApiBackend) GetLastFinalizedNumber() uint64 {
 
 func (b *LesApiBackend) GetLastFinalizedHeader() *types.Header {
 	return b.eth.blockchain.GetLastFinalizedHeader()
-}
-
-func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks) {
-	return b.eth.txPool.Content()
 }
 
 func (b *LesApiBackend) BlockHashesBySlot(ctx context.Context, slot uint64) common.HashArray {
@@ -360,10 +360,6 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
-}
-
-func (b *LesApiBackend) Engine() consensus.Engine {
-	return b.eth.engine
 }
 
 func (b *LesApiBackend) CurrentHeader() *types.Header {

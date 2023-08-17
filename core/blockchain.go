@@ -233,7 +233,6 @@ type BlockChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	engine       consensus.Engine
 	validator    Validator // Block and state validator interface
 	prefetcher   Prefetcher
 	processor    Processor // Block transaction processor interface
@@ -246,7 +245,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -281,17 +280,16 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		invalidBlocksCache:    invBlocksCache,
 		optimisticSpinesCache: optimisticSpinesCache,
 		checkpointCache:       checkpointCache,
-		engine:                engine,
 		vmConfig:              vmConfig,
 		syncProvider:          nil,
 		validatorStorage:      valStore.NewStorage(chainConfig),
 	}
-	bc.validator = NewBlockValidator(chainConfig, bc, engine)
-	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
-	bc.processor = NewStateProcessor(chainConfig, bc, engine)
+	bc.validator = NewBlockValidator(chainConfig, bc)
+	bc.prefetcher = newStatePrefetcher(chainConfig, bc)
+	bc.processor = NewStateProcessor(chainConfig, bc)
 
 	var err error
-	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
+	bc.hc, err = NewHeaderChain(db, chainConfig, bc.insertStopped)
 	if err != nil {
 		return nil, err
 	}
@@ -1917,11 +1915,9 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 			bc.MoveTxsToProcessing(block)
 		}
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
-	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
+	it := newInsertIterator(chain, bc.validator)
 
 	block, err := it.next()
 
@@ -2457,11 +2453,9 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
-	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
+	it := newInsertIterator(chain, bc.validator)
 
 	block, err := it.next()
 
@@ -2683,7 +2677,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	header.GasUsed = usedGas
 	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
-	bc.engine.Finalize(bc, header, statedb, block.Transactions())
+	header.Root = statedb.IntermediateRoot(true)
 
 	// Update the metrics touched during block processing
 	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -3278,11 +3272,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 		headerMap[block.Hash()] = block.Header()
 	}
 
-	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
-	defer close(abort)
-
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
+	it := newInsertIterator(chain, bc.validator)
 
 	block, err := it.next()
 
@@ -3673,9 +3664,9 @@ Error: %v
 // should be done or not. The reason behind the optional check is because some
 // of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
-func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	start := time.Now()
-	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := bc.hc.ValidateHeaderChain(chain); err != nil {
 		return i, err
 	}
 

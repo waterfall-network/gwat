@@ -1,6 +1,7 @@
 package creator
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -11,17 +12,22 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/validatorsync"
+)
+
+var (
+	extraVanity = 32                     // Fixed number of extra-data prefix bytes reserved for signer vanity
+	extraSeal   = crypto.SignatureLength // Fixed number of extra-data suffix bytes reserved for signer seal
 )
 
 // Backend wraps all methods required for block creation.
@@ -65,7 +71,6 @@ type txsWithCumulativeGas struct {
 // and gathering the sealing result.
 type Creator struct {
 	config *Config
-	engine consensus.Engine
 	eth    Backend
 	bc     *core.BlockChain
 
@@ -89,10 +94,9 @@ type Creator struct {
 }
 
 // New creates new Creator instance
-func New(config *Config, engine consensus.Engine, eth Backend, mux *event.TypeMux) *Creator {
+func New(config *Config, eth Backend, mux *event.TypeMux) *Creator {
 	creator := &Creator{
 		config: config,
-		engine: engine,
 		eth:    eth,
 		mux:    mux,
 		bc:     eth.BlockChain(),
@@ -158,14 +162,6 @@ func (c *Creator) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 // to the given channel.
 func (c *Creator) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return c.pendingLogsFeed.Subscribe(ch)
-}
-
-// Hashrate retrieve current hashrate
-func (c *Creator) Hashrate() uint64 {
-	if pow, ok := c.engine.(consensus.PoW); ok {
-		return uint64(pow.Hashrate())
-	}
-	return 0
 }
 
 // SetExtra sets the content used to initialize the block extra field.
@@ -407,6 +403,12 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		return
 	}
 	header.Coinbase = coinbase
+	if len(header.Extra) < extraVanity {
+		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
+	}
+	header.Extra = header.Extra[:extraVanity]
+	header.Extra = append(header.Extra, coinbase[:]...)
+	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
 	// Fill the block with all available pending transactions.
 	pendingTxs := c.getPending(coinbase, creators)

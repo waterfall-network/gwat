@@ -82,8 +82,7 @@ func (st *insertStats) report(chain []*types.Block, index int, dirty common.Stor
 type insertIterator struct {
 	chain types.Blocks // Chain of blocks being iterated over
 
-	results <-chan error // Verification result sink from the consensus engine
-	errors  []error      // Header verification errors for the blocks
+	errors []error // Header verification errors for the blocks
 
 	index     int       // Current offset of the iterator
 	validator Validator // Validator to run if verification succeeds
@@ -91,10 +90,9 @@ type insertIterator struct {
 
 // newInsertIterator creates a new iterator based on the given blocks, which are
 // assumed to be a contiguous chain.
-func newInsertIterator(chain types.Blocks, results <-chan error, validator Validator) *insertIterator {
+func newInsertIterator(chain types.Blocks, validator Validator) *insertIterator {
 	return &insertIterator{
 		chain:     chain,
-		results:   results,
 		errors:    make([]error, 0, len(chain)),
 		index:     -1,
 		validator: validator,
@@ -111,10 +109,8 @@ func (it *insertIterator) next() (*types.Block, error) {
 	}
 	// Advance the iterator and wait for verification result if not yet done
 	it.index++
-	if len(it.errors) <= it.index {
-		it.errors = append(it.errors, <-it.results)
-	}
-	if it.errors[it.index] != nil {
+
+	if len(it.errors) < it.index && it.errors[it.index] != nil {
 		return it.chain[it.index], it.errors[it.index]
 	}
 	// Block header valid, run body validation and return
@@ -131,9 +127,8 @@ func (it *insertIterator) peek() (*types.Block, error) {
 	if it.index+1 >= len(it.chain) {
 		return nil, nil
 	}
-	// Wait for verification result if not yet done
-	if len(it.errors) <= it.index+1 {
-		it.errors = append(it.errors, <-it.results)
+	if len(it.errors) < it.index && it.errors[it.index] != nil {
+		return it.chain[it.index], it.errors[it.index]
 	}
 	if it.errors[it.index+1] != nil {
 		return it.chain[it.index+1], it.errors[it.index+1]
