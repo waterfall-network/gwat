@@ -2306,6 +2306,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
+	if !bc.verifyBlockBaseFee(block) {
+		return false, nil
+	}
+
 	log.Info("^^^^^^^^^^^^ TIME",
 		"elapsed", common.PrettyDuration(time.Since(ts)),
 		"func:", "VerifyBlock:validate height",
@@ -2667,7 +2671,13 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	header := block.Header()
 
 	// Set baseFee and GasLimit
-	header.BaseFee = misc.CalcBaseFee(bc.chainConfig, stateBlock.Header())
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, header.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "UpdateFinalizingState")
+	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+
 	block.SetHeader(header)
 
 	// Process block using the parent state as reference point
@@ -4521,4 +4531,25 @@ func (bc *BlockChain) EpochToEra(epoch uint64) *era.Era {
 	}
 
 	return findingEra
+}
+
+func (bc *BlockChain) verifyBlockBaseFee(block *types.Block) bool {
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot()); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, block.Slot(), true, false, "verifyBlockBaseFee")
+	expectedBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+
+	if expectedBaseFee.Cmp(block.BaseFee()) != 0 {
+		log.Warn("Block verification: invalid base fee",
+			"calcBaseFee", expectedBaseFee.String(),
+			"blockBaseFee", block.BaseFee().String(),
+			"blockHash", block.Hash().Hex(),
+		)
+		return false
+	}
+
+	return true
 }

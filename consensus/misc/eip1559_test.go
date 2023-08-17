@@ -17,12 +17,14 @@
 package misc
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 // copyConfig does a _shallow_ copy of a given config. Safe to set new values, but
@@ -96,77 +98,154 @@ func TestBlockGasLimits(t *testing.T) {
 	}
 }
 
-// TestCalcBaseFee assumes all blocks are 1559-blocks
-func TestCalcBaseFee(t *testing.T) {
-	tests := []struct {
-		parentBaseFee   int64
-		parentGasLimit  uint64
-		parentGasUsed   uint64
-		expectedBaseFee int64
-	}{
-		{params.InitialBaseFee, 20000000, 10000000, params.InitialBaseFee}, // usage == target
-		{params.InitialBaseFee, 20000000, 9000000, 987500000},              // usage below target
-		{params.InitialBaseFee, 20000000, 11000000, 1012500000},            // usage above target
+// TestCalcSlotBaseFee assumes all blocks are 1559-blocks
+func TestCalcSlotBaseFee(t *testing.T) {
+	conf := &params.ChainConfig{
+		SecondsPerSlot:    4,
+		ValidatorsPerSlot: 4,
+		EffectiveBalance:  big.NewInt(3200),
 	}
-	for i, test := range tests {
-		parent := &types.Header{
-			Number:   new(uint64),
-			GasLimit: test.parentGasLimit,
-			GasUsed:  test.parentGasUsed,
-			BaseFee:  big.NewInt(test.parentBaseFee),
-		}
-		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
-			t.Errorf("test %d: have %d  want %d, ", i, have, want)
-		}
+
+	maxGasAmountPerBlock := uint64(105000000)
+
+	testCases := []struct {
+		validatorsCount uint64
+		expectedBaseFee *big.Int
+	}{
+		{
+			validatorsCount: 8,
+			expectedBaseFee: big.NewInt(2838661342),
+		},
+		{
+			validatorsCount: 248,
+			expectedBaseFee: big.NewInt(17031968050),
+		},
+		{
+			validatorsCount: 2048,
+			expectedBaseFee: big.NewInt(45418581470),
+		},
+		{
+			validatorsCount: 5000,
+			expectedBaseFee: big.NewInt(70966533550),
+		},
+		{
+			validatorsCount: 10000,
+			expectedBaseFee: big.NewInt(100361834200),
+		},
+		{
+			validatorsCount: 20000,
+			expectedBaseFee: big.NewInt(141933067100),
+		},
+		{
+			validatorsCount: 50000,
+			expectedBaseFee: big.NewInt(224415883700),
+		},
+		{
+			validatorsCount: 100000,
+			expectedBaseFee: big.NewInt(317371986300),
+		},
+		{
+			validatorsCount: 200000,
+			expectedBaseFee: big.NewInt(448831767300),
+		},
+		{
+			validatorsCount: 500000,
+			expectedBaseFee: big.NewInt(709665335500),
+		},
+		{
+			validatorsCount: 1000000,
+			expectedBaseFee: big.NewInt(1003618342000),
+		},
+		{
+			validatorsCount: 3000000,
+			expectedBaseFee: big.NewInt(1738317960000),
+		},
+		{
+			validatorsCount: 5000000,
+			expectedBaseFee: big.NewInt(2244158837000),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprintf("validators amount %d", testCase.validatorsCount), func(t *testing.T) {
+			res := CalcSlotBaseFee(conf, 4, testCase.validatorsCount, maxGasAmountPerBlock)
+			testutils.BigIntEquals(res, testCase.expectedBaseFee)
+		})
 	}
 }
 
-// TestCalcSlotBaseFee assumes all blocks are 1559-blocks
-func TestCalcSlotBaseFee(t *testing.T) {
-	tests := []struct {
-		gasUsed         uint64
-		validatorsNum   uint64
-		maxGasPerBlock  uint64
-		burnMultiplier  float64
-		creatorsPerSlot uint64
-		expectedBaseFee int64
-	}{
-		{10000, 2048, 210000000, 1, 1, 1915015},
-		{10000, 2048, 210000000, 1, 4, 478753},
-		{10000, 2048, 210000000, 1, 8, 239376},
-		{10000, 2048, 210000000, 1, 16, 119688},
-		{10000, 2048, 210000000, 1, 32, 59844},
-		{10000, 4096, 210000000, 1, 4, 677060},
-		{10000, 32000, 210000000, 1, 4, 1892440},
-		{10000, 300000, 210000000, 1, 4, 5794393},
-		{2100000, 2048, 210000000, 1, 4, 100538315},
-		{2100000, 300000, 210000000, 1, 4, 1216822572},
-		{2100000, 300000, 210000000, 0.75, 4, 912616929},
-		{10000, 2048, 210000000, 1, 4, 478753},
-		{10000, 2048, 210000000, 0.25, 4, 119688},
-		{90000, 2048, 100000000, 1, 4, 9048448},
-		{110000, 2048, 100000000, 1, 1, 44236858},
-		{110000, 2048, 100000000, 0.25, 1, 11059214},
-		{110000, 2048, 100000000, 0.5, 1, 22118429},
-		{110000, 2048, 100000000, 0.75, 1, 33177644},
-		{110000, 2048, 100000000, 1, 4, 11059214},
-		{110000, 2048, 100000000, 0.25, 4, 2764803},
-		{110000, 2048, 100000000, 0.5, 4, 5529607},
-		{110000, 2048, 100000000, 0.75, 4, 8294411},
-		{110000, 2048, 100000000, 1, 32, 1382401},
-		{110000, 2048, 100000000, 0.25, 32, 345600},
-		{110000, 2048, 100000000, 0.5, 32, 691200},
-		{110000, 2048, 100000000, 0.75, 32, 1036801},
-		{110000, 0, 100000000, 1, 32, 0},
-		{110000, 2048, 100000000, 1, 0, 0},
+func TestCalcCreatorRewardForBaseTx(t *testing.T) {
+	conf := &params.ChainConfig{
+		SecondsPerSlot:    4,
+		ValidatorsPerSlot: 4,
+		EffectiveBalance:  big.NewInt(3200),
 	}
-	for i, test := range tests {
-		current := &types.Header{
-			Number:  new(uint64),
-			GasUsed: test.gasUsed,
-		}
-		if have, want := CalcSlotBaseFee(config(), current, test.validatorsNum, test.maxGasPerBlock, test.burnMultiplier, test.creatorsPerSlot), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
-			t.Errorf("test %d: have %d  want %d, ", i, have, want)
-		}
+
+	maxGasAmountPerBlock := uint64(105000000)
+
+	testCases := []struct {
+		validatorsCount uint64
+		expectedReward  *big.Int
+	}{
+		{
+			validatorsCount: 8,
+			expectedReward:  big.NewInt(19870629390000),
+		},
+		{
+			validatorsCount: 248,
+			expectedReward:  big.NewInt(119223776400000),
+		},
+		{
+			validatorsCount: 2048,
+			expectedReward:  big.NewInt(317930070300000),
+		},
+		{
+			validatorsCount: 5000,
+			expectedReward:  big.NewInt(496765734800000),
+		},
+		{
+			validatorsCount: 10000,
+			expectedReward:  big.NewInt(702532839500000),
+		},
+		{
+			validatorsCount: 20000,
+			expectedReward:  big.NewInt(993531469700000),
+		},
+		{
+			validatorsCount: 50000,
+			expectedReward:  big.NewInt(1570911186000000),
+		},
+		{
+			validatorsCount: 100000,
+			expectedReward:  big.NewInt(2221603904000000),
+		},
+		{
+			validatorsCount: 200000,
+			expectedReward:  big.NewInt(3141822371000000),
+		},
+		{
+			validatorsCount: 500000,
+			expectedReward:  big.NewInt(4967657348000000),
+		},
+		{
+			validatorsCount: 1000000,
+			expectedReward:  big.NewInt(7025328395000000),
+		},
+		{
+			validatorsCount: 3000000,
+			expectedReward:  big.NewInt(12168225720000000),
+		},
+		{
+			validatorsCount: 5000000,
+			expectedReward:  big.NewInt(15709111860000000),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprintf("validators amount %d", testCase.validatorsCount), func(t *testing.T) {
+			baseFee := CalcSlotBaseFee(conf, 4, testCase.validatorsCount, maxGasAmountPerBlock)
+			reward := CalcCreatorReward(params.TxGas, baseFee)
+			testutils.BigIntEquals(reward, testCase.expectedReward)
+		})
 	}
 }

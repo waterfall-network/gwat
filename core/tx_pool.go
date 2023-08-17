@@ -326,8 +326,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		log.Info("Setting new local account", "address", addr)
 		pool.locals.add(addr)
 	}
-	pool.priced = newTxPricedList(pool.all)
 	bl := chain.GetLastFinalizedBlock()
+	pool.priced = newTxPricedList(pool.all)
+	pool.priced.SetBaseFee(bl.BaseFee())
 	pool.reset(nil, bl.Header())
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
@@ -674,15 +675,6 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 	for addr, list := range pool.pending {
 		txs := list.Flatten()
 
-		// If the miner requests tip enforcement, cap the lists now
-		if enforceTips && !pool.locals.contains(addr) {
-			for i, tx := range txs {
-				if tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-					txs = txs[:i]
-					break
-				}
-			}
-		}
 		if len(txs) > 0 {
 			pending[addr] = txs
 		}
@@ -745,10 +737,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
 		return ErrInvalidSender
-	}
-	// Drop non-local transactions under our own minimal accepted gas price or tip
-	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
-		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
@@ -1569,7 +1557,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 				statedb = pool.currentState
 			}
 			validators := pool.chain.ValidatorStorage().GetValidatorsList(statedb)
-			pendingBaseFee := misc.CalcSlotBaseFee(pool.chainconfig, reset.newHead, uint64(len(validators)), pool.chain.Genesis().GasLimit(), params.BurnMultiplier, pool.chainconfig.ValidatorsPerSlot)
+			pendingBaseFee := misc.CalcSlotBaseFee(pool.chainconfig, pool.chainconfig.ValidatorsPerSlot, uint64(len(validators)), pool.chain.Genesis().GasLimit())
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}
