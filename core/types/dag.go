@@ -165,6 +165,21 @@ func (vs *ValidatorSync) Copy() *ValidatorSync {
 	return cpy
 }
 
+func (vs *ValidatorSync) Print() string {
+	if vs == nil {
+		return "{nil}"
+	}
+	return fmt.Sprintf("{InitTxHash: %#x, OpType: %d, ProcEpoch: %d, Index: %d, Creator: %#x, Amount: %d, TxHash: %#x}",
+		vs.InitTxHash,
+		vs.OpType,
+		vs.ProcEpoch,
+		vs.Index,
+		vs.Creator,
+		vs.Amount,
+		vs.TxHash,
+	)
+}
+
 func (vs *ValidatorSync) Key() common.Hash {
 	var key common.Hash
 	if vs == nil {

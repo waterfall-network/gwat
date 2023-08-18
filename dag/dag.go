@@ -157,7 +157,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		errStr := creator.ErrSynchronization.Error()
 		res.Error = &errStr
 		log.Error("Handle Finalize: response (busy)", "result", res, "err", errStr)
-// 		return res
+		// return res
 	}
 
 	d.bc.DagMuLock()
@@ -239,6 +239,10 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		} else {
 			era.HandleEra(d.bc, data.Checkpoint)
 		}
+	}
+
+	for i, vs := range data.ValSyncData {
+		log.Info("Handle Finalize: valSync", "i", i, "valSyncData", vs.Print())
 	}
 
 	// handle validator sync data
