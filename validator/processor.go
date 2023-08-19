@@ -464,7 +464,12 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		return nil, ErrUnknownValidator
 	}
 
-	validator.SetBalance(op.Amount())
+	bal := validator.GetBalance()
+	if bal == nil {
+		bal = new(big.Int)
+	}
+	newBal := new(big.Int).Add(bal, op.Amount())
+	validator.SetBalance(newBal)
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
