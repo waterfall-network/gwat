@@ -891,6 +891,7 @@ func (c *Creator) commitNewWork(tips types.Tips, timestamp int64) {
 			"Index", sd.Index,
 			"Creator", fmt.Sprintf("%#x", sd.Creator),
 			"amount", amt.String(),
+			"InitTxHash", fmt.Sprintf("%#x", sd.InitTxHash),
 			"TxHash", fmt.Sprintf("%#x", sd.TxHash),
 		)
 	}

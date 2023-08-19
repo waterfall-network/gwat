@@ -60,6 +60,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 		"OpType", valSyncOp.OpType,
 		"Amount", valSyncOp.Amount.String(),
 		"Index", valSyncOp.Index,
+		"InitTxHash", valSyncOp.InitTxHash.Hex(),
 	)
 
 	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress)
@@ -132,12 +133,6 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 		}
 		if valSyncOp.Amount.Sign() == -1 {
 			return false, fmt.Errorf("validator sync operation failed: withdrawal amount is negative")
-		}
-		if validator.GetActivationEra() >= procEra.Number {
-			return false, fmt.Errorf("validator sync operation failed: withdrawal epoche is too low")
-		}
-		if validator.GetExitEra() == math.MaxUint64 {
-			return false, fmt.Errorf("validator sync operation failed: withdrawal operation require initialized exit procedure")
 		}
 	default:
 		return false, fmt.Errorf("validator sync operation failed: unknown oparation type %d", valSyncOp.OpType)

@@ -146,7 +146,7 @@ func TestBlockDAGWf(t *testing.T) {
 	}
 }
 
-func TestValidatorSyncWf(t *testing.T) {
+func TestValidatorSyncWf_Ok(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	src_1 := &types.ValidatorSync{
@@ -155,13 +155,66 @@ func TestValidatorSyncWf(t *testing.T) {
 		Index:      45645,
 		Creator:    common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 		Amount:     new(big.Int),
-		TxHash:     &common.Hash{1, 2, 3},
+		TxHash:     &common.Hash{7, 8, 9},
 		InitTxHash: common.Hash{1, 2, 3},
 	}
 	src_1.Amount.SetString("32789456000000", 10)
 
 	WriteValidatorSync(db, src_1)
-	if entry := ReadValidatorSync(db, src_1.InitTxHash); fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
+	entry := ReadValidatorSync(db, src_1.InitTxHash)
+	if fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
+		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, src_1)
+	}
+
+	DeleteValidatorSync(db, src_1.InitTxHash)
+	if entry := ReadValidatorSync(db, src_1.InitTxHash); entry != nil {
+		t.Fatalf("ValidatorSync D-R failed:  %#v != nil", entry)
+	}
+}
+
+func TestValidatorSyncWf_Ok_noTxHash(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	src_1 := &types.ValidatorSync{
+		OpType:    2,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:    new(big.Int),
+		//TxHash:     &common.Hash{7, 8, 9},
+		InitTxHash: common.Hash{1, 2, 3},
+	}
+	src_1.Amount.SetString("32789456000000", 10)
+
+	WriteValidatorSync(db, src_1)
+	entry := ReadValidatorSync(db, src_1.InitTxHash)
+	if fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
+		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, src_1)
+	}
+
+	DeleteValidatorSync(db, src_1.InitTxHash)
+	if entry := ReadValidatorSync(db, src_1.InitTxHash); entry != nil {
+		t.Fatalf("ValidatorSync D-R failed:  %#v != nil", entry)
+	}
+}
+
+func TestValidatorSyncWf_Ok_noAmount(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	src_1 := &types.ValidatorSync{
+		OpType:    1,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		//Amount:     new(big.Int),
+		TxHash:     &common.Hash{7, 8, 9},
+		InitTxHash: common.Hash{1, 2, 3},
+	}
+	//src_1.Amount.SetString("32789456000000", 10)
+
+	WriteValidatorSync(db, src_1)
+	entry := ReadValidatorSync(db, src_1.InitTxHash)
+	if fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
 		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, src_1)
 	}
 

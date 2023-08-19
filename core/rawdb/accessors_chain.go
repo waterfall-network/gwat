@@ -999,16 +999,55 @@ func parseValidatorSyncKey(validatorSyncKey []byte) (initTxHash common.Hash) {
 	return initTxHash
 }
 
-// ReadValidatorSync retrieves the ValidatorSync data.
-func ReadValidatorSync(db ethdb.KeyValueReader, initTxHash common.Hash) *types.ValidatorSync {
-	data, err := db.Get(validatorSyncKey(initTxHash))
-	decoded := &types.ValidatorSync{}
-	err = rlp.DecodeBytes(data, decoded)
-	if err != nil {
-		log.Warn("Failed to decode era", "err", err, "initTxHash", initTxHash)
+func decodeValidatorSync(initTxHash common.Hash, data []byte) *types.ValidatorSync {
+	//InitTxHash common.Hash - parse from key
+	// <OpType><Creator><index><procEpoch><txHash><amountBigInt>`
+	minSize := 76
+	if len(data) < minSize {
 		return nil
 	}
-	return decoded
+	res := &types.ValidatorSync{
+		InitTxHash: initTxHash,
+		OpType:     types.ValidatorSyncOp(binary.BigEndian.Uint64(data[0:8])),
+		Creator:    common.BytesToAddress(data[8:28]),
+		Index:      binary.BigEndian.Uint64(data[28:36]),
+		ProcEpoch:  binary.BigEndian.Uint64(data[36:44]),
+		TxHash:     nil,
+		Amount:     nil,
+	}
+	txh := common.BytesToHash(data[44:76])
+	if txh != (common.Hash{}) {
+		res.TxHash = &txh
+	}
+	if len(data[minSize:]) > 0 {
+		res.Amount = new(big.Int).SetBytes(data[minSize:])
+	}
+	return res
+}
+
+func encodeValidatorSync(vs types.ValidatorSync) []byte {
+	//InitTxHash common.Hash - put in key
+	// <OpType><Creator><index><procEpoch><txHash><amountBigInt>`
+	var data []byte
+	data = append(data, encodeBlockNumber(uint64(vs.OpType))...)
+	data = append(data, vs.Creator.Bytes()...)
+	data = append(data, encodeBlockNumber(vs.Index)...)
+	data = append(data, encodeBlockNumber(vs.ProcEpoch)...)
+	txh := vs.TxHash
+	if txh == nil {
+		txh = &common.Hash{}
+	}
+	data = append(data, txh.Bytes()...)
+	if vs.Amount != nil {
+		data = append(data, vs.Amount.Bytes()...)
+	}
+	return data
+}
+
+// ReadValidatorSync retrieves the ValidatorSync data.
+func ReadValidatorSync(db ethdb.KeyValueReader, initTxHash common.Hash) *types.ValidatorSync {
+	data, _ := db.Get(validatorSyncKey(initTxHash))
+	return decodeValidatorSync(initTxHash, data)
 }
 
 // WriteValidatorSync stores the ValidatorSync data.
@@ -1017,12 +1056,9 @@ func WriteValidatorSync(db ethdb.KeyValueWriter, vs *types.ValidatorSync) {
 		return
 	}
 	key := validatorSyncKey(vs.InitTxHash)
-	enc, err := rlp.EncodeToBytes(vs)
-	if err != nil {
-		log.Crit("Failed to store ValidatorSync data: encode failed", key, fmt.Sprintf("%#x", key), "err", err)
-	}
+	enc := encodeValidatorSync(*vs)
 	if err := db.Put(key, enc); err != nil {
-		log.Crit("Failed to store ValidatorSync data", key, fmt.Sprintf("%#x", key), "err", err)
+		log.Crit("Failed to store ValidatorSync data", "err", err)
 	}
 }
 

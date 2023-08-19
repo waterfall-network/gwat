@@ -312,45 +312,15 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	return op.CreatorAddress().Bytes(), nil
 }
 
-//func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op operation.Withdrawal) ([]byte, error) {
-//	if !p.IsValidatorOp(&toAddr) {
-//		return nil, ErrInvalidToAddress
-//	}
-//
-//	from := caller.Address()
-//	validator, err := p.Storage().GetValidator(p.state, op.CreatorAddress())
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if from != *validator.GetWithdrawalAddress() {
-//		return nil, ErrInvalidFromAddresses
-//	}
-//
-//	if validator.GetActivationEra() == math.MaxUint64 {
-//		return nil, ErrNotActivatedValidator
-//	}
-//
-//	currentBalance := validator.GetBalance()
-//
-//	if currentBalance.Cmp(op.Amount()) == -1 {
-//		return nil, ErrInsufficientFundsForTransfer
-//	}
-//
-//	validator.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
-//	err = p.Storage().SetValidator(p.state, validator)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	p.state.AddBalance(from, op.Amount())
-//
-//	return from.Bytes(), nil
-//}
-
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {
 	if err = ValidateValidatorSyncOp(p.blockchain, op, p.ctx.Slot, msg.TxHash()); err != nil {
-		log.Error("Invalid validator sync op", "op", op, "error", err)
+		log.Error("Invalid validator sync op",
+			"error", err,
+			"OpType", op.OpType(),
+			"OpCode", op.OpCode(),
+			"Creator", op.Creator().Hex(),
+			"InitTxHash", op.InitTxHash().Hex(),
+		)
 		return nil, err
 	}
 
@@ -492,32 +462,6 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	if validator == nil {
 		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
-	}
-
-	procEra := p.blockchain.EpochToEra(op.ProcEpoch())
-
-	if validator.GetActivationEra() > procEra.Number {
-		log.Error("Validator sync: err", "era", p.ctx.Era,
-			"opCode", op.OpCode(),
-			"creator", op.Creator().Hex(),
-			"procEpoch", op.ProcEpoch(),
-			"targetEra", procEra.Number,
-			"err", ErrNotActivatedValidator,
-		)
-
-		return nil, ErrNotActivatedValidator
-	}
-
-	if validator.GetExitEra() == math.MaxUint64 {
-		log.Error("Validator sync: err", "era", p.ctx.Era,
-			"opCode", op.OpCode(),
-			"creator", op.Creator().Hex(),
-			"procEpoch", op.ProcEpoch(),
-			"targetEra", procEra.Number,
-			"err", ErrNoExitRequest,
-		)
-
-		return nil, ErrNoExitRequest
 	}
 
 	validator.SetBalance(op.Amount())
@@ -667,27 +611,27 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 	}
 	switch initTxData := iop.(type) {
 	case operation.Deposit:
-		if valSyncOp.OpCode() == operation.ActivateCode {
+		if valSyncOp.OpCode() == operation.DepositCode {
 			return ErrInvalidOpCode
 		}
-		if initTxData.CreatorAddress() == valSyncOp.Creator() {
+		if initTxData.CreatorAddress() != valSyncOp.Creator() {
 			return ErrInvalidCreator
 		}
 	case operation.Exit:
-		if valSyncOp.OpCode() == operation.DeactivateCode {
+		if valSyncOp.OpCode() == operation.ExitCode {
 			return ErrInvalidOpCode
 		}
-		if initTxData.CreatorAddress() == valSyncOp.Creator() {
+		if initTxData.CreatorAddress() != valSyncOp.Creator() {
 			return ErrInvalidCreator
 		}
 		if *initTxData.ExitAfterEpoch() < valSyncOp.ProcEpoch() {
 			return ErrInvalidOpEpoch
 		}
 	case operation.Withdrawal:
-		if valSyncOp.OpCode() == operation.UpdateBalanceCode {
+		if valSyncOp.OpCode() == operation.WithdrawalCode {
 			return ErrInvalidOpCode
 		}
-		if initTxData.CreatorAddress() == valSyncOp.Creator() {
+		if initTxData.CreatorAddress() != valSyncOp.Creator() {
 			return ErrInvalidCreator
 		}
 	default:

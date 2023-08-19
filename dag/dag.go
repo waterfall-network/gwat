@@ -195,6 +195,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 				"Creator", vs.Creator.Hash(),
 				"ProcEpoch", vs.ProcEpoch,
 				"Amount", vs.Amount,
+				"InitTxHash", vs.InitTxHash.Hex(),
 			)
 		}
 	}
