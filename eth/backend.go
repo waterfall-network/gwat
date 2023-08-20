@@ -236,7 +236,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.dag = dag.New(eth, chainConfig, eth.EventMux(), &config.Creator, eth.engine)
+	eth.dag = dag.New(eth, eth.EventMux(), &config.Creator, eth.engine)
 
 	eth.dag.Creator().SetExtra(makeExtraData(config.Creator.ExtraData))
 
@@ -437,8 +437,6 @@ func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 	s.lock.Lock()
 	s.etherbase = etherbase
 	s.lock.Unlock()
-
-	s.dag.Creator().SetEtherbase(etherbase)
 }
 
 // StartMining starts the miner with the given number of CPU threads. If mining
@@ -482,7 +480,7 @@ func (s *Ethereum) StartMining(threads int) error {
 		// introduced to speed sync times.
 		atomic.StoreUint32(&s.handler.acceptTxs, 1)
 
-		go s.dag.Creator().Start(eb)
+		s.dag.Creator().Start()
 	}
 	return nil
 }

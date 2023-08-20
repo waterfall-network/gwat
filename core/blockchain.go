@@ -88,6 +88,7 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
+	errInvalidBlock         = errors.New("invalid block")
 )
 
 const (
@@ -124,6 +125,11 @@ const (
 	//  The following incompatible database changes were added:
 	//    * New scheme for contract code in order to separate the codes and trie nodes
 	BlockChainVersion uint64 = 8
+
+	opCreate    = "create"
+	opPropagate = "propagate"
+	opDelay     = "delay"
+	opSync      = "sync"
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -1581,7 +1587,7 @@ func (bc *BlockChain) WriteSyncDagBlock(block *types.Block, validate bool) (stat
 	if !bc.chainmu.TryLock() {
 		return 0, errInsertionInterrupted
 	}
-	n, err := bc.insertBlocks(types.Blocks{block}, validate, "sync")
+	n, err := bc.insertBlocks(types.Blocks{block}, validate, opSync)
 	bc.chainmu.Unlock()
 
 	err = bc.insertDalayedBloks()
@@ -1600,7 +1606,7 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (statu
 	if !bc.chainmu.TryLock() {
 		return 0, errInsertionInterrupted
 	}
-	n, err := bc.insertBlocks(blocks, validate, "sync")
+	n, err := bc.insertBlocks(blocks, validate, opSync)
 	bc.chainmu.Unlock()
 	if err != nil {
 		return n, err
@@ -1620,7 +1626,7 @@ func (bc *BlockChain) insertDalayedBloks() error {
 			log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
 			continue
 		}
-		_, insErr := bc.insertBlocks(types.Blocks{bl}, true, "delay")
+		_, insErr := bc.insertBlocks(types.Blocks{bl}, true, opDelay)
 		if insErr == ErrInsertUncompletedDag {
 			insBlockCache = append(insBlockCache, bl)
 			log.Info("Insert delayed blocks: retry", "slot", bl.Slot(), "hash", bl.Hash().Hex(), "err", insErr)
@@ -1643,9 +1649,7 @@ func (bc *BlockChain) WriteCreatedDagBlock(block *types.Block) (status int, err 
 		return 0, errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
-
-	n, err := bc.insertBlocks(types.Blocks{block}, true, "create")
-	bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+	n, err := bc.insertBlocks(types.Blocks{block}, true, opCreate)
 
 	return n, err
 }
@@ -1664,8 +1668,6 @@ func (bc *BlockChain) WriteMinedBlock(block *types.Block) (status WriteStatus, e
 	if err != nil {
 		return NonStatTy, err
 	}
-
-	bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 
 	return
 }
@@ -1780,9 +1782,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if emitHeadEvent != ET_SKIP {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block, Type: emitHeadEvent})
 		}
-	} else {
-		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
+
 	return status, nil
 }
 
@@ -1846,7 +1847,7 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
-	n, err := bc.insertBlocks(chain, true, "propagate")
+	n, err := bc.insertBlocks(chain, true, opPropagate)
 	bc.chainmu.Unlock()
 
 	if err == ErrInsertUncompletedDag {
@@ -2172,8 +2173,8 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 		return false
 	}
 
-	blockCreator := block.Header().Coinbase
-	contains, index := common.Contains(creators, blockCreator)
+	coinbase := block.Header().Coinbase
+	contains, index := common.Contains(creators, coinbase)
 	if !contains {
 		log.Warn("Block verification: creator assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators)
 		return false
@@ -2305,6 +2306,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"hash", block.Hash().Hex(),
 			"cpHeight", cpHeader.Height,
 		)
+		return false, nil
+	}
+
+	if !bc.verifyBlockBaseFee(block) {
 		return false, nil
 	}
 
@@ -2581,6 +2586,10 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 					return it.index, err
 				}
 				bc.CacheInvalidBlock(block)
+				if op == opCreate || op == opPropagate {
+					log.Warn("Error while insert block", "err", errInvalidBlock, "op", op)
+					return it.index, errInvalidBlock
+				}
 				continue
 			}
 		}
@@ -2667,7 +2676,13 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	header := block.Header()
 
 	// Set baseFee and GasLimit
-	header.BaseFee = misc.CalcBaseFee(bc.chainConfig, stateBlock.Header())
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, header.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "UpdateFinalizingState")
+	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+
 	block.SetHeader(header)
 
 	// Process block using the parent state as reference point
@@ -4515,4 +4530,25 @@ func (bc *BlockChain) EpochToEra(epoch uint64) *era.Era {
 	}
 
 	return findingEra
+}
+
+func (bc *BlockChain) verifyBlockBaseFee(block *types.Block) bool {
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot()); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, block.Slot(), true, false, "verifyBlockBaseFee")
+	expectedBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+
+	if expectedBaseFee.Cmp(block.BaseFee()) != 0 {
+		log.Warn("Block verification: invalid base fee",
+			"calcBaseFee", expectedBaseFee.String(),
+			"blockBaseFee", block.BaseFee().String(),
+			"blockHash", block.Hash().Hex(),
+		)
+		return false
+	}
+
+	return true
 }
