@@ -217,7 +217,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.GetCode(addr)
-		if len(code) == 0 {
+		if len(code) == 0 || evm.StateDB.IsValidatorAddress(addr) {
 			ret, err = nil, nil // gas is unchanged
 		} else {
 			addrCopy := addr
