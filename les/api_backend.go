@@ -63,6 +63,15 @@ func (b *LesApiBackend) GetLastFinalizedHeader() *types.Header {
 	return b.eth.blockchain.GetLastFinalizedHeader()
 }
 
+func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks) {
+	return b.eth.txPool.Content()
+}
+
+func (b *LesApiBackend) BlockHashesBySlot(ctx context.Context, slot uint64) common.HashArray {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (b *LesApiBackend) GetLastFinalizedBlock() *types.Block {
 	//TODO implement me
 	panic("implement me")
@@ -264,10 +273,6 @@ func (b *LesApiBackend) Stats() (pending, queued, processing int) {
 	return b.eth.txPool.Stats(), 0, 0
 }
 
-func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	return b.eth.txPool.Content()
-}
-
 func (b *LesApiBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions, types.Transactions) {
 	return b.eth.txPool.ContentFrom(addr)
 }
@@ -282,10 +287,6 @@ func (b *LesApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Sub
 
 func (b *LesApiBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeChainHeadEvent(ch)
-}
-
-func (b *LesApiBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return b.eth.blockchain.SubscribeChainSideEvent(ch)
 }
 
 func (b *LesApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {

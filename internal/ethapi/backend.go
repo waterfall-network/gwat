@@ -77,7 +77,6 @@ type Backend interface {
 	GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	BlockHashesBySlot(ctx context.Context, slot uint64) common.HashArray
 
 	// Dag API

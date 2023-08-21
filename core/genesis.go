@@ -28,6 +28,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -46,6 +47,29 @@ import (
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
+type ValidatorData struct {
+	Pubkey            string `json:"pubkey"`
+	CreatorAddress    string `json:"creator_address"`
+	WithdrawalAddress string `json:"withdrawal_address"`
+	Amount            uint64 `json:"amount"`
+}
+
+type DepositData []*ValidatorData
+
+func (d DepositData) Addresses() []common.Address {
+	addresses := make([]common.Address, 0)
+	uniqAddresses := make(map[common.Address]struct{})
+	for _, data := range d {
+		address := common.HexToAddress(data.CreatorAddress)
+		if _, ok := uniqAddresses[address]; !ok {
+			addresses = append(addresses, address)
+			uniqAddresses[address] = struct{}{}
+		}
+	}
+
+	return addresses
+}
+
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
@@ -55,7 +79,7 @@ type Genesis struct {
 	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
 	Coinbase   common.Address      `json:"coinbase"`
 	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
-	Validators []common.Address    `json:"validators"`
+	Validators DepositData
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -289,22 +313,22 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	validatorsStateAddress := g.GenerateValidatorStateAddress()
 
 	if g.Config != nil {
-		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
-		}
-
 		g.Config.ValidatorsStateAddress = validatorsStateAddress
 	} else {
 		g.Config = &params.ChainConfig{ValidatorsStateAddress: validatorsStateAddress}
 	}
 
+	head.BaseFee = misc.CalcSlotBaseFee(g.Config, g.Config.ValidatorsPerSlot, uint64(len(g.Validators)), g.GasLimit)
+
 	validatorStorage := valStore.NewStorage(g.Config)
 
-	validatorStorage.SetValidatorsList(statedb, g.Validators)
-	for _, val := range g.Validators {
-		v := valStore.NewValidator(common.BlsPubKey{}, val, &common.Address{})
+	validatorStorage.SetValidatorsList(statedb, g.Validators.Addresses())
+	for i, val := range g.Validators {
+		pubKey := common.HexToBlsPubKey(val.Pubkey)
+		address := common.HexToAddress(val.CreatorAddress)
+		withdrawalAddress := common.HexToAddress(val.WithdrawalAddress)
+		v := valStore.NewValidator(pubKey, address, &withdrawalAddress)
+		v.SetIndex(uint64(i))
 		v.SetActivationEra(uint64(0))
 
 		err := validatorStorage.SetValidator(statedb, v)
@@ -393,7 +417,7 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 
 func (g *Genesis) GenerateValidatorStateAddress() *common.Address {
 	buf := make([]byte, len(g.Validators)*common.AddressLength)
-	for i, validator := range g.Validators {
+	for i, validator := range g.Validators.Addresses() {
 		beginning := i * common.AddressLength
 		end := beginning + common.AddressLength
 		copy(buf[beginning:end], validator[:])

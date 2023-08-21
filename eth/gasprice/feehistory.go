@@ -30,7 +30,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
@@ -97,7 +96,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, bf.header.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	bf.results.nextBaseFee = misc.CalcSlotBaseFee(chainconfig, bf.header, uint64(len(validators)), genesisGasLimit, params.BurnMultiplier, creatorsPerSlotCount)
+	bf.results.nextBaseFee = misc.CalcSlotBaseFee(chainconfig, creatorsPerSlotCount, uint64(len(validators)), genesisGasLimit)
 	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null

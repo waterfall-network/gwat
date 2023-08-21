@@ -55,7 +55,6 @@ type LightChain struct {
 	engine        consensus.Engine
 	odr           OdrBackend
 	chainFeed     event.Feed
-	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
@@ -88,6 +87,11 @@ func (lc *LightChain) GetConfig() *params.ChainConfig {
 
 func (lc *LightChain) GetEraInfo() *era.EraInfo {
 	return lc.eraInfo
+}
+
+func (lc *LightChain) IsSynced() bool {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (lc *LightChain) Synchronising() bool {
@@ -420,8 +424,8 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 				lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: ev.Block})
 			}
 			lc.chainFeed.Send(ev)
-		case core.ChainSideEvent:
-			lc.chainSideFeed.Send(ev)
+		default:
+			log.Warn("Unsupported event")
 		}
 	}
 }
@@ -603,11 +607,6 @@ func (lc *LightChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (lc *LightChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return lc.scope.Track(lc.chainHeadFeed.Subscribe(ch))
-}
-
-// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
-func (lc *LightChain) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return lc.scope.Track(lc.chainSideFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent implements the interface of filters.Backend

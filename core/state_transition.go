@@ -23,7 +23,7 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	cmath "gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
@@ -210,9 +210,20 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	mgval := new(big.Int).SetUint64(st.msg.Gas())
-	mgval = mgval.Mul(mgval, st.gasPrice)
-	balanceCheck := mgval
+	txFee := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.evm.Context.BaseFee)
+
+	if st.msg.GasTipCap() != nil {
+		tips := st.msg.GasTipCap()
+		if st.msg.GasFeeCap() != nil {
+			if st.msg.GasFeeCap().Cmp(new(big.Int).Add(st.evm.Context.BaseFee, tips)) < 0 {
+				tips = new(big.Int).Sub(st.msg.GasFeeCap(), st.evm.Context.BaseFee)
+			}
+		}
+
+		txFee = new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), new(big.Int).Add(st.evm.Context.BaseFee, tips))
+	}
+
+	balanceCheck := txFee
 	if st.gasFeeCap != nil {
 		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
@@ -227,7 +238,7 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval)
+	st.state.SubBalance(st.msg.From(), txFee)
 	return nil
 }
 
@@ -375,9 +386,21 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// After EIP-3529: refunds are capped to gasUsed / 5
 	st.refundGas(params.RefundQuotientEIP3529)
-	effectiveTip := st.gasPrice
-	effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+
+	reward := misc.CalcCreatorReward(st.msg.Gas(), st.evm.Context.BaseFee)
+
+	if st.msg.GasTipCap() != nil {
+		tips := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.msg.GasTipCap())
+		if st.msg.GasFeeCap() != nil {
+			if st.msg.GasFeeCap().Cmp(new(big.Int).Add(st.evm.Context.BaseFee, st.msg.GasTipCap())) < 0 {
+				tips = new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), new(big.Int).Sub(st.msg.GasFeeCap(), st.evm.Context.BaseFee))
+			}
+		}
+
+		reward = new(big.Int).Add(reward, tips)
+	}
+
+	st.state.AddBalance(st.evm.Context.Coinbase, reward)
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
