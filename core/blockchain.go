@@ -2118,39 +2118,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 	return it.index, err
 }
 
-func (bc *BlockChain) verifyCpData(block *types.Block) bool {
-	CpHeader := bc.GetHeaderByNumber(block.CpNumber())
-	if CpHeader == nil {
-		logValidationIssue("CpBlock header not found", block)
-		return false
-	}
-	if block.CpNumber() != CpHeader.Nr() {
-		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
-		return false
-	}
-	if block.CpHash() != CpHeader.Hash() {
-		logValidationIssue("Hash mismatch", block)
-		return false
-	}
-	if block.CpRoot() != CpHeader.Root {
-		logValidationIssue("CpHash mismatch", block)
-		return false
-	}
-	if block.CpReceiptHash() != CpHeader.ReceiptHash {
-		logValidationIssue("ReceiptHash mismatch", block)
-		return false
-	}
-	if block.CpGasUsed() != CpHeader.GasUsed {
-		logValidationIssue("GasUsed mismatch", block)
-		return false
-	}
-	if block.CpBloom() != CpHeader.Bloom {
-		logValidationIssue("Bloom mismatch", block)
-		return false
-	}
-	return true
-}
-
 func logValidationIssue(issue string, block *types.Block) {
 	log.Warn("Block verification: "+issue,
 		"block hash", block.Hash().Hex(),
@@ -2161,8 +2128,8 @@ func logValidationIssue(issue string, block *types.Block) {
 	)
 }
 
-// verifyCreators return false if creator is unassigned
-func (bc *BlockChain) verifyCreators(block *types.Block) bool {
+// verifyBlockCoinbase return false if creator is unassigned
+func (bc *BlockChain) verifyBlockCoinbase(block *types.Block) bool {
 	var (
 		creators []common.Address
 		err      error
@@ -2170,25 +2137,22 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 
 	creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
 	if err != nil {
-		log.Error("can`t get shuffled validators", "error", err)
+		log.Error("Block verification: can`t get shuffled validators", "error", err)
 		return false
 	}
 
 	coinbase := block.Header().Coinbase
-	contains, index := common.Contains(creators, coinbase)
+	contains, _ := common.Contains(creators, coinbase)
 	if !contains {
-		log.Warn("Block verification: creator assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators)
+		log.Warn("Block verification: creator assignment failed",
+			"slot", block.Slot(),
+			"hash", block.Hash().Hex(),
+			"block creator", block.Header().Coinbase.Hex(),
+			"slot creators", creators,
+		)
 		return false
-	} else {
-		signer := types.LatestSigner(bc.chainConfig)
-		for _, tx := range block.Body().Transactions {
-			from, _ := types.Sender(signer, tx)
-			if !IsAddressAssigned(from, creators, int64(index)) && from != block.Coinbase() {
-				log.Warn("Block verification: creator txs assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators, "txFrom", from)
-				return false
-			}
-		}
 	}
+
 	return true
 }
 
@@ -2198,7 +2162,7 @@ func (bc *BlockChain) CacheInvalidBlock(block *types.Block) {
 }
 
 // VerifyBlock validate block
-func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
+func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	defer func(ts time.Time) {
 		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(ts)),
@@ -2206,54 +2170,48 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		)
 	}(time.Now())
 
-	ts := time.Now()
-
-	// check future slot
-	curSlot := bc.GetSlotInfo().CurrentSlot()
-	if block.Slot() > curSlot+1 {
-		log.Warn("Block verification: future slot", "curSlot", curSlot, "bl.slot", block.Slot(), "hash", block.Hash().Hex(), "bl.time", block.Time(), "now", time.Now().Unix())
+	// Verify block slot
+	if !bc.verifyBlockSlot(block) {
 		return false, nil
 	}
-
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock: check future slot",
-	)
-	ts = time.Now()
-
-	if len(block.ParentHashes()) == 0 {
-		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
-		return false, nil
-	}
-	if !bc.verifyCreators(block) {
-		return false, nil
-	}
-
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:verifyCreators",
-	)
-	ts = time.Now()
 
 	// Verify block era
-	isValidEra := bc.verifyBlockEra(block)
-	if !isValidEra {
-		log.Warn("Block verification: invalid era", "hash", block.Hash().Hex(), "block era", block.Era())
+	if !bc.verifyBlockEra(block) {
 		return false, nil
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:verifyBlockEra",
-	)
-	ts = time.Now()
-
-	//isCpAncestor, ancestors, unloaded, err := bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
-	isCpAncestor, ancestors, unloaded, _, err := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
-	if err != nil {
-		log.Error("Block verification: check ancestors err", "err", err, "block hash", block.Hash().Hex())
-		return false, err
+	// Verify block coinbase
+	if !bc.verifyBlockCoinbase(block) {
+		return false, nil
 	}
+
+	// Verify baseFee
+	if !bc.verifyBlockBaseFee(block) {
+		return false, nil
+	}
+
+	// Verify body hash and transactions hash
+	if !bc.verifyBlockHashes(block) {
+		return false, nil
+	}
+
+	// Verify block used gas
+	if !bc.verifyBlockUsedGas(block) {
+		return false, nil
+	}
+
+	// Verify block checkpoint
+	if !bc.verifyCheckpoint(block) {
+		return false, nil
+	}
+
+	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
+
+	// Verify block height
+	if !bc.verifyBlockHeight(block, len(ancestors)) {
+		return false, nil
+	}
+
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
 		for _, unh := range unloaded {
@@ -2272,34 +2230,39 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		return false, nil
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:isCpAncestor",
-	)
-	ts = time.Now()
+	return bc.verifyBlockParents(block)
+}
 
-	// parents' heights must be less than block height
-	for _, parentHash := range block.ParentHashes() {
-		parent := bc.GetHeader(parentHash)
-		if _, ok := bc.invalidBlocksCache.Get(parent); ok {
-			log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
-			return false, nil
+func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
+	intrGasSum := uint64(0)
+	for _, tx := range block.Transactions() {
+		var intrGas uint64
+		intrGas, err := bc.TxEstimateGas(tx, block.Header())
+		if err != nil {
+			log.Warn("Block verification: gas usage error", "err", err)
+
+			return false
 		}
-		if parent.Height >= block.Height() || parent.Slot >= block.Slot() {
-			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height, "parent slot", parent.Slot)
-			return false, nil
-		}
+
+		intrGasSum += intrGas
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:parents' heights",
-	)
-	ts = time.Now()
+	if intrGasSum > block.GasLimit() {
+		log.Warn("Block verification: intrinsic gas sum > gasLimit",
+			"block hash", block.Hash().Hex(),
+			"block gasLimit", block.GasLimit(),
+			"IntrinsicGas sum", intrGasSum,
+		)
 
-	//validate height
+		return false
+	}
+
+	return true
+}
+
+func (bc *BlockChain) verifyBlockHeight(block *types.Block, ancestorsCount int) bool {
 	cpHeader := bc.GetHeader(block.CpHash())
-	calcHeight := bc.calcBlockHeight(cpHeader.Height, len(ancestors))
+	calcHeight := bc.calcBlockHeight(cpHeader.Height, ancestorsCount)
 	if block.Height() != calcHeight {
 		log.Warn("Block verification: block invalid height",
 			"calcHeight", calcHeight,
@@ -2307,82 +2270,99 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 			"hash", block.Hash().Hex(),
 			"cpHeight", cpHeader.Height,
 		)
-		return false, nil
+
+		return false
 	}
 
-	if !bc.verifyBlockBaseFee(block) {
-		return false, nil
+	return true
+}
+
+func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
+	// Verify body hash
+	blockBody := block.Body()
+	if blockBody.CalculateHash() != block.BodyHash() {
+		log.Warn("Block verification: invalid body hash",
+			"block hash", block.Hash().Hex(),
+			"block body hash", block.BodyHash().Hex(),
+			"calc body hash", blockBody.CalculateHash(),
+		)
+
+		return false
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:validate height",
-	)
-	ts = time.Now()
+	// Verify transactions hash
+	calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
+	if calcTxHash != block.TxHash() {
+		log.Warn("Block verification: invalid transactions hash",
+			"block hash", block.Hash().Hex(),
+			"block tx hash", block.TxHash().Hex(),
+			"calc tx hash", calcTxHash,
+		)
 
-	// Verify block checkpoint
-	isValidCp := bc.verifyCheckpoint(block)
-	if !isValidCp {
-		log.Warn("Block verification: invalid checkpoint", "hash", block.Hash().Hex(), "cp.hash", block.CpHash().Hex())
-		return false, nil
+		return false
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:Verify block checkpoint",
-	)
-	ts = time.Now()
+	// Verify block hash
+	if block.Hash() != block.Header().Hash() {
+		log.Warn("Block verification: invalid block hash",
+			"block hash", block.Hash().Hex(),
+			"block tx hash", block.TxHash().Hex(),
+			"calc tx hash", calcTxHash,
+		)
 
-	intrGasSum := uint64(0)
-	for _, tx := range block.Transactions() {
-		var intrGas uint64
-		intrGas, err = bc.TxEstimateGas(tx, block.Header())
-		if err != nil {
-			log.Warn("Block verification: gas usage error", "err", err)
-			return false, nil
-		}
-		intrGasSum += intrGas
-	}
-	if intrGasSum > block.GasLimit() {
-		log.Warn("Block verification: intrinsic gas sum > gasLimit", "block hash", block.Hash().Hex(), "gasLimit", block.GasLimit(), "IntrinsicGas sum", intrGasSum)
-		return false, nil
+		return false
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:TxEstimateGas",
-		"txs", len(block.Transactions()),
-	)
-	ts = time.Now()
+	return true
+}
 
-	isValid, err := bc.verifyBlockParents(block)
-	if err != nil {
-		return false, err
+func (bc *BlockChain) verifyBlockSlot(block *types.Block) bool {
+	if block.Slot() > bc.GetSlotInfo().CurrentSlot()+1 {
+		log.Warn("Block verification: future slot",
+			"currentSlot", bc.GetSlotInfo().CurrentSlot(),
+			"blockSlot", block.Slot(),
+			"blockHash", block.Hash().Hex(),
+			"blockTime", block.Time(),
+			"timeNow", time.Now().Unix(),
+		)
+
+		return false
 	}
 
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:verifyBlockParents",
-		"parents", len(block.ParentHashes()),
-	)
-	ts = time.Now()
-
-	// validate cp data
-	isCpValid := bc.verifyCpData(block)
-
-	log.Info("^^^^^^^^^^^^ TIME",
-		"elapsed", common.PrettyDuration(time.Since(ts)),
-		"func:", "VerifyBlock:verifyCpData",
-		"parents", len(block.ParentHashes()),
-	)
-
-	return isValid && isCpValid, nil
+	return true
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
+	if len(block.ParentHashes()) == 0 {
+		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
+		return false, nil
+	}
+
 	parentsHeaders := bc.GetHeadersByHashes(block.ParentHashes())
+
+	// parents' heights must be less than block height
+	for _, parent := range parentsHeaders {
+		if _, ok := bc.invalidBlocksCache.Get(parent); ok {
+			log.Warn("Block verification: invalid parent",
+				"hash", block.Hash().Hex(),
+				"invalid parent", parent.Hash().Hex(),
+			)
+			return false, nil
+		}
+		if parent.Height >= block.Height() {
+			log.Warn("Block verification: invalid parent",
+				"height", block.Height(),
+				"slot", block.Slot(),
+				"parent height", parent.Height,
+				"parent slot", parent.Slot,
+			)
+			return false, nil
+		}
+	}
+
 	if bc.AreParentSlotsUniform(block.Slot(), parentsHeaders) {
 		log.Info("##### verifyBlockParents : light")
+
 		return true, nil
 	}
 
@@ -2400,7 +2380,11 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 				return false, err
 			}
 			if isAncestor {
-				log.Warn("Block verification: parent-ancestor detected", "block", block.Hash().Hex(), "parent", parentHeader.Hash().Hex(), "parent-ancestor", pparent.Hash().Hex())
+				log.Warn("Block verification: parent-ancestor detected",
+					"block", block.Hash().Hex(),
+					"parent", parentHeader.Hash().Hex(),
+					"parent-ancestor", pparent.Hash().Hex(),
+				)
 				return false, nil
 			}
 		}
@@ -3860,7 +3844,6 @@ func (bc *BlockChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpHa
 	ancestors types.HeaderMap,
 	unloaded common.HashArray,
 	tips types.Tips,
-	err error,
 ) {
 	return bc.hc.CollectAncestorsAftCpByTips(parents, cpHash)
 }
@@ -3885,10 +3868,7 @@ func (bc *BlockChain) IsAncestorByTips(header *types.Header, ancestorHash common
 	if ancestorHead.Nr() > 0 && ancestorHead.Nr() < header.CpNumber {
 		return true, nil
 	}
-	_, ancestors, unl, _, err := bc.CollectAncestorsAftCpByTips(header.ParentHashes, header.CpHash)
-	if err != nil {
-		return false, err
-	}
+	_, ancestors, unl, _ := bc.CollectAncestorsAftCpByTips(header.ParentHashes, header.CpHash)
 	if len(unl) > 0 {
 		return false, ErrInsertUncompletedDag
 	}
@@ -4100,83 +4080,81 @@ func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
 	// Get the epoch of the block
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
 
-	fEpochSl, _ := bc.slotInfo.SlotOfEpochStart(bc.eraInfo.FirstEpoch())
-	lEpochSl, _ := bc.slotInfo.SlotOfEpochEnd(bc.eraInfo.LastEpoch())
-
-	// Get the era that the block belongs to
-	var valEra *era.Era
-	if bc.GetEraInfo().GetEra().Number == block.Era() {
-		log.Info("Block verification: era",
-			"eraInfo", bc.GetEraInfo().GetEra(),
-			"blEra", block.Era(),
-			"blEpoch", blockEpoch,
-			"blSlot", block.Slot(),
-			"blHash", block.Hash(),
-			"blNr", block.Nr(),
-			"FirsEpoch", bc.eraInfo.FirstEpoch(),
-			"LastEpoch", bc.eraInfo.LastEpoch(),
-			"FirstEpochEraSlot", fEpochSl,
-			"LastEpochEraSlot", lEpochSl,
+	calcEra := bc.EpochToEra(blockEpoch)
+	if calcEra.Number != block.Era() {
+		log.Warn("Block verification: invalid era",
+			"hash", block.Hash().Hex(),
+			"block era", block.Era(),
 		)
-
-		valEra = bc.GetEraInfo().GetEra()
-	} else {
-		valEra = rawdb.ReadEra(bc.db, block.Era())
-		log.Info("Block verification: era", "eraInfo", valEra, "blEra", block.Era(), "blockEpoch", blockEpoch, "blSlot", block.Slot(), "hash", block.Hash(), "blNr", block.Nr())
+		return false
 	}
 
-	// Check if the block epoch is within the era
-	return valEra != nil && valEra.IsContainsEpoch(blockEpoch)
+	return true
 }
 
 func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 	// cp must be coordinated (received from coordinator)
 	coordCp := bc.GetCoordinatedCheckpoint(block.CpHash())
 	if coordCp == nil {
-		log.Warn("Block verification: cp not found",
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
+		logValidationIssue("Cp not found", block)
 		return false
 	}
 	if bc.IsCheckpointOutdated(coordCp) {
-		log.Warn("Block verification: cp is outdated",
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
+		logValidationIssue("Cp is outdated", block)
 		return false
 	}
 	// check cp block exists
 	cpHeader := bc.GetHeader(block.CpHash())
 	if cpHeader == nil {
-		log.Warn("Block verification: cp block not found",
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
+		logValidationIssue("CpBlock not found", block)
 		return false
 	}
 	// cp must be finalized
 	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
-		log.Warn("Block verification: cp is not finalized",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
+		logValidationIssue("Cp is not finalized", block)
 		return false
 	}
-	// cp must be correct finalized
+
+	if block.Slot() <= cpHeader.Slot {
+		logValidationIssue("CpSlot checkpoint slot must be in the block's past", block)
+		return false
+	}
 	if block.CpNumber() != cpHeader.Nr() {
-		log.Warn("Block verification: cp mismatch fin numbers",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
+		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
 		return false
 	}
+	if block.CpHash() != cpHeader.Hash() {
+		logValidationIssue("Hash mismatch", block)
+		return false
+	}
+	if block.CpRoot() != cpHeader.Root {
+		logValidationIssue("CpHash mismatch", block)
+		return false
+	}
+	if block.CpReceiptHash() != cpHeader.ReceiptHash {
+		logValidationIssue("ReceiptHash mismatch", block)
+		return false
+	}
+	if block.CpGasUsed() != cpHeader.GasUsed {
+		logValidationIssue("GasUsed mismatch", block)
+		return false
+	}
+	if block.CpBloom() != cpHeader.Bloom {
+		logValidationIssue("Bloom mismatch", block)
+		return false
+	}
+
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, cpHeader.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, cpHeader.Slot, true, false, "verifyCpData")
+	calcCpBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+	if calcCpBaseFee.Cmp(block.CpBaseFee()) != 0 {
+		logValidationIssue("BaseFee mismatch", block)
+		return false
+	}
+
 	// check accordance to parent checkpoints
 	for _, ph := range block.ParentHashes() {
 		parBdag := bc.GetBlockDag(ph)
@@ -4205,6 +4183,7 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
