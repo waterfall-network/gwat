@@ -183,7 +183,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			log.Info("received validator sync",
 				"OpType", vs.OpType,
 				"Index", vs.Index,
-				"Creator", vs.Creator.Hash(),
+				"Creator", vs.Creator.Hex(),
 				"ProcEpoch", vs.ProcEpoch,
 				"Amount", vs.Amount,
 				"InitTxHash", vs.InitTxHash.Hex(),

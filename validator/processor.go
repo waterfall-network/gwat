@@ -465,23 +465,15 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		return nil, ErrUnknownValidator
 	}
 
-	bal := validator.GetBalance()
-	if bal == nil {
-		bal = new(big.Int)
-	}
-	newBal := new(big.Int).Add(bal, op.Amount())
-	validator.SetBalance(newBal)
-	err = p.Storage().SetValidator(p.state, validator)
-	if err != nil {
-		return nil, err
-	}
+	p.state.AddBalance(valAddress, op.Amount())
 
 	log.Info("Validator sync: update balance",
 		"opCode", op.OpCode(),
 		"creator", op.Creator().Hex(),
 		"procEpoch", op.ProcEpoch(),
 		"amount", op.Amount(),
-		"balance", validator.GetBalance().String(),
+		//"balance", validator.GetBalance().String(),
+		"balance", p.state.GetBalance(valAddress).String(),
 	)
 	return op.Creator().Bytes(), nil
 }
@@ -636,7 +628,7 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 		if initTxData.CreatorAddress() != valSyncOp.Creator() {
 			return ErrInvalidCreator
 		}
-		if *initTxData.ExitAfterEpoch() < valSyncOp.ProcEpoch() {
+		if initTxData.ExitAfterEpoch() != nil && *initTxData.ExitAfterEpoch() < valSyncOp.ProcEpoch() {
 			return ErrInvalidOpEpoch
 		}
 	case operation.Withdrawal:
