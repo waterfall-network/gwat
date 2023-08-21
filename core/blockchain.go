@@ -4151,7 +4151,15 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, cpHeader.Slot, true, false, "verifyCpData")
 	calcCpBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
 	if calcCpBaseFee.Cmp(block.CpBaseFee()) != 0 {
-		logValidationIssue("BaseFee mismatch", block)
+		log.Warn("Block verification: invalid checkpoint base fee",
+			"block hash", block.Hash().Hex(),
+			"CpHash", block.CpHash(),
+			"CpNumber", block.CpNumber(),
+			"CpReceiptHash", block.CpReceiptHash(),
+			"CpRoot", block.CpRoot(),
+			"CpBaseFee", block.CpBaseFee().String(),
+			"calcBaseFee", calcCpBaseFee.String(),
+		)
 		return false
 	}
 
