@@ -735,7 +735,7 @@ func (c *Creator) isAddressAssigned(coinbase common.Address, address common.Addr
 	return core.IsAddressAssigned(address, creators, creatorNr)
 }
 
-func (c *Creator) processValidatorTxs(syncData map[[28]byte]*types.ValidatorSync, header *types.Header) error {
+func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorSync, header *types.Header) error {
 	nonce := c.eth.TxPool().Nonce(header.Coinbase)
 	for _, validatorSync := range syncData {
 		if validatorSync.ProcEpoch <= c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) {
