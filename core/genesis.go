@@ -326,11 +326,12 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	validatorStorage := valStore.NewStorage(g.Config)
 
 	validatorStorage.SetValidatorsList(statedb, g.Validators.Addresses())
-	for _, val := range g.Validators {
+	for i, val := range g.Validators {
 		pubKey := common.HexToBlsPubKey(val.Pubkey)
 		address := common.HexToAddress(val.CreatorAddress)
 		withdrawalAddress := common.HexToAddress(val.WithdrawalAddress)
 		v := valStore.NewValidator(pubKey, address, &withdrawalAddress)
+		v.SetIndex(uint64(i))
 		v.SetActivationEra(uint64(0))
 
 		err := validatorStorage.SetValidator(statedb, v)
