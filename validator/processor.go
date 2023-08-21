@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -603,6 +604,12 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 	if savedValSync.TxHash != nil && *savedValSync.TxHash != txHash {
 		return ErrMismatchTxHashes
 	}
+
+	// check is op initialised by slashing
+	if bytes.Equal(valSyncOp.InitTxHash().Bytes()[:common.AddressLength], valSyncOp.Creator().Bytes()) {
+		return nil
+	}
+
 	// check initial tx
 	initTx, _, _ := bc.GetTransaction(valSyncOp.InitTxHash())
 	if initTx == nil {
