@@ -28,6 +28,7 @@ var (
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
 	ErrInvalidFromAddresses         = errors.New("withdrawal and sender addresses are mismatch")
 	ErrUnknownValidator             = errors.New("unknown validator")
+	ErrNoWithdrawalCred             = errors.New("no withdrawal credentials")
 	ErrMismatchPulicKey             = errors.New("validators public key mismatch")
 	ErrNotActivatedValidator        = errors.New("validator not activated yet")
 	ErrValidatorIsOut               = errors.New("validator is exited")
@@ -464,8 +465,12 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	if validator == nil {
 		return nil, ErrUnknownValidator
 	}
-
-	p.state.AddBalance(valAddress, op.Amount())
+	// transfer amount to withdrawal address
+	wAdr := validator.GetWithdrawalAddress()
+	if wAdr == nil {
+		return nil, ErrNoWithdrawalCred
+	}
+	p.state.AddBalance(*wAdr, op.Amount())
 
 	return op.Creator().Bytes(), nil
 }
