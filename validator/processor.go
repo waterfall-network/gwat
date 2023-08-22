@@ -172,12 +172,82 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 	switch v := op.(type) {
 	case operation.Deposit:
 		ret, err = p.validatorDeposit(caller, toAddr, value, v)
+		if err != nil {
+			log.Error("Validator deposit: err",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", value.String(),
+				"from", caller.Address(),
+				"creator", v.CreatorAddress().Hex(),
+				"withdrawalAddress", v.WithdrawalAddress().Hex(),
+				"pubKey", v.PubKey().Hex(),
+				"err", err,
+			)
+		} else {
+			log.Info("Validator deposit: success",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", value.String(),
+				"from", caller.Address(),
+				"creator", v.CreatorAddress().Hex(),
+				"withdrawalAddress", v.WithdrawalAddress().Hex(),
+				"pubKey", v.PubKey().Hex(),
+			)
+		}
 	case operation.ValidatorSync:
 		ret, err = p.syncOpProcessing(v, msg)
+		if err != nil {
+			log.Error("Validator sync: err",
+				"opCode", op.OpCode(),
+				"initTx", v.InitTxHash().Hex(),
+				"creator", v.Creator().Hex(),
+				"procEpoch", v.ProcEpoch(),
+				"err", err,
+			)
+		} else {
+			log.Info("Validator sync: success",
+				"opCode", op.OpCode(),
+				"initTx", v.InitTxHash().Hex(),
+				"creator", v.Creator().Hex(),
+				"procEpoch", v.ProcEpoch(),
+			)
+		}
 	case operation.Exit:
 		ret, err = p.validatorExit(caller, toAddr, v)
+		if err != nil {
+			log.Error("Validator exit: err",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"creator", v.CreatorAddress().Hex(),
+				"exitAfterEpoch", fmt.Sprintf("%d", v.ExitAfterEpoch()),
+				"err", err,
+			)
+		} else {
+			log.Info("Validator exit: success",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"creator", v.CreatorAddress().Hex(),
+				"exitAfterEpoch", fmt.Sprintf("%d", v.ExitAfterEpoch()),
+			)
+		}
 	case operation.Withdrawal:
 		ret, err = p.validatorWithdrawal(caller, toAddr, v)
+		if err != nil {
+			log.Error("Validator withdrawal: err",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", v.Amount().String(),
+				"creator", v.CreatorAddress().Hex(),
+				"err", err,
+			)
+		} else {
+			log.Info("Validator withdrawal: success",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", v.Amount().String(),
+				"creator", v.CreatorAddress().Hex(),
+			)
+		}
 	}
 
 	if err != nil {
@@ -235,7 +305,6 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	// burn value from sender balance
 	p.state.SubBalance(from, value)
 
-	log.Info("Deposit", "address", toAddr.Hex(), "from", from.Hex(), "value", value.String(), "pabkey", op.PubKey().Hex(), "creator", op.CreatorAddress().Hex())
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
@@ -342,9 +411,7 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-
 	if validator == nil {
-		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
 
@@ -359,12 +426,6 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 
 	p.Storage().AddValidatorToList(p.state, op.Index(), op.Creator())
 
-	log.Info("Validator sync: activate", "opCode", op.OpCode(),
-		"creator", op.Creator().Hex(),
-		"procEpoch", op.ProcEpoch(),
-		"targetEra", opEra,
-	)
-
 	return op.Creator().Bytes(), nil
 }
 
@@ -373,108 +434,39 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
-
 	if validator == nil {
-		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
-
-	procEra := p.blockchain.EpochToEra(op.ProcEpoch())
-
-	if validator.GetActivationEra() > procEra.Number {
-		log.Error("Validator sync: err", "era", p.ctx.Era,
-			"opCode", op.OpCode(),
-			"creator", op.Creator().Hex(),
-			"procEpoch", op.ProcEpoch(),
-			"procEra", procEra,
-			"err", ErrNotActivatedValidator,
-		)
-
-		return nil, ErrNotActivatedValidator
-	}
 	if validator.GetExitEra() != math.MaxUint64 {
-		log.Error("Validator sync: err", "era", p.ctx.Era,
-			"opCode", op.OpCode(),
-			"creator", op.Creator().Hex(),
-			"procEpoch", op.ProcEpoch(),
-			"err", ErrValidatorIsOut,
-			"procEra", procEra,
-		)
-
 		return nil, ErrValidatorIsOut
 	}
 
-	////retrieve block eraInfo
-	//eraInfo := p.blockchain.GetEraInfo()
-	//var blkEraInfo *era.EraInfo
-	//if eraInfo.Number() == p.ctx.Era {
-	//	blkEraInfo = eraInfo
-	//} else {
-	//	blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era)
-	//	if blkEra == nil {
-	//		log.Error("Validator sync: block era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
-	//		return nil, ErrCtxEraNotFound
-	//	}
-	//	bei := era.NewEraInfo(*blkEra)
-	//	blkEraInfo = &bei
-	//}
-	//
-	//// calculate deactivation epoch
-	//var targetEpoch uint64
-	//blkEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
-	//if blkEraInfo.IsTransitionPeriodEpoch(p.blockchain, blkEpoch) {
-	//	var nextEraInfo *era.EraInfo
-	//	if eraInfo.Number() == p.ctx.Era+1 {
-	//		nextEraInfo = eraInfo
-	//	} else {
-	//		blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era+1)
-	//		if blkEra == nil {
-	//			log.Error("Validator sync: target era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
-	//			return nil, ErrTargetEraNotFound
-	//		}
-	//		bei := era.NewEraInfo(*blkEra)
-	//		nextEraInfo = &bei
-	//	}
-	//	targetEpoch = nextEraInfo.NextEraFirstEpoch()
-	//} else {
-	//	targetEpoch = blkEraInfo.NextEraFirstEpoch()
-	//}
+	opEra := p.blockchain.EpochToEra(op.ProcEpoch())
+	if validator.GetActivationEra() >= opEra.Number {
+		return nil, ErrNotActivatedValidator
+	}
 
-	validator.SetExitEra(procEra.Number)
+	exitEra := opEra.Number + postpone
+	validator.SetExitEra(exitEra)
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
 	}
-
-	log.Info("Validator sync: deactivate", "opCode", op.OpCode(), "creator", op.Creator().Hex(),
-		"procEpoch", op.ProcEpoch(), "targetEra", procEra)
-
 	return op.Creator().Bytes(), nil
 }
 
 func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, error) {
 	valAddress := op.Creator()
-
 	validator, err := p.Storage().GetValidator(p.state, valAddress)
 	if err != nil {
 		return nil, err
 	}
-
 	if validator == nil {
-		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
 
 	p.state.AddBalance(valAddress, op.Amount())
 
-	log.Info("Validator sync: update balance",
-		"opCode", op.OpCode(),
-		"creator", op.Creator().Hex(),
-		"procEpoch", op.ProcEpoch(),
-		"amount", op.Amount(),
-		//"balance", validator.GetBalance().String(),
-		"balance", p.state.GetBalance(valAddress).String(),
-	)
 	return op.Creator().Bytes(), nil
 }
 
