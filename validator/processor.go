@@ -23,28 +23,28 @@ import (
 var (
 	// errors
 	ErrTooLowDepositValue = errors.New("deposit value is too low")
-	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
+	// ErrInsufficientFundsForOp is returned if the transaction sender doesn't
 	// have enough funds for transfer(topmost call only).
-	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
-	ErrInvalidFromAddresses         = errors.New("withdrawal and sender addresses are mismatch")
-	ErrUnknownValidator             = errors.New("unknown validator")
-	ErrNoWithdrawalCred             = errors.New("no withdrawal credentials")
-	ErrMismatchPulicKey             = errors.New("validators public key mismatch")
-	ErrNotActivatedValidator        = errors.New("validator not activated yet")
-	ErrValidatorIsOut               = errors.New("validator is exited")
-	ErrInvalidToAddress             = errors.New("address to must be validators state address")
-	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
-	ErrTargetEraNotFound            = errors.New("target era not found")
-	ErrNoSavedValSyncOp             = errors.New("no coordinated confirmation of validator sync data")
-	ErrMismatchTxHashes             = errors.New("validator sync tx already exists")
-	ErrMismatchValSyncOp            = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
-	ErrInvalidOpEpoch               = errors.New("epoch to apply tx is not acceptable")
-	ErrTxNF                         = errors.New("tx not found")
-	ErrReceiptNF                    = errors.New("receipt not found")
-	ErrInvalidReceiptStatus         = errors.New("receipt status is failed")
-	ErrInvalidOpCode                = errors.New("invalid operation code")
-	ErrInvalidCreator               = errors.New("invalid creator address")
-	ErrInvalidAmount                = errors.New("invalid amount")
+	ErrInsufficientFundsForOp = errors.New("insufficient funds for op")
+	ErrInvalidFromAddresses   = errors.New("withdrawal and sender addresses are mismatch")
+	ErrUnknownValidator       = errors.New("unknown validator")
+	ErrNoWithdrawalCred       = errors.New("no withdrawal credentials")
+	ErrMismatchPulicKey       = errors.New("validators public key mismatch")
+	ErrNotActivatedValidator  = errors.New("validator not activated yet")
+	ErrValidatorIsOut         = errors.New("validator is exited")
+	ErrInvalidToAddress       = errors.New("address to must be validators state address")
+	ErrNoExitRequest          = errors.New("exit request is require before withdrawal operation")
+	ErrTargetEraNotFound      = errors.New("target era not found")
+	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
+	ErrMismatchTxHashes       = errors.New("validator sync tx already exists")
+	ErrMismatchValSyncOp      = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
+	ErrInvalidOpEpoch         = errors.New("epoch to apply tx is not acceptable")
+	ErrTxNF                   = errors.New("tx not found")
+	ErrReceiptNF              = errors.New("receipt not found")
+	ErrInvalidReceiptStatus   = errors.New("receipt status is failed")
+	ErrInvalidOpCode          = errors.New("invalid operation code")
+	ErrInvalidCreator         = errors.New("invalid creator address")
+	ErrInvalidAmount          = errors.New("invalid amount")
 )
 
 const (
@@ -61,8 +61,8 @@ const (
 )
 
 var (
-	// minimal value - 1000 wat
-	MinDepositVal, _ = new(big.Int).SetString("1000000000000000000000", 10)
+	// minimal value - 10 wat
+	MinDepositVal, _ = new(big.Int).SetString("10000000000000000000", 10)
 
 	//Events signatures.
 	EvtDepositLogSignature    = crypto.Keccak256Hash([]byte("DepositLog"))
@@ -138,10 +138,6 @@ func (p *Processor) GetValidatorsStateAddress() common.Address {
 
 func (p *Processor) Storage() valStore.Storage {
 	return p.storage
-}
-
-func (p *Processor) Db() ethdb.Database {
-	return p.blockchain.Database()
 }
 
 // IsValidatorOp returns true if tx is validator operation
@@ -279,7 +275,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	}
 	balanceFrom := p.state.GetBalance(from)
 	if balanceFrom.Cmp(value) < 0 {
-		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, from.Hex())
+		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForOp, from.Hex())
 	}
 
 	withdrawalAddress := op.WithdrawalAddress()
@@ -297,6 +293,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		if currValidator.PubKey != op.PubKey() {
 			return nil, errors.New("validator deposit failed (mismatch public key)")
 		}
+		validator = currValidator
 	}
 
 	validator.AddStake(from, value)
@@ -363,7 +360,8 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	}
 
 	// check amount can add to log
-	if !common.BnCanCastToUint64(new(big.Int).Div(op.Amount(), common.BigGwei)) {
+	opAmount := new(big.Int).Set(op.Amount())
+	if !common.BnCanCastToUint64(new(big.Int).Div(opAmount, common.BigGwei)) {
 		return nil, ErrInvalidAmount
 	}
 
@@ -376,61 +374,60 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	if validator == nil {
 		return nil, ErrUnknownValidator
 	}
-	if from != *validator.GetWithdrawalAddress() {
-		return nil, ErrInvalidFromAddresses
-	}
 
-	// TODO CHECK
-	if validator.GetActivationEra() == math.MaxUint64 {
-		stake := validator.TotalStake()
-		if stake.Cmp(op.Amount()) == -1 {
-			return nil, ErrInsufficientFundsForTransfer
+	// if total deposited amount is less than the effective balance
+	// - deposit is insufficient to activate validator.
+	effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
+	if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
+		stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
+		// withdrawal of insufficient deposit to activate validator
+		log.Info("Validator withdrawal: refunds of insufficient deposit",
+			"opCode", op.OpCode(),
+			"amount", opAmount.String(),
+			"creator", op.CreatorAddress().Hex(),
+		)
+		stakeByAddr := validator.StakeByAddress(from)
+		//withdrawal address must be one of the depositors
+		if stakeByAddr == nil {
+			return nil, ErrInvalidFromAddresses
 		}
-
-		// Compare the stake with the effective balance to determine the activation status of the validator
-		switch stake.Cmp(p.blockchain.Config().EffectiveBalance) {
-		case 0, 1: // currentBalance >= effectiveBalance - wait for activation
-			return nil, ErrNotActivatedValidator
-		case -1: // currentBalance < effectiveBalance - withdraw before activation
-			log.Info("validatorWithdrawal before activation and sum < effectiveBalance")
-
-			stakeByAddr := validator.StakeByAddress(from)
-			if stakeByAddr != nil && stakeByAddr.Cmp(op.Amount()) >= 0 {
-				// Subtract the withdrawal amount from the stake associated with the address
-				sum, err := validator.SubtractStake(from, op.Amount())
-				if err != nil {
-					log.Error("Invalid withdraw operation", "op", op, "error", err)
-					return nil, err
-				} else {
-					log.Info("validatorWithdrawal before activation", "creator", op.CreatorAddress(),
-						"address", from,
-						"total", stake,
-						"amount", op.Amount(),
-						"stakeByAddr", stakeByAddr,
-						"balance", sum,
-					)
-				}
-			}
+		// check amount
+		if stakeByAddr.Cmp(opAmount) < 0 {
+			return nil, ErrInsufficientFundsForOp
+		}
+		// if opAmount == 0 - refunds full deposit amount
+		if opAmount.Cmp(common.Big0) == 0 {
+			opAmount = new(big.Int).Set(stakeByAddr)
+		}
+		// withdrawal amount from deposit balance
+		newStake, err := validator.SubtractStake(from, opAmount)
+		if err != nil {
+			log.Error("Validator withdrawal: refunds of insufficient deposit failed",
+				"opCode", op.OpCode(),
+				"amount", opAmount.String(),
+				"creator", op.CreatorAddress().Hex(),
+				"error", err,
+			)
+			return nil, err
+		}
+		// rm validator stake if empty
+		if newStake != nil && newStake.Cmp(common.Big0) == 0 {
+			validator.RmStakeByAddress(from)
+		}
+		// update validator
+		err = p.Storage().SetValidator(p.state, validator)
+		if err != nil {
+			return nil, err
 		}
 	} else {
-		// If the validator is activated, check if the withdrawal amount is more than the validator's balance
-		if validator.Balance.Cmp(op.Amount()) == -1 {
-			return nil, ErrInsufficientFundsForTransfer
+		// check withdrawal credentials
+		if from != *validator.GetWithdrawalAddress() {
+			return nil, ErrInvalidFromAddresses
 		}
-
-		// Subtract the withdrawal amount from the validator's balance
-		validator.SetBalance(new(big.Int).Sub(validator.Balance, op.Amount()))
 	}
 
-	err = p.Storage().SetValidator(p.state, validator)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO CHECK^^^^^^^^^^^^^^^^^
-
-
-	amtGwei := new(big.Int).Div(op.Amount(), common.BigGwei).Uint64()
+	// create tx log
+	amtGwei := new(big.Int).Div(opAmount, common.BigGwei).Uint64()
 
 	logData := PackWithdrawalLogData(validator.GetPubKey(), op.CreatorAddress(), validator.GetIndex(), amtGwei)
 
@@ -522,12 +519,48 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	if validator == nil {
 		return nil, ErrUnknownValidator
 	}
-	// transfer amount to withdrawal address
-	wAdr := validator.GetWithdrawalAddress()
-	if wAdr == nil {
-		return nil, ErrNoWithdrawalCred
+	var withdrawalTo *common.Address
+	// if total deposited amount is less than the effective balance
+	// - deposit is insufficient to activate validator.
+	effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
+	if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
+		stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
+		// withdrawal of insufficient deposit to activate validator
+		log.Info("Validator update balance: refunds of insufficient deposit",
+			"opCode", op.OpCode(),
+			"InitTxHash", op.InitTxHash().Hex(),
+			"amount", op.Amount().String(),
+			"procEpoch", op.ProcEpoch(),
+			"vIndex", op.Index(),
+			"creator", op.Creator().Hex(),
+		)
+		// check initial tx
+		initTx, _, _ := p.blockchain.GetTransaction(op.InitTxHash())
+		if initTx == nil {
+			return nil, ErrTxNF
+		}
+		// check init tx data
+		iop, err := operation.DecodeBytes(initTx.Data())
+		if err != nil {
+			log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+			return nil, err
+		}
+		if iop.OpCode() != operation.WithdrawalCode {
+			return nil, ErrInvalidOpCode
+		}
+		// withdrawal to sender of initial tx
+		signer := types.LatestSigner(p.blockchain.Config())
+		iTxFrom, _ := types.Sender(signer, initTx)
+		withdrawalTo = &iTxFrom
+	} else {
+		// set withdrawal credentials
+		withdrawalTo = validator.GetWithdrawalAddress()
+		if withdrawalTo == nil {
+			return nil, ErrNoWithdrawalCred
+		}
 	}
-	p.state.AddBalance(*wAdr, op.Amount())
+	// transfer amount to withdrawal address
+	p.state.AddBalance(*withdrawalTo, op.Amount())
 
 	return op.Creator().Bytes(), nil
 }

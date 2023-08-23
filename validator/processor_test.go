@@ -759,7 +759,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 				Caller: vm.AccountRef(withdrawalAddress),
 				AddrTo: to,
 			},
-			Errs: []error{ErrInsufficientFundsForTransfer},
+			Errs: []error{ErrInsufficientFundsForOp},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 

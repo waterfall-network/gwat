@@ -799,10 +799,7 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 		case valOperation.Withdrawal:
 			return pool.checkWithdrawalOperation(v, from)
 		case valOperation.Deposit:
-			// check amount can add to log
-			if !common.BnCanCastToUint64(new(big.Int).Div(value, common.BigGwei)) {
-				return val.ErrInvalidAmount
-			}
+			return pool.checkDepositOperation(v, from, value)
 		}
 
 		return nil
@@ -821,12 +818,55 @@ func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from co
 	if err != nil {
 		return err
 	}
+	// if total deposited amount is less than the effective balance
+	// - deposit is insufficient to activate validator.
+	effectiveBalanceWei := new(big.Int).Mul(pool.chainconfig.EffectiveBalance, common.BigWat)
+	if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
+		stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
+		stakeByAddr := validator.StakeByAddress(from)
+		//withdrawal address must be one of the depositors
+		if stakeByAddr == nil {
+			return val.ErrInvalidFromAddresses
+		}
+		// check amount
+		if stakeByAddr.Cmp(op.Amount()) < 0 {
+			return val.ErrInsufficientFundsForOp
+		}
+	} else {
+		withdrawalAddress := validator.GetWithdrawalAddress()
+		if from != *withdrawalAddress {
+			return val.ErrInvalidFromAddresses
+		}
+	}
+	return nil
+}
 
-	withdrawalAddress := validator.GetWithdrawalAddress()
-	if from != *withdrawalAddress {
-		return val.ErrInvalidFromAddresses
+func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.Address, amount *big.Int) error {
+	// check amount can add to log
+	if !common.BnCanCastToUint64(new(big.Int).Div(amount, common.BigGwei)) {
+		return val.ErrInvalidAmount
+	}
+	// check minimal acceptable amount
+	if amount.Cmp(val.MinDepositVal) < 0 {
+		return fmt.Errorf("too low value (min deposit = %s wei)", val.MinDepositVal.String())
 	}
 
+	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
+	if err == valStore.ErrNoStateValidatorInfo {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// check is activated
+	if validator.GetActivationEra() != math.MaxUint64 {
+		return fmt.Errorf("validator passed activation (activation era is %d)", validator.GetActivationEra())
+	}
+	// check is fully deposited
+	effectiveBalanceWei := new(big.Int).Mul(pool.chainconfig.EffectiveBalance, common.BigWat)
+	if stake := validator.TotalStake(); stake != nil && stake.Cmp(effectiveBalanceWei) >= 0 {
+		return fmt.Errorf("required amount of stake reached (req=%s deposited=%s wei)", effectiveBalanceWei.String(), stake.String())
+	}
 	return nil
 }
 

@@ -245,6 +245,16 @@ func (v *Validator) StakeByAddress(address common.Address) *big.Int {
 	return big.NewInt(0)
 }
 
+func (v *Validator) RmStakeByAddress(address common.Address) {
+	stake := make([]*StakeByAddress, 0, len(v.Stake))
+	for _, s := range v.Stake {
+		if s.Address != address {
+			stake = append(stake, s)
+		}
+	}
+	v.Stake = stake
+}
+
 func (v *Validator) UnsetStake() {
 	v.Stake = []*StakeByAddress{}
 }
