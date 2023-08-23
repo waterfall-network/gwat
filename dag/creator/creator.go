@@ -228,7 +228,9 @@ func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accou
 	for _, account := range accounts {
 		if c.isCreatorActive(account, assigned) {
 			wg.Add(1)
+			c.current.txsMu.Lock()
 			c.current.txs[account] = &txsWithCumulativeGas{}
+			c.current.txsMu.Unlock()
 			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg)
 		}
 	}
