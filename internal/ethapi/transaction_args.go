@@ -28,7 +28,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -142,7 +141,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, head *t
 	}
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
-		gas := hexutil.Uint64(params.TxGas)
+		gas := hexutil.Uint64(b.RPCGasCap() / 2)
 		args.Gas = &gas
 		// These fields are immutable during the estimation, safe to
 		// pass the pointer directly.

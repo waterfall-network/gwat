@@ -3211,9 +3211,7 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header)
 	switch txType {
 	case ValidatorMethodTxType, ValidatorSyncTxType:
 		return IntrinsicGas(tx.Data(), tx.AccessList(), false, true)
-	case ContractCreationTxType:
-		return IntrinsicGas(tx.Data(), tx.AccessList(), true, false)
-	case ContractMethodTxType:
+	case ContractMethodTxType, ContractCreationTxType:
 		return bc.TxEstimateGasByEvm(tx, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
 	case TokenCreationTxType, TokenMethodTxType:
 		return IntrinsicGas(tx.Data(), tx.AccessList(), false, false)
