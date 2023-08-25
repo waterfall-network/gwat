@@ -265,9 +265,9 @@ func eraKey(era uint64) []byte {
 	return append(eraPrefix, Uint64ToByteSlice(era)...)
 }
 
-// validatorSyncKey = valSyncOpPrefix + opType + creatorAddr
-func validatorSyncKey(creator common.Address, op uint64) []byte {
-	return append(append(valSyncOpPrefix, encodeBlockNumber(op)...), creator.Bytes()...)
+// validatorSyncKey = valSyncOpPrefix + initTxHash
+func validatorSyncKey(initTxHash common.Hash) []byte {
+	return append(valSyncOpPrefix, initTxHash.Bytes()...)
 }
 
 // coordCpKey = coordCpPrefix + cpSpine

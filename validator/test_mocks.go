@@ -60,6 +60,16 @@ type Mockblockchain struct {
 	recorder *MockblockchainMockRecorder
 }
 
+func (m *Mockblockchain) GetTransaction(txHash common.Hash) (tx *types.Transaction, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *Mockblockchain) GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // MockblockchainMockRecorder is the mock recorder for Mockblockchain.
 type MockblockchainMockRecorder struct {
 	mock *Mockblockchain
@@ -218,9 +228,9 @@ func (mr *MockblockchainMockRecorder) GetSlotInfo() *gomock.Call {
 }
 
 // GetValidatorSyncData mocks base method.
-func (m *Mockblockchain) GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
+func (m *Mockblockchain) GetValidatorSyncData(initTxHash common.Hash) *types.ValidatorSync {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetValidatorSyncData", creator, op)
+	ret := m.ctrl.Call(m, "GetValidatorSyncData", initTxHash)
 	ret0, _ := ret[0].(*types.ValidatorSync)
 	return ret0
 }

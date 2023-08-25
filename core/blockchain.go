@@ -210,7 +210,7 @@ type BlockChain struct {
 	lastFinalizedFastBlock atomic.Value // Current last finalized block of the fast-sync chain (may be above the blockchain!)
 	eraInfo                era.EraInfo  // Current Era
 	lastCoordinatedCp      atomic.Value // Current last coordinated checkpoint
-	notProcValSyncOps      map[[28]byte]*types.ValidatorSync
+	notProcValSyncOps      map[common.Hash]*types.ValidatorSync
 	valSyncCache           *lru.Cache
 
 	stateCache            state.Database // State database to reuse between imports (contains state cache)
@@ -669,19 +669,18 @@ func (bc *BlockChain) GetEpoch(epoch uint64) common.Hash {
 
 // GetValidatorSyncData retrieves a validator sync data from the database by
 // creator addr and op, caching it if found.
-func (bc *BlockChain) GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
+func (bc *BlockChain) GetValidatorSyncData(initTxHash common.Hash) *types.ValidatorSync {
 	// Short circuit if the body's already in the cache, retrieve otherwise
-	key := (&types.ValidatorSync{OpType: op, Creator: creator}).Key()
-	if cached, ok := bc.valSyncCache.Get(key); ok {
+	if cached, ok := bc.valSyncCache.Get(initTxHash); ok {
 		vs := cached.(*types.ValidatorSync)
 		return vs
 	}
-	vs := rawdb.ReadValidatorSync(bc.db, creator, op)
+	vs := rawdb.ReadValidatorSync(bc.db, initTxHash)
 	if vs == nil {
 		return nil
 	}
 	// Cache the found data for next time and return
-	bc.valSyncCache.Add(key, vs)
+	bc.valSyncCache.Add(initTxHash, vs)
 	return vs
 }
 
@@ -693,7 +692,7 @@ func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
 	bc.valSyncCache.Add(key, validatorSync)
 	rawdb.WriteValidatorSync(bc.db, validatorSync)
 	if validatorSync.TxHash != nil && bc.notProcValSyncOps[key] != nil {
-		notProcValSyncOps := map[[28]byte]*types.ValidatorSync{}
+		notProcValSyncOps := map[common.Hash]*types.ValidatorSync{}
 		for k, vs := range bc.notProcValSyncOps {
 			if k != key {
 				notProcValSyncOps[k] = vs
@@ -737,10 +736,10 @@ func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.V
 }
 
 // GetNotProcessedValidatorSyncData get current not processed validator sync data.
-func (bc *BlockChain) GetNotProcessedValidatorSyncData() map[[28]byte]*types.ValidatorSync {
+func (bc *BlockChain) GetNotProcessedValidatorSyncData() map[common.Hash]*types.ValidatorSync {
 	if bc.notProcValSyncOps == nil {
 		ops := rawdb.ReadNotProcessedValidatorSyncOps(bc.db)
-		bc.notProcValSyncOps = make(map[[28]byte]*types.ValidatorSync, len(ops))
+		bc.notProcValSyncOps = make(map[common.Hash]*types.ValidatorSync, len(ops))
 		for _, op := range ops {
 			if op == nil {
 				log.Warn("GetNotProcessedValidatorSyncData: nil data detected")
@@ -4327,20 +4326,7 @@ func (bc *BlockChain) verifyBlockValidatorSyncTx(block *types.Block, tx *types.T
 
 	switch v := op.(type) {
 	case validatorOp.ValidatorSync:
-		savedValSync := bc.GetValidatorSyncData(v.Creator(), v.OpType())
-		if savedValSync == nil {
-			return validator.ErrNoSavedValSyncOp
-		}
-		blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-		if blockEpoch > v.ProcEpoch() {
-			return validator.ErrInvalidOpEpoch
-		}
-		if !validator.CompareValSync(savedValSync, v) {
-			return validator.ErrMismatchValSyncOp
-		}
-		if savedValSync.TxHash != nil && *savedValSync.TxHash != tx.Hash() {
-			return validator.ErrMismatchTxHashes
-		}
+		validator.ValidateValidatorSyncOp(bc, v, block.Slot(), tx.Hash())
 	}
 	return nil
 }
@@ -4370,12 +4356,13 @@ func (bc *BlockChain) handleBlockValidatorSyncTxs(block *types.Block) {
 		case validatorOp.ValidatorSync:
 			txHash := tx.Hash()
 			txValSyncOp := &types.ValidatorSync{
-				OpType:    v.OpType(),
-				ProcEpoch: v.ProcEpoch(),
-				Index:     v.Index(),
-				Creator:   v.Creator(),
-				Amount:    v.Amount(),
-				TxHash:    &txHash,
+				InitTxHash: v.InitTxHash(),
+				OpType:     v.OpType(),
+				ProcEpoch:  v.ProcEpoch(),
+				Index:      v.Index(),
+				Creator:    v.Creator(),
+				Amount:     v.Amount(),
+				TxHash:     &txHash,
 			}
 			log.Info("Validator sync tx",
 				"OpType", txValSyncOp.OpType,
@@ -4384,6 +4371,7 @@ func (bc *BlockChain) handleBlockValidatorSyncTxs(block *types.Block) {
 				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
 				"amount", txValSyncOp.Amount,
 				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+				"InitTxHash", fmt.Sprintf("%#x", txValSyncOp.InitTxHash),
 			)
 			bc.SetValidatorSyncData(txValSyncOp)
 		}
@@ -4424,12 +4412,13 @@ func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, recei
 		case validatorOp.ValidatorSync:
 			txHash := tx.Hash()
 			txValSyncOp := &types.ValidatorSync{
-				OpType:    v.OpType(),
-				ProcEpoch: v.ProcEpoch(),
-				Index:     v.Index(),
-				Creator:   v.Creator(),
-				Amount:    v.Amount(),
-				TxHash:    &txHash,
+				InitTxHash: v.InitTxHash(),
+				OpType:     v.OpType(),
+				ProcEpoch:  v.ProcEpoch(),
+				Index:      v.Index(),
+				Creator:    v.Creator(),
+				Amount:     v.Amount(),
+				TxHash:     &txHash,
 			}
 			log.Info("Validator sync tx receipts",
 				"OpType", txValSyncOp.OpType,
@@ -4438,6 +4427,7 @@ func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, recei
 				"Creator", fmt.Sprintf("%#x", txValSyncOp.Creator),
 				"amount", txValSyncOp.Amount,
 				"TxHash", fmt.Sprintf("%#x", txValSyncOp.TxHash),
+				"InitTxHash", txValSyncOp.InitTxHash.Hex(),
 			)
 			bc.SetValidatorSyncData(txValSyncOp)
 		}

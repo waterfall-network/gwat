@@ -25,6 +25,7 @@ type ValidatorSync interface {
 	ProcEpoch() uint64
 	Index() uint64
 	Creator() common.Address
+	InitTxHash() common.Hash
 	Amount() *big.Int
 	WithdrawalAddress() *common.Address
 }

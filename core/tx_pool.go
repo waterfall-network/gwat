@@ -769,7 +769,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	if isValidatorOp {
 		txData = tx.Data()
-		if err := pool.handleValidatorTransaction(txData, from); err != nil {
+		if err := pool.handleValidatorTransaction(txData, from, tx.Value()); err != nil {
 			return err
 		}
 	}
@@ -788,7 +788,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 }
 
 // handleValidatorTransaction validates validator transactions
-func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Address) error {
+func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Address, value *big.Int) error {
 	if len(txData) > 0 {
 		op, err := valOperation.DecodeBytes(txData)
 		if err != nil {
@@ -798,6 +798,8 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 		switch v := op.(type) {
 		case valOperation.Withdrawal:
 			return pool.checkWithdrawalOperation(v, from)
+		case valOperation.Deposit:
+			return pool.checkDepositOperation(v, from, value)
 		}
 
 		return nil
@@ -808,26 +810,63 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 }
 
 func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from common.Address) error {
+	// check amount can add to log
+	if !common.BnCanCastToUint64(new(big.Int).Div(op.Amount(), common.BigGwei)) {
+		return val.ErrInvalidAmount
+	}
 	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
 	if err != nil {
 		return err
 	}
+	// if total deposited amount is less than the effective balance
+	// - deposit is insufficient to activate validator.
+	effectiveBalanceWei := new(big.Int).Mul(pool.chainconfig.EffectiveBalance, common.BigWat)
+	if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
+		stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
+		stakeByAddr := validator.StakeByAddress(from)
+		//withdrawal address must be one of the depositors
+		if stakeByAddr == nil {
+			return val.ErrInvalidFromAddresses
+		}
+		// check amount
+		if stakeByAddr.Cmp(op.Amount()) < 0 {
+			return val.ErrInsufficientFundsForOp
+		}
+	} else {
+		withdrawalAddress := validator.GetWithdrawalAddress()
+		if from != *withdrawalAddress {
+			return val.ErrInvalidFromAddresses
+		}
+	}
+	return nil
+}
 
-	withdrawalAddress := validator.GetWithdrawalAddress()
-	if from != *withdrawalAddress {
-		return val.ErrInvalidFromAddresses
+func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.Address, amount *big.Int) error {
+	// check amount can add to log
+	if !common.BnCanCastToUint64(new(big.Int).Div(amount, common.BigGwei)) {
+		return val.ErrInvalidAmount
+	}
+	// check minimal acceptable amount
+	if amount.Cmp(val.MinDepositVal) < 0 {
+		return fmt.Errorf("too low value (min deposit = %s wei)", val.MinDepositVal.String())
 	}
 
-	if validator.GetActivationEra() == math.MaxUint64 {
-		return val.ErrNotActivatedValidator
+	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
+	if err == valStore.ErrNoStateValidatorInfo {
+		return nil
 	}
-
-	currentBalance := validator.GetBalance()
-
-	if currentBalance.Cmp(op.Amount()) == -1 {
-		return val.ErrInsufficientFundsForTransfer
+	if err != nil {
+		return err
 	}
-
+	// check is activated
+	if validator.GetActivationEra() != math.MaxUint64 {
+		return fmt.Errorf("validator passed activation (activation era is %d)", validator.GetActivationEra())
+	}
+	// check is fully deposited
+	effectiveBalanceWei := new(big.Int).Mul(pool.chainconfig.EffectiveBalance, common.BigWat)
+	if stake := validator.TotalStake(); stake != nil && stake.Cmp(effectiveBalanceWei) >= 0 {
+		return fmt.Errorf("required amount of stake reached (req=%s deposited=%s wei)", effectiveBalanceWei.String(), stake.String())
+	}
 	return nil
 }
 
