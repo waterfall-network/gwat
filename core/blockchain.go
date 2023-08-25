@@ -2200,17 +2200,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		return false, nil
 	}
 
-	// Verify block checkpoint
-	if !bc.verifyCheckpoint(block) {
-		return false, nil
-	}
-
 	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
-
-	// Verify block height
-	if !bc.verifyBlockHeight(block, len(ancestors)) {
-		return false, nil
-	}
 
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
@@ -2227,6 +2217,16 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	// cp must be an ancestor of the block
 	if !isCpAncestor {
 		log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
+		return false, nil
+	}
+
+	// Verify block checkpoint
+	if !bc.verifyCheckpoint(block) {
+		return false, nil
+	}
+
+	// Verify block height
+	if !bc.verifyBlockHeight(block, len(ancestors)) {
 		return false, nil
 	}
 
@@ -2341,21 +2341,14 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 	parentsHeaders := bc.GetHeadersByHashes(block.ParentHashes())
 
 	// parents' heights must be less than block height
-	for _, parent := range parentsHeaders {
+	for _, parentHash := range block.ParentHashes() {
+		parent := bc.GetHeader(parentHash)
 		if _, ok := bc.invalidBlocksCache.Get(parent); ok {
-			log.Warn("Block verification: invalid parent",
-				"hash", block.Hash().Hex(),
-				"invalid parent", parent.Hash().Hex(),
-			)
+			log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
 			return false, nil
 		}
-		if parent.Height >= block.Height() {
-			log.Warn("Block verification: invalid parent",
-				"height", block.Height(),
-				"slot", block.Slot(),
-				"parent height", parent.Height,
-				"parent slot", parent.Slot,
-			)
+		if parent.Height >= block.Height() || parent.Slot >= block.Slot() {
+			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height, "parent slot", parent.Slot)
 			return false, nil
 		}
 	}
