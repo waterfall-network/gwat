@@ -570,7 +570,9 @@ func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header,
 		return nil
 	}
 
-	gas, err := c.bc.TxEstimateGas(tx, header)
+	signer := types.MakeSigner(c.bc.Config())
+	msg, err := tx.AsMessage(signer, header.BaseFee)
+	gas, err := c.bc.EstimateGas(msg, header)
 	if err != nil {
 		log.Error("Failed to estimate gas for the transaction", "err", err)
 		return err
