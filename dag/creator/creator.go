@@ -122,9 +122,6 @@ func (c *Creator) IsRunning() bool {
 // Pending returns the currently pending block and associated state.
 func (c *Creator) Pending() (*types.Block, *state.StateDB) {
 	// return a snapshot to avoid contention on currentMu mutex
-	c.snapshotMu.RLock()
-	defer c.snapshotMu.RUnlock()
-
 	block := c.bc.GetLastFinalizedBlock()
 	state, err := c.bc.StateAt(block.Root())
 	if err != nil {
@@ -554,11 +551,9 @@ func (c *Creator) updateSnapshot(header *types.Header) {
 	c.snapshotMu.Lock()
 	defer c.snapshotMu.Unlock()
 
-	txs := c.getUnhandledTxs(header.Coinbase)
-
 	c.snapshotBlock = types.NewBlock(
 		header,
-		txs,
+		c.getUnhandledTxs(header.Coinbase),
 		nil,
 		trie.NewStackTrie(nil),
 	)
