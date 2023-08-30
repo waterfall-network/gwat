@@ -343,7 +343,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 
-	if !isValidatorOp {
+	if txType != ValidatorSyncTxType {
 		if st.gas < gas {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 		}
