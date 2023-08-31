@@ -20,7 +20,7 @@ func TestBlockDAG(t *testing.T) {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11,
 		},
 		CpHeight: uint64(255),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.Hash{
 				0x11, 0x11, 0x11, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11,
@@ -183,7 +183,7 @@ func TestTips(t *testing.T) {
 		CpHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		CpHeight: uint64(1807706),
 
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x0c449b3b974d1c33081eda15010740a4c79b194ee10846311970d150b7cd07de"), // 1807717 (blue)
 			common.HexToHash("0x72fc4b6693d51f0a10913ca9ecfb6baa6774e54134b5aa23f49e45c5443841db"), // 1807717
 			common.HexToHash("0xae0e83f6c7249349bd4c71f4aaccf16c57b3ba7a7f5a2a3b6618f2f86e155a99"), // 1807717
@@ -199,7 +199,7 @@ func TestTips(t *testing.T) {
 		CpHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		CpHeight: uint64(1807706),
 
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), //> 1807706 => 1807707
 			common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), //> 1807706 => 1807708
 			common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), //> 1807706 => 1807709
@@ -226,7 +226,7 @@ func TestTips(t *testing.T) {
 		Slot:     uint64(1800022),
 		CpHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		CpHeight: uint64(1807706),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), //> 1807706 => 1807707
 			common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), //> 1807706 => 1807708
 			common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), //> 1807706 => 1807709
@@ -253,7 +253,7 @@ func TestTips(t *testing.T) {
 		Slot:     uint64(1807722),
 		CpHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		CpHeight: uint64(1807706),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), //> 1807706 => 1807707
 			common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), //> 1807706 => 1807708
 			common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), //> 1807706 => 1807709
@@ -280,7 +280,7 @@ func TestTips(t *testing.T) {
 		Slot:     uint64(1807722),
 		CpHash:   common.HexToHash("0x7b5f02d2646f4d0758e78ae1d211b0bb3a0724952ff04d588c7a57bfc2ba7070"),
 		CpHeight: uint64(1807706),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x880b8b458fb7fbb4660292d9ecaf484536849972712f5a5628a207f318cae307"), //> 1807706 => 1807707
 			common.HexToHash("0xadd020939a5f00207c95147c7d1f89fdcf84dfde08ac099bd90b5c571c26649e"), //> 1807706 => 1807708
 			common.HexToHash("0xfa4c39399200727eec17c5eb32f859321daa8b1856dfe5e634aed0ffabfdc09d"), //> 1807706 => 1807709
@@ -311,7 +311,7 @@ func TestTips(t *testing.T) {
 		t.Fatalf("Tips.getOrderedHashes failed, got %v != %v", res, exp)
 	}
 
-	ordChain := tips.GetOrderedDagChainHashes()
+	ordChain := tips.GetOrderedAncestorsHashes()
 	res = fmt.Sprintf("%v", ordChain.Uniq())
 
 	expHashes := common.HashArray{
@@ -338,7 +338,7 @@ func TestTips(t *testing.T) {
 	}
 	exp = fmt.Sprintf("%v", expHashes.Uniq())
 	if res != exp {
-		t.Fatalf("Tips.GetOrderedDagChainHashes failed, got %v != %v", res, exp)
+		t.Fatalf("Tips.GetOrderedAncestorsHashes failed, got %v != %v", res, exp)
 	}
 
 	// tips.GetStableStateHash()
@@ -360,7 +360,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 		Slot:     uint64(1500),
 		CpHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		CpHeight: uint64(3170),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x5316ca87acd66d92f8766daf0e28508577b2048d67477d22430408ffd13663c8"), //
 			common.HexToHash("0x8b69c9581d484978b094748fff612faaa8756fe2007c2e51288a57044d7dc2f2"), //
 			common.HexToHash("0xa0c5206e647d2a3d268cf854f69491c3dbe2001d071d368e64d02cf14a5a904c"), //
@@ -389,7 +389,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 		Slot:     uint64(3190),
 		CpHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		CpHeight: uint64(3170),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x5316ca87acd66d92f8766daf0e28508577b2048d67477d22430408ffd13663c8"), //
 			common.HexToHash("0x8b69c9581d484978b094748fff612faaa8756fe2007c2e51288a57044d7dc2f2"), //
 			common.HexToHash("0xa0c5206e647d2a3d268cf854f69491c3dbe2001d071d368e64d02cf14a5a904c"), //
@@ -418,7 +418,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 		Slot:     uint64(1500),
 		CpHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		CpHeight: uint64(3170),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x5316ca87acd66d92f8766daf0e28508577b2048d67477d22430408ffd13663c8"), //
 			common.HexToHash("0x8b69c9581d484978b094748fff612faaa8756fe2007c2e51288a57044d7dc2f2"), //
 			common.HexToHash("0xa0c5206e647d2a3d268cf854f69491c3dbe2001d071d368e64d02cf14a5a904c"), //
@@ -447,7 +447,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 		Slot:     uint64(1500),
 		CpHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		CpHeight: uint64(3170),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x5316ca87acd66d92f8766daf0e28508577b2048d67477d22430408ffd13663c8"), //
 			common.HexToHash("0x8b69c9581d484978b094748fff612faaa8756fe2007c2e51288a57044d7dc2f2"), //
 			common.HexToHash("0xa0c5206e647d2a3d268cf854f69491c3dbe2001d071d368e64d02cf14a5a904c"), //
@@ -470,7 +470,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 		Slot:     uint64(1500),
 		CpHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		CpHeight: uint64(3170),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x5316ca87acd66d92f8766daf0e28508577b2048d67477d22430408ffd13663c8"), //
 			common.HexToHash("0x8b69c9581d484978b094748fff612faaa8756fe2007c2e51288a57044d7dc2f2"), //
 			common.HexToHash("0xa0c5206e647d2a3d268cf854f69491c3dbe2001d071d368e64d02cf14a5a904c"), //
@@ -495,7 +495,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 		Slot:     uint64(1500),
 		CpHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		CpHeight: uint64(3170),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x5316ca87acd66d92f8766daf0e28508577b2048d67477d22430408ffd13663c8"), //
 			common.HexToHash("0x8b69c9581d484978b094748fff612faaa8756fe2007c2e51288a57044d7dc2f2"), //
 			common.HexToHash("0xa0c5206e647d2a3d268cf854f69491c3dbe2001d071d368e64d02cf14a5a904c"), //
@@ -524,7 +524,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 		Slot:     uint64(1500),
 		CpHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		CpHeight: uint64(3170),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x5316ca87acd66d92f8766daf0e28508577b2048d67477d22430408ffd13663c8"), //
 			common.HexToHash("0x8b69c9581d484978b094748fff612faaa8756fe2007c2e51288a57044d7dc2f2"), //
 			common.HexToHash("0xa0c5206e647d2a3d268cf854f69491c3dbe2001d071d368e64d02cf14a5a904c"), //
@@ -553,7 +553,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 		Slot:     uint64(1500),
 		CpHash:   common.HexToHash("0x4264174f75eb9ed6cee56681adf1ab68adc2baf928ab5bbf2125e43f8504115a"),
 		CpHeight: uint64(3170),
-		DagChainHashes: common.HashArray{
+		OrderedAncestorsHashes: common.HashArray{
 			common.HexToHash("0x5316ca87acd66d92f8766daf0e28508577b2048d67477d22430408ffd13663c8"), //
 			common.HexToHash("0x8b69c9581d484978b094748fff612faaa8756fe2007c2e51288a57044d7dc2f2"), //
 			common.HexToHash("0xa0c5206e647d2a3d268cf854f69491c3dbe2001d071d368e64d02cf14a5a904c"), //
@@ -603,8 +603,8 @@ func TestTipsSkippedSlots(t *testing.T) {
 		t.Fatalf("Tips.GetStableStateHash failed, got %v != %v", res, exp)
 	}
 
-	// tips.GetOrderedDagChainHashes()
-	ordChain := tips.GetOrderedDagChainHashes()
+	// tips.GetOrderedAncestorsHashes()
+	ordChain := tips.GetOrderedAncestorsHashes()
 	res = fmt.Sprintf("%v", ordChain.Uniq())
 
 	expHashes := common.HashArray{
@@ -642,7 +642,7 @@ func TestTipsSkippedSlots(t *testing.T) {
 
 	exp = fmt.Sprintf("%v", expHashes.Uniq())
 	if res != exp {
-		t.Fatalf("Tips.GetOrderedDagChainHashes failed, got %v != %v", res, exp)
+		t.Fatalf("Tips.GetOrderedAncestorsHashes failed, got %v != %v", res, exp)
 	}
 
 }

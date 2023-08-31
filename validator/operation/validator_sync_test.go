@@ -14,6 +14,7 @@ import (
 
 func TestValidatorSync(t *testing.T) {
 	type decodedOp struct {
+		initTxHash        common.Hash
 		opType            types.ValidatorSyncOp
 		procEpoch         uint64
 		index             uint64
@@ -23,6 +24,7 @@ func TestValidatorSync(t *testing.T) {
 	}
 
 	var (
+		initTxHash        = common.HexToHash("0303030303030303030303030303030303030303030303030303030303030303")
 		procEpoch         = uint64(0xaa)
 		index             = uint64(0xbb)
 		creator           = common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
@@ -34,14 +36,16 @@ func TestValidatorSync(t *testing.T) {
 		{
 			caseName: "activation OK",
 			decoded: decodedOp{
-				opType:    types.Activate,
-				procEpoch: procEpoch,
-				index:     index,
-				creator:   creator,
+				initTxHash: initTxHash,
+				opType:     types.Activate,
+				procEpoch:  procEpoch,
+				index:      index,
+				creator:    creator,
 			},
 			encoded: hexutils.HexToBytes("f4" +
 				"02" +
 				"0000000000000000" +
+				"0303030303030303030303030303030303030303030303030303030303030303" +
 				"00000000000000aa" +
 				"00000000000000bb" +
 				"a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e"),
@@ -50,9 +54,10 @@ func TestValidatorSync(t *testing.T) {
 		{
 			caseName: "activation: creator_address is required",
 			decoded: decodedOp{
-				opType:    types.Activate,
-				procEpoch: procEpoch,
-				index:     index,
+				initTxHash: initTxHash,
+				opType:     types.Activate,
+				procEpoch:  procEpoch,
+				index:      index,
 			},
 			errs: []error{ErrNoCreatorAddress},
 		},
@@ -60,14 +65,16 @@ func TestValidatorSync(t *testing.T) {
 		{
 			caseName: "exit OK",
 			decoded: decodedOp{
-				opType:    types.Deactivate,
-				procEpoch: procEpoch,
-				index:     index,
-				creator:   creator,
+				initTxHash: initTxHash,
+				opType:     types.Deactivate,
+				procEpoch:  procEpoch,
+				index:      index,
+				creator:    creator,
 			},
 			encoded: hexutils.HexToBytes("f4" +
 				"04" +
 				"0000000000000001" +
+				"0303030303030303030303030303030303030303030303030303030303030303" +
 				"00000000000000aa" +
 				"00000000000000bb" +
 				"a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e"),
@@ -77,6 +84,7 @@ func TestValidatorSync(t *testing.T) {
 		{
 			caseName: "withdrawal OK",
 			decoded: decodedOp{
+				initTxHash:        initTxHash,
 				opType:            types.UpdateBalance,
 				procEpoch:         procEpoch,
 				index:             index,
@@ -87,6 +95,7 @@ func TestValidatorSync(t *testing.T) {
 			encoded: hexutils.HexToBytes("f4" +
 				"05" +
 				"0000000000000002" +
+				"0303030303030303030303030303030303030303030303030303030303030303" +
 				"00000000000000aa" +
 				"00000000000000bb" +
 				"a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e" +
@@ -99,6 +108,7 @@ func TestValidatorSync(t *testing.T) {
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
 		createOp, err := NewValidatorSyncOperation(
+			o.initTxHash,
 			o.opType,
 			o.procEpoch,
 			o.index,

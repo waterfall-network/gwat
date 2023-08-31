@@ -469,7 +469,7 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 	if incDag {
 		toFinNr = backend.Chain().GetLastFinalizedNumber()
 		//collect dag hashes by slot
-		dagHeaders := backend.Chain().GetHeadersByHashes(backend.Chain().GetTips().GetOrderedDagChainHashes())
+		dagHeaders := backend.Chain().GetHeadersByHashes(backend.Chain().GetTips().GetOrderedAncestorsHashes())
 		if dagHeaders[terminalSpine] == nil {
 			return dag, fmt.Errorf("%w", errInvalidDag)
 		}

@@ -682,101 +682,6 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	DeleteBlockDag(db, hash)
 }
 
-const badBlockToKeep = 10
-
-type badBlock struct {
-	Header *types.Header
-	Body   *types.Body
-}
-
-// badBlockList implements the sort interface to allow sorting a list of
-// bad blocks by their number in the reverse order.
-type badBlockList []*badBlock
-
-func (s badBlockList) Len() int { return len(s) }
-func (s badBlockList) Less(i, j int) bool {
-	return s[i].Header.Nr() < s[j].Header.Nr()
-}
-func (s badBlockList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-// ReadBadBlock retrieves the bad block with the corresponding block hash.
-func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
-	blob, err := db.Get(badBlockKey)
-	if err != nil {
-		return nil
-	}
-	var badBlocks badBlockList
-	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
-		return nil
-	}
-	for _, bad := range badBlocks {
-		if bad.Header.Hash() == hash {
-			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions)
-		}
-	}
-	return nil
-}
-
-// ReadAllBadBlocks retrieves all the bad blocks in the database.
-// All returned blocks are sorted in reverse order by number.
-func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
-	blob, err := db.Get(badBlockKey)
-	if err != nil {
-		return nil
-	}
-	var badBlocks badBlockList
-	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
-		return nil
-	}
-	var blocks []*types.Block
-	for _, bad := range badBlocks {
-		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions))
-	}
-	return blocks
-}
-
-// WriteBadBlock serializes the bad block into the database. If the cumulated
-// bad blocks exceeds the limitation, the oldest will be dropped.
-func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
-	blob, err := db.Get(badBlockKey)
-	if err != nil {
-		log.Warn("Failed to load old bad blocks", "error", err)
-	}
-	var badBlocks badBlockList
-	if len(blob) > 0 {
-		if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
-			log.Crit("Failed to decode old bad blocks", "error", err)
-		}
-	}
-	for _, b := range badBlocks {
-		if b.Header.Nr() == block.Nr() && b.Header.Hash() == block.Hash() {
-			log.Info("Skip duplicated bad block", "number", block.Nr(), "hash", block.Hash().Hex())
-			return
-		}
-	}
-	badBlocks = append(badBlocks, &badBlock{
-		Header: block.Header(),
-		Body:   block.Body(),
-	})
-	if len(badBlocks) > badBlockToKeep {
-		badBlocks = badBlocks[:badBlockToKeep]
-	}
-	data, err := rlp.EncodeToBytes(badBlocks)
-	if err != nil {
-		log.Crit("Failed to encode bad blocks", "err", err)
-	}
-	if err := db.Put(badBlockKey, data); err != nil {
-		log.Crit("Failed to write bad blocks", "err", err)
-	}
-}
-
-// DeleteBadBlocks deletes all the bad blocks from the database
-func DeleteBadBlocks(db ethdb.KeyValueWriter) {
-	if err := db.Delete(badBlockKey); err != nil {
-		log.Crit("Failed to delete bad blocks", "err", err)
-	}
-}
-
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	if (a.Nr() == 0 && a.Height > 0) || (b.Nr() == 0 && b.Height > 0) {
@@ -992,31 +897,30 @@ func DeleteEpoch(db ethdb.KeyValueWriter, epoch uint64) {
 
 /**** ValidatorSync ***/
 
-func parseValidatorSyncKey(validatorSyncKey []byte) (creator common.Address, op uint64) {
+func parseValidatorSyncKey(validatorSyncKey []byte) (initTxHash common.Hash) {
 	start := len(valSyncOpPrefix)
-	end := start + 8
-	op = binary.BigEndian.Uint64(validatorSyncKey[start:end])
-	start = end
-	end = start + common.AddressLength
-	creator = common.BytesToAddress(validatorSyncKey[start:end])
-	return creator, op
+	end := start + common.HashLength
+	initTxHash = common.BytesToHash(validatorSyncKey[start:end])
+	return initTxHash
 }
 
-func decodeValidatorSync(creator common.Address, op types.ValidatorSyncOp, data []byte) *types.ValidatorSync {
-	// <procEpoch><index><txHash><amountBigInt>`
-	minSize := 8 + 8 + common.HashLength
+func decodeValidatorSync(initTxHash common.Hash, data []byte) *types.ValidatorSync {
+	//InitTxHash common.Hash - parse from key
+	// <OpType><Creator><index><procEpoch><txHash><amountBigInt>`
+	minSize := 76
 	if len(data) < minSize {
 		return nil
 	}
 	res := &types.ValidatorSync{
-		Index:     binary.BigEndian.Uint64(data[0:8]),
-		ProcEpoch: binary.BigEndian.Uint64(data[8:16]),
-		TxHash:    nil,
-		Amount:    nil,
-		OpType:    op,
-		Creator:   creator,
+		InitTxHash: initTxHash,
+		OpType:     types.ValidatorSyncOp(binary.BigEndian.Uint64(data[0:8])),
+		Creator:    common.BytesToAddress(data[8:28]),
+		Index:      binary.BigEndian.Uint64(data[28:36]),
+		ProcEpoch:  binary.BigEndian.Uint64(data[36:44]),
+		TxHash:     nil,
+		Amount:     nil,
 	}
-	txh := common.BytesToHash(data[16:minSize])
+	txh := common.BytesToHash(data[44:76])
 	if txh != (common.Hash{}) {
 		res.TxHash = &txh
 	}
@@ -1027,8 +931,11 @@ func decodeValidatorSync(creator common.Address, op types.ValidatorSyncOp, data 
 }
 
 func encodeValidatorSync(vs types.ValidatorSync) []byte {
-	// <procEpoch><index><txHash><amountBigInt>`
+	//InitTxHash common.Hash - put in key
+	// <OpType><Creator><index><procEpoch><txHash><amountBigInt>`
 	var data []byte
+	data = append(data, encodeBlockNumber(uint64(vs.OpType))...)
+	data = append(data, vs.Creator.Bytes()...)
 	data = append(data, encodeBlockNumber(vs.Index)...)
 	data = append(data, encodeBlockNumber(vs.ProcEpoch)...)
 	txh := vs.TxHash
@@ -1043,9 +950,9 @@ func encodeValidatorSync(vs types.ValidatorSync) []byte {
 }
 
 // ReadValidatorSync retrieves the ValidatorSync data.
-func ReadValidatorSync(db ethdb.KeyValueReader, creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync {
-	data, _ := db.Get(validatorSyncKey(creator, uint64(op)))
-	return decodeValidatorSync(creator, op, data)
+func ReadValidatorSync(db ethdb.KeyValueReader, initTxHash common.Hash) *types.ValidatorSync {
+	data, _ := db.Get(validatorSyncKey(initTxHash))
+	return decodeValidatorSync(initTxHash, data)
 }
 
 // WriteValidatorSync stores the ValidatorSync data.
@@ -1053,7 +960,7 @@ func WriteValidatorSync(db ethdb.KeyValueWriter, vs *types.ValidatorSync) {
 	if vs == nil {
 		return
 	}
-	key := validatorSyncKey(vs.Creator, uint64(vs.OpType))
+	key := validatorSyncKey(vs.InitTxHash)
 	enc := encodeValidatorSync(*vs)
 	if err := db.Put(key, enc); err != nil {
 		log.Crit("Failed to store ValidatorSync data", "err", err)
@@ -1061,8 +968,8 @@ func WriteValidatorSync(db ethdb.KeyValueWriter, vs *types.ValidatorSync) {
 }
 
 // DeleteValidatorSync delete the ValidatorSync data..
-func DeleteValidatorSync(db ethdb.KeyValueWriter, creator common.Address, op types.ValidatorSyncOp) {
-	key := validatorSyncKey(creator, uint64(op))
+func DeleteValidatorSync(db ethdb.KeyValueWriter, initTxHash common.Hash) {
+	key := validatorSyncKey(initTxHash)
 	if err := db.Delete(key); err != nil {
 		log.Crit("Failed to delete validators sync data", "err", err)
 	}
@@ -1074,7 +981,7 @@ func ReadNotProcessedValidatorSyncOps(db ethdb.KeyValueReader) []*types.Validato
 	if err != nil {
 		return nil
 	}
-	keyLen := len(validatorSyncKey(common.Address{}, uint64(0)))
+	keyLen := len(validatorSyncKey(common.Hash{}))
 	if len(data)%keyLen != 0 {
 		// alternate return nil
 		log.Crit("Failed to read the not processed validator sync operations: bad data length", "err", err)
@@ -1085,19 +992,19 @@ func ReadNotProcessedValidatorSyncOps(db ethdb.KeyValueReader) []*types.Validato
 		start := i * keyLen
 		end := start + keyLen
 		opKey := data[start:end]
-		creator, op := parseValidatorSyncKey(opKey)
-		res[i] = ReadValidatorSync(db, creator, types.ValidatorSyncOp(op))
+		initTxHash := parseValidatorSyncKey(opKey)
+		res[i] = ReadValidatorSync(db, initTxHash)
 	}
 	return res
 }
 
 // WriteNotProcessedValidatorSyncOps stores the not processed validator sync operations.
 func WriteNotProcessedValidatorSyncOps(db ethdb.KeyValueWriter, valSyncOps []*types.ValidatorSync) {
-	keyLen := len(validatorSyncKey(common.Address{}, uint64(0)))
+	keyLen := len(validatorSyncKey(common.Hash{}))
 	dataLen := keyLen * len(valSyncOps)
 	data := make([]byte, 0, dataLen)
 	for _, vs := range valSyncOps {
-		key := validatorSyncKey(vs.Creator, uint64(vs.OpType))
+		key := validatorSyncKey(vs.InitTxHash)
 		WriteValidatorSync(db, vs)
 		data = append(data, key...)
 	}

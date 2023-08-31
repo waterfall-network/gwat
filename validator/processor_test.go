@@ -29,9 +29,10 @@ var (
 	ctrl              *gomock.Controller
 	eraInfo           era.EraInfo
 
-	value     = MinDepositVal
-	procEpoch = uint64(100)
-	ctx       = vm.BlockContext{
+	initTxHash = common.HexToHash("0303030303030303030303030303030303030303030303030303030303030303")
+	value      = MinDepositVal
+	procEpoch  = uint64(100)
+	ctx        = vm.BlockContext{
 		CanTransfer: nil,
 		Transfer:    nil,
 		Coinbase:    common.Address{},
@@ -144,7 +145,7 @@ func TestProcessorDeposit(t *testing.T) {
 }
 
 func TestProcessorActivate(t *testing.T) {
-	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress)
+	activateOperation, err := operation.NewValidatorSyncOperation(initTxHash, types.Activate, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -167,11 +168,12 @@ func TestProcessorActivate(t *testing.T) {
 		gomock.AssignableToTypeOf(common.Address{}),
 		gomock.AssignableToTypeOf(types.Activate)).
 		AnyTimes().Return(&types.ValidatorSync{
-		OpType:    activateOperation.OpType(),
-		ProcEpoch: activateOperation.ProcEpoch(),
-		Index:     activateOperation.Index(),
-		Creator:   activateOperation.Creator(),
-		Amount:    activateOperation.Amount(),
+		OpType:     activateOperation.OpType(),
+		ProcEpoch:  activateOperation.ProcEpoch(),
+		Index:      activateOperation.Index(),
+		Creator:    activateOperation.Creator(),
+		Amount:     activateOperation.Amount(),
+		InitTxHash: common.Hash{1, 2, 3},
 	})
 	bc.EXPECT().EpochToEra(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(&era.Era{Number: 6})
 
@@ -484,7 +486,7 @@ func TestProcessorExit(t *testing.T) {
 }
 
 func TestProcessorDeactivate(t *testing.T) {
-	deactivateOp, err := operation.NewValidatorSyncOperation(types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
+	deactivateOp, err := operation.NewValidatorSyncOperation(initTxHash, types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -507,11 +509,12 @@ func TestProcessorDeactivate(t *testing.T) {
 		gomock.AssignableToTypeOf(common.Address{}),
 		gomock.AssignableToTypeOf(types.Deactivate)).
 		AnyTimes().Return(&types.ValidatorSync{
-		OpType:    deactivateOp.OpType(),
-		ProcEpoch: deactivateOp.ProcEpoch(),
-		Index:     deactivateOp.Index(),
-		Creator:   deactivateOp.Creator(),
-		Amount:    deactivateOp.Amount(),
+		OpType:     deactivateOp.OpType(),
+		ProcEpoch:  deactivateOp.ProcEpoch(),
+		Index:      deactivateOp.Index(),
+		Creator:    deactivateOp.Creator(),
+		Amount:     deactivateOp.Amount(),
+		InitTxHash: common.Hash{1, 2, 3},
 	})
 	bc.EXPECT().EpochToEra(uint64(100)).AnyTimes().Return(&testmodels.TestEra)
 
@@ -756,7 +759,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 				Caller: vm.AccountRef(withdrawalAddress),
 				AddrTo: to,
 			},
-			Errs: []error{ErrInsufficientFundsForTransfer},
+			Errs: []error{ErrInsufficientFundsForOp},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 
@@ -810,7 +813,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 }
 
 func TestProcessorUpdateBalance(t *testing.T) {
-	updateBalanceOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress)
+	updateBalanceOperation, err := operation.NewValidatorSyncOperation(initTxHash, types.UpdateBalance, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -829,11 +832,12 @@ func TestProcessorUpdateBalance(t *testing.T) {
 		gomock.AssignableToTypeOf(common.Address{}),
 		gomock.AssignableToTypeOf(types.UpdateBalance)).
 		AnyTimes().Return(&types.ValidatorSync{
-		OpType:    updateBalanceOperation.OpType(),
-		ProcEpoch: updateBalanceOperation.ProcEpoch(),
-		Index:     updateBalanceOperation.Index(),
-		Creator:   updateBalanceOperation.Creator(),
-		Amount:    updateBalanceOperation.Amount(),
+		OpType:     updateBalanceOperation.OpType(),
+		ProcEpoch:  updateBalanceOperation.ProcEpoch(),
+		Index:      updateBalanceOperation.Index(),
+		Creator:    updateBalanceOperation.Creator(),
+		Amount:     updateBalanceOperation.Amount(),
+		InitTxHash: common.Hash{1, 2, 3},
 	})
 	bc.EXPECT().EpochToEra(uint64(100)).AnyTimes().Return(&testmodels.TestEra)
 
@@ -940,12 +944,13 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 	defer ctrl.Finish()
 
 	valSyncData := types.ValidatorSync{
-		OpType:    0,
-		ProcEpoch: procEpoch,
-		Index:     index,
-		Creator:   creatorAddress,
-		Amount:    amount,
-		TxHash:    nil,
+		OpType:     0,
+		ProcEpoch:  procEpoch,
+		Index:      index,
+		Creator:    creatorAddress,
+		Amount:     amount,
+		TxHash:     nil,
+		InitTxHash: common.Hash{1, 2, 3},
 	}
 
 	msg := NewMockmessage(ctrl)
@@ -960,7 +965,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 
 	processor := NewProcessor(ctx, stateDb, bc)
 
-	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, procEpoch, index, creatorAddress, big.NewInt(123), &withdrawalAddress)
+	activateOperation, err := operation.NewValidatorSyncOperation(initTxHash, types.Activate, procEpoch, index, creatorAddress, big.NewInt(123), &withdrawalAddress)
 	testutils.AssertNoError(t, err)
 
 	opData, err := operation.EncodeToBytes(activateOperation)

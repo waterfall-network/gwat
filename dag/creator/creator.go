@@ -228,7 +228,9 @@ func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accou
 	for _, account := range accounts {
 		if c.isCreatorActive(account, assigned) {
 			wg.Add(1)
+			c.current.txsMu.Lock()
 			c.current.txs[account] = &txsWithCumulativeGas{}
+			c.current.txsMu.Unlock()
 			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg)
 		}
 	}
@@ -311,20 +313,13 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 						log.Warn("Creator reorg tips failed: bad parent in dag", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "parent", hash.Hex())
 						continue
 					}
-					dagChainHashes := common.HashArray{}
 					//if block not finalized
-					var (
-						isCpAncestor bool
-						ancestors    types.HeaderMap
-						err          error
-						unl          common.HashArray
-					)
 					log.Warn("Creator reorg tips: active BlockDag not found", "parent", hash.Hex(), "parent.slot", parentBlock.Slot, "parent.height", parentBlock.Height, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex())
-					isCpAncestor, ancestors, unl, err = c.bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
+					isCpAncestor, ancestors, unloaded, err := c.bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
 					if err != nil {
 						return nil, err
 					}
-					if len(unl) > 0 {
+					if len(unloaded) > 0 {
 						log.Error("Creator reorg tips: should never happen",
 							"err", core.ErrInsertUncompletedDag,
 							"parent", hash.Hex(),
@@ -349,17 +344,16 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 						return nil, core.ErrCpIsnotAncestor
 					}
 					delete(ancestors, cpHeader.Hash())
-					dagChainHashes = ancestors.Hashes()
 					dagBlock = &types.BlockDAG{
-						Hash:           hash,
-						Height:         parentBlock.Height,
-						Slot:           parentBlock.Slot,
-						CpHash:         parentBlock.CpHash,
-						CpHeight:       cpHeader.Height,
-						DagChainHashes: dagChainHashes,
+						Hash:                   hash,
+						Height:                 parentBlock.Height,
+						Slot:                   parentBlock.Slot,
+						CpHash:                 parentBlock.CpHash,
+						CpHeight:               cpHeader.Height,
+						OrderedAncestorsHashes: ancestors.Hashes(),
 					}
 				}
-				dagBlock.DagChainHashes = dagBlock.DagChainHashes.Difference(common.HashArray{genesis})
+				dagBlock.OrderedAncestorsHashes = dagBlock.OrderedAncestorsHashes.Difference(common.HashArray{genesis})
 				tips.Add(dagBlock)
 			}
 			delete(tips, block.Hash())
@@ -735,7 +729,7 @@ func (c *Creator) isAddressAssigned(coinbase common.Address, address common.Addr
 	return core.IsAddressAssigned(address, creators, creatorNr)
 }
 
-func (c *Creator) processValidatorTxs(syncData map[[28]byte]*types.ValidatorSync, header *types.Header) error {
+func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorSync, header *types.Header) error {
 	nonce := c.eth.TxPool().Nonce(header.Coinbase)
 	for _, validatorSync := range syncData {
 		if validatorSync.ProcEpoch <= c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) {

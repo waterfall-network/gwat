@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -22,21 +23,28 @@ import (
 var (
 	// errors
 	ErrTooLowDepositValue = errors.New("deposit value is too low")
-	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
+	// ErrInsufficientFundsForOp is returned if the transaction sender doesn't
 	// have enough funds for transfer(topmost call only).
-	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
-	ErrInvalidFromAddresses         = errors.New("withdrawal and sender addresses are mismatch")
-	ErrUnknownValidator             = errors.New("unknown validator")
-	ErrMismatchPulicKey             = errors.New("validators public key mismatch")
-	ErrNotActivatedValidator        = errors.New("validator not activated yet")
-	ErrValidatorIsOut               = errors.New("validator is exited")
-	ErrInvalidToAddress             = errors.New("address to must be validators state address")
-	ErrNoExitRequest                = errors.New("exit request is require before withdrawal operation")
-	ErrTargetEraNotFound            = errors.New("target era not found")
-	ErrNoSavedValSyncOp             = errors.New("no coordinated confirmation of validator sync data")
-	ErrMismatchTxHashes             = errors.New("validator sync tx already exists")
-	ErrMismatchValSyncOp            = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
-	ErrInvalidOpEpoch               = errors.New("epoch to apply tx is not acceptable")
+	ErrInsufficientFundsForOp = errors.New("insufficient funds for op")
+	ErrInvalidFromAddresses   = errors.New("withdrawal and sender addresses are mismatch")
+	ErrUnknownValidator       = errors.New("unknown validator")
+	ErrNoWithdrawalCred       = errors.New("no withdrawal credentials")
+	ErrMismatchPulicKey       = errors.New("validators public key mismatch")
+	ErrNotActivatedValidator  = errors.New("validator not activated yet")
+	ErrValidatorIsOut         = errors.New("validator is exited")
+	ErrInvalidToAddress       = errors.New("address to must be validators state address")
+	ErrNoExitRequest          = errors.New("exit request is require before withdrawal operation")
+	ErrTargetEraNotFound      = errors.New("target era not found")
+	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
+	ErrMismatchTxHashes       = errors.New("validator sync tx already exists")
+	ErrMismatchValSyncOp      = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
+	ErrInvalidOpEpoch         = errors.New("epoch to apply tx is not acceptable")
+	ErrTxNF                   = errors.New("tx not found")
+	ErrReceiptNF              = errors.New("receipt not found")
+	ErrInvalidReceiptStatus   = errors.New("receipt status is failed")
+	ErrInvalidOpCode          = errors.New("invalid operation code")
+	ErrInvalidCreator         = errors.New("invalid creator address")
+	ErrInvalidAmount          = errors.New("invalid amount")
 )
 
 const (
@@ -53,12 +61,13 @@ const (
 )
 
 var (
-	// minimal value - 1000 wat
-	MinDepositVal, _ = new(big.Int).SetString("1000000000000000000000", 10)
+	// minimal value - 10 wat
+	MinDepositVal, _ = new(big.Int).SetString("10000000000000000000", 10)
 
 	//Events signatures.
-	EvtDepositLogSignature = crypto.Keccak256Hash([]byte("DepositLog"))
-	EvtExitReqLogSignature = crypto.Keccak256Hash([]byte("ExitRequestLog"))
+	EvtDepositLogSignature    = crypto.Keccak256Hash([]byte("DepositLog"))
+	EvtExitReqLogSignature    = crypto.Keccak256Hash([]byte("ExitRequestLog"))
+	EvtWithdrawalLogSignature = crypto.Keccak256Hash([]byte("WithdrawaRequestLog"))
 )
 
 // Ref represents caller of the validator processor
@@ -73,7 +82,9 @@ type blockchain interface {
 	GetEraInfo() *era.EraInfo
 	Config() *params.ChainConfig
 	Database() ethdb.Database
-	GetValidatorSyncData(creator common.Address, op types.ValidatorSyncOp) *types.ValidatorSync
+	GetValidatorSyncData(InitTxHash common.Hash) *types.ValidatorSync
+	GetTransaction(txHash common.Hash) (tx *types.Transaction, blHash common.Hash, index uint64)
+	GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64)
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
@@ -162,12 +173,82 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 	switch v := op.(type) {
 	case operation.Deposit:
 		ret, err = p.validatorDeposit(caller, toAddr, value, v)
+		if err != nil {
+			log.Error("Validator deposit: err",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", value.String(),
+				"from", caller.Address(),
+				"creator", v.CreatorAddress().Hex(),
+				"withdrawalAddress", v.WithdrawalAddress().Hex(),
+				"pubKey", v.PubKey().Hex(),
+				"err", err,
+			)
+		} else {
+			log.Info("Validator deposit: success",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", value.String(),
+				"from", caller.Address(),
+				"creator", v.CreatorAddress().Hex(),
+				"withdrawalAddress", v.WithdrawalAddress().Hex(),
+				"pubKey", v.PubKey().Hex(),
+			)
+		}
 	case operation.ValidatorSync:
 		ret, err = p.syncOpProcessing(v, msg)
+		if err != nil {
+			log.Error("Validator sync: err",
+				"opCode", op.OpCode(),
+				"initTx", v.InitTxHash().Hex(),
+				"creator", v.Creator().Hex(),
+				"procEpoch", v.ProcEpoch(),
+				"err", err,
+			)
+		} else {
+			log.Info("Validator sync: success",
+				"opCode", op.OpCode(),
+				"initTx", v.InitTxHash().Hex(),
+				"creator", v.Creator().Hex(),
+				"procEpoch", v.ProcEpoch(),
+			)
+		}
 	case operation.Exit:
 		ret, err = p.validatorExit(caller, toAddr, v)
+		if err != nil {
+			log.Error("Validator exit: err",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"creator", v.CreatorAddress().Hex(),
+				"exitAfterEpoch", fmt.Sprintf("%d", v.ExitAfterEpoch()),
+				"err", err,
+			)
+		} else {
+			log.Info("Validator exit: success",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"creator", v.CreatorAddress().Hex(),
+				"exitAfterEpoch", fmt.Sprintf("%d", v.ExitAfterEpoch()),
+			)
+		}
 	case operation.Withdrawal:
 		ret, err = p.validatorWithdrawal(caller, toAddr, v)
+		if err != nil {
+			log.Error("Validator withdrawal: err",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", v.Amount().String(),
+				"creator", v.CreatorAddress().Hex(),
+				"err", err,
+			)
+		} else {
+			log.Info("Validator withdrawal: success",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", v.Amount().String(),
+				"creator", v.CreatorAddress().Hex(),
+			)
+		}
 	}
 
 	if err != nil {
@@ -182,6 +263,11 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		return nil, ErrInvalidToAddress
 	}
 
+	// check amount can add to log
+	if !common.BnCanCastToUint64(new(big.Int).Div(value, common.BigGwei)) {
+		return nil, ErrInvalidAmount
+	}
+
 	from := caller.Address()
 
 	if value == nil || value.Cmp(MinDepositVal) < 0 {
@@ -189,7 +275,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	}
 	balanceFrom := p.state.GetBalance(from)
 	if balanceFrom.Cmp(value) < 0 {
-		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, from.Hex())
+		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForOp, from.Hex())
 	}
 
 	withdrawalAddress := op.WithdrawalAddress()
@@ -207,7 +293,10 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		if currValidator.PubKey != op.PubKey() {
 			return nil, errors.New("validator deposit failed (mismatch public key)")
 		}
+		validator = currValidator
 	}
+
+	validator.AddStake(from, value)
 
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
@@ -220,7 +309,6 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	// burn value from sender balance
 	p.state.SubBalance(from, value)
 
-	log.Info("Deposit", "address", toAddr.Hex(), "from", from.Hex(), "value", value.String(), "pabkey", op.PubKey().Hex(), "creator", op.CreatorAddress().Hex())
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
@@ -271,40 +359,92 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		return nil, ErrInvalidToAddress
 	}
 
+	// check amount can add to log
+	opAmount := new(big.Int).Set(op.Amount())
+	if !common.BnCanCastToUint64(new(big.Int).Div(opAmount, common.BigGwei)) {
+		return nil, ErrInvalidAmount
+	}
+
 	from := caller.Address()
 	validator, err := p.Storage().GetValidator(p.state, op.CreatorAddress())
 	if err != nil {
 		return nil, err
 	}
 
-	if from != *validator.GetWithdrawalAddress() {
-		return nil, ErrInvalidFromAddresses
+	if validator == nil {
+		return nil, ErrUnknownValidator
 	}
 
-	if validator.GetActivationEra() == math.MaxUint64 {
-		return nil, ErrNotActivatedValidator
+	// if total deposited amount is less than the effective balance
+	// - deposit is insufficient to activate validator.
+	effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
+	if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
+		stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
+		// withdrawal of insufficient deposit to activate validator
+		log.Info("Validator withdrawal: refunds of insufficient deposit",
+			"opCode", op.OpCode(),
+			"amount", opAmount.String(),
+			"creator", op.CreatorAddress().Hex(),
+		)
+		stakeByAddr := validator.StakeByAddress(from)
+		//withdrawal address must be one of the depositors
+		if stakeByAddr == nil {
+			return nil, ErrInvalidFromAddresses
+		}
+		// check amount
+		if stakeByAddr.Cmp(opAmount) < 0 {
+			return nil, ErrInsufficientFundsForOp
+		}
+		// if opAmount == 0 - refunds full deposit amount
+		if opAmount.Cmp(common.Big0) == 0 {
+			opAmount = new(big.Int).Set(stakeByAddr)
+		}
+		// withdrawal amount from deposit balance
+		newStake, err := validator.SubtractStake(from, opAmount)
+		if err != nil {
+			log.Error("Validator withdrawal: refunds of insufficient deposit failed",
+				"opCode", op.OpCode(),
+				"amount", opAmount.String(),
+				"creator", op.CreatorAddress().Hex(),
+				"error", err,
+			)
+			return nil, err
+		}
+		// rm validator stake if empty
+		if newStake != nil && newStake.Cmp(common.Big0) == 0 {
+			validator.RmStakeByAddress(from)
+		}
+		// update validator
+		err = p.Storage().SetValidator(p.state, validator)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// check withdrawal credentials
+		if from != *validator.GetWithdrawalAddress() {
+			return nil, ErrInvalidFromAddresses
+		}
 	}
 
-	currentBalance := validator.GetBalance()
+	// create tx log
+	amtGwei := new(big.Int).Div(opAmount, common.BigGwei).Uint64()
 
-	if currentBalance.Cmp(op.Amount()) == -1 {
-		return nil, ErrInsufficientFundsForTransfer
-	}
+	logData := PackWithdrawalLogData(validator.GetPubKey(), op.CreatorAddress(), validator.GetIndex(), amtGwei)
 
-	validator.SetBalance(new(big.Int).Sub(currentBalance, op.Amount()))
-	err = p.Storage().SetValidator(p.state, validator)
-	if err != nil {
-		return nil, err
-	}
+	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
 
-	p.state.AddBalance(from, op.Amount())
-
-	return from.Bytes(), nil
+	return op.CreatorAddress().Bytes(), nil
 }
 
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {
-	if err = p.validateValSyncOp(op, msg); err != nil {
-		log.Error("Invalid validator sync op", "op", op, "error", err)
+	if err = ValidateValidatorSyncOp(p.blockchain, op, p.ctx.Slot, msg.TxHash()); err != nil {
+		log.Error("Invalid validator sync op",
+			"error", err,
+			"OpType", op.OpType(),
+			"OpCode", op.OpCode(),
+			"Creator", op.Creator().Hex(),
+			"InitTxHash", op.InitTxHash().Hex(),
+		)
 		return nil, err
 	}
 
@@ -320,72 +460,12 @@ func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (r
 	return ret, err
 }
 
-func (p *Processor) validateValSyncOp(op operation.ValidatorSync, msg message) error {
-	savedValSync := p.blockchain.GetValidatorSyncData(op.Creator(), op.OpType())
-	if savedValSync == nil {
-		return ErrNoSavedValSyncOp
-	}
-
-	blockEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
-	if blockEpoch > op.ProcEpoch() {
-		return ErrInvalidOpEpoch
-	}
-
-	if !CompareValSync(savedValSync, op) {
-		return ErrMismatchValSyncOp
-	}
-
-	if savedValSync.TxHash != nil && *savedValSync.TxHash != msg.TxHash() {
-		return ErrMismatchTxHashes
-	}
-
-	return nil
-}
-
-func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
-	if saved.OpType != input.OpType() {
-		log.Warn("check validator sync failed: OpType", "s.OpType", saved.OpType, "i.OpType", input.OpType())
-		return false
-	}
-
-	if saved.Creator != input.Creator() {
-		log.Warn("check validator sync failed: Creator",
-			"s.Creator", fmt.Sprintf("%#x", saved.Creator),
-			"i.Creator", fmt.Sprintf("%#x", input.Creator()))
-		return false
-	}
-
-	if saved.Index != input.Index() {
-		log.Warn("check validator sync failed: Index", "s.Index", saved.Index, "i.Index", input.Index())
-		return false
-	}
-
-	if saved.ProcEpoch != input.ProcEpoch() {
-		log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
-		return false
-	}
-
-	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
-		log.Warn("check validator sync failed: Amount", "s.Amount", saved.Amount.String(), "i.Amount", input.Amount().String())
-		return false
-	}
-
-	if saved.Amount != nil && input.Amount() == nil || saved.Amount == nil && input.Amount() != nil {
-		log.Warn("check validator sync failed: Amount nil", "s.Amount", saved.Amount, "i.Amount", input.Amount())
-		return false
-	}
-
-	return true
-}
-
 func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error) {
 	validator, err := p.Storage().GetValidator(p.state, op.Creator())
 	if err != nil {
 		return nil, err
 	}
-
 	if validator == nil {
-		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
 
@@ -393,18 +473,13 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 
 	validator.SetActivationEra(opEra.Number + postpone)
 	validator.SetIndex(op.Index())
+	validator.UnsetStake()
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
 	}
 
 	p.Storage().AddValidatorToList(p.state, op.Index(), op.Creator())
-
-	log.Info("Validator sync: activate", "opCode", op.OpCode(),
-		"creator", op.Creator().Hex(),
-		"procEpoch", op.ProcEpoch(),
-		"targetEra", opEra,
-	)
 
 	return op.Creator().Bytes(), nil
 }
@@ -414,137 +489,79 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
-
 	if validator == nil {
-		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
-
-	procEra := p.blockchain.EpochToEra(op.ProcEpoch())
-
-	if validator.GetActivationEra() > procEra.Number {
-		log.Error("Validator sync: err", "era", p.ctx.Era,
-			"opCode", op.OpCode(),
-			"creator", op.Creator().Hex(),
-			"procEpoch", op.ProcEpoch(),
-			"procEra", procEra,
-			"err", ErrNotActivatedValidator,
-		)
-
-		return nil, ErrNotActivatedValidator
-	}
 	if validator.GetExitEra() != math.MaxUint64 {
-		log.Error("Validator sync: err", "era", p.ctx.Era,
-			"opCode", op.OpCode(),
-			"creator", op.Creator().Hex(),
-			"procEpoch", op.ProcEpoch(),
-			"err", ErrValidatorIsOut,
-			"procEra", procEra,
-		)
-
 		return nil, ErrValidatorIsOut
 	}
 
-	////retrieve block eraInfo
-	//eraInfo := p.blockchain.GetEraInfo()
-	//var blkEraInfo *era.EraInfo
-	//if eraInfo.Number() == p.ctx.Era {
-	//	blkEraInfo = eraInfo
-	//} else {
-	//	blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era)
-	//	if blkEra == nil {
-	//		log.Error("Validator sync: block era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
-	//		return nil, ErrCtxEraNotFound
-	//	}
-	//	bei := era.NewEraInfo(*blkEra)
-	//	blkEraInfo = &bei
-	//}
-	//
-	//// calculate deactivation epoch
-	//var targetEpoch uint64
-	//blkEpoch := p.blockchain.GetSlotInfo().SlotToEpoch(p.ctx.Slot)
-	//if blkEraInfo.IsTransitionPeriodEpoch(p.blockchain, blkEpoch) {
-	//	var nextEraInfo *era.EraInfo
-	//	if eraInfo.Number() == p.ctx.Era+1 {
-	//		nextEraInfo = eraInfo
-	//	} else {
-	//		blkEra := rawdb.ReadEra(p.blockchain.Database(), p.ctx.Era+1)
-	//		if blkEra == nil {
-	//			log.Error("Validator sync: target era not found", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch())
-	//			return nil, ErrTargetEraNotFound
-	//		}
-	//		bei := era.NewEraInfo(*blkEra)
-	//		nextEraInfo = &bei
-	//	}
-	//	targetEpoch = nextEraInfo.NextEraFirstEpoch()
-	//} else {
-	//	targetEpoch = blkEraInfo.NextEraFirstEpoch()
-	//}
+	opEra := p.blockchain.EpochToEra(op.ProcEpoch())
+	if validator.GetActivationEra() >= opEra.Number {
+		return nil, ErrNotActivatedValidator
+	}
 
-	validator.SetExitEra(procEra.Number)
+	exitEra := opEra.Number + postpone
+	validator.SetExitEra(exitEra)
 	err = p.Storage().SetValidator(p.state, validator)
 	if err != nil {
 		return nil, err
 	}
-
-	log.Info("Validator sync: deactivate", "opCode", op.OpCode(), "creator", op.Creator().Hex(),
-		"procEpoch", op.ProcEpoch(), "targetEra", procEra)
-
 	return op.Creator().Bytes(), nil
 }
 
 func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, error) {
 	valAddress := op.Creator()
-
 	validator, err := p.Storage().GetValidator(p.state, valAddress)
 	if err != nil {
 		return nil, err
 	}
-
 	if validator == nil {
-		log.Error("Validator sync: err", "era", p.ctx.Era, "opCode", op.OpCode(), "creator", op.Creator().Hex(), "procEpoch", op.ProcEpoch(), "err", ErrUnknownValidator)
 		return nil, ErrUnknownValidator
 	}
-
-	procEra := p.blockchain.EpochToEra(op.ProcEpoch())
-
-	if validator.GetActivationEra() > procEra.Number {
-		log.Error("Validator sync: err", "era", p.ctx.Era,
+	var withdrawalTo *common.Address
+	// if total deposited amount is less than the effective balance
+	// - deposit is insufficient to activate validator.
+	effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
+	if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
+		stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
+		// withdrawal of insufficient deposit to activate validator
+		log.Info("Validator update balance: refunds of insufficient deposit",
 			"opCode", op.OpCode(),
-			"creator", op.Creator().Hex(),
+			"InitTxHash", op.InitTxHash().Hex(),
+			"amount", op.Amount().String(),
 			"procEpoch", op.ProcEpoch(),
-			"targetEra", procEra.Number,
-			"err", ErrNotActivatedValidator,
-		)
-
-		return nil, ErrNotActivatedValidator
-	}
-
-	if validator.GetExitEra() == math.MaxUint64 {
-		log.Error("Validator sync: err", "era", p.ctx.Era,
-			"opCode", op.OpCode(),
+			"vIndex", op.Index(),
 			"creator", op.Creator().Hex(),
-			"procEpoch", op.ProcEpoch(),
-			"targetEra", procEra.Number,
-			"err", ErrNoExitRequest,
 		)
-
-		return nil, ErrNoExitRequest
+		// check initial tx
+		initTx, _, _ := p.blockchain.GetTransaction(op.InitTxHash())
+		if initTx == nil {
+			return nil, ErrTxNF
+		}
+		// check init tx data
+		iop, err := operation.DecodeBytes(initTx.Data())
+		if err != nil {
+			log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+			return nil, err
+		}
+		if iop.OpCode() != operation.WithdrawalCode {
+			return nil, ErrInvalidOpCode
+		}
+		// withdrawal to sender of initial tx
+		signer := types.LatestSigner(p.blockchain.Config())
+		iTxFrom, _ := types.Sender(signer, initTx)
+		withdrawalTo = &iTxFrom
+	} else {
+		// set withdrawal credentials
+		withdrawalTo = validator.GetWithdrawalAddress()
+		if withdrawalTo == nil {
+			return nil, ErrNoWithdrawalCred
+		}
 	}
+	// transfer amount to withdrawal address
+	p.state.AddBalance(*withdrawalTo, op.Amount())
 
-	validator.SetBalance(op.Amount())
-	err = p.Storage().SetValidator(p.state, validator)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Info("Validator sync: update balance",
-		"opCode", op.OpCode(),
-		"creator", op.Creator().Hex(),
-		"procEpoch", op.ProcEpoch(),
-		"amount", op.Amount(),
-		"balance", validator.GetBalance().String(),
-	)
 	return op.Creator().Bytes(), nil
 }
 
@@ -626,6 +643,10 @@ func (e *EventEmmiter) ExitRequest(evtAddr common.Address, data []byte) {
 	e.addLog(evtAddr, EvtExitReqLogSignature, data)
 }
 
+func (e *EventEmmiter) WithdrawalRequest(evtAddr common.Address, data []byte) {
+	e.addLog(evtAddr, EvtWithdrawalLogSignature, data)
+}
+
 func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, data []byte, logsEntries ...logEntry) {
 	//var data []byte
 	topics := []common.Hash{signature}
@@ -643,4 +664,120 @@ func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, 
 		Topics:  topics,
 		Data:    data,
 	})
+}
+
+// ValidateValidatorSyncOp validate validator sync op data with context of apply.
+func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, applySlot uint64, txHash common.Hash) error {
+	savedValSync := bc.GetValidatorSyncData(valSyncOp.InitTxHash())
+	if savedValSync == nil {
+		return ErrNoSavedValSyncOp
+	}
+
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(applySlot)
+	if blockEpoch > valSyncOp.ProcEpoch() {
+		return ErrInvalidOpEpoch
+	}
+	if !CompareValSync(savedValSync, valSyncOp) {
+		return ErrMismatchValSyncOp
+	}
+	if savedValSync.TxHash != nil && *savedValSync.TxHash != txHash {
+		return ErrMismatchTxHashes
+	}
+
+	// check is op initialised by slashing
+	if bytes.Equal(valSyncOp.InitTxHash().Bytes()[:common.AddressLength], valSyncOp.Creator().Bytes()) {
+		return nil
+	}
+
+	// check initial tx
+	initTx, _, _ := bc.GetTransaction(valSyncOp.InitTxHash())
+	if initTx == nil {
+		return ErrTxNF
+	}
+	// check init tx data
+	iop, err := operation.DecodeBytes(initTx.Data())
+	if err != nil {
+		log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+		return err
+	}
+	switch initTxData := iop.(type) {
+	case operation.Deposit:
+		if valSyncOp.OpCode() == operation.DepositCode {
+			return ErrInvalidOpCode
+		}
+		if initTxData.CreatorAddress() != valSyncOp.Creator() {
+			return ErrInvalidCreator
+		}
+	case operation.Exit:
+		if valSyncOp.OpCode() == operation.ExitCode {
+			return ErrInvalidOpCode
+		}
+		if initTxData.CreatorAddress() != valSyncOp.Creator() {
+			return ErrInvalidCreator
+		}
+		if initTxData.ExitAfterEpoch() != nil && *initTxData.ExitAfterEpoch() < valSyncOp.ProcEpoch() {
+			return ErrInvalidOpEpoch
+		}
+	case operation.Withdrawal:
+		if valSyncOp.OpCode() == operation.WithdrawalCode {
+			return ErrInvalidOpCode
+		}
+		if initTxData.CreatorAddress() != valSyncOp.Creator() {
+			return ErrInvalidCreator
+		}
+	default:
+		return ErrInvalidOpCode
+	}
+
+	// check initial tx status
+	rc, _, _ := bc.GetTransactionReceipt(valSyncOp.InitTxHash())
+	if rc == nil {
+		return ErrReceiptNF
+	}
+	if rc.Status != types.ReceiptStatusSuccessful {
+		return ErrInvalidReceiptStatus
+	}
+
+	return nil
+}
+
+func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
+	if saved.InitTxHash != input.InitTxHash() {
+		log.Warn("check validator sync failed: InitTxHash", "s.InitTxHash", saved.InitTxHash.Hex(), "i.InitTxHash", input.InitTxHash().Hex())
+		return false
+	}
+
+	if saved.OpType != input.OpType() {
+		log.Warn("check validator sync failed: OpType", "s.OpType", saved.OpType, "i.OpType", input.OpType())
+		return false
+	}
+
+	if saved.Creator != input.Creator() {
+		log.Warn("check validator sync failed: Creator",
+			"s.Creator", fmt.Sprintf("%#x", saved.Creator),
+			"i.Creator", fmt.Sprintf("%#x", input.Creator()))
+		return false
+	}
+
+	if saved.Index != input.Index() {
+		log.Warn("check validator sync failed: Index", "s.Index", saved.Index, "i.Index", input.Index())
+		return false
+	}
+
+	if saved.ProcEpoch != input.ProcEpoch() {
+		log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
+		return false
+	}
+
+	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
+		log.Warn("check validator sync failed: Amount", "s.Amount", saved.Amount.String(), "i.Amount", input.Amount().String())
+		return false
+	}
+
+	if saved.Amount != nil && input.Amount() == nil || saved.Amount == nil && input.Amount() != nil {
+		log.Warn("check validator sync failed: Amount nil", "s.Amount", saved.Amount, "i.Amount", input.Amount())
+		return false
+	}
+
+	return true
 }

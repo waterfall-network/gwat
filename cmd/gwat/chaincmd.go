@@ -47,7 +47,7 @@ var (
 		Action:    utils.MigrateFlags(initGenesis),
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
-		ArgsUsage: "<genesisPath>",
+		ArgsUsage: "<genesisPath> <depositDataPath>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 		},
