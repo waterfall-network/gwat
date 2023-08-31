@@ -26,7 +26,7 @@ func (tips Tips) Add(blockDag *BlockDAG) Tips {
 		return tips
 	}
 
-	blockDag.DagChainHashes.Deduplicate()
+	blockDag.OrderedAncestorsHashes.Deduplicate()
 
 	tips[blockDag.Hash] = blockDag
 	return tips
@@ -63,14 +63,14 @@ func (tips Tips) Copy() Tips {
 	return cpy
 }
 
-// GetOrderedDagChainHashes collect all dag hashes in finalizing order
-// used to create for next blockDag DagChainHashes
-func (tips Tips) GetOrderedDagChainHashes() common.HashArray {
+// GetOrderedAncestorsHashes collect all dag hashes in finalizing order
+// used to create for next blockDag OrderedAncestorsHashes
+func (tips Tips) GetOrderedAncestorsHashes() common.HashArray {
 	allHashes := common.HashArray{}
 	dagHashes := tips.getOrderedHashes()
 	for _, dagHash := range dagHashes {
 		dag := tips.Get(dagHash)
-		allHashes = append(allHashes, dag.DagChainHashes...)
+		allHashes = append(allHashes, dag.OrderedAncestorsHashes...)
 		allHashes = append(allHashes, dagHash).Uniq()
 	}
 	return allHashes.Uniq()
@@ -92,11 +92,11 @@ func (tips Tips) GetFinalizingDag() *BlockDAG {
 	return tips.Get(dagHashes[0])
 }
 
-// GetAncestorsHashes retrieve all DagChainHashes
+// GetAncestorsHashes retrieve all OrderedAncestorsHashes
 func (tips Tips) GetAncestorsHashes() common.HashArray {
 	ancestors := common.HashArray{}
 	for _, dag := range tips {
-		ancestors = append(ancestors, dag.DagChainHashes...)
+		ancestors = append(ancestors, dag.OrderedAncestorsHashes...)
 	}
 	return ancestors
 }
@@ -150,7 +150,7 @@ type BlockDAG struct {
 	CpHash   common.Hash
 	CpHeight uint64
 	// ordered non-finalized ancestors hashes
-	DagChainHashes common.HashArray
+	OrderedAncestorsHashes common.HashArray
 }
 
 // ToBytes encodes the BlockDAG structure
@@ -173,9 +173,9 @@ func (b *BlockDAG) ToBytes() []byte {
 	res = append(res, lastFinHeight...)
 
 	lenDC := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenDC, uint32(len(b.DagChainHashes)))
+	binary.BigEndian.PutUint32(lenDC, uint32(len(b.OrderedAncestorsHashes)))
 	res = append(res, lenDC...)
-	res = append(res, b.DagChainHashes.ToBytes()...)
+	res = append(res, b.OrderedAncestorsHashes.ToBytes()...)
 
 	return res
 }
@@ -207,7 +207,7 @@ func (b *BlockDAG) SetBytes(data []byte) *BlockDAG {
 	lenDC := binary.BigEndian.Uint32(data[start:end])
 	start = end
 	end += common.HashLength * int(lenDC)
-	b.DagChainHashes = common.HashArrayFromBytes(data[start:end])
+	b.OrderedAncestorsHashes = common.HashArrayFromBytes(data[start:end])
 
 	return b
 }

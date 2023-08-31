@@ -128,11 +128,11 @@ func TestBlockDAGWf(t *testing.T) {
 	finBlock := types.NewBlockWithHeader(&types.Header{Extra: []byte("test FinBlock")})
 
 	blockDag := &types.BlockDAG{
-		Hash:           finBlock.Hash(),
-		Height:         finBlock.Height(),
-		CpHash:         finBlock.Hash(),
-		CpHeight:       1455646545646,
-		DagChainHashes: common.HashArray{common.Hash{}, finBlock.Hash(), common.Hash{}},
+		Hash:                   finBlock.Hash(),
+		Height:                 finBlock.Height(),
+		CpHash:                 finBlock.Hash(),
+		CpHeight:               1455646545646,
+		OrderedAncestorsHashes: common.HashArray{common.Hash{}, finBlock.Hash(), common.Hash{}},
 	}
 
 	WriteBlockDag(db, blockDag)

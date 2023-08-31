@@ -886,20 +886,18 @@ func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uin
 			newBlockDag := bc.GetBlockDag(newHeadBlock.CpHash())
 			if newBlockDag == nil {
 				cpHeader := bc.GetHeader(newHeadBlock.CpHash())
-				dagChainHashes := common.HashArray{}
 				_, ancestors, _, err := bc.CollectAncestorsAftCpByParents(newHeadBlock.ParentHashes(), newHeadBlock.CpHash())
 				if err != nil {
 					log.Error("Set head beyond root: collact ancestors failed", "number", headerHeight, "hash", header.Hash())
 				}
 				delete(ancestors, cpHeader.Hash())
-				dagChainHashes = ancestors.Hashes()
 				newBlockDag = &types.BlockDAG{
-					Hash:           newHeadBlock.Hash(),
-					Height:         newHeadBlock.Height(),
-					Slot:           newHeadBlock.Slot(),
-					CpHash:         newHeadBlock.CpHash(),
-					CpHeight:       cpHeader.Height,
-					DagChainHashes: dagChainHashes,
+					Hash:                   newHeadBlock.Hash(),
+					Height:                 newHeadBlock.Height(),
+					Slot:                   newHeadBlock.Slot(),
+					CpHash:                 newHeadBlock.CpHash(),
+					CpHeight:               cpHeader.Height,
+					OrderedAncestorsHashes: ancestors.Hashes(),
 				}
 			}
 			bc.AddTips(newBlockDag)
@@ -2087,26 +2085,26 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 					return it.index, err
 				}
 				bdag = &types.BlockDAG{
-					Hash:           pHeader.Hash(),
-					Height:         pHeader.Height,
-					Slot:           pHeader.Slot,
-					CpHash:         pHeader.CpHash,
-					CpHeight:       bc.GetHeader(pHeader.CpHash).Height,
-					DagChainHashes: anc.Hashes(),
+					Hash:                   pHeader.Hash(),
+					Height:                 pHeader.Height,
+					Slot:                   pHeader.Slot,
+					CpHash:                 pHeader.CpHash,
+					CpHeight:               bc.GetHeader(pHeader.CpHash).Height,
+					OrderedAncestorsHashes: anc.Hashes(),
 				}
 			}
 			tmpTips.Add(bdag)
 		}
-		dagChainHashes, err := bc.CollectDagChainHashesByTips(tmpTips, block.CpHash())
+		ancestorsHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, block.CpHash())
 		bc.AddTips(&types.BlockDAG{
-			Hash:           block.Hash(),
-			Height:         block.Height(),
-			Slot:           block.Slot(),
-			CpHash:         block.CpHash(),
-			CpHeight:       bc.GetHeader(block.CpHash()).Height,
-			DagChainHashes: dagChainHashes,
+			Hash:                   block.Hash(),
+			Height:                 block.Height(),
+			Slot:                   block.Slot(),
+			CpHash:                 block.CpHash(),
+			CpHeight:               bc.GetHeader(block.CpHash()).Height,
+			OrderedAncestorsHashes: ancestorsHashes,
 		})
-		bc.RemoveTips(dagChainHashes)
+		bc.RemoveTips(ancestorsHashes)
 	}
 
 	stats.ignored += it.remaining()
@@ -2607,20 +2605,20 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 			}
 			tmpTips.Add(bdag)
 		}
-		dagChainHashes, err := bc.CollectDagChainHashesByTips(tmpTips, block.CpHash())
+		dagChainHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, block.CpHash())
 		if err != nil {
 			return it.index, err
 		}
 		dagBlock := &types.BlockDAG{
-			Hash:           block.Hash(),
-			Height:         block.Height(),
-			Slot:           block.Slot(),
-			CpHash:         block.CpHash(),
-			CpHeight:       block.CpNumber(),
-			DagChainHashes: dagChainHashes,
+			Hash:                   block.Hash(),
+			Height:                 block.Height(),
+			Slot:                   block.Slot(),
+			CpHash:                 block.CpHash(),
+			CpHeight:               block.CpNumber(),
+			OrderedAncestorsHashes: dagChainHashes,
 		}
 		bc.AddTips(dagBlock)
-		bc.RemoveTips(dagBlock.DagChainHashes)
+		bc.RemoveTips(dagBlock.OrderedAncestorsHashes)
 		bc.MoveTxsToProcessing(block)
 		bc.WriteCurrentTips()
 
@@ -2800,48 +2798,48 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return bc.insertChain(chain)
 }
 
-func (bc *BlockChain) CollectDagChainHashesByTips(tips types.Tips, cpHash common.Hash) (common.HashArray, error) {
+func (bc *BlockChain) CollectAncestorsHashesByTips(tips types.Tips, cpHash common.Hash) (common.HashArray, error) {
 	cpHeader := bc.GetHeader(cpHash)
-	dagChainHashes := make(common.HashArray, 0)
+	ancestorsHashes := make(common.HashArray, 0)
 	for _, tip := range tips {
 		if tip.Hash == cpHash {
 			continue
 		}
 		if tip.CpHash == cpHash {
-			dagChainHashes = append(dagChainHashes, tip.DagChainHashes...)
-			dagChainHashes = append(dagChainHashes, tip.Hash)
-			dagChainHashes.Deduplicate()
+			ancestorsHashes = append(ancestorsHashes, tip.OrderedAncestorsHashes...)
+			ancestorsHashes = append(ancestorsHashes, tip.Hash)
+			ancestorsHashes.Deduplicate()
 			continue
 		}
 		// current cp must be in past of parent
-		if !tip.DagChainHashes.Has(cpHash) {
+		if !tip.OrderedAncestorsHashes.Has(cpHash) {
 			// must be rejected by validation
-			log.Error("Collect DagChainHashes: bad tips",
+			log.Error("Collect OrderedAncestorsHashes: bad tips",
 				"tips.Hash", tip.Hash.Hex(),
 				"CpHash", cpHash,
-				"tip.ancestors", tip.DagChainHashes,
+				"tip.ancestors", tip.OrderedAncestorsHashes,
 				"tips", tips.Print(),
 			)
 			return nil, fmt.Errorf("bad tips: not found cp=%#x for tip=%#x", cpHash, tip.Hash)
 		}
 		// exclude cp hash
-		ancHashes := tip.DagChainHashes.Difference(common.HashArray{cpHash})
+		ancHashes := tip.OrderedAncestorsHashes.Difference(common.HashArray{cpHash})
 		ancestors := bc.GetHeadersByHashes(ancHashes)
 		for h, anc := range ancestors {
 			// skipping if finalised before current checkpoint
 			if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() < cpHeader.Nr() {
 				continue
 			}
-			dagChainHashes = append(dagChainHashes, h)
+			ancestorsHashes = append(ancestorsHashes, h)
 		}
-		dagChainHashes = append(dagChainHashes, tip.Hash)
-		dagChainHashes.Deduplicate()
+		ancestorsHashes = append(ancestorsHashes, tip.Hash)
+		ancestorsHashes.Deduplicate()
 	}
-	return dagChainHashes, nil
+	return ancestorsHashes, nil
 }
 
 func (bc *BlockChain) CalcBlockHeightByTips(tips types.Tips, cpHash common.Hash) (uint64, error) {
-	ancestors, err := bc.CollectDagChainHashesByTips(tips, cpHash)
+	ancestors, err := bc.CollectAncestorsHashesByTips(tips, cpHash)
 	if err != nil {
 		return 0, err
 	}
@@ -3670,7 +3668,7 @@ func (bc *BlockChain) GetDagHashes() *common.HashArray {
 	dagHashes := common.HashArray{}
 	tips := *bc.hc.GetTips()
 
-	//tipsHashes := tips.GetOrderedDagChainHashes()
+	//tipsHashes := tips.GetOrderedAncestorsHashes()
 	//dagBlocks := bc.GetBlocksByHashes(tipsHashes)
 	//for hash, bl := range dagBlocks {
 	//	if bl != nil && bl.Nr() == 0 && bl.Height() > 0 {
@@ -4161,10 +4159,10 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 			return false
 		}
 		// otherwise block cp must be in past of parent and grater parent cp
-		if !parBdag.DagChainHashes.Has(block.CpHash()) {
+		if !parBdag.OrderedAncestorsHashes.Has(block.CpHash()) {
 			log.Warn("Block verification: cp not found in range from parent cp",
 				"parent.Hash", ph.Hex(),
-				"range", parBdag.DagChainHashes,
+				"range", parBdag.OrderedAncestorsHashes,
 				"cp.Hash", block.CpHash().Hex(),
 				"bl.Hash", block.Hash().Hex(),
 			)
