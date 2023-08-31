@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"math/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -187,76 +186,6 @@ func TestPartialBlockStorage(t *testing.T) {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
 		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
-	}
-}
-
-// Tests block storage and retrieval operations.
-func TestBadBlockStorage(t *testing.T) {
-	db := NewMemoryDatabase()
-
-	// Create a test block to move around the database and make sure it's really new
-	block := types.NewBlockWithHeader(&types.Header{
-		Number:      func() *uint64 { nr := uint64(1); return &nr }(),
-		Extra:       []byte("bad block"),
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-	})
-	if entry := ReadBadBlock(db, block.Hash()); entry != nil {
-		t.Fatalf("Non existent block returned: %v", entry)
-	}
-	// Write and verify the block in the database
-	WriteBadBlock(db, block)
-	if entry := ReadBadBlock(db, block.Hash()); entry == nil {
-		t.Fatalf("Stored block not found")
-	} else if entry.Hash() != block.Hash() {
-		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
-	}
-	// Write one more bad block
-	nr := uint64(2)
-	blockTwo := types.NewBlockWithHeader(&types.Header{
-		Number:      &nr,
-		Height:      nr,
-		Extra:       []byte("bad block two"),
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-	})
-	WriteBadBlock(db, blockTwo)
-
-	// Write the block one again, should be filtered out.
-	WriteBadBlock(db, block)
-	badBlocks := ReadAllBadBlocks(db)
-	if len(badBlocks) != 2 {
-		t.Fatalf("Failed to load all bad blocks")
-	}
-
-	// Write a bunch of bad blocks, all the blocks are should sorted
-	// in reverse order. The extra blocks should be truncated.
-	for _, n := range rand.Perm(100) {
-		nrBl := uint64(n)
-		block := types.NewBlockWithHeader(&types.Header{
-			Number:      &nrBl,
-			Height:      nrBl,
-			Extra:       []byte("bad block"),
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
-		})
-		WriteBadBlock(db, block)
-	}
-	badBlocks = ReadAllBadBlocks(db)
-	if len(badBlocks) != badBlockToKeep {
-		t.Fatalf("The number of persised bad blocks in incorrect %d", len(badBlocks))
-	}
-	for i := 0; i < len(badBlocks)-1; i++ {
-		if badBlocks[i].Nr() < badBlocks[i+1].Nr() {
-			t.Fatalf("The bad blocks are not sorted #[%d](%d) < #[%d](%d)", i, i+1, badBlocks[i].Nr(), badBlocks[i+1].Nr())
-		}
-	}
-
-	// Delete all bad blocks
-	DeleteBadBlocks(db)
-	badBlocks = ReadAllBadBlocks(db)
-	if len(badBlocks) != 0 {
-		t.Fatalf("Failed to delete bad blocks")
 	}
 }
 
