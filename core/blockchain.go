@@ -2108,16 +2108,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 	return it.index, err
 }
 
-func logValidationIssue(issue string, block *types.Block) {
-	log.Warn("Block verification: "+issue,
-		"block hash", block.Hash().Hex(),
-		"CpHash", block.CpHash(),
-		"CpNumber", block.CpNumber(),
-		"CpReceiptHash", block.CpReceiptHash(),
-		"CpRoot", block.CpRoot(),
-	)
-}
-
 // verifyBlockCoinbase return false if creator is unassigned
 func (bc *BlockChain) verifyBlockCoinbase(block *types.Block) bool {
 	var (
@@ -2225,9 +2215,14 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
 	intrGasSum := uint64(0)
+	signer := types.LatestSigner(bc.Config())
 	for _, tx := range block.Transactions() {
-		var intrGas uint64
-		intrGas, err := bc.TxEstimateGas(tx, block.Header())
+		msg, err := tx.AsMessage(signer, block.BaseFee())
+		if err != nil {
+			log.Warn("Block verification: gas usage error", "err", err)
+			return false
+		}
+		intrGas, err := bc.EstimateGas(msg, block.Header())
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
 
@@ -2292,17 +2287,6 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 		return false
 	}
 
-	// Verify block hash
-	if block.Hash() != block.Header().Hash() {
-		log.Warn("Block verification: invalid block hash",
-			"block hash", block.Hash().Hex(),
-			"block tx hash", block.TxHash().Hex(),
-			"calc tx hash", calcTxHash,
-		)
-
-		return false
-	}
-
 	return true
 }
 
@@ -2334,7 +2318,7 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetHeader(parentHash)
 		if _, ok := bc.invalidBlocksCache.Get(parent); ok {
-			log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
+			log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "parent hash", parentHash.Hex())
 			return false, nil
 		}
 		if parent.Height >= block.Height() || parent.Slot >= block.Slot() {
@@ -4073,49 +4057,87 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 		return false
 	}
 	if block.CpNumber() != cpHeader.Nr() {
-		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
+		log.Warn("Block verification: mismatch cp fin numbers",
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Number", cpHeader.Nr(),
+			"bl.CpNumber", block.CpNumber(),
+		)
 		return false
 	}
 	if block.CpHash() != cpHeader.Hash() {
-		logValidationIssue("Hash mismatch", block)
+		log.Warn("Block verification: mismatch cp fin hashes",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.CpHash", block.CpHash().Hex(),
+		)
 		return false
 	}
 	if block.CpRoot() != cpHeader.Root {
-		logValidationIssue("CpHash mismatch", block)
+		log.Warn("Block verification: mismatch cp roots",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Root", cpHeader.Root.Hex(),
+			"bl.CpRoot", block.CpRoot().Hex(),
+		)
 		return false
 	}
 	if block.CpReceiptHash() != cpHeader.ReceiptHash {
-		logValidationIssue("ReceiptHash mismatch", block)
+		log.Warn("Block verification: mismatch cp receipt hashes",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.ReceiptHash", cpHeader.ReceiptHash.Hex(),
+			"bl.CpReceiptHash", block.CpReceiptHash().Hex(),
+		)
 		return false
 	}
 	if block.CpGasUsed() != cpHeader.GasUsed {
-		logValidationIssue("GasUsed mismatch", block)
+		log.Warn("Block verification: mismatch cp used gas",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.GasUsed", cpHeader.GasUsed,
+			"bl.CpGasUsed", block.CpGasUsed(),
+		)
 		return false
 	}
 	if block.CpBloom() != cpHeader.Bloom {
-		logValidationIssue("Bloom mismatch", block)
-		return false
-	}
-
-	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
-	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, cpHeader.Slot); err == nil {
-		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
-	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, cpHeader.Slot, true, false, "verifyCpData")
-	calcCpBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
-	if calcCpBaseFee.Cmp(block.CpBaseFee()) != 0 {
-		log.Warn("Block verification: invalid checkpoint base fee",
-			"block hash", block.Hash().Hex(),
-			"CpHash", block.CpHash(),
-			"CpNumber", block.CpNumber(),
-			"CpReceiptHash", block.CpReceiptHash(),
-			"CpRoot", block.CpRoot(),
-			"CpBaseFee", block.CpBaseFee().String(),
-			"calcBaseFee", calcCpBaseFee.String(),
+		log.Warn("Block verification: mismatch cp bloom",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Bloom", cpHeader.Bloom,
+			"bl.CpBloom", block.CpBloom(),
 		)
 		return false
 	}
 
+	if cpHeader.BaseFee.Cmp(block.CpBaseFee()) != 0 {
+		log.Warn("Block verification: mismatch cp base fee",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.BaseFee", cpHeader.BaseFee.String(),
+			"bl.CpBaseFee", block.CpBaseFee().String(),
+		)
+		return false
+	}
 	// check accordance to parent checkpoints
 	for _, ph := range block.ParentHashes() {
 		parBdag := bc.GetBlockDag(ph)
