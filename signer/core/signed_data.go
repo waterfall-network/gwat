@@ -240,13 +240,6 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
 			return nil, useEthereumV, err
 		}
-		// The incoming sealer header is already truncated, sent to us with a extradata already shortened
-		if len(header.Extra) < 65 {
-			// Need to add it back, to get a suitable length for hashing
-			newExtra := make([]byte, len(header.Extra)+65)
-			copy(newExtra, header.Extra)
-			header.Extra = newExtra
-		}
 		// Get back the rlp data, encoded by us
 		sighash, cliqueRlp, err := cliqueHeaderHashAndRlp(header)
 		if err != nil {
@@ -305,10 +298,6 @@ func SignTextValidator(validatorData ValidatorData) (hexutil.Bytes, string) {
 // in sealer.go panics if this is the case, thus it's been reimplemented here to avoid the panic
 // and simply return an error instead
 func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
-	if len(header.Extra) < 65 {
-		err = fmt.Errorf("sealer header extradata too short, %d < 65", len(header.Extra))
-		return
-	}
 	rlp = cliqueRLP(header)
 	hash = sealHash(header).Bytes()
 	return hash, rlp, err

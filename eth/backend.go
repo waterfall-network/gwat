@@ -232,8 +232,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	eth.dag = dag.New(eth, eth.EventMux(), &config.Creator)
 
-	eth.dag.Creator().SetExtra(makeExtraData(config.Creator.ExtraData))
-
 	currentEraNumber := rawdb.ReadCurrentEra(chainDb)
 	if eraInfo := rawdb.ReadEra(chainDb, currentEraNumber); eraInfo != nil {
 		eth.blockchain.SetNewEraInfo(*eraInfo)
@@ -387,36 +385,6 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 		}
 	}
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
-}
-
-// isLocalBlock checks whether the specified block is mined
-// by local miner accounts.
-//
-// We regard two types of accounts as local miner account: etherbase
-// and accounts specified via `txpool.locals` flag.
-func (s *Ethereum) isLocalBlock(block *types.Block) bool {
-	author := block.Coinbase()
-	// Check whether the given address is etherbase.
-	s.lock.RLock()
-	etherbase := s.etherbase
-	s.lock.RUnlock()
-	if author == etherbase {
-		return true
-	}
-	// support multi creator mode
-	for _, acc := range s.accountManager.Accounts() {
-		if etherbase == acc {
-			return true
-		}
-	}
-	// Check whether the given address is specified by `txpool.local`
-	// CLI flag.
-	for _, account := range s.config.TxPool.Locals {
-		if account == author {
-			return true
-		}
-	}
-	return false
 }
 
 // SetEtherbase sets the mining reward address.

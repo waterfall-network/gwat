@@ -300,7 +300,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		ParentHashes: g.ParentHashes,
 		Slot:         g.Slot,
 		Height:       g.Height,
-		Extra:        g.ExtraData,
 		GasLimit:     g.GasLimit,
 		GasUsed:      g.GasUsed,
 		BaseFee:      g.BaseFee,
