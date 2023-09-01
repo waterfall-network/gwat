@@ -322,11 +322,12 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	validatorStorage := valStore.NewStorage(g.Config)
 
 	validatorStorage.SetValidatorsList(statedb, g.Validators.Addresses())
-	for _, val := range g.Validators {
+	for i, val := range g.Validators {
 		pubKey := common.HexToBlsPubKey(val.Pubkey)
 		address := common.HexToAddress(val.CreatorAddress)
 		withdrawalAddress := common.HexToAddress(val.WithdrawalAddress)
 		v := valStore.NewValidator(pubKey, address, &withdrawalAddress)
+		v.SetIndex(uint64(i))
 		v.SetActivationEra(uint64(0))
 
 		err := validatorStorage.SetValidator(statedb, v)
@@ -390,12 +391,12 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.AddSlotBlockHash(db, block.Slot(), block.Hash())
 	//set genesis blockDag
 	genesisDag := &types.BlockDAG{
-		Hash:           block.Hash(),
-		Height:         0,
-		Slot:           0,
-		CpHash:         block.Hash(),
-		CpHeight:       0,
-		DagChainHashes: common.HashArray{},
+		Hash:                   block.Hash(),
+		Height:                 0,
+		Slot:                   0,
+		CpHash:                 block.Hash(),
+		CpHeight:               0,
+		OrderedAncestorsHashes: common.HashArray{},
 	}
 	rawdb.WriteBlockDag(db, genesisDag)
 	rawdb.WriteTipsHashes(db, common.HashArray{genesisDag.Hash})

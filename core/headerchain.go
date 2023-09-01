@@ -499,16 +499,15 @@ func (hc *HeaderChain) ResetTips() error {
 		return ErrCpIsnotAncestor
 	}
 	delete(ancestors, lastFinHeader.CpHash)
-	dagChainHashes := ancestors.Hashes()
 
 	//set genesis blockDag
 	dag := &types.BlockDAG{
-		Hash:           lastFinHeader.Hash(),
-		Height:         lastFinHeader.Height,
-		Slot:           lastFinHeader.Slot,
-		CpHash:         lastFinHeader.CpHash,
-		CpHeight:       cpHeader.Height,
-		DagChainHashes: dagChainHashes,
+		Hash:                   lastFinHeader.Hash(),
+		Height:                 lastFinHeader.Height,
+		Slot:                   lastFinHeader.Slot,
+		CpHash:                 lastFinHeader.CpHash,
+		CpHeight:               cpHeader.Height,
+		OrderedAncestorsHashes: ancestors.Hashes(),
 	}
 	hc.SaveBlockDag(dag)
 	rawdb.WriteTipsHashes(hc.chainDb, common.HashArray{dag.Hash})
@@ -628,12 +627,12 @@ func (hc *HeaderChain) FinalizeTips(finHashes common.HashArray, lastFinHash comm
 			_, ancestors, _, _ := hc.CollectAncestorsAftCpByParents(tHeader.ParentHashes, cpHeader)
 			delete(ancestors, cpHeader.Hash())
 			bdag = &types.BlockDAG{
-				Hash:           tHeader.Hash(),
-				Height:         tHeader.Height,
-				Slot:           tHeader.Slot,
-				CpHash:         tHeader.CpHash,
-				CpHeight:       cpHeader.Height,
-				DagChainHashes: ancestors.Hashes(),
+				Hash:                   tHeader.Hash(),
+				Height:                 tHeader.Height,
+				Slot:                   tHeader.Slot,
+				CpHash:                 tHeader.CpHash,
+				CpHeight:               cpHeader.Height,
+				OrderedAncestorsHashes: ancestors.Hashes(),
 			}
 		}
 		tips.Add(bdag)
@@ -818,10 +817,10 @@ func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpH
 	}
 	// check isCpAncestor
 	for _, tip := range tips {
-		if tip.CpHash == cpHash || tip.DagChainHashes.Has(cpHash) {
+		if tip.CpHash == cpHash || tip.OrderedAncestorsHashes.Has(cpHash) {
 			isCpAncestor = true
 		}
-		ancHashes = append(ancHashes, tip.DagChainHashes...)
+		ancHashes = append(ancHashes, tip.OrderedAncestorsHashes...)
 		ancHashes = append(ancHashes, tip.Hash)
 		ancHashes.Deduplicate()
 	}

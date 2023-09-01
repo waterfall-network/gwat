@@ -323,18 +323,6 @@ web3._extend({
 			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
-			name: 'traceBadBlock',
-			call: 'debug_traceBadBlock',
-			params: 1,
-			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
-			name: 'standardTraceBadBlockToFile',
-			call: 'debug_standardTraceBadBlockToFile',
-			params: 2,
-			inputFormatter: [null, null]
-		}),
-		new web3._extend.Method({
 			name: 'intermediateRoots',
 			call: 'debug_intermediateRoots',
 			params: 2,
@@ -375,11 +363,6 @@ web3._extend({
 			call: 'debug_preimage',
 			params: 1,
 			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
-			name: 'getBadBlocks',
-			call: 'debug_getBadBlocks',
-			params: 0,
 		}),
 		new web3._extend.Method({
 			name: 'storageRangeAt',

@@ -182,9 +182,10 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			log.Info("received validator sync",
 				"OpType", vs.OpType,
 				"Index", vs.Index,
-				"Creator", vs.Creator.Hash(),
+				"Creator", vs.Creator.Hex(),
 				"ProcEpoch", vs.ProcEpoch,
 				"Amount", vs.Amount,
+				"InitTxHash", vs.InitTxHash.Hex(),
 			)
 		}
 	}
@@ -229,6 +230,10 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		} else {
 			era.HandleEra(d.bc, data.Checkpoint)
 		}
+	}
+
+	for i, vs := range data.ValSyncData {
+		log.Info("Handle Finalize: valSync", "i", i, "valSyncData", vs.Print())
 	}
 
 	// handle validator sync data

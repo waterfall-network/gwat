@@ -59,6 +59,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 		"OpType", valSyncOp.OpType,
 		"Amount", valSyncOp.Amount.String(),
 		"Index", valSyncOp.Index,
+		"InitTxHash", valSyncOp.InitTxHash.Hex(),
 	)
 
 	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress)
@@ -132,12 +133,6 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 		if valSyncOp.Amount.Sign() == -1 {
 			return false, fmt.Errorf("validator sync operation failed: withdrawal amount is negative")
 		}
-		if validator.GetActivationEra() >= procEra.Number {
-			return false, fmt.Errorf("validator sync operation failed: withdrawal epoche is too low")
-		}
-		if validator.GetExitEra() == math.MaxUint64 {
-			return false, fmt.Errorf("validator sync operation failed: withdrawal operation require initialized exit procedure")
-		}
 	default:
 		return false, fmt.Errorf("validator sync operation failed: unknown oparation type %d", valSyncOp.OpType)
 	}
@@ -149,7 +144,7 @@ func getValSyncTxData(valSyncOp types.ValidatorSync, withdrawal *common.Address)
 		op  operation.Operation
 		err error
 	)
-	if op, err = operation.NewValidatorSyncOperation(valSyncOp.OpType, valSyncOp.ProcEpoch, valSyncOp.Index, valSyncOp.Creator, valSyncOp.Amount, withdrawal); err != nil {
+	if op, err = operation.NewValidatorSyncOperation(valSyncOp.InitTxHash, valSyncOp.OpType, valSyncOp.ProcEpoch, valSyncOp.Index, valSyncOp.Creator, valSyncOp.Amount, withdrawal); err != nil {
 		return nil, err
 	}
 	b, err := operation.EncodeToBytes(op)
@@ -173,17 +168,17 @@ func signTx(backend Backend, addr common.Address, tx *types.Transaction) (*types
 }
 
 // GetPendingValidatorSyncData retrieves currently processable validators sync operations.
-func GetPendingValidatorSyncData(bc *core.BlockChain) map[[28]byte]*types.ValidatorSync {
+func GetPendingValidatorSyncData(bc *core.BlockChain) map[common.Hash]*types.ValidatorSync {
 	si := bc.GetSlotInfo()
 	currEpoch := si.SlotToEpoch(si.CurrentSlot())
 
 	valSyncOps := bc.GetNotProcessedValidatorSyncData()
-	vsPending := make(map[[28]byte]*types.ValidatorSync, len(valSyncOps))
+	vsPending := make(map[common.Hash]*types.ValidatorSync, len(valSyncOps))
 	for k, vs := range valSyncOps {
 		if vs.TxHash != nil {
 			continue
 		}
-		saved := bc.GetValidatorSyncData(vs.Creator, vs.OpType)
+		saved := bc.GetValidatorSyncData(vs.InitTxHash)
 		if saved.TxHash != nil {
 			continue
 		}

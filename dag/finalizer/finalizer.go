@@ -213,8 +213,8 @@ func (f *Finalizer) isSyncing() bool {
 func (f *Finalizer) GetFinalizingCandidates(lteSlot *uint64) (common.HashArray, error) {
 	tips := f.bc.GetTips()
 
-	finChain := []*types.Block{}
-	for _, block := range f.bc.GetBlocksByHashes(tips.GetOrderedDagChainHashes().Uniq()).ToArray() {
+	finChain := make(types.Blocks, 0)
+	for _, block := range f.bc.GetBlocksByHashes(tips.GetOrderedAncestorsHashes().Uniq()).ToArray() {
 		if block.Height() > 0 && block.Nr() == 0 {
 			finChain = append(finChain, block)
 		}
@@ -395,18 +395,18 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		}
 		//check blockDag record exists
 		if f.bc.GetBlockDag(blockHeader.Hash()) == nil {
-			_, loaded, _, _, err := f.bc.CollectAncestorsAftCpByTips(blockHeader.ParentHashes, blockHeader.CpHash)
+			_, ancestors, _, _, err := f.bc.CollectAncestorsAftCpByTips(blockHeader.ParentHashes, blockHeader.CpHash)
 			if err != nil {
 				return err
 			}
 			cpHeader := f.bc.GetHeader(blockHeader.CpHash)
 			f.bc.SaveBlockDag(&types.BlockDAG{
-				Hash:           blockHeader.Hash(),
-				Height:         blockHeader.Height,
-				Slot:           blockHeader.Slot,
-				CpHash:         blockHeader.CpHash,
-				CpHeight:       cpHeader.Height,
-				DagChainHashes: loaded.Hashes(),
+				Hash:                   blockHeader.Hash(),
+				Height:                 blockHeader.Height,
+				Slot:                   blockHeader.Slot,
+				CpHash:                 blockHeader.CpHash,
+				CpHeight:               cpHeader.Height,
+				OrderedAncestorsHashes: ancestors.Hashes(),
 			})
 		}
 		err := f.bc.RollbackFinalization(i)

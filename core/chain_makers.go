@@ -184,12 +184,12 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 	lcp := bc.GetLastCoordinatedCheckpoint()
 	cpBlock := bc.GetBlock(lcp.Spine)
 	bc.AddTips(&types.BlockDAG{
-		Hash:           cpBlock.Hash(),
-		Height:         cpBlock.Height(),
-		Slot:           cpBlock.Slot(),
-		CpHash:         cpBlock.Hash(),
-		CpHeight:       cpBlock.Height(),
-		DagChainHashes: common.HashArray{},
+		Hash:                   cpBlock.Hash(),
+		Height:                 cpBlock.Height(),
+		Slot:                   cpBlock.Slot(),
+		CpHash:                 cpBlock.Hash(),
+		CpHeight:               cpBlock.Height(),
+		OrderedAncestorsHashes: common.HashArray{},
 	})
 	tips := bc.GetTips().Copy()
 
@@ -199,21 +199,21 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 		bc.RemoveTips(block.ParentHashes())
 		//2. create for new blockDag
 		finDag := tips.GetFinalizingDag()
-		tmpDagChainHashes := tips.GetOrderedDagChainHashes()
+		ancestorsHashes := tips.GetOrderedAncestorsHashes()
 		if finDag.Hash == bc.Genesis().Hash() {
-			tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{bc.Genesis().Hash()})
+			ancestorsHashes = ancestorsHashes.Difference(common.HashArray{bc.Genesis().Hash()})
 		}
 		blockDag := &types.BlockDAG{
-			Hash:           block.Hash(),
-			Height:         block.Height(),
-			Slot:           block.Slot(),
-			CpHash:         cpBlock.Hash(),
-			CpHeight:       cpBlock.Height(),
-			DagChainHashes: tmpDagChainHashes,
+			Hash:                   block.Hash(),
+			Height:                 block.Height(),
+			Slot:                   block.Slot(),
+			CpHash:                 cpBlock.Hash(),
+			CpHeight:               cpBlock.Height(),
+			OrderedAncestorsHashes: ancestorsHashes,
 		}
 		bc.SaveBlockDag(blockDag)
 		bc.AddTips(blockDag)
-		bc.RemoveTips(tmpDagChainHashes)
+		bc.RemoveTips(ancestorsHashes)
 		//bc.ReviseTips()
 	}
 }

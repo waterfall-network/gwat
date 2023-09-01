@@ -95,7 +95,7 @@ func (b *EthAPIBackend) SetHead(hash common.Hash) {
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.dag.Creator().PendingBlock()
+		block, _ := b.eth.dag.Creator().Pending()
 		return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
@@ -133,7 +133,7 @@ func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*ty
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.dag.Creator().PendingBlock()
+		block, _ := b.eth.dag.Creator().Pending()
 		return block, nil
 	}
 	// Otherwise resolve and return the block

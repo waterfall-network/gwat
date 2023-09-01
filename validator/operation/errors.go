@@ -8,6 +8,7 @@ var (
 	ErrBadDataLen = errors.New("bad data length")
 
 	ErrNoPubKey            = errors.New("pubkey is required")
+	ErrNoInitTxHash        = errors.New("initTxHash is required")
 	ErrNoCreatorAddress    = errors.New("creator_address is required")
 	ErrNoWithdrawalAddress = errors.New("withdrawal_address is required")
 	ErrNoSignature         = errors.New("signature is required")
