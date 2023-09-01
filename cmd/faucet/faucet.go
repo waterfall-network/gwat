@@ -259,7 +259,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 
 	// Assemble the ethstats monitoring and reporting service'
 	if stats != "" {
-		if err := ethstats.New(stack, lesBackend.ApiBackend, lesBackend.Engine(), stats); err != nil {
+		if err := ethstats.New(stack, lesBackend.ApiBackend, stats); err != nil {
 			return nil, err
 		}
 	}

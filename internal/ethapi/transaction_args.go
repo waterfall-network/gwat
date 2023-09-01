@@ -159,7 +159,8 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, head *t
 		//pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 		//estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
 		//estimated, err := DoEstimateGasQuick(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
-		estimated, err := b.BlockChain().TxEstimateGas(args.ToTransaction(), head)
+		msg, err := args.ToMessage(b.RPCGasCap(), head.BaseFee)
+		estimated, err := b.BlockChain().EstimateGas(msg, head)
 		if err != nil {
 			return err
 		}
