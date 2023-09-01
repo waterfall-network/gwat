@@ -1,7 +1,6 @@
 package creator
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -16,18 +15,12 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/validatorsync"
-)
-
-var (
-	extraVanity = 32                     // Fixed number of extra-data prefix bytes reserved for signer vanity
-	extraSeal   = crypto.SignatureLength // Fixed number of extra-data suffix bytes reserved for signer seal
 )
 
 // Backend wraps all methods required for block creation.
@@ -269,7 +262,6 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 		Era:          era,
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
-		Extra:        c.extra,
 		Time:         uint64(time.Now().Unix()),
 		// Checkpoint spine block
 		CpHash:        cpHeader.Hash(),
@@ -403,12 +395,6 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		return
 	}
 	header.Coinbase = coinbase
-	if len(header.Extra) < extraVanity {
-		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
-	}
-	header.Extra = header.Extra[:extraVanity]
-	header.Extra = append(header.Extra, coinbase[:]...)
-	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
 	// Fill the block with all available pending transactions.
 	pendingTxs := c.getPending(coinbase, creators)
