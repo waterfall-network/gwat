@@ -11,7 +11,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -65,7 +64,6 @@ type txsWithCumulativeGas struct {
 // and gathering the sealing result.
 type Creator struct {
 	config *Config
-	engine consensus.Engine
 	eth    Backend
 	bc     *core.BlockChain
 
@@ -89,10 +87,9 @@ type Creator struct {
 }
 
 // New creates new Creator instance
-func New(config *Config, engine consensus.Engine, eth Backend, mux *event.TypeMux) *Creator {
+func New(config *Config, eth Backend, mux *event.TypeMux) *Creator {
 	creator := &Creator{
 		config: config,
-		engine: engine,
 		eth:    eth,
 		mux:    mux,
 		bc:     eth.BlockChain(),
@@ -122,9 +119,6 @@ func (c *Creator) IsRunning() bool {
 // Pending returns the currently pending block and associated state.
 func (c *Creator) Pending() (*types.Block, *state.StateDB) {
 	// return a snapshot to avoid contention on currentMu mutex
-	c.snapshotMu.RLock()
-	defer c.snapshotMu.RUnlock()
-
 	block := c.bc.GetLastFinalizedBlock()
 	state, err := c.bc.StateAt(block.Root())
 	if err != nil {
@@ -158,14 +152,6 @@ func (c *Creator) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 // to the given channel.
 func (c *Creator) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return c.pendingLogsFeed.Subscribe(ch)
-}
-
-// Hashrate retrieve current hashrate
-func (c *Creator) Hashrate() uint64 {
-	if pow, ok := c.engine.(consensus.PoW); ok {
-		return uint64(pow.Hashrate())
-	}
-	return 0
 }
 
 // SetExtra sets the content used to initialize the block extra field.
@@ -311,7 +297,6 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 		Era:          era,
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
-		Extra:        c.extra,
 		Time:         uint64(time.Now().Unix()),
 		// Checkpoint spine block
 		CpHash:        cpHeader.Hash(),
@@ -349,20 +334,13 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 						log.Warn("Creator reorg tips failed: bad parent in dag", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "parent", hash.Hex())
 						continue
 					}
-					dagChainHashes := common.HashArray{}
 					//if block not finalized
-					var (
-						isCpAncestor bool
-						ancestors    types.HeaderMap
-						err          error
-						unl          common.HashArray
-					)
 					log.Warn("Creator reorg tips: active BlockDag not found", "parent", hash.Hex(), "parent.slot", parentBlock.Slot, "parent.height", parentBlock.Height, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex())
-					isCpAncestor, ancestors, unl, err = c.bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
+					isCpAncestor, ancestors, unloaded, err := c.bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
 					if err != nil {
 						return nil, err
 					}
-					if len(unl) > 0 {
+					if len(unloaded) > 0 {
 						log.Error("Creator reorg tips: should never happen",
 							"err", core.ErrInsertUncompletedDag,
 							"parent", hash.Hex(),
@@ -387,17 +365,16 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 						return nil, core.ErrCpIsnotAncestor
 					}
 					delete(ancestors, cpHeader.Hash())
-					dagChainHashes = ancestors.Hashes()
 					dagBlock = &types.BlockDAG{
-						Hash:           hash,
-						Height:         parentBlock.Height,
-						Slot:           parentBlock.Slot,
-						CpHash:         parentBlock.CpHash,
-						CpHeight:       cpHeader.Height,
-						DagChainHashes: dagChainHashes,
+						Hash:                   hash,
+						Height:                 parentBlock.Height,
+						Slot:                   parentBlock.Slot,
+						CpHash:                 parentBlock.CpHash,
+						CpHeight:               cpHeader.Height,
+						OrderedAncestorsHashes: ancestors.Hashes(),
 					}
 				}
-				dagBlock.DagChainHashes = dagBlock.DagChainHashes.Difference(common.HashArray{genesis})
+				dagBlock.OrderedAncestorsHashes = dagBlock.OrderedAncestorsHashes.Difference(common.HashArray{genesis})
 				tips.Add(dagBlock)
 			}
 			delete(tips, block.Hash())
@@ -596,11 +573,9 @@ func (c *Creator) updateSnapshot(header *types.Header) {
 	c.snapshotMu.Lock()
 	defer c.snapshotMu.Unlock()
 
-	txs := c.getUnhandledTxs(header.Coinbase)
-
 	c.snapshotBlock = types.NewBlock(
 		header,
-		txs,
+		c.getUnhandledTxs(header.Coinbase),
 		nil,
 		trie.NewStackTrie(nil),
 	)
@@ -612,7 +587,9 @@ func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header,
 		return nil
 	}
 
-	gas, err := c.bc.TxEstimateGas(tx, header)
+	signer := types.MakeSigner(c.bc.Config())
+	msg, err := tx.AsMessage(signer, header.BaseFee)
+	gas, err := c.bc.EstimateGas(msg, header)
 	if err != nil {
 		log.Error("Failed to estimate gas for the transaction", "err", err)
 		return err

@@ -28,7 +28,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	l "gitlab.waterfall.network/waterfall/protocol/gwat/les"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
@@ -62,7 +61,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 	}
 	genesis := gspec.MustCommit(db)
 	signer := types.HomesteadSigner{}
-	blocks, _ := core.GenerateChain(gspec.Config, genesis, sealer.New(db), db, testChainLen,
+	blocks, _ := core.GenerateChain(gspec.Config, genesis, db, testChainLen,
 		func(i int, gen *core.BlockGen) {
 			var (
 				tx   *types.Transaction
@@ -80,7 +79,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 			addrHashes = append(addrHashes, crypto.Keccak256Hash(addr[:]))
 			txHashes = append(txHashes, tx.Hash())
 		})
-	bc, _ = core.NewBlockChain(db, nil, gspec.Config, sealer.New(db), vm.Config{}, nil)
+	bc, _ = core.NewBlockChain(db, nil, gspec.Config, vm.Config{}, nil)
 	if _, err := bc.InsertChain(blocks); err != nil {
 		panic(err)
 	}

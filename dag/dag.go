@@ -13,7 +13,6 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -110,13 +109,13 @@ type Dag struct {
 }
 
 // New creates new instance of Dag
-func New(eth Backend, mux *event.TypeMux, creatorConfig *creator.Config, engine consensus.Engine) *Dag {
+func New(eth Backend, mux *event.TypeMux, creatorConfig *creator.Config) *Dag {
 	fin := finalizer.New(eth)
 	d := &Dag{
 		eth:        eth,
 		bc:         eth.BlockChain(),
 		downloader: eth.Downloader(),
-		creator:    creator.New(creatorConfig, engine, eth, mux),
+		creator:    creator.New(creatorConfig, eth, mux),
 		finalizer:  fin,
 		exitChan:   make(chan struct{}),
 		errChan:    make(chan error),

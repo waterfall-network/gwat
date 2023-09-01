@@ -30,9 +30,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
@@ -67,7 +65,6 @@ type Backend interface {
 	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
-	Engine() consensus.Engine
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error)
@@ -87,10 +84,6 @@ func NewAPI(backend Backend) *API {
 type chainContext struct {
 	api *API
 	ctx context.Context
-}
-
-func (context *chainContext) Engine() consensus.Engine {
-	return context.api.backend.Engine()
 }
 
 func (context *chainContext) GetHeader(hash common.Hash) *types.Header {
@@ -448,17 +441,6 @@ func (api *API) TraceBlockFromFile(ctx context.Context, file string, config *Tra
 	return api.TraceBlock(ctx, blob, config)
 }
 
-// TraceBadBlock returns the structured logs created during the execution of
-// EVM against a block pulled from the pool of bad ones and returns them as a JSON
-// object.
-func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
-	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
-	if block == nil {
-		return nil, fmt.Errorf("bad block %#x not found", hash)
-	}
-	return api.traceBlock(ctx, block, config)
-}
-
 // StandardTraceBlockToFile dumps the structured logs created during the
 // execution of EVM to the local file system and returns a list of files
 // to the caller.
@@ -474,10 +456,6 @@ func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, 
 // of intermediate roots: the stateroot after each transaction.
 func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config *TraceConfig) ([]common.Hash, error) {
 	block, _ := api.blockByHash(ctx, hash)
-	if block == nil {
-		// Check in the bad blocks
-		block = rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
-	}
 	if block == nil {
 		return nil, fmt.Errorf("block %#x not found", hash)
 	}
@@ -539,17 +517,6 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
 	}
 	return roots, nil
-}
-
-// StandardTraceBadBlockToFile dumps the structured logs created during the
-// execution of EVM against a block pulled from the pool of bad ones to the
-// local file system and returns a list of files to the caller.
-func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error) {
-	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
-	if block == nil {
-		return nil, fmt.Errorf("bad block %#x not found", hash)
-	}
-	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
 // traceBlock configures a new tracer according to the provided configuration, and

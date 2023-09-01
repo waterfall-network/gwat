@@ -25,7 +25,6 @@ import (
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/bloombits"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -96,7 +95,7 @@ func (b *EthAPIBackend) SetHead(hash common.Hash) {
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.dag.Creator().PendingBlock()
+		block, _ := b.eth.dag.Creator().Pending()
 		return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
@@ -134,7 +133,7 @@ func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*ty
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.dag.Creator().PendingBlock()
+		block, _ := b.eth.dag.Creator().Pending()
 		return block, nil
 	}
 	// Otherwise resolve and return the block
@@ -378,10 +377,6 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
-}
-
-func (b *EthAPIBackend) Engine() consensus.Engine {
-	return b.eth.engine
 }
 
 func (b *EthAPIBackend) GetLastFinalizedHeader() *types.Header {

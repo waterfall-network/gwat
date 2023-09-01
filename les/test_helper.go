@@ -39,7 +39,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
@@ -191,9 +190,8 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 
 func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) (*clientHandler, func()) {
 	var (
-		evmux  = new(event.TypeMux)
-		engine = sealer.New(db)
-		gspec  = core.Genesis{
+		evmux = new(event.TypeMux)
+		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
 			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
 			GasLimit: 100000000,
@@ -202,7 +200,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		oracle *checkpointoracle.CheckpointOracle
 	)
 	genesis := gspec.MustCommit(db)
-	chain, _ := light.NewLightChain(odr, gspec.Config, engine, nil)
+	chain, _ := light.NewLightChain(odr, gspec.Config, nil)
 	if indexers != nil {
 		checkpointConfig := &params.CheckpointOracleConfig{
 			Address:   crypto.CreateAddress(bankAddr, 0),
@@ -236,7 +234,6 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		reqDist:    odr.retriever.dist,
 		retriever:  odr.retriever,
 		odr:        odr,
-		engine:     engine,
 		blockchain: chain,
 		eventMux:   evmux,
 	}

@@ -34,7 +34,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/ethapi"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
@@ -60,11 +59,6 @@ func (api *PublicEthereumAPI) Etherbase() (common.Address, error) {
 // Coinbase is the address that mining rewards will be send to (alias for Etherbase)
 func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
 	return api.Etherbase()
-}
-
-// Hashrate returns the POW hashrate
-func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
-	return hexutil.Uint64(api.e.dag.Creator().Hashrate())
 }
 
 // PublicMinerAPI provides an API to control the miner.
@@ -311,43 +305,6 @@ func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hex
 		return preimage, nil
 	}
 	return nil, errors.New("unknown preimage")
-}
-
-// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
-type BadBlockArgs struct {
-	Hash  common.Hash            `json:"hash"`
-	Block map[string]interface{} `json:"block"`
-	RLP   string                 `json:"rlp"`
-}
-
-// GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-// and returns them as a JSON list of block-hashes
-func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
-	var (
-		err     error
-		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
-		results = make([]*BadBlockArgs, 0, len(blocks))
-	)
-	for _, block := range blocks {
-		var (
-			blockRlp  string
-			blockJSON map[string]interface{}
-		)
-		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
-			blockRlp = err.Error() // Hacky, but hey, it works
-		} else {
-			blockRlp = fmt.Sprintf("0x%x", rlpBytes)
-		}
-		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig()); err != nil {
-			blockJSON = map[string]interface{}{"error": err.Error()}
-		}
-		results = append(results, &BadBlockArgs{
-			Hash:  block.Hash(),
-			RLP:   blockRlp,
-			Block: blockJSON,
-		})
-	}
-	return results, nil
 }
 
 // AccountRangeMaxResults is the maximum number of results to be returned per call

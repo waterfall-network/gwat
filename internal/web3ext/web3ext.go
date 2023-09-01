@@ -19,7 +19,6 @@ package web3ext
 
 var Modules = map[string]string{
 	"admin":    AdminJs,
-	"clique":   CliqueJs,
 	"ethash":   EthashJs,
 	"debug":    DebugJs,
 	"eth":      EthJs,
@@ -33,63 +32,6 @@ var Modules = map[string]string{
 	"dag":      DagJs,
 	"wat":      WatJs,
 }
-
-const CliqueJs = `
-web3._extend({
-	property: 'clique',
-	methods: [
-		new web3._extend.Method({
-			name: 'getSnapshot',
-			call: 'clique_getSnapshot',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
-		}),
-		new web3._extend.Method({
-			name: 'getSnapshotAtHash',
-			call: 'clique_getSnapshotAtHash',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'getSigners',
-			call: 'clique_getSigners',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
-		}),
-		new web3._extend.Method({
-			name: 'getSignersAtHash',
-			call: 'clique_getSignersAtHash',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'propose',
-			call: 'clique_propose',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'discard',
-			call: 'clique_discard',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'status',
-			call: 'clique_status',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'getSigner',
-			call: 'clique_getSigner',
-			params: 1,
-			inputFormatter: [null]
-		}),
-	],
-	properties: [
-		new web3._extend.Property({
-			name: 'proposals',
-			getter: 'clique_proposals'
-		}),
-	]
-});
-`
 
 const EthashJs = `
 web3._extend({
@@ -234,12 +176,6 @@ web3._extend({
 			name: 'getBlockRlp',
 			call: 'debug_getBlockRlp',
 			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'testSignCliqueBlock',
-			call: 'debug_testSignCliqueBlock',
-			params: 2,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null],
 		}),
 		new web3._extend.Method({
 			name: 'setHead',
@@ -387,18 +323,6 @@ web3._extend({
 			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
-			name: 'traceBadBlock',
-			call: 'debug_traceBadBlock',
-			params: 1,
-			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
-			name: 'standardTraceBadBlockToFile',
-			call: 'debug_standardTraceBadBlockToFile',
-			params: 2,
-			inputFormatter: [null, null]
-		}),
-		new web3._extend.Method({
 			name: 'intermediateRoots',
 			call: 'debug_intermediateRoots',
 			params: 2,
@@ -439,11 +363,6 @@ web3._extend({
 			call: 'debug_preimage',
 			params: 1,
 			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
-			name: 'getBadBlocks',
-			call: 'debug_getBadBlocks',
-			params: 0,
 		}),
 		new web3._extend.Method({
 			name: 'storageRangeAt',
@@ -642,10 +561,6 @@ web3._extend({
 			name: 'setRecommitInterval',
 			call: 'miner_setRecommitInterval',
 			params: 1,
-		}),
-		new web3._extend.Method({
-			name: 'getHashrate',
-			call: 'miner_getHashrate'
 		}),
 	],
 	properties: []

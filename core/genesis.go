@@ -300,7 +300,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		ParentHashes: g.ParentHashes,
 		Slot:         g.Slot,
 		Height:       g.Height,
-		Extra:        g.ExtraData,
 		GasLimit:     g.GasLimit,
 		GasUsed:      g.GasUsed,
 		BaseFee:      g.BaseFee,
@@ -392,12 +391,12 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.AddSlotBlockHash(db, block.Slot(), block.Hash())
 	//set genesis blockDag
 	genesisDag := &types.BlockDAG{
-		Hash:           block.Hash(),
-		Height:         0,
-		Slot:           0,
-		CpHash:         block.Hash(),
-		CpHeight:       0,
-		DagChainHashes: common.HashArray{},
+		Hash:                   block.Hash(),
+		Height:                 0,
+		Slot:                   0,
+		CpHash:                 block.Hash(),
+		CpHeight:               0,
+		OrderedAncestorsHashes: common.HashArray{},
 	}
 	rawdb.WriteBlockDag(db, genesisDag)
 	rawdb.WriteTipsHashes(db, common.HashArray{genesisDag.Hash})
