@@ -188,7 +188,13 @@ func (c *Creator) SetGasCeil(ceil uint64) {
 }
 
 // RunBlockCreation starts process of block creation
-func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accounts []common.Address, tips types.Tips, checkpoint *types.Checkpoint) error {
+func (c *Creator) RunBlockCreation(slot uint64,
+	creators []common.Address,
+	accounts []common.Address,
+	tips types.Tips,
+	checkpoint *types.Checkpoint,
+	needEmptyBlock bool,
+) error {
 	if !c.IsRunning() {
 		log.Warn("Creator stopped")
 		return ErrCreatorStopped
@@ -231,12 +237,42 @@ func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accou
 			c.current.txsMu.Lock()
 			c.current.txs[account] = &txsWithCumulativeGas{}
 			c.current.txsMu.Unlock()
-			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg)
+			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, false)
+		}
+	}
+	wg.Wait()
+
+	if needEmptyBlock && len(creators) > 0 {
+		err := c.createEmptyBlock(creators, accounts, header, slot)
+		if err != nil {
+			return err
+		}
+		log.Info("Create empty block", "creator", header.Coinbase.Hex(), "slot", slot)
+	}
+
+	return nil
+}
+
+func (c *Creator) createEmptyBlock(creators []common.Address, accounts []common.Address, header *types.Header, slot uint64) error {
+	slotBlocks := c.bc.GetBlockHashesBySlot(slot)
+	if len(slotBlocks) > 0 {
+		return errors.New("unexpected empty block creation - have blocks with transactions")
+	}
+
+	assigned := &Assignment{
+		Slot:     slot,
+		Creators: creators[:1],
+	}
+	for _, account := range accounts {
+		if c.isCreatorActive(account, assigned) {
+			c.current.txs[account] = &txsWithCumulativeGas{}
+			header.Coinbase = account
+			c.create(header, true)
+			return nil
 		}
 	}
 
-	wg.Wait()
-	return nil
+	return errors.New("failed to create empty block, no active creators")
 }
 
 func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.BlockMap, tips types.Tips, checkpoint *types.Checkpoint) (*types.Header, error) {
@@ -400,7 +436,7 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 	return tipsBlocks, nil
 }
 
-func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Address, header *types.Header, wg *sync.WaitGroup) {
+func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Address, header *types.Header, wg *sync.WaitGroup, needEmptyBlock bool) {
 	log.Info("Try to create new block", "slot", header.Slot, "coinbase", coinbase.Hex())
 	defer wg.Done()
 
@@ -435,6 +471,12 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 	// Short circuit if no pending transactions
 	if len(pendingTxs) == 0 && len(syncData) == 0 {
+		if needEmptyBlock {
+			c.create(header, true)
+			log.Info("Create empty block")
+
+			return
+		}
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs (short circuit)", "creator", coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		return

@@ -2366,6 +2366,13 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	)
 	ts = time.Now()
 
+	if len(block.Transactions()) == 0 {
+		err := bc.verifyEmptyBlock(block)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	// validate cp data
 	isCpValid := bc.verifyCpData(block)
 
@@ -2376,6 +2383,43 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	)
 
 	return isValid && isCpValid, nil
+}
+
+func (bc *BlockChain) verifyEmptyBlock(block *types.Block) error {
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+	blockEpochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(blockEpoch)
+	if err != nil {
+		log.Warn("Empty block verification failed: can`t calculate block`s epoch start slot",
+			"blockHash", block.Hash().Hex(),
+			"block slot", block.Slot(),
+			"blockEpoch", blockEpoch,
+		)
+
+		return err
+	}
+
+	if block.Slot() != blockEpochStartSlot {
+		log.Warn("Empty block verification failed: do not expect an empty block in this slot",
+			"blockHash", block.Hash().Hex(),
+			"block slot", block.Slot(),
+			"blockEpoch", blockEpoch,
+		)
+
+		return err
+	}
+
+	haveBlocks, err := bc.HaveEpochBlocks(blockEpoch - 1)
+	if haveBlocks {
+		log.Warn("Empty block verification failed: previous epoch have blocks",
+			"blockHash", block.Hash().Hex(),
+			"block slot", block.Slot(),
+			"blockEpoch", blockEpoch,
+		)
+
+		return errors.New("block verification: unexpected empty block")
+	}
+
+	return err
 }
 
 func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
@@ -4528,6 +4572,28 @@ func (bc *BlockChain) EpochToEra(epoch uint64) *era.Era {
 	}
 
 	return findingEra
+}
+
+func (bc *BlockChain) HaveEpochBlocks(epoch uint64) (bool, error) {
+	startSlot, err := bc.GetSlotInfo().SlotOfEpochStart(epoch)
+	if err != nil {
+		return false, err
+	}
+
+	endSlot, err := bc.GetSlotInfo().SlotOfEpochEnd(epoch)
+	if err != nil {
+		return false, err
+	}
+
+	for startSlot <= endSlot {
+		blocks := bc.GetBlockHashesBySlot(startSlot)
+		if len(blocks) > 0 {
+			return true, nil
+		}
+		startSlot++
+	}
+
+	return false, nil
 }
 
 func (bc *BlockChain) verifyBlockBaseFee(block *types.Block) bool {
