@@ -189,8 +189,8 @@ func (c *Creator) SetGasCeil(ceil uint64) {
 
 // RunBlockCreation starts process of block creation
 func (c *Creator) RunBlockCreation(slot uint64,
-	creators []common.Address,
-	accounts []common.Address,
+	slotCreators []common.Address,
+	nodeCreators map[common.Address]struct{},
 	tips types.Tips,
 	checkpoint *types.Checkpoint,
 ) error {
@@ -209,7 +209,7 @@ func (c *Creator) RunBlockCreation(slot uint64,
 
 	assigned := &Assignment{
 		Slot:     slot,
-		Creators: creators,
+		Creators: slotCreators,
 	}
 
 	tipsBlocks, err := c.reorgTips(assigned.Slot, tips)
@@ -229,19 +229,21 @@ func (c *Creator) RunBlockCreation(slot uint64,
 		return err
 	}
 
-	needEmptyBlock, err := c.needEmptyBlock(slot)
-	if err != nil {
-		return err
-	}
-
 	wg := new(sync.WaitGroup)
-	for _, account := range accounts {
-		if c.isCreatorActive(account, assigned) {
+	for _, account := range assigned.Creators {
+		var needEmptyBlock bool
+		if c.isCreatorActive(account, nodeCreators) {
+			if account == assigned.Creators[0] {
+				needEmptyBlock, err = c.needEmptyBlock(slot)
+				if err != nil {
+					return err
+				}
+			}
 			wg.Add(1)
 			c.current.txsMu.Lock()
 			c.current.txs[account] = &txsWithCumulativeGas{}
 			c.current.txsMu.Unlock()
-			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, needEmptyBlock && account == assigned.Creators[0])
+			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, needEmptyBlock)
 		}
 	}
 	wg.Wait()
@@ -721,13 +723,10 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 }
 
 // isCreatorActive returns true if creator is assigned to create blocks in current slot.
-func (c *Creator) isCreatorActive(coinbase common.Address, assigned *Assignment) bool {
-	for _, creator := range assigned.Creators {
-		if creator == coinbase {
-			return true
-		}
-	}
-	return false
+func (c *Creator) isCreatorActive(coinbase common.Address, nodeCreators map[common.Address]struct{}) bool {
+	_, ok := nodeCreators[coinbase]
+
+	return ok
 }
 
 // getPending returns all pending transactions for current miner

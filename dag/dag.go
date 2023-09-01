@@ -571,6 +571,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 	genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
 	slotTicker := slotticker.NewSlotTicker(genesisTime, secPerSlot)
 
+	nodeCreators := d.prepareNodeCreatorsMap(accounts)
+
 	for {
 		select {
 		case <-d.exitChan:
@@ -605,8 +607,8 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", currentEpoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
 
 			var (
-				err      error
-				creators []common.Address
+				err          error
+				slotCreators []common.Address
 			)
 
 			startTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(d.bc.GetEraInfo().ToEpoch() + 1 - d.bc.Config().TransitionPeriod)
@@ -636,20 +638,20 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			//} else {}
 			// TODO: move it to else condition
 
-			creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, slot)
+			slotCreators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, slot)
 			if err != nil {
 				d.errChan <- err
 			}
 
 			// todo check
-			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", creators)
+			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", slotCreators)
 
-			go d.work(slot, creators, accounts)
+			go d.work(slot, slotCreators, nodeCreators)
 		}
 	}
 }
 
-func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
+func (d *Dag) work(slot uint64, slotCreators []common.Address, nodeCreators map[common.Address]struct{}) {
 	if !d.bc.IsSynced() {
 		return
 	}
@@ -671,7 +673,7 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
 	}
 
-	err := d.Creator().RunBlockCreation(slot, creators, accounts, tips, checkpoint)
+	err := d.Creator().RunBlockCreation(slot, slotCreators, nodeCreators, tips, checkpoint)
 	if err != nil {
 		log.Error("Create block error", "error", err)
 	}
@@ -747,4 +749,13 @@ func (d *Dag) isSlotLocked(slot uint64) bool {
 	}
 
 	return false
+}
+
+func (d *Dag) prepareNodeCreatorsMap(accounts []common.Address) map[common.Address]struct{} {
+	creators := make(map[common.Address]struct{})
+	for _, account := range accounts {
+		creators[account] = struct{}{}
+	}
+
+	return creators
 }
