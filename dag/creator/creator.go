@@ -193,7 +193,6 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	accounts []common.Address,
 	tips types.Tips,
 	checkpoint *types.Checkpoint,
-	needEmptyBlock bool,
 ) error {
 	if !c.IsRunning() {
 		log.Warn("Creator stopped")
@@ -230,6 +229,11 @@ func (c *Creator) RunBlockCreation(slot uint64,
 		return err
 	}
 
+	needEmptyBlock, err := c.needEmptyBlock(slot)
+	if err != nil {
+		return err
+	}
+
 	wg := new(sync.WaitGroup)
 	for _, account := range accounts {
 		if c.isCreatorActive(account, assigned) {
@@ -237,42 +241,36 @@ func (c *Creator) RunBlockCreation(slot uint64,
 			c.current.txsMu.Lock()
 			c.current.txs[account] = &txsWithCumulativeGas{}
 			c.current.txsMu.Unlock()
-			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, false)
+			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, needEmptyBlock && account == assigned.Creators[0])
 		}
 	}
 	wg.Wait()
 
-	if needEmptyBlock && len(creators) > 0 {
-		err := c.createEmptyBlock(creators, accounts, header, slot)
-		if err != nil {
-			return err
-		}
-		log.Info("Create empty block", "creator", header.Coinbase.Hex(), "slot", slot)
-	}
-
 	return nil
 }
 
-func (c *Creator) createEmptyBlock(creators []common.Address, accounts []common.Address, header *types.Header, slot uint64) error {
-	slotBlocks := c.bc.GetBlockHashesBySlot(slot)
-	if len(slotBlocks) > 0 {
-		return errors.New("unexpected empty block creation - have blocks with transactions")
+func (c *Creator) needEmptyBlock(slot uint64) (bool, error) {
+	slotEpoch := c.bc.GetSlotInfo().SlotToEpoch(slot)
+
+	currentEpochStartSlot, err := c.bc.GetSlotInfo().SlotOfEpochStart(slotEpoch)
+	if err != nil {
+		log.Error("error while calculating epoch start slot", "error", err)
+		return false, err
 	}
 
-	assigned := &Assignment{
-		Slot:     slot,
-		Creators: creators[:1],
-	}
-	for _, account := range accounts {
-		if c.isCreatorActive(account, assigned) {
-			c.current.txs[account] = &txsWithCumulativeGas{}
-			header.Coinbase = account
-			c.create(header, true)
-			return nil
+	if slot == currentEpochStartSlot {
+		have, err := c.bc.HaveEpochBlocks(slotEpoch - 1)
+		if err != nil {
+			log.Error("error while check previous epoch blocks", "error", err)
+			return false, err
+		}
+
+		if !have {
+			return true, nil
 		}
 	}
 
-	return errors.New("failed to create empty block, no active creators")
+	return false, nil
 }
 
 func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.BlockMap, tips types.Tips, checkpoint *types.Checkpoint) (*types.Header, error) {
@@ -473,7 +471,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 	if len(pendingTxs) == 0 && len(syncData) == 0 {
 		if needEmptyBlock {
 			c.create(header, true)
-			log.Info("Create empty block")
+			log.Info("Create empty block", "creator", header.Coinbase.Hex(), "slot", header.Slot)
 
 			return
 		}

@@ -644,31 +644,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			// todo check
 			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", creators)
 
-			currentEpochStartSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(currentEpoch)
-			if err != nil {
-				log.Error("error while calculating epoch start slot", "error", err)
-				continue
-			}
-
-			var needEmptyBlock bool
-			if slot == currentEpochStartSlot {
-				have, err := d.bc.HaveEpochBlocks(currentEpoch - 1)
-				if err != nil {
-					log.Error("error while check previous epoch blocks", "error", err)
-					continue
-				}
-
-				if !have {
-					needEmptyBlock = true
-				}
-			}
-
-			go d.work(slot, creators, accounts, needEmptyBlock)
+			go d.work(slot, creators, accounts)
 		}
 	}
 }
 
-func (d *Dag) work(slot uint64, creators, accounts []common.Address, needEmptyBlock bool) {
+func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 	if !d.bc.IsSynced() {
 		return
 	}
@@ -690,7 +671,7 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address, needEmptyBl
 		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
 	}
 
-	err := d.Creator().RunBlockCreation(slot, creators, accounts, tips, checkpoint, needEmptyBlock)
+	err := d.Creator().RunBlockCreation(slot, creators, accounts, tips, checkpoint)
 	if err != nil {
 		log.Error("Create block error", "error", err)
 	}

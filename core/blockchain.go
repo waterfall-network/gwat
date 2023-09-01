@@ -2161,7 +2161,7 @@ func logValidationIssue(issue string, block *types.Block) {
 }
 
 // verifyCreators return false if creator is unassigned
-func (bc *BlockChain) verifyCreators(block *types.Block) bool {
+func (bc *BlockChain) verifyCreators(block *types.Block) ([]common.Address, bool) {
 	var (
 		creators []common.Address
 		err      error
@@ -2170,25 +2170,25 @@ func (bc *BlockChain) verifyCreators(block *types.Block) bool {
 	creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
 	if err != nil {
 		log.Error("can`t get shuffled validators", "error", err)
-		return false
+		return creators, false
 	}
 
 	coinbase := block.Header().Coinbase
 	contains, index := common.Contains(creators, coinbase)
 	if !contains {
 		log.Warn("Block verification: creator assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators)
-		return false
+		return creators, false
 	} else {
 		signer := types.LatestSigner(bc.chainConfig)
 		for _, tx := range block.Body().Transactions {
 			from, _ := types.Sender(signer, tx)
 			if !IsAddressAssigned(from, creators, int64(index)) && from != block.Coinbase() {
 				log.Warn("Block verification: creator txs assignment failed", "slot", block.Slot(), "hash", block.Hash().Hex(), "block creator", block.Header().Coinbase.Hex(), "slot creators", creators, "txFrom", from)
-				return false
+				return creators, false
 			}
 		}
 	}
-	return true
+	return creators, true
 }
 
 // CacheInvalidBlock cache invalid block
@@ -2224,7 +2224,8 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 		log.Warn("Block verification: no parents", "hash", block.Hash().Hex())
 		return false, nil
 	}
-	if !bc.verifyCreators(block) {
+	creators, ok := bc.verifyCreators(block)
+	if !ok {
 		return false, nil
 	}
 
@@ -2367,7 +2368,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	ts = time.Now()
 
 	if len(block.Transactions()) == 0 {
-		err := bc.verifyEmptyBlock(block)
+		err := bc.verifyEmptyBlock(block, creators)
 		if err != nil {
 			return false, err
 		}
@@ -2385,7 +2386,15 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	return isValid && isCpValid, nil
 }
 
-func (bc *BlockChain) verifyEmptyBlock(block *types.Block) error {
+func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Address) error {
+	if block.Coinbase() != creators[0] {
+		log.Warn("Empty block verification failed: invalid coinbase",
+			"blockHash", block.Hash().Hex(),
+			"block slot", block.Slot(),
+			"coinbase", block.Coinbase().Hex(),
+		)
+	}
+
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
 	blockEpochStartSlot, err := bc.GetSlotInfo().SlotOfEpochStart(blockEpoch)
 	if err != nil {
@@ -2393,6 +2402,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block) error {
 			"blockHash", block.Hash().Hex(),
 			"block slot", block.Slot(),
 			"blockEpoch", blockEpoch,
+			"coinbase", block.Coinbase().Hex(),
 		)
 
 		return err
@@ -2403,6 +2413,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block) error {
 			"blockHash", block.Hash().Hex(),
 			"block slot", block.Slot(),
 			"blockEpoch", blockEpoch,
+			"coinbase", block.Coinbase().Hex(),
 		)
 
 		return err
@@ -2414,6 +2425,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block) error {
 			"blockHash", block.Hash().Hex(),
 			"block slot", block.Slot(),
 			"blockEpoch", blockEpoch,
+			"coinbase", block.Coinbase().Hex(),
 		)
 
 		return errors.New("block verification: unexpected empty block")
