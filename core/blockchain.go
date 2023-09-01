@@ -2328,9 +2328,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (ok bool, err error) {
 	ts = time.Now()
 
 	intrGasSum := uint64(0)
+	signer := types.MakeSigner(bc.Config())
 	for _, tx := range block.Transactions() {
-		var intrGas uint64
-		intrGas, err = bc.TxEstimateGas(tx, block.Header())
+		msg, err := tx.AsMessage(signer, block.BaseFee())
+		intrGas, err := bc.EstimateGas(msg, block.Header())
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
 			return false, nil
@@ -3178,8 +3179,8 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	return statedb, receipts, rlogs, *gasUsed
 }
 
-func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header) (uint64, error) {
-	if len(tx.Data()) == 0 {
+func (bc *BlockChain) EstimateGas(msg types.Message, header *types.Header) (uint64, error) {
+	if len(msg.Data()) == 0 {
 		return params.TxGas, nil
 	}
 
@@ -3193,26 +3194,23 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header)
 		return 0, err
 	}
 
-	signer := types.MakeSigner(bc.Config())
-	msg, err := tx.AsMessage(signer, header.BaseFee)
-
 	tokenProcessor := token.NewProcessor(blockContext, stateDb)
 	validatorProcessor := validator.NewProcessor(blockContext, stateDb, bc)
 	txType := GetTxType(msg, validatorProcessor, tokenProcessor)
 
 	switch txType {
 	case ValidatorMethodTxType, ValidatorSyncTxType:
-		return IntrinsicGas(tx.Data(), tx.AccessList(), false, true)
+		return IntrinsicGas(msg.Data(), msg.AccessList(), false, true)
 	case ContractMethodTxType, ContractCreationTxType:
-		return bc.TxEstimateGasByEvm(tx, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
+		return bc.EstimateGasByEvm(msg, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
 	case TokenCreationTxType, TokenMethodTxType:
-		return IntrinsicGas(tx.Data(), tx.AccessList(), false, false)
+		return IntrinsicGas(msg.Data(), msg.AccessList(), false, false)
 	default:
 		return 0, ErrTxTypeNotSupported
 	}
 }
 
-func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction,
+func (bc *BlockChain) EstimateGasByEvm(msg types.Message,
 	header *types.Header,
 	blkCtx vm.BlockContext,
 	statedb *state.StateDB,
@@ -3220,8 +3218,6 @@ func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction,
 	tp *token.Processor,
 ) (uint64, error) {
 	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	msg, err := tx.AsMessage(types.MakeSigner(bc.Config()), header.BaseFee)
-
 	from := msg.From()
 	statedb.SetNonce(from, msg.Nonce())
 	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
