@@ -69,6 +69,16 @@ type downloadTester struct {
 	lock sync.RWMutex
 }
 
+func (dl *downloadTester) WriteSyncBlocks(blocks types.Blocks, validate bool) (status int, err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dl *downloadTester) GetInsertDelayedHashes() common.HashArray {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (dl *downloadTester) GetEraInfo() *era.EraInfo {
 	//TODO implement me
 	panic("implement me")
@@ -357,7 +367,7 @@ func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 }
 
 // InsertHeaderChain injects a new batch of headers into the simulated chain.
-func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq int) (i int, err error) {
+func (dl *downloadTester) InsertHeaderChain(headers []*types.Header) (i int, err error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 	// Do a quick check, as the blockchain.InsertHeaderChain doesn't insert anything in case of errors
@@ -1600,7 +1610,7 @@ func (ftp *floodingTestPeer) RequestDag(baseSpine common.Hash, terminalSpine com
 	panic("implement me")
 }
 
-//func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
+// func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
 func (ftp *floodingTestPeer) RequestHeadersByHash(hash common.Hash, count int, skip int, reverse bool) error {
 	return ftp.peer.RequestHeadersByHash(hash, count, skip, reverse)
 }

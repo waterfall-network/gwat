@@ -36,7 +36,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	ethash "gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/filters"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
@@ -81,8 +80,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
 	genesis.MustCommit(database)
 	// i.o. ethash.NewFaker()
-	engine := ethash.New(database)
-	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, engine, vm.Config{}, nil)
+	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, vm.Config{}, nil)
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -133,9 +131,7 @@ func (b *SimulatedBackend) Rollback() {
 }
 
 func (b *SimulatedBackend) rollback(parent *types.Block) {
-	// i.o. ethash.NewFaker()
-	engine := ethash.New(b.database)
-	blocks, _ := core.GenerateChain(b.config, parent, engine, b.database, 1, func(int, *core.BlockGen) {})
+	blocks, _ := core.GenerateChain(b.config, parent, b.database, 1, func(int, *core.BlockGen) {})
 	for _, bl := range blocks {
 		nr := bl.Height()
 		bl.SetNumber(&nr)
@@ -661,9 +657,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
 	// Include tx in chain
-	// i.o. ethash.NewFaker()
-	engine := ethash.New(b.database)
-	blocks, _ := core.GenerateChain(b.config, block, engine, b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, block, b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
 		}
@@ -781,9 +775,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 		return errors.New("Could not adjust time on non-empty block")
 	}
 
-	// i.o. ethash.NewFaker()
-	engine := ethash.New(b.database)
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.GetLastFinalizedBlock(), engine, b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.GetLastFinalizedBlock(), b.database, 1, func(number int, block *core.BlockGen) {
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
 	stateDB, _ := b.blockchain.State()

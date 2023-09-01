@@ -11,7 +11,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -65,7 +64,6 @@ type txsWithCumulativeGas struct {
 // and gathering the sealing result.
 type Creator struct {
 	config *Config
-	engine consensus.Engine
 	eth    Backend
 	bc     *core.BlockChain
 
@@ -89,10 +87,9 @@ type Creator struct {
 }
 
 // New creates new Creator instance
-func New(config *Config, engine consensus.Engine, eth Backend, mux *event.TypeMux) *Creator {
+func New(config *Config, eth Backend, mux *event.TypeMux) *Creator {
 	creator := &Creator{
 		config: config,
-		engine: engine,
 		eth:    eth,
 		mux:    mux,
 		bc:     eth.BlockChain(),
@@ -155,14 +152,6 @@ func (c *Creator) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 // to the given channel.
 func (c *Creator) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return c.pendingLogsFeed.Subscribe(ch)
-}
-
-// Hashrate retrieve current hashrate
-func (c *Creator) Hashrate() uint64 {
-	if pow, ok := c.engine.(consensus.PoW); ok {
-		return uint64(pow.Hashrate())
-	}
-	return 0
 }
 
 // SetExtra sets the content used to initialize the block extra field.
@@ -272,7 +261,6 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 		Era:          era,
 		Height:       newHeight,
 		GasLimit:     core.CalcGasLimit(tipsBlocks.AvgGasLimit(), c.config.GasCeil),
-		Extra:        c.extra,
 		Time:         uint64(time.Now().Unix()),
 		// Checkpoint spine block
 		CpHash:        cpHeader.Hash(),
