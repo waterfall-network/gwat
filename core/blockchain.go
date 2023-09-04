@@ -1719,49 +1719,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if err := triedb.Commit(root, true, nil); err != nil {
 			return NonStatTy, err
 		}
-		//bc.triegc.Push(root, -int64(block.NumberU64()))
-
-		//if current := block.NumberU64(); current > TriesInMemory {
-		//	// If we exceeded our memory allowance, flush matured singleton nodes to disk
-		//	var (
-		//		nodes, imgs = triedb.Size()
-		//		limit       = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
-		//	)
-		//	if nodes > limit || imgs > 4*1024*1024 {
-		//		triedb.Cap(limit - ethdb.IdealBatchSize)
-		//	}
-		//	// Find the next state trie we need to commit
-		//	chosen := current - TriesInMemory
-		//
-		//	// If we exceeded out time allowance, flush an entire trie to disk
-		//	if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
-		//		// If the header is missing (canonical chain behind), we're reorging a low
-		//		// diff sidechain. Suspend committing until this operation is completed.
-		//		header := bc.GetHeaderByNumber(chosen)
-		//		if header == nil {
-		//			log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
-		//		} else {
-		//			// If we're exceeding limits but haven't reached a large enough memory gap,
-		//			// warn the user that the system is becoming unstable.
-		//			if chosen < lastWrite+TriesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-		//				log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
-		//			}
-		//			// Flush an entire trie and restart the counters
-		//			triedb.Commit(header.Root, true, nil)
-		//			lastWrite = chosen
-		//			bc.gcproc = 0
-		//		}
-		//	}
-		//	// Garbage collect anything below our required write retention
-		//	for !bc.triegc.Empty() {
-		//		root, number := bc.triegc.Pop()
-		//		if uint64(-number) > chosen {
-		//			bc.triegc.Push(root, number)
-		//			break
-		//		}
-		//		triedb.Dereference(root.(common.Hash))
-		//	}
-		//}
 	}
 	status = SideStatTy
 
@@ -2186,10 +2143,10 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	if len(unloaded) > 0 {
 		for _, unh := range unloaded {
 			if _, ok := bc.invalidBlocksCache.Get(unh); ok {
-				log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", unh.Hex())
+				log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "parent", unh.Hex())
 				return false, nil
 			}
-			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "unknown parent", unh.Hex())
+			log.Warn("Block verification: unknown parent", "hash", block.Hash().Hex(), "parent", unh.Hex())
 			continue
 		}
 		return false, ErrInsertUncompletedDag
@@ -2219,26 +2176,23 @@ func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
 	for _, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(signer, block.BaseFee())
 		if err != nil {
-			log.Warn("Block verification: gas usage error", "err", err)
+			log.Warn("Block verification: tx to msg error", "err", err)
 			return false
 		}
 		intrGas, err := bc.EstimateGas(msg, block.Header())
 		if err != nil {
-			log.Warn("Block verification: gas usage error", "err", err)
-
+			log.Warn("Block verification: estimate gas error", "err", err)
 			return false
 		}
-
 		intrGasSum += intrGas
 	}
 
 	if intrGasSum > block.GasLimit() {
 		log.Warn("Block verification: intrinsic gas sum > gasLimit",
-			"block hash", block.Hash().Hex(),
-			"block gasLimit", block.GasLimit(),
-			"IntrinsicGas sum", intrGasSum,
+			"hash", block.Hash().Hex(),
+			"gasLimit", block.GasLimit(),
+			"IntrinsicGas", intrGasSum,
 		)
-
 		return false
 	}
 
@@ -2255,10 +2209,8 @@ func (bc *BlockChain) verifyBlockHeight(block *types.Block, ancestorsCount int) 
 			"hash", block.Hash().Hex(),
 			"cpHeight", cpHeader.Height,
 		)
-
 		return false
 	}
-
 	return true
 }
 
@@ -2267,26 +2219,22 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 	blockBody := block.Body()
 	if blockBody.CalculateHash() != block.BodyHash() {
 		log.Warn("Block verification: invalid body hash",
-			"block hash", block.Hash().Hex(),
-			"block body hash", block.BodyHash().Hex(),
-			"calc body hash", blockBody.CalculateHash(),
+			"hash", block.Hash().Hex(),
+			"bl.bodyHash", block.BodyHash().Hex(),
+			"calc.bodyHash", blockBody.CalculateHash().Hex(),
 		)
-
 		return false
 	}
-
 	// Verify transactions hash
 	calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
 	if calcTxHash != block.TxHash() {
 		log.Warn("Block verification: invalid transactions hash",
-			"block hash", block.Hash().Hex(),
-			"block tx hash", block.TxHash().Hex(),
-			"calc tx hash", calcTxHash,
+			"hash", block.Hash().Hex(),
+			"txHash", block.TxHash().Hex(),
+			"calc.txHash", calcTxHash.Hex(),
 		)
-
 		return false
 	}
-
 	return true
 }
 
@@ -2299,10 +2247,8 @@ func (bc *BlockChain) verifyBlockSlot(block *types.Block) bool {
 			"blockTime", block.Time(),
 			"timeNow", time.Now().Unix(),
 		)
-
 		return false
 	}
-
 	return true
 }
 
@@ -2312,73 +2258,266 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 		return false, nil
 	}
 
+	var pSlot uint64
+	parentsSlotsEquals := true
 	parentsHeaders := bc.GetHeadersByHashes(block.ParentHashes())
-
-	// parents' heights must be less than block height
-	for _, parentHash := range block.ParentHashes() {
-		parent := bc.GetHeader(parentHash)
-		if _, ok := bc.invalidBlocksCache.Get(parent); ok {
-			log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "parent hash", parentHash.Hex())
+	for i, parentHash := range block.ParentHashes() {
+		parent := parentsHeaders[parentHash]
+		if parent == nil {
+			log.Warn("Block verification: parent not found",
+				"hash", block.Hash().Hex(),
+				"parent", parentHash.Hex(),
+			)
+			return false, ErrInsertUncompletedDag
+		}
+		//check parent Height
+		if parent.Height >= block.Height() {
+			log.Warn("Block verification: bad parent height",
+				"height", block.Height(),
+				"parent.height", parent.Height,
+				"hash", block.Hash().Hex(),
+				"parent", parentHash.Hex(),
+			)
 			return false, nil
 		}
-		if parent.Height >= block.Height() || parent.Slot >= block.Slot() {
-			log.Warn("Block verification: invalid parent", "height", block.Height(), "slot", block.Slot(), "parent height", parent.Height, "parent slot", parent.Slot)
+		//check parent slot
+		if parent.Slot >= block.Slot() {
+			log.Warn("Block verification: bad parent slot",
+				"slot", block.Slot(),
+				"parent.slot", parent.Slot,
+				"hash", block.Hash().Hex(),
+				"parent", parentHash.Hex(),
+			)
 			return false, nil
+		}
+		//check parents' slots are equals
+		if i == 0 {
+			pSlot = parent.Slot
+		} else if pSlot != parent.Slot {
+			parentsSlotsEquals = false
 		}
 	}
 
-	if bc.AreParentSlotsUniform(block.Slot(), parentsHeaders) {
-		log.Info("##### verifyBlockParents : light")
-
-		return true, nil
-	}
-
-	log.Info("##### verifyBlockParents : heavy")
-	for ph, parentHeader := range parentsHeaders {
-		if parentHeader.Nr() > 0 || parentHeader.Height == 0 {
-			continue
-		}
-		for pph, pparent := range parentsHeaders {
-			if ph == pph {
+	if !parentsSlotsEquals {
+		//check there are not parent-ancestor relations
+		for ph, parentHeader := range parentsHeaders {
+			if parentHeader.Nr() > 0 || parentHeader.Height == 0 {
 				continue
 			}
-			isAncestor, err := bc.IsAncestorByTips(parentHeader, pparent.Hash())
-			if err != nil {
-				return false, err
-			}
-			if isAncestor {
-				log.Warn("Block verification: parent-ancestor detected",
-					"block", block.Hash().Hex(),
-					"parent", parentHeader.Hash().Hex(),
-					"parent-ancestor", pparent.Hash().Hex(),
-				)
-				return false, nil
+			for pph, pparent := range parentsHeaders {
+				if ph == pph {
+					continue
+				}
+				isAncestor, err := bc.IsAncestorByTips(parentHeader, pparent.Hash())
+				if err != nil {
+					return false, err
+				}
+				if isAncestor {
+					log.Warn("Block verification: parent-ancestor detected",
+						"block", block.Hash().Hex(),
+						"parent", parentHeader.Hash().Hex(),
+						"parent-ancestor", pparent.Hash().Hex(),
+					)
+					return false, nil
+				}
 			}
 		}
 	}
 	return true, nil
 }
 
-// AreParentSlotsUniform checks if all parent headers in the provided map have the same slot value.
-// It returns true if all slots are the same, and false otherwise.
-func (bc *BlockChain) AreParentSlotsUniform(slot uint64, parentsHeaders types.HeaderMap) bool {
-	var lastSlot *uint64 = nil
-	for _, parentHeader := range parentsHeaders {
-		if parentHeader.Slot >= slot {
-			log.Warn("Validation error: The slot of the parent is equal to or larger than the block's slot.",
-				"hash", parentHeader.Hash(),
-				"parSlot", parentHeader.Slot,
-				"slot", slot,
+func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
+	// Get the epoch of the block
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+
+	calcEra := bc.EpochToEra(blockEpoch)
+	if calcEra.Number != block.Era() {
+		log.Warn("Block verification: invalid era",
+			"hash", block.Hash().Hex(),
+			"era", block.Era(),
+		)
+		return false
+	}
+	return true
+}
+
+func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
+	// cp must be coordinated (received from coordinator)
+	coordCp := bc.GetCoordinatedCheckpoint(block.CpHash())
+	if coordCp == nil {
+		log.Warn("Block verification: cp not found",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	if bc.IsCheckpointOutdated(coordCp) {
+		log.Warn("Block verification: cp is outdated",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	// check cp block exists
+	cpHeader := bc.GetHeader(block.CpHash())
+	if cpHeader == nil {
+		log.Warn("Block verification: cp block not found",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	// cp must be finalized
+	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+		log.Warn("Block verification: cp is not finalized",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
+		return false
+	}
+	if block.CpNumber() != cpHeader.Nr() {
+		log.Warn("Block verification: mismatch cp fin numbers",
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Number", cpHeader.Nr(),
+			"bl.CpNumber", block.CpNumber(),
+		)
+		return false
+	}
+	if block.CpHash() != cpHeader.Hash() {
+		log.Warn("Block verification: mismatch cp fin hashes",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.CpHash", block.CpHash().Hex(),
+		)
+		return false
+	}
+	if block.CpRoot() != cpHeader.Root {
+		log.Warn("Block verification: mismatch cp roots",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Root", cpHeader.Root.Hex(),
+			"bl.CpRoot", block.CpRoot().Hex(),
+		)
+		return false
+	}
+	if block.CpReceiptHash() != cpHeader.ReceiptHash {
+		log.Warn("Block verification: mismatch cp receipt hashes",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.ReceiptHash", cpHeader.ReceiptHash.Hex(),
+			"bl.CpReceiptHash", block.CpReceiptHash().Hex(),
+		)
+		return false
+	}
+	if block.CpGasUsed() != cpHeader.GasUsed {
+		log.Warn("Block verification: mismatch cp used gas",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.GasUsed", cpHeader.GasUsed,
+			"bl.CpGasUsed", block.CpGasUsed(),
+		)
+		return false
+	}
+	if block.CpBloom() != cpHeader.Bloom {
+		log.Warn("Block verification: mismatch cp bloom",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Bloom", cpHeader.Bloom,
+			"bl.CpBloom", block.CpBloom(),
+		)
+		return false
+	}
+
+	if cpHeader.BaseFee.Cmp(block.CpBaseFee()) != 0 {
+		log.Warn("Block verification: mismatch cp base fee",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.BaseFee", cpHeader.BaseFee.String(),
+			"bl.CpBaseFee", block.CpBaseFee().String(),
+		)
+		return false
+	}
+	// check accordance to parent checkpoints
+	for _, ph := range block.ParentHashes() {
+		parBdag := bc.GetBlockDag(ph)
+		// block cp must be same or greater than parents
+		if block.CpHash() == parBdag.CpHash {
+			continue
+		}
+		if cpHeader.Height <= parBdag.CpHeight {
+			log.Warn("Block verification: cp height less of parent cp",
+				"parent.CpHeight", parBdag.CpHeight,
+				"cp.Height", cpHeader.Height,
+				"parent.Hash", ph.Hex(),
+				"cp.Hash", block.CpHash().Hex(),
+				"bl.Hash", block.Hash().Hex(),
 			)
 			return false
 		}
-
-		if lastSlot == nil {
-			lastSlot = &parentHeader.Slot
-		} else if *lastSlot != parentHeader.Slot {
+		// otherwise block cp must be in past of parent and grater parent cp
+		if !parBdag.OrderedAncestorsHashes.Has(block.CpHash()) {
+			log.Warn("Block verification: cp not found in range from parent cp",
+				"parent.Hash", ph.Hex(),
+				"range", parBdag.OrderedAncestorsHashes,
+				"cp.Hash", block.CpHash().Hex(),
+				"bl.Hash", block.Hash().Hex(),
+			)
 			return false
 		}
 	}
+	return true
+}
+
+func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
+	lastCp := bc.GetLastCoordinatedCheckpoint()
+	//if is current cp
+	if cp.Epoch >= lastCp.Epoch {
+		return false
+	}
+	// compare with prev cp
+	lcpHeader := bc.GetHeader(lastCp.Spine)
+	prevCpHash := lcpHeader.CpHash
+	if lcpHeader.Hash() == bc.genesisBlock.Hash() {
+		prevCpHash = bc.genesisBlock.Hash()
+	}
+	prevCp := bc.GetCoordinatedCheckpoint(prevCpHash)
+	if cp.Epoch >= prevCp.Epoch {
+		return false
+	}
+	log.Warn("Outdated cp detected",
+		"cp.Epoch", cp.Epoch,
+		"cp.FinEpoch", cp.FinEpoch,
+		"cp.Spine", cp.Spine.Hex(),
+		"lastCp.Epoch", lastCp.Epoch,
+		"lastCp.FinEpoch", lastCp.FinEpoch,
+		"lastCp.Spine", lastCp.Spine.Hex(),
+		"prevCp.Epoch", prevCp.Epoch,
+		"prevCp.FinEpoch", prevCp.FinEpoch,
+		"prevCp.Spine", prevCp.Spine.Hex(),
+	)
 	return true
 }
 
@@ -2455,7 +2594,6 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		//}
 
 		if validate {
-			//todo check
 			// cp must be coordinated (received from coordinator)
 			if coordCp := bc.GetCoordinatedCheckpoint(block.CpHash()); coordCp == nil {
 				log.Warn("Insert blocks: CP verification: CP not found as coordinated cp",
@@ -4001,203 +4139,6 @@ func (bc *BlockChain) DagMuLock() {
 
 func (bc *BlockChain) DagMuUnlock() {
 	bc.dagMu.Unlock()
-}
-
-func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
-	// Get the epoch of the block
-	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
-
-	calcEra := bc.EpochToEra(blockEpoch)
-	if calcEra.Number != block.Era() {
-		log.Warn("Block verification: invalid era",
-			"hash", block.Hash().Hex(),
-			"block era", block.Era(),
-		)
-		return false
-	}
-
-	return true
-}
-
-func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
-	// cp must be coordinated (received from coordinator)
-	coordCp := bc.GetCoordinatedCheckpoint(block.CpHash())
-	if coordCp == nil {
-		log.Warn("Block verification: cp not found",
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
-		return false
-	}
-	if bc.IsCheckpointOutdated(coordCp) {
-		log.Warn("Block verification: cp is outdated",
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
-		return false
-	}
-	// check cp block exists
-	cpHeader := bc.GetHeader(block.CpHash())
-	if cpHeader == nil {
-		log.Warn("Block verification: cp block not found",
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
-		return false
-	}
-	// cp must be finalized
-	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
-		log.Warn("Block verification: cp is not finalized",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-		)
-		return false
-	}
-	if block.CpNumber() != cpHeader.Nr() {
-		log.Warn("Block verification: mismatch cp fin numbers",
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-			"cp.Number", cpHeader.Nr(),
-			"bl.CpNumber", block.CpNumber(),
-		)
-		return false
-	}
-	if block.CpHash() != cpHeader.Hash() {
-		log.Warn("Block verification: mismatch cp fin hashes",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"bl.Hash", block.Hash().Hex(),
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.CpHash", block.CpHash().Hex(),
-		)
-		return false
-	}
-	if block.CpRoot() != cpHeader.Root {
-		log.Warn("Block verification: mismatch cp roots",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-			"cp.Root", cpHeader.Root.Hex(),
-			"bl.CpRoot", block.CpRoot().Hex(),
-		)
-		return false
-	}
-	if block.CpReceiptHash() != cpHeader.ReceiptHash {
-		log.Warn("Block verification: mismatch cp receipt hashes",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-			"cp.ReceiptHash", cpHeader.ReceiptHash.Hex(),
-			"bl.CpReceiptHash", block.CpReceiptHash().Hex(),
-		)
-		return false
-	}
-	if block.CpGasUsed() != cpHeader.GasUsed {
-		log.Warn("Block verification: mismatch cp used gas",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-			"cp.GasUsed", cpHeader.GasUsed,
-			"bl.CpGasUsed", block.CpGasUsed(),
-		)
-		return false
-	}
-	if block.CpBloom() != cpHeader.Bloom {
-		log.Warn("Block verification: mismatch cp bloom",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-			"cp.Bloom", cpHeader.Bloom,
-			"bl.CpBloom", block.CpBloom(),
-		)
-		return false
-	}
-
-	if cpHeader.BaseFee.Cmp(block.CpBaseFee()) != 0 {
-		log.Warn("Block verification: mismatch cp base fee",
-			"bl.CpNumber", block.CpNumber(),
-			"cp.Number", cpHeader.Nr(),
-			"cp.Height", cpHeader.Height,
-			"cp.Hash", block.CpHash().Hex(),
-			"bl.Hash", block.Hash().Hex(),
-			"cp.BaseFee", cpHeader.BaseFee.String(),
-			"bl.CpBaseFee", block.CpBaseFee().String(),
-		)
-		return false
-	}
-	// check accordance to parent checkpoints
-	for _, ph := range block.ParentHashes() {
-		parBdag := bc.GetBlockDag(ph)
-		// block cp must be same or greater than parents
-		if block.CpHash() == parBdag.CpHash {
-			continue
-		}
-		if cpHeader.Height <= parBdag.CpHeight {
-			log.Warn("Block verification: cp height less of parent cp",
-				"parent.CpHeight", parBdag.CpHeight,
-				"cp.Height", cpHeader.Height,
-				"parent.Hash", ph.Hex(),
-				"cp.Hash", block.CpHash().Hex(),
-				"bl.Hash", block.Hash().Hex(),
-			)
-			return false
-		}
-		// otherwise block cp must be in past of parent and grater parent cp
-		if !parBdag.OrderedAncestorsHashes.Has(block.CpHash()) {
-			log.Warn("Block verification: cp not found in range from parent cp",
-				"parent.Hash", ph.Hex(),
-				"range", parBdag.OrderedAncestorsHashes,
-				"cp.Hash", block.CpHash().Hex(),
-				"bl.Hash", block.Hash().Hex(),
-			)
-			return false
-		}
-	}
-
-	return true
-}
-
-func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
-	lastCp := bc.GetLastCoordinatedCheckpoint()
-	//if is current cp
-	if cp.Epoch >= lastCp.Epoch {
-		return false
-	}
-	// compare with prev cp
-	lcpHeader := bc.GetHeader(lastCp.Spine)
-	prevCpHash := lcpHeader.CpHash
-	if lcpHeader.Hash() == bc.genesisBlock.Hash() {
-		prevCpHash = bc.genesisBlock.Hash()
-	}
-	prevCp := bc.GetCoordinatedCheckpoint(prevCpHash)
-	if cp.Epoch >= prevCp.Epoch {
-		return false
-	}
-	log.Warn("Outdated cp detected",
-		"cp.Epoch", cp.Epoch,
-		"cp.FinEpoch", cp.FinEpoch,
-		"cp.Spine", cp.Spine.Hex(),
-		"lastCp.Epoch", lastCp.Epoch,
-		"lastCp.FinEpoch", lastCp.FinEpoch,
-		"lastCp.Spine", lastCp.Spine.Hex(),
-		"prevCp.Epoch", prevCp.Epoch,
-		"prevCp.FinEpoch", prevCp.FinEpoch,
-		"prevCp.Spine", prevCp.Spine.Hex(),
-	)
-	return true
 }
 
 func (bc *BlockChain) EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era {
