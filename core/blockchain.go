@@ -2066,7 +2066,7 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 }
 
 // verifyBlockCoinbase return false if creator is unassigned
-func (bc *BlockChain) verifyBlockCoinbase(block *types.Block) ([]common.Address, bool)  {
+func (bc *BlockChain) verifyBlockCoinbase(block *types.Block) ([]common.Address, bool) {
 	var (
 		creators []common.Address
 		err      error
@@ -2087,10 +2087,10 @@ func (bc *BlockChain) verifyBlockCoinbase(block *types.Block) ([]common.Address,
 			"block creator", block.Header().Coinbase.Hex(),
 			"slot creators", creators,
 		)
-		creators, false
+		return creators, false
 	}
 
-	creators, true
+	return creators, true
 }
 
 // CacheInvalidBlock cache invalid block
@@ -2118,12 +2118,16 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	}
 
 	// Verify block coinbase
-	if !bc.verifyBlockCoinbase(block) {
-		creators, ok := bc.verifyCreators(block)
-		if !ok {
-			return false, nil
-		}
+	creators, ok := bc.verifyBlockCoinbase(block)
+	if !ok {
+		return false, nil
 	}
+
+	err := bc.verifyEmptyBlock(block, creators)
+	if err != nil {
+		return false, err
+	}
+
 	// Verify baseFee
 	if !bc.verifyBlockBaseFee(block) {
 		return false, nil
@@ -2167,13 +2171,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	// Verify block height
 	if !bc.verifyBlockHeight(block, len(ancestors)) {
 		return false, nil
-	}
-
-	if len(block.Transactions()) == 0 {
-		err := bc.verifyEmptyBlock(block, creators)
-		if err != nil {
-			return false, err
-		}
 	}
 
 	return bc.verifyBlockParents(block)
@@ -2336,6 +2333,10 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 }
 
 func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Address) error {
+	if len(block.Transactions()) > 0 {
+		return nil
+	}
+
 	if block.Coinbase() != creators[0] {
 		log.Warn("Empty block verification failed: invalid coinbase",
 			"blockHash", block.Hash().Hex(),
@@ -2380,7 +2381,8 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 		return errors.New("block verification: unexpected empty block")
 	}
 
-	return err
+	return nil
+
 }
 
 func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
