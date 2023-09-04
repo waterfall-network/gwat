@@ -26,7 +26,6 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -52,7 +51,6 @@ type LightChain struct {
 	hc            *core.HeaderChain
 	indexerConfig *IndexerConfig
 	chainDb       ethdb.Database
-	engine        consensus.Engine
 	odr           OdrBackend
 	chainFeed     event.Feed
 	chainHeadFeed event.Feed
@@ -126,7 +124,7 @@ func (lc *LightChain) WriteSyncDagBlock(block *types.Block, validate bool) (stat
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -140,10 +138,9 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		bodyCache:     bodyCache,
 		bodyRLPCache:  bodyRLPCache,
 		blockCache:    blockCache,
-		engine:        engine,
 	}
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
+	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
@@ -279,9 +276,6 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 }
 
 // Accessors
-
-// Engine retrieves the light chain's consensus engine.
-func (lc *LightChain) Engine() consensus.Engine { return lc.engine }
 
 // Genesis returns the genesis block
 func (lc *LightChain) Genesis() *types.Block {
@@ -441,12 +435,9 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 //
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
-func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
-	if atomic.LoadInt32(&lc.disableCheckFreq) == 1 {
-		checkFreq = 0
-	}
+func (lc *LightChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	start := time.Now()
-	if i, err := lc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := lc.hc.ValidateHeaderChain(chain); err != nil {
 		return i, err
 	}
 

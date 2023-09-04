@@ -164,7 +164,7 @@ type LightChain interface {
 	CurrentHeader() *types.Header
 
 	// InsertHeaderChain inserts a batch of headers into the local chain.
-	InsertHeaderChain([]*types.Header, int) (int, error)
+	InsertHeaderChain([]*types.Header) (int, error)
 
 	// SetHead rewinds the local chain to a new head.
 	SetHead(hash common.Hash) error
@@ -1636,7 +1636,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 					if chunk[len(chunk)-1].Nr()+uint64(fsHeaderForceVerify) > pivot {
 						frequency = 1
 					}
-					if n, err := d.lightchain.InsertHeaderChain(chunk, frequency); err != nil {
+					if n, err := d.lightchain.InsertHeaderChain(chunk); err != nil {
 						rollbackErr = err
 
 						// If some headers were inserted, track them as uncertain

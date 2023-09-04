@@ -233,7 +233,6 @@ type BlockChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	engine       consensus.Engine
 	validator    Validator // Block and state validator interface
 	prefetcher   Prefetcher
 	processor    Processor // Block transaction processor interface
@@ -246,7 +245,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -281,17 +280,16 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		invalidBlocksCache:    invBlocksCache,
 		optimisticSpinesCache: optimisticSpinesCache,
 		checkpointCache:       checkpointCache,
-		engine:                engine,
 		vmConfig:              vmConfig,
 		syncProvider:          nil,
 		validatorStorage:      valStore.NewStorage(chainConfig),
 	}
-	bc.validator = NewBlockValidator(chainConfig, bc, engine)
-	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
-	bc.processor = NewStateProcessor(chainConfig, bc, engine)
+	bc.validator = NewBlockValidator(chainConfig, bc)
+	bc.prefetcher = newStatePrefetcher(chainConfig, bc)
+	bc.processor = NewStateProcessor(chainConfig, bc)
 
 	var err error
-	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
+	bc.hc, err = NewHeaderChain(db, chainConfig, bc.insertStopped)
 	if err != nil {
 		return nil, err
 	}
@@ -1914,11 +1912,9 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 			bc.MoveTxsToProcessing(block)
 		}
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
-	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
+	it := newInsertIterator(chain, bc.validator)
 
 	block, err := it.next()
 
@@ -2112,16 +2108,6 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 	return it.index, err
 }
 
-func logValidationIssue(issue string, block *types.Block) {
-	log.Warn("Block verification: "+issue,
-		"block hash", block.Hash().Hex(),
-		"CpHash", block.CpHash(),
-		"CpNumber", block.CpNumber(),
-		"CpReceiptHash", block.CpReceiptHash(),
-		"CpRoot", block.CpRoot(),
-	)
-}
-
 // verifyBlockCoinbase return false if creator is unassigned
 func (bc *BlockChain) verifyBlockCoinbase(block *types.Block) bool {
 	var (
@@ -2229,9 +2215,14 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
 	intrGasSum := uint64(0)
+	signer := types.LatestSigner(bc.Config())
 	for _, tx := range block.Transactions() {
-		var intrGas uint64
-		intrGas, err := bc.TxEstimateGas(tx, block.Header())
+		msg, err := tx.AsMessage(signer, block.BaseFee())
+		if err != nil {
+			log.Warn("Block verification: gas usage error", "err", err)
+			return false
+		}
+		intrGas, err := bc.EstimateGas(msg, block.Header())
 		if err != nil {
 			log.Warn("Block verification: gas usage error", "err", err)
 
@@ -2296,17 +2287,6 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 		return false
 	}
 
-	// Verify block hash
-	if block.Hash() != block.Header().Hash() {
-		log.Warn("Block verification: invalid block hash",
-			"block hash", block.Hash().Hex(),
-			"block tx hash", block.TxHash().Hex(),
-			"calc tx hash", calcTxHash,
-		)
-
-		return false
-	}
-
 	return true
 }
 
@@ -2338,7 +2318,7 @@ func (bc *BlockChain) verifyBlockParents(block *types.Block) (bool, error) {
 	for _, parentHash := range block.ParentHashes() {
 		parent := bc.GetHeader(parentHash)
 		if _, ok := bc.invalidBlocksCache.Get(parent); ok {
-			log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "invalid parent", parentHash.Hex())
+			log.Warn("Block verification: invalid parent", "hash", block.Hash().Hex(), "parent hash", parentHash.Hex())
 			return false, nil
 		}
 		if parent.Height >= block.Height() || parent.Slot >= block.Slot() {
@@ -2432,11 +2412,9 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		headers[i] = block.Header()
 		headerMap[block.Hash()] = block.Header()
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
-	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
+	it := newInsertIterator(chain, bc.validator)
 
 	block, err := it.next()
 
@@ -2662,7 +2640,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	header.GasUsed = usedGas
 	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
-	bc.engine.Finalize(bc, header, statedb, block.Transactions())
+	header.Root = statedb.IntermediateRoot(true)
 
 	// Update the metrics touched during block processing
 	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -3155,8 +3133,8 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 	return statedb, receipts, rlogs, *gasUsed
 }
 
-func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header) (uint64, error) {
-	if len(tx.Data()) == 0 {
+func (bc *BlockChain) EstimateGas(msg types.Message, header *types.Header) (uint64, error) {
+	if len(msg.Data()) == 0 {
 		return params.TxGas, nil
 	}
 
@@ -3170,26 +3148,23 @@ func (bc *BlockChain) TxEstimateGas(tx *types.Transaction, header *types.Header)
 		return 0, err
 	}
 
-	signer := types.MakeSigner(bc.Config())
-	msg, err := tx.AsMessage(signer, header.BaseFee)
-
 	tokenProcessor := token.NewProcessor(blockContext, stateDb)
 	validatorProcessor := validator.NewProcessor(blockContext, stateDb, bc)
 	txType := GetTxType(msg, validatorProcessor, tokenProcessor)
 
 	switch txType {
 	case ValidatorMethodTxType, ValidatorSyncTxType:
-		return IntrinsicGas(tx.Data(), tx.AccessList(), false, true)
+		return IntrinsicGas(msg.Data(), msg.AccessList(), false, true)
 	case ContractMethodTxType, ContractCreationTxType:
-		return bc.TxEstimateGasByEvm(tx, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
+		return bc.EstimateGasByEvm(msg, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
 	case TokenCreationTxType, TokenMethodTxType:
-		return IntrinsicGas(tx.Data(), tx.AccessList(), false, false)
+		return IntrinsicGas(msg.Data(), msg.AccessList(), false, false)
 	default:
 		return 0, ErrTxTypeNotSupported
 	}
 }
 
-func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction,
+func (bc *BlockChain) EstimateGasByEvm(msg types.Message,
 	header *types.Header,
 	blkCtx vm.BlockContext,
 	statedb *state.StateDB,
@@ -3197,8 +3172,6 @@ func (bc *BlockChain) TxEstimateGasByEvm(tx *types.Transaction,
 	tp *token.Processor,
 ) (uint64, error) {
 	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	msg, err := tx.AsMessage(types.MakeSigner(bc.Config()), header.BaseFee)
-
 	from := msg.From()
 	statedb.SetNonce(from, msg.Nonce())
 	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
@@ -3255,11 +3228,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 		headerMap[block.Hash()] = block.Header()
 	}
 
-	abort, results := bc.engine.VerifyHeaders(bc, headerMap.ToArray())
-	defer close(abort)
-
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
+	it := newInsertIterator(chain, bc.validator)
 
 	block, err := it.next()
 
@@ -3624,9 +3594,9 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 // should be done or not. The reason behind the optional check is because some
 // of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
-func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	start := time.Now()
-	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := bc.hc.ValidateHeaderChain(chain); err != nil {
 		return i, err
 	}
 
@@ -4053,73 +4023,121 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 	// cp must be coordinated (received from coordinator)
 	coordCp := bc.GetCoordinatedCheckpoint(block.CpHash())
 	if coordCp == nil {
-		logValidationIssue("Cp not found", block)
+		log.Warn("Block verification: cp not found",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
 		return false
 	}
 	if bc.IsCheckpointOutdated(coordCp) {
-		logValidationIssue("Cp is outdated", block)
+		log.Warn("Block verification: cp is outdated",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
 		return false
 	}
 	// check cp block exists
 	cpHeader := bc.GetHeader(block.CpHash())
 	if cpHeader == nil {
-		logValidationIssue("CpBlock not found", block)
+		log.Warn("Block verification: cp block not found",
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
 		return false
 	}
 	// cp must be finalized
 	if cpHeader.Height > 0 && cpHeader.Nr() == 0 {
-		logValidationIssue("Cp is not finalized", block)
-		return false
-	}
-
-	if block.Slot() <= cpHeader.Slot {
-		logValidationIssue("CpSlot checkpoint slot must be in the block's past", block)
+		log.Warn("Block verification: cp is not finalized",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+		)
 		return false
 	}
 	if block.CpNumber() != cpHeader.Nr() {
-		logValidationIssue("CpBlock number above node GetLastFinalizedNumber", block)
+		log.Warn("Block verification: mismatch cp fin numbers",
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Number", cpHeader.Nr(),
+			"bl.CpNumber", block.CpNumber(),
+		)
 		return false
 	}
 	if block.CpHash() != cpHeader.Hash() {
-		logValidationIssue("Hash mismatch", block)
+		log.Warn("Block verification: mismatch cp fin hashes",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.CpHash", block.CpHash().Hex(),
+		)
 		return false
 	}
 	if block.CpRoot() != cpHeader.Root {
-		logValidationIssue("CpHash mismatch", block)
+		log.Warn("Block verification: mismatch cp roots",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Root", cpHeader.Root.Hex(),
+			"bl.CpRoot", block.CpRoot().Hex(),
+		)
 		return false
 	}
 	if block.CpReceiptHash() != cpHeader.ReceiptHash {
-		logValidationIssue("ReceiptHash mismatch", block)
+		log.Warn("Block verification: mismatch cp receipt hashes",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.ReceiptHash", cpHeader.ReceiptHash.Hex(),
+			"bl.CpReceiptHash", block.CpReceiptHash().Hex(),
+		)
 		return false
 	}
 	if block.CpGasUsed() != cpHeader.GasUsed {
-		logValidationIssue("GasUsed mismatch", block)
+		log.Warn("Block verification: mismatch cp used gas",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.GasUsed", cpHeader.GasUsed,
+			"bl.CpGasUsed", block.CpGasUsed(),
+		)
 		return false
 	}
 	if block.CpBloom() != cpHeader.Bloom {
-		logValidationIssue("Bloom mismatch", block)
-		return false
-	}
-
-	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
-	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, cpHeader.Slot); err == nil {
-		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
-	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, cpHeader.Slot, true, false, "verifyCpData")
-	calcCpBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
-	if calcCpBaseFee.Cmp(block.CpBaseFee()) != 0 {
-		log.Warn("Block verification: invalid checkpoint base fee",
-			"block hash", block.Hash().Hex(),
-			"CpHash", block.CpHash(),
-			"CpNumber", block.CpNumber(),
-			"CpReceiptHash", block.CpReceiptHash(),
-			"CpRoot", block.CpRoot(),
-			"CpBaseFee", block.CpBaseFee().String(),
-			"calcBaseFee", calcCpBaseFee.String(),
+		log.Warn("Block verification: mismatch cp bloom",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.Bloom", cpHeader.Bloom,
+			"bl.CpBloom", block.CpBloom(),
 		)
 		return false
 	}
 
+	if cpHeader.BaseFee.Cmp(block.CpBaseFee()) != 0 {
+		log.Warn("Block verification: mismatch cp base fee",
+			"bl.CpNumber", block.CpNumber(),
+			"cp.Number", cpHeader.Nr(),
+			"cp.Height", cpHeader.Height,
+			"cp.Hash", block.CpHash().Hex(),
+			"bl.Hash", block.Hash().Hex(),
+			"cp.BaseFee", cpHeader.BaseFee.String(),
+			"bl.CpBaseFee", block.CpBaseFee().String(),
+		)
+		return false
+	}
 	// check accordance to parent checkpoints
 	for _, ph := range block.ParentHashes() {
 		parBdag := bc.GetBlockDag(ph)

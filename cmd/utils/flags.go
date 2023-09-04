@@ -39,12 +39,10 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/fdlimit"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
@@ -1553,7 +1551,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
 // the given node.
 func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
-	if err := ethstats.New(stack, backend, backend.Engine(), url); err != nil {
+	if err := ethstats.New(stack, backend, url); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
 }
@@ -1682,25 +1680,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if err != nil {
 		Fatalf("%v", err)
 	}
-	var engine consensus.Engine = sealer.New(chainDb)
-	//var engine consensus.Engine
-	//if config.Clique != nil {
-	//	engine = clique.New(config.Clique, chainDb)
-	//} else {
-	//	engine = ethash.NewFaker()
-	//	if !ctx.GlobalBool(FakePoWFlag.Name) {
-	//		engine = ethash.New(ethash.Config{
-	//			CacheDir:         stack.ResolvePath(ethconfig.Defaults.Ethash.CacheDir),
-	//			CachesInMem:      ethconfig.Defaults.Ethash.CachesInMem,
-	//			CachesOnDisk:     ethconfig.Defaults.Ethash.CachesOnDisk,
-	//			CachesLockMmap:   ethconfig.Defaults.Ethash.CachesLockMmap,
-	//			DatasetDir:       stack.ResolvePath(ethconfig.Defaults.Ethash.DatasetDir),
-	//			DatasetsInMem:    ethconfig.Defaults.Ethash.DatasetsInMem,
-	//			DatasetsOnDisk:   ethconfig.Defaults.Ethash.DatasetsOnDisk,
-	//			DatasetsLockMmap: ethconfig.Defaults.Ethash.DatasetsLockMmap,
-	//		}, nil, false)
-	//	}
-	//}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
@@ -1730,7 +1709,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil)
+	chain, err = core.NewBlockChain(chainDb, cache, config, vmcfg, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

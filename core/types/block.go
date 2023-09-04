@@ -190,7 +190,7 @@ func (h *Header) Size() common.StorageSize {
 // that the unbounded fields are stuffed with junk data to add processing
 // overhead
 func (h *Header) SanityCheck() error {
-	if eLen := len(h.Extra); eLen > 100*1024 {
+	if eLen := len(h.Extra); eLen > 0 {
 		return fmt.Errorf("too large block extradata: size %d", eLen)
 	}
 	if h.BaseFee != nil {

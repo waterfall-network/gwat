@@ -26,7 +26,6 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/asm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -216,11 +215,6 @@ func fakeHeader(n uint64, parentHashes []common.Hash) *types.Header {
 
 type dummyChain struct {
 	counter int
-}
-
-// Engine retrieves the chain's consensus engine.
-func (d *dummyChain) Engine() consensus.Engine {
-	return nil
 }
 
 // GetHeader returns the hash corresponding to their hash.
