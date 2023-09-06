@@ -793,7 +793,6 @@ func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpH
 	ancestors types.HeaderMap,
 	unloaded common.HashArray,
 	tips types.Tips,
-	err error,
 ) {
 	defer func(start time.Time) {
 		log.Debug("TIME",
@@ -842,7 +841,7 @@ func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpH
 			continue
 		}
 	}
-	return isCpAncestor, ancestors, unloaded, tips, err
+	return isCpAncestor, ancestors, unloaded, tips
 }
 
 // CollectAncestorsAftCpByParents recursively collect ancestors by block parents

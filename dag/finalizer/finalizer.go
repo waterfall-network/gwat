@@ -52,7 +52,7 @@ type BlockChain interface {
 	SetRollbackActive()
 	ResetRollbackActive()
 	GetBlockDag(hash common.Hash) *types.BlockDAG
-	CollectAncestorsAftCpByTips(parents common.HashArray, cpHash common.Hash) (isCpAncestor bool, ancestors types.HeaderMap, unloaded common.HashArray, tips types.Tips, err error)
+	CollectAncestorsAftCpByTips(parents common.HashArray, cpHash common.Hash) (isCpAncestor bool, ancestors types.HeaderMap, unloaded common.HashArray, tips types.Tips)
 	GetHeader(hash common.Hash) *types.Header
 	SaveBlockDag(blockDag *types.BlockDAG)
 	RollbackFinalization(finNr uint64) error
@@ -395,10 +395,7 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		}
 		//check blockDag record exists
 		if f.bc.GetBlockDag(blockHeader.Hash()) == nil {
-			_, ancestors, _, _, err := f.bc.CollectAncestorsAftCpByTips(blockHeader.ParentHashes, blockHeader.CpHash)
-			if err != nil {
-				return err
-			}
+			_, ancestors, _, _ := f.bc.CollectAncestorsAftCpByTips(blockHeader.ParentHashes, blockHeader.CpHash)
 			cpHeader := f.bc.GetHeader(blockHeader.CpHash)
 			f.bc.SaveBlockDag(&types.BlockDAG{
 				Hash:                   blockHeader.Hash(),
