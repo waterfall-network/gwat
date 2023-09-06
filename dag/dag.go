@@ -82,6 +82,7 @@ type blockChain interface {
 	RemoveTips(hashes common.HashArray)
 	WriteCurrentTips()
 	GetBlockHashesBySlot(slot uint64) common.HashArray
+	HaveEpochBlocks(epoch uint64) (bool, error)
 }
 
 type ethDownloader interface {
@@ -525,7 +526,7 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
 
-func (d *Dag) StartWork(accounts []common.Address) {
+func (d *Dag) StartWork() {
 	startTicker := time.NewTicker(2000 * time.Millisecond)
 
 	tickSec := 0
@@ -550,7 +551,7 @@ func (d *Dag) StartWork(accounts []common.Address) {
 				} else {
 					log.Info("Chain genesis time reached", "curSlot", si.CurrentSlot())
 					startTicker.Stop()
-					go d.workLoop(accounts)
+					go d.workLoop()
 
 					return
 				}
@@ -564,7 +565,7 @@ func (d *Dag) StopWork() {
 	d.exitChan <- struct{}{}
 }
 
-func (d *Dag) workLoop(accounts []common.Address) {
+func (d *Dag) workLoop() {
 	secPerSlot := d.bc.GetSlotInfo().SecondsPerSlot
 	genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
 	slotTicker := slotticker.NewSlotTicker(genesisTime, secPerSlot)
@@ -599,12 +600,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
 				continue
 			}
-			epoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
-			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", epoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
+			currentEpoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
+			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", currentEpoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
 
 			var (
-				err      error
-				creators []common.Address
+				err          error
+				slotCreators []common.Address
 			)
 
 			startTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochStart(d.bc.GetEraInfo().ToEpoch() + 1 - d.bc.Config().TransitionPeriod)
@@ -617,7 +618,7 @@ func (d *Dag) workLoop(accounts []common.Address) {
 
 			log.Info("New slot",
 				"slot", slot,
-				"epoch", d.bc.GetSlotInfo().SlotToEpoch(slot),
+				"currentEpoch", d.bc.GetSlotInfo().SlotToEpoch(slot),
 				"era", d.bc.GetEraInfo().Number(),
 				"startTransEpoch", d.bc.GetEraInfo().ToEpoch()+1-d.bc.Config().TransitionPeriod,
 				"startTransSlot", startTransitionSlot,
@@ -634,19 +635,20 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			//} else {}
 			// TODO: move it to else condition
 
-			creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, slot)
+			slotCreators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, slot)
 			if err != nil {
 				d.errChan <- err
 			}
 
 			// todo check
-			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", creators)
-			go d.work(slot, creators, accounts)
+			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", slotCreators)
+
+			go d.work(slot, slotCreators)
 		}
 	}
 }
 
-func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
+func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 	if !d.bc.IsSynced() {
 		return
 	}
@@ -668,7 +670,7 @@ func (d *Dag) work(slot uint64, creators, accounts []common.Address) {
 		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
 	}
 
-	err := d.Creator().RunBlockCreation(slot, creators, accounts, tips, checkpoint)
+	err := d.Creator().RunBlockCreation(slot, slotCreators, tips, checkpoint)
 	if err != nil {
 		log.Error("Create block error", "error", err)
 	}
