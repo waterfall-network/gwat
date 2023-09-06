@@ -84,6 +84,8 @@ type Creator struct {
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
+
+	nodeCreators map[common.Address]struct{}
 }
 
 // New creates new Creator instance
@@ -94,6 +96,8 @@ func New(config *Config, eth Backend, mux *event.TypeMux) *Creator {
 		mux:    mux,
 		bc:     eth.BlockChain(),
 	}
+
+	creator.setNodeCreators(eth.AccountManager().Accounts())
 
 	return creator
 }
@@ -176,7 +180,6 @@ func (c *Creator) SetGasCeil(ceil uint64) {
 // RunBlockCreation starts process of block creation
 func (c *Creator) RunBlockCreation(slot uint64,
 	slotCreators []common.Address,
-	nodeCreators map[common.Address]struct{},
 	tips types.Tips,
 	checkpoint *types.Checkpoint,
 ) error {
@@ -218,7 +221,7 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	wg := new(sync.WaitGroup)
 	for _, account := range assigned.Creators {
 		var needEmptyBlock bool
-		if c.isCreatorActive(account, nodeCreators) {
+		if c.isCreatorActive(account) {
 			if account == assigned.Creators[0] {
 				needEmptyBlock, err = c.needEmptyBlock(slot)
 				if err != nil {
@@ -700,8 +703,8 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 }
 
 // isCreatorActive returns true if creator is assigned to create blocks in current slot.
-func (c *Creator) isCreatorActive(coinbase common.Address, nodeCreators map[common.Address]struct{}) bool {
-	_, ok := nodeCreators[coinbase]
+func (c *Creator) isCreatorActive(coinbase common.Address) bool {
+	_, ok := c.nodeCreators[coinbase]
 
 	return ok
 }
@@ -774,4 +777,13 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 	}
 
 	return nil
+}
+
+func (c *Creator) setNodeCreators(accounts []common.Address) {
+	creators := make(map[common.Address]struct{})
+	for _, account := range accounts {
+		creators[account] = struct{}{}
+	}
+
+	c.nodeCreators = creators
 }

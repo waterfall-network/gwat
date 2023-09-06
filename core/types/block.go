@@ -311,10 +311,10 @@ func NewStatelessBlock(header *Header, txs []*Transaction, hasher TrieHasher) *B
 		b.header.TxHash = DeriveSha(Transactions(txs), hasher)
 		b.transactions = make(Transactions, len(txs))
 		copy(b.transactions, txs)
-
-		// calc BodyHash
-		b.header.BodyHash = b.Body().CalculateHash()
 	}
+
+	// calc BodyHash
+	b.header.BodyHash = b.Body().CalculateHash()
 
 	return b
 }

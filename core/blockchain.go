@@ -2066,31 +2066,20 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 }
 
 // verifyBlockCoinbase return false if creator is unassigned
-func (bc *BlockChain) verifyBlockCoinbase(block *types.Block) ([]common.Address, bool) {
-	var (
-		creators []common.Address
-		err      error
-	)
-
-	creators, err = bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
-	if err != nil {
-		log.Error("can`t get shuffled validators", "error", err)
-		return creators, false
-	}
-
+func (bc *BlockChain) verifyBlockCoinbase(block *types.Block, slotCreators []common.Address) bool {
 	coinbase := block.Header().Coinbase
-	contains, _ := common.Contains(creators, coinbase)
+	contains, _ := common.Contains(slotCreators, coinbase)
 	if !contains {
 		log.Warn("Block verification: creator assignment failed",
 			"slot", block.Slot(),
 			"hash", block.Hash().Hex(),
 			"block creator", block.Header().Coinbase.Hex(),
-			"slot creators", creators,
+			"slot creators", slotCreators,
 		)
-		return creators, false
+		return false
 	}
 
-	return creators, true
+	return true
 }
 
 // CacheInvalidBlock cache invalid block
@@ -2117,13 +2106,18 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		return false, nil
 	}
 
+	slotCreators, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
+	if err != nil {
+		log.Error("VerifyBlock: can`t get shuffled validators", "error", err)
+		return false, err
+	}
+
 	// Verify block coinbase
-	creators, ok := bc.verifyBlockCoinbase(block)
-	if !ok {
+	if !bc.verifyBlockCoinbase(block, slotCreators) {
 		return false, nil
 	}
 
-	err := bc.verifyEmptyBlock(block, creators)
+	err = bc.verifyEmptyBlock(block, slotCreators)
 	if err != nil {
 		return false, err
 	}
@@ -2382,7 +2376,6 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	}
 
 	return nil
-
 }
 
 func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {

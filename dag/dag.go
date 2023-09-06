@@ -526,7 +526,7 @@ func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
 
-func (d *Dag) StartWork(accounts []common.Address) {
+func (d *Dag) StartWork() {
 	startTicker := time.NewTicker(2000 * time.Millisecond)
 
 	tickSec := 0
@@ -551,7 +551,7 @@ func (d *Dag) StartWork(accounts []common.Address) {
 				} else {
 					log.Info("Chain genesis time reached", "curSlot", si.CurrentSlot())
 					startTicker.Stop()
-					go d.workLoop(accounts)
+					go d.workLoop()
 
 					return
 				}
@@ -565,12 +565,10 @@ func (d *Dag) StopWork() {
 	d.exitChan <- struct{}{}
 }
 
-func (d *Dag) workLoop(accounts []common.Address) {
+func (d *Dag) workLoop() {
 	secPerSlot := d.bc.GetSlotInfo().SecondsPerSlot
 	genesisTime := time.Unix(int64(d.bc.GetSlotInfo().GenesisTime), 0)
 	slotTicker := slotticker.NewSlotTicker(genesisTime, secPerSlot)
-
-	nodeCreators := d.prepareNodeCreatorsMap(accounts)
 
 	for {
 		select {
@@ -645,12 +643,12 @@ func (d *Dag) workLoop(accounts []common.Address) {
 			// todo check
 			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", slotCreators)
 
-			go d.work(slot, slotCreators, nodeCreators)
+			go d.work(slot, slotCreators)
 		}
 	}
 }
 
-func (d *Dag) work(slot uint64, slotCreators []common.Address, nodeCreators map[common.Address]struct{}) {
+func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 	if !d.bc.IsSynced() {
 		return
 	}
@@ -672,7 +670,7 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address, nodeCreators map[
 		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
 	}
 
-	err := d.Creator().RunBlockCreation(slot, slotCreators, nodeCreators, tips, checkpoint)
+	err := d.Creator().RunBlockCreation(slot, slotCreators, tips, checkpoint)
 	if err != nil {
 		log.Error("Create block error", "error", err)
 	}
@@ -748,13 +746,4 @@ func (d *Dag) isSlotLocked(slot uint64) bool {
 	}
 
 	return false
-}
-
-func (d *Dag) prepareNodeCreatorsMap(accounts []common.Address) map[common.Address]struct{} {
-	creators := make(map[common.Address]struct{})
-	for _, account := range accounts {
-		creators[account] = struct{}{}
-	}
-
-	return creators
 }
