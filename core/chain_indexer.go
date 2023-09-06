@@ -127,7 +127,7 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
 
 	//todo
-	go c.updateLoop()
+	//go c.updateLoop()
 
 	return c
 }

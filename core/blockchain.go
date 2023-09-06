@@ -676,13 +676,25 @@ func (bc *BlockChain) rollbackCheckpoint() error {
 		return errors.New("no finalized checkpoint")
 	}
 
-	prevEpoch := bc.GetEpoch(lastCp.FinEpoch - 1)
+	if lastCp.Spine == bc.genesisBlock.Hash() {
+		return nil
+	}
+
+	prevEpoch := bc.GetEpoch(lastCp.Epoch)
 	prevCp := bc.GetCoordinatedCheckpoint(prevEpoch)
 	if prevCp != nil {
+		log.Info("Try rollback checkpoint",
+			"currentCp", lastCp,
+		)
+
 		bc.SetLastCoordinatedCheckpoint(prevCp)
 		lastFinNum := bc.GetLastFinalizedNumber()
-		rollbackFinNum := bc.GetHeader(prevCp.Spine).Nr()
-		for i := lastFinNum; i > rollbackFinNum; i-- {
+		lastFinHeader := bc.GetHeader(prevCp.Spine)
+		if lastFinHeader == nil {
+			return errors.New("no checkpoint spine header")
+		}
+
+		for i := lastFinNum; i > lastFinHeader.Nr(); i-- {
 			err := bc.RollbackFinalization(i)
 			if err != nil {
 				return err
@@ -701,9 +713,8 @@ func (bc *BlockChain) rollbackCheckpoint() error {
 
 		bc.SetIsSynced(false)
 
-		log.Info("Rollback checkpoint",
-			"checkpoint", lastCp,
-			"prevCheckpoint", prevCp,
+		log.Info("Successful rollback checkpoint",
+			"currentCp", bc.GetLastCoordinatedCheckpoint(),
 		)
 	}
 
