@@ -324,6 +324,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}
 	}
 
+	err = bc.rollbackCheckpoint()
+	if err != nil {
+		return nil, err
+	}
+
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -663,6 +668,46 @@ func (bc *BlockChain) GetCoordinatedCheckpoint(cpSpine common.Hash) *types.Check
 // GetEpoch retrieves the checkpoint spine by epoch.
 func (bc *BlockChain) GetEpoch(epoch uint64) common.Hash {
 	return rawdb.ReadEpoch(bc.db, epoch)
+}
+
+func (bc *BlockChain) rollbackCheckpoint() error {
+	lastCp := bc.GetLastCoordinatedCheckpoint()
+	if lastCp == nil {
+		return errors.New("no finalized checkpoint")
+	}
+
+	prevEpoch := bc.GetEpoch(lastCp.FinEpoch - 1)
+	prevCp := bc.GetCoordinatedCheckpoint(prevEpoch)
+	if prevCp != nil {
+		bc.SetLastCoordinatedCheckpoint(prevCp)
+		lastFinNum := bc.GetLastFinalizedNumber()
+		rollbackFinNum := bc.GetHeader(prevCp.Spine).Nr()
+		for i := lastFinNum; i > rollbackFinNum; i-- {
+			err := bc.RollbackFinalization(i)
+			if err != nil {
+				return err
+			}
+		}
+
+		rawdb.DeleteCoordinatedCheckpoint(bc.db, lastCp.Spine)
+		rawdb.WriteLastFinalizedHash(bc.db, prevCp.Spine)
+
+		dagHashes := bc.GetDagHashes()
+		if dagHashes != nil {
+			for _, hash := range *dagHashes {
+				bc.DeleteBlockDag(hash)
+			}
+		}
+
+		bc.SetIsSynced(false)
+
+		log.Info("Rollback checkpoint",
+			"checkpoint", lastCp,
+			"prevCheckpoint", prevCp,
+		)
+	}
+
+	return nil
 }
 
 // GetValidatorSyncData retrieves a validator sync data from the database by
