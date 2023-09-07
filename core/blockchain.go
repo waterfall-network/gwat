@@ -329,44 +329,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		return nil, err
 	}
 
-	if err := bc.loadLastState(); err != nil {
-		return nil, err
-	}
-
-	// Make sure the state associated with the block is available
-	head := bc.GetLastFinalizedBlock()
-	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil {
-		// Head state is missing, before the state recovery, find out the
-		// disk layer point of snapshot(if it's enabled). Make sure the
-		// rewound point is lower than disk layer.
-		var diskRoot common.Hash
-		if bc.cacheConfig.SnapshotLimit > 0 {
-			//todo uncomment
-			//diskRoot = rawdb.ReadSnapshotRoot(bc.db)
-		}
-		if diskRoot != (common.Hash{}) {
-			log.Warn("Head state missing, repairing", "number", head.Nr(), "hash", head.Hash().Hex(), "snaproot", diskRoot)
-			snapDisk, err := bc.SetHeadBeyondRoot(head.Hash(), diskRoot)
-			if err != nil {
-				return nil, err
-			}
-			// Chain rewound, persist old snapshot number to indicate recovery procedure
-			if snapDisk != 0 {
-				rawdb.WriteSnapshotRecoveryNumber(bc.db, snapDisk)
-			}
-		} else {
-			log.Warn("Head state missing, repairing", "number", head.Nr(), "hash", head.Hash())
-			prevStateHeader := bc.SearchPrevFinalizedBlueHeader(head.Nr())
-			if prevStateHeader != nil {
-				head = bc.GetBlock(prevStateHeader.Hash())
-			}
-			if err := bc.SetHead(head.Hash()); err != nil {
-				return nil, err
-			}
-			bc.hc.ResetTips()
-		}
-	}
-
 	// Ensure that a previous crash in SetHead doesn't leave extra ancients
 	if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
 		var (
@@ -670,6 +632,143 @@ func (bc *BlockChain) GetEpoch(epoch uint64) common.Hash {
 	return rawdb.ReadEpoch(bc.db, epoch)
 }
 
+func (bc *BlockChain) lightCheckpointRollback(lastCp *types.Checkpoint) error {
+	prevEpoch := bc.GetEpoch(lastCp.Epoch)
+	prevCp := bc.GetCoordinatedCheckpoint(prevEpoch)
+	if prevCp != nil {
+		log.Info("Try light rollback checkpoint",
+			"currentCp", lastCp,
+		)
+
+		lastFinNum := bc.GetLastFinalizedNumber()
+		bc.SetLastCoordinatedCheckpoint(prevCp)
+		lastFinBlock := bc.GetBlock(prevCp.Spine)
+		if lastFinBlock == nil {
+			return errors.New("no checkpoint spine header")
+		}
+
+		for i := lastFinNum; i > lastFinBlock.Nr(); i-- {
+			blockHeader := bc.GetHeaderByNumber(i)
+			if blockHeader == nil {
+				log.Warn("Rollback checkpoint: rollback block not found", "finNr", i)
+				continue
+			}
+			//check blockDag record exists
+			if bc.GetBlockDag(blockHeader.Hash()) == nil {
+				_, ancestors, _, _ := bc.CollectAncestorsAftCpByTips(blockHeader.ParentHashes, blockHeader.CpHash)
+				cpHeader := bc.GetHeader(blockHeader.CpHash)
+				if cpHeader != nil {
+					bc.SaveBlockDag(&types.BlockDAG{
+						Hash:                   blockHeader.Hash(),
+						Height:                 blockHeader.Height,
+						Slot:                   blockHeader.Slot,
+						CpHash:                 cpHeader.Hash(),
+						CpHeight:               cpHeader.Height,
+						OrderedAncestorsHashes: ancestors.Hashes(),
+					})
+				}
+			}
+			err := bc.RollbackFinalization(i)
+			if err != nil {
+				return err
+			}
+		}
+
+		err := bc.writeFinalizedBlock(lastFinBlock.Nr(), lastFinBlock, true)
+		if err != nil {
+			return err
+		}
+		rawdb.DeleteCoordinatedCheckpoint(bc.db, lastCp.Spine)
+
+		head := bc.GetLastFinalizedBlock()
+		_, err = state.New(head.Root(), bc.stateCache, bc.snaps)
+		if err != nil {
+			return err
+		}
+
+		log.Info("Successful rollback checkpoint light",
+			"currentCp", bc.GetLastCoordinatedCheckpoint(),
+		)
+	}
+
+	return nil
+}
+
+func (bc *BlockChain) hardRollbackCheckpoint() error {
+	lastCp := bc.GetLastCoordinatedCheckpoint()
+	if lastCp == nil {
+		return errors.New("no finalized checkpoint")
+	}
+
+	if lastCp.Spine == bc.genesisBlock.Hash() {
+		return nil
+	}
+	for {
+		prevEpoch := bc.GetEpoch(lastCp.Epoch)
+		prevCp := bc.GetCoordinatedCheckpoint(prevEpoch)
+		if prevCp != nil {
+			log.Info("Try hard rollback checkpoint",
+				"currentCp", lastCp,
+			)
+
+			lastFinNum := bc.GetLastFinalizedNumber()
+			bc.SetLastCoordinatedCheckpoint(prevCp)
+			lastFinBlock := bc.GetBlock(prevCp.Spine)
+			if lastFinBlock == nil {
+				return errors.New("no checkpoint spine header")
+			}
+
+			for i := lastFinNum; i > lastFinBlock.Nr(); i-- {
+				blockHeader := bc.GetHeaderByNumber(i)
+				if blockHeader == nil {
+					log.Warn("Hard rollback checkpoint: rollback block not found", "finNr", i)
+					continue
+				}
+				err := bc.RollbackFinalization(i)
+				if err != nil {
+					return err
+				}
+
+				rawdb.DeleteBlock(bc.db, blockHeader.Hash(), blockHeader.Number)
+				rawdb.DeleteSlotBlockHash(bc.db, blockHeader.Slot, blockHeader.Hash())
+			}
+
+			dagHashes := bc.GetDagHashes()
+			if dagHashes != nil {
+				headers := bc.GetHeadersByHashes(*dagHashes)
+				for _, header := range headers {
+					rawdb.DeleteBlock(bc.Database(), header.Hash(), header.Number)
+					bc.DeleteBlockDag(header.Hash())
+				}
+			}
+
+			err := bc.writeFinalizedBlock(lastFinBlock.Nr(), lastFinBlock, true)
+			if err != nil {
+				return err
+			}
+			// Make sure the state associated with the block is available
+			head := bc.GetLastFinalizedBlock()
+			_, err = state.New(head.Root(), bc.stateCache, bc.snaps)
+			if err != nil {
+				lastCp = bc.GetCoordinatedCheckpoint(prevCp.Spine)
+				continue
+			}
+
+			tips := bc.GetTips()
+			bc.RemoveTips(tips.GetHashes())
+
+			log.Info("Successful rollback checkpoint hard",
+				"currentCp", bc.GetLastCoordinatedCheckpoint(),
+			)
+
+			break
+		}
+
+	}
+
+	return nil
+}
+
 func (bc *BlockChain) rollbackCheckpoint() error {
 	lastCp := bc.GetLastCoordinatedCheckpoint()
 	if lastCp == nil {
@@ -680,42 +779,16 @@ func (bc *BlockChain) rollbackCheckpoint() error {
 		return nil
 	}
 
-	prevEpoch := bc.GetEpoch(lastCp.Epoch)
-	prevCp := bc.GetCoordinatedCheckpoint(prevEpoch)
-	if prevCp != nil {
-		log.Info("Try rollback checkpoint",
-			"currentCp", lastCp,
-		)
-
-		bc.SetLastCoordinatedCheckpoint(prevCp)
-		lastFinNum := bc.GetLastFinalizedNumber()
-		lastFinHeader := bc.GetHeader(prevCp.Spine)
-		if lastFinHeader == nil {
-			return errors.New("no checkpoint spine header")
+	err := bc.lightCheckpointRollback(lastCp)
+	if err != nil {
+		err := bc.hardRollbackCheckpoint()
+		if err != nil {
+			return err
 		}
+	}
 
-		for i := lastFinNum; i > lastFinHeader.Nr(); i-- {
-			err := bc.RollbackFinalization(i)
-			if err != nil {
-				return err
-			}
-		}
-
-		rawdb.DeleteCoordinatedCheckpoint(bc.db, lastCp.Spine)
-		rawdb.WriteLastFinalizedHash(bc.db, prevCp.Spine)
-
-		dagHashes := bc.GetDagHashes()
-		if dagHashes != nil {
-			for _, hash := range *dagHashes {
-				bc.DeleteBlockDag(hash)
-			}
-		}
-
-		bc.SetIsSynced(false)
-
-		log.Info("Successful rollback checkpoint",
-			"currentCp", bc.GetLastCoordinatedCheckpoint(),
-		)
+	if err := bc.loadLastState(); err != nil {
+		return err
 	}
 
 	return nil
