@@ -18,8 +18,6 @@ package eth
 
 import (
 	"fmt"
-	"sort"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -432,19 +430,22 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	if err != nil {
 		return err
 	}
-	dag = dag.Uniq()
 	return peer.ReplyDagData(query.RequestId, dag)
 }
 
 func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, error) {
-	// Gather dag data
 	dag := common.HashArray{}
-	finalized := common.HashArray{}
+	dagHashes := common.HashArray{}
+	limitReached := false
+
+	// baseSpine
 	baseHeader := backend.Chain().GetHeaderByHash(query.BaseSpine)
-	if baseHeader == nil || (baseHeader.Height > 0 && baseHeader.Nr() == 0) {
+	if baseHeader == nil {
 		return dag, fmt.Errorf("%w", errInvalidDag)
 	}
+	isBaseFinalized := baseHeader.Height > 0 && baseHeader.Nr() > 0
 
+	// terminalSpine
 	var terminalSpine common.Hash
 	if query.TerminalSpine != (common.Hash{}) {
 		terminalSpine = query.TerminalSpine
@@ -459,60 +460,130 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 			return dag, fmt.Errorf("%w", errInvalidDag)
 		}
 	}
+	// retrieve terminal header
 	terminalHeader := backend.Chain().GetHeaderByHash(terminalSpine)
 	if terminalHeader == nil {
 		return dag, fmt.Errorf("%w", errInvalidDag)
 	}
-	terminalSlot := terminalHeader.Slot
-	incDag := terminalHeader.Height > 0 && terminalHeader.Nr() == 0
-	toFinNr := terminalHeader.Nr()
-	if incDag {
-		toFinNr = backend.Chain().GetLastFinalizedNumber()
-		//collect dag hashes by slot
-		dagHeaders := backend.Chain().GetHeadersByHashes(backend.Chain().GetTips().GetOrderedAncestorsHashes())
-		if dagHeaders[terminalSpine] == nil {
-			return dag, fmt.Errorf("%w", errInvalidDag)
+	isTerminalFinalized := terminalHeader.Height > 0 && terminalHeader.Nr() > 0
+
+	switch {
+	case isBaseFinalized && isTerminalFinalized:
+		//collect blocks by range of finalized numbers only
+		fromNr := baseHeader.Nr()
+		toNr := terminalHeader.Nr()
+		if fromNr > toNr {
+			return dag, errBadRequestParam
 		}
-		slotMap := map[uint64]common.HashArray{}
-		for h, header := range dagHeaders {
-			if header == nil {
-				return dag, fmt.Errorf("%w", errInvalidDag)
-			}
-			if header.Slot <= terminalSlot {
-				//if header.Slot < terminalSlot {
-				if slotMap[header.Slot] == nil {
-					slotMap[header.Slot] = common.HashArray{}
-				}
-				slotMap[header.Slot] = append(slotMap[header.Slot], h)
-			}
+		dag = getHashesByNumberRange(backend, fromNr, toNr, LimitDagHashes)
+		limitReached = len(dag) >= LimitDagHashes
+
+	case isBaseFinalized && !isTerminalFinalized:
+		//1. collect finalized part
+		fromNr := baseHeader.Nr()
+		lfHeader := backend.Chain().GetLastFinalizedHeader()
+		toNr := lfHeader.Nr()
+		//check data limitation
+		if toNr-fromNr > LimitDagHashes {
+			toNr = fromNr + LimitDagHashes
 		}
-		//sort by slots
-		slots := common.SorterAscU64{}
-		for s := range slotMap {
-			slots = append(slots, s)
+		dag = getHashesByNumberRange(backend, fromNr, toNr, LimitDagHashes)
+		limitReached = len(dag) >= LimitDagHashes
+
+		//2. if data less than LimitDagHashes
+		// - collect not finalized part (by slots)
+		if len(dag) < LimitDagHashes {
+			fromSlot := lfHeader.Slot
+			toSlot := terminalHeader.Slot
+			// expecting that lfHeader.Hash will be received twice
+			limit := LimitDagHashes - len(dag) + 1
+			dagHashes, limitReached = getHashesBySlotRange(backend, fromSlot, toSlot, limit, query.TerminalSpine)
+			dag = append(dag, dagHashes...)
+			dag.Deduplicate()
 		}
-		sort.Sort(slots)
-		for _, slot := range slots {
-			dag = append(dag, slotMap[slot]...)
+
+	case !isBaseFinalized && !isTerminalFinalized:
+		//	collect not finalized part (by slots) only
+		fromSlot := baseHeader.Slot
+		toSlot := terminalHeader.Slot
+		if fromSlot > toSlot {
+			return dag, errBadRequestParam
 		}
-		//dag = append(dag, terminalHeader.Hash())
-	}
-	baseNr := baseHeader.Nr()
-	//check data length limit
-	dataLen := uint64(len(dag)) + (toFinNr - baseNr)
-	if dataLen > LimitDagHashes {
-		return dag, fmt.Errorf("%w: %v > %v (LimitDagHashes)", errMsgTooLarge, dataLen, LimitDagHashes)
+		// expecting that baseHash will be received too
+		limit := LimitDagHashes + 1
+		dagHashes, limitReached = getHashesBySlotRange(backend, fromSlot, toSlot, limit, query.TerminalSpine)
+		if i := dagHashes.IndexOf(baseHeader.Hash()); i >= 0 {
+			dag = append(dagHashes[:i], dagHashes[i+1:]...)
+		} else {
+			dag = dagHashes
+		}
+	default:
+		return dag, errBadRequestParam
 	}
 
-	for nr := uint64(1); baseNr+nr <= toFinNr; nr++ {
-		finHash := backend.Chain().ReadFinalizedHashByNumber(baseNr + nr)
-		if finHash != (common.Hash{}) {
-			finalized = append(finalized, finHash)
-		}
+	// if requested all not-finalized blocks and limit not reached
+	// - add zero hash
+	if query.TerminalSpine == (common.Hash{}) && !limitReached {
+		dag = append(dag, common.Hash{})
 	}
-
-	dag = finalized.Concat(dag)
+	// if limit is exceeded - cut off right side
+	if len(dag) > LimitDagHashes {
+		dag = dag[:LimitDagHashes]
+	}
 	return dag, nil
+}
+
+func getHashesByNumberRange(backend Backend, fromNr, toNr uint64, limit int) common.HashArray {
+	dag := common.HashArray{}
+	if limit <= 0 {
+		return dag
+	}
+	if fromNr > toNr {
+		return dag
+	}
+	//check data limitation
+	if toNr-fromNr > uint64(limit) {
+		toNr = fromNr + uint64(limit)
+	}
+	for nr := uint64(1); fromNr+nr <= toNr; nr++ {
+		finHash := backend.Chain().ReadFinalizedHashByNumber(fromNr + nr)
+		if finHash != (common.Hash{}) {
+			dag = append(dag, finHash)
+		}
+	}
+	return dag
+}
+
+func getHashesBySlotRange(backend Backend, from, to uint64, limit int, terminalHash common.Hash) (common.HashArray, bool) {
+	if limit <= 0 {
+		return common.HashArray{}, true
+	}
+	var limitReached bool
+	si := backend.Chain().GetSlotInfo()
+	hashes := make(common.HashArray, 0, limit)
+	for slot := from; slot < to; slot++ {
+		slh := backend.Chain().GetBlockHashesBySlot(slot)
+		if len(slh) > 0 {
+			// if received terminalHash
+			// - add terminalHash only and stop
+			if slh.Has(terminalHash) {
+				hashes = append(hashes, terminalHash)
+				break
+			}
+			// if limit reached
+			// - add the first only and stop
+			if len(hashes)+len(slh) >= limit {
+				hashes = append(hashes, slh[0])
+				limitReached = true
+				break
+			}
+			hashes = append(hashes, slh...)
+		}
+		if si != nil && slot >= si.CurrentSlot() {
+			break
+		}
+	}
+	return hashes, limitReached
 }
 
 func handleDag66(backend Backend, msg Decoder, peer *Peer) error {
