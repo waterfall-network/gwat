@@ -408,18 +408,27 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 	// is O(tab.len() * nresults).
 	nodes := &nodesByDistance{target: target}
 	liveNodes := &nodesByDistance{target: target}
+	nodesIP := make([]string, 0)
+	liveNodesIP := make([]string, 0)
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
 			nodes.push(n, nresults)
+			nodesIP = append(nodesIP, n.IP().String())
 			if preferLive && n.livenessChecks > 0 {
 				liveNodes.push(n, nresults)
+				liveNodesIP = append(liveNodesIP, n.IP().String())
 			}
 		}
 	}
 
+	log.Info("CHECK PEERS - findnodeById", "nodes", nodesIP, "nodesCount", len(nodes.entries), "liveNodes", liveNodesIP, "liveCount", len(liveNodes.entries))
+
 	if preferLive && len(liveNodes.entries) > 0 {
+		log.Info("CHECK PEERS - return LiveNodes")
 		return liveNodes
 	}
+
+	log.Info("CHECK PEERS - return Nodes")
 	return nodes
 }
 

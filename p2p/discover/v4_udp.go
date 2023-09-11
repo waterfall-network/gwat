@@ -318,6 +318,7 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 		}
 		return true, nreceived >= bucketSize
 	})
+	log.Info("CHECK PEERS - send findnode", "toAddr", toaddr.IP.String())
 	t.send(toaddr, toid, &v4wire.Findnode{
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
@@ -727,17 +728,21 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	// to stay below the packet size limit.
 	p := v4wire.Neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
 	var sent bool
+	sendingNodes := make([]string, 0)
 	for _, n := range closest {
 		if netutil.CheckRelayIP(from.IP, n.IP()) == nil {
 			p.Nodes = append(p.Nodes, nodeToRPC(n))
+			sendingNodes = append(sendingNodes, n.IP().String())
 		}
 		if len(p.Nodes) == v4wire.MaxNeighbors {
+			log.Info("CHECK PEERS - sendNeighbors", "to", from.IP.String(), "nodes", sendingNodes)
 			t.send(from, fromID, &p)
 			p.Nodes = p.Nodes[:0]
 			sent = true
 		}
 	}
 	if len(p.Nodes) > 0 || !sent {
+		log.Info("CHECK PEERS - sendNeighbors", "to", from.IP.String(), "nodes", sendingNodes)
 		t.send(from, fromID, &p)
 	}
 }
@@ -746,6 +751,15 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 
 func (t *UDPv4) verifyNeighbors(h *packetHandlerV4, from *net.UDPAddr, fromID enode.ID, fromKey v4wire.Pubkey) error {
 	req := h.Packet.(*v4wire.Neighbors)
+
+	go func() {
+		ips := make([]string, 0)
+		for _, n := range req.Nodes {
+			ips = append(ips, n.IP.String())
+		}
+
+		log.Info("CHECK PEERS - verifyNeighbors", "fromAddr", from.IP, "fromId", fromID.String(), "ips", ips)
+	}()
 
 	if v4wire.Expired(req.Expiration) {
 		return errExpired
