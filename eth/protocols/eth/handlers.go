@@ -443,7 +443,7 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 	if baseHeader == nil {
 		return dag, fmt.Errorf("%w", errInvalidDag)
 	}
-	isBaseFinalized := baseHeader.Height > 0 && baseHeader.Nr() > 0
+	isBaseFinalized := baseHeader.Height > 0 && baseHeader.Nr() > 0 || baseHeader.Hash() == backend.Chain().Genesis().Hash()
 
 	// terminalSpine
 	var terminalSpine common.Hash
