@@ -752,12 +752,11 @@ func (m *MockethDownloader) EXPECT() *MockethDownloaderMockRecorder {
 }
 
 // SyncChainBySpines mocks base method.
-func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) (fullySynced bool, err error) {
+func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SyncChainBySpines", baseSpine, spines, syncMode)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[0].(error)
+	return ret1
 }
 
 // SyncChainBySpines indicates an expected call of SyncChainBySpines.

@@ -46,7 +46,11 @@ var protocolLengths = map[uint]uint64{ETH66: 20}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
-const LimitDagHashes = 32 * 16 * 8 //32slot * 16 blocks * 8 epoches
+
+// todo revert
+const LimitDagHashes = 2
+
+//const LimitDagHashes = 32 * 16 * 8 //32slot * 16 blocks * 8 epoches
 
 const (
 	StatusMsg                     = 0x00
@@ -79,6 +83,7 @@ var (
 	errGenesisMismatch         = errors.New("genesis mismatch")
 	errForkIDRejected          = errors.New("fork ID rejected")
 	errInvalidDag              = errors.New("invalid dag")
+	errBadRequestParam         = errors.New("bad request params")
 )
 
 // Packet represents a p2p message in the `wfdag` protocol.

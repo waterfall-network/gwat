@@ -87,7 +87,7 @@ type blockChain interface {
 
 type ethDownloader interface {
 	Synchronising() bool
-	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) (fullySynced bool, err error)
+	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) error
 }
 
 type Dag struct {
@@ -299,13 +299,8 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 
 	d.bc.SetSyncCheckpointCache(cp)
 	defer d.bc.ResetSyncCheckpointCache()
-	var fullySynced bool
-	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines, syncMode); err != nil {
+	if err = d.downloader.SyncChainBySpines(baseSpine, spines, syncMode); err != nil {
 		return err
-	}
-	if fullySynced {
-		//d.bc.SetIsSynced(true)
-		log.Info("Node fully synced: head reached")
 	}
 	return nil
 }
