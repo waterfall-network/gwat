@@ -84,6 +84,8 @@ type Creator struct {
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
+
+	nodeCreators map[common.Address]struct{}
 }
 
 // New creates new Creator instance
@@ -94,6 +96,8 @@ func New(config *Config, eth Backend, mux *event.TypeMux) *Creator {
 		mux:    mux,
 		bc:     eth.BlockChain(),
 	}
+
+	creator.setNodeCreators(eth.AccountManager().Accounts())
 
 	return creator
 }
@@ -174,7 +178,11 @@ func (c *Creator) SetGasCeil(ceil uint64) {
 }
 
 // RunBlockCreation starts process of block creation
-func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accounts []common.Address, tips types.Tips, checkpoint *types.Checkpoint) error {
+func (c *Creator) RunBlockCreation(slot uint64,
+	slotCreators []common.Address,
+	tips types.Tips,
+	checkpoint *types.Checkpoint,
+) error {
 	if !c.IsRunning() {
 		log.Warn("Creator stopped")
 		return ErrCreatorStopped
@@ -190,7 +198,7 @@ func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accou
 
 	assigned := &Assignment{
 		Slot:     slot,
-		Creators: creators,
+		Creators: slotCreators,
 	}
 
 	tipsBlocks, err := c.reorgTips(assigned.Slot, tips)
@@ -211,18 +219,49 @@ func (c *Creator) RunBlockCreation(slot uint64, creators []common.Address, accou
 	}
 
 	wg := new(sync.WaitGroup)
-	for _, account := range accounts {
-		if c.isCreatorActive(account, assigned) {
+	for _, account := range assigned.Creators {
+		var needEmptyBlock bool
+		if c.isCreatorActive(account) {
+			if account == assigned.Creators[0] {
+				needEmptyBlock, err = c.needEmptyBlock(slot)
+				if err != nil {
+					return err
+				}
+			}
 			wg.Add(1)
 			c.current.txsMu.Lock()
 			c.current.txs[account] = &txsWithCumulativeGas{}
 			c.current.txsMu.Unlock()
-			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg)
+			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, needEmptyBlock)
+		}
+	}
+	wg.Wait()
+
+	return nil
+}
+
+func (c *Creator) needEmptyBlock(slot uint64) (bool, error) {
+	slotEpoch := c.bc.GetSlotInfo().SlotToEpoch(slot)
+
+	currentEpochStartSlot, err := c.bc.GetSlotInfo().SlotOfEpochStart(slotEpoch)
+	if err != nil {
+		log.Error("error while calculating epoch start slot", "error", err)
+		return false, err
+	}
+
+	if slot == currentEpochStartSlot {
+		have, err := c.bc.HaveEpochBlocks(slotEpoch - 1)
+		if err != nil {
+			log.Error("error while check previous epoch blocks", "error", err)
+			return false, err
+		}
+
+		if !have {
+			return true, nil
 		}
 	}
 
-	wg.Wait()
-	return nil
+	return false, nil
 }
 
 func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.BlockMap, tips types.Tips, checkpoint *types.Checkpoint) (*types.Header, error) {
@@ -377,7 +416,7 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 	return tipsBlocks, nil
 }
 
-func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Address, header *types.Header, wg *sync.WaitGroup) {
+func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Address, header *types.Header, wg *sync.WaitGroup, needEmptyBlock bool) {
 	log.Info("Try to create new block", "slot", header.Slot, "coinbase", coinbase.Hex())
 	defer wg.Done()
 
@@ -412,6 +451,12 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 	// Short circuit if no pending transactions
 	if len(pendingTxs) == 0 && len(syncData) == 0 {
+		if needEmptyBlock {
+			c.create(header, true)
+			log.Info("Create empty block", "creator", header.Coinbase.Hex(), "slot", header.Slot)
+
+			return
+		}
 		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs (short circuit)", "creator", coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		return
@@ -658,13 +703,10 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 }
 
 // isCreatorActive returns true if creator is assigned to create blocks in current slot.
-func (c *Creator) isCreatorActive(coinbase common.Address, assigned *Assignment) bool {
-	for _, creator := range assigned.Creators {
-		if creator == coinbase {
-			return true
-		}
-	}
-	return false
+func (c *Creator) isCreatorActive(coinbase common.Address) bool {
+	_, ok := c.nodeCreators[coinbase]
+
+	return ok
 }
 
 // getPending returns all pending transactions for current miner
@@ -735,4 +777,13 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 	}
 
 	return nil
+}
+
+func (c *Creator) setNodeCreators(accounts []common.Address) {
+	creators := make(map[common.Address]struct{})
+	for _, account := range accounts {
+		creators[account] = struct{}{}
+	}
+
+	c.nodeCreators = creators
 }
