@@ -428,7 +428,7 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	dag, err := answerGetDagQuery(backend, query.GetDagPacket)
 	if err != nil {
-		return err
+		return peer.ReplyDagData(query.RequestId, common.HashArray{})
 	}
 	return peer.ReplyDagData(query.RequestId, dag)
 }

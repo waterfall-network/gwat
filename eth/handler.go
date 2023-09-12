@@ -345,13 +345,9 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	// If we have any explicit whitelist block hashes, request them
 	for number := range h.whitelist {
-
-		peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "number", number)
-
+		peer.Log().Info("Eth peer connected", "name", peer.Name(), "number", number)
 		if err := peer.RequestHeadersByNumber(number, 1, 0, false); err != nil {
-
-			peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "err", err)
-
+			peer.Log().Error("Eth peer connected", "name", peer.Name(), "err", err)
 			return err
 		}
 	}
