@@ -437,7 +437,10 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 	dag := common.HashArray{}
 	dagHashes := common.HashArray{}
 	limitReached := false
-
+	log.Debug("Sync handling: start",
+		"baseSpine", query.BaseSpine.Hex(),
+		"terminalSpine", query.TerminalSpine.Hex(),
+	)
 	// baseSpine
 	baseHeader := backend.Chain().GetHeaderByHash(query.BaseSpine)
 	if baseHeader == nil {
@@ -460,6 +463,11 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 			return dag, fmt.Errorf("%w", errInvalidDag)
 		}
 	}
+	log.Debug("Sync handling: terminal header",
+		"baseSpine", query.BaseSpine.Hex(),
+		"terminalSpine", query.TerminalSpine.Hex(),
+		"terminalHeader", terminalSpine,
+	)
 	// retrieve terminal header
 	terminalHeader := backend.Chain().GetHeaderByHash(terminalSpine)
 	if terminalHeader == nil {
@@ -472,6 +480,14 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 		//collect blocks by range of finalized numbers only
 		fromNr := baseHeader.Nr()
 		toNr := terminalHeader.Nr()
+		log.Debug("Sync handling: case 1",
+			"baseSpine", query.BaseSpine.Hex(),
+			"terminalSpine", query.TerminalSpine.Hex(),
+			"isBaseFinalized", isBaseFinalized,
+			"isTerminalFinalized", isTerminalFinalized,
+			"fromNr", fromNr,
+			"toNr", toNr,
+		)
 		if fromNr > toNr {
 			return dag, errBadRequestParam
 		}
@@ -487,6 +503,14 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 		if toNr-fromNr > LimitDagHashes {
 			toNr = fromNr + LimitDagHashes
 		}
+		log.Debug("Sync handling: case 2.0",
+			"baseSpine", query.BaseSpine.Hex(),
+			"terminalSpine", query.TerminalSpine.Hex(),
+			"isBaseFinalized", isBaseFinalized,
+			"isTerminalFinalized", isTerminalFinalized,
+			"fromNr", fromNr,
+			"toNr", toNr,
+		)
 		dag = getHashesByNumberRange(backend, fromNr, toNr, LimitDagHashes)
 		limitReached = len(dag) >= LimitDagHashes
 
@@ -497,6 +521,15 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 			toSlot := terminalHeader.Slot
 			// expecting that lfHeader.Hash will be received twice
 			limit := LimitDagHashes - len(dag) + 1
+			log.Debug("Sync handling: case 2.1",
+				"baseSpine", query.BaseSpine.Hex(),
+				"terminalSpine", query.TerminalSpine.Hex(),
+				"isBaseFinalized", isBaseFinalized,
+				"isTerminalFinalized", isTerminalFinalized,
+				"fromSlot", fromSlot,
+				"toSlot", toSlot,
+				"limit", limit,
+			)
 			dagHashes, limitReached = getHashesBySlotRange(backend, fromSlot, toSlot, limit, query.TerminalSpine)
 			dag = append(dag, dagHashes...)
 			dag.Deduplicate()
@@ -511,6 +544,15 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 		}
 		// expecting that baseHash will be received too
 		limit := LimitDagHashes + 1
+		log.Debug("Sync handling: case 3",
+			"baseSpine", query.BaseSpine.Hex(),
+			"terminalSpine", query.TerminalSpine.Hex(),
+			"isBaseFinalized", isBaseFinalized,
+			"isTerminalFinalized", isTerminalFinalized,
+			"fromSlot", fromSlot,
+			"toSlot", toSlot,
+			"limit", limit,
+		)
 		dagHashes, limitReached = getHashesBySlotRange(backend, fromSlot, toSlot, limit, query.TerminalSpine)
 		if i := dagHashes.IndexOf(baseHeader.Hash()); i >= 0 {
 			dag = append(dagHashes[:i], dagHashes[i+1:]...)
@@ -518,9 +560,23 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 			dag = dagHashes
 		}
 	default:
+		log.Error("Sync handling: case default",
+			"baseSpine", query.BaseSpine.Hex(),
+			"terminalSpine", query.TerminalSpine.Hex(),
+			"isBaseFinalized", isBaseFinalized,
+			"isTerminalFinalized", isTerminalFinalized,
+		)
 		return dag, errBadRequestParam
 	}
 
+	log.Debug("Sync handling: dag retrieved",
+		"baseSpine", query.BaseSpine.Hex(),
+		"terminalSpine", query.TerminalSpine.Hex(),
+		"isBaseFinalized", isBaseFinalized,
+		"isTerminalFinalized", isTerminalFinalized,
+		"limitReached", limitReached,
+		"dag", dag,
+	)
 	// if requested all not-finalized blocks and limit not reached
 	// - add zero hash
 	if query.TerminalSpine == (common.Hash{}) && !limitReached {
@@ -530,6 +586,14 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 	if len(dag) > LimitDagHashes {
 		dag = dag[:LimitDagHashes]
 	}
+	log.Debug("Sync handling: dag response",
+		"baseSpine", query.BaseSpine.Hex(),
+		"terminalSpine", query.TerminalSpine.Hex(),
+		"isBaseFinalized", isBaseFinalized,
+		"isTerminalFinalized", isTerminalFinalized,
+		"limitReached", limitReached,
+		"dag", dag,
+	)
 	return dag, nil
 }
 

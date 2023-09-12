@@ -439,7 +439,7 @@ func (d *Downloader) SynchroniseDagOnly(id string) error {
 
 func (d *Downloader) synchroniseDagOnly(id string) error {
 	if d.Synchronising() {
-		log.Warn("Sync canceled (synchronise process busy)")
+		log.Warn("Sync of dag chain canceled (synchronise process busy)")
 		return errBusy
 	}
 
@@ -452,30 +452,12 @@ func (d *Downloader) synchroniseDagOnly(id string) error {
 		log.Info("Sync of dag chain terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 
-	//todo check
-	//// Make sure only one goroutine is ever allowed past this point at once
-	//if !atomic.CompareAndSwapInt32(&d.finSyncing, 0, 1) {
-	//	return errBusy
-	//}
-	//defer atomic.StoreInt32(&d.finSyncing, 0)
-
-	//todo check
-	//// Post a user notification of the sync (only once per session)
-	//if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
-	//	log.Info("Block synchronization started")
-	//}
-
 	// If we are already full syncing, but have a fast-sync bloom filter laying
 	// around, make sure it doesn't use memory any more. This is a special case
 	// when the user attempts to fast sync a new empty network.
 	if d.stateBloom != nil {
 		d.stateBloom.Close()
 	}
-
-	//todo check
-	//// Reset the queue, peer set and wake channels to clean any internal leftover state
-	//d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
-	//d.peers.Reset()
 
 	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
 		select {
@@ -506,16 +488,20 @@ func (d *Downloader) synchroniseDagOnly(id string) error {
 	d.cancelLock.Unlock()
 	defer d.Cancel() // No matter what, we can't leave the cancel channel open
 
-	//todo check
-	//// Atomically set the requested sync mode
-	//atomic.StoreUint32(&d.mode, uint32(FullSync))
-
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
 	if p == nil {
 		return errUnknownPeer
 	}
-	return d.syncWithPeerDagOnly(p)
+	//Synchronization of dag chain
+	baseSpine := d.blockchain.GetLastCoordinatedCheckpoint().Spine
+
+	if err := d.peerSyncBySpines(p, baseSpine, common.HashArray{common.Hash{}}); err != nil {
+		log.Error("Sync of dag chain failed", "err", err)
+		return err
+	}
+	return nil
+	//return d.syncWithPeerDagOnly(p)
 }
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
@@ -2573,10 +2559,8 @@ func (d *Downloader) peerMainSync(p *peerConnection, baseSpine common.Hash, spin
 	//Synchronization of dag chain
 	if err = d.peerSyncBySpines(p, baseSpine, spines); err != nil {
 		log.Error("Sync of dag chain failed", "err", err)
-		d.Cancel()
 		return err
 	}
-	d.Cancel()
 	return nil
 }
 
@@ -2592,6 +2576,9 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 		return false, nil, errBadPeer
 	}
 	terminalSpine := spines[len(spines)-1]
+	if terminalSpine == (common.Hash{}) {
+		return true, terminalRemote, nil
+	}
 	terminalRemote, err = d.fetchHeaderByHash(p, terminalSpine)
 	if err != nil {
 		return false, terminalRemote, err
@@ -2741,6 +2728,9 @@ func (d *Downloader) peerSyncBySpines(p *peerConnection, baseSpine common.Hash, 
 	}
 	// check all spines received
 	for _, s := range spines {
+		if s == (common.Hash{}) {
+			continue
+		}
 		if !d.blockchain.HasHeader(s) {
 			p.log.Error("Sync by spines: spine not found",
 				"err", errCanceled,
