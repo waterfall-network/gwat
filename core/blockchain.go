@@ -1604,11 +1604,23 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (statu
 	}
 	n, err := bc.insertBlocks(blocks, validate, opSync)
 	bc.chainmu.Unlock()
-	if err != nil {
+	if err == ErrInsertUncompletedDag {
+		processing := make(map[common.Hash]bool, len(bc.insBlockCache))
+		for _, b := range bc.insBlockCache {
+			processing[b.Hash()] = true
+		}
+		for i, bl := range blocks {
+			log.Info("Delay propagated block", "height", bl.Height(), "hash", bl.Hash().Hex())
+			if i >= n && !processing[bl.Hash()] {
+				bc.insBlockCache = append(bc.insBlockCache, bl)
+				processing[bl.Hash()] = true
+			}
+		}
+	} else if err != nil {
 		return n, err
 	}
 	err = bc.insertDalayedBloks()
-	return n, err
+	return n, nil
 }
 
 func (bc *BlockChain) insertDalayedBloks() error {
