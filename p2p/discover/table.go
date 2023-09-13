@@ -40,7 +40,6 @@ import (
 
 const (
 	alpha           = 3  // Kademlia concurrency factor
-	bucketSize      = 16 // Kademlia bucket size
 	maxReplacements = 10 // Size of per-bucket replacement list
 
 	// We keep buckets for the upper 1/15 of distances because
@@ -60,6 +59,8 @@ const (
 	seedCount          = 30
 	seedMaxAge         = 5 * 24 * time.Hour
 )
+
+var bucketSize = 16 // Kademlia bucket size
 
 // Table is the 'node table', a Kademlia-like index of neighbor nodes. The table keeps
 // itself up-to-date by verifying the liveness of neighbors and requesting their node
@@ -99,7 +100,7 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger) (*Table, error) {
+func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, bs uint) (*Table, error) {
 	tab := &Table{
 		net:        t,
 		db:         db,
@@ -121,6 +122,10 @@ func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger
 	}
 	tab.seedRand()
 	tab.loadSeedNodes()
+
+	if bs != 0 {
+		bucketSize = int(bs)
+	}
 
 	return tab, nil
 }
