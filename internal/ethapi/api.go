@@ -398,6 +398,9 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 		log.Info("Your new key was generated", "address", acc.Address)
 		log.Warn("Please backup your key file!", "path", acc.URL.Path)
 		log.Warn("Please remember your password!")
+
+		s.b.Dag().Creator().SetNodeCreators([]common.Address{acc.Address})
+
 		return acc.Address, nil
 	}
 	return common.Address{}, err

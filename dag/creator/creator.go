@@ -97,7 +97,7 @@ func New(config *Config, eth Backend, mux *event.TypeMux) *Creator {
 		bc:     eth.BlockChain(),
 	}
 
-	creator.setNodeCreators(eth.AccountManager().Accounts())
+	creator.SetNodeCreators(eth.AccountManager().Accounts())
 
 	return creator
 }
@@ -183,11 +183,6 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	tips types.Tips,
 	checkpoint *types.Checkpoint,
 ) error {
-	if !c.IsRunning() {
-		log.Warn("Creator stopped")
-		return ErrCreatorStopped
-	}
-
 	if c.isSyncing() {
 		log.Warn("Creator skipping due to synchronization")
 		return ErrSynchronization
@@ -779,7 +774,7 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 	return nil
 }
 
-func (c *Creator) setNodeCreators(accounts []common.Address) {
+func (c *Creator) SetNodeCreators(accounts []common.Address) {
 	creators := make(map[common.Address]struct{})
 	for _, account := range accounts {
 		creators[account] = struct{}{}
