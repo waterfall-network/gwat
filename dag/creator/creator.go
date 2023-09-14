@@ -91,10 +91,11 @@ type Creator struct {
 // New creates new Creator instance
 func New(config *Config, eth Backend, mux *event.TypeMux) *Creator {
 	creator := &Creator{
-		config: config,
-		eth:    eth,
-		mux:    mux,
-		bc:     eth.BlockChain(),
+		config:       config,
+		eth:          eth,
+		mux:          mux,
+		bc:           eth.BlockChain(),
+		nodeCreators: make(map[common.Address]struct{}),
 	}
 
 	creator.SetNodeCreators(eth.AccountManager().Accounts())
@@ -775,10 +776,11 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 }
 
 func (c *Creator) SetNodeCreators(accounts []common.Address) {
-	creators := make(map[common.Address]struct{})
-	for _, account := range accounts {
-		creators[account] = struct{}{}
+	if c.nodeCreators == nil {
+		c.nodeCreators = make(map[common.Address]struct{})
 	}
 
-	c.nodeCreators = creators
+	for _, account := range accounts {
+		c.nodeCreators[account] = struct{}{}
+	}
 }

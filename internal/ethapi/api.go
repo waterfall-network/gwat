@@ -401,8 +401,13 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 
 		s.b.Dag().Creator().SetNodeCreators([]common.Address{acc.Address})
 
+		if !s.b.Dag().Creator().IsRunning() {
+			s.b.Dag().Creator().Start()
+		}
+
 		return acc.Address, nil
 	}
+
 	return common.Address{}, err
 }
 
