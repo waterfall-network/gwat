@@ -146,7 +146,7 @@ type Downloader struct {
 	syncPeersMutex      *sync.Mutex
 	syncPeerHashesMutex *sync.Mutex
 
-	syncPeers      map[string]*peerConnection
+	syncPeers      map[string]syncPeerChans
 	syncPeerHashes map[string]common.HashArray
 
 	// Cancellation and termination
@@ -289,7 +289,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		},
 		trackStateReq: make(chan *stateReq),
 
-		syncPeers:           make(map[string]*peerConnection),
+		syncPeers:           make(map[string]syncPeerChans),
 		syncPeerHashes:      make(map[string]common.HashArray),
 		syncPeerHashesMutex: new(sync.Mutex),
 		syncPeersMutex:      new(sync.Mutex),
@@ -871,6 +871,7 @@ func (d *Downloader) Terminate() {
 }
 
 // fetchHead retrieves the head header and prior pivot block (if available) from a remote peer.
+// Deprecated
 func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *types.Header, err error) {
 	p.log.Debug("Retrieving remote chain head")
 	mode := d.getMode()
@@ -949,7 +950,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 //
 // and also returns 'max', the last block which is expected to be returned by the remote peers,
 // given the (from,count,skip)
-// deprecated
+// Deprecated
 func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, uint64) {
 	var (
 		from     int
@@ -999,7 +1000,7 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 // on the correct chain, checking the top N links should already get us a match.
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
-// deprecated
+// Deprecated
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
 	// Figure out the valid ancestor range to prevent rewrite attacks
 	var (
@@ -1071,6 +1072,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	return ancestor, nil
 }
 
+// Deprecated
 func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (commonAncestor uint64, err error) {
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
@@ -1167,6 +1169,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 	return 0, errNoAncestorFound
 }
 
+// Deprecated
 func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (commonAncestor uint64, err error) {
 	// init by genesis
 	hash := d.blockchain.GetHeaderByNumber(0).Hash()
@@ -1266,6 +1269,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 // other peers are only accepted if they map cleanly to the skeleton. If no one
 // can fill in the skeleton - not even the origin peer - it's assumed invalid and
 // the origin is dropped.
+// Deprecated
 func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 	p.log.Debug("Directing header downloads", "origin", from)
 	defer p.log.Debug("Header download terminated")
@@ -1505,6 +1509,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 //
 // The method returns the entire filled skeleton and also the number of headers
 // already forwarded for processing.
+// Deprecated
 func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) ([]*types.Header, int, error) {
 	log.Info("Filling up skeleton", "from", from)
 	d.queue.ScheduleSkeleton(from, skeleton)
@@ -2285,6 +2290,13 @@ func (d *Downloader) fetchDagHashesBySlots(p *peerConnection, from, to uint64) (
 	}
 	p.log.Info("Retrieving remote dag hashes by slot: start", "from", from, "to", to)
 
+	//multi peers sync support
+	if !d.isPeerSync(p.id) {
+		d.setPeerSync(p.id)
+		defer d.resetPeerSync(p.id)
+	}
+	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
+
 	go p.peer.RequestHashesBySlots(from, to)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -2297,8 +2309,26 @@ func (d *Downloader) fetchDagHashesBySlots(p *peerConnection, from, to uint64) (
 			return nil, errCanceled
 		case packet := <-d.dagCh:
 			// Discard anything not from the origin peer
+			if !d.isPeerSync(packet.PeerId()) {
+				log.Error("Sync: dag by slots: received from incorrect peer", "peer", packet.PeerId())
+				break
+			}
+			// redirect packet to peer chan
+			pChs := d.getPeerSyncChans(packet.PeerId())
+			if pChs == nil {
+				log.Error("Sync: dag by slots: sync peer not found", "peer", packet.PeerId())
+				break
+			}
+			pChs.GetDagChan() <- packet
+
+			log.Info("Sync: dag by slots: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
+
+		case packet := <-peerCh:
+			// handle redirected packet at peer chan
+			log.Info("Sync: dag by slots: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
+			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
-				log.Warn("Sync: Received dag header from incorrect peer", "peer", packet.PeerId())
+				log.Error("Sync: dag by slots: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
 				break
 			}
 			dag = packet.(*dagPack).dag
@@ -2327,6 +2357,13 @@ func (d *Downloader) fetchHashesBySpines(p *peerConnection, baseSpine common.Has
 		"terminalSpine", fmt.Sprintf("%#x", terminalSpine),
 	)
 
+	//multi peers sync support
+	if !d.isPeerSync(p.id) {
+		d.setPeerSync(p.id)
+		defer d.resetPeerSync(p.id)
+	}
+	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
+
 	go p.peer.RequestDag(baseSpine, terminalSpine)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -2340,8 +2377,26 @@ func (d *Downloader) fetchHashesBySpines(p *peerConnection, baseSpine common.Has
 
 		case packet := <-d.dagCh:
 			// Discard anything not from the origin peer
+			if !d.isPeerSync(packet.PeerId()) {
+				log.Error("Sync: dag by slots: received from incorrect peer", "peer", packet.PeerId())
+				break
+			}
+			// redirect packet to peer chan
+			pChs := d.getPeerSyncChans(packet.PeerId())
+			if pChs == nil {
+				log.Error("Sync: dag by slots: sync peer not found", "peer", packet.PeerId())
+				break
+			}
+			pChs.GetDagChan() <- packet
+
+			log.Info("Sync: dag by slots: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
+
+		case packet := <-peerCh:
+			// handle redirected packet at peer chan
+			log.Info("Sync: dag by slots: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
+			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
-				log.Warn("Sync: Received dag hashes from incorrect peer", "peer", packet.PeerId())
+				log.Error("Sync: dag by slots: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
 				break
 			}
 			dag = packet.(*dagPack).dag
@@ -2366,6 +2421,14 @@ func (d *Downloader) fetchHashesBySpines(p *peerConnection, baseSpine common.Has
 // fetchDagHeaders retrieves the dag headers by hashes from a remote peer.
 func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray) (headers []*types.Header, err error) {
 	p.log.Info("Retrieving remote dag headers: start", "hashes", len(hashes))
+
+	//multi peers sync support
+	if !d.isPeerSync(p.id) {
+		d.setPeerSync(p.id)
+		defer d.resetPeerSync(p.id)
+	}
+	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
+
 	go p.peer.RequestHeadersByHashes(hashes)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -2379,8 +2442,26 @@ func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray)
 
 		case packet := <-d.headerCh:
 			// Discard anything not from the origin peer
+			if !d.isPeerSync(packet.PeerId()) {
+				log.Error("Sync: header by hash: received headers from incorrect peer", "peer", packet.PeerId())
+				break
+			}
+			// redirect packet to peer chan
+			pChs := d.getPeerSyncChans(packet.PeerId())
+			if pChs == nil {
+				log.Error("Sync: header by hash: sync peer not found", "peer", packet.PeerId())
+				break
+			}
+			pChs.GetHeaderChan() <- packet
+
+			log.Info("Sync: header by hash: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
+
+		case packet := <-peerCh:
+			// handle redirected packet at peer chan
+			log.Info("Sync: header by hash: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
+			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
-				log.Warn("Sync: Received dag headers from incorrect peer", "peer", packet.PeerId())
+				log.Error("Sync: header by hash: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
 				break
 			}
 			headers = packet.(*headerPack).headers
@@ -2399,7 +2480,14 @@ func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray)
 // fetchDagTxs retrieves the dag transactions by blocks hashes from a remote peer.
 func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (map[common.Hash][]*types.Transaction, error) {
 
-	p.log.Info("Retrieving remote dag block txs: start", "hashes", len(hashes))
+	p.log.Info("Sync: body by hashes: start", "hashes", len(hashes))
+
+	//multi peers sync support
+	if !d.isPeerSync(p.id) {
+		d.setPeerSync(p.id)
+		defer d.resetPeerSync(p.id)
+	}
+	peerCh := d.getPeerSyncChans(p.id).GetBodyChan()
 
 	go p.peer.RequestBodies(hashes)
 
@@ -2413,8 +2501,32 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 
 		case packet := <-d.bodyCh:
 			// Discard anything not from the origin peer
+			if !d.isPeerSync(packet.PeerId()) {
+				log.Error("Sync: body by hashes: received from incorrect peer", "peer", packet.PeerId())
+				break
+			}
+			// redirect packet to peer chan
+			pChs := d.getPeerSyncChans(packet.PeerId())
+			if pChs == nil {
+				log.Error("Sync: body by hashes: sync peer not found", "peer", packet.PeerId())
+				break
+			}
+			pChs.GetBodyChan() <- packet
+
+			log.Info("Sync: body by hashes: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
+
+		case packet := <-peerCh:
+			// handle redirected packet at peer chan
+			log.Info("Sync: body by hashes: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
+			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
-				log.Warn("Sync: Received dag txs from incorrect peer", "peer", packet.PeerId())
+				log.Error("Sync: body by hashes: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
+				break
+			}
+
+			// Discard anything not from the origin peer
+			if packet.PeerId() != p.id {
+				log.Warn("Sync: body by hashes: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
 				break
 			}
 			transactions := packet.(*bodyPack).transactions
@@ -2424,7 +2536,7 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 			}
 			return txsMap, nil
 		case <-timeout:
-			p.log.Warn("Sync: Waiting for dag timed out", "elapsed", ttl)
+			p.log.Warn("Sync: body by hashes: timed out", "elapsed", ttl)
 			return nil, errTimeout
 		}
 	}
@@ -2432,11 +2544,15 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 
 func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) error {
 	log.Info("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", len(spines), "len(d.peers)", len(d.peers.peers))
+	if len(spines) == 0 {
+		return nil
+	}
 	if d.peers.Len() == 0 {
 		log.Error("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", spines, "peers.Len", d.peers.Len(), "err", errNoPeers)
 		return errNoPeers
 	}
 
+	// check it
 	//d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
 	//d.ClearBlockDag()
 
@@ -2600,6 +2716,13 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 	p.log.Info("Sync: Retrieving remote chain header by nr")
 	fetch := 1
 
+	//multi peers sync support
+	if !d.isPeerSync(p.id) {
+		d.setPeerSync(p.id)
+		defer d.resetPeerSync(p.id)
+	}
+	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
+
 	go p.peer.RequestHeadersByNumber(nr, 1, 0, true)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -2611,8 +2734,26 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 
 		case packet := <-d.headerCh:
 			// Discard anything not from the origin peer
+			if !d.isPeerSync(packet.PeerId()) {
+				log.Error("Sync: header by nr: received from incorrect peer", "peer", packet.PeerId())
+				break
+			}
+			// redirect packet to peer chan
+			pChs := d.getPeerSyncChans(packet.PeerId())
+			if pChs == nil {
+				log.Error("Sync: header by nr: sync peer not found", "peer", packet.PeerId())
+				break
+			}
+			pChs.GetHeaderChan() <- packet
+
+			log.Info("Sync: header by nr: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
+
+		case packet := <-peerCh:
+			// handle redirected packet at peer chan
+			log.Info("Sync: header by nr: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
+			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
-				log.Error("Sync: header by nr: received headers from incorrect peer", "peer", packet.PeerId())
+				log.Error("Sync: header by nr: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
 				break
 			}
 			// Make sure the peer gave us at least one and at most the requested headers
@@ -2640,6 +2781,13 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 	p.log.Info("Sync: Retrieving remote chain header by hash")
 	fetch := 1
 
+	//multi peers sync support
+	if !d.isPeerSync(p.id) {
+		d.setPeerSync(p.id)
+		defer d.resetPeerSync(p.id)
+	}
+	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
+
 	go p.peer.RequestHeadersByHashes(common.HashArray{hash})
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -2651,8 +2799,26 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 
 		case packet := <-d.headerCh:
 			// Discard anything not from the origin peer
-			if packet.PeerId() != p.id {
+			if !d.isPeerSync(packet.PeerId()) {
 				log.Error("Sync: header by hash: received headers from incorrect peer", "peer", packet.PeerId())
+				break
+			}
+			// redirect packet to peer chan
+			pChs := d.getPeerSyncChans(packet.PeerId())
+			if pChs == nil {
+				log.Error("Sync: header by hash: sync peer not found", "peer", packet.PeerId())
+				break
+			}
+			pChs.GetHeaderChan() <- packet
+
+			log.Info("Sync: header by hash: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
+
+		case packet := <-peerCh:
+			// handle redirected packet at peer chan
+			log.Info("Sync: header by hash: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
+			// Discard anything not from the origin peer
+			if packet.PeerId() != p.id {
+				log.Error("Sync: header by hash: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
 				break
 			}
 			// Make sure the peer gave us at least one and at most the requested headers
@@ -3084,10 +3250,11 @@ Loop:
 			}
 
 			log.Info("Sync head: run peer", "i", i, "peer", con.id)
-			d.syncPeers[con.id] = con
+			d.setPeerSync(con.id)
 
 			wg.Add(1)
 			go func(con *peerConnection) {
+				defer d.resetPeerSync(con.id)
 				defer wg.Done()
 				if err = d.multiPeerGetHashes(con, baseSpine, spines); err != nil {
 					if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
@@ -3230,6 +3397,14 @@ func (d *Downloader) multiFetchDagHashesBySlots(p *peerConnection, from, to uint
 		return nil, errDataSizeLimitExceeded
 	}
 	p.log.Info("Retrieving remote dag hashes by slot: start", "from", from, "to", to)
+
+	//multi peers sync support
+	if !d.isPeerSync(p.id) {
+		d.setPeerSync(p.id)
+		defer d.resetPeerSync(p.id)
+	}
+	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
+
 	go p.peer.RequestHashesBySlots(from, to)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -3242,14 +3417,29 @@ func (d *Downloader) multiFetchDagHashesBySlots(p *peerConnection, from, to uint
 			return nil, errCanceled
 		case packet := <-d.dagCh:
 			// Discard anything not from the origin peer
-			d.syncPeersMutex.Lock()
-			if _, ok := d.syncPeers[packet.PeerId()]; !ok {
-				log.Warn("Received dag headers from incorrect peer", "peer", packet.PeerId())
+			if !d.isPeerSync(packet.PeerId()) {
+				log.Error("Sync: dag by slots: received from incorrect peer", "peer", packet.PeerId())
 				break
 			}
-			d.syncPeersMutex.Unlock()
-			dag = packet.(*dagPack).dag
+			// redirect packet to peer chan
+			pChs := d.getPeerSyncChans(packet.PeerId())
+			if pChs == nil {
+				log.Error("Sync: dag by slots: sync peer not found", "peer", packet.PeerId())
+				break
+			}
+			pChs.GetDagChan() <- packet
 
+			log.Info("Sync: dag by slots: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
+
+		case packet := <-peerCh:
+			// handle redirected packet at peer chan
+			log.Info("Sync: dag by slots: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
+			// Discard anything not from the origin peer
+			if packet.PeerId() != p.id {
+				log.Error("Sync: dag by slots: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
+				break
+			}
+			dag = packet.(*dagPack).dag
 			if len(dag) == 0 {
 				log.Info("No block hashes found for provided slots", "from:", from, "to:", to)
 			}
@@ -3278,4 +3468,41 @@ func (d *Downloader) multiPeerReset() {
 // slotStep calculates max slots numbers for sync request ramge.
 func (d *Downloader) slotRangeLimit() uint64 {
 	return eth.LimitDagHashes / d.lightchain.Config().ValidatorsPerSlot
+}
+
+func (d *Downloader) setPeerSync(peerId string) {
+	d.syncPeersMutex.Lock()
+	defer d.syncPeersMutex.Unlock()
+
+	if _, ok := d.syncPeers[peerId]; !ok {
+		d.syncPeers[peerId] = initSyncPeerChans()
+	}
+}
+
+func (d *Downloader) resetPeerSync(peerId string) {
+	d.syncPeersMutex.Lock()
+	defer d.syncPeersMutex.Unlock()
+
+	if ch, ok := d.syncPeers[peerId]; ok {
+		ch.Close()
+		delete(d.syncPeers, peerId)
+	}
+}
+
+func (d *Downloader) isPeerSync(peerId string) bool {
+	d.syncPeersMutex.Lock()
+	defer d.syncPeersMutex.Unlock()
+
+	_, ok := d.syncPeers[peerId]
+	return ok
+}
+
+func (d *Downloader) getPeerSyncChans(peerId string) *syncPeerChans {
+	d.syncPeersMutex.Lock()
+	defer d.syncPeersMutex.Unlock()
+
+	if ch, ok := d.syncPeers[peerId]; ok {
+		return &ch
+	}
+	return nil
 }
