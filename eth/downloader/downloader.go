@@ -496,7 +496,7 @@ func (d *Downloader) synchroniseDagOnly(id string) error {
 	//Synchronization of dag chain
 	baseSpine := d.blockchain.GetLastCoordinatedCheckpoint().Spine
 
-	if err := d.peerSyncBySpines(p, baseSpine, common.HashArray{common.Hash{}}); err != nil {
+	if err := d.peerSyncBySpinesByChunk(p, baseSpine, common.HashArray{common.Hash{}}); err != nil {
 		log.Error("Sync of dag chain failed", "err", err)
 		return err
 	}
@@ -2430,27 +2430,19 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 	}
 }
 
-func (d *Downloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) error {
+func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) error {
 	log.Info("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", len(spines), "len(d.peers)", len(d.peers.peers))
 	if d.peers.Len() == 0 {
 		log.Error("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", spines, "peers.Len", d.peers.Len(), "err", errNoPeers)
 		return errNoPeers
 	}
 
-	//is head reached
-	if syncMode == types.HeadSync || syncMode == types.NoSync {
-		// set param to load full dag
-		log.Info("Sync of chain head detected", "baseSpine", baseSpine.Hex(), "spines", spines, "syncMode", syncMode)
-		return d.multiPeersHeadSync(baseSpine, spines)
-	}
-
 	//d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
 	//d.ClearBlockDag()
 
-	// types.MainSync:
 	//select peer
 	for _, con := range d.peers.AllPeers() {
-		err := d.peerMainSync(con, baseSpine, spines)
+		err := d.peerSyncBySpines(con, baseSpine, spines)
 		switch err {
 		case nil:
 			return nil
@@ -2477,7 +2469,21 @@ func (d *Downloader) SyncChainBySpines(baseSpine common.Hash, spines common.Hash
 	return errNoPeers
 }
 
-func (d *Downloader) peerMainSync(p *peerConnection, baseSpine common.Hash, spines common.HashArray) error {
+// DagSync retrieves all blocks starting from baseSpine and add it to not finalized chain.
+// param spines is optional and used for check remote peer and completeness data retrieved.
+func (d *Downloader) DagSync(baseSpine common.Hash, spines common.HashArray) error {
+	log.Info("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", len(spines), "len(d.peers)", len(d.peers.peers))
+	if d.peers.Len() == 0 {
+		log.Error("Sync chain by spines", "baseSpine", baseSpine.Hex(), "spines", spines, "peers.Len", d.peers.Len(), "err", errNoPeers)
+		return errNoPeers
+	}
+
+	// set param to load full dag
+	log.Info("Sync of chain head detected", "baseSpine", baseSpine.Hex(), "spines", spines)
+	return d.multiPeersHeadSync(baseSpine, spines)
+}
+
+func (d *Downloader) peerSyncBySpines(p *peerConnection, baseSpine common.Hash, spines common.HashArray) error {
 	if d.Synchronising() {
 		log.Warn("Sync canceled (synchronise process busy)")
 		return errBusy
@@ -2557,7 +2563,7 @@ func (d *Downloader) peerMainSync(p *peerConnection, baseSpine common.Hash, spin
 	log.Info("Synchronising with the network", "peer", p.id, "eth", p.version, "mode", mode, "baseSpine", baseSpine.Hex(), "spines", spines)
 
 	//Synchronization of dag chain
-	if err = d.peerSyncBySpines(p, baseSpine, spines); err != nil {
+	if err = d.peerSyncBySpinesByChunk(p, baseSpine, spines); err != nil {
 		log.Error("Sync of dag chain failed", "err", err)
 		return err
 	}
@@ -2591,7 +2597,7 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 
 // fetchHeaderByNr retrieves the header by finalized number from a remote peer.
 func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *types.Header, err error) {
-	p.log.Info("Retrieving remote chain header by nr")
+	p.log.Info("Sync: Retrieving remote chain header by nr")
 	fetch := 1
 
 	go p.peer.RequestHeadersByNumber(nr, 1, 0, true)
@@ -2606,20 +2612,20 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 		case packet := <-d.headerCh:
 			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
-				log.Debug("Received headers from incorrect peer", "peer", packet.PeerId())
+				log.Error("Sync: header by nr: received headers from incorrect peer", "peer", packet.PeerId())
 				break
 			}
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
-				log.Error(fmt.Sprintf("%s: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
+				log.Error(fmt.Sprintf("Sync: header by nr: %s: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
 				return nil, errBadPeer
 			}
 			header = headers[0]
 			return header, nil
 
 		case <-timeout:
-			p.log.Warn("Waiting for header header timed out", "elapsed", ttl)
+			p.log.Warn("Sync: header by nr: timed out", "elapsed", ttl)
 			return nil, errTimeout
 
 		case <-d.bodyCh:
@@ -2631,7 +2637,7 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 
 // fetchHeaderByHash retrieves the header by hash from a remote peer.
 func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (header *types.Header, err error) {
-	p.log.Info("Retrieving remote chain header by hash")
+	p.log.Info("Sync: Retrieving remote chain header by hash")
 	fetch := 1
 
 	go p.peer.RequestHeadersByHashes(common.HashArray{hash})
@@ -2646,20 +2652,20 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 		case packet := <-d.headerCh:
 			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
-				log.Debug("Received headers from incorrect peer", "peer", packet.PeerId())
+				log.Error("Sync: header by hash: received headers from incorrect peer", "peer", packet.PeerId())
 				break
 			}
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
-				log.Error(fmt.Sprintf("%s: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
+				log.Error(fmt.Sprintf("Sync: header by hash: %s: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
 				return nil, errBadPeer
 			}
 			header = headers[0]
 			return header, nil
 
 		case <-timeout:
-			p.log.Warn("Waiting for header header timed out", "elapsed", ttl)
+			p.log.Warn("Sync: header by hash: timed out", "elapsed", ttl)
 			return nil, errTimeout
 
 		case <-d.bodyCh:
@@ -2669,12 +2675,12 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 	}
 }
 
-// peerSyncBySpines downloads and set on current node unfinalized chain from remote peer.
-func (d *Downloader) peerSyncBySpines(p *peerConnection, baseSpine common.Hash, spines common.HashArray) error {
+// peerSyncBySpinesByChunk downloads and set on current node unfinalized chain from remote peer.
+func (d *Downloader) peerSyncBySpinesByChunk(p *peerConnection, baseSpine common.Hash, spines common.HashArray) error {
 	defer func(ts time.Time) {
 		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(ts)),
-			"func:", "peerSyncBySpines",
+			"func:", "peerSyncBySpinesByChunk",
 		)
 	}(time.Now())
 
