@@ -41,7 +41,6 @@ import (
 
 const (
 	alpha           = 3  // Kademlia concurrency factor
-	bucketSize      = 16 // Kademlia bucket size
 	maxReplacements = 10 // Size of per-bucket replacement list
 
 	// We keep buckets for the upper 1/15 of distances because
@@ -61,6 +60,8 @@ const (
 	seedCount          = 30
 	seedMaxAge         = 5 * 24 * time.Hour
 )
+
+var bucketSize = 16 // Kademlia bucket size
 
 // Table is the 'node table', a Kademlia-like index of neighbor nodes. The table keeps
 // itself up-to-date by verifying the liveness of neighbors and requesting their node
@@ -101,7 +102,7 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, genHash *common.Hash) (*Table, error) {
+func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, bs uint,genHash *common.Hash) (*Table, error) {
 	tab := &Table{
 		net:         t,
 		db:          db,
@@ -124,6 +125,10 @@ func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger
 	}
 	tab.seedRand()
 	tab.loadSeedNodes()
+
+	if bs != 0 {
+		bucketSize = int(bs)
+	}
 
 	return tab, nil
 }
@@ -411,15 +416,11 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 	// is O(tab.len() * nresults).
 	nodes := &nodesByDistance{target: target}
 	liveNodes := &nodesByDistance{target: target}
-	nodesIP := make([]string, 0)
-	liveNodesIP := make([]string, 0)
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
 			nodes.push(n, nresults)
-			nodesIP = append(nodesIP, n.IP().String())
 			if preferLive && n.livenessChecks > 0 {
 				liveNodes.push(n, nresults)
-				liveNodesIP = append(liveNodesIP, n.IP().String())
 			}
 		}
 	}
@@ -427,7 +428,6 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 	if preferLive && len(liveNodes.entries) > 0 {
 		return liveNodes
 	}
-
 	return nodes
 }
 

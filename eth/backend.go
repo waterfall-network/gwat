@@ -401,7 +401,7 @@ func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 // and updates the minimum price required by the transaction pool.
 func (s *Ethereum) StartMining(threads int) error {
 	// If the creator was not running, initialize it
-	if !s.dag.Creator().IsRunning() {
+	if !s.dag.Creator().IsRunning() && len(s.AccountManager().Accounts()) > 0 {
 		// Propagate the initial price point to the transaction pool
 		s.lock.RLock()
 		price := s.gasPrice
@@ -425,6 +425,8 @@ func (s *Ethereum) StartMining(threads int) error {
 		atomic.StoreUint32(&s.handler.acceptTxs, 1)
 
 		s.dag.Creator().Start()
+	} else {
+		log.Info("Mining not started: No accounts found in keystore and creator is not active")
 	}
 	return nil
 }

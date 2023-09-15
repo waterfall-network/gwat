@@ -143,7 +143,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		log:             cfg.Log,
 	}
 
-	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log, &cfg.Genesis)
+	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log, cfg.FindNodesBucketLength,&cfg.Genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -753,11 +753,9 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	// to stay below the packet size limit.
 	p := v4wire.Neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
 	var sent bool
-	sendingNodes := make([]string, 0)
 	for _, n := range closest {
 		if netutil.CheckRelayIP(from.IP, n.IP()) == nil {
 			p.Nodes = append(p.Nodes, nodeToRPC(n))
-			sendingNodes = append(sendingNodes, n.IP().String())
 		}
 		if len(p.Nodes) == v4wire.MaxNeighbors {
 			t.send(from, fromID, &p)
