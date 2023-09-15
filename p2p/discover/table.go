@@ -35,6 +35,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/netutil"
 )
 
@@ -80,6 +81,7 @@ type Table struct {
 	closed     chan struct{}
 
 	nodeAddedHook func(*node) // for testing
+	genesisHash   *common.Hash
 }
 
 // transport is implemented by the UDP transports.
@@ -99,17 +101,18 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger) (*Table, error) {
+func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, genHash *common.Hash) (*Table, error) {
 	tab := &Table{
-		net:        t,
-		db:         db,
-		refreshReq: make(chan chan struct{}),
-		initDone:   make(chan struct{}),
-		closeReq:   make(chan struct{}),
-		closed:     make(chan struct{}),
-		rand:       mrand.New(mrand.NewSource(0)),
-		ips:        netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
-		log:        log,
+		net:         t,
+		db:          db,
+		refreshReq:  make(chan chan struct{}),
+		initDone:    make(chan struct{}),
+		closeReq:    make(chan struct{}),
+		closed:      make(chan struct{}),
+		rand:        mrand.New(mrand.NewSource(0)),
+		ips:         netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
+		log:         log,
+		genesisHash: genHash,
 	}
 	if err := tab.setFallbackNodes(bootnodes); err != nil {
 		return nil, err
@@ -421,14 +424,10 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 		}
 	}
 
-	log.Info("CHECK PEERS - findnodeById", "nodes", nodesIP, "nodesCount", len(nodes.entries), "liveNodes", liveNodesIP, "liveCount", len(liveNodes.entries))
-
 	if preferLive && len(liveNodes.entries) > 0 {
-		log.Info("CHECK PEERS - return LiveNodes")
 		return liveNodes
 	}
 
-	log.Info("CHECK PEERS - return Nodes")
 	return nodes
 }
 
@@ -514,6 +513,20 @@ func (tab *Table) addVerifiedNode(n *node) {
 	}
 	if n.ID() == tab.self().ID() {
 		return
+	}
+
+	if tab.genesisHash != nil && *tab.genesisHash != (common.Hash{}) {
+		var gen enr.ENRGenesis
+		err := n.Node.Load(&gen)
+		if err != nil {
+			log.Error("can`t load enr genesis", "error", err)
+			return
+		}
+
+		if common.Hash(gen) != *tab.genesisHash && common.Hash(gen) != (common.Hash{}) {
+			log.Warn("unknown node, mismatch genesis", "want", *tab.genesisHash, "have", gen)
+			return
+		}
 	}
 
 	tab.mutex.Lock()

@@ -27,6 +27,7 @@ import (
 	"net"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
@@ -47,10 +48,11 @@ const (
 // RPC request structures
 type (
 	Ping struct {
-		Version    uint
-		From, To   Endpoint
-		Expiration uint64
-		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.
+		Version     uint
+		From, To    Endpoint
+		Expiration  uint64
+		ENRSeq      uint64      `rlp:"optional"` // Sequence number of local record, added by EIP-868.
+		GenesisRoot common.Hash `rlp:"optional"`
 
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
@@ -61,10 +63,11 @@ type (
 		// This field should mirror the UDP envelope address
 		// of the ping packet, which provides a way to discover the
 		// the external address (after NAT).
-		To         Endpoint
-		ReplyTok   []byte // This contains the hash of the ping packet.
-		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
-		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.
+		To          Endpoint
+		ReplyTok    []byte      // This contains the hash of the ping packet.
+		Expiration  uint64      // Absolute timestamp at which the packet becomes invalid.
+		ENRSeq      uint64      `rlp:"optional"` // Sequence number of local record, added by EIP-868.
+		GenesisRoot common.Hash `rlp:"optional"`
 
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`

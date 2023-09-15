@@ -26,6 +26,7 @@ import (
 	"net"
 	"strings"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
@@ -82,6 +83,10 @@ func Parse(validSchemes enr.IdentityScheme, input string) (*Node, error) {
 // ID returns the node identifier.
 func (n *Node) ID() ID {
 	return n.id
+}
+
+func (n *Node) SetGenesisRoot(hash common.Hash) {
+	n.r.Set(enr.ENRGenesis(hash))
 }
 
 // Seq returns the sequence number of the underlying record.

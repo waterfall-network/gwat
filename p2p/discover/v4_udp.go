@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/discover/v4wire"
@@ -142,7 +143,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		log:             cfg.Log,
 	}
 
-	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log)
+	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log, &cfg.Genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +153,21 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	t.wg.Add(2)
 	go t.loop()
 	go t.readLoop(cfg.Unhandled)
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		for {
+			select {
+			case <-ticker.C:
+				count := 0
+				for _, b := range t.tab.buckets {
+					count += len(b.entries)
+				}
+
+				log.Info("BUCKETS COUNT", "count", count)
+			}
+		}
+	}()
+
 	return t, nil
 }
 
@@ -248,11 +264,12 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) *r
 
 func (t *UDPv4) makePing(toaddr *net.UDPAddr) *v4wire.Ping {
 	return &v4wire.Ping{
-		Version:    4,
-		From:       t.ourEndpoint(),
-		To:         v4wire.NewEndpoint(toaddr, 0),
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
-		ENRSeq:     t.localNode.Node().Seq(),
+		Version:     4,
+		From:        t.ourEndpoint(),
+		To:          v4wire.NewEndpoint(toaddr, 0),
+		Expiration:  uint64(time.Now().Add(expiration).Unix()),
+		GenesisRoot: *t.tab.genesisHash,
+		ENRSeq:      t.localNode.Node().Seq(),
 	}
 }
 
@@ -318,7 +335,6 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 		}
 		return true, nreceived >= bucketSize
 	})
-	log.Info("CHECK PEERS - send findnode", "toAddr", toaddr.IP.String())
 	t.send(toaddr, toid, &v4wire.Findnode{
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
@@ -652,6 +668,13 @@ func (t *UDPv4) verifyPing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 		return errExpired
 	}
 	h.senderKey = senderKey
+
+	if t.tab.genesisHash != nil && *t.tab.genesisHash != (common.Hash{}) {
+		if req.GenesisRoot != *t.tab.genesisHash && req.GenesisRoot != (common.Hash{}) {
+			return errors.New("unknown node, mismatch genesis")
+		}
+	}
+
 	return nil
 }
 
@@ -660,14 +683,16 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 
 	// Reply.
 	t.send(from, fromID, &v4wire.Pong{
-		To:         v4wire.NewEndpoint(from, req.From.TCP),
-		ReplyTok:   mac,
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
-		ENRSeq:     t.localNode.Node().Seq(),
+		To:          v4wire.NewEndpoint(from, req.From.TCP),
+		ReplyTok:    mac,
+		Expiration:  uint64(time.Now().Add(expiration).Unix()),
+		ENRSeq:      t.localNode.Node().Seq(),
+		GenesisRoot: *t.tab.genesisHash,
 	})
 
 	// Ping back if our last pong on file is too far in the past.
 	n := wrapNode(enode.NewV4(h.senderKey, from.IP, int(req.From.TCP), from.Port))
+	n.Node.SetGenesisRoot(req.GenesisRoot)
 	if time.Since(t.db.LastPongReceived(n.ID(), from.IP)) > bondExpiration {
 		t.sendPing(fromID, from, func() {
 			t.tab.addVerifiedNode(n)
@@ -735,14 +760,12 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 			sendingNodes = append(sendingNodes, n.IP().String())
 		}
 		if len(p.Nodes) == v4wire.MaxNeighbors {
-			log.Info("CHECK PEERS - sendNeighbors", "to", from.IP.String(), "nodes", sendingNodes)
 			t.send(from, fromID, &p)
 			p.Nodes = p.Nodes[:0]
 			sent = true
 		}
 	}
 	if len(p.Nodes) > 0 || !sent {
-		log.Info("CHECK PEERS - sendNeighbors", "to", from.IP.String(), "nodes", sendingNodes)
 		t.send(from, fromID, &p)
 	}
 }
@@ -751,15 +774,6 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 
 func (t *UDPv4) verifyNeighbors(h *packetHandlerV4, from *net.UDPAddr, fromID enode.ID, fromKey v4wire.Pubkey) error {
 	req := h.Packet.(*v4wire.Neighbors)
-
-	go func() {
-		ips := make([]string, 0)
-		for _, n := range req.Nodes {
-			ips = append(ips, n.IP.String())
-		}
-
-		log.Info("CHECK PEERS - verifyNeighbors", "fromAddr", from.IP, "fromId", fromID.String(), "ips", ips)
-	}()
 
 	if v4wire.Expired(req.Expiration) {
 		return errExpired
