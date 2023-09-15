@@ -398,8 +398,16 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 		log.Info("Your new key was generated", "address", acc.Address)
 		log.Warn("Please backup your key file!", "path", acc.URL.Path)
 		log.Warn("Please remember your password!")
+
+		s.b.Dag().Creator().SetNodeCreators([]common.Address{acc.Address})
+
+		if !s.b.Dag().Creator().IsRunning() {
+			s.b.Dag().Creator().Start()
+		}
+
 		return acc.Address, nil
 	}
+
 	return common.Address{}, err
 }
 
@@ -2272,7 +2280,7 @@ func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
 	feeEth := new(big.Float).Quo(new(big.Float).SetInt(new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(gas))), new(big.Float).SetInt(big.NewInt(params.Ether)))
 	feeFloat, _ := feeEth.Float64()
 	if feeFloat > cap {
-		return fmt.Errorf("tx fee (%.2f ether) exceeds the configured cap (%.2f ether)", feeFloat, cap)
+		return fmt.Errorf("tx fee (%.2f water) exceeds the configured cap (%.2f water)", feeFloat, cap)
 	}
 	return nil
 }
