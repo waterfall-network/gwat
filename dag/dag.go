@@ -595,11 +595,11 @@ func (d *Dag) workLoop() {
 				d.resetCheckpoint()
 				continue
 			}
-			//if d.isCoordinatorConnectionLost() {
-			//	d.bc.SetIsSynced(false)
-			//	log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
-			//	continue
-			//}
+			if d.isCoordinatorConnectionLost() {
+				d.bc.SetIsSynced(false)
+				log.Info("Detected coordinator skipped slot handling: sync mode on", "slot", slot, "coordSlot", d.getLastFinalizeApiSlot())
+				continue
+			}
 			currentEpoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
 			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", currentEpoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
 
