@@ -670,9 +670,13 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
 	}
 
-	err := d.Creator().RunBlockCreation(slot, slotCreators, tips, checkpoint)
-	if err != nil {
-		log.Error("Create block error", "error", err)
+	if d.Creator().IsRunning() {
+		err := d.Creator().RunBlockCreation(slot, slotCreators, tips, checkpoint)
+		if err != nil {
+			log.Error("Create block error", "error", err)
+		}
+	} else {
+		log.Warn("Creator stopped")
 	}
 
 	d.saveCheckpoint(d.bc.GetLastCoordinatedCheckpoint())
