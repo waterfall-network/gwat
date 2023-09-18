@@ -2688,7 +2688,7 @@ func (d *Downloader) peerSyncBySpines(p *peerConnection, baseSpine common.Hash, 
 
 func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines common.HashArray) (isPeerAcceptable bool, terminalRemote *types.Header, err error) {
 	// check remote header
-	baseHeader := d.blockchain.GetHeaderByHash(baseSpine)
+	baseHeader := d.lightchain.GetHeaderByHash(baseSpine)
 	if baseHeader == nil || baseHeader.Height > 0 && baseHeader.Nr() == 0 {
 		return false, nil, errInvalidBaseSpine
 	}
@@ -3257,7 +3257,10 @@ Loop:
 				defer d.resetPeerSync(con.id)
 				defer wg.Done()
 				if err = d.multiPeerGetHashes(con, baseSpine, spines); err != nil {
-					if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
+					if errors.Is(err, errTimeout) {
+						log.Warn("Sync head failed: timed out", "i", i, "peer", con.id, "err", err)
+					}
+					if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || //errors.Is(err, errTimeout) ||
 						errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
 						errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
 						log.Warn("Sync head failed, dropping peer", "i", i, "peer", con.id, "err", err)
