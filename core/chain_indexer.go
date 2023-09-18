@@ -339,11 +339,11 @@ func (c *ChainIndexer) updateLoop() {
 			return
 
 		case <-c.update:
-			log.Info("Check update loop", "got update event")
+			log.Info("Check update loop: got update event")
 			// Section headers completed (or rolled back), update the index
 			c.lock.Lock()
 			if c.knownSections > c.storedSections {
-				log.Info("Check update loop", "c.knownSections > c.storedSections")
+				log.Info("Check update loop: c.knownSections > c.storedSections")
 				// Periodically print an upgrade log message to the user
 				if time.Since(updated) > 8*time.Second {
 					if c.knownSections > c.storedSections+1 {
