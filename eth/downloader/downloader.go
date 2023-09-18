@@ -2663,6 +2663,9 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 	if baseRemote.Hash() != baseHeader.Hash() || baseRemote.Root != baseHeader.Root {
 		return false, nil, errBadPeer
 	}
+	if len(spines) == 0 {
+		return true, terminalRemote, nil
+	}
 	terminalSpine := spines[len(spines)-1]
 	if terminalSpine == (common.Hash{}) {
 		return true, terminalRemote, nil
