@@ -83,6 +83,15 @@ func (p *dagPack) PeerId() string { return p.peerID }
 func (p *dagPack) Items() int     { return len(p.dag) }
 func (p *dagPack) Stats() string  { return fmt.Sprintf("%d", len(p.dag)) }
 
+type syncPeerChanType int8
+
+const (
+	dagCh syncPeerChanType = iota
+	headerCh
+	bodyCh
+	receiptCh
+)
+
 // dagPack is a dag chain returned by a peer.
 type syncPeerChans struct {
 	dagCh     chan dataPack

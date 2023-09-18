@@ -90,6 +90,7 @@ var (
 	errTooOld                  = errors.New("peer's protocol version too old")
 	errNoAncestorFound         = errors.New("no common ancestor found")
 	errDataSizeLimitExceeded   = errors.New("data size limit exceeded")
+	errSyncPeerNotFound        = errors.New("sync peer not found")
 )
 
 type Downloader struct {
@@ -2303,26 +2304,21 @@ func (d *Downloader) fetchDagHashesBySlots(p *peerConnection, from, to uint64) (
 	timeout := time.After(ttl)
 
 	for {
+		if err != nil {
+			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "fetchDagHashesBySlots")
+		}
 		err = nil
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
 		case packet := <-d.dagCh:
-			// Discard anything not from the origin peer
-			if !d.isPeerSync(packet.PeerId()) {
-				log.Error("Sync: dag by slots: received from incorrect peer", "peer", packet.PeerId())
-				break
-			}
-			// redirect packet to peer chan
-			pChs := d.getPeerSyncChans(packet.PeerId())
-			if pChs == nil {
-				log.Error("Sync: dag by slots: sync peer not found", "peer", packet.PeerId())
-				break
-			}
-			pChs.GetDagChan() <- packet
-
-			log.Info("Sync: dag by slots: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
-
+			err = d.redirectPacketToSyncPeerChan(packet, dagCh)
+		case packet := <-d.headerCh:
+			err = d.redirectPacketToSyncPeerChan(packet, headerCh)
+		case packet := <-d.bodyCh:
+			err = d.redirectPacketToSyncPeerChan(packet, bodyCh)
+		case packet := <-d.receiptCh:
+			err = d.redirectPacketToSyncPeerChan(packet, receiptCh)
 		case packet := <-peerCh:
 			// handle redirected packet at peer chan
 			log.Info("Sync: dag by slots: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
@@ -2339,13 +2335,6 @@ func (d *Downloader) fetchDagHashesBySlots(p *peerConnection, from, to uint64) (
 		case <-timeout:
 			p.log.Debug("Waiting for dag timed out", "elapsed", ttl)
 			return nil, errTimeout
-		case header := <-d.headerCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.headerCh:", "elapsed", ttl, "header", header, "fn", "sync:RequestHashesBySlots")
-		case body := <-d.bodyCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.bodyCh:", "elapsed", ttl, "body", body, "fn", "sync:RequestHashesBySlots")
-		case receipt := <-d.receiptCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.receiptCh:", "elapsed", ttl, "receipt", receipt, "fn", "sync:RequestHashesBySlots")
-			// Out of bounds delivery, ignore
 		}
 	}
 }
@@ -2370,27 +2359,21 @@ func (d *Downloader) fetchHashesBySpines(p *peerConnection, baseSpine common.Has
 	timeout := time.After(ttl)
 
 	for {
+		if err != nil {
+			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "fetchHashesBySpines")
+		}
 		err = nil
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
-
 		case packet := <-d.dagCh:
-			// Discard anything not from the origin peer
-			if !d.isPeerSync(packet.PeerId()) {
-				log.Error("Sync: dag by slots: received from incorrect peer", "peer", packet.PeerId())
-				break
-			}
-			// redirect packet to peer chan
-			pChs := d.getPeerSyncChans(packet.PeerId())
-			if pChs == nil {
-				log.Error("Sync: dag by slots: sync peer not found", "peer", packet.PeerId())
-				break
-			}
-			pChs.GetDagChan() <- packet
-
-			log.Info("Sync: dag by slots: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
-
+			err = d.redirectPacketToSyncPeerChan(packet, dagCh)
+		case packet := <-d.headerCh:
+			err = d.redirectPacketToSyncPeerChan(packet, headerCh)
+		case packet := <-d.bodyCh:
+			err = d.redirectPacketToSyncPeerChan(packet, bodyCh)
+		case packet := <-d.receiptCh:
+			err = d.redirectPacketToSyncPeerChan(packet, receiptCh)
 		case packet := <-peerCh:
 			// handle redirected packet at peer chan
 			log.Info("Sync: dag by slots: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
@@ -2407,13 +2390,6 @@ func (d *Downloader) fetchHashesBySpines(p *peerConnection, baseSpine common.Has
 		case <-timeout:
 			p.log.Warn("Sync: Waiting for dag timed out", "elapsed", ttl)
 			return nil, errTimeout
-		case header := <-d.headerCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.headerCh:", "elapsed", ttl, "header", header)
-		case body := <-d.bodyCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.bodyCh:", "elapsed", ttl, "body", body)
-		case receipt := <-d.receiptCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.receiptCh:", "elapsed", ttl, "receipt", receipt)
-			// Out of bounds delivery, ignore
 		}
 	}
 }
@@ -2435,27 +2411,21 @@ func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray)
 	timeout := time.After(ttl)
 
 	for {
+		if err != nil {
+			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "fetchDagHeaders")
+		}
 		err = nil
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
-
+		case packet := <-d.dagCh:
+			err = d.redirectPacketToSyncPeerChan(packet, dagCh)
 		case packet := <-d.headerCh:
-			// Discard anything not from the origin peer
-			if !d.isPeerSync(packet.PeerId()) {
-				log.Error("Sync: header by hash: received headers from incorrect peer", "peer", packet.PeerId())
-				break
-			}
-			// redirect packet to peer chan
-			pChs := d.getPeerSyncChans(packet.PeerId())
-			if pChs == nil {
-				log.Error("Sync: header by hash: sync peer not found", "peer", packet.PeerId())
-				break
-			}
-			pChs.GetHeaderChan() <- packet
-
-			log.Info("Sync: header by hash: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
-
+			err = d.redirectPacketToSyncPeerChan(packet, headerCh)
+		case packet := <-d.bodyCh:
+			err = d.redirectPacketToSyncPeerChan(packet, bodyCh)
+		case packet := <-d.receiptCh:
+			err = d.redirectPacketToSyncPeerChan(packet, receiptCh)
 		case packet := <-peerCh:
 			// handle redirected packet at peer chan
 			log.Info("Sync: header by hash: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
@@ -2494,27 +2464,23 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
 
+	var err error
 	for {
+		if err != nil {
+			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "fetchDagTxs")
+		}
+		err = nil
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
-
+		case packet := <-d.headerCh:
+			err = d.redirectPacketToSyncPeerChan(packet, headerCh)
+		case packet := <-d.dagCh:
+			err = d.redirectPacketToSyncPeerChan(packet, dagCh)
 		case packet := <-d.bodyCh:
-			// Discard anything not from the origin peer
-			if !d.isPeerSync(packet.PeerId()) {
-				log.Error("Sync: body by hashes: received from incorrect peer", "peer", packet.PeerId())
-				break
-			}
-			// redirect packet to peer chan
-			pChs := d.getPeerSyncChans(packet.PeerId())
-			if pChs == nil {
-				log.Error("Sync: body by hashes: sync peer not found", "peer", packet.PeerId())
-				break
-			}
-			pChs.GetBodyChan() <- packet
-
-			log.Info("Sync: body by hashes: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
-
+			err = d.redirectPacketToSyncPeerChan(packet, bodyCh)
+		case packet := <-d.receiptCh:
+			err = d.redirectPacketToSyncPeerChan(packet, receiptCh)
 		case packet := <-peerCh:
 			// handle redirected packet at peer chan
 			log.Info("Sync: body by hashes: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
@@ -2728,26 +2694,21 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
 	for {
+		if err != nil {
+			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "fetchHeaderByNr")
+		}
+		err = nil
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
-
+		case packet := <-d.dagCh:
+			err = d.redirectPacketToSyncPeerChan(packet, dagCh)
 		case packet := <-d.headerCh:
-			// Discard anything not from the origin peer
-			if !d.isPeerSync(packet.PeerId()) {
-				log.Error("Sync: header by nr: received from incorrect peer", "peer", packet.PeerId())
-				break
-			}
-			// redirect packet to peer chan
-			pChs := d.getPeerSyncChans(packet.PeerId())
-			if pChs == nil {
-				log.Error("Sync: header by nr: sync peer not found", "peer", packet.PeerId())
-				break
-			}
-			pChs.GetHeaderChan() <- packet
-
-			log.Info("Sync: header by nr: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
-
+			err = d.redirectPacketToSyncPeerChan(packet, headerCh)
+		case packet := <-d.bodyCh:
+			err = d.redirectPacketToSyncPeerChan(packet, bodyCh)
+		case packet := <-d.receiptCh:
+			err = d.redirectPacketToSyncPeerChan(packet, receiptCh)
 		case packet := <-peerCh:
 			// handle redirected packet at peer chan
 			log.Info("Sync: header by nr: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
@@ -2768,10 +2729,6 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 		case <-timeout:
 			p.log.Warn("Sync: header by nr: timed out", "elapsed", ttl)
 			return nil, errTimeout
-
-		case <-d.bodyCh:
-		case <-d.receiptCh:
-			// Out of bounds delivery, ignore
 		}
 	}
 }
@@ -2793,26 +2750,21 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
 	for {
+		if err != nil {
+			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "fetchHeaderByHash")
+		}
+		err = nil
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
-
+		case packet := <-d.dagCh:
+			err = d.redirectPacketToSyncPeerChan(packet, dagCh)
 		case packet := <-d.headerCh:
-			// Discard anything not from the origin peer
-			if !d.isPeerSync(packet.PeerId()) {
-				log.Error("Sync: header by hash: received headers from incorrect peer", "peer", packet.PeerId())
-				break
-			}
-			// redirect packet to peer chan
-			pChs := d.getPeerSyncChans(packet.PeerId())
-			if pChs == nil {
-				log.Error("Sync: header by hash: sync peer not found", "peer", packet.PeerId())
-				break
-			}
-			pChs.GetHeaderChan() <- packet
-
-			log.Info("Sync: header by hash: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
-
+			err = d.redirectPacketToSyncPeerChan(packet, headerCh)
+		case packet := <-d.bodyCh:
+			err = d.redirectPacketToSyncPeerChan(packet, bodyCh)
+		case packet := <-d.receiptCh:
+			err = d.redirectPacketToSyncPeerChan(packet, receiptCh)
 		case packet := <-peerCh:
 			// handle redirected packet at peer chan
 			log.Info("Sync: header by hash: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
@@ -2829,14 +2781,9 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 			}
 			header = headers[0]
 			return header, nil
-
 		case <-timeout:
 			p.log.Warn("Sync: header by hash: timed out", "elapsed", ttl)
 			return nil, errTimeout
-
-		case <-d.bodyCh:
-		case <-d.receiptCh:
-			// Out of bounds delivery, ignore
 		}
 	}
 }
@@ -3414,26 +3361,21 @@ func (d *Downloader) multiFetchDagHashesBySlots(p *peerConnection, from, to uint
 	timeout := time.After(ttl)
 
 	for {
+		if err != nil {
+			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "multiFetchDagHashesBySlots")
+		}
 		err = nil
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
 		case packet := <-d.dagCh:
-			// Discard anything not from the origin peer
-			if !d.isPeerSync(packet.PeerId()) {
-				log.Error("Sync: dag by slots: received from incorrect peer", "peer", packet.PeerId())
-				break
-			}
-			// redirect packet to peer chan
-			pChs := d.getPeerSyncChans(packet.PeerId())
-			if pChs == nil {
-				log.Error("Sync: dag by slots: sync peer not found", "peer", packet.PeerId())
-				break
-			}
-			pChs.GetDagChan() <- packet
-
-			log.Info("Sync: dag by slots: redirect packet", "packet.peer", packet.PeerId(), "peer", p.id)
-
+			err = d.redirectPacketToSyncPeerChan(packet, dagCh)
+		case packet := <-d.headerCh:
+			err = d.redirectPacketToSyncPeerChan(packet, headerCh)
+		case packet := <-d.bodyCh:
+			err = d.redirectPacketToSyncPeerChan(packet, bodyCh)
+		case packet := <-d.receiptCh:
+			err = d.redirectPacketToSyncPeerChan(packet, receiptCh)
 		case packet := <-peerCh:
 			// handle redirected packet at peer chan
 			log.Info("Sync: dag by slots: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
@@ -3450,15 +3392,49 @@ func (d *Downloader) multiFetchDagHashesBySlots(p *peerConnection, from, to uint
 		case <-timeout:
 			p.log.Debug("Waiting for dag timed out", "elapsed", ttl)
 			return nil, errTimeout
-		case header := <-d.headerCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.headerCh:", "elapsed", ttl, "header", header, "fn", "sync:RequestHashesBySlots")
-		case body := <-d.bodyCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.bodyCh:", "elapsed", ttl, "body", body, "fn", "sync:RequestHashesBySlots")
-		case receipt := <-d.receiptCh:
-			p.log.Warn("Out of bounds delivery, ignore: <-d.receiptCh:", "elapsed", ttl, "receipt", receipt, "fn", "sync:RequestHashesBySlots")
-			// Out of bounds delivery, ignore
 		}
 	}
+}
+
+// redirectPacketToSyncPeerChan redirects data from common chans to individual peer's chans.
+func (d *Downloader) redirectPacketToSyncPeerChan(packet dataPack, chType syncPeerChanType) error {
+	log.Info("Sync: redirect packet 000", "packet.peer", packet.PeerId(), "chType", chType)
+	if !d.isPeerSync(packet.PeerId()) {
+		log.Error("Sync: dag by slots: received from incorrect peer", "peer", packet.PeerId(), "chType", chType)
+		return errSyncPeerNotFound
+	}
+	pChs := d.getPeerSyncChans(packet.PeerId())
+	if pChs == nil {
+		log.Error("Sync: dag by slots: sync peer not found", "peer", packet.PeerId(), "chType", chType)
+		return errSyncPeerNotFound
+	}
+	switch chType {
+	case dagCh:
+		if len(pChs.GetDagChan()) > 0 {
+			<-pChs.GetDagChan()
+		}
+		pChs.GetDagChan() <- packet
+	case headerCh:
+		if len(pChs.GetHeaderChan()) > 0 {
+			<-pChs.GetHeaderChan()
+		}
+		pChs.GetHeaderChan() <- packet
+	case bodyCh:
+		if len(pChs.GetBodyChan()) > 0 {
+			<-pChs.GetBodyChan()
+		}
+		pChs.GetBodyChan() <- packet
+	case receiptCh:
+		if len(pChs.GetReceiptChan()) > 0 {
+			<-pChs.GetReceiptChan()
+		}
+		pChs.GetReceiptChan() <- packet
+	default:
+		log.Error("Sync: dag by slots: bad chan type", "peer", packet.PeerId(), "chType", chType)
+		return fmt.Errorf("bad chan type=%d", chType)
+	}
+	log.Info("Sync: redirect packet 111", "packet.peer", packet.PeerId(), "chType", chType)
+	return nil
 }
 
 // multiPeerReset empties the syncPeerHashes map.
