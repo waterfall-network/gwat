@@ -102,7 +102,7 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, bs uint,genHash *common.Hash) (*Table, error) {
+func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, bs uint, genHash *common.Hash) (*Table, error) {
 	tab := &Table{
 		net:         t,
 		db:          db,
@@ -523,7 +523,7 @@ func (tab *Table) addVerifiedNode(n *node) {
 			return
 		}
 
-		if common.Hash(gen) != *tab.genesisHash && common.Hash(gen) != (common.Hash{}) {
+		if common.Hash(gen) != *tab.genesisHash {
 			log.Warn("unknown node, mismatch genesis", "want", *tab.genesisHash, "have", gen)
 			return
 		}

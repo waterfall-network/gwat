@@ -143,7 +143,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		log:             cfg.Log,
 	}
 
-	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log, cfg.FindNodesBucketLength,&cfg.Genesis)
+	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log, cfg.FindNodesBucketLength, &cfg.Genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -670,7 +670,8 @@ func (t *UDPv4) verifyPing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 	h.senderKey = senderKey
 
 	if t.tab.genesisHash != nil && *t.tab.genesisHash != (common.Hash{}) {
-		if req.GenesisRoot != *t.tab.genesisHash && req.GenesisRoot != (common.Hash{}) {
+		if req.GenesisRoot != *t.tab.genesisHash {
+			log.Error("unknown node, mismatch genesis", "our", t.tab.genesisHash.Hex(), "their", req.GenesisRoot.Hex())
 			return errors.New("unknown node, mismatch genesis")
 		}
 	}
