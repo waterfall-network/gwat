@@ -657,23 +657,33 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 		return
 	}
 
-	d.bc.DagMuLock()
-	defer d.bc.DagMuUnlock()
-
-	if err := d.removeTipsWithOutdatedCp(); err != nil {
-		return
-	}
-
-	tips := d.bc.GetTips()
-	checkpoint := d.getCheckpoint()
-	if checkpoint == nil {
-		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
-	}
-
 	if d.Creator().IsRunning() {
-		err := d.Creator().RunBlockCreation(slot, slotCreators, tips, checkpoint)
-		if err != nil {
-			log.Error("Create block error", "error", err)
+		var canCreate bool
+		for _, account := range slotCreators {
+			if d.Creator().IsCreatorActive(account) {
+				canCreate = true
+				break
+			}
+		}
+
+		if canCreate {
+			d.bc.DagMuLock()
+			defer d.bc.DagMuUnlock()
+
+			if err := d.removeTipsWithOutdatedCp(); err != nil {
+				return
+			}
+
+			tips := d.bc.GetTips()
+			checkpoint := d.getCheckpoint()
+			if checkpoint == nil {
+				checkpoint = d.bc.GetLastCoordinatedCheckpoint()
+			}
+
+			err := d.Creator().RunBlockCreation(slot, slotCreators, tips, checkpoint)
+			if err != nil {
+				log.Error("Create block error", "error", err)
+			}
 		}
 	} else {
 		log.Warn("Creator stopped")

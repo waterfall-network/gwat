@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
@@ -34,15 +35,16 @@ type Backend interface {
 
 // Config is the configuration parameters of block creation.
 type Config struct {
-	Etherbase  common.Address `toml:",omitempty"` // Public address for block creation rewards (default = first account)
-	Notify     []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
-	NotifyFull bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
-	ExtraData  hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor   uint64         // Target gas floor for mined blocks.
-	GasCeil    uint64         // Target gas ceiling for mined blocks.
-	GasPrice   *big.Int       // Minimum gas price for mining a transaction
-	Recommit   time.Duration  // The time interval for creator to re-create block creation work.
-	Noverify   bool           // Disable remote block creation solution verification(only useful in ethash).
+	Etherbase   common.Address `toml:",omitempty"` // Public address for block creation rewards (default = first account)
+	PasswordDir string         // Keystore password directory
+	Notify      []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
+	NotifyFull  bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
+	ExtraData   hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
+	GasFloor    uint64         // Target gas floor for mined blocks.
+	GasCeil     uint64         // Target gas ceiling for mined blocks.
+	GasPrice    *big.Int       // Minimum gas price for mining a transaction
+	Recommit    time.Duration  // The time interval for creator to re-create block creation work.
+	Noverify    bool           // Disable remote block creation solution verification(only useful in ethash).
 }
 
 // environment is the Creator's current environment and holds all of the current state information.
@@ -217,7 +219,7 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	wg := new(sync.WaitGroup)
 	for _, account := range assigned.Creators {
 		var needEmptyBlock bool
-		if c.isCreatorActive(account) {
+		if c.IsCreatorActive(account) {
 			if account == assigned.Creators[0] {
 				needEmptyBlock, err = c.needEmptyBlock(slot)
 				if err != nil {
@@ -426,6 +428,17 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 	pendingTxs := c.getPending(coinbase, creators)
 
 	syncData := validatorsync.GetPendingValidatorSyncData(c.bc)
+	if len(syncData) > 0 || len(pendingTxs) > 0 || needEmptyBlock {
+		ks, err := fetchKeystore(c.eth.AccountManager())
+		if err != nil {
+			log.Error("Failed to fetch keystore: %v", err)
+		}
+
+		acc := accounts.Account{Address: coinbase}
+		if !ks.IsUnlocked(acc) {
+			c.UnlockAccount(ks, acc.Address.String())
+		}
+	}
 
 	//syncData log
 	for _, sd := range syncData {
@@ -699,7 +712,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 }
 
 // isCreatorActive returns true if creator is assigned to create blocks in current slot.
-func (c *Creator) isCreatorActive(coinbase common.Address) bool {
+func (c *Creator) IsCreatorActive(coinbase common.Address) bool {
 	_, ok := c.nodeCreators[coinbase]
 
 	return ok
@@ -783,4 +796,21 @@ func (c *Creator) SetNodeCreators(accounts []common.Address) {
 	for _, account := range accounts {
 		c.nodeCreators[account] = struct{}{}
 	}
+}
+
+// UnlockAccount unlocks a specified account.
+func (c *Creator) UnlockAccount(ks *keystore.KeyStore, targetAddress string) {
+	passwords := c.getPasswords()
+	keystoreAccounts := ks.Accounts()
+
+	// Find the position of the target account.
+	position := findAccountPosition(keystoreAccounts, targetAddress)
+
+	// Unlock the account.
+	unlockAccount(ks, targetAddress, position, passwords)
+}
+
+// getPasswords returns a list of passwords from the password directory.
+func (c *Creator) getPasswords() []string {
+	return makePasswordList(c.config.PasswordDir)
 }

@@ -1282,6 +1282,9 @@ func setMiner(ctx *cli.Context, cfg *creator.Config) {
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
 		log.Warn("The generic --creator.gastarget flag is deprecated and will be removed in the future!")
 	}
+	if ctx.GlobalIsSet(PasswordFileFlag.Name) {
+		cfg.PasswordDir = ctx.GlobalString(PasswordFileFlag.Name)
+	}
 }
 
 func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {

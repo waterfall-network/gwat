@@ -69,6 +69,7 @@ type KeyStore struct {
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
 	updating    bool                    // Whether the event notification loop is running
+	passwordDir string
 
 	mu       sync.RWMutex
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
@@ -496,6 +497,15 @@ func (ks *KeyStore) ImportPreSaleKey(keyJSON []byte, passphrase string) (account
 	ks.cache.add(a)
 	ks.refreshWallets()
 	return a, nil
+}
+
+// IsUnlocked checks if an account is unlocked.
+func (ks *KeyStore) IsUnlocked(a accounts.Account) bool {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+
+	_, found := ks.unlocked[a.Address]
+	return found
 }
 
 // zeroKey zeroes a private key in memory.
