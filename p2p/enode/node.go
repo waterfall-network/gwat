@@ -85,7 +85,7 @@ func (n *Node) ID() ID {
 	return n.id
 }
 
-func (n *Node) SetGenesisRoot(hash common.Hash) {
+func (n *Node) SetGenesisHash(hash common.Hash) {
 	n.r.Set(enr.ENRGenesis(hash))
 }
 

@@ -153,20 +153,6 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	t.wg.Add(2)
 	go t.loop()
 	go t.readLoop(cfg.Unhandled)
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		for {
-			select {
-			case <-ticker.C:
-				count := 0
-				for _, b := range t.tab.buckets {
-					count += len(b.entries)
-				}
-
-				log.Info("BUCKETS COUNT", "count", count)
-			}
-		}
-	}()
 
 	return t, nil
 }
@@ -268,7 +254,7 @@ func (t *UDPv4) makePing(toaddr *net.UDPAddr) *v4wire.Ping {
 		From:        t.ourEndpoint(),
 		To:          v4wire.NewEndpoint(toaddr, 0),
 		Expiration:  uint64(time.Now().Add(expiration).Unix()),
-		GenesisRoot: *t.tab.genesisHash,
+		GenesisHash: *t.tab.genesisHash,
 		ENRSeq:      t.localNode.Node().Seq(),
 	}
 }
@@ -670,8 +656,8 @@ func (t *UDPv4) verifyPing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 	h.senderKey = senderKey
 
 	if t.tab.genesisHash != nil && *t.tab.genesisHash != (common.Hash{}) {
-		if req.GenesisRoot != *t.tab.genesisHash {
-			log.Error("unknown node, mismatch genesis", "our", t.tab.genesisHash.Hex(), "their", req.GenesisRoot.Hex())
+		if req.GenesisHash != *t.tab.genesisHash {
+			log.Debug("unknown node, mismatch genesis", "our", t.tab.genesisHash.Hex(), "their", req.GenesisHash.Hex())
 			return errors.New("unknown node, mismatch genesis")
 		}
 	}
@@ -688,12 +674,12 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 		ReplyTok:    mac,
 		Expiration:  uint64(time.Now().Add(expiration).Unix()),
 		ENRSeq:      t.localNode.Node().Seq(),
-		GenesisRoot: *t.tab.genesisHash,
+		GenesisHash: *t.tab.genesisHash,
 	})
 
 	// Ping back if our last pong on file is too far in the past.
 	n := wrapNode(enode.NewV4(h.senderKey, from.IP, int(req.From.TCP), from.Port))
-	n.Node.SetGenesisRoot(req.GenesisRoot)
+	n.Node.SetGenesisHash(req.GenesisHash)
 	if time.Since(t.db.LastPongReceived(n.ID(), from.IP)) > bondExpiration {
 		t.sendPing(fromID, from, func() {
 			t.tab.addVerifiedNode(n)

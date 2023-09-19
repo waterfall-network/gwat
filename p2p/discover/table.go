@@ -519,12 +519,12 @@ func (tab *Table) addVerifiedNode(n *node) {
 		var gen enr.ENRGenesis
 		err := n.Node.Load(&gen)
 		if err != nil {
-			log.Error("can`t load enr genesis", "error", err)
+			log.Debug("can`t load enr genesis", "error", err)
 			return
 		}
 
 		if common.Hash(gen) != *tab.genesisHash {
-			log.Warn("unknown node, mismatch genesis", "want", *tab.genesisHash, "have", gen)
+			log.Debug("unknown node, mismatch genesis", "want", *tab.genesisHash, "have", gen)
 			return
 		}
 	}
