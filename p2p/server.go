@@ -155,6 +155,8 @@ type Config struct {
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
 
+	p2pGenesis common.Hash
+
 	clock mclock.Clock
 }
 
@@ -584,6 +586,7 @@ func (srv *Server) setupDiscovery() error {
 			Bootnodes:   srv.BootstrapNodes,
 			Unhandled:   unhandled,
 			Log:         srv.log,
+			Genesis:     srv.p2pGenesis,
 		}
 		ntab, err := discover.ListenV4(conn, srv.localnode, cfg)
 		if err != nil {
@@ -1118,4 +1121,8 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	return infos
+}
+
+func (srv *Server) SetP2PGenesis(genesis common.Hash) {
+	srv.p2pGenesis = genesis
 }

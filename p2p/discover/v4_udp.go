@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/discover/v4wire"
@@ -142,7 +143,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		log:             cfg.Log,
 	}
 
-	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log, cfg.FindNodesBucketLength)
+	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log, cfg.FindNodesBucketLength, &cfg.Genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +153,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	t.wg.Add(2)
 	go t.loop()
 	go t.readLoop(cfg.Unhandled)
+
 	return t, nil
 }
 
@@ -248,11 +250,12 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) *r
 
 func (t *UDPv4) makePing(toaddr *net.UDPAddr) *v4wire.Ping {
 	return &v4wire.Ping{
-		Version:    4,
-		From:       t.ourEndpoint(),
-		To:         v4wire.NewEndpoint(toaddr, 0),
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
-		ENRSeq:     t.localNode.Node().Seq(),
+		Version:     4,
+		From:        t.ourEndpoint(),
+		To:          v4wire.NewEndpoint(toaddr, 0),
+		Expiration:  uint64(time.Now().Add(expiration).Unix()),
+		GenesisHash: *t.tab.genesisHash,
+		ENRSeq:      t.localNode.Node().Seq(),
 	}
 }
 
@@ -651,6 +654,14 @@ func (t *UDPv4) verifyPing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 		return errExpired
 	}
 	h.senderKey = senderKey
+
+	if t.tab.genesisHash != nil && *t.tab.genesisHash != (common.Hash{}) {
+		if req.GenesisHash != *t.tab.genesisHash {
+			log.Debug("unknown node, mismatch genesis", "our", t.tab.genesisHash.Hex(), "their", req.GenesisHash.Hex())
+			return errors.New("unknown node, mismatch genesis")
+		}
+	}
+
 	return nil
 }
 
@@ -659,14 +670,16 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 
 	// Reply.
 	t.send(from, fromID, &v4wire.Pong{
-		To:         v4wire.NewEndpoint(from, req.From.TCP),
-		ReplyTok:   mac,
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
-		ENRSeq:     t.localNode.Node().Seq(),
+		To:          v4wire.NewEndpoint(from, req.From.TCP),
+		ReplyTok:    mac,
+		Expiration:  uint64(time.Now().Add(expiration).Unix()),
+		ENRSeq:      t.localNode.Node().Seq(),
+		GenesisHash: *t.tab.genesisHash,
 	})
 
 	// Ping back if our last pong on file is too far in the past.
 	n := wrapNode(enode.NewV4(h.senderKey, from.IP, int(req.From.TCP), from.Port))
+	n.Node.SetGenesisHash(req.GenesisHash)
 	if time.Since(t.db.LastPongReceived(n.ID(), from.IP)) > bondExpiration {
 		t.sendPing(fromID, from, func() {
 			t.tab.addVerifiedNode(n)
