@@ -1368,6 +1368,11 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"bodyRoot":         head.BodyHash,
 	}
 
+	if head.V != nil && head.R != nil && head.S != nil {
+		result["v"] = (*hexutil.Big)(head.V)
+		result["r"] = (*hexutil.Big)(head.R)
+		result["s"] = (*hexutil.Big)(head.S)
+	}
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}

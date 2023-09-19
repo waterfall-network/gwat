@@ -2073,10 +2073,25 @@ func (bc *BlockChain) verifyBlockCoinbase(block *types.Block, slotCreators []com
 		log.Warn("Block verification: creator assignment failed",
 			"slot", block.Slot(),
 			"hash", block.Hash().Hex(),
-			"block creator", block.Header().Coinbase.Hex(),
-			"slot creators", slotCreators,
+			"blockCreator", block.Header().Coinbase.Hex(),
+			"slotCreators", slotCreators,
 		)
 		return false
+	}
+
+	signer, err := types.BlockSigner(block)
+	if err != nil {
+		return false
+	}
+
+	if signer != coinbase {
+		log.Warn("Block verification: creator is not a signer",
+			"slot", block.Slot(),
+			"hash", block.Hash().Hex(),
+			"blockCreator", block.Header().Coinbase.Hex(),
+			"blockSigner", signer.Hex(),
+			"slotCreators", slotCreators,
+		)
 	}
 
 	return true

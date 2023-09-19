@@ -95,6 +95,11 @@ type Header struct {
 	ReceiptHash common.Hash `json:"receiptsRoot"  rlp:"optional"`
 	GasUsed     uint64      `json:"gasUsed"       rlp:"optional"`
 	Bloom       Bloom       `json:"logsBloom"     rlp:"optional"`
+
+	// Signature values
+	V *big.Int `json:"v" rlp:"optional"`
+	R *big.Int `json:"r" rlp:"optional"`
+	S *big.Int `json:"s" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -123,6 +128,9 @@ func (h *Header) Hash() common.Hash {
 		cpy.Bloom = Bloom{}
 		cpy.ReceiptHash = common.Hash{}
 		cpy.Root = common.Hash{}
+		cpy.V = nil
+		cpy.R = nil
+		cpy.S = nil
 	}
 	return rlpHash(cpy)
 }
@@ -155,6 +163,9 @@ func (h *Header) Copy() *Header {
 			Extra:         h.Extra,
 			BaseFee:       h.BaseFee,
 			Number:        h.Number,
+			V:             h.V,
+			R:             h.R,
+			S:             h.S,
 		}
 	}
 	return cpy
@@ -210,6 +221,14 @@ func (h *Header) EmptyBody() bool {
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash == EmptyRootHash
+}
+
+func (h *Header) rawSignatureValues() (v, r, s *big.Int) {
+	return h.V, h.R, h.S
+}
+
+func (h *Header) setSignatureValues(v, r, s *big.Int) {
+	h.V, h.R, h.S = v, r, s
 }
 
 const uint32Length = 4
@@ -473,6 +492,13 @@ func (b *Block) Size() common.StorageSize {
 // stuffed with junk data to add processing overhead
 func (b *Block) SanityCheck() error {
 	return b.header.SanityCheck()
+}
+
+func (b *Block) withSignature(sig []byte) *Block {
+	r, s, v := decodeSignature(sig)
+
+	b.header.setSignatureValues(v, r, s)
+	return b
 }
 
 type writeCounter common.StorageSize

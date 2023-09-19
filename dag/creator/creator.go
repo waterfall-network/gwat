@@ -49,7 +49,8 @@ type Config struct {
 
 // environment is the Creator's current environment and holds all of the current state information.
 type environment struct {
-	signer types.Signer
+	signer   types.Signer
+	keystore *keystore.KeyStore
 
 	gasPool *core.GasPool // available gas used to pack transactions
 
@@ -65,9 +66,9 @@ type txsWithCumulativeGas struct {
 // Creator is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type Creator struct {
-	config *Config
-	eth    Backend
-	bc     *core.BlockChain
+	config  *Config
+	backend Backend
+	bc      *core.BlockChain
 
 	// Feeds
 	pendingLogsFeed event.Feed
@@ -91,16 +92,16 @@ type Creator struct {
 }
 
 // New creates new Creator instance
-func New(config *Config, eth Backend, mux *event.TypeMux) *Creator {
+func New(config *Config, backend Backend, mux *event.TypeMux) *Creator {
 	creator := &Creator{
 		config:       config,
-		eth:          eth,
+		backend:      backend,
 		mux:          mux,
-		bc:           eth.BlockChain(),
+		bc:           backend.BlockChain(),
 		nodeCreators: make(map[common.Address]struct{}),
 	}
 
-	creator.SetNodeCreators(eth.AccountManager().Accounts())
+	creator.SetNodeCreators(backend.AccountManager().Accounts())
 
 	return creator
 }
@@ -188,7 +189,7 @@ func (c *Creator) RunBlockCreation(slot uint64,
 ) error {
 	if c.isSyncing() {
 		log.Warn("Creator skipping due to synchronization")
-		return ErrSynchronization
+		return errors.New("synchronization")
 	}
 
 	c.mu.RLock()
@@ -429,14 +430,19 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 	syncData := validatorsync.GetPendingValidatorSyncData(c.bc)
 	if len(syncData) > 0 || len(pendingTxs) > 0 || needEmptyBlock {
-		ks, err := fetchKeystore(c.eth.AccountManager())
+		ks, err := fetchKeystore(c.backend.AccountManager())
 		if err != nil {
-			log.Error("Failed to fetch keystore: %v", err)
+			log.Error("Failed to fetch keystore", "error", err)
+			return
 		}
 
+		c.current.keystore = ks
 		acc := accounts.Account{Address: coinbase}
 		if !ks.IsUnlocked(acc) {
-			c.UnlockAccount(ks, acc.Address.String())
+			if err := c.unlockAccount(ks, acc.Address.String()); err != nil {
+				log.Warn("Can`t unlock account", "error", err)
+				return
+			}
 		}
 	}
 
@@ -466,7 +472,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 			return
 		}
-		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+		pendAddr, queAddr, _ := c.backend.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs (short circuit)", "creator", coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		return
 	}
@@ -483,7 +489,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 			return
 		}
-		pendAddr, queAddr, _ := c.eth.TxPool().StatsByAddrs()
+		pendAddr, queAddr, _ := c.backend.TxPool().StatsByAddrs()
 		log.Warn("Skipping block creation: no assigned txs", "creator", coinbase, "pendAddr", pendAddr, "queAddr", queAddr)
 		return
 	}
@@ -516,8 +522,14 @@ func (c *Creator) create(header *types.Header, update bool) {
 		return
 	}
 
+	signedBlock, err := c.current.keystore.SignBlock(header.Coinbase, block)
+	if err != nil {
+		log.Error("Failed to sign block", "coinbase", header.Coinbase.Hex(), "blockHash", block.Hash().Hex(), "err", err)
+		return
+	}
+
 	// Commit block to database.
-	_, err := c.bc.WriteCreatedDagBlock(block)
+	_, err = c.bc.WriteCreatedDagBlock(signedBlock)
 	if err != nil {
 		log.Error("Failed write dag block", "err", err)
 		return
@@ -552,7 +564,7 @@ func (c *Creator) isSyncing() bool {
 	if badTips := c.bc.GetUnsynchronizedTipsHashes(); len(badTips) > 0 {
 		return true
 	}
-	if c.eth.Downloader().Synchronising() {
+	if c.backend.Downloader().Synchronising() {
 		return true
 	}
 	return false
@@ -720,7 +732,7 @@ func (c *Creator) IsCreatorActive(coinbase common.Address) bool {
 
 // getPending returns all pending transactions for current miner
 func (c *Creator) getPending(coinbase common.Address, creators []common.Address) map[common.Address]types.Transactions {
-	pending := c.eth.TxPool().Pending(true)
+	pending := c.backend.TxPool().Pending(true)
 
 	for address := range pending {
 		for _, creator := range creators {
@@ -766,10 +778,10 @@ func (c *Creator) isAddressAssigned(coinbase common.Address, address common.Addr
 }
 
 func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorSync, header *types.Header) error {
-	nonce := c.eth.TxPool().Nonce(header.Coinbase)
+	nonce := c.backend.TxPool().Nonce(header.Coinbase)
 	for _, validatorSync := range syncData {
 		if validatorSync.ProcEpoch <= c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) {
-			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.eth, header.CpHash, header.Coinbase, validatorSync, nonce)
+			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.backend, header.CpHash, header.Coinbase, validatorSync, nonce)
 			if err != nil {
 				log.Error("failed to create validator sync tx", "error", err)
 				continue
@@ -798,8 +810,8 @@ func (c *Creator) SetNodeCreators(accounts []common.Address) {
 	}
 }
 
-// UnlockAccount unlocks a specified account.
-func (c *Creator) UnlockAccount(ks *keystore.KeyStore, targetAddress string) {
+// unlockAccount unlocks a specified account.
+func (c *Creator) unlockAccount(ks *keystore.KeyStore, targetAddress string) error {
 	passwords := c.getPasswords()
 	keystoreAccounts := ks.Accounts()
 
@@ -807,7 +819,7 @@ func (c *Creator) UnlockAccount(ks *keystore.KeyStore, targetAddress string) {
 	position := findAccountPosition(keystoreAccounts, targetAddress)
 
 	// Unlock the account.
-	unlockAccount(ks, targetAddress, position, passwords)
+	return unlockAccount(ks, targetAddress, position, passwords)
 }
 
 // getPasswords returns a list of passwords from the password directory.
