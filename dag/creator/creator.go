@@ -818,7 +818,7 @@ func (c *Creator) unlockAccount(ks *keystore.KeyStore, targetAddress string) err
 	// Find the position of the target account.
 	position := findAccountPosition(keystoreAccounts, targetAddress)
 
-	// Unlock the account.
+	// Unlock the account.log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
 	return unlockAccount(ks, targetAddress, position, passwords)
 }
 

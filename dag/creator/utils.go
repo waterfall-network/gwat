@@ -3,10 +3,7 @@ package creator
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"os"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -42,26 +39,6 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	return accs[index], nil
 }
 
-// Fatalf formats a message to standard error and exits the program.
-// The message is also printed to standard output if standard error
-// is redirected to a different file.
-func Fatalf(format string, args ...interface{}) {
-	w := io.MultiWriter(os.Stdout, os.Stderr)
-	if runtime.GOOS == "windows" {
-		// The SameFile check below doesn't work on Windows.
-		// stdout is unlikely to get redirected though, so just print there.
-		w = os.Stdout
-	} else {
-		outf, _ := os.Stdout.Stat()
-		errf, _ := os.Stderr.Stat()
-		if outf != nil && errf != nil && os.SameFile(outf, errf) {
-			w = os.Stderr
-		}
-	}
-	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
-	os.Exit(1)
-}
-
 // GetPassPhraseWithList retrieves the password associated with an account, either fetched
 // from a list of preloaded passphrases, or requested interactively from the user.
 func getPassPhraseWithList(confirmation bool, index int, passwords []string) string {
@@ -83,15 +60,15 @@ func getPassPhraseWithList(confirmation bool, index int, passwords []string) str
 func getPassPhrase(confirmation bool) string {
 	password, err := prompt.Stdin.PromptPassword("Password: ")
 	if err != nil {
-		Fatalf("Failed to read password: %v", err)
+		log.Error("Failed to read password:", "err", err)
 	}
 	if confirmation {
 		confirm, err := prompt.Stdin.PromptPassword("Repeat password: ")
 		if err != nil {
-			Fatalf("Failed to read password confirmation: %v", err)
+			log.Error("Failed to read password confirmation:", "err", err)
 		}
 		if password != confirm {
-			Fatalf("Passwords do not match")
+			log.Error("Passwords do not match")
 		}
 	}
 	return password
