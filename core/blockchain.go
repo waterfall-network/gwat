@@ -2563,6 +2563,9 @@ func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
 	}
 	// compare with prev cp
 	lcpHeader := bc.GetHeader(lastCp.Spine)
+	if lcpHeader == nil {
+		return false
+	}
 	prevCpHash := lcpHeader.CpHash
 	if lcpHeader.Hash() == bc.genesisBlock.Hash() {
 		prevCpHash = bc.genesisBlock.Hash()

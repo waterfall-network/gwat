@@ -338,7 +338,7 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	// New transaction announcement arrived, make sure we have
 	// a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
-		peer.Log().Error("Handle request: skip handle tx (node is syncing)", "fn", "handleNewPooledTransactionHashes", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
+		peer.Log().Debug("Handle request: skip handle tx (node is syncing)", "fn", "handleNewPooledTransactionHashes", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
 		return nil
 	}
 	ann := new(NewPooledTransactionHashesPacket)
@@ -395,7 +395,7 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() || !backend.Chain().IsSynced() {
-		peer.Log().Error("Handle request: skip handle tx (node is syncing)", "fn", "handleTransactions", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
+		peer.Log().Debug("Handle request: skip handle tx (node is syncing)", "fn", "handleTransactions", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
 		return nil
 	}
 	// Transactions can be processed, parse all of them and deliver to the pool
@@ -418,7 +418,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() || !backend.Chain().IsSynced() {
-		peer.Log().Error("Handle request: skip handle tx (node is syncing)", "fn", "handlePooledTransactions66", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
+		peer.Log().Debug("Handle request: skip handle tx (node is syncing)", "fn", "handlePooledTransactions66", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
 		return nil
 	}
 	// Transactions can be processed, parse all of them and deliver to the pool
