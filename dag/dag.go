@@ -652,10 +652,12 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 	if !d.bc.IsSynced() {
 		return
 	}
-
 	if d.isSlotLocked(slot) {
 		return
 	}
+
+	d.bc.DagMuLock()
+	defer d.bc.DagMuUnlock()
 
 	if d.Creator().IsRunning() {
 		var canCreate bool
@@ -665,11 +667,7 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 				break
 			}
 		}
-
 		if canCreate {
-			d.bc.DagMuLock()
-			defer d.bc.DagMuUnlock()
-
 			if err := d.removeTipsWithOutdatedCp(); err != nil {
 				return
 			}
