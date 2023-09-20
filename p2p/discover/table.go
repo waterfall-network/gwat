@@ -35,6 +35,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/netutil"
 )
 
@@ -81,6 +82,7 @@ type Table struct {
 	closed     chan struct{}
 
 	nodeAddedHook func(*node) // for testing
+	genesisHash   *common.Hash
 }
 
 // transport is implemented by the UDP transports.
@@ -100,17 +102,18 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, bs uint) (*Table, error) {
+func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, bs uint, genHash *common.Hash) (*Table, error) {
 	tab := &Table{
-		net:        t,
-		db:         db,
-		refreshReq: make(chan chan struct{}),
-		initDone:   make(chan struct{}),
-		closeReq:   make(chan struct{}),
-		closed:     make(chan struct{}),
-		rand:       mrand.New(mrand.NewSource(0)),
-		ips:        netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
-		log:        log,
+		net:         t,
+		db:          db,
+		refreshReq:  make(chan chan struct{}),
+		initDone:    make(chan struct{}),
+		closeReq:    make(chan struct{}),
+		closed:      make(chan struct{}),
+		rand:        mrand.New(mrand.NewSource(0)),
+		ips:         netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
+		log:         log,
+		genesisHash: genHash,
 	}
 	if err := tab.setFallbackNodes(bootnodes); err != nil {
 		return nil, err
@@ -510,6 +513,20 @@ func (tab *Table) addVerifiedNode(n *node) {
 	}
 	if n.ID() == tab.self().ID() {
 		return
+	}
+
+	if tab.genesisHash != nil && *tab.genesisHash != (common.Hash{}) {
+		var gen enr.ENRGenesis
+		err := n.Node.Load(&gen)
+		if err != nil {
+			log.Debug("can`t load enr genesis", "error", err)
+			return
+		}
+
+		if common.Hash(gen) != *tab.genesisHash {
+			log.Debug("unknown node, mismatch genesis", "want", *tab.genesisHash, "have", gen)
+			return
+		}
 	}
 
 	tab.mutex.Lock()
