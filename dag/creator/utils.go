@@ -1,7 +1,6 @@
 package creator
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"strconv"
@@ -119,12 +118,4 @@ func makePasswordList(path string) []string {
 		lines[i] = strings.TrimRight(lines[i], "\r")
 	}
 	return lines
-}
-
-// fetchKeystore retrieves the encrypted keystore from the account manager.
-func fetchKeystore(am *accounts.Manager) (*keystore.KeyStore, error) {
-	if ks := am.Backends(keystore.KeyStoreType); len(ks) > 0 {
-		return ks[0].(*keystore.KeyStore), nil
-	}
-	return nil, errors.New("local keystore not used")
 }

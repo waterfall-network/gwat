@@ -430,13 +430,12 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 	syncData := validatorsync.GetPendingValidatorSyncData(c.bc)
 	if len(syncData) > 0 || len(pendingTxs) > 0 || needEmptyBlock {
-		ks, err := fetchKeystore(c.backend.AccountManager())
+		ks, err := c.getKeystore(c.backend.AccountManager())
 		if err != nil {
 			log.Error("Failed to fetch keystore", "error", err)
 			return
 		}
 
-		c.current.keystore = ks
 		acc := accounts.Account{Address: coinbase}
 		if !ks.IsUnlocked(acc) {
 			if err := c.unlockAccount(ks, acc.Address.String()); err != nil {
@@ -819,4 +818,17 @@ func (c *Creator) unlockAccount(ks *keystore.KeyStore, targetAddress string) err
 // getPasswords returns a list of passwords from the password directory.
 func (c *Creator) getPasswords() []string {
 	return makePasswordList(c.config.PasswordDir)
+}
+
+// getKeystore retrieves and set cache the encrypted keystore from the account manager.
+func (c *Creator) getKeystore(am *accounts.Manager) (*keystore.KeyStore, error) {
+	if c.current.keystore != nil {
+		return c.current.keystore, nil
+	}
+	if ks := am.Backends(keystore.KeyStoreType); len(ks) > 0 {
+		c.current.keystore = ks[0].(*keystore.KeyStore)
+		return ks[0].(*keystore.KeyStore), nil
+	}
+
+	return nil, errors.New("local keystore not used")
 }
