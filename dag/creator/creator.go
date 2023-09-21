@@ -241,6 +241,7 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	log.Info("BLOCK CREATION TIME - TOTAL",
 		"elapsed", common.PrettyDuration(time.Since(start)),
 		"func:", "RunBlockCreation",
+		"slot", slot,
 	)
 
 	return nil
@@ -448,6 +449,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		log.Info("BLOCK CREATION TIME",
 			"elapsed", common.PrettyDuration(time.Since(startTime)),
 			"func:", "getKeyStore",
+			"slot", header.Slot,
 		)
 
 		acc := accounts.Account{Address: coinbase}
@@ -457,13 +459,14 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 			"elapsed", common.PrettyDuration(time.Since(startTime)),
 			"func:", "IsUnlocked",
 			"account", acc.Address.Hex(),
+			"slot", header.Slot,
 		)
 		if !ok {
 			startTime = time.Now()
 			if err := c.unlockAccount(ks, acc.Address.String()); err != nil {
 				log.Warn("Creator: unlock account failed",
 					"error", err,
-					"elapsed", common.PrettyDuration(time.Since(ts)),
+					"elapsed", common.PrettyDuration(time.Since(startTime)),
 					"slot", header.Slot,
 					"addr", acc.Address.String())
 				return
@@ -473,6 +476,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 				"elapsed", common.PrettyDuration(time.Since(startTime)),
 				"func:", "unlockAccount",
 				"address", acc.Address.Hex(),
+				"slot", header.Slot,
 			)
 		}
 	}
@@ -505,6 +509,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"func:", "createNewBlock",
 				"coinbase", coinbase.Hex(),
+				"slot", header.Slot,
 			)
 			return
 		}
@@ -527,6 +532,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"func:", "createNewBlock",
 				"coinbase", coinbase.Hex(),
+				"slot", header.Slot,
 			)
 			return
 		}
@@ -548,6 +554,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		"elapsed", common.PrettyDuration(time.Since(start)),
 		"func:", "createNewBlock",
 		"coinbase", coinbase.Hex(),
+		"slot", header.Slot,
 	)
 }
 
@@ -575,6 +582,7 @@ func (c *Creator) create(header *types.Header, update bool) {
 		"elapsed", common.PrettyDuration(time.Since(start)),
 		"func:", "SignBlock",
 		"signer", signedBlock.Coinbase().Hex(),
+		"slot", header.Slot,
 	)
 
 	// Short circuit when receiving duplicate result caused by resubmitting.
