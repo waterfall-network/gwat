@@ -438,10 +438,20 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 		acc := accounts.Account{Address: coinbase}
 		if !ks.IsUnlocked(acc) {
+			ts := time.Now()
 			if err := c.unlockAccount(ks, acc.Address.String()); err != nil {
-				log.Warn("Can`t unlock account", "error", err)
+				log.Warn("Creator: unlock account failed",
+					"error", err,
+					"elapsed", common.PrettyDuration(time.Since(ts)),
+					"slot", header.Slot,
+					"addr", acc.Address.String())
 				return
 			}
+			log.Info("Creator: unlock account",
+				"elapsed", common.PrettyDuration(time.Since(ts)),
+				"slot", header.Slot,
+				"addr", acc.Address.String(),
+			)
 		}
 	}
 
