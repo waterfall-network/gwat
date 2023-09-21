@@ -128,6 +128,19 @@ func (h *Header) Hash() common.Hash {
 		cpy.Bloom = Bloom{}
 		cpy.ReceiptHash = common.Hash{}
 		cpy.Root = common.Hash{}
+	}
+	return rlpHash(cpy)
+}
+
+func (h *Header) UnsignedHash() common.Hash {
+	cpy := h.Copy()
+	if cpy != nil {
+		cpy.Number = nil
+		cpy.BaseFee = nil
+		cpy.GasUsed = 0
+		cpy.Bloom = Bloom{}
+		cpy.ReceiptHash = common.Hash{}
+		cpy.Root = common.Hash{}
 		cpy.V = nil
 		cpy.R = nil
 		cpy.S = nil
@@ -455,6 +468,9 @@ func (b *Block) BaseHeader() *Header {
 			GasLimit:      b.header.GasLimit,
 			Time:          b.header.Time,
 			Extra:         b.header.Extra,
+			V:             b.header.V,
+			R:             b.header.R,
+			S:             b.header.S,
 		}
 	}
 	return cpy
@@ -538,6 +554,10 @@ func (b *Block) Hash() common.Hash {
 	v := b.header.Hash()
 	b.hash.Store(v)
 	return v
+}
+
+func (b *Block) UnsignedHash() common.Hash {
+	return b.header.UnsignedHash()
 }
 
 type Blocks []*Block
