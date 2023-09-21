@@ -648,6 +648,10 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
+	if err := d.removeTipsWithOutdatedCp(); err != nil {
+		return
+	}
+
 	if d.Creator().IsRunning() {
 		var canCreate bool
 		for _, account := range slotCreators {
@@ -657,10 +661,6 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 			}
 		}
 		if canCreate {
-			if err := d.removeTipsWithOutdatedCp(); err != nil {
-				return
-			}
-
 			tips := d.bc.GetTips()
 			checkpoint := d.getCheckpoint()
 			if checkpoint == nil {
