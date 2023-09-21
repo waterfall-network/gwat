@@ -1535,7 +1535,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	//}
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
-		Fatalf("Failed to register the Waterfall service: %v", err)
+		Fatalf("Failed to register the Gwat service: %v", err)
 	}
 	// TODO LES TMP OFF
 	//if cfg.LightServ > 0 {
@@ -1552,7 +1552,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 // the given node.
 func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
 	if err := ethstats.New(stack, backend, url); err != nil {
-		Fatalf("Failed to register the Waterfall Stats service: %v", err)
+		Fatalf("Failed to register the Gwat Stats service: %v", err)
 	}
 }
 

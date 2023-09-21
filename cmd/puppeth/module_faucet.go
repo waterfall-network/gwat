@@ -165,13 +165,13 @@ func (info *faucetInfos) Report() map[string]string {
 	report := map[string]string{
 		"Website address":              info.host,
 		"Website listener port":        strconv.Itoa(info.port),
-		"Waterfall listener port":      strconv.Itoa(info.node.port),
+		"Gwat listener port":           strconv.Itoa(info.node.port),
 		"Funding amount (base tier)":   fmt.Sprintf("%d Ethers", info.amount),
 		"Funding cooldown (base tier)": fmt.Sprintf("%d mins", info.minutes),
 		"Funding tiers":                strconv.Itoa(info.tiers),
 		"Captha protection":            fmt.Sprintf("%v", info.captchaToken != ""),
 		"Using Twitter API":            fmt.Sprintf("%v", info.twitterToken != ""),
-		"WATstats username":            info.node.ethstats,
+		"GWATstats username":           info.node.ethstats,
 	}
 	if info.noauth {
 		report["Debug mode (no auth)"] = "enabled"

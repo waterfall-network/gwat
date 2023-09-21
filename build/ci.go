@@ -91,15 +91,15 @@ var (
 		},
 		{
 			BinaryName:  "bootnode",
-			Description: "Waterfall bootnode.",
+			Description: "Gwat bootnode.",
 		},
 		{
 			BinaryName:  "evm",
-			Description: "Developer utility version of the EVM (Waterfall Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
+			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
 			BinaryName:  "gwat",
-			Description: "Waterfall CLI client.",
+			Description: "Gwat CLI client.",
 		},
 		{
 			BinaryName:  "puppeth",

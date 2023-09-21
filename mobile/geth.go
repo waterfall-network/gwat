@@ -176,7 +176,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		lesBackend, err := les.New(rawStack, &ethConf)
 		if err != nil {
-			return nil, fmt.Errorf("waterfall init: %v", err)
+			return nil, fmt.Errorf("Gwat init: %v", err)
 		}
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
