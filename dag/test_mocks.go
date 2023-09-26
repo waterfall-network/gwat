@@ -232,17 +232,17 @@ func (mr *MockblockChainMockRecorder) Database() *gomock.Call {
 }
 
 // EnterNextEra mocks base method.
-func (m *MockblockChain) EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era {
+func (m *MockblockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *era.Era {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnterNextEra", cp, root)
+	ret := m.ctrl.Call(m, "EnterNextEra", nextEraEpochFrom, root)
 	ret0, _ := ret[0].(*era.Era)
 	return ret0
 }
 
 // EnterNextEra indicates an expected call of EnterNextEra.
-func (mr *MockblockChainMockRecorder) EnterNextEra(cp, root interface{}) *gomock.Call {
+func (mr *MockblockChainMockRecorder) EnterNextEra(nextEraEpochFrom, root interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnterNextEra", reflect.TypeOf((*MockblockChain)(nil).EnterNextEra), cp, root)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnterNextEra", reflect.TypeOf((*MockblockChain)(nil).EnterNextEra), nextEraEpochFrom, root)
 }
 
 // EpochToEra mocks base method.
