@@ -116,7 +116,7 @@ func (mr *MockblockchainMockRecorder) Database() *gomock.Call {
 }
 
 // EnterNextEra mocks base method.
-func (m *Mockblockchain) EnterNextEra(arg0 *types.Checkpoint, arg1 common.Hash) *era.Era {
+func (m *Mockblockchain) EnterNextEra(arg0 uint64, arg1 common.Hash) *era.Era {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EnterNextEra", arg0, arg1)
 	ret0, _ := ret[0].(*era.Era)

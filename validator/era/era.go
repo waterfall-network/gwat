@@ -3,6 +3,7 @@ package era
 import (
 	"errors"
 	"math"
+	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -12,6 +13,7 @@ import (
 
 var (
 	ErrCheckpointInvalid = errors.New("invalid checkpoint")
+	ErrHandleEraFailed   = errors.New("handle era failed")
 )
 
 type Blockchain interface {
@@ -20,7 +22,7 @@ type Blockchain interface {
 	GetEraInfo() *EraInfo
 	Config() *params.ChainConfig
 	GetHeaderByHash(common.Hash) *types.Header
-	EnterNextEra(*types.Checkpoint, common.Hash) *Era
+	EnterNextEra(uint64, common.Hash) *Era
 	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
 	//SyncEraToSlot(slot uint64)
 }
@@ -182,9 +184,15 @@ func roundUp(num float64) uint64 {
 }
 
 func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
+	defer func(start time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "HandleEra",
+		)
+	}(time.Now())
+
 	log.Info("ERA started for new cp", "cp", cp.Epoch, "finEpoch", cp.FinEpoch, "root", cp.Spine.Hex())
-	//currentEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-	//newEpoch := bc.GetSlotInfo().IsEpochStart(slot)
+
 	var spineRoot common.Hash
 	// if cp != nil {
 	header := bc.GetHeaderByHash(cp.Spine)
@@ -195,15 +203,18 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 		return ErrCheckpointInvalid
 	}
 
-	//if newEpoch {
+	curToEpoch := bc.GetEraInfo().ToEpoch()
 	// New era
 	if bc.GetEraInfo().ToEpoch()+1 <= cp.FinEpoch {
-		// Checkpoint
-		// checkpoint := bc.GetLastCoordinatedCheckpoint()
-
-		bc.EnterNextEra(cp, spineRoot)
-
-		log.Info("######## HandleEra", "cpEpoch", cp.Epoch,
+		for curToEpoch+1 <= cp.FinEpoch {
+			nextEra := bc.EnterNextEra(curToEpoch+1, spineRoot)
+			if nextEra != nil {
+				curToEpoch = nextEra.To
+			} else {
+				return ErrHandleEraFailed
+			}
+		}
+		log.Info("Handle era", "cpEpoch", cp.Epoch,
 			"cpFinEpoch", cp.FinEpoch,
 			"curEpoch", bc.GetSlotInfo().SlotInEpoch(bc.GetSlotInfo().CurrentSlot()),
 			"curSlot", bc.GetSlotInfo().CurrentSlot(),
@@ -211,11 +222,9 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 			"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
 			"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
 		)
-
 		return nil
 	} else if (bc.GetEraInfo().ToEpoch()+1)-bc.Config().TransitionPeriod == cp.FinEpoch && cp.FinEpoch <= bc.GetEraInfo().ToEpoch()+1 {
 		bc.StartTransitionPeriod(cp, spineRoot)
 	}
-
 	return nil
 }
