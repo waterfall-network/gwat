@@ -457,7 +457,7 @@ func (pool *TxPool) loop() {
 			func() {
 				syncMode := !pool.chain.IsSynced()
 				defer func(tStart time.Time) {
-					log.Info("^^^^^^^^^^^^ TIME moveToProcessing",
+					log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing block",
 						"elapsed", common.PrettyDuration(time.Since(tStart)),
 						"func:", "moveToProcessing",
 						"txs", len(txs.Transactions),
@@ -484,7 +484,7 @@ func (pool *TxPool) loop() {
 		case txs := <-pool.rmTxCh:
 			func() {
 				defer func(tStart time.Time) {
-					log.Info("^^^^^^^^^^^^ TIME removeProcessedTx",
+					log.Info("^^^^^^^^^^^^ TIME txpool removeProcessedTx block",
 						"elapsed", common.PrettyDuration(time.Since(tStart)),
 						"func:", "removeProcessedTx",
 						"txs", len(txs),
@@ -1218,6 +1218,14 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 }
 
 func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
+
+	defer func(tStart time.Time) {
+		log.Info("ad",
+			"elapsed", common.PrettyDuration(time.Since(tStart)),
+			"func:", "moveToProcessing",
+		)
+	}(time.Now())
+
 	addr, err := types.Sender(pool.signer, tx.Transaction) // already validated during insertion
 	if err != nil {
 		log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())
@@ -1337,6 +1345,15 @@ func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
+
+	defer func(tStart time.Time) {
+		log.Info("^^^^^^^^^^^^ TIME txpool removeTx 1 tx",
+			"elapsed", common.PrettyDuration(time.Since(tStart)),
+			"func:", "removeProcessedTx",
+			"isNil", tx == nil,
+		)
+	}(time.Now())
+
 	if tx == nil {
 		return
 	}
@@ -1543,7 +1560,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
 
 	defer func(tStart time.Time) {
-		log.Debug("^^^^^^^^^^^^ TIME runReorg",
+		log.Debug("^^^^^^^^^^^^ TIME txpool runReorg",
 			"elapsed", common.PrettyDuration(time.Since(tStart)),
 			"func:", "runReorg",
 		)
