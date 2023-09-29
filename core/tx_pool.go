@@ -473,10 +473,17 @@ func (pool *TxPool) loop() {
 						pool.removeTx(tx.Hash(), true)
 						//pool.removeProcessedTx(tx)
 					} else {
+						tStart := time.Now()
 						pool.moveToProcessing(&types.TransactionBlocks{
 							Transaction:  tx,
 							BlocksHashes: common.HashArray{txs.BlockHash},
 						})
+
+						log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing cycle",
+							"elapsed", common.PrettyDuration(time.Since(tStart)),
+							"func:", "moveToProcessing",
+						)
+
 					}
 				}
 			}()
@@ -1220,7 +1227,7 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
 
 	defer func(tStart time.Time) {
-		log.Info("ad",
+		log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing 1 tx",
 			"elapsed", common.PrettyDuration(time.Since(tStart)),
 			"func:", "moveToProcessing",
 		)
