@@ -1238,14 +1238,6 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 }
 
 func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
-
-	defer func(tStart time.Time) {
-		log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing 1 tx",
-			"elapsed", common.PrettyDuration(time.Since(tStart)),
-			"func:", "moveToProcessing",
-		)
-	}(time.Now())
-
 	addr, err := types.Sender(pool.signer, tx.Transaction) // already validated during insertion
 	if err != nil {
 		log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())
@@ -1497,14 +1489,6 @@ func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
-
-	defer func(tStart time.Time) {
-		log.Info("^^^^^^^^^^^^ TIME txpool removeTx 1 tx",
-			"elapsed", common.PrettyDuration(time.Since(tStart)),
-			"func:", "removeProcessedTx",
-			"isNil", tx == nil,
-		)
-	}(time.Now())
 
 	if tx == nil {
 		return
