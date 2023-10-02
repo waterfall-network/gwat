@@ -289,18 +289,6 @@ func (ks *KeyStore) SignTx(a accounts.Account, tx *types.Transaction, chainID *b
 	return types.SignTx(tx, signer, unlockedKey.PrivateKey)
 }
 
-func (ks *KeyStore) SignBlock(coinbase common.Address, block *types.Block) (*types.Block, error) {
-	// Look up the key to sign with and abort if it cannot be found
-	ks.mu.RLock()
-	defer ks.mu.RUnlock()
-
-	unlockedKey, found := ks.unlocked[coinbase]
-	if !found {
-		return nil, ErrLocked
-	}
-	return types.SignBlock(block, unlockedKey.PrivateKey)
-}
-
 // SignHashWithPassphrase signs hash if the private key matching the given address
 // can be decrypted with the given passphrase. The produced signature is in the
 // [R || S || V] format where V is 0 or 1.
@@ -518,6 +506,18 @@ func (ks *KeyStore) IsUnlocked(a accounts.Account) bool {
 
 	_, found := ks.unlocked[a.Address]
 	return found
+}
+
+func (ks *KeyStore) GetKey(address common.Address) (*ecdsa.PrivateKey, error) {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+
+	unlockedKey, found := ks.unlocked[address]
+	if !found {
+		return nil, ErrLocked
+	}
+
+	return unlockedKey.PrivateKey, nil
 }
 
 // zeroKey zeroes a private key in memory.

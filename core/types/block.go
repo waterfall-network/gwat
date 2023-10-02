@@ -159,7 +159,6 @@ func (h *Header) Copy() *Header {
 			Height:        h.Height,
 			CpHash:        h.CpHash,
 			CpNumber:      h.CpNumber,
-			CpBaseFee:     h.CpBaseFee,
 			CpBloom:       h.CpBloom,
 			CpRoot:        h.CpRoot,
 			CpReceiptHash: h.CpReceiptHash,
@@ -174,13 +173,28 @@ func (h *Header) Copy() *Header {
 			GasUsed:       h.GasUsed,
 			Time:          h.Time,
 			Extra:         h.Extra,
-			BaseFee:       h.BaseFee,
-			Number:        h.Number,
-			V:             h.V,
-			R:             h.R,
-			S:             h.S,
+		}
+
+		if h.CpBaseFee != nil {
+			cpy.CpBaseFee = new(big.Int).Set(h.CpBaseFee)
+		}
+		if h.BaseFee != nil {
+			cpy.BaseFee = new(big.Int).Set(h.BaseFee)
+		}
+		if h.Number != nil {
+			cpy.Number = h.Number
+		}
+		if h.V != nil {
+			cpy.V = new(big.Int).Set(h.V)
+		}
+		if h.R != nil {
+			cpy.R = new(big.Int).Set(h.R)
+		}
+		if h.S != nil {
+			cpy.S = new(big.Int).Set(h.S)
 		}
 	}
+
 	return cpy
 }
 
@@ -193,14 +207,6 @@ func (h *Header) Nr() uint64 {
 		return *h.Number
 	}
 	return 0
-}
-
-func (h *Header) FinalizedHash() common.Hash {
-	if h == nil || h.Number == nil {
-		return common.Hash{}
-	}
-	cpy := h.Copy()
-	return rlpHash(cpy)
 }
 
 // Size returns the approximate memory used by all internal contents. It is used
@@ -240,7 +246,8 @@ func (h *Header) rawSignatureValues() (v, r, s *big.Int) {
 	return h.V, h.R, h.S
 }
 
-func (h *Header) setSignatureValues(v, r, s *big.Int) {
+func (h *Header) setSignature(sig []byte) {
+	r, s, v := decodeSignature(sig)
 	h.V, h.R, h.S = v, r, s
 }
 
@@ -431,7 +438,6 @@ func (b *Block) Extra() []byte                  { return common.CopyBytes(b.head
 func (b *Block) Number() *uint64                { return b.header.Number }
 func (b *Block) Nr() uint64                     { return b.header.Nr() }
 func (b *Block) SetNumber(finNr *uint64)        { b.header.Number = finNr }
-func (b *Block) FinalizedHash() common.Hash     { return b.header.FinalizedHash() }
 func (b *Block) CpHash() common.Hash            { return b.header.CpHash }
 func (b *Block) CpNumber() uint64               { return b.header.CpNumber }
 func (b *Block) CpBaseFee() *big.Int            { return b.header.CpBaseFee }
@@ -448,33 +454,6 @@ func (b *Block) BaseFee() *big.Int {
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
-func (b *Block) BaseHeader() *Header {
-	var cpy *Header = nil
-	if b.header != nil {
-		cpy = &Header{
-			ParentHashes:  b.header.ParentHashes,
-			Slot:          b.header.Slot,
-			Era:           b.header.Era,
-			Height:        b.header.Height,
-			CpHash:        b.header.CpHash,
-			CpNumber:      b.header.CpNumber,
-			CpBaseFee:     b.header.CpBaseFee,
-			CpBloom:       b.header.CpBloom,
-			CpRoot:        b.header.CpRoot,
-			CpReceiptHash: b.header.CpReceiptHash,
-			CpGasUsed:     b.header.CpGasUsed,
-			Coinbase:      b.header.Coinbase,
-			TxHash:        b.header.TxHash,
-			GasLimit:      b.header.GasLimit,
-			Time:          b.header.Time,
-			Extra:         b.header.Extra,
-			V:             b.header.V,
-			R:             b.header.R,
-			S:             b.header.S,
-		}
-	}
-	return cpy
-}
 
 func (b *Block) SetHeader(header *Header) {
 	b.header = header
@@ -508,13 +487,6 @@ func (b *Block) Size() common.StorageSize {
 // stuffed with junk data to add processing overhead
 func (b *Block) SanityCheck() error {
 	return b.header.SanityCheck()
-}
-
-func (b *Block) withSignature(sig []byte) *Block {
-	r, s, v := decodeSignature(sig)
-
-	b.header.setSignatureValues(v, r, s)
-	return b
 }
 
 type writeCounter common.StorageSize
@@ -554,10 +526,6 @@ func (b *Block) Hash() common.Hash {
 	v := b.header.Hash()
 	b.hash.Store(v)
 	return v
-}
-
-func (b *Block) UnsignedHash() common.Hash {
-	return b.header.UnsignedHash()
 }
 
 type Blocks []*Block

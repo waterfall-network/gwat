@@ -6,21 +6,27 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )
 
-func SignBlock(block *Block, prv *ecdsa.PrivateKey) (*Block, error) {
-	h := block.UnsignedHash()
+func SignBlockHeader(header *Header, prv *ecdsa.PrivateKey) (*Header, error) {
+	h := header.UnsignedHash()
 
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
 	}
 
-	return block.withSignature(sig), nil
+	header.setSignature(sig)
+
+	return header, nil
 }
 
-func BlockSigner(block *Block) (common.Address, error) {
-	v, r, s := block.header.rawSignatureValues()
+func BlockHeaderSigner(header *Header) (common.Address, error) {
+	v, r, s := header.rawSignatureValues()
 
-	addr, err := recoverPlain(block.UnsignedHash(), r, s, v, true)
+	if v == nil && r == nil && s == nil {
+		return common.Address{}, nil
+	}
+
+	addr, err := recoverPlain(header.UnsignedHash(), r, s, v, true)
 
 	return addr, err
 }

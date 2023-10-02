@@ -572,48 +572,50 @@ func (c *Creator) create(header *types.Header, update bool) {
 	}
 
 	start := time.Now()
-	signedBlock, err := c.current.keystore.SignBlock(header.Coinbase, block)
+	signedHeader, err := c.signBlockHeader(block.Header())
 	if err != nil {
 		log.Error("Failed to sign block", "coinbase", header.Coinbase.Hex(), "blockHash", block.Hash().Hex(), "err", err)
 		return
 	}
 
+	block.SetHeader(signedHeader)
+
 	log.Info("BLOCK CREATION TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
 		"func:", "SignBlock",
-		"signer", signedBlock.Coinbase().Hex(),
+		"signer", block.Coinbase().Hex(),
 		"slot", header.Slot,
 	)
 
 	// Short circuit when receiving duplicate result caused by resubmitting.
-	if c.bc.HasBlock(signedBlock.Hash()) {
+	if c.bc.HasBlock(block.Hash()) {
 		log.Error("Created block is already creating")
 		return
 	}
 
 	// Commit block to database.
-	_, err = c.bc.WriteCreatedDagBlock(signedBlock)
+	_, err = c.bc.WriteCreatedDagBlock(block)
 	if err != nil {
 		log.Error("Failed write dag block", "err", err)
 		return
 	}
 	// Broadcast the block and announce bc insertion event
-	err = c.mux.Post(core.NewMinedBlockEvent{Block: signedBlock})
+	err = c.mux.Post(core.NewMinedBlockEvent{Block: block})
 	if err != nil {
 		log.Error("Failed broadcast the block and announce bc insertion event", "error", err)
 		return
 	}
 	// Insert the block into the set of pending ones to resultLoop for confirmations
 	log.Info("🔨 created dag block",
-		"slot", signedBlock.Slot(),
-		"epoch", c.bc.GetSlotInfo().SlotToEpoch(signedBlock.Slot()),
-		"era", signedBlock.Era(),
-		"height", signedBlock.Height(),
-		"hash", signedBlock.Hash().Hex(),
-		"creator", signedBlock.Coinbase().Hex(),
-		"parents", signedBlock.ParentHashes(),
-		"CpHash", signedBlock.CpHash().Hex(),
-		"CpNumber", signedBlock.CpNumber(),
+		"slot", block.Slot(),
+		"epoch", c.bc.GetSlotInfo().SlotToEpoch(block.Slot()),
+		"era", block.Era(),
+		"height", block.Height(),
+		"hash", block.Hash().Hex(),
+		"creator", block.Coinbase().Hex(),
+		"parents", block.ParentHashes(),
+		"CpHash", block.CpHash().Hex(),
+		"CpNumber", block.CpNumber(),
 	)
 
 	if update {
@@ -901,4 +903,13 @@ func (c *Creator) getKeystore(am *accounts.Manager) (*keystore.KeyStore, error) 
 	}
 
 	return nil, errors.New("local keystore not used")
+}
+
+func (c *Creator) signBlockHeader(h *types.Header) (*types.Header, error) {
+	key, err := c.current.keystore.GetKey(h.Coinbase)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.SignBlockHeader(h, key)
 }

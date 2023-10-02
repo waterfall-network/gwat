@@ -2079,7 +2079,7 @@ func (bc *BlockChain) verifyBlockCoinbase(block *types.Block, slotCreators []com
 		return false
 	}
 
-	signer, err := types.BlockSigner(block)
+	signer, err := types.BlockHeaderSigner(block.Header())
 	if err != nil {
 		return false
 	}
