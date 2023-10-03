@@ -274,7 +274,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.GetLastFinalizedBlock().Nr())
 	if err := peer.Handshake(h.networkID, lastFinNr, dag, genesis.Hash(), forkID, h.forkFilter); err != nil {
-		peer.Log().Error("Ethereum handshake failed", "err", err)
+		peer.Log().Error("Gwat handshake failed", "err", err)
 		return err
 	}
 	reject := false // reserved peer slots
@@ -294,11 +294,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return p2p.DiscTooManyPeers
 		}
 	}
-	peer.Log().Info("Ethereum peer connected", "name", peer.Name(), "ID", peer.ID())
+	peer.Log().Info("Gwat peer connected", "name", peer.Name(), "ID", peer.ID())
 
 	// Register the peer locally
 	if err := h.peers.registerPeer(peer, snap); err != nil {
-		peer.Log().Error("Ethereum peer registration failed", "err", err)
+		peer.Log().Error("Gwat peer registration failed", "err", err)
 		return err
 	}
 	defer h.unregisterPeer(peer.ID())
@@ -346,11 +346,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If we have any explicit whitelist block hashes, request them
 	for number := range h.whitelist {
 
-		peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "number", number)
+		peer.Log().Info("???? Gwat peer connected 111-000", "name", peer.Name(), "number", number)
 
 		if err := peer.RequestHeadersByNumber(number, 1, 0, false); err != nil {
 
-			peer.Log().Info("???? Ethereum peer connected 111-000", "name", peer.Name(), "err", err)
+			peer.Log().Info("???? Gwat peer connected 111-000", "name", peer.Name(), "err", err)
 
 			return err
 		}
@@ -395,11 +395,11 @@ func (h *handler) unregisterPeer(id string) {
 	// Abort if the peer does not exist
 	peer := h.peers.peer(id)
 	if peer == nil {
-		logger.Error("Ethereum peer removal failed", "err", errPeerNotRegistered)
+		logger.Error("Gwat peer removal failed", "err", errPeerNotRegistered)
 		return
 	}
 	// Remove the `eth` peer if it exists
-	logger.Debug("Removing Ethereum peer", "snap", peer.snapExt != nil)
+	logger.Debug("Removing Gwat peer", "snap", peer.snapExt != nil)
 
 	// Remove the `snap` extension if it exists
 	if peer.snapExt != nil {
@@ -409,7 +409,7 @@ func (h *handler) unregisterPeer(id string) {
 	h.txFetcher.Drop(id)
 
 	if err := h.peers.unregisterPeer(id); err != nil {
-		logger.Error("Ethereum peer removal failed", "err", err)
+		logger.Error("Gwat peer removal failed", "err", err)
 	}
 }
 
@@ -448,7 +448,7 @@ func (h *handler) Stop() {
 	h.peers.close()
 	h.peerWG.Wait()
 
-	log.Info("Ethereum protocol stopped")
+	log.Info("Gwat protocol stopped")
 }
 
 // BroadcastBlock will either propagate a block to a subset of its peers, or

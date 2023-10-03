@@ -2763,9 +2763,79 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		for _, h := range block.ParentHashes() {
 			bdag := bc.GetBlockDag(h)
 			if bdag == nil {
-				//should never happen
-				panic("should never happen")
+				// create parent blockDag
+				parentBlock := bc.GetHeader(h)
+				if parentBlock == nil {
+					log.Error("Insert blocks: create parent blockDag: parent not found",
+						"slot", block.Slot(),
+						"height", block.Height(),
+						"hash", block.Hash().Hex(),
+						"parent", h.Hex(),
+						"err", ErrInsertUncompletedDag,
+					)
+					return it.index, ErrInsertUncompletedDag
+				}
+				cpHeader := bc.GetHeader(parentBlock.CpHash)
+				if cpHeader == nil {
+					log.Error("Insert blocks: create parent blockDag: parent cp not found",
+						"slot", block.Slot(),
+						"height", block.Height(),
+						"hash", block.Hash().Hex(),
+						"parent", h.Hex(),
+						"parentCP", parentBlock.CpHash.Hex(),
+						"err", ErrInsertUncompletedDag,
+					)
+					return it.index, ErrInsertUncompletedDag
+				}
+
+				log.Warn("Insert blocks: create parent blockDag",
+					"parent.slot", parentBlock.Slot,
+					"parent.height", parentBlock.Height,
+					"parent", h.Hex(),
+					"slot", block.Slot(),
+					"height", block.Height(),
+					"hash", block.Hash().Hex(),
+				)
+				//isCpAncestor, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
+				_, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
+				if err != nil {
+					return it.index, err
+				}
+				if len(unl) > 0 {
+					log.Error("Insert blocks: create parent blockDag: incomplete dag",
+						"err", ErrInsertUncompletedDag,
+						"parent", h.Hex(),
+						"parent.slot", parentBlock.Slot,
+						"parent.height", parentBlock.Height,
+						"slot", block.Slot(),
+						"height", block.Height(),
+						"hash", block.Hash().Hex(),
+					)
+					return it.index, ErrInsertUncompletedDag
+				}
+				//if !isCpAncestor {
+				//	log.Error("Insert blocks: create parent blockDag: cp is not ancestor",
+				//		"err", ErrCpIsnotAncestor,
+				//		"parent", h.Hex(),
+				//		"parent.slot", parentBlock.Slot,
+				//		"parent.height", parentBlock.Height,
+				//		"slot", block.Slot(),
+				//		"height", block.Height(),
+				//		"hash", block.Hash().Hex(),
+				//	)
+				//	return it.index, ErrCpIsnotAncestor
+				//}
+				delete(ancestors, cpHeader.Hash())
+				bdag = &types.BlockDAG{
+					Hash:                   h,
+					Height:                 parentBlock.Height,
+					Slot:                   parentBlock.Slot,
+					CpHash:                 parentBlock.CpHash,
+					CpHeight:               cpHeader.Height,
+					OrderedAncestorsHashes: ancestors.Hashes(),
+				}
 			}
+			bdag.OrderedAncestorsHashes = bdag.OrderedAncestorsHashes.Difference(common.HashArray{bc.Genesis().Hash()})
 			tmpTips.Add(bdag)
 		}
 		dagChainHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, block.CpHash())
@@ -4211,7 +4281,7 @@ func (bc *BlockChain) DagMuUnlock() {
 	bc.dagMu.Unlock()
 }
 
-func (bc *BlockChain) EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era {
+func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *era.Era {
 	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
 	if nextEra != nil {
 		rawdb.WriteCurrentEra(bc.db, nextEra.Number)
@@ -4227,12 +4297,12 @@ func (bc *BlockChain) EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.
 		return nextEra
 	}
 
-	epochSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.FinEpoch - bc.Config().TransitionPeriod)
+	transitionSlot, err := bc.GetSlotInfo().SlotOfEpochStart(nextEraEpochFrom - bc.Config().TransitionPeriod)
 	if err != nil {
-		log.Error("EnterNextEra slot of cp finEpoch start error", "err", err)
+		log.Error("Next era: calculate transition slot failed", "err", err)
 	}
 
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, epochSlot, true, false, "EnterNextEra")
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, transitionSlot, true, false, "EnterNextEra")
 	nextEra = era.NextEra(bc, root, uint64(len(validators)))
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
@@ -4243,6 +4313,7 @@ func (bc *BlockChain) EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.
 		"root", nextEra.Root,
 		"currSlot", bc.GetSlotInfo().CurrentSlot(),
 		"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+		"validators", validators,
 	)
 	bc.SetNewEraInfo(*nextEra)
 	return nextEra

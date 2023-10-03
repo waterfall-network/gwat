@@ -51,7 +51,7 @@ var (
 	gitCommit = ""
 	gitDate   = ""
 	// The app that holds all commands and flags.
-	app = flags.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
+	app = flags.NewApp(gitCommit, gitDate, "the gwat command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -190,7 +190,7 @@ func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2021 The go-ethereum Authors"
+	app.Copyright = fmt.Sprintf("%s\n   %s", "Copyright 2013-2021 The go-ethereum Authors", "Copyright 2021-2023 The Waterfall Authors")
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -252,13 +252,13 @@ func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
 	case ctx.GlobalIsSet(utils.DevNetFlag.Name):
-		log.Info("Starting Geth on DevNet testnet...")
+		log.Info("Starting GWAT on DevNet testnet...")
 
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting GWAT in dev mode...")
 
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Geth on Ethereum mainnet...")
+		log.Info("Starting GWAT on Waterfall mainnet...")
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
@@ -386,7 +386,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	}
 	ethBackend, ok := backend.(*eth.EthAPIBackend)
 	if !ok {
-		utils.Fatalf("Ethereum service not running")
+		utils.Fatalf("Waterfall service not running")
 	}
 	// Set the gas price to the limits from the CLI and start mining
 	gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)

@@ -23,7 +23,7 @@ func (m mockBlockchain) GetHeaderByHash(hash common.Hash) *types.Header {
 	panic("implement me")
 }
 
-func (m mockBlockchain) EnterNextEra(cp *types.Checkpoint, hash common.Hash) *Era {
+func (m mockBlockchain) EnterNextEra(cp uint64, hash common.Hash) *Era {
 	//TODO implement me
 	panic("implement me")
 }

@@ -249,7 +249,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 
 func init() {
 	app.Name = "Clef"
-	app.Usage = "Manage Ethereum account operations"
+	app.Usage = "Manage Waterfall account operations"
 	app.Flags = []cli.Flag{
 		logLevelFlag,
 		keystoreFlag,

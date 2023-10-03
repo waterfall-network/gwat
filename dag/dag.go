@@ -62,7 +62,7 @@ type blockChain interface {
 	Config() *params.ChainConfig
 	GetEraInfo() *era.EraInfo
 	SetNewEraInfo(newEra era.Era)
-	EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era
+	EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *era.Era
 	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
 	//SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage

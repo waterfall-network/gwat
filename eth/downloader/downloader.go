@@ -2773,6 +2773,12 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 	}
 	baseNr := baseHeader.Nr()
 	baseRemote, err := d.fetchHeaderByNr(p, baseNr)
+	if err == errBadPeer {
+		return false, nil, errCanceled
+	}
+	if err != nil {
+		return false, nil, err
+	}
 	if baseRemote.Hash() != baseHeader.Hash() || baseRemote.Root != baseHeader.Root {
 		return false, nil, errBadPeer
 	}
