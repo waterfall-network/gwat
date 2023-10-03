@@ -2824,12 +2824,16 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		if err != nil {
 			return it.index, err
 		}
+		cpHeader := bc.GetHeader(block.CpHash())
+		if cpHeader == nil {
+			return it.index, ErrInsertUncompletedDag
+		}
 		dagBlock := &types.BlockDAG{
 			Hash:                   block.Hash(),
 			Height:                 block.Height(),
 			Slot:                   block.Slot(),
 			CpHash:                 block.CpHash(),
-			CpHeight:               block.CpNumber(),
+			CpHeight:               cpHeader.Height,
 			OrderedAncestorsHashes: dagChainHashes,
 		}
 		bc.AddTips(dagBlock)
