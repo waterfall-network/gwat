@@ -18,7 +18,6 @@
 package types
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -173,9 +172,11 @@ func (h *Header) Copy() *Header {
 			GasLimit:      h.GasLimit,
 			GasUsed:       h.GasUsed,
 			Time:          h.Time,
-			Extra:         bytes.Clone(h.Extra),
+			Extra:         make([]byte, len(h.Extra)),
 		}
-
+		if len(h.Extra) > 0 {
+			copy(cpy.Extra, h.Extra)
+		}
 		if h.CpBaseFee != nil {
 			cpy.CpBaseFee = new(big.Int).Set(h.CpBaseFee)
 		}
