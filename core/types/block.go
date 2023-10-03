@@ -18,6 +18,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -153,26 +154,26 @@ func (h *Header) Copy() *Header {
 	var cpy *Header = nil
 	if h != nil {
 		cpy = &Header{
-			ParentHashes:  h.ParentHashes,
+			ParentHashes:  h.ParentHashes.Copy(),
 			Slot:          h.Slot,
 			Era:           h.Era,
 			Height:        h.Height,
-			CpHash:        h.CpHash,
+			CpHash:        common.BytesToHash(h.CpHash.Bytes()),
 			CpNumber:      h.CpNumber,
-			CpBloom:       h.CpBloom,
-			CpRoot:        h.CpRoot,
-			CpReceiptHash: h.CpReceiptHash,
+			CpBloom:       BytesToBloom(h.CpBloom.Bytes()),
+			CpRoot:        common.BytesToHash(h.CpRoot.Bytes()),
+			CpReceiptHash: common.BytesToHash(h.CpReceiptHash.Bytes()),
 			CpGasUsed:     h.CpGasUsed,
-			Coinbase:      h.Coinbase,
-			Root:          h.Root,
-			TxHash:        h.TxHash,
-			BodyHash:      h.BodyHash,
-			ReceiptHash:   h.ReceiptHash,
-			Bloom:         h.Bloom,
+			Coinbase:      common.BytesToAddress(h.Coinbase.Bytes()),
+			Root:          common.BytesToHash(h.Root.Bytes()),
+			TxHash:        common.BytesToHash(h.TxHash.Bytes()),
+			BodyHash:      common.BytesToHash(h.BodyHash.Bytes()),
+			ReceiptHash:   common.BytesToHash(h.ReceiptHash.Bytes()),
+			Bloom:         BytesToBloom(h.Bloom.Bytes()),
 			GasLimit:      h.GasLimit,
 			GasUsed:       h.GasUsed,
 			Time:          h.Time,
-			Extra:         h.Extra,
+			Extra:         bytes.Clone(h.Extra),
 		}
 
 		if h.CpBaseFee != nil {
@@ -182,7 +183,8 @@ func (h *Header) Copy() *Header {
 			cpy.BaseFee = new(big.Int).Set(h.BaseFee)
 		}
 		if h.Number != nil {
-			cpy.Number = h.Number
+			nr := *h.Number
+			cpy.Number = &nr
 		}
 		if h.V != nil {
 			cpy.V = new(big.Int).Set(h.V)
@@ -194,7 +196,6 @@ func (h *Header) Copy() *Header {
 			cpy.S = new(big.Int).Set(h.S)
 		}
 	}
-
 	return cpy
 }
 
