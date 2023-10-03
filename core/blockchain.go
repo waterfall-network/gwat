@@ -2076,6 +2076,7 @@ func (bc *BlockChain) verifyBlockCoinbase(block *types.Block, slotCreators []com
 			"blockCreator", block.Header().Coinbase.Hex(),
 			"slotCreators", slotCreators,
 		)
+
 		return false
 	}
 
@@ -2092,6 +2093,8 @@ func (bc *BlockChain) verifyBlockCoinbase(block *types.Block, slotCreators []com
 			"blockSigner", signer.Hex(),
 			"slotCreators", slotCreators,
 		)
+
+		return false
 	}
 
 	return true
