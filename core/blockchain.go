@@ -2171,7 +2171,6 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 }
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
-	return true
 	intrGasSum := uint64(0)
 	signer := types.LatestSigner(bc.Config())
 	for _, tx := range block.Transactions() {
@@ -2216,7 +2215,6 @@ func (bc *BlockChain) verifyBlockHeight(block *types.Block, ancestorsCount int) 
 }
 
 func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
-    return true
 	// Verify body hash
 	blockBody := block.Body()
 	if blockBody.CalculateHash() != block.BodyHash() {
