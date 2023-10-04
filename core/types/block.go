@@ -95,6 +95,11 @@ type Header struct {
 	ReceiptHash common.Hash `json:"receiptsRoot"  rlp:"optional"`
 	GasUsed     uint64      `json:"gasUsed"       rlp:"optional"`
 	Bloom       Bloom       `json:"logsBloom"     rlp:"optional"`
+
+	// Signature values
+	V *big.Int `json:"v" rlp:"optional"`
+	R *big.Int `json:"r" rlp:"optional"`
+	S *big.Int `json:"s" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -127,34 +132,69 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(cpy)
 }
 
+func (h *Header) UnsignedHash() common.Hash {
+	cpy := h.Copy()
+	if cpy != nil {
+		cpy.Number = nil
+		cpy.BaseFee = nil
+		cpy.GasUsed = 0
+		cpy.Bloom = Bloom{}
+		cpy.ReceiptHash = common.Hash{}
+		cpy.Root = common.Hash{}
+		cpy.V = nil
+		cpy.R = nil
+		cpy.S = nil
+	}
+	return rlpHash(cpy)
+}
+
 // Copy creates copy of Header
 func (h *Header) Copy() *Header {
 	var cpy *Header = nil
 	if h != nil {
 		cpy = &Header{
-			ParentHashes:  h.ParentHashes,
+			ParentHashes:  h.ParentHashes.Copy(),
 			Slot:          h.Slot,
 			Era:           h.Era,
 			Height:        h.Height,
-			CpHash:        h.CpHash,
+			CpHash:        common.BytesToHash(h.CpHash.Bytes()),
 			CpNumber:      h.CpNumber,
-			CpBaseFee:     h.CpBaseFee,
-			CpBloom:       h.CpBloom,
-			CpRoot:        h.CpRoot,
-			CpReceiptHash: h.CpReceiptHash,
+			CpBloom:       BytesToBloom(h.CpBloom.Bytes()),
+			CpRoot:        common.BytesToHash(h.CpRoot.Bytes()),
+			CpReceiptHash: common.BytesToHash(h.CpReceiptHash.Bytes()),
 			CpGasUsed:     h.CpGasUsed,
-			Coinbase:      h.Coinbase,
-			Root:          h.Root,
-			TxHash:        h.TxHash,
-			BodyHash:      h.BodyHash,
-			ReceiptHash:   h.ReceiptHash,
-			Bloom:         h.Bloom,
+			Coinbase:      common.BytesToAddress(h.Coinbase.Bytes()),
+			Root:          common.BytesToHash(h.Root.Bytes()),
+			TxHash:        common.BytesToHash(h.TxHash.Bytes()),
+			BodyHash:      common.BytesToHash(h.BodyHash.Bytes()),
+			ReceiptHash:   common.BytesToHash(h.ReceiptHash.Bytes()),
+			Bloom:         BytesToBloom(h.Bloom.Bytes()),
 			GasLimit:      h.GasLimit,
 			GasUsed:       h.GasUsed,
 			Time:          h.Time,
-			Extra:         h.Extra,
-			BaseFee:       h.BaseFee,
-			Number:        h.Number,
+			Extra:         make([]byte, len(h.Extra)),
+		}
+		if len(h.Extra) > 0 {
+			copy(cpy.Extra, h.Extra)
+		}
+		if h.CpBaseFee != nil {
+			cpy.CpBaseFee = new(big.Int).Set(h.CpBaseFee)
+		}
+		if h.BaseFee != nil {
+			cpy.BaseFee = new(big.Int).Set(h.BaseFee)
+		}
+		if h.Number != nil {
+			nr := *h.Number
+			cpy.Number = &nr
+		}
+		if h.V != nil {
+			cpy.V = new(big.Int).Set(h.V)
+		}
+		if h.R != nil {
+			cpy.R = new(big.Int).Set(h.R)
+		}
+		if h.S != nil {
+			cpy.S = new(big.Int).Set(h.S)
 		}
 	}
 	return cpy
@@ -169,14 +209,6 @@ func (h *Header) Nr() uint64 {
 		return *h.Number
 	}
 	return 0
-}
-
-func (h *Header) FinalizedHash() common.Hash {
-	if h == nil || h.Number == nil {
-		return common.Hash{}
-	}
-	cpy := h.Copy()
-	return rlpHash(cpy)
 }
 
 // Size returns the approximate memory used by all internal contents. It is used
@@ -210,6 +242,15 @@ func (h *Header) EmptyBody() bool {
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash == EmptyRootHash
+}
+
+func (h *Header) rawSignatureValues() (v, r, s *big.Int) {
+	return h.V, h.R, h.S
+}
+
+func (h *Header) setSignature(sig []byte) {
+	r, s, v := decodeSignature(sig)
+	h.V, h.R, h.S = v, r, s
 }
 
 const uint32Length = 4
@@ -399,7 +440,6 @@ func (b *Block) Extra() []byte                  { return common.CopyBytes(b.head
 func (b *Block) Number() *uint64                { return b.header.Number }
 func (b *Block) Nr() uint64                     { return b.header.Nr() }
 func (b *Block) SetNumber(finNr *uint64)        { b.header.Number = finNr }
-func (b *Block) FinalizedHash() common.Hash     { return b.header.FinalizedHash() }
 func (b *Block) CpHash() common.Hash            { return b.header.CpHash }
 func (b *Block) CpNumber() uint64               { return b.header.CpNumber }
 func (b *Block) CpBaseFee() *big.Int            { return b.header.CpBaseFee }
@@ -416,30 +456,6 @@ func (b *Block) BaseFee() *big.Int {
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
-func (b *Block) BaseHeader() *Header {
-	var cpy *Header = nil
-	if b.header != nil {
-		cpy = &Header{
-			ParentHashes:  b.header.ParentHashes,
-			Slot:          b.header.Slot,
-			Era:           b.header.Era,
-			Height:        b.header.Height,
-			CpHash:        b.header.CpHash,
-			CpNumber:      b.header.CpNumber,
-			CpBaseFee:     b.header.CpBaseFee,
-			CpBloom:       b.header.CpBloom,
-			CpRoot:        b.header.CpRoot,
-			CpReceiptHash: b.header.CpReceiptHash,
-			CpGasUsed:     b.header.CpGasUsed,
-			Coinbase:      b.header.Coinbase,
-			TxHash:        b.header.TxHash,
-			GasLimit:      b.header.GasLimit,
-			Time:          b.header.Time,
-			Extra:         b.header.Extra,
-		}
-	}
-	return cpy
-}
 
 func (b *Block) SetHeader(header *Header) {
 	b.header = header

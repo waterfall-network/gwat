@@ -187,6 +187,8 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	tips types.Tips,
 	checkpoint *types.Checkpoint,
 ) error {
+	start := time.Now()
+
 	if c.isSyncing() {
 		log.Warn("Creator skipping due to synchronization")
 		return errors.New("synchronization")
@@ -235,6 +237,12 @@ func (c *Creator) RunBlockCreation(slot uint64,
 		}
 	}
 	wg.Wait()
+
+	log.Info("BLOCK CREATION TIME - TOTAL",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "RunBlockCreation",
+		"slot", slot,
+	)
 
 	return nil
 }
@@ -416,6 +424,8 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 }
 
 func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Address, header *types.Header, wg *sync.WaitGroup, needEmptyBlock bool) {
+	start := time.Now()
+
 	log.Info("Try to create new block", "slot", header.Slot, "coinbase", coinbase.Hex())
 	defer wg.Done()
 
@@ -430,27 +440,43 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 	syncData := validatorsync.GetPendingValidatorSyncData(c.bc)
 	if len(syncData) > 0 || len(pendingTxs) > 0 || needEmptyBlock {
+		startTime := time.Now()
 		ks, err := c.getKeystore(c.backend.AccountManager())
 		if err != nil {
 			log.Error("Failed to fetch keystore", "error", err)
 			return
 		}
+		log.Info("BLOCK CREATION TIME",
+			"elapsed", common.PrettyDuration(time.Since(startTime)),
+			"func:", "getKeyStore",
+			"slot", header.Slot,
+		)
 
 		acc := accounts.Account{Address: coinbase}
-		if !ks.IsUnlocked(acc) {
-			ts := time.Now()
+		start = time.Now()
+		ok := ks.IsUnlocked(acc)
+		log.Info("BLOCK CREATION TIME",
+			"elapsed", common.PrettyDuration(time.Since(startTime)),
+			"func:", "IsUnlocked",
+			"account", acc.Address.Hex(),
+			"slot", header.Slot,
+		)
+		if !ok {
+			startTime = time.Now()
 			if err := c.unlockAccount(ks, acc.Address.String()); err != nil {
 				log.Warn("Creator: unlock account failed",
 					"error", err,
-					"elapsed", common.PrettyDuration(time.Since(ts)),
+					"elapsed", common.PrettyDuration(time.Since(startTime)),
 					"slot", header.Slot,
 					"addr", acc.Address.String())
 				return
 			}
-			log.Info("Creator: unlock account",
-				"elapsed", common.PrettyDuration(time.Since(ts)),
+
+			log.Info("BLOCK CREATION TIME",
+				"elapsed", common.PrettyDuration(time.Since(startTime)),
+				"func:", "unlockAccount",
+				"address", acc.Address.Hex(),
 				"slot", header.Slot,
-				"addr", acc.Address.String(),
 			)
 		}
 	}
@@ -479,6 +505,12 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 			c.create(header, true)
 			log.Info("Create empty block", "creator", header.Coinbase.Hex(), "slot", header.Slot)
 
+			log.Info("BLOCK CREATION TIME",
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"func:", "createNewBlock",
+				"coinbase", coinbase.Hex(),
+				"slot", header.Slot,
+			)
 			return
 		}
 		pendAddr, queAddr, _ := c.backend.TxPool().StatsByAddrs()
@@ -496,6 +528,12 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 
 			c.create(header, true)
 
+			log.Info("BLOCK CREATION TIME",
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"func:", "createNewBlock",
+				"coinbase", coinbase.Hex(),
+				"slot", header.Slot,
+			)
 			return
 		}
 		pendAddr, queAddr, _ := c.backend.TxPool().StatsByAddrs()
@@ -511,6 +549,13 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 	}
 
 	c.create(header, true)
+
+	log.Info("BLOCK CREATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "createNewBlock",
+		"coinbase", coinbase.Hex(),
+		"slot", header.Slot,
+	)
 }
 
 func (c *Creator) create(header *types.Header, update bool) {
@@ -525,6 +570,23 @@ func (c *Creator) create(header *types.Header, update bool) {
 		log.Error("Created block is nil")
 		return
 	}
+
+	start := time.Now()
+	signedHeader, err := c.signBlockHeader(block.Header())
+	if err != nil {
+		log.Error("Failed to sign block", "coinbase", header.Coinbase.Hex(), "blockHash", block.Hash().Hex(), "err", err)
+		return
+	}
+
+	block.SetHeader(signedHeader)
+
+	log.Info("BLOCK CREATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"func:", "SignBlock",
+		"signer", block.Coinbase().Hex(),
+		"slot", header.Slot,
+	)
+
 	// Short circuit when receiving duplicate result caused by resubmitting.
 	if c.bc.HasBlock(block.Hash()) {
 		log.Error("Created block is already creating")
@@ -532,7 +594,7 @@ func (c *Creator) create(header *types.Header, update bool) {
 	}
 
 	// Commit block to database.
-	_, err := c.bc.WriteCreatedDagBlock(block)
+	_, err = c.bc.WriteCreatedDagBlock(block)
 	if err != nil {
 		log.Error("Failed write dag block", "err", err)
 		return
@@ -841,4 +903,13 @@ func (c *Creator) getKeystore(am *accounts.Manager) (*keystore.KeyStore, error) 
 	}
 
 	return nil, errors.New("local keystore not used")
+}
+
+func (c *Creator) signBlockHeader(h *types.Header) (*types.Header, error) {
+	key, err := c.current.keystore.GetKey(h.Coinbase)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.SignBlockHeader(h, key)
 }

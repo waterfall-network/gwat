@@ -107,7 +107,7 @@ func TestSetSpineState(t *testing.T) {
 	bc.EXPECT().ResetRollbackActive()
 	bc.EXPECT().GetHeaderByNumber(gomock.AssignableToTypeOf(num)).AnyTimes().Return(header)
 	bc.EXPECT().GetBlockDag(header.Hash()).AnyTimes().Return(nil)
-	bc.EXPECT().CollectAncestorsAftCpByTips(gomock.AssignableToTypeOf(common.HashArray{}), gomock.AssignableToTypeOf(common.Hash{})).AnyTimes().Return(true, unloaded, nil, nil, nil)
+	bc.EXPECT().CollectAncestorsAftCpByTips(gomock.AssignableToTypeOf(common.HashArray{}), gomock.AssignableToTypeOf(common.Hash{})).AnyTimes().Return(true, unloaded, nil, nil)
 	bc.EXPECT().GetHeader(gomock.AssignableToTypeOf(common.Hash{})).AnyTimes().Return(header)
 	bc.EXPECT().SaveBlockDag(gomock.AssignableToTypeOf(&types.BlockDAG{})).AnyTimes()
 	bc.EXPECT().RollbackFinalization(gomock.AssignableToTypeOf(uint64(0))).AnyTimes()
