@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"sort"
 	"sync"
@@ -2190,19 +2189,19 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
 	intrGasSum := uint64(0)
-	signer := types.LatestSigner(bc.Config())
+	//signer := types.LatestSigner(bc.Config())
 	for _, tx := range block.Transactions() {
-		msg, err := tx.AsMessage(signer, block.BaseFee())
-		if err != nil {
-			log.Warn("Block verification: tx to msg error", "err", err)
-			return false
-		}
-		intrGas, err := bc.EstimateGas(msg, block.Header())
-		if err != nil {
-			log.Warn("Block verification: estimate gas error", "err", err)
-			return false
-		}
-		intrGasSum += intrGas
+		//msg, err := tx.AsMessage(signer, block.BaseFee())
+		//if err != nil {
+		//	log.Warn("Block verification: tx to msg error", "err", err)
+		//	return false
+		//}
+		//intrGas, err := bc.EstimateGas(msg, block.Header())
+		//if err != nil {
+		//	log.Warn("Block verification: estimate gas error", "err", err)
+		//	return false
+		//}
+		intrGasSum += tx.Gas()
 	}
 
 	if intrGasSum > block.GasLimit() {
@@ -3437,8 +3436,8 @@ func (bc *BlockChain) EstimateGas(msg types.Message, header *types.Header) (uint
 	switch txType {
 	case ValidatorMethodTxType, ValidatorSyncTxType:
 		return IntrinsicGas(msg.Data(), msg.AccessList(), false, true)
-	case ContractMethodTxType, ContractCreationTxType:
-		return bc.EstimateGasByEvm(msg, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
+	//case ContractMethodTxType, ContractCreationTxType:
+	//	return bc.EstimateGasByEvm(msg, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
 	case TokenCreationTxType, TokenMethodTxType:
 		return IntrinsicGas(msg.Data(), msg.AccessList(), false, false)
 	default:
@@ -3446,33 +3445,33 @@ func (bc *BlockChain) EstimateGas(msg types.Message, header *types.Header) (uint
 	}
 }
 
-func (bc *BlockChain) EstimateGasByEvm(msg types.Message,
-	header *types.Header,
-	blkCtx vm.BlockContext,
-	statedb *state.StateDB,
-	vp *validator.Processor,
-	tp *token.Processor,
-) (uint64, error) {
-	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	from := msg.From()
-	statedb.SetNonce(from, msg.Nonce())
-	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
-	gasBalance := new(big.Int).Mul(maxGas, msg.GasPrice())
-	reqBalance := new(big.Int).Add(gasBalance, msg.Value())
-	statedb.SetBalance(from, reqBalance)
-
-	gasPool := new(GasPool).AddGas(math.MaxUint64)
-
-	evm := vm.NewEVM(blkCtx, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())
-
-	receipt, err := ApplyMessage(evm, tp, vp, msg, gasPool)
-	if err != nil {
-		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "err", err)
-		return 0, err
-	}
-	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "txGas", msg.Gas(), "calcGas", receipt.UsedGas)
-	return receipt.UsedGas, nil
-}
+//func (bc *BlockChain) EstimateGasByEvm(msg types.Message,
+//	header *types.Header,
+//	blkCtx vm.BlockContext,
+//	statedb *state.StateDB,
+//	vp *validator.Processor,
+//	tp *token.Processor,
+//) (uint64, error) {
+//	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+//	from := msg.From()
+//	statedb.SetNonce(from, msg.Nonce())
+//	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
+//	gasBalance := new(big.Int).Mul(maxGas, msg.GasPrice())
+//	reqBalance := new(big.Int).Add(gasBalance, msg.Value())
+//	statedb.SetBalance(from, reqBalance)
+//
+//	gasPool := new(GasPool).AddGas(math.MaxUint64)
+//
+//	evm := vm.NewEVM(blkCtx, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())
+//
+//	receipt, err := ApplyMessage(evm, tp, vp, msg, gasPool)
+//	if err != nil {
+//		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "err", err)
+//		return 0, err
+//	}
+//	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "txGas", msg.Gas(), "calcGas", receipt.UsedGas)
+//	return receipt.UsedGas, nil
+//}
 
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.

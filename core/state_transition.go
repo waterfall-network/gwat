@@ -457,11 +457,11 @@ func GetTxType(msg Message, vp *validator.Processor, tp *token.Processor) TxType
 		return ContractCreationTxType
 	}
 
-	if tp.IsToken(*msg.To()) {
+	if tp != nil && tp.IsToken(*msg.To()) {
 		return TokenMethodTxType
 	}
 
-	if vp.IsValidatorOp(msg.To()) {
+	if vp != nil && vp.IsValidatorOp(msg.To()) {
 		valOp, err := operation.DecodeBytes(msg.Data())
 		if err != nil {
 			return UnknownTxType
