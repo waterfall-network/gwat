@@ -35,12 +35,12 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enr"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/netutil"
 )
 
 const (
 	alpha           = 3  // Kademlia concurrency factor
-	bucketSize      = 16 // Kademlia bucket size
 	maxReplacements = 10 // Size of per-bucket replacement list
 
 	// We keep buckets for the upper 1/15 of distances because
@@ -61,6 +61,8 @@ const (
 	seedMaxAge         = 5 * 24 * time.Hour
 )
 
+var bucketSize = 16 // Kademlia bucket size
+
 // Table is the 'node table', a Kademlia-like index of neighbor nodes. The table keeps
 // itself up-to-date by verifying the liveness of neighbors and requesting their node
 // records when announcements of a new record version are received.
@@ -80,6 +82,7 @@ type Table struct {
 	closed     chan struct{}
 
 	nodeAddedHook func(*node) // for testing
+	genesisHash   *common.Hash
 }
 
 // transport is implemented by the UDP transports.
@@ -99,17 +102,18 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger) (*Table, error) {
+func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger, bs uint, genHash *common.Hash) (*Table, error) {
 	tab := &Table{
-		net:        t,
-		db:         db,
-		refreshReq: make(chan chan struct{}),
-		initDone:   make(chan struct{}),
-		closeReq:   make(chan struct{}),
-		closed:     make(chan struct{}),
-		rand:       mrand.New(mrand.NewSource(0)),
-		ips:        netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
-		log:        log,
+		net:         t,
+		db:          db,
+		refreshReq:  make(chan chan struct{}),
+		initDone:    make(chan struct{}),
+		closeReq:    make(chan struct{}),
+		closed:      make(chan struct{}),
+		rand:        mrand.New(mrand.NewSource(0)),
+		ips:         netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
+		log:         log,
+		genesisHash: genHash,
 	}
 	if err := tab.setFallbackNodes(bootnodes); err != nil {
 		return nil, err
@@ -121,6 +125,10 @@ func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger
 	}
 	tab.seedRand()
 	tab.loadSeedNodes()
+
+	if bs != 0 {
+		bucketSize = int(bs)
+	}
 
 	return tab, nil
 }
@@ -505,6 +513,20 @@ func (tab *Table) addVerifiedNode(n *node) {
 	}
 	if n.ID() == tab.self().ID() {
 		return
+	}
+
+	if tab.genesisHash != nil && *tab.genesisHash != (common.Hash{}) {
+		var gen enr.ENRGenesis
+		err := n.Node.Load(&gen)
+		if err != nil {
+			log.Debug("can`t load enr genesis", "error", err)
+			return
+		}
+
+		if common.Hash(gen) != *tab.genesisHash {
+			log.Debug("unknown node, mismatch genesis", "want", *tab.genesisHash, "have", gen)
+			return
+		}
 	}
 
 	tab.mutex.Lock()

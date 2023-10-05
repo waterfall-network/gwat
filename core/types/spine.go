@@ -131,10 +131,6 @@ func selectSpinesByMaxParentsCount(headers Headers) Headers {
 
 func sortByHash(headers Headers) {
 	sort.Slice(headers, func(i, j int) bool {
-		ih := headers[i].Hash().Hex()
-		jh := headers[j].Hash().Hex()
-		if ih != jh {
-		}
 		cmp := bytes.Compare(headers[i].Hash().Bytes(), headers[j].Hash().Bytes()) < 0
 		return cmp
 	})

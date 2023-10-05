@@ -155,7 +155,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
-	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
+	log.Info("Initialising Gwat protocol", "network", config.NetworkId, "dbversion", dbVer)
 
 	if !config.SkipBcVersionCheck {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
@@ -267,6 +267,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
+
+	stack.Server().SetP2PGenesis(eth.blockchain.Genesis().Hash())
 	// Check for unclean shutdown
 	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
 		log.Error("Could not update unclean-shutdown-marker list", "error", err)
@@ -399,7 +401,7 @@ func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 // and updates the minimum price required by the transaction pool.
 func (s *Ethereum) StartMining(threads int) error {
 	// If the creator was not running, initialize it
-	if !s.dag.Creator().IsRunning() {
+	if !s.dag.Creator().IsRunning() && len(s.AccountManager().Accounts()) > 0 {
 		// Propagate the initial price point to the transaction pool
 		s.lock.RLock()
 		price := s.gasPrice
@@ -423,6 +425,8 @@ func (s *Ethereum) StartMining(threads int) error {
 		atomic.StoreUint32(&s.handler.acceptTxs, 1)
 
 		s.dag.Creator().Start()
+	} else {
+		log.Info("Mining not started: No accounts found in keystore and creator is not active")
 	}
 	return nil
 }

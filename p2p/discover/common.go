@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"net"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
@@ -47,6 +48,8 @@ type Config struct {
 	Log          log.Logger         // if set, log messages go here
 	ValidSchemes enr.IdentityScheme // allowed identity schemes
 	Clock        mclock.Clock
+	FindNodesBucketLength uint // amount of nodes to find within network
+	Genesis      common.Hash
 }
 
 func (cfg Config) withDefaults() Config {
