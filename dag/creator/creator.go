@@ -290,7 +290,7 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 	cpHeader := c.bc.GetHeader(checkpoint.Spine)
 	newHeight, err := c.bc.CalcBlockHeightByTips(tips, cpHeader.Hash())
 	if err != nil {
-		log.Error("Failed to make block creation context", "err", err)
+		log.Error("Creator calculate block height failed", "err", err)
 		return nil, err
 	}
 
