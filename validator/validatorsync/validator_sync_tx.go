@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -22,7 +23,7 @@ type Backend interface {
 }
 
 // GetPendingValidatorSyncData retrieves currently processable validators sync operations.
-func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from common.Address, valSyncOp *types.ValidatorSync, nonce uint64) (*types.Transaction, error) {
+func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from common.Address, valSyncOp *types.ValidatorSync, nonce uint64, ks *keystore.KeyStore) (*types.Transaction, error) {
 	bc := backend.BlockChain()
 	_, err := ValidateValidatorSyncOp(bc, stateBlockHash, valSyncOp)
 	if err != nil {
@@ -80,7 +81,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	}
 	tx := types.NewTx(txData)
 
-	signed, err := signTx(backend, from, tx)
+	signed, err := signTx(backend, from, tx, ks)
 	if err != nil {
 		return nil, err
 	}
@@ -156,15 +157,11 @@ func getValSyncTxData(valSyncOp types.ValidatorSync, withdrawal *common.Address)
 }
 
 // sign is a helper function that signs a transaction with the private key of the given address.
-func signTx(backend Backend, addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
+func signTx(backend Backend, addr common.Address, tx *types.Transaction, ks *keystore.KeyStore) (*types.Transaction, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
-	wallet, err := backend.AccountManager().Find(account)
-	if err != nil {
-		return nil, err
-	}
-	// Request the wallet to sign the transaction
-	return wallet.SignTx(account, tx, (backend.BlockChain()).Config().ChainID)
+
+	return ks.SignTx(account, tx, (backend.BlockChain()).Config().ChainID)
 }
 
 // GetPendingValidatorSyncData retrieves currently processable validators sync operations.

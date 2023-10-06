@@ -28,6 +28,11 @@ import (
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
+var (
+	// ErrSynchronization throws if synchronization process running
+	errSynchronization = errors.New("synchronization")
+)
+
 // Backend wraps all methods required for block creation.
 type Backend interface {
 	BlockChain() *core.BlockChain
@@ -57,7 +62,7 @@ type blockChain interface {
 	Config() *params.ChainConfig
 	GetEraInfo() *era.EraInfo
 	SetNewEraInfo(newEra era.Era)
-	EnterNextEra(cp *types.Checkpoint, root common.Hash) *era.Era
+	EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *era.Era
 	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
 	//SyncEraToSlot(slot uint64)
 	ValidatorStorage() valStore.Storage
@@ -146,7 +151,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	//skip if synchronising
 	if d.downloader.Synchronising() {
-		errStr := creator.ErrSynchronization.Error()
+		errStr := errSynchronization.Error()
 		res.Error = &errStr
 		log.Error("Handle Finalize: response (busy)", "result", res, "err", errStr)
 		// 		return res
@@ -361,14 +366,11 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 	//skip if synchronising
 	if d.downloader.Synchronising() {
-		errStr := creator.ErrSynchronization.Error()
+		errStr := errSynchronization.Error()
 		return &types.FinalizationResult{
 			Error: &errStr,
 		}
 	}
-
-	//d.bc.DagMuLock()
-	//defer d.bc.DagMuUnlock()
 
 	lfHeader := d.bc.GetLastFinalizedHeader()
 	lfHash := lfHeader.Hash()
@@ -390,7 +392,7 @@ func (d *Dag) HandleCoordinatedState() *types.FinalizationResult {
 func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 	//skip if synchronising
 	if d.downloader.Synchronising() {
-		errStr := creator.ErrSynchronization.Error()
+		errStr := errSynchronization.Error()
 		return &types.CandidatesResult{
 			Error: &errStr,
 		}
@@ -402,10 +404,6 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 			"func:", "GetCandidates",
 		)
 	}(time.Now())
-
-	//d.bc.DagMuLock()
-	//defer d.bc.DagMuUnlock()
-
 	// collect next finalization candidates
 	//candidates, err := d.finalizer.GetFinalizingCandidates(&slot)
 	fromSlot := d.bc.GetLastFinalizedHeader().Slot
@@ -444,14 +442,11 @@ func (d *Dag) HandleGetCandidates(slot uint64) *types.CandidatesResult {
 func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.OptimisticSpinesResult {
 	//skip if synchronising
 	if d.downloader.Synchronising() {
-		errStr := creator.ErrSynchronization.Error()
+		errStr := errSynchronization.Error()
 		return &types.OptimisticSpinesResult{
 			Error: &errStr,
 		}
 	}
-
-	//d.bc.DagMuLock()
-	//defer d.bc.DagMuUnlock()
 
 	tstart := time.Now()
 
@@ -486,9 +481,6 @@ func (d *Dag) HandleGetOptimisticSpines(fromSpine common.Hash) *types.Optimistic
 
 // HandleSyncSlotInfo set initial state to start head sync with coordinating network.
 func (d *Dag) HandleSyncSlotInfo(slotInfo types.SlotInfo) (bool, error) {
-	//d.bc.DagMuLock()
-	//defer d.bc.DagMuUnlock()
-
 	log.Info("Handle Sync Slot info", "params", slotInfo)
 	si := d.bc.GetSlotInfo()
 	if si == nil {
@@ -537,9 +529,6 @@ func (d *Dag) HandleValidateFinalization(spines common.HashArray) (bool, error) 
 
 // HandleValidateSpines collect next finalization candidates
 func (d *Dag) HandleValidateSpines(spines common.HashArray) (bool, error) {
-	//d.bc.DagMuLock()
-	//defer d.bc.DagMuUnlock()
-
 	log.Debug("Candidates HandleValidateSpines req", "candidates", spines, "elapsed", "\u2692", params.BuildId)
 	return d.finalizer.IsValidSequenceOfSpines(spines)
 }
@@ -670,7 +659,6 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 	if !d.bc.IsSynced() {
 		return
 	}
-
 	if d.isSlotLocked(slot) {
 		return
 	}
@@ -682,16 +670,25 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 		return
 	}
 
-	tips := d.bc.GetTips()
-	checkpoint := d.getCheckpoint()
-	if checkpoint == nil {
-		checkpoint = d.bc.GetLastCoordinatedCheckpoint()
-	}
-
 	if d.Creator().IsRunning() {
-		err := d.Creator().RunBlockCreation(slot, slotCreators, tips, checkpoint)
-		if err != nil {
-			log.Error("Create block error", "error", err)
+		var canCreate bool
+		for _, account := range slotCreators {
+			if d.Creator().IsCreatorActive(account) {
+				canCreate = true
+				break
+			}
+		}
+		if canCreate {
+			tips := d.bc.GetTips()
+			checkpoint := d.getCheckpoint()
+			if checkpoint == nil {
+				checkpoint = d.bc.GetLastCoordinatedCheckpoint()
+			}
+
+			err := d.Creator().RunBlockCreation(slot, slotCreators, tips, checkpoint)
+			if err != nil {
+				log.Error("Create block error", "error", err)
+			}
 		}
 	} else {
 		log.Warn("Creator stopped")

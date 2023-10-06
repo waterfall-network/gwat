@@ -89,7 +89,7 @@ func (dl *downloadTester) Config() *params.ChainConfig {
 	panic("implement me")
 }
 
-func (dl *downloadTester) EnterNextEra(checkpoint *types.Checkpoint, hash common.Hash) *era.Era {
+func (dl *downloadTester) EnterNextEra(nextEraEpochFrom uint64, hash common.Hash) *era.Era {
 	//TODO implement me
 	panic("implement me")
 }

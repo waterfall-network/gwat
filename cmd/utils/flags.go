@@ -436,7 +436,7 @@ var (
 	}
 	RPCGlobalTxFeeCapFlag = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
-		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
+		Usage: "Sets a cap on transaction fee (in WATER) that can be sent via the RPC APIs (0 = no cap)",
 		Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
 	// Logging and debug settings
@@ -1282,6 +1282,9 @@ func setMiner(ctx *cli.Context, cfg *creator.Config) {
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
 		log.Warn("The generic --creator.gastarget flag is deprecated and will be removed in the future!")
 	}
+	if ctx.GlobalIsSet(PasswordFileFlag.Name) {
+		cfg.PasswordDir = ctx.GlobalString(PasswordFileFlag.Name)
+	}
 }
 
 func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {
@@ -1535,7 +1538,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	//}
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
+		Fatalf("Failed to register the Gwat service: %v", err)
 	}
 	// TODO LES TMP OFF
 	//if cfg.LightServ > 0 {
@@ -1552,7 +1555,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 // the given node.
 func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
 	if err := ethstats.New(stack, backend, url); err != nil {
-		Fatalf("Failed to register the Ethereum Stats service: %v", err)
+		Fatalf("Failed to register the Gwat Stats service: %v", err)
 	}
 }
 

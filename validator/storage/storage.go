@@ -146,7 +146,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 		stateDb, _ := bc.StateAt(eraEra.Root)
 
 		valList := s.GetValidatorsList(stateDb)
-		log.Info("GetValidators from state", "validators", valList, "slot", slot, "epoch", slotEpoch, "root", eraEra.Root.Hex())
+		log.Info("GetValidators from state", "validators", len(valList), "slot", slot, "epoch", slotEpoch, "root", eraEra.Root.Hex())
 		for _, valAddress := range valList {
 			val, err := s.GetValidator(stateDb, valAddress)
 			if err != nil {

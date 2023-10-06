@@ -396,7 +396,7 @@ func (c *ChainIndexer) updateLoop() {
 			}
 			// If there are still further sections to process, reschedule
 			if c.knownSections > c.storedSections {
-				log.Info("Check update loop", "AfterFunc")
+				log.Info("Check update loop: AfterFunc")
 				time.AfterFunc(c.throttling, func() {
 					select {
 					case c.update <- struct{}{}:

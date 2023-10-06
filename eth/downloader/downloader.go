@@ -2449,8 +2449,28 @@ func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray)
 
 // fetchDagTxs retrieves the dag transactions by blocks hashes from a remote peer.
 func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (map[common.Hash][]*types.Transaction, error) {
+	txsMap := map[common.Hash][]*types.Transaction{}
+	var undelivered = hashes.Copy()
+	for {
+		transactions, err := d.requestDagTxs(p, undelivered)
+		if err != nil {
+			return nil, err
+		}
+		for i, txs := range transactions {
+			txsMap[undelivered[i]] = txs
+		}
+		if len(txsMap) < len(hashes) {
+			undelivered = hashes[len(txsMap):]
+			continue
+		}
+		break
+	}
+	return txsMap, nil
+}
 
-	p.log.Info("Sync: body by hashes: start", "hashes", len(hashes))
+// requestDagTxs retrieves the dag transactions by blocks hashes from a remote peer.
+func (d *Downloader) requestDagTxs(p *peerConnection, hashes common.HashArray) ([][]*types.Transaction, error) {
+	p.log.Info("Request remote dag block txs: start", "hashes", len(hashes))
 
 	//multi peers sync support
 	if !d.isPeerSync(p.id) {
@@ -2495,12 +2515,7 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 				log.Warn("Sync: body by hashes: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
 				break
 			}
-			transactions := packet.(*bodyPack).transactions
-			txsMap := make(map[common.Hash][]*types.Transaction, len(hashes))
-			for i, txs := range transactions {
-				txsMap[hashes[i]] = txs
-			}
-			return txsMap, nil
+			return packet.(*bodyPack).transactions, nil
 		case <-timeout:
 			p.log.Warn("Sync: body by hashes: timed out", "elapsed", ttl)
 			return nil, errTimeout
@@ -2660,6 +2675,12 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 	}
 	baseNr := baseHeader.Nr()
 	baseRemote, err := d.fetchHeaderByNr(p, baseNr)
+	if err == errBadPeer {
+		return false, nil, errCanceled
+	}
+	if err != nil {
+		return false, nil, err
+	}
 	if baseRemote.Hash() != baseHeader.Hash() || baseRemote.Root != baseHeader.Root {
 		return false, nil, errBadPeer
 	}
