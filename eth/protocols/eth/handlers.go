@@ -160,6 +160,8 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 		if data := backend.Chain().GetBodyRLP(hash); len(data) != 0 {
 			bodies = append(bodies, data)
 			bytes += len(data)
+		} else {
+			bodies = append(bodies, rlp.RawValue{})
 		}
 	}
 	return bodies

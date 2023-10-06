@@ -2598,8 +2598,28 @@ func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray)
 
 // fetchDagTxs retrieves the dag transactions by blocks hashes from a remote peer.
 func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (map[common.Hash][]*types.Transaction, error) {
+	txsMap := map[common.Hash][]*types.Transaction{}
+	var undelivered = hashes.Copy()
+	for {
+		transactions, err := d.requestDagTxs(p, undelivered)
+		if err != nil {
+			return nil, err
+		}
+		for i, txs := range transactions {
+			txsMap[undelivered[i]] = txs
+		}
+		if len(txsMap) < len(hashes) {
+			undelivered = hashes[len(txsMap):]
+			continue
+		}
+		break
+	}
+	return txsMap, nil
+}
 
-	p.log.Info("Retrieving remote dag block txs: start", "hashes", len(hashes))
+// requestDagTxs retrieves the dag transactions by blocks hashes from a remote peer.
+func (d *Downloader) requestDagTxs(p *peerConnection, hashes common.HashArray) ([][]*types.Transaction, error) {
+	p.log.Info("Request remote dag block txs: start", "hashes", len(hashes))
 
 	go p.peer.RequestBodies(hashes)
 
@@ -2610,19 +2630,13 @@ func (d *Downloader) fetchDagTxs(p *peerConnection, hashes common.HashArray) (ma
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
-
 		case packet := <-d.bodyCh:
 			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
 				log.Warn("Received dag header from incorrect peer", "peer", packet.PeerId())
 				break
 			}
-			transactions := packet.(*bodyPack).transactions
-			txsMap := make(map[common.Hash][]*types.Transaction, len(hashes))
-			for i, txs := range transactions {
-				txsMap[hashes[i]] = txs
-			}
-			return txsMap, nil
+			return packet.(*bodyPack).transactions, nil
 		case <-timeout:
 			p.log.Debug("Waiting for dag timed out", "elapsed", ttl)
 			return nil, errTimeout
