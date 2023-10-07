@@ -745,7 +745,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	dagBlocks := d.blockchain.GetBlocksByHashes(remoteHashes)
 	dag = make(common.HashArray, 0, len(remoteHashes))
 	for _, h := range remoteHashes {
-		if dagBlocks[h] == nil {
+		if dagBlocks[h] == nil && h != (common.Hash{}) {
 			dag = append(dag, h)
 		}
 	}
@@ -759,6 +759,16 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	log.Info("Sync of unknown dag blocks: dag headers retrieved", "count", len(headers), "headers", headers, "err", err)
 	if err != nil {
 		return err
+	}
+	// request bodies for retrieved headers only
+	dag = make(common.HashArray, 0, len(headers))
+	for _, hdr := range headers {
+		if hdr != nil {
+			dag = append(dag, hdr.Hash())
+		}
+	}
+	if len(dag) == 0 {
+		return nil
 	}
 	txsMap, err := d.fetchDagTxs(p, dag)
 	log.Info("Sync of unknown dag blocks: dag transactions retrieved", "count", len(txsMap), "err", err)
@@ -2922,7 +2932,7 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 	dag := make(common.HashArray, 0, len(remoteHashes))
 	dagBlocks := d.blockchain.GetBlocksByHashes(remoteHashes)
 	for h, b := range dagBlocks {
-		if b == nil {
+		if b == nil && h != (common.Hash{}) {
 			dag = append(dag, h)
 		}
 	}
@@ -2941,6 +2951,16 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 	if err != nil {
 		p.log.Error("Sync by spines: error 2", "err", err, "from", "baseSpine", baseSpine.Hex(), "terminalSpine", terminalSpine.Hex())
 		return lastHash, err
+	}
+	// request bodies for retrieved headers only
+	dag = make(common.HashArray, 0, len(headers))
+	for _, hdr := range headers {
+		if hdr != nil {
+			dag = append(dag, hdr.Hash())
+		}
+	}
+	if len(dag) == 0 {
+		return lastHash, nil
 	}
 	txsMap, err := d.fetchDagTxs(p, dag)
 	log.Info("Sync by spines: dag transactions retrieved", "count", len(txsMap), "txs", len(txsMap), "err", err)
@@ -3045,7 +3065,7 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 	dag := make(common.HashArray, 0, len(remoteHashes))
 	dagBlocks := d.blockchain.GetBlocksByHashes(remoteHashes)
 	for h, b := range dagBlocks {
-		if b == nil {
+		if b == nil && h != (common.Hash{}) {
 			dag = append(dag, h)
 		}
 	}
@@ -3064,6 +3084,16 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 	if err != nil {
 		p.log.Error("Sync by slots: error 2", "err", err, "from", from, "to", to)
 		return err
+	}
+	// request bodies for retrieved headers only
+	dag = make(common.HashArray, 0, len(headers))
+	for _, hdr := range headers {
+		if hdr != nil {
+			dag = append(dag, hdr.Hash())
+		}
+	}
+	if len(dag) == 0 {
+		return nil
 	}
 	txsMap, err := d.fetchDagTxs(p, dag)
 	log.Info("Sync by slots: dag transactions retrieved", "count", len(txsMap), "txs", len(txsMap), "err", err)

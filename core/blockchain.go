@@ -1610,7 +1610,7 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (statu
 			processing[b.Hash()] = true
 		}
 		for i, bl := range blocks {
-			log.Info("Delay propagated block", "height", bl.Height(), "hash", bl.Hash().Hex())
+			log.Info("Delay syncing block", "height", bl.Height(), "hash", bl.Hash().Hex())
 			if i >= n && !processing[bl.Hash()] {
 				bc.insBlockCache = append(bc.insBlockCache, bl)
 				processing[bl.Hash()] = true
