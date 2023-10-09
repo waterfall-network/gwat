@@ -80,6 +80,7 @@ type Message interface {
 	GasFeeCap() *big.Int
 	GasTipCap() *big.Int
 	Gas() uint64
+	SetGas(gas uint64) types.Message
 	Value() *big.Int
 
 	Nonce() uint64

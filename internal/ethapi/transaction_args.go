@@ -21,8 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -147,43 +145,27 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, head *t
 		args.Gas = &gas
 		// These fields are immutable during the estimation, safe to
 		// pass the pointer directly.
-
+		//data := args.data()
+		//callArgs := TransactionArgs{
+		//	From:                 args.From,
+		//	To:                   args.To,
+		//	GasPrice:             args.GasPrice,
+		//	MaxFeePerGas:         args.MaxFeePerGas,
+		//	MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+		//	Value:                args.Value,
+		//	Data:                 (*hexutil.Bytes)(&data),
+		//	AccessList:           args.AccessList,
+		//}
+		//estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
 		//estimated, err := DoEstimateGasQuick(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
 		msg, err := args.ToMessage(b.RPCGasCap(), head.BaseFee)
+
+		estimated, err := b.BlockChain().EstimateGas(msg, head)
 		if err != nil {
 			return err
 		}
 
-		txType := core.GetTxType(msg, nil, nil)
-
-		var estimated hexutil.Uint64
-		if txType == core.ContractCreationTxType || txType == core.ContractMethodTxType {
-			data := args.data()
-			callArgs := TransactionArgs{
-				From:                 args.From,
-				To:                   args.To,
-				GasPrice:             args.GasPrice,
-				MaxFeePerGas:         args.MaxFeePerGas,
-				MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
-				Value:                args.Value,
-				Data:                 (*hexutil.Bytes)(&data),
-				AccessList:           args.AccessList,
-			}
-			pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-			estimated, err = DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
-			if err != nil {
-				return err
-			}
-		} else {
-			est, err := b.BlockChain().EstimateGas(msg, head)
-			if err != nil {
-				return err
-			}
-
-			estimated = hexutil.Uint64(est)
-		}
-
-		gas = estimated
+		gas = hexutil.Uint64(estimated)
 		args.Gas = &gas
 		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
