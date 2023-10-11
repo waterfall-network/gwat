@@ -2190,18 +2190,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
 	intrGasSum := uint64(0)
-	//signer := types.LatestSigner(bc.Config())
 	for _, tx := range block.Transactions() {
-		//msg, err := tx.AsMessage(signer, block.BaseFee())
-		//if err != nil {
-		//	log.Warn("Block verification: tx to msg error", "err", err)
-		//	return false
-		//}
-		//intrGas, err := bc.EstimateGas(msg, block.Header())
-		//if err != nil {
-		//	log.Warn("Block verification: estimate gas error", "err", err)
-		//	return false
-		//}
 		intrGasSum += tx.Gas()
 	}
 
