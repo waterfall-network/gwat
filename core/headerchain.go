@@ -673,8 +673,7 @@ type (
 	DeleteBlockContentCallback func(ethdb.KeyValueWriter, common.Hash)
 )
 
-// SetHead rewinds the local chain to a new head. Everything above the new head
-// will be deleted and the new one set.
+// deprecated
 func (hc *HeaderChain) SetHead(headHash common.Hash, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
 	var (
 		parentHash common.Hash
