@@ -246,19 +246,11 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			res.Error = &e
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-			if d.bc.IsSynced() {
-				go era.HandleEra(d.bc, data.Checkpoint)
-			} else {
-				era.HandleEra(d.bc, data.Checkpoint)
-			}
+			era.HandleEra(d.bc, data.Checkpoint)
 		}
 	} else {
 		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-		if d.bc.IsSynced() {
-			go era.HandleEra(d.bc, data.Checkpoint)
-		} else {
-			era.HandleEra(d.bc, data.Checkpoint)
-		}
+		era.HandleEra(d.bc, data.Checkpoint)
 	}
 
 	for i, vs := range data.ValSyncData {

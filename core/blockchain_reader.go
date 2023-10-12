@@ -84,7 +84,7 @@ func (bc *BlockChain) GetHeader(hash common.Hash) *types.Header {
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if found.
 func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
+	if block, ok := bc.blockCache.Get(hash); ok && block != nil {
 		return block.(*types.Block).Header()
 	}
 

@@ -379,7 +379,7 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 func (hc *HeaderChain) GetHeader(hash common.Hash) *types.Header {
 	finNr := hc.GetBlockFinalizedNumber(hash)
 	// Short circuit if the header's already in the cache, retrieve otherwise
-	if header, ok := hc.headerCache.Get(hash); ok {
+	if header, ok := hc.headerCache.Get(hash); ok && header != nil {
 		hdr := header.(*types.Header)
 		hdr.Number = finNr
 		return hdr

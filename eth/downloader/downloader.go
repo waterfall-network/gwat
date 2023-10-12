@@ -2681,6 +2681,11 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 	// check remote header
 	baseHeader := d.lightchain.GetHeaderByHash(baseSpine)
 	if baseHeader == nil || baseHeader.Height > 0 && baseHeader.Nr() == 0 {
+		if baseHeader == nil {
+			log.Error("Check peer: invalid base spine: base header not found", "hash", baseSpine.Hex())
+		} else {
+			log.Error("Check peer: invalid base spine", "slot", baseHeader.Slot, "height", baseHeader.Height, "nr", baseHeader.Nr(), "height", baseHeader.Hash().Hex())
+		}
 		return false, nil, errInvalidBaseSpine
 	}
 	baseNr := baseHeader.Nr()
@@ -2996,7 +3001,7 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 		//handle by reverse order
 		for _, block := range slotBlocks {
 			// Commit block to database.
-			_, err = d.blockchain.WriteSyncDagBlock(block, true)
+			_, err = d.blockchain.WriteSyncDagBlock(block, false)
 			if err != nil {
 				p.log.Error("Sync by spines: error 4", "err", err, "baseSpine", baseSpine.Hex(), "terminalSpine", terminalSpine.Hex())
 				return lastHash, err
