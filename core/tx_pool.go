@@ -148,6 +148,7 @@ const (
 // some pre checks in tx pool and event subscribers.
 type blockChain interface {
 	GetLastFinalizedBlock() *types.Block
+	GetLastFinalizedHeader() *types.Header
 	GetBlock(hash common.Hash) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
 	ReadFinalizedNumberByHash(hash common.Hash) *uint64
@@ -165,6 +166,8 @@ type blockChain interface {
 	ValidatorStorage() valStore.Storage
 	// IsSynced returns tru if node fully synchronized
 	IsSynced() bool
+	EstimateGas(msg types.Message, header *types.Header) (uint64, error)
+	Config() *params.ChainConfig
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -794,13 +797,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		}
 	}
 
-	contractCreation := tx.To() == nil && !isTokenOp && !isValidatorOp
-	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(txData, tx.AccessList(), contractCreation, isValidatorOp)
+	head := pool.chain.GetLastFinalizedHeader()
+	signer := types.MakeSigner(pool.chain.Config())
+	msg, err := tx.AsMessage(signer, head.BaseFee)
 	if err != nil {
 		return err
 	}
-	if tx.Gas() < intrGas && !isValidatorOp {
+
+	estimateGas, err := pool.chain.EstimateGas(msg, head)
+
+	if tx.Gas() < estimateGas && !isValidatorOp {
 		return ErrIntrinsicGas
 	}
 

@@ -2190,19 +2190,8 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
 	intrGasSum := uint64(0)
-	signer := types.LatestSigner(bc.Config())
 	for _, tx := range block.Transactions() {
-		msg, err := tx.AsMessage(signer, block.BaseFee())
-		if err != nil {
-			log.Warn("Block verification: tx to msg error", "err", err)
-			return false
-		}
-		intrGas, err := bc.EstimateGas(msg, block.Header())
-		if err != nil {
-			log.Warn("Block verification: estimate gas error", "err", err)
-			return false
-		}
-		intrGasSum += intrGas
+		intrGasSum += tx.Gas()
 	}
 
 	if intrGasSum > block.GasLimit() {
@@ -3438,7 +3427,7 @@ func (bc *BlockChain) EstimateGas(msg types.Message, header *types.Header) (uint
 	case ValidatorMethodTxType, ValidatorSyncTxType:
 		return IntrinsicGas(msg.Data(), msg.AccessList(), false, true)
 	case ContractMethodTxType, ContractCreationTxType:
-		return bc.EstimateGasByEvm(msg, header, blockContext, stateDb, validatorProcessor, tokenProcessor)
+		return bc.EstimateGasByEvm(msg, header, stateDb, tokenProcessor, validatorProcessor)
 	case TokenCreationTxType, TokenMethodTxType:
 		return IntrinsicGas(msg.Data(), msg.AccessList(), false, false)
 	default:
@@ -3446,32 +3435,130 @@ func (bc *BlockChain) EstimateGas(msg types.Message, header *types.Header) (uint
 	}
 }
 
-func (bc *BlockChain) EstimateGasByEvm(msg types.Message,
+//func (bc *BlockChain) EstimateGasByEvm(msg types.Message,
+//	header *types.Header,
+//	blkCtx vm.BlockContext,
+//	statedb *state.StateDB,
+//	vp *validator.Processor,
+//	tp *token.Processor,
+//) (uint64, error) {
+//	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+//	from := msg.From()
+//	statedb.SetNonce(from, msg.Nonce())
+//	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
+//	gasBalance := new(big.Int).Mul(maxGas, msg.GasPrice())
+//	reqBalance := new(big.Int).Add(gasBalance, msg.Value())
+//	statedb.SetBalance(from, reqBalance)
+//
+//	gasPool := new(GasPool).AddGas(math.MaxUint64)
+//
+//	evm := vm.NewEVM(blkCtx, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())
+//
+//	receipt, err := ApplyMessage(evm, tp, vp, msg, gasPool)
+//	if err != nil {
+//		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "err", err)
+//		return 0, err
+//	}
+//	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "txGas", msg.Gas(), "calcGas", receipt.UsedGas)
+//	return receipt.UsedGas, nil
+//}
+
+func (bc *BlockChain) EstimateGasByEvm(msg Message,
 	header *types.Header,
-	blkCtx vm.BlockContext,
-	statedb *state.StateDB,
-	vp *validator.Processor,
+	stateDb *state.StateDB,
 	tp *token.Processor,
+	vp *validator.Processor,
 ) (uint64, error) {
-	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	from := msg.From()
-	statedb.SetNonce(from, msg.Nonce())
-	maxGas := (new(big.Int)).SetUint64(header.GasLimit)
-	gasBalance := new(big.Int).Mul(maxGas, msg.GasPrice())
-	reqBalance := new(big.Int).Add(gasBalance, msg.Value())
-	statedb.SetBalance(from, reqBalance)
+	// Binary search the gas requirement, as it may be higher than the amount used
+	var (
+		lo  = params.TxGas - 1
+		hi  uint64
+		cap uint64
+	)
 
-	gasPool := new(GasPool).AddGas(math.MaxUint64)
-
-	evm := vm.NewEVM(blkCtx, vm.TxContext{}, statedb, bc.Config(), *bc.GetVMConfig())
-
-	receipt, err := ApplyMessage(evm, tp, vp, msg, gasPool)
-	if err != nil {
-		log.Error("Tx estimate gas by evm: error", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "err", err)
-		return 0, err
+	// Determine the highest gas limit can be used during the estimation.
+	if msg.Gas() >= params.TxGas {
+		hi = msg.Gas()
+	} else {
+		hi = header.GasLimit
 	}
-	log.Info("Tx estimate gas by evm: success", "lfNumber", header.Nr(), "tx", msg.TxHash().Hex(), "txGas", msg.Gas(), "calcGas", receipt.UsedGas)
-	return receipt.UsedGas, nil
+	// Normalize the max fee per gas the call is willing to spend.
+	var feeCap *big.Int
+	if msg.GasPrice() != nil {
+		feeCap = msg.GasPrice()
+	} else if msg.GasFeeCap() != nil {
+		feeCap = msg.GasPrice()
+	} else {
+		feeCap = common.Big0
+	}
+	// Recap the highest gas limit with account's available balance.
+	if feeCap.BitLen() != 0 {
+		balance := stateDb.GetBalance(msg.From()) // from can't be nil
+		available := new(big.Int).Set(balance)
+		if msg.Value() != nil {
+			if msg.Value().Cmp(available) >= 0 {
+				return 0, errors.New("insufficient funds for transfer")
+			}
+			available.Sub(available, msg.Value())
+		}
+		allowance := new(big.Int).Div(available, feeCap)
+
+		// If the allowance is larger than maximum uint64, skip checking
+		if allowance.IsUint64() && hi > allowance.Uint64() {
+			transfer := msg.Value()
+			if transfer == nil {
+				transfer = new(big.Int)
+			}
+			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
+				"sent", transfer, "maxFeePerGas", feeCap, "fundable", allowance)
+			hi = allowance.Uint64()
+		}
+	}
+
+	if hi > header.GasLimit {
+		log.Warn("Caller gas above allowance, capping", "requested", hi, "cap", header.GasLimit)
+		hi = header.GasLimit
+	}
+
+	// Create a helper to check if a gas allowance results in an executable transaction
+	executable := func(gas uint64) (bool, *ExecutionResult, error) {
+		msg = msg.SetGas(gas)
+
+		result, err := bc.doCall(msg, header, tp, vp)
+		if err != nil {
+			if errors.Is(err, ErrIntrinsicGas) {
+				return true, nil, nil // Special case, raise gas limit
+			}
+			return true, nil, err // Bail out
+		}
+		return result.Failed(), result, nil
+	}
+	for lo+1 < hi {
+		mid := (hi + lo) / 2
+		failed, _, err := executable(mid)
+		if err != nil {
+			return 0, err
+		}
+		if failed {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	// Reject the transaction as invalid if it still fails at the highest allowance
+	if hi == cap {
+		failed, result, err := executable(hi)
+		if err != nil {
+			return 0, err
+		}
+		if failed {
+			return 0, result.Err
+		}
+		// Otherwise, the specified gas cap is too low
+		return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+	}
+
+	return hi, nil
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -4622,4 +4709,57 @@ func (bc *BlockChain) verifyBlockBaseFee(block *types.Block) bool {
 	}
 
 	return true
+}
+
+func (bc *BlockChain) GetEVM(msg Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
+	vmError := func() error { return nil }
+	if vmConfig == nil {
+		vmConfig = bc.GetVMConfig()
+	}
+	txContext := NewEVMTxContext(msg)
+	context := NewEVMBlockContext(header, bc, nil)
+	return vm.NewEVM(context, txContext, state, bc.Config(), *vmConfig), vmError, nil
+}
+
+// GetTP retrieves the token processor.
+func (bc *BlockChain) GetTP(state *state.StateDB, header *types.Header) (*token.Processor, func() error, error) {
+	tpError := func() error { return nil }
+	context := NewEVMBlockContext(header, bc, nil)
+	return token.NewProcessor(context, state), tpError, nil
+}
+
+// GetVP retrieves the validator processor.
+func (bc *BlockChain) GetVP(state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error) {
+	tpError := func() error { return nil }
+	context := NewEVMBlockContext(header, bc, nil)
+	return validator.NewProcessor(context, state, bc), tpError, nil
+}
+
+func (bc *BlockChain) doCall(msg Message, header *types.Header, tp *token.Processor, vp *validator.Processor) (*ExecutionResult, error) {
+	defer func(start time.Time) { log.Info("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	state, err := bc.StateAt(header.Root)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	evm, _, err := bc.GetEVM(msg, state, header, &vm.Config{NoBaseFee: true})
+	if err != nil {
+		return nil, err
+	}
+	// Wait for the context to be done and cancel the evm. Even if the
+	// EVM has finished, cancelling may be done (repeatedly)
+	defer evm.Cancel()
+
+	// Execute the message.
+	gp := new(GasPool).AddGas(math.MaxUint64)
+	result, err := ApplyMessage(evm, tp, vp, msg, gp)
+
+	if evm.Cancelled() {
+		return nil, fmt.Errorf("execution aborted")
+	}
+	if err != nil {
+		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
+	}
+	return result, nil
 }
