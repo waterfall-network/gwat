@@ -739,19 +739,32 @@ func (m *MockethDownloader) EXPECT() *MockethDownloaderMockRecorder {
 	return m.recorder
 }
 
-// SyncChainBySpines mocks base method.
-func (m *MockethDownloader) SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) (bool, error) {
+// MainSync mocks base method.
+func (m *MockethDownloader) MainSync(baseSpine common.Hash, spines common.HashArray) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncChainBySpines", baseSpine, spines, syncMode)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "MainSync", baseSpine, spines)
+	ret1, _ := ret[0].(error)
+	return ret1
 }
 
-// SyncChainBySpines indicates an expected call of SyncChainBySpines.
-func (mr *MockethDownloaderMockRecorder) SyncChainBySpines(baseSpine, spines, syncMode interface{}) *gomock.Call {
+// DagSync mocks base method.
+func (m *MockethDownloader) DagSync(baseSpine common.Hash, spines common.HashArray) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DagSync", baseSpine, spines)
+	ret1, _ := ret[0].(error)
+	return ret1
+}
+
+// MainSync indicates an expected call of MainSync.
+func (mr *MockethDownloaderMockRecorder) MainSync(baseSpine, spines, finEpoch interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncChainBySpines", reflect.TypeOf((*MockethDownloader)(nil).SyncChainBySpines), baseSpine, spines, syncMode)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MainSync", reflect.TypeOf((*MockethDownloader)(nil).MainSync), baseSpine, spines, finEpoch)
+}
+
+// DagSync indicates an expected call of DagSync.
+func (mr *MockethDownloaderMockRecorder) DagSync(baseSpine, spines, finEpoch interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DagSync", reflect.TypeOf((*MockethDownloader)(nil).DagSync), baseSpine, spines, finEpoch)
 }
 
 // Synchronising mocks base method.
