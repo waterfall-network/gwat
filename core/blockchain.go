@@ -4666,12 +4666,19 @@ func (bc *BlockChain) EpochToEra(epoch uint64) *era.Era {
 	}
 
 	eraNumber := curEra.Number
-	findingEra := new(era.Era)
+	findingEra := curEra
 
 	if epoch < curEra.From {
+		low := uint64(0)
+		high := eraNumber
 		for !findingEra.IsContainsEpoch(epoch) {
-			eraNumber--
+			eraNumber = (low + high) / 2
 			findingEra = rawdb.ReadEra(bc.db, eraNumber)
+			if findingEra.To > epoch {
+				high = eraNumber - 1
+			} else {
+				low = eraNumber + 1
+			}
 		}
 	} else if epoch > curEra.To {
 		for !findingEra.IsContainsEpoch(epoch) {
