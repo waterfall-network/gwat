@@ -290,7 +290,7 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 	cpHeader := c.bc.GetHeader(checkpoint.Spine)
 	newHeight, err := c.bc.CalcBlockHeightByTips(tips, cpHeader.Hash())
 	if err != nil {
-		log.Error("Failed to make block creation context", "err", err)
+		log.Error("Creator calculate block height failed", "err", err)
 		return nil, err
 	}
 
@@ -676,15 +676,7 @@ func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header,
 		return nil
 	}
 
-	signer := types.MakeSigner(c.bc.Config())
-	msg, err := tx.AsMessage(signer, header.BaseFee)
-	gas, err := c.bc.EstimateGas(msg, header)
-	if err != nil {
-		log.Error("Failed to estimate gas for the transaction", "err", err)
-		return err
-	}
-
-	expectedGas := c.current.txs[header.Coinbase].cumulativeGas + gas
+	expectedGas := c.current.txs[header.Coinbase].cumulativeGas + tx.Gas()
 	if expectedGas <= header.GasLimit {
 		c.current.txs[header.Coinbase].txs = append(c.current.txs[header.Coinbase].txs, tx)
 	}

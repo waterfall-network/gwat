@@ -80,6 +80,7 @@ type Message interface {
 	GasFeeCap() *big.Int
 	GasTipCap() *big.Int
 	Gas() uint64
+	SetGas(gas uint64) types.Message
 	Value() *big.Int
 
 	Nonce() uint64
@@ -457,11 +458,11 @@ func GetTxType(msg Message, vp *validator.Processor, tp *token.Processor) TxType
 		return ContractCreationTxType
 	}
 
-	if tp.IsToken(*msg.To()) {
+	if tp != nil && tp.IsToken(*msg.To()) {
 		return TokenMethodTxType
 	}
 
-	if vp.IsValidatorOp(msg.To()) {
+	if vp != nil && vp.IsValidatorOp(msg.To()) {
 		valOp, err := operation.DecodeBytes(msg.Data())
 		if err != nil {
 			return UnknownTxType

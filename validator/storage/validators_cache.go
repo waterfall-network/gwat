@@ -69,7 +69,7 @@ func (c *ValidatorsCache) getAllValidatorsByEpoch(epoch uint64) ([]Validator, er
 	defer c.allMu.Unlock()
 
 	validators, ok := c.allValidatorsCache[epoch]
-	if !ok {
+	if !ok || validators == nil {
 		return nil, errNoEpochValidators
 	}
 

@@ -82,3 +82,61 @@ type dagPack struct {
 func (p *dagPack) PeerId() string { return p.peerID }
 func (p *dagPack) Items() int     { return len(p.dag) }
 func (p *dagPack) Stats() string  { return fmt.Sprintf("%d", len(p.dag)) }
+
+type syncPeerChanType int8
+
+const (
+	dagCh syncPeerChanType = iota
+	headerCh
+	bodyCh
+	receiptCh
+)
+
+// dagPack is a dag chain returned by a peer.
+type syncPeerChans struct {
+	dagCh     chan dataPack
+	headerCh  chan dataPack
+	bodyCh    chan dataPack
+	receiptCh chan dataPack
+}
+
+func initSyncPeerChans() syncPeerChans {
+	return syncPeerChans{
+		dagCh:     make(chan dataPack, 1),
+		headerCh:  make(chan dataPack, 1),
+		bodyCh:    make(chan dataPack, 1),
+		receiptCh: make(chan dataPack, 1),
+	}
+}
+
+func (p syncPeerChans) Close() {
+	close(p.dagCh)
+	close(p.headerCh)
+	close(p.bodyCh)
+	close(p.receiptCh)
+}
+
+func (p syncPeerChans) GetDagChan() chan dataPack {
+	if p.dagCh == nil {
+		p.dagCh = make(chan dataPack)
+	}
+	return p.dagCh
+}
+func (p syncPeerChans) GetHeaderChan() chan dataPack {
+	if p.headerCh == nil {
+		p.headerCh = make(chan dataPack)
+	}
+	return p.headerCh
+}
+func (p syncPeerChans) GetBodyChan() chan dataPack {
+	if p.bodyCh == nil {
+		p.bodyCh = make(chan dataPack)
+	}
+	return p.bodyCh
+}
+func (p syncPeerChans) GetReceiptChan() chan dataPack {
+	if p.receiptCh == nil {
+		p.receiptCh = make(chan dataPack)
+	}
+	return p.receiptCh
+}

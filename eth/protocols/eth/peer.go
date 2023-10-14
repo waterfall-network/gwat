@@ -469,7 +469,10 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 // RequestDag fetches a batch of hashes in range from baseSpine to terminalSpine.
 // include hashes of dag
 func (p *Peer) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error {
-	p.Log().Info("Fetching dag chain", "baseSpine", baseSpine, "terminalSpine", fmt.Sprintf("%#x", terminalSpine))
+	p.Log().Info("Fetching dag chain",
+		"baseSpine", fmt.Sprintf("%#x", baseSpine),
+		"terminalSpine", fmt.Sprintf("%#x", terminalSpine),
+	)
 	id := rand.Uint64()
 	requestTracker.Track(p.id, p.version, GetDagMsg, DagMsg, id)
 	return p2p.Send(p.rw, GetDagMsg, &GetDagPacket66{

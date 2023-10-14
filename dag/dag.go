@@ -92,7 +92,8 @@ type blockChain interface {
 
 type ethDownloader interface {
 	Synchronising() bool
-	SyncChainBySpines(baseSpine common.Hash, spines common.HashArray, syncMode types.SyncMode) (fullySynced bool, err error)
+	MainSync(baseSpine common.Hash, spines common.HashArray) error
+	DagSync(baseSpine common.Hash, spines common.HashArray) error
 }
 
 type Dag struct {
@@ -205,10 +206,32 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	//forward finalization
 	spines, baseSpine = d.finalizer.ForwardFinalization(spines, baseSpine)
 
-	if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint, data.SyncMode); err != nil {
-		strErr := err.Error()
-		res.Error = &strErr
-		log.Error("Handle Finalize: response (sync failed)", "result", res, "err", err)
+	switch data.SyncMode {
+	case types.NoSync:
+		if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint); err != nil {
+			strErr := err.Error()
+			res.Error = &strErr
+			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
+			return res
+		}
+	case types.MainSync:
+		if err := d.downloader.MainSync(baseSpine, spines); err != nil {
+			strErr := err.Error()
+			res.Error = &strErr
+			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
+			return res
+		}
+	case types.HeadSync:
+		if err := d.downloader.DagSync(baseSpine, spines); err != nil {
+			strErr := err.Error()
+			res.Error = &strErr
+			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
+			return res
+		}
+	default:
+		e := fmt.Sprintf("bad sync mode=%d", data.SyncMode)
+		res.Error = &e
+		log.Error("Handle Finalize: bad sync mode", "syncMode", data.SyncMode, "result", res)
 		return res
 	}
 
@@ -223,19 +246,11 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			res.Error = &e
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-			if d.bc.IsSynced() {
-				go era.HandleEra(d.bc, data.Checkpoint)
-			} else {
-				era.HandleEra(d.bc, data.Checkpoint)
-			}
+			era.HandleEra(d.bc, data.Checkpoint)
 		}
 	} else {
 		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-		if d.bc.IsSynced() {
-			go era.HandleEra(d.bc, data.Checkpoint)
-		} else {
-			era.HandleEra(d.bc, data.Checkpoint)
-		}
+		era.HandleEra(d.bc, data.Checkpoint)
 	}
 
 	for i, vs := range data.ValSyncData {
@@ -276,7 +291,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 // 2. switch on sync mode
 // 3. start sync process
 // 4. if chain head reached - switch off sync mode
-func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, cp *types.Checkpoint, syncMode types.SyncMode) error {
+func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, cp *types.Checkpoint) error {
 	defer func(start time.Time) {
 		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(start)),
@@ -304,13 +319,8 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 
 	d.bc.SetSyncCheckpointCache(cp)
 	defer d.bc.ResetSyncCheckpointCache()
-	var fullySynced bool
-	if fullySynced, err = d.downloader.SyncChainBySpines(baseSpine, spines, syncMode); err != nil {
+	if err = d.downloader.DagSync(baseSpine, spines); err != nil {
 		return err
-	}
-	if fullySynced {
-		//d.bc.SetIsSynced(true)
-		log.Info("Node fully synced: head reached")
 	}
 	return nil
 }

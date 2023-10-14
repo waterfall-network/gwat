@@ -80,12 +80,9 @@ func (st *insertStats) report(chain []*types.Block, index int, dirty common.Stor
 
 // insertIterator is a helper to assist during chain import.
 type insertIterator struct {
-	chain types.Blocks // Chain of blocks being iterated over
-
-	errors []error // Header verification errors for the blocks
-
-	index     int       // Current offset of the iterator
-	validator Validator // Validator to run if verification succeeds
+	chain     types.Blocks // Chain of blocks being iterated over
+	index     int          // Current offset of the iterator
+	validator Validator    // Validator to run if verification succeeds
 }
 
 // newInsertIterator creates a new iterator based on the given blocks, which are
@@ -93,7 +90,6 @@ type insertIterator struct {
 func newInsertIterator(chain types.Blocks, validator Validator) *insertIterator {
 	return &insertIterator{
 		chain:     chain,
-		errors:    make([]error, 0, len(chain)),
 		index:     -1,
 		validator: validator,
 	}
@@ -109,10 +105,6 @@ func (it *insertIterator) next() (*types.Block, error) {
 	}
 	// Advance the iterator and wait for verification result if not yet done
 	it.index++
-
-	if len(it.errors) < it.index && it.errors[it.index] != nil {
-		return it.chain[it.index], it.errors[it.index]
-	}
 	// Block header valid, run body validation and return
 	return it.chain[it.index], it.validator.ValidateBody(it.chain[it.index])
 }
@@ -126,12 +118,6 @@ func (it *insertIterator) peek() (*types.Block, error) {
 	// If we reached the end of the chain, abort
 	if it.index+1 >= len(it.chain) {
 		return nil, nil
-	}
-	if len(it.errors) < it.index && it.errors[it.index] != nil {
-		return it.chain[it.index], it.errors[it.index]
-	}
-	if it.errors[it.index+1] != nil {
-		return it.chain[it.index+1], it.errors[it.index+1]
 	}
 	// Block header valid, ignore body validation since we don't have a parent anyway
 	return it.chain[it.index+1], nil
