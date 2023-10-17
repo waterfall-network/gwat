@@ -175,7 +175,9 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 			if kvhash, _ := db.Get(finHashByNumberKey(frozen)); len(kvhash) == 0 {
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup is the database has a more recent head.
-				if *ReadFinalizedNumberByHash(db, ReadLastFinalizedHash(db)) > frozen-1 {
+				lfHash := ReadLastFinalizedHash(db)
+				fnr := ReadFinalizedNumberByHash(db, lfHash)
+				if fnr != nil && *fnr > frozen-1 {
 					return nil, fmt.Errorf("gap (#%d) in the chain between ancients and leveldb", frozen)
 				}
 				// Database contains only older data than the freezer, this happens if the

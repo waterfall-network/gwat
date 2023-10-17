@@ -730,7 +730,6 @@ func (bc *BlockChain) SetHead(head common.Hash) error {
 }
 
 func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
-
 	// find valid head
 	headBlock := rawdb.ReadBlock(bc.db, head)
 	if headBlock == nil {
@@ -861,6 +860,16 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 	//set correct current era
 	rawdb.WriteCurrentEra(bc.db, headBlock.Era())
 
+	frozen, _ := bc.db.Ancients()
+	if headBlock.Nr() < frozen {
+		// Truncate all relative data from ancient store.
+		if err = bc.db.TruncateAncients(headBlock.Nr() + 1); err != nil {
+			log.Crit("Set head: truncate ancient failed", "frozen", frozen, "truncateNr", headBlock.Nr()+1, "err", err)
+		}
+		frozenNr, _ := bc.db.Ancients()
+		log.Info("Set head: truncate ancient success", "frozenNr", frozenNr, "truncateNr", headBlock.Nr()+1, "err", err)
+	}
+
 	// reset tips
 	if err := bc.hc.ResetTips(); err != nil {
 		// if any error - try set cp as head
@@ -941,235 +950,6 @@ func (bc *BlockChain) rmBlockData(hash common.Hash, slot *uint64) {
 	bc.hc.numberCache.Remove(hash)
 	bc.hc.ancestorCache.Remove(hash)
 	bc.hc.blockDagCache.Remove(hash)
-}
-
-// SetHeadBeyondRoot rewinds the local chain to a new head with the extra condition
-// that the rewind must pass the specified state root. This method is meant to be
-// used when rewinding with snapshots enabled to ensure that we go back further than
-// persistent disk layer. Depending on whether the node was fast synced or full, and
-// in which state, the method will try to delete minimal data from disk whilst
-// retaining chain consistency.
-//
-// The method returns the block number where the requested root cap was found.
-// deprecated
-func (bc *BlockChain) SetHeadBeyondRoot(head common.Hash, root common.Hash) (uint64, error) {
-	if !bc.chainmu.TryLock() {
-		return 0, errChainStopped
-	}
-	defer bc.chainmu.Unlock()
-
-	hdr := rawdb.ReadHeader(bc.db, head)
-	if hdr.Nr() != hdr.Height {
-		currNr := hdr.Nr()
-		if hdr.Number == nil {
-			currNr = rawdb.ReadLastFinalizedNumber(bc.db)
-		}
-		for currNr > 0 {
-			currHash := rawdb.ReadFinalizedHashByNumber(bc.db, currNr)
-			if currHash != (common.Hash{}) {
-				currHeader := rawdb.ReadHeader(bc.db, currHash)
-				if currHeader.Nr() == currHeader.Height {
-					head = currHeader.Hash()
-					//root = currHeader.Root
-					break
-				}
-			}
-			currNr--
-		}
-	}
-
-	// Track the block number of the requested root hash
-	var rootNumber uint64 // (no root == always 0)
-
-	// Retrieve the last pivot block to short circuit rollbacks beyond it and the
-	// current freezer limit to start nuking id underflown
-	pivot := rawdb.ReadLastPivotNumber(bc.db)
-	frozen, _ := bc.db.Ancients()
-
-	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (common.Hash, bool) {
-		// Rewind the block chain, ensuring we don't end up with a stateless head
-		// block. Note, depth equality is permitted to allow using SetHead as a
-		// chain reparation mechanism without deleting any data!
-		currentBlock := bc.GetLastFinalizedBlock()
-		blHeigt := bc.GetBlockFinalizedNumber(currentBlock.Hash())
-		headerHeight := rawdb.ReadFinalizedNumberByHash(bc.db, header.Hash())
-		if currentBlock != nil && headerHeight != nil && blHeigt != nil && *headerHeight <= *blHeigt {
-			newHeadBlock := bc.GetBlock(header.Hash())
-			if newHeadBlock == nil {
-				log.Error("Gap in the chain, rewinding to genesis", "number", headerHeight, "hash", header.Hash())
-				newHeadBlock = bc.genesisBlock
-			} else {
-				// Block exists, keep rewinding until we find one with state,
-				// keeping rewinding until we exceed the optional threshold
-				// root hash
-				beyondRoot := (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
-
-				rootNumber = newHeadBlock.Nr()
-
-				for {
-					// If a root threshold was requested but not yet crossed, check
-					if root != (common.Hash{}) && !beyondRoot && newHeadBlock.Root() == root {
-						beyondRoot = true
-						rootNumber = uint64(0)
-						if bh := bc.GetBlockFinalizedNumber(newHeadBlock.Hash()); bh != nil {
-							rootNumber = *bh
-						}
-					}
-
-					if newHeadBlock.Nr() != newHeadBlock.Height() {
-						parent := bc.GetBlockByNumber(rootNumber - 1)
-						if parent != nil {
-							newHeadBlock = parent
-							rootNumber = newHeadBlock.Nr()
-							rawdb.DeleteChildren(db, parent.Hash())
-							bc.DeleteBlockDag(parent.Hash())
-							continue
-						}
-					}
-					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps); err != nil {
-						log.Warn("Block state missing, rewinding further", "number", rootNumber, "hash", newHeadBlock.Hash())
-						if pivot == nil || newHeadBlock.Nr() > *pivot {
-							parent := bc.GetBlockByNumber(rootNumber - 1)
-							if parent != nil {
-								newHeadBlock = parent
-								rootNumber = newHeadBlock.Nr()
-								rawdb.DeleteChildren(db, parent.Hash())
-								bc.DeleteBlockDag(parent.Hash())
-								continue
-							}
-							log.Error("Missing block in the middle, aiming genesis", "number", rootNumber-1)
-							newHeadBlock = bc.genesisBlock
-						} else {
-							log.Trace("Rewind passed pivot, aiming genesis", "number", rootNumber, "hash", newHeadBlock.Hash(), "pivot", *pivot)
-							newHeadBlock = bc.genesisBlock
-						}
-					}
-					if beyondRoot || rootNumber == 0 {
-						log.Debug("Rewound to block with state", "number", rootNumber, "hash", newHeadBlock.Hash().Hex())
-						break
-					}
-					log.Debug("Skipping block with threshold state", "number", rootNumber, "hash", newHeadBlock.Hash(), "root", newHeadBlock.Root())
-					newHeadBlock = bc.GetBlockByNumber(newHeadBlock.Nr()) // Keep rewinding
-					if rootNumber == newHeadBlock.Nr() {
-						newHeadBlock = bc.GetBlockByNumber(newHeadBlock.Nr() - 1)
-						log.Warn("set head beyond root: check next root", "rootNumber", rootNumber, "nr", newHeadBlock.Nr(), "hash", newHeadBlock.Hash().Hex())
-					}
-				}
-			}
-			rawdb.WriteLastCanonicalHash(db, newHeadBlock.Hash())
-			rawdb.WriteLastFinalizedHash(db, newHeadBlock.Hash())
-
-			// Degrade the chain markers if they are explicitly reverted.
-			// In theory we should update all in-memory markers in the
-			// last step, however the direction of SetHead is from high
-			// to low, so it's safe the update in-memory markers directly.
-			bc.lastFinalizedBlock.Store(newHeadBlock)
-			headBlockGauge.Update(int64(rootNumber))
-
-			// update tips
-			//bc.ResetTips()
-			newBlockDag := bc.GetBlockDag(newHeadBlock.CpHash())
-			if newBlockDag == nil {
-				cpHeader := bc.GetHeader(newHeadBlock.CpHash())
-				_, ancestors, _, err := bc.CollectAncestorsAftCpByParents(newHeadBlock.ParentHashes(), newHeadBlock.CpHash())
-				if err != nil {
-					log.Error("Set head beyond root: collact ancestors failed", "number", headerHeight, "hash", header.Hash())
-				}
-				delete(ancestors, cpHeader.Hash())
-				newBlockDag = &types.BlockDAG{
-					Hash:                   newHeadBlock.Hash(),
-					Height:                 newHeadBlock.Height(),
-					Slot:                   newHeadBlock.Slot(),
-					CpHash:                 newHeadBlock.CpHash(),
-					CpHeight:               cpHeader.Height,
-					OrderedAncestorsHashes: ancestors.Hashes(),
-				}
-			}
-			bc.AddTips(newBlockDag)
-			bc.WriteCurrentTips()
-		}
-		// Rewind the fast block in a simpleton way to the target head
-		if lastFinalizedFastBlock := bc.GetLastFinalizedFastBlock(); lastFinalizedFastBlock != nil && header.Nr() < lastFinalizedFastBlock.Nr() {
-			curFinHeight := rawdb.ReadFinalizedNumberByHash(bc.db, lastFinalizedFastBlock.Hash())
-			if curFinHeight != nil && headerHeight != nil && *headerHeight < *curFinHeight {
-				newHeadFastBlock := bc.GetBlock(header.Hash())
-				// If either blocks reached nil, reset to the genesis state
-				if newHeadFastBlock == nil {
-					newHeadFastBlock = bc.genesisBlock
-				}
-				//rawdb.WriteHeadFastBlockHash(db, newHeadFastBlock.Hash())
-				rawdb.WriteLastFinalizedHash(db, newHeadFastBlock.Hash())
-
-				// Degrade the chain markers if they are explicitly reverted.
-				// In theory we should update all in-memory markers in the
-				// last step, however the direction of SetHead is from high
-				// to low, so it's safe the update in-memory markers directly.
-				bc.lastFinalizedFastBlock.Store(newHeadFastBlock)
-				headFastBlockGauge.Update(int64(*headerHeight))
-			}
-		}
-		headHash := bc.GetLastFinalizedBlock().Hash()
-		headHeight := bc.GetBlockFinalizedNumber(headHash)
-
-		// If setHead underflown the freezer threshold and the block processing
-		// intent afterwards is full block importing, delete the chain segment
-		// between the stateful-block and the sethead target.
-		var wipe = pivot == nil
-		if !wipe && headHeight != nil && *headHeight+1 < frozen {
-			wipe = *headHeight >= *pivot
-		}
-		return headHash, wipe // Only force wipe if full synced
-	}
-	// Rewind the header chain, deleting all block bodies until then
-	delFn := func(db ethdb.KeyValueWriter, hash common.Hash) {
-		num := rawdb.ReadFinalizedNumberByHash(bc.db, hash)
-		// Ignore the error here since light client won't hit this path
-		frozen, _ := bc.db.Ancients()
-		if num != nil && *num+1 <= frozen {
-			// Truncate all relative data(header, total difficulty, body, receipt
-			// and canonical hash) from ancient store.
-			if err := bc.db.TruncateAncients(*num); err != nil {
-				log.Crit("Failed to truncate ancient data", "number", num, "err", err)
-			}
-		}
-
-		delBlock := bc.GetBlockByHash(hash)
-		log.Info("Delete block from db", "slot", delBlock.Slot(), "hash", hash)
-		rawdb.DeleteSlotBlockHash(bc.Database(), delBlock.Slot(), hash)
-
-		if num != nil {
-			rawdb.DeleteBlock(db, hash, num)
-		} else {
-			rawdb.DeleteBlockWithoutNumber(db, hash)
-		}
-		bc.RemoveTips(common.HashArray{hash})
-
-		// Todo(rjl493456442) txlookup, bloombits, etc
-	}
-	// If SetHead was only called as a chain reparation method, try to skip
-	// touching the header chain altogether, unless the freezer is broken
-	block := bc.GetLastFinalizedBlock()
-	if block.Hash() == head {
-		if target, force := updateFn(bc.db, block.Header()); force {
-			bc.hc.SetHead(target, updateFn, delFn)
-		}
-	} else {
-		// Rewind the chain to the requested head and keep going backwards until a
-		// block with a state is found or fast sync pivot is passed
-		log.Warn("Rewinding blockchain", "target", head.Hex())
-		bc.hc.SetHead(head, updateFn, delFn)
-	}
-	// Clear out any stale content from the caches
-	bc.valSyncCache.Purge()
-	bc.bodyCache.Purge()
-	bc.bodyRLPCache.Purge()
-	bc.receiptsCache.Purge()
-	bc.blockCache.Purge()
-	bc.txLookupCache.Purge()
-	bc.optimisticSpinesCache.Purge()
-	log.Info("Purge caches of blockchain", "head", head.Hex())
-
-	return rootNumber, bc.loadLastState()
 }
 
 // FastSyncCommitHead sets the current head block to the one defined by the hash
@@ -1994,7 +1774,7 @@ func IsAddressAssigned(address common.Address, creators []common.Address, creato
 	return pos == creatorNr
 }
 
-// deprecated, used for tests only
+// Deprecated, used for tests only
 // syncInsertChain is the internal implementation of SyncInsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
