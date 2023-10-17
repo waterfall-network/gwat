@@ -718,9 +718,9 @@ func (bc *BlockChain) SetHead(head common.Hash) error {
 	bc.hc.ancestorCache.Purge()
 	bc.hc.blockDagCache.Purge()
 
-	////todo разобраться c validator Sync
+	//// validator Sync ?
 	//bc.notProcValSyncOps
-	bc.valSyncCache.Purge()
+	//bc.valSyncCache.Purge()
 
 	err := bc.setHeadRecirsive(head)
 	if err != nil {
