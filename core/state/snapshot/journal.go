@@ -87,7 +87,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// etc.), we just discard all diffs and try to recover them later.
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
-		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "missing")
+		log.Warn("Loaded snapshot journal", "diskroot", base.root.Hex(), "diffs", "missing")
 		return base, generator, nil
 	}
 	r := rlp.NewStream(bytes.NewReader(journal), 0)
@@ -113,7 +113,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// It can happen that Geth crashes without persisting the latest
 	// diff journal.
 	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
-		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "unmatched")
+		log.Warn("Loaded snapshot journal", "diskroot", base.root.Hex(), "diffs", "unmatched")
 		return base, generator, nil
 	}
 	// Load all the snapshot diffs from the journal

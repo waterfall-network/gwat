@@ -246,11 +246,21 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			res.Error = &e
 		} else {
 			d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-			era.HandleEra(d.bc, data.Checkpoint)
+			if err := era.HandleEra(d.bc, data.Checkpoint); err != nil {
+				strErr := err.Error()
+				res.Error = &strErr
+				log.Error("Handle Finalize: update era failed 1", "syncMode", data.SyncMode, "result", res, "err", err)
+				return res
+			}
 		}
 	} else {
 		d.bc.SetLastCoordinatedCheckpoint(data.Checkpoint)
-		era.HandleEra(d.bc, data.Checkpoint)
+		if err := era.HandleEra(d.bc, data.Checkpoint); err != nil {
+			strErr := err.Error()
+			res.Error = &strErr
+			log.Error("Handle Finalize: update era failed 2", "syncMode", data.SyncMode, "result", res, "err", err)
+			return res
+		}
 	}
 
 	for i, vs := range data.ValSyncData {
@@ -720,6 +730,9 @@ func (d *Dag) removeTipsWithOutdatedCp() error {
 	tips := d.bc.GetTips()
 	rmTips := common.HashArray{}
 	for th, tip := range tips.Copy() {
+		if th == d.bc.Genesis().Hash() {
+			continue
+		}
 		cp := d.bc.GetCoordinatedCheckpoint(tip.CpHash)
 		if cp == nil {
 			err := errors.New("tips checkpoint not found")

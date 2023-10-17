@@ -258,16 +258,6 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header) (int, error) {
 			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, chain[i-1].Nr(),
 				parentHash.Bytes()[:4], i, chain[i].Number, hash.Bytes()[:4], chain[i].ParentHashes)
 		}
-		// If the header is a banned one, straight out abort
-		for _, pHash := range chain[i].ParentHashes {
-			if BadHashes[pHash] {
-				return i - 1, ErrBannedHash
-			}
-		}
-		// If it's the last header in the cunk, we need to check it too
-		if i == len(chain)-1 && BadHashes[chain[i].Hash()] {
-			return i, ErrBannedHash
-		}
 	}
 
 	return 0, nil
@@ -457,20 +447,35 @@ func (hc *HeaderChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint
 	headHeaderGauge.Update(int64(lastFinNr))
 }
 
-// ResetTips set base tips for stable work
-// in case synchronization not finished
+// ResetTips set last finalized and not merged forks as tips and
+// clean all deprecated tips data.
 func (hc *HeaderChain) ResetTips() error {
 	hc.tipsMu.Lock()
+	defer hc.tipsMu.Unlock()
 
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()
 	hc.numberCache.Purge()
-	if head := rawdb.ReadLastFinalizedHash(hc.chainDb); head != (common.Hash{}) {
-		if chead := hc.GetHeaderByHash(head); chead != nil {
-			lfnr := *rawdb.ReadFinalizedNumberByHash(hc.chainDb, head)
-			hc.SetLastFinalisedHeader(chead, lfnr)
-		}
+
+	lfHash := rawdb.ReadLastFinalizedHash(hc.chainDb)
+	if lfHash == (common.Hash{}) {
+		log.Error("last finalized hash not found")
+		return errors.New("last finalized hash not found")
 	}
+	head := hc.GetHeaderByHash(lfHash)
+	if head == nil {
+		log.Error("nil last finalized header")
+		return errors.New("nil last finalized header")
+	}
+	lfnr := *rawdb.ReadFinalizedNumberByHash(hc.chainDb, lfHash)
+	if lfnr == 0 && head.Height > 0 {
+		log.Error("last finalized header number not found")
+		return errors.New("last finalized header number not found")
+	}
+	hc.SetLastFinalisedHeader(head, lfnr)
+
+	// remove all blockDags
+	hc.ClearBlockDag()
 
 	var (
 		cpHeader     *types.Header
@@ -500,27 +505,71 @@ func (hc *HeaderChain) ResetTips() error {
 	}
 	delete(ancestors, lastFinHeader.CpHash)
 
-	//set genesis blockDag
+	//set head blockDag
 	dag := &types.BlockDAG{
 		Hash:                   lastFinHeader.Hash(),
 		Height:                 lastFinHeader.Height,
 		Slot:                   lastFinHeader.Slot,
-		CpHash:                 lastFinHeader.CpHash,
+		CpHash:                 cpHeader.Hash(),
 		CpHeight:               cpHeader.Height,
 		OrderedAncestorsHashes: ancestors.Hashes(),
 	}
 	hc.SaveBlockDag(dag)
-	rawdb.WriteTipsHashes(hc.chainDb, common.HashArray{dag.Hash})
-	rawdb.DeleteChildren(hc.chainDb, dag.Hash)
+	tipsHashes := common.HashArray{dag.Hash}
 
-	hc.tipsMu.Unlock()
-	return hc.loadTips()
+	//search forks and add to tips
+	for nr := cpHeader.Nr() + 1; nr < lastFinHeader.Nr(); nr++ {
+		hdr := hc.GetHeaderByNumber(nr)
+		if hdr == nil {
+			return errBlockNotFound
+		}
+		isFork := !dag.OrderedAncestorsHashes.Has(hdr.Hash())
+		if !isFork {
+			continue
+		}
+		hdrCpHeader := hc.GetHeader(hdr.CpHash)
+		isCpAncestor, ancestors, unloaded, err = hc.CollectAncestorsAftCpByParents(hdr.ParentHashes, hdrCpHeader)
+		if err != nil {
+			return err
+		}
+		if len(unloaded) > 0 {
+			return ErrInsertUncompletedDag
+		}
+		if !isCpAncestor {
+			return ErrCpIsnotAncestor
+		}
+		delete(ancestors, hdr.CpHash)
+		//set head blockDag
+		hdrDag := &types.BlockDAG{
+			Hash:                   hdr.Hash(),
+			Height:                 hdr.Height,
+			Slot:                   hdr.Slot,
+			CpHash:                 hdr.CpHash,
+			CpHeight:               hdrCpHeader.Height,
+			OrderedAncestorsHashes: ancestors.Hashes(),
+		}
+		hc.SaveBlockDag(hdrDag)
+		tipsHashes = append(tipsHashes, hdr.Hash())
+	}
+	rawdb.WriteTipsHashes(hc.chainDb, tipsHashes)
+
+	return hc.loadTips(true)
+}
+
+// ClearBlockDag removes all BlockDag records
+func (hc *HeaderChain) ClearBlockDag() {
+	dagHashes := rawdb.ReadAllBlockDagHashes(hc.chainDb)
+	for _, hash := range dagHashes {
+		rawdb.DeleteBlockDag(hc.chainDb, hash)
+	}
 }
 
 // loadTips retrieves tips with incomplete chain to finalized state
-func (hc *HeaderChain) loadTips() error {
-	hc.tipsMu.Lock()
-	defer hc.tipsMu.Unlock()
+func (hc *HeaderChain) loadTips(skipLock ...bool) error {
+	if len(skipLock) == 0 || !skipLock[0] {
+		hc.tipsMu.Lock()
+		defer hc.tipsMu.Unlock()
+	}
 	tipsHashes := rawdb.ReadTipsHashes(hc.chainDb)
 	if len(tipsHashes) == 0 {
 		// Corrupt or empty database
@@ -533,8 +582,8 @@ func (hc *HeaderChain) loadTips() error {
 		}
 		// rm finalized blocks from tips
 		tipHeader := hc.GetHeader(th)
-		if tipHeader.Nr() > 0 && tipHeader.Height > 0 {
-			continue
+		if tipHeader == nil {
+			return fmt.Errorf("tips header not found")
 		}
 		bdag := hc.GetBlockDag(th)
 		if bdag == nil {
@@ -563,14 +612,19 @@ func (hc *HeaderChain) GetTips(skipLock ...bool) *types.Tips {
 		defer hc.tipsMu.Unlock()
 	}
 	cpy := hc.tips.Load().(*types.Tips).Copy()
-	if len(cpy) > 1 {
-		// if last finalised block stuck in tips - rm it
-		lfHash := hc.GetLastFinalizedHeader().Hash()
-		if tip := cpy.Get(lfHash); tip != nil {
-			cpy = cpy.Remove(lfHash)
-			hc.tips.Store(&cpy)
+	finTips := make(types.Tips, len(cpy))
+	for h, t := range cpy {
+		nr := hc.GetBlockFinalizedNumber(h)
+		if nr != nil {
+			finTips = finTips.Add(t)
+			cpy = cpy.Remove(h)
+			continue
 		}
 	}
+	if len(cpy) == 0 {
+		return &finTips
+	}
+	hc.tips.Store(&cpy)
 	return &cpy
 }
 
@@ -673,7 +727,9 @@ type (
 	DeleteBlockContentCallback func(ethdb.KeyValueWriter, common.Hash)
 )
 
-// deprecated
+// SetHead rewinds the local chain to a new head. Everything above the new head
+// will be deleted and the new one set.
+// Deprecated
 func (hc *HeaderChain) SetHead(headHash common.Hash, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
 	var (
 		parentHash common.Hash

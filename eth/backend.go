@@ -363,7 +363,7 @@ func (s *Ethereum) APIs() []rpc.API {
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
-	s.blockchain.ResetWithGenesisBlock(gb)
+	s.blockchain.SetHead(gb.Hash())
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {

@@ -803,11 +803,11 @@ func ReadLastFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 	if hash == (common.Hash{}) {
 		return uint64(0)
 	}
-	height := ReadFinalizedNumberByHash(db, hash)
-	if height == nil {
+	nr := ReadFinalizedNumberByHash(db, hash)
+	if nr == nil {
 		return uint64(0)
 	}
-	return *height
+	return *nr
 }
 
 /**** Coordinated state ***/
@@ -1126,6 +1126,13 @@ func ReadEra(db ethdb.KeyValueReader, number uint64) *era.Era {
 	}
 
 	return &decoded
+}
+
+func DeleteEra(db ethdb.KeyValueWriter, number uint64) {
+	key := eraKey(number)
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete era", "err", err)
+	}
 }
 
 // ReadCurrentEra reads the current era number from the database.
