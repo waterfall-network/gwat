@@ -564,7 +564,7 @@ func (hc *HeaderChain) ClearBlockDag() {
 	}
 }
 
-// loadTips retrieves tips with incomplete chain to finalized state
+// loadTips retrieves tips from db and set caches.
 func (hc *HeaderChain) loadTips(skipLock ...bool) error {
 	if len(skipLock) == 0 || !skipLock[0] {
 		hc.tipsMu.Lock()
@@ -575,6 +575,7 @@ func (hc *HeaderChain) loadTips(skipLock ...bool) error {
 		// Corrupt or empty database
 		return fmt.Errorf("tips missing")
 	}
+	curTips := &types.Tips{}
 	for _, th := range tipsHashes {
 		if th == (common.Hash{}) {
 			log.Error("Bad tips hash", "hash", th.Hex())
@@ -589,10 +590,8 @@ func (hc *HeaderChain) loadTips(skipLock ...bool) error {
 		if bdag == nil {
 			return fmt.Errorf("block dag not found")
 		}
-		hc.AddTips(bdag, true)
+		curTips.Add(bdag)
 	}
-
-	curTips := hc.GetTips(true)
 	// check top hashes in chains
 	ancestors := curTips.GetAncestorsHashes()
 	for hash := range *curTips {

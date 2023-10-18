@@ -745,7 +745,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		return nil
 	}
 
-	log.Warn("Sync of unknown dag blocks", "count", len(dag), "dag", dag)
+	log.Info("Sync of unknown dag blocks", "count", len(dag), "dag", dag)
 
 	headers, err := d.fetchDagHeaders(p, dag)
 	log.Info("Sync of unknown dag blocks: dag headers retrieved", "count", len(headers), "headers", headers, "err", err)

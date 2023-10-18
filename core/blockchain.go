@@ -379,7 +379,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		var recover bool
 
 		head := bc.GetLastFinalizedBlock()
-		if layer := rawdb.ReadSnapshotRecoveryNumber(bc.db); layer != nil && *layer > head.Nr() {
+		layer := rawdb.ReadSnapshotRecoveryNumber(bc.db)
+		if layer != nil && *layer > head.Nr() {
 			log.Warn("Enabling snapshot recovery", "chainhead", head.Nr(), "diskbase", *layer)
 			recover = true
 		}
@@ -437,28 +438,22 @@ func (bc *BlockChain) loadLastState() error {
 		log.Crit("Database corrupted, use backup or init new one: no last finalized data")
 	}
 	// Make sure the entire head block is available
-	lastFinalisedBlock := bc.GetBlockByHash(lastFinHash)
-	if lastFinalisedBlock == nil {
+	lfBlock := bc.GetBlockByHash(lastFinHash)
+	if lfBlock == nil {
 		log.Crit("Database corrupted, use backup or init new one: last finalized block not found",
 			"block", lastFinHash.Hex(),
 		)
 	}
 
 	// Everything seems to be fine, set as the lastFinHash block
-	bc.lastFinalizedBlock.Store(lastFinalisedBlock)
+	bc.lastFinalizedBlock.Store(lfBlock)
 	headBlockGauge.Update(int64(lastFinNr))
 
 	// Restore the last known head header
-	lastFinalisedHeader := lastFinalisedBlock.Header()
-	if lastFinHash != (common.Hash{}) {
-		if header := bc.GetHeaderByHash(lastFinHash); header != nil {
-			lastFinalisedHeader = header
-		}
-	}
-	bc.hc.SetLastFinalisedHeader(lastFinalisedHeader, lastFinNr)
+	bc.hc.SetLastFinalisedHeader(lfBlock.Header(), lastFinNr)
 
 	// Restore the last known lastFinHash fast block
-	bc.lastFinalizedFastBlock.Store(lastFinalisedBlock)
+	bc.lastFinalizedFastBlock.Store(lfBlock)
 	headFastBlockGauge.Update(int64(lastFinNr))
 
 	if head := rawdb.ReadHeadFastBlockHash(bc.db); head != (common.Hash{}) {
@@ -482,11 +477,29 @@ func (bc *BlockChain) loadLastState() error {
 	// Issue a status log for the user
 	lastFinalizedFastBlocks := bc.GetLastFinalizedFastBlock()
 
-	log.Info("Loaded last finalized", "block", lastFinalisedBlock.Hash().Hex())
+	//load state
+	tmpSi := &types.SlotInfo{
+		GenesisTime:    bc.Genesis().Time(),
+		SecondsPerSlot: bc.Config().SecondsPerSlot,
+		SlotsPerEpoch:  bc.Config().SlotsPerEpoch,
+	}
+	headEpoch := tmpSi.SlotToEpoch(lfBlock.Slot())
+	if _, err := state.New(lfBlock.Root(), bc.stateCache, bc.snaps); err != nil {
+		// search valid checkpoint
+		cp := bc.searchValidCheckpoint(headEpoch - 1)
+		if cp == nil {
+			log.Crit("Set head: valid checkpoint not found (init state)", "headEpoch", headEpoch, "head", lfBlock.Hash().Hex())
+			return errBlockNotFound
+		}
+		//recursive call
+		return bc.SetHead(cp.Spine)
+	}
+
+	log.Info("Loaded last finalized", "block", lfBlock.Hash().Hex())
 	log.Info("Loaded last finalized", "number", lastFinNr)
-	log.Info("Loaded last finalized", "slot", lastFinalisedBlock.Slot())
-	log.Info("Loaded last finalized", "epoch", lastFinalisedBlock.Slot()/bc.Config().SlotsPerEpoch)
-	log.Info("Loaded last finalized", "era", lastFinalisedBlock.Era())
+	log.Info("Loaded last finalized", "slot", lfBlock.Slot())
+	log.Info("Loaded last finalized", "epoch", lfBlock.Slot()/bc.Config().SlotsPerEpoch)
+	log.Info("Loaded last finalized", "era", lfBlock.Era())
 	log.Info("Loaded last finalized fast block", "hash", lastFinalizedFastBlocks.Hash(), "finNr", lastFinNr)
 	log.Info("Loaded tips", "hashes", tips.GetHashes())
 	if pivot := rawdb.ReadLastPivotNumber(bc.db); pivot != nil {
@@ -784,17 +797,6 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 		return bc.setHeadRecirsive(cp.Spine)
 	}
 	headEraInfo := era.NewEraInfo(*headEra)
-
-	if _, err := state.New(headBlock.Root(), bc.stateCache, bc.snaps); err != nil {
-		// search valid checkpoint
-		cp := bc.searchValidCheckpoint(headEpoch - 1)
-		if cp == nil {
-			log.Error("Set head: valid checkpoint not found (init state)", "headEpoch", headEpoch, "head", head.Hex())
-			return errBlockNotFound
-		}
-		//recursive call
-		return bc.setHeadRecirsive(cp.Spine)
-	}
 
 	// clean chain
 	// clean eras
@@ -1101,6 +1103,7 @@ func (bc *BlockChain) Stop() {
 		if snapBase, err = bc.snaps.Journal(curBlock.Root); err != nil {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
+		rawdb.WriteSnapshotRecoveryNumber(bc.db, curBlock.Nr())
 	}
 
 	// Ensure the state of a recent block is also stored to disk before exiting.
@@ -4680,10 +4683,16 @@ func (bc *BlockChain) searchValidCheckpoint(fromEpoch uint64) *types.Checkpoint 
 	for ; fromEpoch >= 0; fromEpoch-- {
 		cpSpine := rawdb.ReadEpoch(bc.db, fromEpoch)
 		if cpSpine == (common.Hash{}) {
+			if fromEpoch == 0 {
+				return nil
+			}
 			continue
 		}
 		cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
 		if cp == nil {
+			if fromEpoch == 0 {
+				return nil
+			}
 			continue
 		}
 		return cp
