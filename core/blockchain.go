@@ -332,7 +332,15 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	err = bc.SetHead(lastCP.Spine)
 	if err != nil {
-		log.Crit("Node initializing failed", "err", err)
+		// search valid checkpoint
+		lastCP = bc.searchValidCheckpoint(lastCP.FinEpoch - 1)
+		if lastCP == nil {
+			log.Crit("Node initializing failed", "err", err)
+		}
+		err = bc.SetHead(lastCP.Spine)
+		if err != nil {
+			log.Crit("Node initializing failed (retry)", "err", err)
+		}
 	}
 
 	// Ensure that a previous crash in SetHead doesn't leave extra ancients
