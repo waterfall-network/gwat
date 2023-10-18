@@ -376,15 +376,15 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		// a recovery block number to be persisted to disk), check if we're still
 		// in recovery mode and in that case, don't invalidate the snapshot on a
 		// head mismatch.
-		var recover bool
+		//var recover bool
 
 		head := bc.GetLastFinalizedBlock()
-		layer := rawdb.ReadSnapshotRecoveryNumber(bc.db)
-		if layer != nil && *layer > head.Nr() {
-			log.Warn("Enabling snapshot recovery", "chainhead", head.Nr(), "diskbase", *layer)
-			recover = true
-		}
-		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		//layer := rawdb.ReadSnapshotRecoveryNumber(bc.db)
+		//if layer != nil && *layer > head.Nr() {
+		//	log.Warn("Enabling snapshot recovery", "chainhead", head.Nr(), "diskbase", *layer)
+		//	recover = true
+		//}
+		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, true)
 	}
 
 	// Start tx indexer/unindexer.
@@ -525,18 +525,27 @@ func (bc *BlockChain) GetSlotInfo() *types.SlotInfo {
 // SetLastCoordinatedCheckpoint set last coordinated checkpoint.
 func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 	// save new checkpoint and cache it.
+	var batch ethdb.Batch
 	if epCp := bc.GetCoordinatedCheckpoint(cp.Spine); epCp == nil {
-		rawdb.WriteCoordinatedCheckpoint(bc.db, cp)
+		batch = bc.db.NewBatch()
+		rawdb.WriteCoordinatedCheckpoint(batch, cp)
 		bc.checkpointCache.Add(cp.Spine, cp)
 	}
 	//update current cp and apoch data.
 	currCp := bc.GetLastCoordinatedCheckpoint()
 	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
-		rawdb.WriteLastCoordinatedCheckpoint(bc.db, cp)
-		log.Info("CheckShuffle - write checkpoint to db", "epoch", cp.FinEpoch, "checkpoint", cp)
-		rawdb.WriteEpoch(bc.db, cp.FinEpoch, cp.Spine)
+		if batch == nil {
+			batch = bc.db.NewBatch()
+		}
+		rawdb.WriteLastCoordinatedCheckpoint(batch, cp)
+		rawdb.WriteEpoch(batch, cp.FinEpoch, cp.Spine)
 		log.Info("Update coordinated checkpoint ", "cp", cp)
+	}
+	if batch != nil {
+		if err := batch.Write(); err != nil {
+			log.Crit("Set last coordinated checkpoint failed", "err", err)
+		}
 	}
 	// rm stale blockDags
 	go func() {
@@ -822,10 +831,16 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 	} else if lcp := rawdb.ReadLastCoordinatedCheckpoint(bc.db); lcp != nil {
 		maxEpoch = lcp.FinEpoch
 	}
+	var cpCache *types.Checkpoint
 	for e := maxEpoch; e > headEpoch; e-- {
-		cpSpine := rawdb.ReadEpoch(bc.db, e)
+		eSpine := rawdb.ReadEpoch(bc.db, e)
 		rawdb.DeleteEpoch(bc.db, e)
-		rawdb.DeleteCoordinatedCheckpoint(bc.db, cpSpine)
+		if cpCache == nil || cpCache.Spine != eSpine {
+			cpCache = rawdb.ReadCoordinatedCheckpoint(bc.db, eSpine)
+		}
+		if cpCache != nil && cpCache.Epoch == e {
+			rawdb.DeleteCoordinatedCheckpoint(bc.db, eSpine)
+		}
 	}
 	//clean blocks data by slot
 	maxSlot, err := tmpSi.SlotOfEpochEnd(maxEpoch)
@@ -906,7 +921,6 @@ func (bc *BlockChain) rmBlockData(hash common.Hash, slot *uint64) {
 
 	children := rawdb.ReadChildren(bc.db, hash)
 	nr := rawdb.ReadFinalizedNumberByHash(bc.db, hash)
-	cp := rawdb.ReadCoordinatedCheckpoint(bc.db, hash)
 
 	// rm related data:
 	for _, ch := range children {
@@ -921,10 +935,6 @@ func (bc *BlockChain) rmBlockData(hash common.Hash, slot *uint64) {
 	}
 	if slot != nil {
 		rawdb.DeleteSlotBlockHash(bc.db, *slot, hash)
-	}
-	if cp != nil {
-		rawdb.DeleteCoordinatedCheckpoint(bc.db, hash)
-		rawdb.DeleteEpoch(bc.db, cp.Epoch)
 	}
 	rawdb.DeleteBlockWithoutNumber(bc.db, hash)
 
