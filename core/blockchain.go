@@ -506,7 +506,7 @@ func (bc *BlockChain) loadLastState() error {
 	lcp := rawdb.ReadLastCoordinatedCheckpoint(bc.db)
 	bc.SetLastCoordinatedCheckpoint(lcp)
 
-	log.Info("Loaded last finalized block", "number", lastFinNr, "slot", lfBlock.Slot(), "hash", "era", lfBlock.Era(), lfBlock.Hash().Hex())
+	log.Info("Loaded last finalized block", "number", lastFinNr, "slot", lfBlock.Slot(), "era", lfBlock.Era(), "hash", lfBlock.Hash().Hex())
 	log.Info("Loaded last finalized checkpoint", "finEpoch", lcp.FinEpoch, "epoch", lcp.Epoch, "spine", lcp.Spine.Hex(), "root", lcp.Root.Hex())
 	log.Info("Loaded last finalized fast block", "hash", lastFinalizedFastBlocks.Hash(), "finNr", lastFinNr)
 	log.Info("Loaded tips", "hashes", tips.GetHashes())
