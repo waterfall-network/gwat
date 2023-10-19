@@ -333,7 +333,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	err = bc.SetHead(lastCP.Spine)
 	if err != nil {
 		// search valid checkpoint
-		lastCP = bc.searchValidCheckpoint(lastCP.FinEpoch - 1)
+		lastCP = bc.searchValidCheckpoint(lastCP.Epoch)
 		if lastCP == nil {
 			log.Crit("Node initializing failed", "err", err)
 		}
@@ -494,7 +494,7 @@ func (bc *BlockChain) loadLastState() error {
 	headEpoch := tmpSi.SlotToEpoch(lfBlock.Slot())
 	if _, err := state.New(lfBlock.Root(), bc.stateCache, bc.snaps); err != nil {
 		// search valid checkpoint
-		cp := bc.searchValidCheckpoint(headEpoch - 1)
+		cp := bc.searchValidCheckpoint(headEpoch)
 		if cp == nil {
 			log.Crit("Set head: valid checkpoint not found (init state)", "headEpoch", headEpoch, "head", lfBlock.Hash().Hex())
 			return errBlockNotFound
@@ -775,7 +775,7 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 
 	// if block is not finalized
 	// - set as head valid checkpoint starting from the block's epoch
-	if headBlock.Nr() == 0 && headBlock.Height() > 0 && headEpoch > 0 {
+	if headBlock.Nr() == 0 && headBlock.Height() > 0 {
 		cp := bc.searchValidCheckpoint(headEpoch)
 		if cp == nil {
 			log.Error("Set head: valid checkpoint not found (not finalized head)", "headEpoch", headEpoch, "head", head.Hex())
@@ -786,47 +786,48 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 	}
 
 	// find checkpoint of head
-	var headCp *types.Checkpoint
-	cpSpine := rawdb.ReadEpoch(bc.db, headEpoch)
-	cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
-	if cp == nil {
+	headCp := bc.searchBlockFinalizationCp(headBlock.Header())
+	if headCp == nil {
 		// search valid checkpoint
-		cp = bc.searchValidCheckpoint(headEpoch - 1)
-		if cp == nil {
+		headCp = bc.searchValidCheckpoint(headEpoch)
+		if headCp == nil {
 			log.Error("Set head: valid checkpoint not found (get head cp)", "headEpoch", headEpoch, "head", head.Hex())
 			return errBlockNotFound
 		}
 		//recursive call
-		return bc.setHeadRecirsive(cp.Spine)
+		return bc.setHeadRecirsive(headCp.Spine)
 	}
-	headCp = cp
 
 	// check head era
-	headEra := rawdb.ReadEra(bc.db, headBlock.Era())
-	if headEra == nil {
+	cpEra := bc.EpochToEra(headCp.FinEpoch)
+	if cpEra == nil {
 		// search valid checkpoint
-		cp := bc.searchValidCheckpoint(headEpoch - 1)
+		cp := bc.searchValidCheckpoint(headEpoch)
 		if cp == nil {
-			log.Error("Set head: valid checkpoint not found (get head era)", "headEpoch", headEpoch, "head", head.Hex())
+			log.Error("Set head: valid checkpoint not found (get head era)",
+				"cpFinEpoch", headCp.FinEpoch,
+				"headEpoch", headEpoch,
+				"head", head.Hex(),
+			)
 			return errBlockNotFound
 		}
 		//recursive call
 		return bc.setHeadRecirsive(cp.Spine)
 	}
-	headEraInfo := era.NewEraInfo(*headEra)
+	cpEraInfo := era.NewEraInfo(*cpEra)
 
 	// clean chain
 	// clean eras
 	var lastEra *era.Era
-	isHeadTransition := headEraInfo.IsTransitionPeriodEpoch(bc, headEpoch)
+	isHeadTransition := cpEraInfo.IsTransitionPeriodEpoch(bc, headCp.FinEpoch)
 	lastEraNr := rawdb.ReadCurrentEra(bc.db)
-	for eraNr := lastEraNr + 1; eraNr > headBlock.Era(); eraNr-- {
+	for eraNr := lastEraNr + 1; eraNr > cpEraInfo.Number(); eraNr-- {
 		if e := rawdb.ReadEra(bc.db, eraNr); e != nil {
 			if lastEra == nil {
 				lastEra = e
 			}
 			// if era transition period - keep next era
-			if isHeadTransition && eraNr == headBlock.Era()+1 {
+			if isHeadTransition && eraNr == cpEraInfo.Number()+1 {
 				break
 			}
 			rawdb.DeleteEra(bc.db, eraNr)
@@ -840,7 +841,7 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 		maxEpoch = lcp.FinEpoch
 	}
 	var cpCache *types.Checkpoint
-	for e := maxEpoch; e > headEpoch; e-- {
+	for e := maxEpoch; e > headCp.FinEpoch; e-- {
 		eSpine := rawdb.ReadEpoch(bc.db, e)
 		rawdb.DeleteEpoch(bc.db, e)
 		if cpCache == nil || cpCache.Spine != eSpine {
@@ -883,7 +884,7 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 	//set correct current cp
 	rawdb.WriteLastCoordinatedCheckpoint(bc.db, headCp)
 	//set correct current era
-	rawdb.WriteCurrentEra(bc.db, headBlock.Era())
+	rawdb.WriteCurrentEra(bc.db, cpEraInfo.Number())
 
 	frozen, _ := bc.db.Ancients()
 	if headBlock.Nr() < frozen {
@@ -896,13 +897,17 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 	}
 
 	// reset tips
-	if err := bc.hc.ResetTips(); err != nil {
+	if err = bc.hc.ResetTips(); err != nil {
 		// if any error - try set cp as head
 		if headCp.Spine == head {
 			//if head is checkpoint - try previous valid checkpoint
-			headCp = bc.searchValidCheckpoint(headEpoch - 1)
+			headCp = bc.searchValidCheckpoint(headEpoch)
 			if headCp == nil {
-				log.Error("Set head: valid checkpoint not found (reset tips)", "headEpoch", headEpoch, "head", head.Hex())
+				log.Error("Set head: valid checkpoint not found (reset tips)",
+					"cpEpoch", headCp.Epoch,
+					"headEpoch", headEpoch,
+					"head", head.Hex(),
+				)
 				return errBlockNotFound
 			}
 		}
@@ -4571,6 +4576,15 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 
 func (bc *BlockChain) EpochToEra(epoch uint64) *era.Era {
 	curEra := bc.eraInfo.GetEra()
+	if curEra == nil {
+		currentEraNumber := rawdb.ReadCurrentEra(bc.db)
+		if eraInfo := rawdb.ReadEra(bc.db, currentEraNumber); eraInfo != nil {
+			bc.SetNewEraInfo(*eraInfo)
+			curEra = eraInfo
+		} else {
+			return nil
+		}
+	}
 	if curEra.IsContainsEpoch(epoch) {
 		return curEra
 	}
@@ -4709,6 +4723,28 @@ func (bc *BlockChain) searchValidCheckpoint(fromEpoch uint64) *types.Checkpoint 
 		cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
 		if cp == nil {
 			if fromEpoch == 0 {
+				return nil
+			}
+			continue
+		}
+		return cp
+	}
+	return nil
+}
+
+// searchBlockFinalizationCp searching for checkpoint of block finalization by number.
+func (bc *BlockChain) searchBlockFinalizationCp(hdr *types.Header) *types.Checkpoint {
+	if hdr == nil || hdr.Number == nil {
+		return nil
+	}
+	for nr := hdr.Nr() - 1; nr >= hdr.CpNumber; nr-- {
+		cpSpine := rawdb.ReadFinalizedHashByNumber(bc.db, nr)
+		if cpSpine == (common.Hash{}) {
+			return nil
+		}
+		cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
+		if cp == nil {
+			if nr == 0 {
 				return nil
 			}
 			continue
