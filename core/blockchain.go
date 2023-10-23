@@ -4737,7 +4737,11 @@ func (bc *BlockChain) searchBlockFinalizationCp(hdr *types.Header) *types.Checkp
 	if hdr == nil || hdr.Number == nil {
 		return nil
 	}
-	for nr := hdr.Nr() - 1; nr >= hdr.CpNumber; nr-- {
+	nr := hdr.Nr()
+	if nr > 0 {
+		nr--
+	}
+	for ; nr >= hdr.CpNumber; nr-- {
 		cpSpine := rawdb.ReadFinalizedHashByNumber(bc.db, nr)
 		if cpSpine == (common.Hash{}) {
 			return nil
