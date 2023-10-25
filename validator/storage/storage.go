@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/binary"
+	"fmt"
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -217,7 +218,14 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 
 	activeEpochValidators := s.validatorsCache.getValidatorsAddresses(bc, epoch, true)
 
-	epochSpine := bc.GetEpoch(epoch - 1)
+	spineEpoch := uint64(0)
+	if epoch > 0 {
+		spineEpoch = epoch - 1
+	}
+	epochSpine := bc.GetEpoch(spineEpoch)
+	if epochSpine == (common.Hash{}) {
+		return nil, fmt.Errorf("epoch not found")
+	}
 	seed, err := s.seed(epoch, epochSpine)
 	if err != nil {
 		return nil, err
@@ -225,7 +233,7 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 
 	log.Info("CheckShuffle - shuffle params", "slot", slot,
 		"slotEpoch", epoch,
-		"spineEpoch", epoch-1,
+		"spineEpoch", spineEpoch,
 		"spine", epochSpine.Hex(),
 		"seed", seed.Hex(),
 		"validatorsCount", len(activeEpochValidators),

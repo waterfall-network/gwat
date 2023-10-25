@@ -154,20 +154,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, checkpoint *param
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
-	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
-	for hash := range core.BadHashes {
-		if header := bc.GetHeaderByHash(hash); header != nil {
-			height := rawdb.ReadFinalizedNumberByHash(bc.chainDb, hash)
-			if height == nil {
-				continue
-			}
-			prevHeight := *height - 1
-			prevHash := rawdb.ReadFinalizedHashByNumber(bc.chainDb, prevHeight)
-			log.Error("Found bad hash, rewinding chain", "hash", prevHash)
-			bc.SetHead(prevHash)
-			log.Info("Chain rewind was successful, resuming normal operation")
-		}
-	}
 
 	bc.validatorStorage = valStore.NewStorage(config)
 

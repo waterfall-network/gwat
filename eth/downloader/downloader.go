@@ -300,14 +300,6 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 	return dl
 }
 
-// ClearBlockDag removes all BlockDag records
-func (d *Downloader) ClearBlockDag() {
-	dagHashes := rawdb.ReadAllBlockDagHashes(d.stateDB)
-	for _, hash := range dagHashes {
-		rawdb.DeleteBlockDag(d.stateDB, hash)
-	}
-}
-
 // Progress retrieves the synchronisation boundaries, specifically the origin
 // block where synchronisation started at (may have failed/suspended); the block
 // or header sync is currently at; and the latest known block which the sync targets.
@@ -753,7 +745,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		return nil
 	}
 
-	log.Warn("Sync of unknown dag blocks", "count", len(dag), "dag", dag)
+	log.Info("Sync of unknown dag blocks", "count", len(dag), "dag", dag)
 
 	headers, err := d.fetchDagHeaders(p, dag)
 	log.Info("Sync of unknown dag blocks: dag headers retrieved", "count", len(headers), "headers", headers, "err", err)
@@ -1810,152 +1802,6 @@ func (d *Downloader) fetchParts(
 	}
 }
 
-// processHeaders takes batches of retrieved headers from an input channel and
-// keeps processing and scheduling them into the header chain and downloader's
-// queue until the stream ends or a failure occurs.
-func (d *Downloader) processHeaders(origin uint64) error {
-	// Keep a count of uncertain headers to roll back
-	var (
-		rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
-		rollbackErr error
-		mode        = d.getMode()
-	)
-	defer func() {
-		if rollback > 0 {
-			lastHeader, lastFastBlock, lastBlock := *d.lightchain.GetLastFinalizedHeader().Number, uint64(0), uint64(0)
-			if mode != LightSync {
-				lastFastBlock = *d.blockchain.GetLastFinalizedFastBlock().Number()
-				lastBlock = d.blockchain.GetLastFinalizedNumber()
-			}
-			header := d.lightchain.GetHeaderByNumber(rollback - 1)
-			if err := d.lightchain.SetHead(header.Hash()); err != nil { // -1 to target the parent of the first uncertain block
-				// We're already unwinding the stack, only print the error to make it more visible
-				log.Error("Failed to roll back chain segment", "head", rollback-1, "err", err)
-			}
-			curFastBlock, curBlock := uint64(0), uint64(0)
-			if mode != LightSync {
-				curFastBlock = *d.blockchain.GetLastFinalizedFastBlock().Number()
-				curBlock = d.blockchain.GetLastFinalizedNumber()
-			}
-			log.Warn("Rolled back chain segment",
-				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.GetLastFinalizedHeader().Nr()),
-				"fast", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
-				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
-		}
-	}()
-	// Wait for batches of headers to process
-	for {
-		select {
-		case <-d.cancelCh:
-			rollbackErr = errCanceled
-			return errCanceled
-
-		case headers := <-d.headerProcCh:
-			// Terminate header processing if we synced up
-			if len(headers) == 0 {
-				// Notify everyone that headers are fully processed
-				for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
-					select {
-					case ch <- false:
-					case <-d.cancelCh:
-					}
-				}
-				// Disable any rollback and return
-				rollback = 0
-				return nil
-			}
-			// Otherwise split the chunk of headers into batches and process them
-			for len(headers) > 0 {
-				// Terminate if something failed in between processing chunks
-				select {
-				case <-d.cancelCh:
-					rollbackErr = errCanceled
-					return errCanceled
-				default:
-				}
-				// Select the next chunk of headers to import
-				limit := maxHeadersProcess
-				if limit > len(headers) {
-					limit = len(headers)
-				}
-				chunk := headers[:limit]
-
-				// In case of header only syncing, validate the chunk immediately
-				if mode == FastSync || mode == LightSync {
-					// If we're importing pure headers, verify based on their recentness
-					var pivot uint64
-
-					d.pivotLock.RLock()
-					if d.pivotHeader != nil {
-						pivot = *d.pivotHeader.Number
-					}
-					d.pivotLock.RUnlock()
-
-					frequency := fsHeaderCheckFrequency
-					if *chunk[len(chunk)-1].Number+uint64(fsHeaderForceVerify) > pivot {
-						frequency = 1
-					}
-					if n, err := d.lightchain.InsertHeaderChain(chunk); err != nil {
-						rollbackErr = err
-
-						// If some headers were inserted, track them as uncertain
-						if (mode == FastSync || frequency > 1) && n > 0 && rollback == 0 {
-							rollback = *chunk[0].Number
-						}
-						log.Warn("Invalid header encountered", "number", chunk[n].Nr(), "height", chunk[n].Height, "hash", chunk[n].Hash(), "parent", chunk[n].ParentHashes, "err", err)
-						return fmt.Errorf("%w: %v", errInvalidChain, err)
-					}
-					// All verifications passed, track all headers within the alloted limits
-					if mode == FastSync {
-						head := *chunk[len(chunk)-1].Number
-						if head-rollback > uint64(fsHeaderSafetyNet) {
-							rollback = head - uint64(fsHeaderSafetyNet)
-						} else {
-							rollback = 1
-						}
-					}
-				}
-				// Unless we're doing light chains, schedule the headers for associated content retrieval
-				if mode == FullSync || mode == FastSync {
-					// If we've reached the allowed number of pending headers, stall a bit
-					for d.queue.PendingBlocks() >= maxQueuedHeaders || d.queue.PendingReceipts() >= maxQueuedHeaders {
-						select {
-						case <-d.cancelCh:
-							rollbackErr = errCanceled
-							return errCanceled
-						case <-time.After(time.Second):
-						}
-					}
-					// Otherwise insert the headers for content retrieval
-					inserts := d.queue.Schedule(chunk, origin)
-					insLen := len(inserts)
-					chLen := len(chunk)
-					if insLen != chLen {
-						rollbackErr = fmt.Errorf("stale headers: len inserts %v len(chunk) %v", len(inserts), len(chunk))
-						return fmt.Errorf("%w: stale headers", errBadPeer)
-					}
-				}
-				headers = headers[limit:]
-				origin += uint64(limit)
-			}
-			// Update the highest block number we know if a higher one is found.
-			d.syncStatsLock.Lock()
-			if d.syncStatsChainHeight < origin {
-				d.syncStatsChainHeight = origin - 1
-			}
-			d.syncStatsLock.Unlock()
-
-			// Signal the content downloaders of the availablility of new tasks
-			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
-				select {
-				case ch <- true:
-				default:
-				}
-			}
-		}
-	}
-}
-
 // processFullSyncContent takes fetch results from the queue and imports them into the chain.
 func (d *Downloader) processFullSyncContent() error {
 	for {
@@ -2553,10 +2399,11 @@ func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) er
 		switch err {
 		case nil:
 			return nil
-		case errInvalidBaseSpine:
-			return err
-		case errBusy, errCanceled:
-			log.Warn("Sync failed, trying next peer", "err", err)
+		case errBusy, errCanceled, errInvalidBaseSpine:
+			log.Warn("Sync failed, trying next peer",
+				"err", err,
+				"baseSpine", baseSpine.Hex(),
+			)
 			continue
 		}
 		if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
