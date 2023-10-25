@@ -752,14 +752,14 @@ func (bc *BlockChain) SetHead(head common.Hash) error {
 	//bc.notProcValSyncOps
 	//bc.valSyncCache.Purge()
 
-	err := bc.setHeadRecirsive(head)
+	err := bc.setHeadRecursive(head)
 	if err != nil {
 		return err
 	}
 	return bc.loadLastState()
 }
 
-func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
+func (bc *BlockChain) setHeadRecursive(head common.Hash) error {
 	// find valid head
 	headBlock := rawdb.ReadBlock(bc.db, head)
 	if headBlock == nil {
@@ -782,7 +782,7 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 			return errBlockNotFound
 		}
 		//recursive call
-		return bc.setHeadRecirsive(cp.Spine)
+		return bc.setHeadRecursive(cp.Spine)
 	}
 
 	// find checkpoint of head
@@ -795,7 +795,7 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 			return errBlockNotFound
 		}
 		//recursive call
-		return bc.setHeadRecirsive(headCp.Spine)
+		return bc.setHeadRecursive(headCp.Spine)
 	}
 
 	// check head era
@@ -812,7 +812,7 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 			return errBlockNotFound
 		}
 		//recursive call
-		return bc.setHeadRecirsive(cp.Spine)
+		return bc.setHeadRecursive(cp.Spine)
 	}
 	cpEraInfo := era.NewEraInfo(*cpEra)
 
@@ -911,7 +911,7 @@ func (bc *BlockChain) setHeadRecirsive(head common.Hash) error {
 				return errBlockNotFound
 			}
 		}
-		return bc.setHeadRecirsive(headCp.Spine)
+		return bc.setHeadRecursive(headCp.Spine)
 	}
 
 	return nil
