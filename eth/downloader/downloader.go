@@ -497,7 +497,7 @@ func (d *Downloader) synchroniseDagOnly(id string) error {
 	//return d.syncWithPeerDagOnly(p)
 }
 
-// syncWithPeer starts a block synchronization based on the hash chain from the
+// syncWithPeerDagOnly starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeerDagOnly(p *peerConnection) (err error) {
 	d.mux.Post(StartEvent{})
@@ -561,8 +561,8 @@ func (d *Downloader) getMode() SyncMode {
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
-// deprecated
-func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastFinNr uint64, dagOnly bool) (err error) {
+// Deprecated
+func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray) (err error) {
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -582,16 +582,13 @@ func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray, lastF
 		log.Debug("Sync terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 
-	log.Info("Synchronising with the network", "peer", p.id, "eth", p.version, "mode", mode, "lastFinNr", lastFinNr, "dag", dag)
+	log.Info("Synchronising with the network", "peer", p.id, "eth", p.version, "mode", mode, "dag", dag)
 
 	// if remote peer has unknown dag blocks only
 	// sync such blocks only
-	if dagOnly {
-		if err = d.syncWithPeerUnknownDagBlocks(p, dag); err != nil {
-			log.Error("Sync of unknown dag blocks failed", "err", err)
-			return err
-		}
-		return nil
+	if err = d.syncWithPeerUnknownDagBlocks(p, dag); err != nil {
+		log.Error("Sync of unknown dag blocks failed", "err", err)
+		return err
 	}
 	return nil
 }
