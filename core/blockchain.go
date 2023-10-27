@@ -1453,8 +1453,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	return 0, nil
 }
 
-//var lastWrite uint64
-
 // writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
@@ -1528,43 +1526,64 @@ func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
 	return nil
 }
 
-// WriteSyncDagBlock writes the dag block and all associated state to the database
-// for dag synchronization process
-func (bc *BlockChain) WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error) {
-	bc.blockProcFeed.Send(true)
-	defer bc.blockProcFeed.Send(false)
-
-	// Pre-checks passed, start the full block imports
-	if !bc.chainmu.TryLock() {
-		return 0, errInsertionInterrupted
-	}
-	n, err := bc.insertBlocks(types.Blocks{block}, validate, opSync)
-	bc.chainmu.Unlock()
-
-	err = bc.insertDalayedBloks()
-	if err != nil {
-		return n, err
-	}
-	return n, err
-}
-
 // WriteSyncBlocks writes the blocks and all associated state to the database while synchronization process.
-func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (status int, err error) {
+func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (failed *types.Block, err error) {
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
 	// Pre-checks passed, start the full block imports
 	if !bc.chainmu.TryLock() {
-		return 0, errInsertionInterrupted
+		return nil, errInsertionInterrupted
 	}
-	n, err := bc.insertBlocks(blocks, validate, opSync)
+
+	// include delayed blocks
+	if len(bc.insBlockCache) > 0 {
+		blocks = append(blocks, bc.insBlockCache...)
+		bc.insBlockCache = []*types.Block{}
+	}
+	blocks = blocks.Deduplicate(true)
+
+	// rm existed blocks
+	notExisted := make(types.Blocks, 0, len(blocks))
+	for _, bl := range blocks {
+		if hdr := bc.GetHeader(bl.Hash()); hdr != nil {
+			log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
+			continue
+		}
+		notExisted = append(notExisted, bl)
+	}
+
+	// ordering by slot sequence to insert
+	blocksBySlot, err := notExisted.GroupBySlot()
+	if err != nil {
+		bc.insBlockCache = notExisted
+		return nil, err
+	}
+	//sort by slots
+	slots := common.SorterAscU64{}
+	for sl, _ := range blocksBySlot {
+		slots = append(slots, sl)
+	}
+	sort.Sort(slots)
+
+	orderedBlocks := make([]*types.Block, 0, len(notExisted))
+	for _, slot := range slots {
+		slotBlocks := blocksBySlot[slot]
+		if len(slotBlocks) == 0 {
+			continue
+		}
+		orderedBlocks = append(orderedBlocks, slotBlocks...)
+	}
+
+	// insert process
+	n, err := bc.insertBlocks(orderedBlocks, validate, opSync)
 	bc.chainmu.Unlock()
 	if err == ErrInsertUncompletedDag {
 		processing := make(map[common.Hash]bool, len(bc.insBlockCache))
 		for _, b := range bc.insBlockCache {
 			processing[b.Hash()] = true
 		}
-		for i, bl := range blocks {
+		for i, bl := range orderedBlocks {
 			log.Info("Delay syncing block", "height", bl.Height(), "hash", bl.Hash().Hex())
 			if i >= n && !processing[bl.Hash()] {
 				bc.insBlockCache = append(bc.insBlockCache, bl)
@@ -1572,34 +1591,9 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (statu
 			}
 		}
 	} else if err != nil {
-		return n, err
+		return orderedBlocks[n], err
 	}
-	err = bc.insertDalayedBloks()
-	return n, nil
-}
-
-func (bc *BlockChain) insertDalayedBloks() error {
-	if len(bc.insBlockCache) == 0 {
-		return nil
-	}
-	log.Info("Insert delayed blocks: start", "count", len(bc.insBlockCache))
-	insBlockCache := []*types.Block{}
-	for _, bl := range bc.insBlockCache {
-		if hdr := bc.GetHeader(bl.Hash()); hdr != nil {
-			log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
-			continue
-		}
-		_, insErr := bc.insertBlocks(types.Blocks{bl}, true, opDelay)
-		if insErr == ErrInsertUncompletedDag {
-			insBlockCache = append(insBlockCache, bl)
-			log.Info("Insert delayed blocks: retry", "slot", bl.Slot(), "hash", bl.Hash().Hex(), "err", insErr)
-		} else if insErr != nil {
-			log.Error("Insert delayed blocks: error", "slot", bl.Slot(), "hash", bl.Hash().Hex(), "err", insErr)
-			return insErr
-		}
-	}
-	bc.insBlockCache = insBlockCache
-	return nil
+	return nil, nil
 }
 
 // WriteCreatedDagBlock writes the dag block created locally.
@@ -1779,6 +1773,7 @@ func (bc *BlockChain) InsertPropagatedBlocks(chain types.Blocks) (int, error) {
 			log.Info("Delay propagated block", "height", bl.Height(), "hash", bl.Hash().Hex())
 			if i >= n && !processing[bl.Hash()] {
 				bc.insBlockCache = append(bc.insBlockCache, bl)
+				processing[bl.Hash()] = true
 			}
 		}
 	}
@@ -3068,32 +3063,6 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 
 	sortedBlocks := types.SpineSortBlocks(parentBlocks.ToArray())
 
-	////if state is last finalized block
-	//if sortedBlocks[0].Nr() == lastFinBlock.Nr() ||
-	//	//if state is dag block
-	//	sortedBlocks[0].Slot() > lastFinBlock.Slot() && sortedBlocks[0].Nr() == 0 && sortedBlocks[0].Height() > 0 {
-	//	stateBlock = sortedBlocks[0]
-	//	statedb, err = bc.StateAt(stateBlock.Root())
-	//	if err != nil {
-	//		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex())
-	//	}
-	//	recommitBlocks = sortedBlocks[1:]
-	//	calcHeight = bc.calcBlockHeight(stateBlock.Height(), len(recommitBlocks))
-	//	return statedb, stateBlock, recommitBlocks, calcHeight, nil
-	//} else {
-	//	//if state is finalized block - search first spine in ancestors
-	//	stateBlock = sortedBlocks[0]
-	//	statedb, err = bc.StateAt(stateBlock.Root())
-	//	if err != nil {
-	//		log.Error("Error while get state by parents", "slot", stateBlock.Slot(), "nr", stateBlock.Nr(), "height", stateBlock.Height(), "hash", stateBlock.Hash().Hex(), "err", err)
-	//	}
-	//	if statedb != nil {
-	//		recommitBlocks = sortedBlocks[1:]
-	//		calcHeight = bc.calcBlockHeight(stateBlock.Height(), len(recommitBlocks))
-	//		return statedb, stateBlock, recommitBlocks, calcHeight, nil
-	//	}
-	//}
-
 	stateBlock = sortedBlocks[0]
 	statedb, err = bc.StateAt(stateBlock.Root())
 	if err != nil {
@@ -3145,82 +3114,6 @@ func (bc *BlockChain) CollectStateDataByParents(parents common.HashArray) (state
 	recommitBlocks = append(recomFinBlocks, sortedBlocks[1:]...)
 	calcHeight = bc.calcBlockHeight(stateBlock.Height(), len(recommitBlocks))
 	return statedb, stateBlock, recommitBlocks, calcHeight, nil
-}
-
-// CollectStateDataByFinalizedBlockRecursive collects state data of current dag chain to insert new block.
-func (bc *BlockChain) CollectStateDataByFinalizedBlockRecursive(block *types.Block, _memo types.BlockMap) (statedb *state.StateDB, stateBlock *types.Block, recommitBlocks []*types.Block, err error) {
-	finNr := block.Nr()
-	if finNr == 0 {
-		if block.Hash() != bc.genesisBlock.Hash() {
-			log.Error("Collect State Data By Finalized Block: bad block number", "nr", finNr, "height", block.Height(), "hash", block.Hash().Hex())
-			return statedb, stateBlock, recommitBlocks, fmt.Errorf("Collect State Data By Finalized Block: bad block number: nr=%d (height=%d  hash=%v)", finNr, block.Height(), block.Hash().Hex())
-		}
-		stdb, err := bc.StateAt(block.Root())
-		if err == nil || stdb != nil {
-			return stdb, block, recommitBlocks, nil
-		}
-	}
-
-	if _memo == nil {
-		_memo = types.BlockMap{}
-	}
-
-	parentBlocks := bc.GetBlocksByHashes(block.ParentHashes()).ToArray()
-	for _, b := range parentBlocks {
-		if b != nil {
-			_memo.Add(b)
-		}
-	}
-	parentBlocks = types.SpineSortBlocks(parentBlocks)
-	spineBlock := parentBlocks[0]
-	_stdb, err := bc.StateAt(spineBlock.Root())
-	if err != nil || _stdb == nil {
-		log.Warn("Collect State Data By Finalized Block: skip block", "nr", finNr, "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
-	}
-	if stateBlock == nil || stateBlock.Nr() < spineBlock.Nr() {
-		statedb = _stdb
-		stateBlock = spineBlock
-	}
-	if statedb == nil {
-		_stdb, _stBlock, _recomBls, err := bc.CollectStateDataByFinalizedBlockRecursive(spineBlock, _memo)
-		if err != nil {
-			log.Warn("Collect State Data By Finalized Block: skip block", "nr", finNr, "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex(), "err", err)
-		}
-		//todo check condition
-		// if stateBlock == nil || stateBlock.Nr() > stateBlock.Nr() {
-		if stateBlock == nil || stateBlock.Nr() > spineBlock.Nr() {
-			statedb = _stdb
-			stateBlock = _stBlock
-			for _, b := range _recomBls {
-				if b != nil {
-					_memo.Add(b)
-				}
-			}
-		}
-	}
-	//rm stateBlock and blocks with lt nr
-	nrs := common.SorterAscU64{}
-	blockMap := types.BlockMap{}
-	for _, bl := range _memo {
-		if bl == nil || bl.Nr() <= stateBlock.Nr() {
-			continue
-		}
-		blockMap[bl.Hash()] = bl
-		nrs = append(nrs, bl.Nr())
-	}
-	//sort by number
-	recommitBlocks = make([]*types.Block, len(nrs))
-	sort.Sort(nrs)
-	for i, nr := range nrs {
-		for _, bl := range blockMap {
-			if nr == bl.Nr() {
-				recommitBlocks[i] = bl
-				break
-			}
-		}
-	}
-	//recommitBlocks = sortedRecomBls
-	return statedb, stateBlock, recommitBlocks, nil
 }
 
 // CollectStateDataByFinalizedBlock collects state data of current dag chain to insert new block.
@@ -3714,40 +3607,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
-	//var (
-	//current  = bc.GetLastFinalizedBlock()
-	//)
 	// The first sidechain block error is already verified to be ErrPrunedAncestor.
 	// Since we don't import them here, we expect ErrUnknownAncestor for the remaining
 	// ones. Any other errors means that the block is invalid, and should not be written
 	// to disk.
 	err := consensus.ErrPrunedAncestor
 	for ; block != nil && errors.Is(err, consensus.ErrPrunedAncestor); block, err = it.next() {
-		//todo
-		// Check the canonical state root for that number
-		//if number := block.NumberU64(); current.NumberU64() >= number {
-		//	canonical := bc.GetBlockByNumber(number)
-		//	if canonical != nil && canonical.Hash() == block.Hash() {
-		//		// Not a sidechain block, this is a re-import of a canon block which has it's state pruned
-		//		continue
-		//	}
-		//	if canonical != nil && canonical.Root() == block.Root() {
-		//		// This is most likely a shadow-state attack. When a fork is imported into the
-		//		// database, and it eventually reaches a block height which is not pruned, we
-		//		// just found that the state already exist! This means that the sidechain block
-		//		// refers to a state which already exists in our canon chain.
-		//		//
-		//		// If left unchecked, we would now proceed importing the blocks, without actually
-		//		// having verified the state of the previous blocks.
-		//		log.Warn("Sidechain ghost-state attack detected", "number", block.Nr(), "sideroot", block.Root(), "canonroot", canonical.Root())
-		//
-		//		// If someone legitimately side-mines blocks, they would still be imported as usual. However,
-		//		// we cannot risk writing unverified blocks to disk when they obviously target the pruning
-		//		// mechanism.
-		//		return it.index, errors.New("sidechain ghost-state attack")
-		//	}
-		//}
-
 		if !bc.HasBlock(block.Hash()) {
 			start := time.Now()
 			if err := bc.writeBlockWithoutState(block); err != nil {

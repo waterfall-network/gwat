@@ -117,10 +117,6 @@ func (lc *LightChain) CurrentHeader() *types.Header {
 	panic("implement me")
 }
 
-func (lc *LightChain) WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error) {
-	panic("implement me")
-}
-
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.

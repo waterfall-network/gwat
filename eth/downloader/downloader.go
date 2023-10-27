@@ -189,10 +189,8 @@ type LightChain interface {
 	// SetHead rewinds the local chain to a new head.
 	SetHead(array common.Hash) error
 
-	// WriteSyncDagBlock writes the dag block and all associated state to the database for dag synchronization process
-	WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error)
-
-	WriteSyncBlocks(blocks types.Blocks, validate bool) (status int, err error)
+	// WriteSyncBlocks writes the dag blocks and all associated state to the database for dag synchronization process
+	WriteSyncBlocks(blocks types.Blocks, validate bool) (failed *types.Block, err error)
 
 	GetInsertDelayedHashes() common.HashArray
 
@@ -667,8 +665,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
 		insBlocks = append(insBlocks, slotBlocks...)
 	}
-	if i, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
-		bl := insBlocks[i]
+	if bl, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
 		log.Error("Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		return err
 	}
@@ -2025,15 +2022,12 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 		return lastHash, nil
 	}
 
-	log.Info("Sync by spines: dag hashes retrieved", "dag", len(dag), "err", err)
-	if err != nil {
-		p.log.Error("Sync by spines: error 1", "err", err, "baseSpine", baseSpine.Hex(), "terminalSpine", terminalSpine.Hex())
-		return lastHash, err
-	}
+	log.Info("Sync by spines: dag hashes retrieved", "dag", len(dag))
+
 	headers, err := d.fetchDagHeaders(p, dag)
 	log.Info("Sync by spines: dag headers retrieved", "count", len(headers), "headers", len(headers), "err", err)
 	if err != nil {
-		p.log.Error("Sync by spines: error 2", "err", err, "from", "baseSpine", baseSpine.Hex(), "terminalSpine", terminalSpine.Hex())
+		p.log.Error("Sync by spines: error 1", "err", err, "from", "baseSpine", baseSpine.Hex(), "terminalSpine", terminalSpine.Hex())
 		return lastHash, err
 	}
 	// request bodies for retrieved headers only
@@ -2049,7 +2043,7 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 	txsMap, err := d.fetchDagTxs(p, dag)
 	log.Info("Sync by spines: dag transactions retrieved", "count", len(txsMap), "txs", len(txsMap), "err", err)
 	if err != nil {
-		p.log.Error("Sync by spines: error 3", "err", err, "baseSpine", baseSpine.Hex(), "terminalSpine", terminalSpine.Hex())
+		p.log.Error("Sync by spines: error 2", "err", err, "baseSpine", baseSpine.Hex(), "terminalSpine", terminalSpine.Hex())
 		return lastHash, err
 	}
 
@@ -2060,32 +2054,9 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 		blocks[i] = block
 	}
 
-	blocksBySlot, err := (&blocks).GroupBySlot()
-	if err != nil {
+	if bl, err := d.blockchain.WriteSyncBlocks(blocks, false); err != nil {
+		log.Error("Sync by spines: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		return lastHash, err
-	}
-	//sort by slots
-	slots := common.SorterAscU64{}
-	for sl, _ := range blocksBySlot {
-		slots = append(slots, sl)
-	}
-	sort.Sort(slots)
-
-	for _, slot := range slots {
-		// era.HandleEra(d.blockchain, slot)
-		slotBlocks := blocksBySlot[slot]
-		if len(slotBlocks) == 0 {
-			continue
-		}
-		//handle by reverse order
-		for _, block := range slotBlocks {
-			// Commit block to database.
-			_, err = d.blockchain.WriteSyncDagBlock(block, false)
-			if err != nil {
-				p.log.Error("Sync by spines: error 4", "err", err, "baseSpine", baseSpine.Hex(), "terminalSpine", terminalSpine.Hex())
-				return lastHash, err
-			}
-		}
 	}
 	return lastHash, err
 }
@@ -2158,11 +2129,8 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 		return nil
 	}
 
-	log.Info("Sync by slots: dag hashes retrieved", "dag", len(dag), "err", err)
-	if err != nil {
-		p.log.Error("Sync by slots: error 1", "err", err, "from", from, "to", to)
-		return err
-	}
+	log.Info("Sync by slots: dag hashes retrieved", "dag", len(dag))
+
 	headers, err := d.fetchDagHeaders(p, dag)
 	log.Info("Sync by slots: dag headers retrieved", "count", len(headers), "headers", len(headers), "err", err)
 	if err != nil {
@@ -2193,34 +2161,11 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 		blocks[i] = block
 	}
 
-	blocksBySlot, err := (&blocks).GroupBySlot()
-	if err != nil {
+	if bl, err := d.blockchain.WriteSyncBlocks(blocks, true); err != nil {
+		log.Error("Sync by slots: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		return err
 	}
-	//sort by slots
-	slots := common.SorterAscU64{}
-	for sl, _ := range blocksBySlot {
-		slots = append(slots, sl)
-	}
-	sort.Sort(slots)
-
-	for _, slot := range slots {
-		// era.HandleEra(d.blockchain, slot)
-		slotBlocks := blocksBySlot[slot]
-		if len(slotBlocks) == 0 {
-			continue
-		}
-		//handle by reverse order
-		for _, block := range slotBlocks {
-			// Commit block to database.
-			_, err = d.blockchain.WriteSyncDagBlock(block, true)
-			if err != nil {
-				p.log.Error("Sync by slots: error 4", "err", err, "from", from, "to", to)
-				return err
-			}
-		}
-	}
-	return err
+	return nil
 }
 
 func (d *Downloader) multiPeersHeadSync(baseSpine common.Hash, spines common.HashArray) error {

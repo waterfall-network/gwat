@@ -138,11 +138,6 @@ func (dl *downloadTester) GetLastFinalizedHeader() *types.Header {
 	panic("implement me")
 }
 
-func (dl *downloadTester) WriteSyncDagBlock(block *types.Block, validate bool) (status int, err error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (dl *downloadTester) GetLastFinalizedNumber() uint64 {
 	//TODO implement me
 	panic("implement me")
