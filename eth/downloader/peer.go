@@ -73,7 +73,6 @@ type peerConnection struct {
 type LightPeer interface {
 	GetDagInfo() (uint64, *common.HashArray)
 	RequestHeadersByHashes(common.HashArray) error
-	RequestHeadersByHash(common.Hash, int, int, bool) error
 	RequestHeadersByNumber(uint64, int, int, bool) error
 }
 
@@ -102,9 +101,6 @@ func (w *lightPeerWrapper) RequestDag(baseSpine common.Hash, terminalSpine commo
 }
 func (w *lightPeerWrapper) GetDagInfo() (uint64, *common.HashArray) {
 	return w.peer.GetDagInfo()
-}
-func (w *lightPeerWrapper) RequestHeadersByHash(h common.Hash, amount int, skip int, reverse bool) error {
-	return w.peer.RequestHeadersByHash(h, amount, skip, reverse)
 }
 func (w *lightPeerWrapper) RequestHeadersByHashes(h common.HashArray) error {
 	return w.peer.RequestHeadersByHashes(h)
@@ -214,17 +210,17 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 	return nil
 }
 
-// FetchDag sends a dag hashes retrieval request to the remote peer.
-func (p *peerConnection) FetchDag(baseSpine common.Hash, terminalSpine common.Hash) error {
-	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.dagIdle, 0, 1) {
-		return errAlreadyFetching
-	}
-	p.dagStarted = time.Now()
-	// Issue the header retrieval request (absolute upwards without gaps)
-	go p.peer.RequestDag(baseSpine, terminalSpine)
-	return nil
-}
+//// FetchDag sends a dag hashes retrieval request to the remote peer.
+//func (p *peerConnection) FetchDag(baseSpine common.Hash, terminalSpine common.Hash) error {
+//	// Short circuit if the peer is already fetching
+//	if !atomic.CompareAndSwapInt32(&p.dagIdle, 0, 1) {
+//		return errAlreadyFetching
+//	}
+//	p.dagStarted = time.Now()
+//	// Issue the header retrieval request (absolute upwards without gaps)
+//	go p.peer.RequestDag(baseSpine, terminalSpine)
+//	return nil
+//}
 
 // SetHeadersIdle sets the peer to idle, allowing it to execute new header retrieval
 // requests. Its estimated header retrieval throughput is updated with that measured

@@ -354,7 +354,8 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 		RequestId: id,
 		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			Origin:  &HashOrNumber{Hash: hash},
+			Hashes:  &common.HashArray{hash},
+			Origin:  &HashOrNumber{},
 			Amount:  uint64(1),
 			Skip:    uint64(0),
 			Reverse: false,
@@ -376,24 +377,6 @@ func (p *Peer) RequestHeadersByHashes(hashes common.HashArray) error {
 			Amount:  uint64(len(hashes)),
 			Skip:    uint64(0),
 			Reverse: false,
-		},
-	})
-}
-
-// RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
-// specified header query, based on the hash of an origin block.
-func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
-	p.Log().Info("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
-	id := rand.Uint64()
-
-	requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
-		RequestId: id,
-		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			Origin:  &HashOrNumber{Hash: origin},
-			Amount:  uint64(amount),
-			Skip:    uint64(skip),
-			Reverse: reverse,
 		},
 	})
 }
