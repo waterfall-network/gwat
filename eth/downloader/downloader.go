@@ -719,245 +719,6 @@ func (d *Downloader) Terminate() {
 	d.Cancel()
 }
 
-// fetchHeaders keeps retrieving headers concurrently from the number
-// requested, until no more are returned, potentially throttling on the way. To
-// facilitate concurrency but still protect against malicious nodes sending bad
-// headers, we construct a header chain skeleton using the "origin" peer we are
-// syncing with, and fill in the missing headers using anyone else. Headers from
-// other peers are only accepted if they map cleanly to the skeleton. If no one
-// can fill in the skeleton - not even the origin peer - it's assumed invalid and
-// the origin is dropped.
-// Deprecated
-func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
-	p.log.Debug("Directing header downloads", "origin", from)
-	defer p.log.Debug("Header download terminated")
-
-	// Create a timeout timer, and the associated header fetcher
-	skeleton := false           // Skeleton assembly phase or finishing up
-	pivoting := false           // Whether the next request is pivot verification
-	request := time.Now()       // time of the last skeleton fetch request
-	timeout := time.NewTimer(0) // timer to dump a non-responsive active peer
-	<-timeout.C                 // timeout channel should be initially empty
-	defer timeout.Stop()
-
-	var ttl time.Duration
-	getHeaders := func(from uint64) {
-		request = time.Now()
-
-		ttl = d.peers.rates.TargetTimeout()
-		timeout.Reset(ttl)
-
-		if skeleton {
-			p.log.Info("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
-		} else {
-			p.log.Info("Fetching full headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
-		}
-	}
-	getNextPivot := func() {
-		pivoting = true
-		request = time.Now()
-
-		ttl = d.peers.rates.TargetTimeout()
-		timeout.Reset(ttl)
-
-		d.pivotLock.RLock()
-		pivot := d.pivotHeader.Nr()
-		d.pivotLock.RUnlock()
-
-		p.log.Debug("Fetching next pivot header", "number", pivot+uint64(fsMinFullBlocks))
-		go p.peer.RequestHeadersByNumber(pivot+uint64(fsMinFullBlocks), 2, fsMinFullBlocks-9, false) // move +64 when it's 2x64-8 deep
-	}
-	// Start pulling the header chain skeleton until all is done
-	ancestor := from
-	getHeaders(from)
-
-	mode := d.getMode()
-	for {
-		select {
-		case <-d.cancelCh:
-			return errCanceled
-
-		case packet := <-d.headerCh:
-			// Make sure the active peer is giving us the skeleton headers
-			if packet.PeerId() != p.id {
-				log.Info("Received skeleton from incorrect peer", "peer", packet.PeerId())
-				break
-			}
-			headerReqTimer.UpdateSince(request)
-			timeout.Stop()
-
-			// If the pivot is being checked, move if it became stale and run the real retrieval
-			var pivot uint64
-
-			d.pivotLock.RLock()
-			if d.pivotHeader != nil && d.pivotHeader.Number != nil {
-				pivot = *d.pivotHeader.Number
-			}
-			d.pivotLock.RUnlock()
-
-			if pivoting {
-				if packet.Items() == 2 {
-					// Retrieve the headers and do some sanity checks, just in case
-					headers := packet.(*headerPack).headers
-
-					if have, want := *headers[0].Number, pivot+uint64(fsMinFullBlocks); have != want {
-						log.Warn("Peer sent invalid next pivot", "have", have, "want", want)
-						return fmt.Errorf("%w: next pivot number %d != requested %d", errInvalidChain, have, want)
-					}
-					if have, want := *headers[1].Number, pivot+2*uint64(fsMinFullBlocks)-8; have != want {
-						log.Warn("Peer sent invalid pivot confirmer", "have", have, "want", want)
-						return fmt.Errorf("%w: next pivot confirmer number %d != requested %d", errInvalidChain, have, want)
-					}
-					log.Warn("Pivot seemingly stale, moving", "old", pivot, "new", headers[0].Height)
-					pivot = *headers[0].Number
-
-					d.pivotLock.Lock()
-					d.pivotHeader = headers[0]
-					d.pivotLock.Unlock()
-
-					// Write out the pivot into the database so a rollback beyond
-					// it will reenable fast sync and update the state root that
-					// the state syncer will be downloading.
-					rawdb.WriteLastPivotNumber(d.stateDB, pivot)
-				}
-				pivoting = false
-				getHeaders(from)
-				continue
-			}
-			// If the skeleton's finished, pull any remaining head headers directly from the origin
-			if skeleton && packet.Items() == 0 {
-				skeleton = false
-				getHeaders(from)
-				continue
-			}
-			// If no more headers are inbound, notify the content fetchers and return
-			if packet.Items() == 0 {
-				// Don't abort header fetches while the pivot is downloading
-				if atomic.LoadInt32(&d.committed) == 0 && pivot <= from {
-					p.log.Debug("No headers, waiting for pivot commit")
-					select {
-					case <-time.After(fsHeaderContCheck):
-						getHeaders(from)
-						continue
-					case <-d.cancelCh:
-						return errCanceled
-					}
-				}
-				// Pivot done (or not in fast sync) and no more headers, terminate the process
-				p.log.Info("No more headers available")
-				select {
-				case d.headerProcCh <- nil:
-					return nil
-				case <-d.cancelCh:
-					return errCanceled
-				}
-			}
-			headers := packet.(*headerPack).headers
-
-			// If we received a skeleton batch, resolve internals concurrently
-			if skeleton {
-				filled, proced, err := d.fillHeaderSkeleton(from, headers)
-				if err != nil {
-					p.log.Debug("Skeleton chain invalid", "err", err)
-					return fmt.Errorf("%w: %v", errInvalidChain, err)
-				}
-				headers = filled[proced:]
-				from += uint64(proced)
-			} else {
-				// If we're closing in on the chain head, but haven't yet reached it, delay
-				// the last few headers so mini reorgs on the head don't cause invalid hash
-				// chain errors.
-				if n := len(headers); n > 0 {
-					// Retrieve the current head we're at
-					var head uint64
-					if mode == LightSync {
-						head = *d.lightchain.GetLastFinalizedHeader().Number
-					} else {
-						full := d.blockchain.GetLastFinalizedNumber()
-						headBlock := d.blockchain.GetLastFinalizedFastBlock()
-						if headBlock.Number() != nil {
-							head = *headBlock.Number()
-						}
-						if head < full {
-							head = full
-						}
-					}
-					// If the head is below the common ancestor, we're actually deduplicating
-					// already existing chain segments, so use the ancestor as the fake head.
-					// Otherwise we might end up delaying header deliveries pointlessly.
-					if head < ancestor {
-						head = ancestor
-					}
-					// If the head is way older than this batch, delay the last few headers
-					if head+uint64(reorgProtThreshold) < *headers[n-1].Number {
-						delay := reorgProtHeaderDelay
-						if delay > n {
-							delay = n
-						}
-						headers = headers[:n-delay]
-					}
-				}
-			}
-			// Insert all the new headers and fetch the next batch
-			if len(headers) > 0 {
-				p.log.Info("Scheduling new headers", "count", len(headers), "from", from)
-				select {
-				case d.headerProcCh <- headers:
-				case <-d.cancelCh:
-					return errCanceled
-				}
-				from += uint64(len(headers))
-
-				// If we're still skeleton filling fast sync, check pivot staleness
-				// before continuing to the next skeleton filling
-				if skeleton && pivot > 0 {
-					getNextPivot()
-				} else {
-					getHeaders(from)
-					log.Info("Synchronising is ending", "peer", p.id, "eth", p.version, "mode", d.mode, "from", from)
-				}
-			} else {
-				// No headers delivered, or all of them being delayed, sleep a bit and retry
-				p.log.Info("All headers delayed, waiting")
-				select {
-				case <-time.After(fsHeaderContCheck):
-					getHeaders(from)
-					continue
-				case <-d.cancelCh:
-					return errCanceled
-				}
-			}
-
-		case <-timeout.C:
-			if d.dropPeer == nil {
-				// The dropPeer method is nil when `--copydb` is used for a local copy.
-				// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
-				p.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", p.id)
-				break
-			}
-			// Header retrieval timed out, consider the peer bad and drop
-			p.log.Debug("Header request timed out", "elapsed", ttl)
-			headerTimeoutMeter.Mark(1)
-			d.dropPeer(p.id)
-
-			// Finish the sync gracefully instead of dumping the gathered data though
-			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
-				select {
-				case ch <- false:
-				case <-d.cancelCh:
-				}
-			}
-			select {
-			case d.headerProcCh <- nil:
-			case <-d.cancelCh:
-			}
-			return fmt.Errorf("%w: header request timed out", errBadPeer)
-		}
-	}
-}
-
 // fillHeaderSkeleton concurrently retrieves headers from all our available peers
 // and maps them to the provided skeleton header chain.
 //
@@ -1609,7 +1370,10 @@ func (d *Downloader) fetchDagHashesBySlots(p *peerConnection, from, to uint64) (
 	}
 	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
 
-	go p.peer.RequestHashesBySlots(from, to)
+	err = p.peer.RequestHashesBySlots(from, to)
+	if err != nil {
+		return nil, err
+	}
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
@@ -1664,7 +1428,10 @@ func (d *Downloader) fetchHashesBySpines(p *peerConnection, baseSpine common.Has
 	}
 	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
 
-	go p.peer.RequestDag(baseSpine, terminalSpine)
+	err = p.peer.RequestDag(baseSpine, terminalSpine)
+	if err != nil {
+		return nil, err
+	}
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
@@ -1716,7 +1483,10 @@ func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray)
 	}
 	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
 
-	go p.peer.RequestHeadersByHashes(hashes)
+	err = p.peer.RequestHeadersByHashes(hashes)
+	if err != nil {
+		return nil, err
+	}
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
@@ -1790,12 +1560,14 @@ func (d *Downloader) requestDagTxs(p *peerConnection, hashes common.HashArray) (
 	}
 	peerCh := d.getPeerSyncChans(p.id).GetBodyChan()
 
-	go p.peer.RequestBodies(hashes)
+	err := p.peer.RequestBodies(hashes)
+	if err != nil {
+		return nil, err
+	}
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
 
-	var err error
 	for {
 		if err != nil {
 			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "fetchDagTxs")
@@ -2029,7 +1801,10 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 	}
 	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
 
-	go p.peer.RequestHeadersByNumber(nr, 1, 0, true)
+	err = p.peer.RequestHeadersByNumber(nr, 1, 0, true)
+	if err != nil {
+		return nil, err
+	}
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
@@ -2060,7 +1835,7 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
-				log.Error(fmt.Sprintf("Sync: header by nr: %s: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
+				log.Error(fmt.Sprintf("Sync: header by nr: %s: returned headers %d != requested %d", errBadPeer, len(headers), fetch), "peer", p.id)
 				return nil, errBadPeer
 			}
 			header = headers[0]
@@ -2085,7 +1860,10 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 	}
 	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
 
-	go p.peer.RequestHeadersByHashes(common.HashArray{hash})
+	err = p.peer.RequestHeadersByHashes(common.HashArray{hash})
+	if err != nil {
+		return nil, err
+	}
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
@@ -2116,7 +1894,7 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
-				log.Error(fmt.Sprintf("Sync: header by hash: %s: returned headers %d != requested %d", errBadPeer, len(headers), fetch))
+				log.Error(fmt.Sprintf("Sync: header by hash: %s: returned headers %d != requested %d", errBadPeer, len(headers), fetch), "peer", p.id)
 				return nil, errBadPeer
 			}
 			header = headers[0]
@@ -2561,26 +2339,27 @@ Loop:
 
 			wg.Add(1)
 			go func(con *peerConnection) {
+				ii := i
 				defer d.resetPeerSync(con.id)
 				defer wg.Done()
 				if err = d.multiPeerGetHashes(con, baseSpine, spines); err != nil {
 					if errors.Is(err, errTimeout) {
-						log.Warn("Sync head failed: timed out", "i", i, "peer", con.id, "err", err)
+						log.Warn("Sync head failed: timed out", "i", ii, "peer", con.id, "err", err)
 					}
 					if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || //errors.Is(err, errTimeout) ||
 						errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
 						errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
-						log.Warn("Sync head failed, dropping peer", "i", i, "peer", con.id, "err", err)
+						log.Warn("Sync head failed, dropping peer", "i", ii, "peer", con.id, "err", err)
 						if d.dropPeer == nil {
 							// The dropPeer method is nil when `--copydb` is used for a local copy.
 							// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
 							log.Warn("Sync head: downloader wants to drop peer, but peerdrop-function is not set", "peer", con.id)
 						} else {
-							log.Warn("Sync head failed, dropping peer", "i", i, "peer", con.id)
+							log.Warn("Sync head failed, dropping peer", "i", ii, "peer", con.id)
 							d.dropPeer(con.id)
 						}
 					}
-					log.Warn("Sync head: finished peer", "i", i, "peer", con.id)
+					log.Info("Sync head: finished peer", "i", ii, "peer", con.id)
 					sem <- struct{}{}
 					return
 				} else {
@@ -2607,7 +2386,7 @@ Loop:
 					log.Error("Sync head: block fetching failed", "err", err, "peer", pid, "blocks", dag)
 				}
 			}
-			log.Info("Sync head: ", "dag", d.syncPeerHashes)
+			log.Info("Sync head:", "dag", d.syncPeerHashes)
 			cancel()
 			return nil
 		}
@@ -2715,7 +2494,10 @@ func (d *Downloader) multiFetchDagHashesBySlots(p *peerConnection, from, to uint
 	}
 	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
 
-	go p.peer.RequestHashesBySlots(from, to)
+	err = p.peer.RequestHashesBySlots(from, to)
+	if err != nil {
+		return nil, err
+	}
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
