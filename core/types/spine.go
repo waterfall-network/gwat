@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -157,15 +158,20 @@ func selectSpinesByMaxHeight(blocks Headers) Headers {
 	return maxHeightBlocks
 }
 
-func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
+func SpineGetDagChain(bc BlockChain, spine *Block) (Blocks, error) {
 	// collect all ancestors in dag (not finalized)
 	candidatesInChain := make(map[common.Hash]struct{})
 	dagBlocks := make(Blocks, 0)
-	spineProcessBlock(bc, spine, candidatesInChain, &dagBlocks)
+	err := spineProcessBlock(bc, spine, candidatesInChain, &dagBlocks)
+	if err != nil {
+		log.Error("☠ Calculate dag chain failed (process block)", "err", err)
+		return nil, err
+	}
 	// sort by slot
 	blocksBySlot, err := dagBlocks.GroupBySlot()
 	if err != nil {
-		log.Error("☠ Ordering dag chain failed", "err", err)
+		log.Error("☠ Calculate dag chain failed (group by slot)", "err", err)
+		return nil, err
 	}
 	//sort by slots
 	slots := common.SorterAscU64{}
@@ -184,38 +190,55 @@ func SpineGetDagChain(bc BlockChain, spine *Block) Blocks {
 		orderedBlocks = append(orderedBlocks, slotBlocks...)
 	}
 
-	// todo rm
 	// check that spine is the last in chain
 	if len(orderedBlocks) > 0 {
 		if orderedBlocks[len(orderedBlocks)-1].Hash() != spine.Hash() {
-			panic("☠ Ordering of spine finalization chain is bad")
+			err = fmt.Errorf("bad sequence")
+			log.Error("☠ Calculate dag chain failed (bad sequence)", "err", err)
+			return nil, err
+
 		}
 	}
-	return orderedBlocks
+	return orderedBlocks, nil
 }
 
-func spineCalculateChain(bc BlockChain, block *Block, candidatesInChain map[common.Hash]struct{}) Blocks {
+func spineCalculateChain(bc BlockChain, block *Block, candidatesInChain map[common.Hash]struct{}) (Blocks, error) {
 	chain := make(Blocks, 0, len(block.ParentHashes()))
-	spineProcessBlock(bc, block, candidatesInChain, &chain)
-	return chain
+	err := spineProcessBlock(bc, block, candidatesInChain, &chain)
+	if err != nil {
+		return nil, err
+	}
+	return chain, nil
 }
 
-func spineProcessBlock(bc BlockChain, block *Block, candidatesInChain map[common.Hash]struct{}, chain *Blocks) {
+func spineProcessBlock(bc BlockChain, block *Block, candidatesInChain map[common.Hash]struct{}, chain *Blocks) error {
 	if _, wasProcessed := candidatesInChain[block.Hash()]; wasProcessed || block.Number() != nil {
-		return
+		return nil
 	}
-	parents := bc.GetBlocksByHashes(block.ParentHashes()).ToArray()
+	parentsMap := bc.GetBlocksByHashes(block.ParentHashes())
+	parents := make([]*Block, 0, len(parentsMap))
+	for h, b := range parentsMap {
+		if b == nil {
+			return fmt.Errorf("block not found hash=", h)
+		}
+		parents = append(parents, b)
+	}
 	sortedParents := SpineSortBlocks(parents)
 
 	candidatesInChain[block.Hash()] = struct{}{}
 	for _, parent := range sortedParents {
 		nr := bc.GetBlockFinalizedNumber(parent.Hash())
 		if _, wasProcessed := candidatesInChain[parent.Hash()]; !wasProcessed && nr == nil {
-			if chainPart := spineCalculateChain(bc, parent, candidatesInChain); len(chainPart) != 0 {
+			chainPart, err := spineCalculateChain(bc, parent, candidatesInChain)
+			if err != nil {
+				return err
+			}
+			if len(chainPart) != 0 {
 				*chain = append(*chain, chainPart...)
 			}
 			candidatesInChain[parent.Hash()] = struct{}{}
 		}
 	}
 	*chain = append(*chain, block)
+	return nil
 }

@@ -109,7 +109,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 	for _, spineHash := range *spines {
 		block := f.bc.GetBlockByHash(spineHash)
 		if block == nil {
-			log.Error("Block finalization failed", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
+			log.Error("Finalization failed (spine not found)", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
 			return ErrSpineNotFound
 		}
 		spinesMap[block.Slot()] = block
@@ -124,7 +124,11 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 
 	for _, slot := range slots {
 		spine := spinesMap[slot]
-		orderedChain := types.SpineGetDagChain(f.bc, spine)
+		orderedChain, err := types.SpineGetDagChain(f.bc, spine)
+		if err != nil {
+			log.Error("Finalization failed (calc fin seq)", "err", err)
+			return err
+		}
 
 		log.Info("Finalization spine chain calculated", "isSync", f.isSyncing(), "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
@@ -137,9 +141,9 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 		for i, block := range orderedChain {
 			nr := lastFinNr + uint64(i) + 1
 			block.SetNumber(&nr)
-			err := f.bc.UpdateFinalizingState(block, lastFinBlock)
+			err = f.bc.UpdateFinalizingState(block, lastFinBlock)
 			if err != nil {
-				log.Error("Block finalization failed: PreFinalizingUpdateState failed", "err", err)
+				log.Error("Finalization failed (state transition)", "err", err)
 				return err
 			}
 			isHead := i == len(orderedChain)-1
