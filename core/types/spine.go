@@ -219,7 +219,7 @@ func spineProcessBlock(bc BlockChain, block *Block, candidatesInChain map[common
 	parents := make([]*Block, 0, len(parentsMap))
 	for h, b := range parentsMap {
 		if b == nil {
-			return fmt.Errorf("block not found hash=", h)
+			return fmt.Errorf("block not found hash=%#x", h)
 		}
 		parents = append(parents, b)
 	}
