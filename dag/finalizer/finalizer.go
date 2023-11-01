@@ -61,10 +61,9 @@ type BlockChain interface {
 
 // Finalizer
 type Finalizer struct {
-	bc      BlockChain
-	eth     Backend
-	running int32 // The indicator whether the finalizer is running or not.
-	busy    int32 // The indicator whether the finalizer is finalizing blocks.
+	bc   BlockChain
+	eth  Backend
+	busy int32 // The indicator whether the finalizer is finalizing blocks.
 }
 
 // New create new instance of Finalizer
@@ -73,7 +72,6 @@ func New(eth Backend) *Finalizer {
 		eth: eth,
 		bc:  eth.BlockChain(),
 	}
-	atomic.StoreInt32(&f.running, 0)
 	atomic.StoreInt32(&f.busy, 0)
 
 	return f

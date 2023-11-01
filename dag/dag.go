@@ -94,6 +94,7 @@ type ethDownloader interface {
 	Synchronising() bool
 	MainSync(baseSpine common.Hash, spines common.HashArray) error
 	DagSync(baseSpine common.Hash, spines common.HashArray) error
+	Terminate()
 }
 
 type Dag struct {
@@ -109,6 +110,7 @@ type Dag struct {
 	lastFinApiSlot uint64
 
 	exitChan chan struct{}
+	enddChan chan struct{}
 	errChan  chan error
 
 	checkpoint *types.Checkpoint
@@ -124,6 +126,7 @@ func New(eth Backend, mux *event.TypeMux, creatorConfig *creator.Config) *Dag {
 		creator:    creator.New(creatorConfig, eth, mux),
 		finalizer:  fin,
 		exitChan:   make(chan struct{}),
+		enddChan:   make(chan struct{}),
 		errChan:    make(chan error),
 	}
 	return d
@@ -542,9 +545,7 @@ func (d *Dag) StartWork() {
 	for {
 		select {
 		case <-d.exitChan:
-			log.Info("Dag workLoop stopped")
-			close(d.exitChan)
-			close(d.errChan)
+			d.exitProcedurre()
 			return
 		case <-startTicker.C:
 			si := d.bc.GetSlotInfo()
@@ -572,6 +573,18 @@ func (d *Dag) StartWork() {
 
 func (d *Dag) StopWork() {
 	d.exitChan <- struct{}{}
+	<-d.enddChan
+	close(d.enddChan)
+}
+
+func (d *Dag) exitProcedurre() {
+	d.creator.Stop()
+	d.downloader.Terminate()
+	d.bc.DagMuLock()
+	d.bc.DagMuUnlock()
+	close(d.exitChan)
+	close(d.errChan)
+	d.enddChan <- struct{}{}
 }
 
 func (d *Dag) workLoop() {
@@ -582,10 +595,8 @@ func (d *Dag) workLoop() {
 	for {
 		select {
 		case <-d.exitChan:
-			log.Info("Dag workLoop stopped")
-			close(d.exitChan)
-			close(d.errChan)
 			slotTicker.Done()
+			d.exitProcedurre()
 			return
 		case err := <-d.errChan:
 			close(d.errChan)
