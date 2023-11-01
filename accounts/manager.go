@@ -23,6 +23,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 // managerSubBufferSize determines how many incoming wallet events
@@ -98,6 +99,15 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 
 // Close terminates the account manager's internal notification processes.
 func (am *Manager) Close() error {
+	for _, wallet := range am.walletsNoLock() {
+		accs := []common.Address{}
+		for _, acc := range wallet.Accounts() {
+			accs = append(accs, acc.Address)
+		}
+		wallet.Close()
+		log.Info("Close wallet", "adds", accs)
+	}
+
 	am.quit <- struct{}{}
 	<-am.term
 	close(am.quit)
