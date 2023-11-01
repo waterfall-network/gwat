@@ -56,7 +56,7 @@ type Manager struct {
 
 	feed event.Feed // Wallet feed notifying of arrivals/departures
 
-	quit chan chan error
+	quit chan struct{}
 	term chan struct{} // Channel is closed upon termination of the update loop
 	lock sync.RWMutex
 }
@@ -84,7 +84,7 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 		updates:     updates,
 		newBackends: make(chan newBackendEvent),
 		wallets:     wallets,
-		quit:        make(chan chan error),
+		quit:        make(chan struct{}),
 		term:        make(chan struct{}),
 	}
 	for _, backend := range backends {
@@ -98,9 +98,11 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 
 // Close terminates the account manager's internal notification processes.
 func (am *Manager) Close() error {
-	errc := make(chan error)
-	am.quit <- errc
-	return <-errc
+	am.quit <- struct{}{}
+	<-am.term
+	close(am.quit)
+	close(am.term)
+	return nil
 }
 
 // Config returns the configuration of account manager.
@@ -155,12 +157,8 @@ func (am *Manager) update() {
 			am.backends[kind] = append(am.backends[kind], backend)
 			am.lock.Unlock()
 			close(event.processed)
-		case errc := <-am.quit:
-			// Manager terminating, return
-			errc <- nil
-			// Signals event emitters the loop is not receiving values
-			// to prevent them from getting stuck.
-			close(am.term)
+		case <-am.quit:
+			am.term <- struct{}{}
 			return
 		}
 	}

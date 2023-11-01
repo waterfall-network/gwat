@@ -1623,7 +1623,9 @@ func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) er
 		switch err {
 		case nil:
 			return nil
-		case errBusy, errCanceled, errInvalidBaseSpine:
+		case errInvalidBaseSpine:
+			return errInvalidBaseSpine
+		case errBusy, errCanceled:
 			log.Warn("Sync failed, trying next peer",
 				"err", err,
 				"baseSpine", baseSpine.Hex(),
