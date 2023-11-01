@@ -774,3 +774,7 @@ func (n *Node) obtainJWTSecret(jwtPath string) ([]byte, error) {
 func (n *Node) HTTPAuthEndpoint() string {
 	return "http://" + n.httpAuth.listenAddr()
 }
+
+func (n *Node) IsClosed() bool {
+	return n.state == closedState
+}
