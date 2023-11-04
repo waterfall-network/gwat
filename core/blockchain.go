@@ -330,16 +330,28 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		lfb := bc.GetLastFinalizedBlock()
 		lastCP = bc.GetCoordinatedCheckpoint(lfb.CpHash())
 	}
-	err = bc.SetHead(lastCP.Spine)
-	if err != nil {
-		// search valid checkpoint
-		lastCP = bc.searchValidCheckpoint(lastCP.Epoch)
-		if lastCP == nil {
-			log.Crit("Node initializing failed", "err", err)
+	lfHash := rawdb.ReadLastFinalizedHash(bc.db)
+	lfNr := rawdb.ReadFinalizedNumberByHash(bc.db, lfHash)
+	if lfNr != nil {
+		err = bc.RollbackFinalization(lastCP.Spine, *lfNr)
+		if err == nil {
+			err = bc.loadLastState()
 		}
+	}
+	if lfNr == nil || err != nil {
+		log.Error("Node initializing: rollback finalization failed: try hard reset", "lfNr", lfNr, "err", err)
+		// hard rollback
 		err = bc.SetHead(lastCP.Spine)
 		if err != nil {
-			log.Crit("Node initializing failed (retry)", "err", err)
+			// search valid checkpoint and try again
+			lastCP = bc.searchValidCheckpoint(lastCP.Epoch)
+			if lastCP == nil {
+				log.Crit("Node initializing failed", "err", err)
+			}
+			err = bc.SetHead(lastCP.Spine)
+			if err != nil {
+				log.Crit("Node initializing failed (retry)", "err", err)
+			}
 		}
 	}
 
@@ -721,9 +733,11 @@ func (bc *BlockChain) GetNotProcessedValidatorSyncData() map[common.Hash]*types.
 	return bc.notProcValSyncOps
 }
 
-// SetHead rewinds the local chain to a new head. Depending on whether the node
-// was fast synced or full synced and in which state, the method will try to
-// delete minimal data from disk whilst retaining chain consistency.
+// SetHead rewinds the local chain to a new head.
+// The method searches finalised block which provide chain consistency,
+// starting from passed hash;
+// removes all data that follows after head;
+// provide required node state to start.
 func (bc *BlockChain) SetHead(head common.Hash) error {
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
@@ -975,6 +989,67 @@ func (bc *BlockChain) rmBlockData(hash common.Hash, slot *uint64) {
 	bc.hc.numberCache.Remove(hash)
 	bc.hc.ancestorCache.Remove(hash)
 	bc.hc.blockDagCache.Remove(hash)
+}
+
+// RollbackFinalization
+// 1. set the passed block as the last finalized,
+// 2. removes finalisation data from last finalized up to lfNr
+// 3. move all unfinalized blocks to dag and provide consistented tips
+func (bc *BlockChain) RollbackFinalization(spineHash common.Hash, lfNr uint64) error {
+	newLfBlock := bc.GetBlock(spineHash)
+	if newLfBlock == nil {
+		log.Error("Rollback finalization: block not found", "spineHash", fmt.Sprintf("%#x", spineHash), "lfNr", lfNr)
+		return ErrBlockNotFound
+	}
+
+	lastFinBlock := bc.GetLastFinalizedHeader()
+	if newLfBlock.Hash() == lastFinBlock.Hash() && newLfBlock.Nr() >= lfNr {
+		return nil
+	}
+
+	bc.SetRollbackActive()
+	defer bc.ResetRollbackActive()
+
+	//reorg finalized and dag chains in accordance with spineHash
+	for i := lfNr; i > newLfBlock.Nr(); i-- {
+		blockHeader := bc.GetHeaderByNumber(i)
+		if blockHeader == nil {
+			log.Warn("Rollback finalization: rollback block not found", "finNr", i)
+			continue
+		}
+		//check blockDag record exists
+		if bc.GetBlockDag(blockHeader.Hash()) == nil {
+			_, ancestors, _, _ := bc.CollectAncestorsAftCpByParents(blockHeader.ParentHashes, blockHeader.CpHash)
+			cpHeader := bc.GetHeader(blockHeader.CpHash)
+			bc.SaveBlockDag(&types.BlockDAG{
+				Hash:                   blockHeader.Hash(),
+				Height:                 blockHeader.Height,
+				Slot:                   blockHeader.Slot,
+				CpHash:                 blockHeader.CpHash,
+				CpHeight:               cpHeader.Height,
+				OrderedAncestorsHashes: ancestors.Hashes(),
+			})
+		}
+		err := bc.rollbackBlockFinalization(i)
+		if err != nil {
+			log.Error("Rollback finalization: rollback block finalization error", "finNr", i, "hash", blockHeader.Hash().Hex(), "err", err)
+		}
+	}
+	// update head of finalized chain
+	if err := bc.WriteFinalizedBlock(newLfBlock.Nr(), newLfBlock, true); err != nil {
+		return err
+	}
+	// update cp
+	cp := bc.searchBlockFinalizationCp(newLfBlock.Header())
+	if cp == nil {
+		log.Error("Rollback finalization: cp not found", "lfSlot", newLfBlock.Slot(), "lfHash", newLfBlock.Hash().Hex())
+		return fmt.Errorf("cp not found")
+	}
+	if lastCp := bc.GetLastCoordinatedCheckpoint(); lastCp == nil || lastCp.FinEpoch != cp.FinEpoch {
+		bc.SetLastCoordinatedCheckpoint(cp)
+	}
+
+	return nil
 }
 
 // FastSyncCommitHead sets the current head block to the one defined by the hash
@@ -1472,8 +1547,8 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
 	return nil
 }
 
-// WriteFinalizedBlock writes the block and all associated state to the database.
-func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, isHead bool) error {
+// WriteFinalizedBlock writes the block finalization info to the database.
+func (bc *BlockChain) WriteFinalizedBlock(finNr uint64, block *types.Block, isHead bool) error {
 	if !bc.chainmu.TryLock() {
 		return errInsertionInterrupted
 	}
@@ -1497,31 +1572,37 @@ func (bc *BlockChain) IsRollbackActive() bool {
 	return bc.hc.IsRollbackActive()
 }
 
-// RollbackFinalization reset block's finalization data only.
-func (bc *BlockChain) RollbackFinalization(finNr uint64) error {
+// rollbackBlockFinalization reset block's finalization data only.
+func (bc *BlockChain) rollbackBlockFinalization(finNr uint64) error {
 	if !bc.chainmu.TryLock() {
 		return errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
 
 	block := bc.GetBlockByNumber(finNr)
+	if block == nil {
+		return errBlockNotFound
+	}
+	hash := block.Hash()
 	block.SetNumber(nil)
 
 	batch := bc.db.NewBatch()
-	rawdb.DeleteFinalizedHashNumber(batch, block.Hash(), finNr)
+	rawdb.DeleteFinalizedHashNumber(batch, hash, finNr)
 
 	// update finalized number cache
-	bc.hc.numberCache.Remove(block.Hash())
+	bc.hc.numberCache.Remove(hash)
+	bc.receiptsCache.Remove(hash)
 
-	bc.hc.headerCache.Remove(block.Hash())
-	bc.hc.headerCache.Add(block.Hash(), block.Header())
+	bc.hc.headerCache.Remove(hash)
+	bc.hc.headerCache.Add(hash, block.Header())
 
-	bc.blockCache.Remove(block.Hash())
-	bc.blockCache.Add(block.Hash(), block)
+	bc.blockCache.Remove(hash)
+	bc.blockCache.Add(hash, block)
 
 	// Flush the whole batch into the disk, exit the node if failed
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to rollback block finalization", "finNr", finNr, "hash", block.Hash().Hex(), "err", err)
+		log.Error("Failed to rollback block finalization", "finNr", finNr, "hash", hash.Hex(), "err", err)
+		return err
 	}
 	return nil
 }
