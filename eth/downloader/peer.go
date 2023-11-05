@@ -71,7 +71,7 @@ type peerConnection struct {
 
 // LightPeer encapsulates the methods required to synchronise with a remote light peer.
 type LightPeer interface {
-	GetDagInfo() (uint64, *common.HashArray)
+	GetDagInfo() uint64
 	RequestHeadersByHashes(common.HashArray) error
 	RequestHeadersByNumber(uint64, int, int, bool) error
 }
@@ -99,7 +99,7 @@ func (w *lightPeerWrapper) RequestHashesBySlots(from, to uint64) error {
 func (w *lightPeerWrapper) RequestDag(baseSpine common.Hash, terminalSpine common.Hash) error {
 	panic("RequestReceipts not supported in light client mode sync")
 }
-func (w *lightPeerWrapper) GetDagInfo() (uint64, *common.HashArray) {
+func (w *lightPeerWrapper) GetDagInfo() uint64 {
 	return w.peer.GetDagInfo()
 }
 func (w *lightPeerWrapper) RequestHeadersByHashes(h common.HashArray) error {

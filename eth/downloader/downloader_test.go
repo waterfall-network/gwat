@@ -68,7 +68,7 @@ type downloadTester struct {
 	lock sync.RWMutex
 }
 
-func (dl *downloadTester) WriteSyncBlocks(blocks types.Blocks, validate bool) (status int, err error) {
+func (dl *downloadTester) WriteSyncBlocks(blocks types.Blocks, validate bool) (failed *types.Block, err error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -531,7 +531,7 @@ func (dlp *downloadTesterPeer) RequestHashesBySlots(from, to uint64) error {
 	panic("implement me")
 }
 
-func (dlp *downloadTesterPeer) GetDagInfo() (uint64, *common.HashArray) {
+func (dlp *downloadTesterPeer) GetDagInfo() uint64 {
 	//TODO implement me
 	panic("implement me")
 }
@@ -1595,7 +1595,7 @@ func (ftp *floodingTestPeer) RequestHashesBySlots(from, to uint64) error {
 	panic("implement me")
 }
 
-func (ftp *floodingTestPeer) GetDagInfo() (uint64, *common.HashArray) {
+func (ftp *floodingTestPeer) GetDagInfo() uint64 {
 	//TODO implement me
 	panic("implement me")
 }

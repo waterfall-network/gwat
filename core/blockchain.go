@@ -3873,23 +3873,32 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 
 // GetDagHashes retrieves all non finalized block's hashes
 func (bc *BlockChain) GetDagHashes() *common.HashArray {
-	dagHashes := common.HashArray{}
 	tips := *bc.hc.GetTips()
+	aproxLen := len(tips) * int(bc.Config().SlotsPerEpoch) * int(bc.Config().ValidatorsPerSlot)
+	ancHashes := make(common.HashArray, 0, aproxLen)
+	tipsHashes := make(common.HashArray, 0, len(tips))
 
-	expCache := ExploreResultMap{}
 	for hash, tip := range tips {
-		if hash == tip.CpHash {
-			dagHashes = append(dagHashes, hash)
+		tipsHashes = append(tipsHashes, hash)
+		// if tips block finalized
+		tHeader := bc.GetHeader(hash)
+		if hash == tip.CpHash || tHeader.Nr() > 0 || hash == bc.Genesis().Hash() {
 			continue
 		}
-		_, loaded, _, _, c, _ := bc.ExploreChainRecursive(hash, expCache)
-		expCache = c
-		dagHashes = append(dagHashes, loaded...)
-		dagHashes = append(dagHashes, hash)
+		ancHashes = append(ancHashes, tip.OrderedAncestorsHashes...)
 	}
-	dagHashes.Deduplicate()
-	dagHashes = dagHashes.Sort()
-	return &dagHashes
+	ancHashes.Deduplicate()
+	// rm finalized
+	dag := make(common.HashArray, 0, len(ancHashes)+len(tipsHashes))
+	for _, h := range ancHashes {
+		if hdr := bc.GetHeader(h); hdr.Nr() > 0 && hdr.Height > 0 {
+			dag = append(dag, h)
+		}
+	}
+	dag = append(dag, tipsHashes...)
+	dag.Deduplicate()
+	dag = dag.Sort()
+	return &dag
 }
 
 // GetUnsynchronizedTipsHashes retrieves tips with incomplete chain to finalized state

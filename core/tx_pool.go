@@ -342,7 +342,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	blocks := pool.chain.GetBlocksByHashes(*pool.chain.GetDagHashes()).ToArray()
 	txs := make([]*types.TransactionBlocks, 0, len(blocks))
 	for _, block := range blocks {
-		if block == nil {
+		if block == nil || block.Nr() > 0 {
 			continue
 		}
 		for _, transaction := range block.Transactions() {

@@ -107,10 +107,9 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	// Run the handshake locally to avoid spinning up a source handler
 	var (
 		genesis = handler.chain.Genesis()
-		dag     = handler.chain.GetDagHashes()
 		lfnr    = handler.chain.GetLastFinalizedNumber()
 	)
-	if err := src.Handshake(1, lfnr, dag, genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
+	if err := src.Handshake(1, lfnr, genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// Send the transaction to the sink and verify that it's added to the tx pool
@@ -169,9 +168,8 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	var (
 		genesis = handler.chain.Genesis()
 		lfnr    = handler.chain.GetLastFinalizedNumber()
-		dag     = handler.chain.GetDagHashes()
 	)
-	if err := sink.Handshake(1, lfnr, dag, genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
+	if err := sink.Handshake(1, lfnr, genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// After the handshake completes, the source handler should stream the sink
@@ -373,10 +371,9 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	// Run the handshake locally to avoid spinning up a remote handler.
 	var (
 		genesis = handler.chain.Genesis()
-		dag     = handler.chain.GetDagHashes()
 		lfnr    = handler.chain.GetLastFinalizedNumber()
 	)
-	if err := remote.Handshake(1, lfnr, dag, genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
+	if err := remote.Handshake(1, lfnr, genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// Connect a new peer and check that we receive the checkpoint challenge.
@@ -472,7 +469,7 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 		go source.handler.runEthPeer(sourcePeer, func(peer *eth.Peer) error {
 			return eth.Handle((*ethHandler)(source.handler), peer)
 		})
-		if err := sinkPeer.Handshake(1, lfnr, &common.HashArray{genesis.Hash()}, genesis.Hash(), forkid.NewIDWithChain(source.chain), forkid.NewFilter(source.chain)); err != nil {
+		if err := sinkPeer.Handshake(1, lfnr, genesis.Hash(), forkid.NewIDWithChain(source.chain), forkid.NewFilter(source.chain)); err != nil {
 			t.Fatalf("failed to run protocol handshake")
 		}
 		go eth.Handle(sink, sinkPeer)
@@ -544,7 +541,7 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 		genesis = source.chain.Genesis()
 		lfnr    = source.chain.GetLastFinalizedNumber()
 	)
-	if err := sink.Handshake(1, lfnr, &common.HashArray{genesis.Hash()}, genesis.Hash(), forkid.NewIDWithChain(source.chain), forkid.NewFilter(source.chain)); err != nil {
+	if err := sink.Handshake(1, lfnr, genesis.Hash(), forkid.NewIDWithChain(source.chain), forkid.NewFilter(source.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// After the handshake completes, the source handler should stream the sink

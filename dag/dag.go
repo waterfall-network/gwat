@@ -200,6 +200,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
+	var err error
 	baseSpine := *data.BaseSpine
 	spines := data.Spines
 	// if baseSpine is in spines - remove
@@ -207,25 +208,31 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		spines = spines[bi+1:]
 	}
 	//forward finalization
-	spines, baseSpine = d.finalizer.ForwardFinalization(spines, baseSpine)
+	spines, baseSpine, err = d.finalizer.ForwardFinalization(spines, baseSpine)
+	if err != nil {
+		e := err.Error()
+		res.Error = &e
+		log.Error("Handle Finalize: forward finalization failed", "syncMode", data.SyncMode, "err", err)
+		return res
+	}
 
 	switch data.SyncMode {
 	case types.NoSync:
-		if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint); err != nil {
+		if err = d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint); err != nil {
 			strErr := err.Error()
 			res.Error = &strErr
 			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
 			return res
 		}
 	case types.MainSync:
-		if err := d.downloader.MainSync(baseSpine, spines); err != nil {
+		if err = d.downloader.MainSync(baseSpine, spines); err != nil {
 			strErr := err.Error()
 			res.Error = &strErr
 			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
 			return res
 		}
 	case types.HeadSync:
-		if err := d.downloader.DagSync(baseSpine, spines); err != nil {
+		if err = d.downloader.DagSync(baseSpine, spines); err != nil {
 			strErr := err.Error()
 			res.Error = &strErr
 			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
@@ -240,7 +247,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	// finalization
 	if len(spines) > 0 {
-		if err := d.finalizer.Finalize(&spines, &baseSpine); err != nil {
+		if err = d.finalizer.Finalize(&spines, &baseSpine); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
 				log.Error("Handle Finalize: response (finalize failed)", "result", res, "err", err)
 				return res

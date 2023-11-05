@@ -365,26 +365,21 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 }
 
 // ForwardFinalization recalculate finalization params by skipping correctly finalized spines.
-func (f *Finalizer) ForwardFinalization(spines common.HashArray, baseSpine common.Hash) (common.HashArray, common.Hash) {
-	spn, bSpine := f.forwardFinalization(&spines, &baseSpine)
-	return *spn, *bSpine
+func (f *Finalizer) ForwardFinalization(spines common.HashArray, baseSpine common.Hash) (common.HashArray, common.Hash, error) {
+	spn, bSpine, err := f.forwardFinalization(&spines, &baseSpine)
+	return *spn, *bSpine, err
 }
 
 // forwardFinalization recalculate finalization params by skipping correctly finalized spines.
-func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *common.Hash) (*common.HashArray, *common.Hash) {
+func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *common.Hash) (*common.HashArray, *common.Hash, error) {
 	if baseSpine == nil || spines == nil || len(*spines) == 0 {
-		return spines, baseSpine
+		return spines, baseSpine, nil
 	}
-
-	log.Info("forward finalization: start",
-		"baseSpine", fmt.Sprintf("%#x", baseSpine),
-		"spines", *spines,
-	)
 
 	lfNr := f.bc.GetLastFinalizedNumber()
 	baseHeader := f.bc.GetHeader(*baseSpine)
 	if baseHeader == nil {
-		return spines, baseSpine
+		return spines, baseSpine, nil
 	}
 
 	curSlot := baseHeader.Slot
@@ -393,6 +388,9 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 
 	for nr := curNr + 1; nr <= lfNr && curIndex < len(*spines); nr++ {
 		header := f.bc.GetHeaderByNumber(nr)
+		if header == nil {
+			return spines, baseSpine, fmt.Errorf("header not found by nr")
+		}
 		//each slot increasing have to
 		//correspond to the next spine
 		if header.Slot > curSlot {
@@ -413,5 +411,5 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 		"spines", resSpine,
 	)
 
-	return &resSpine, baseSpine
+	return &resSpine, baseSpine, nil
 }
