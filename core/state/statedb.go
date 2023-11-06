@@ -1050,11 +1050,11 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 }
 
 func (s *StateDB) IsValidatorAddress(address common.Address) bool {
-	minValidatorData := 120
-	info := s.GetCode(address)
-	if len(info) < minValidatorData {
+	code := s.GetCode(address)
+	if len(code) == 0 {
 		return false
 	}
-
-	return bytes.Equal(info[common.BlsPubKeyLength:common.BlsPubKeyLength+common.AddressLength], address.Bytes())
+	// validator address at the first position
+	stAdr := code[0:common.AddressLength]
+	return bytes.Equal(stAdr, address.Bytes())
 }

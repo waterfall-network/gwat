@@ -1,35 +1,23 @@
 package storage
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-)
-
-const (
-	uint64Size              = 8
-	creatorAddressOffset    = common.BlsPubKeyLength
-	withdrawalAddressOffset = creatorAddressOffset + common.AddressLength
-	validatorIndexOffset    = withdrawalAddressOffset + common.AddressLength
-	activationEraOffset     = validatorIndexOffset + uint64Size
-	exitEraOffset           = activationEraOffset + uint64Size
-	balanceLengthOffset     = exitEraOffset + uint64Size
-	balanceOffset           = balanceLengthOffset + uint64Size
-	metricOffset            = balanceOffset // TODO: add balance length to calculate offset
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
 type Validator struct {
-	PubKey            common.BlsPubKey  `json:"pubKey"`
+	// the Address property must be the first for IsValidatorAddress
 	Address           common.Address    `json:"address"`
+	PubKey            common.BlsPubKey  `json:"pubKey"`
 	WithdrawalAddress *common.Address   `json:"withdrawalAddress"`
 	Index             uint64            `json:"index"`
 	ActivationEra     uint64            `json:"activationEra"`
 	ExitEra           uint64            `json:"exitEra"`
-	Balance           *big.Int          `json:"balance"`
 	Stake             []*StakeByAddress `json:"stake"`
 }
 
@@ -41,103 +29,117 @@ func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *c
 		Index:             math.MaxUint64,
 		ActivationEra:     math.MaxUint64,
 		ExitEra:           math.MaxUint64,
-		Balance:           new(big.Int),
+		Stake:             []*StakeByAddress{},
 	}
+}
+
+func (v *Validator) Copy() *Validator {
+	if v == nil {
+		return nil
+	}
+	cpy := &Validator{
+		Index:         v.Index,
+		ActivationEra: v.ActivationEra,
+		ExitEra:       v.ExitEra,
+	}
+	copy(cpy.PubKey[:], v.PubKey[:])
+	copy(cpy.Address[:], v.Address[:])
+	if v.WithdrawalAddress != nil {
+		cpy.WithdrawalAddress = &common.Address{}
+		copy(cpy.WithdrawalAddress[:], v.WithdrawalAddress[:])
+	}
+	cpy.Stake = make([]*StakeByAddress, len(v.Stake))
+	for i, stake := range v.Stake {
+		cpy.Stake[i] = stake.Copy()
+	}
+	return cpy
+}
+
+type rlpBaseValidator struct {
+	//Address           common.Address    `json:"address"`
+	PubKey            common.BlsPubKey  `json:"pubKey"`
+	WithdrawalAddress *common.Address   `json:"withdrawalAddress"`
+	Index             uint64            `json:"index"`
+	ActivationEra     uint64            `json:"activationEra"`
+	ExitEra           uint64            `json:"exitEra"`
+	Stake             []*StakeByAddress `json:"stake"`
 }
 
 func (v *Validator) MarshalBinary() ([]byte, error) {
-	pubKey := make([]byte, common.BlsPubKeyLength)
-	copy(pubKey, v.PubKey[:])
-
-	address := make([]byte, common.AddressLength)
-	copy(address, v.Address[:])
-
-	withdrawalAddress := make([]byte, common.AddressLength)
-	if v.WithdrawalAddress != nil {
-		copy(withdrawalAddress, v.WithdrawalAddress[:])
+	rlpData := rlpBaseValidator{
+		PubKey:            v.PubKey,
+		WithdrawalAddress: v.WithdrawalAddress,
+		Index:             v.Index,
+		ActivationEra:     v.ActivationEra,
+		ExitEra:           v.ExitEra,
+		Stake:             v.Stake,
+	}
+	if rlpData.WithdrawalAddress == nil {
+		rlpData.WithdrawalAddress = &common.Address{}
+	}
+	if rlpData.Stake == nil {
+		rlpData.Stake = make([]*StakeByAddress, 0)
+	}
+	baseData, err := rlp.EncodeToBytes(rlpData)
+	if err != nil {
+		return nil, err
 	}
 
-	balance := v.Balance.Bytes()
+	//create bin data
+	binDataLen := common.AddressLength + uint32Size + len(baseData)
+	binData := make([]byte, binDataLen)
 
-	data := make([]byte, common.BlsPubKeyLength+common.AddressLength*2+uint64Size*4+len(balance))
+	var startOffset, endOfset int
 
-	copy(data[:common.BlsPubKeyLength], pubKey)
-	copy(data[creatorAddressOffset:creatorAddressOffset+common.AddressLength], address)
-	copy(data[withdrawalAddressOffset:withdrawalAddressOffset+common.AddressLength], withdrawalAddress)
+	// set validator address at the first position
+	startOffset = endOfset
+	endOfset = startOffset + common.AddressLength
+	copy(binData[startOffset:endOfset], v.Address.Bytes())
 
-	binary.BigEndian.PutUint64(data[validatorIndexOffset:validatorIndexOffset+uint64Size], v.Index)
+	// set len of base validator data
+	startOffset = endOfset
+	endOfset = startOffset + uint32Size
+	binary.BigEndian.PutUint32(binData[startOffset:endOfset], uint32(len(baseData)))
 
-	binary.BigEndian.PutUint64(data[activationEraOffset:activationEraOffset+uint64Size], v.ActivationEra)
+	// set base validator data
+	startOffset = endOfset
+	endOfset = startOffset + len(baseData)
+	copy(binData[startOffset:endOfset], baseData)
 
-	binary.BigEndian.PutUint64(data[exitEraOffset:exitEraOffset+uint64Size], v.ExitEra)
-
-	binary.BigEndian.PutUint64(data[balanceLengthOffset:balanceOffset], uint64(len(balance)))
-
-	copy(data[balanceOffset:balanceOffset+len(balance)], balance)
-
-	var stakeBuffer bytes.Buffer
-	for _, stake := range v.Stake {
-		// Marshal each stake to binary
-		stakeData := stake.MarshalBinary()
-
-		// Write the stake length
-		binary.Write(&stakeBuffer, binary.BigEndian, uint64(len(stakeData)))
-
-		// Write the stake data
-		stakeBuffer.Write(stakeData)
-	}
-	stakeData := stakeBuffer.Bytes()
-
-	// Resize the main data buffer to hold the stake data
-	newData := make([]byte, len(data)+len(stakeData))
-	copy(newData, data)
-	copy(newData[len(data):], stakeData)
-
-	return newData, nil
+	return binData, nil
 }
 
 func (v *Validator) UnmarshalBinary(data []byte) error {
-	v.PubKey = common.BlsPubKey{}
-	copy(v.PubKey[:], data[:common.BlsPubKeyLength])
+	var startOffset, endOfset int
 
+	// get validator address at the first position
 	v.Address = common.Address{}
-	copy(v.Address[:], data[creatorAddressOffset:creatorAddressOffset+common.AddressLength])
+	startOffset = endOfset
+	endOfset = startOffset + common.AddressLength
+	copy(v.Address[:], data[startOffset:endOfset])
 
-	v.WithdrawalAddress = new(common.Address)
-	copy(v.WithdrawalAddress[:], data[withdrawalAddressOffset:withdrawalAddressOffset+common.AddressLength])
+	// get len of base validator data
+	startOffset = endOfset
+	endOfset = startOffset + uint32Size
+	baseDataLen := binary.BigEndian.Uint32(data[startOffset:endOfset])
 
-	v.Index = binary.BigEndian.Uint64(data[validatorIndexOffset : validatorIndexOffset+uint64Size])
+	// get base validator data
+	startOffset = endOfset
+	endOfset = startOffset + int(baseDataLen)
+	baseValData := &rlpBaseValidator{}
+	if err := rlp.DecodeBytes(data[startOffset:endOfset], baseValData); err != nil {
+		return err
+	}
 
-	v.ActivationEra = binary.BigEndian.Uint64(data[activationEraOffset : activationEraOffset+uint64Size])
+	v.PubKey = baseValData.PubKey
+	v.WithdrawalAddress = baseValData.WithdrawalAddress
+	v.Index = baseValData.Index
+	v.ActivationEra = baseValData.ActivationEra
+	v.ExitEra = baseValData.ExitEra
+	v.Stake = baseValData.Stake
 
-	v.ExitEra = binary.BigEndian.Uint64(data[exitEraOffset : exitEraOffset+uint64Size])
-
-	balanceLen := binary.BigEndian.Uint64(data[balanceLengthOffset:balanceOffset])
-
-	v.Balance = new(big.Int).SetBytes(data[balanceOffset : balanceOffset+balanceLen])
-
-	stakeData := data[balanceOffset+balanceLen:]
-	for len(stakeData) > 0 {
-		// Ensure stakeData is long enough to contain stakeLen
-		if len(stakeData) < uint64Size {
-			return fmt.Errorf("stakeData is too short to contain stakeLen")
-		}
-		// Get the size of the stake
-		stakeLen := binary.BigEndian.Uint64(stakeData[:uint64Size])
-
-		// Ensure stakeData is long enough to contain the stake
-		if len(stakeData) < uint64Size+int(stakeLen) {
-			return fmt.Errorf("stakeData is too short to contain the stake")
-		}
-		// Unmarshal the stake
-		stake := &StakeByAddress{}
-		err := stake.UnmarshalBinary(stakeData[uint64Size : uint64Size+stakeLen])
-		if err != nil {
-			return err
-		}
-		v.Stake = append(v.Stake, stake)
-
-		stakeData = stakeData[uint64Size+stakeLen:]
+	if *v.WithdrawalAddress == (common.Address{}) {
+		v.WithdrawalAddress = nil
 	}
 
 	return nil
@@ -189,14 +191,6 @@ func (v *Validator) GetExitEra() uint64 {
 
 func (v *Validator) SetExitEra(era uint64) {
 	v.ExitEra = era
-}
-
-func (v *Validator) GetBalance() *big.Int {
-	return v.Balance
-}
-
-func (v *Validator) SetBalance(balance *big.Int) {
-	v.Balance = balance
 }
 
 func (v *Validator) AddStake(address common.Address, sum *big.Int) *big.Int {
@@ -277,31 +271,14 @@ type StakeByAddress struct {
 	Sum     *big.Int       `json:"sum"`
 }
 
-func (s *StakeByAddress) MarshalBinary() []byte {
-	// Get the bytes for the Address and Sum
-	address := s.Address[:]
-	sum := s.Sum.Bytes()
-
-	// Create the binary data
-	data := make([]byte, common.AddressLength+len(sum))
-
-	copy(data[:common.AddressLength], address)
-	copy(data[common.AddressLength:], sum)
-
-	return data
-}
-
-func (s *StakeByAddress) UnmarshalBinary(data []byte) error {
-	if len(data) < common.AddressLength {
-		return fmt.Errorf("data is too short for unmarshalling")
+func (s *StakeByAddress) Copy() *StakeByAddress {
+	if s == nil {
+		return nil
 	}
-
-	// Set the Address
-	s.Address = common.Address{}
-	copy(s.Address[:], data[:common.AddressLength])
-
-	// Set the Sum
-	s.Sum = new(big.Int).SetBytes(data[common.AddressLength:])
-
-	return nil
+	cpy := &StakeByAddress{}
+	copy(cpy.Address[:], s.Address[:])
+	if s.Sum != nil {
+		cpy.Sum = new(big.Int).Set(s.Sum)
+	}
+	return cpy
 }
