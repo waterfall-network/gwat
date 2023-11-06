@@ -39,6 +39,8 @@ var (
 
 	// ErrSpineStateNF is returned when spine state not found.
 	ErrSpineStateNF = errors.New("spine state not found")
+
+	ErrBlockNotFound = errors.New("block not found")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

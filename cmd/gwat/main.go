@@ -310,6 +310,9 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 
 	// Unlock any account specifically requested
 	unlockAccounts(ctx, stack)
+	if stack.IsClosed() {
+		return
+	}
 
 	// Register wallet event handlers to open and auto-derive wallets
 	events := make(chan accounts.WalletEvent, 16)
@@ -419,6 +422,9 @@ func unlockAccounts(ctx *cli.Context, stack *node.Node) {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	passwords := utils.MakePasswordList(ctx)
 	for i, account := range unlocks {
+		if stack.IsClosed() {
+			return
+		}
 		unlockAccount(ks, account, i, passwords)
 	}
 }

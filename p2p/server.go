@@ -402,6 +402,7 @@ func (srv *Server) Stop() {
 		// this unblocks listener Accept
 		srv.listener.Close()
 	}
+	srv.quit <- struct{}{}
 	close(srv.quit)
 	srv.lock.Unlock()
 	srv.loopWG.Wait()

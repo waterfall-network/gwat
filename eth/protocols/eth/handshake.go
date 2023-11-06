@@ -33,7 +33,7 @@ const (
 
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, dag hashes and lastFinNr, and genesis block.
-func (p *Peer) Handshake(network uint64, lastFinNr uint64, dag *common.HashArray, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
+func (p *Peer) Handshake(network uint64, lastFinNr uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
 	// Send out own handshake in a new thread
 	errc := make(chan error, 2)
 
@@ -44,9 +44,9 @@ func (p *Peer) Handshake(network uint64, lastFinNr uint64, dag *common.HashArray
 			ProtocolVersion: uint32(p.version),
 			NetworkID:       network,
 			LastFinNr:       lastFinNr,
-			Dag:             dag,
-			Genesis:         genesis,
-			ForkID:          forkID,
+			//Dag:             &common.HashArray{},
+			Genesis: genesis,
+			ForkID:  forkID,
 		})
 	}()
 	go func() {
@@ -64,7 +64,7 @@ func (p *Peer) Handshake(network uint64, lastFinNr uint64, dag *common.HashArray
 			return p2p.DiscReadTimeout
 		}
 	}
-	p.lastFinNr, p.dag = status.LastFinNr, status.Dag
+	p.lastFinNr = status.LastFinNr
 	p.isNewCon = true
 	return nil
 }

@@ -30,6 +30,7 @@ import (
 
 	"github.com/prometheus/tsdb/fileutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -237,6 +238,18 @@ func (n *Node) doClose(errs []error) error {
 	n.state = closedState
 	errs = append(errs, n.closeDatabases()...)
 	n.lock.Unlock()
+
+	//lock all accounts
+	if ksval := n.accman.Backends(keystore.KeyStoreType); len(ksval) > 0 {
+		ks := ksval[0].(*keystore.KeyStore)
+		accs := ks.Accounts()
+		for _, acc := range accs {
+			if ks.IsUnlocked(acc) {
+				ks.Lock(acc.Address)
+				log.Info("Lock account", "address", acc.Address.Hex())
+			}
+		}
+	}
 
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
@@ -760,4 +773,8 @@ func (n *Node) obtainJWTSecret(jwtPath string) ([]byte, error) {
 // HTTPAuthEndpoint returns the URL of the authenticated HTTP server.
 func (n *Node) HTTPAuthEndpoint() string {
 	return "http://" + n.httpAuth.listenAddr()
+}
+
+func (n *Node) IsClosed() bool {
+	return n.state == closedState
 }

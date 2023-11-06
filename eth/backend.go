@@ -496,21 +496,32 @@ func (s *Ethereum) Start() error {
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
+	start := time.Now()
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
+	log.Info("Terminate: ethDialCandidates", "elapsed", common.PrettyDuration(time.Since(start)))
 	s.snapDialCandidates.Close()
+	log.Info("Terminate: snapDialCandidates", "elapsed", common.PrettyDuration(time.Since(start)))
 	s.handler.Stop()
+	log.Info("Terminate: handler", "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// Then stop everything else.
-	s.bloomIndexer.Close()
-	close(s.closeBloomHandler)
-	s.txPool.Stop()
-	s.dag.Creator().Stop()
-	s.blockchain.Stop()
-	rawdb.PopUncleanShutdownMarker(s.chainDb)
-	s.chainDb.Close()
-	s.eventMux.Stop()
 	s.dag.StopWork()
+	log.Info("Terminate: dag", "elapsed", common.PrettyDuration(time.Since(start)))
+	s.txPool.Stop()
+	log.Info("Terminate: txPool", "elapsed", common.PrettyDuration(time.Since(start)))
+	s.bloomIndexer.Close()
+	log.Info("Terminate: bloomIndexer", "elapsed", common.PrettyDuration(time.Since(start)))
+	close(s.closeBloomHandler)
+	log.Info("Terminate: closeBloomHandler", "elapsed", common.PrettyDuration(time.Since(start)))
+	s.blockchain.Stop()
+	log.Info("Terminate: blockchain", "elapsed", common.PrettyDuration(time.Since(start)))
+	rawdb.PopUncleanShutdownMarker(s.chainDb)
+	log.Info("Terminate: Unclean Shutdown Marker", "elapsed", common.PrettyDuration(time.Since(start)))
+	s.chainDb.Close()
+	log.Info("Terminate: chain Db", "elapsed", common.PrettyDuration(time.Since(start)))
+	s.eventMux.Stop()
+	log.Info("Terminate: eventMux", "elapsed", common.PrettyDuration(time.Since(start)))
 
 	return nil
 }

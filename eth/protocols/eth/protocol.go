@@ -94,7 +94,7 @@ type StatusPacket struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
 	LastFinNr       uint64
-	Dag             *common.HashArray
+	Dag             *common.HashArray // Deprecated
 	Genesis         common.Hash
 	ForkID          forkid.ID
 }

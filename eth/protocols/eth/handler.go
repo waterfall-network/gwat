@@ -153,9 +153,10 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 		unsync                        = chain.GetUnsynchronizedTipsHashes()
 		slotInfo                      = chain.GetSlotInfo()
 	)
-	if len(unsync) == 0 {
-		dagHashes = chain.GetDagHashes()
-	} else {
+	dagHashes = chain.GetDagHashes()
+	if len(unsync) > 0 {
+		dh := dagHashes.Difference(unsync)
+		dagHashes = &dh
 		log.Warn("cannot calculate dag hashes", "unsynchronized tips", unsync)
 	}
 
@@ -175,7 +176,7 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 		Config:      chain.Config(),
 		LastFinNr:   lastFinNr,
 		LastCpFinNr: lastCpFinNr,
-		Dag:         dagHashes, // nil - has not synchronized tips
+		Dag:         dagHashes,
 		SlotInfo:    slotInfo,
 	}
 }

@@ -616,6 +616,31 @@ func (bs *Blocks) GetBlockByHash(hash common.Hash) *Block {
 	return nil
 }
 
+func (bs *Blocks) Deduplicate(rmNil bool) Blocks {
+	if bs == nil {
+		return Blocks{}
+	}
+	cpy := make(Blocks, 0, len(*bs))
+	bmap := map[common.Hash]bool{}
+	for _, block := range *bs {
+		if block == nil {
+			if rmNil {
+				continue
+			}
+			if _, ok := bmap[common.Hash{}]; !ok {
+				cpy = append(cpy, block)
+				bmap[common.Hash{}] = true
+			}
+			continue
+		}
+		if _, ok := bmap[block.Hash()]; !ok {
+			cpy = append(cpy, block)
+			bmap[block.Hash()] = true
+		}
+	}
+	return cpy
+}
+
 func (bs *Blocks) GetHashes() *common.HashArray {
 	hashes := make(common.HashArray, 0, len(*bs))
 	for _, block := range *bs {

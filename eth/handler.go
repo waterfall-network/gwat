@@ -264,16 +264,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 	// Execute the Ethereum handshake
 	var (
-		genesis                     = h.chain.Genesis()
-		lastFinNr                   = h.chain.GetLastFinalizedNumber()
-		dag       *common.HashArray = nil
-		unsync                      = h.chain.GetUnsynchronizedTipsHashes()
+		genesis   = h.chain.Genesis()
+		lastFinNr = h.chain.GetLastFinalizedNumber()
 	)
-	if len(unsync) == 0 {
-		dag = h.chain.GetDagHashes()
-	}
 	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.GetLastFinalizedBlock().Nr())
-	if err := peer.Handshake(h.networkID, lastFinNr, dag, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if err := peer.Handshake(h.networkID, lastFinNr, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Error("Gwat handshake failed", "err", err)
 		return err
 	}

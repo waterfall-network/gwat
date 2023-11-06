@@ -94,6 +94,7 @@ type ethDownloader interface {
 	Synchronising() bool
 	MainSync(baseSpine common.Hash, spines common.HashArray) error
 	DagSync(baseSpine common.Hash, spines common.HashArray) error
+	Terminate()
 }
 
 type Dag struct {
@@ -109,6 +110,7 @@ type Dag struct {
 	lastFinApiSlot uint64
 
 	exitChan chan struct{}
+	enddChan chan struct{}
 	errChan  chan error
 
 	checkpoint *types.Checkpoint
@@ -124,6 +126,7 @@ func New(eth Backend, mux *event.TypeMux, creatorConfig *creator.Config) *Dag {
 		creator:    creator.New(creatorConfig, eth, mux),
 		finalizer:  fin,
 		exitChan:   make(chan struct{}),
+		enddChan:   make(chan struct{}),
 		errChan:    make(chan error),
 	}
 	return d
@@ -197,6 +200,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		}
 	}
 
+	var err error
 	baseSpine := *data.BaseSpine
 	spines := data.Spines
 	// if baseSpine is in spines - remove
@@ -204,25 +208,31 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		spines = spines[bi+1:]
 	}
 	//forward finalization
-	spines, baseSpine = d.finalizer.ForwardFinalization(spines, baseSpine)
+	spines, baseSpine, err = d.finalizer.ForwardFinalization(spines, baseSpine)
+	if err != nil {
+		e := err.Error()
+		res.Error = &e
+		log.Error("Handle Finalize: forward finalization failed", "syncMode", data.SyncMode, "err", err)
+		return res
+	}
 
 	switch data.SyncMode {
 	case types.NoSync:
-		if err := d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint); err != nil {
+		if err = d.handleSyncUnloadedBlocks(baseSpine, spines, data.Checkpoint); err != nil {
 			strErr := err.Error()
 			res.Error = &strErr
 			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
 			return res
 		}
 	case types.MainSync:
-		if err := d.downloader.MainSync(baseSpine, spines); err != nil {
+		if err = d.downloader.MainSync(baseSpine, spines); err != nil {
 			strErr := err.Error()
 			res.Error = &strErr
 			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
 			return res
 		}
 	case types.HeadSync:
-		if err := d.downloader.DagSync(baseSpine, spines); err != nil {
+		if err = d.downloader.DagSync(baseSpine, spines); err != nil {
 			strErr := err.Error()
 			res.Error = &strErr
 			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
@@ -237,7 +247,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 
 	// finalization
 	if len(spines) > 0 {
-		if err := d.finalizer.Finalize(&spines, &baseSpine); err != nil {
+		if err = d.finalizer.Finalize(&spines, &baseSpine); err != nil {
 			if err == core.ErrInsertUncompletedDag || err == finalizer.ErrSpineNotFound {
 				log.Error("Handle Finalize: response (finalize failed)", "result", res, "err", err)
 				return res
@@ -542,9 +552,7 @@ func (d *Dag) StartWork() {
 	for {
 		select {
 		case <-d.exitChan:
-			log.Info("Dag workLoop stopped")
-			close(d.exitChan)
-			close(d.errChan)
+			d.exitProcedurre()
 			return
 		case <-startTicker.C:
 			si := d.bc.GetSlotInfo()
@@ -572,6 +580,18 @@ func (d *Dag) StartWork() {
 
 func (d *Dag) StopWork() {
 	d.exitChan <- struct{}{}
+	<-d.enddChan
+	close(d.enddChan)
+}
+
+func (d *Dag) exitProcedurre() {
+	d.creator.Stop()
+	d.downloader.Terminate()
+	d.bc.DagMuLock()
+	d.bc.DagMuUnlock()
+	close(d.exitChan)
+	close(d.errChan)
+	d.enddChan <- struct{}{}
 }
 
 func (d *Dag) workLoop() {
@@ -582,10 +602,8 @@ func (d *Dag) workLoop() {
 	for {
 		select {
 		case <-d.exitChan:
-			log.Info("Dag workLoop stopped")
-			close(d.exitChan)
-			close(d.errChan)
 			slotTicker.Done()
+			d.exitProcedurre()
 			return
 		case err := <-d.errChan:
 			close(d.errChan)

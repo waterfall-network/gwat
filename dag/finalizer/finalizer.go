@@ -12,7 +12,6 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -43,7 +42,7 @@ type BlockChain interface {
 	ReadFinalizedNumberByHash(hash common.Hash) *uint64
 	ReadFinalizedHashByNumber(number uint64) common.Hash
 	GetBlockFinalizedNumber(hash common.Hash) *uint64
-	WriteFinalizedBlock(finNr uint64, block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, isHead bool) error
+	WriteFinalizedBlock(finNr uint64, block *types.Block, isHead bool) error
 	GetTips() types.Tips
 	GetHeadersByHashes(hashes common.HashArray) types.HeaderMap
 	GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error)
@@ -55,16 +54,15 @@ type BlockChain interface {
 	CollectAncestorsAftCpByTips(parents common.HashArray, cpHash common.Hash) (isCpAncestor bool, ancestors types.HeaderMap, unloaded common.HashArray, tips types.Tips)
 	GetHeader(hash common.Hash) *types.Header
 	SaveBlockDag(blockDag *types.BlockDAG)
-	RollbackFinalization(finNr uint64) error
+	RollbackFinalization(spineHash common.Hash, lfNr uint64) error
 	GetLastFinalizedNumber() uint64
 }
 
 // Finalizer
 type Finalizer struct {
-	bc      BlockChain
-	eth     Backend
-	running int32 // The indicator whether the finalizer is running or not.
-	busy    int32 // The indicator whether the finalizer is finalizing blocks.
+	bc   BlockChain
+	eth  Backend
+	busy int32 // The indicator whether the finalizer is finalizing blocks.
 }
 
 // New create new instance of Finalizer
@@ -73,7 +71,6 @@ func New(eth Backend) *Finalizer {
 		eth: eth,
 		bc:  eth.BlockChain(),
 	}
-	atomic.StoreInt32(&f.running, 0)
 	atomic.StoreInt32(&f.busy, 0)
 
 	return f
@@ -109,7 +106,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 	for _, spineHash := range *spines {
 		block := f.bc.GetBlockByHash(spineHash)
 		if block == nil {
-			log.Error("Block finalization failed", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
+			log.Error("Finalization failed (spine not found)", "spineHash", spineHash.Hex(), "err", ErrSpineNotFound)
 			return ErrSpineNotFound
 		}
 		spinesMap[block.Slot()] = block
@@ -124,7 +121,11 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 
 	for _, slot := range slots {
 		spine := spinesMap[slot]
-		orderedChain := types.SpineGetDagChain(f.bc, spine)
+		orderedChain, err := types.SpineGetDagChain(f.bc, spine)
+		if err != nil {
+			log.Error("Finalization failed (calc fin seq)", "err", err)
+			return err
+		}
 
 		log.Info("Finalization spine chain calculated", "isSync", f.isSyncing(), "lfNr", lastFinNr, "slot", spine.Slot(), "height", spine.Height(), "hash", spine.Hash().Hex(), "chain", orderedChain.GetHashes())
 
@@ -137,9 +138,9 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 		for i, block := range orderedChain {
 			nr := lastFinNr + uint64(i) + 1
 			block.SetNumber(&nr)
-			err := f.bc.UpdateFinalizingState(block, lastFinBlock)
+			err = f.bc.UpdateFinalizingState(block, lastFinBlock)
 			if err != nil {
-				log.Error("Block finalization failed: PreFinalizingUpdateState failed", "err", err)
+				log.Error("Finalization failed (state transition)", "err", err)
 				return err
 			}
 			isHead := i == len(orderedChain)-1
@@ -196,7 +197,7 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 		return ErrFinNrrUsed
 	}
 
-	if err := f.bc.WriteFinalizedBlock(finNr, &block, []*types.Receipt{}, []*types.Log{}, &state.StateDB{}, isHead); err != nil {
+	if err := f.bc.WriteFinalizedBlock(finNr, &block, isHead); err != nil {
 		return err
 	}
 
@@ -360,85 +361,25 @@ func (f *Finalizer) SetSpineState(spineHash *common.Hash, lfNr uint64) error {
 		log.Error("Set spine state: bad param", "spineHash", nil)
 		return ErrBadParams
 	}
-
-	spineBlock := f.bc.GetBlock(*spineHash)
-
-	// TODO: remove
-	lfHead := f.bc.GetLastFinalizedHeader()
-	log.Info("########  SetSpineState lfheader",
-		"spineHash", fmt.Sprintf("%#x", spineHash),
-		"lfHash", fmt.Sprintf("%#x", lfHead.Hash()),
-		"lfSlot", lfHead.Slot,
-		"lfNr", lfHead.Nr(),
-		"lfCp", lfHead.CpHash.Hex(),
-	)
-
-	if spineBlock == nil {
-		log.Error("Set spine state: spine not found", "spineHash", fmt.Sprintf("%#x", spineHash), "lfNr", lfNr)
-		return ErrSpineNotFound
-	}
-
-	lastFinBlock := f.bc.GetLastFinalizedBlock()
-	if spineBlock.Hash() == lastFinBlock.Hash() && spineBlock.Nr() >= lfNr {
-		return nil
-	}
-
-	f.bc.SetRollbackActive()
-	defer f.bc.ResetRollbackActive()
-
-	//reorg finalized and dag chains in accordance with spineHash
-	for i := lfNr; i > spineBlock.Nr(); i-- {
-		blockHeader := f.bc.GetHeaderByNumber(i)
-		if blockHeader == nil {
-			log.Warn("Set spine state: rollback block not found", "finNr", i)
-			continue
-		}
-		//check blockDag record exists
-		if f.bc.GetBlockDag(blockHeader.Hash()) == nil {
-			_, ancestors, _, _ := f.bc.CollectAncestorsAftCpByTips(blockHeader.ParentHashes, blockHeader.CpHash)
-			cpHeader := f.bc.GetHeader(blockHeader.CpHash)
-			f.bc.SaveBlockDag(&types.BlockDAG{
-				Hash:                   blockHeader.Hash(),
-				Height:                 blockHeader.Height,
-				Slot:                   blockHeader.Slot,
-				CpHash:                 blockHeader.CpHash,
-				CpHeight:               cpHeader.Height,
-				OrderedAncestorsHashes: ancestors.Hashes(),
-			})
-		}
-		err := f.bc.RollbackFinalization(i)
-		if err != nil {
-			log.Error("Prepare to head synchronising error (rollback)", "finNr", i, "hash", blockHeader.Hash().Hex(), "err", err)
-		}
-	}
-	// update head of finalized chain
-	if err := f.bc.WriteFinalizedBlock(spineBlock.Nr(), spineBlock, nil, nil, nil, true); err != nil {
-		return err
-	}
-	return nil
+	return f.bc.RollbackFinalization(*spineHash, lfNr)
 }
 
 // ForwardFinalization recalculate finalization params by skipping correctly finalized spines.
-func (f *Finalizer) ForwardFinalization(spines common.HashArray, baseSpine common.Hash) (common.HashArray, common.Hash) {
-	spn, bSpine := f.forwardFinalization(&spines, &baseSpine)
-	return *spn, *bSpine
+func (f *Finalizer) ForwardFinalization(spines common.HashArray, baseSpine common.Hash) (common.HashArray, common.Hash, error) {
+	spn, bSpine, err := f.forwardFinalization(&spines, &baseSpine)
+	return *spn, *bSpine, err
 }
 
 // forwardFinalization recalculate finalization params by skipping correctly finalized spines.
-func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *common.Hash) (*common.HashArray, *common.Hash) {
+func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *common.Hash) (*common.HashArray, *common.Hash, error) {
 	if baseSpine == nil || spines == nil || len(*spines) == 0 {
-		return spines, baseSpine
+		return spines, baseSpine, nil
 	}
-
-	log.Info("forward finalization: start",
-		"baseSpine", fmt.Sprintf("%#x", baseSpine),
-		"spines", *spines,
-	)
 
 	lfNr := f.bc.GetLastFinalizedNumber()
 	baseHeader := f.bc.GetHeader(*baseSpine)
 	if baseHeader == nil {
-		return spines, baseSpine
+		return spines, baseSpine, nil
 	}
 
 	curSlot := baseHeader.Slot
@@ -447,6 +388,9 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 
 	for nr := curNr + 1; nr <= lfNr && curIndex < len(*spines); nr++ {
 		header := f.bc.GetHeaderByNumber(nr)
+		if header == nil {
+			return spines, baseSpine, fmt.Errorf("header not found by nr")
+		}
 		//each slot increasing have to
 		//correspond to the next spine
 		if header.Slot > curSlot {
@@ -467,5 +411,5 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 		"spines", resSpine,
 	)
 
-	return &resSpine, baseSpine
+	return &resSpine, baseSpine, nil
 }
