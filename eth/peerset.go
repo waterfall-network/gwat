@@ -228,27 +228,6 @@ func (ps *peerSet) snapLen() int {
 	return ps.snapPeers
 }
 
-// getPeer retrieves the known peer
-func (ps *peerSet) getPeer(onlyNew bool) *eth.Peer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	var peer *eth.Peer
-
-	for _, p := range ps.peers {
-		// TODO: check
-		//if onlyNew && !p.IsNewlyConnected() {
-		//	continue
-		//}
-		// dag == nil - has not synchronized tips
-		if _, dag := p.GetDagInfo(); dag != nil {
-			peer = p.Peer
-			p.ResetNewlyConnected()
-		}
-	}
-	return peer
-}
-
 // close disconnects all peers.
 func (ps *peerSet) close() {
 	ps.lock.Lock()

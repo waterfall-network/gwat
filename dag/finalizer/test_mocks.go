@@ -357,9 +357,9 @@ func (mr *MockBlockChainMockRecorder) ResetRollbackActive() *gomock.Call {
 }
 
 // RollbackFinalization mocks base method.
-func (m *MockBlockChain) RollbackFinalization(finNr uint64) error {
+func (m *MockBlockChain) RollbackFinalization(spineHash common.Hash, lfNr uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RollbackFinalization", finNr)
+	ret := m.ctrl.Call(m, "RollbackFinalization", spineHash, lfNr)
 	ret0, _ := ret[0].(error)
 	return ret0
 }

@@ -354,12 +354,12 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		}
 		// Retrieve the freezing threshold.
 		cp := ReadLastCoordinatedCheckpoint(nfdb)
-		hash := cp.Spine
-		if hash == (common.Hash{}) {
+		if cp == nil || cp.Spine == (common.Hash{}) {
 			log.Debug("Current full block hash unavailable") // new chain, empty database
 			backoff = true
 			continue
 		}
+		hash := cp.Spine
 		number := ReadFinalizedNumberByHash(nfdb, hash)
 		threshold := atomic.LoadUint64(&f.threshold)
 

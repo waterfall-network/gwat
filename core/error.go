@@ -23,9 +23,6 @@ import (
 )
 
 var (
-	// ErrBannedHash is returned if a block to import is on the banned list.
-	ErrBannedHash = errors.New("banned hash")
-
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
@@ -42,6 +39,8 @@ var (
 
 	// ErrSpineStateNF is returned when spine state not found.
 	ErrSpineStateNF = errors.New("spine state not found")
+
+	ErrBlockNotFound = errors.New("block not found")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

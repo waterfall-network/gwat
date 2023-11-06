@@ -72,9 +72,8 @@ type Peer struct {
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
 
-	lastFinNr uint64            // Latest advertised dag lastFinNr
-	dag       *common.HashArray // Latest advertised dag hashes
-	isNewCon  bool              // Is newly connected
+	lastFinNr uint64 // Latest advertised dag lastFinNr
+	isNewCon  bool   // Is newly connected
 
 	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
@@ -132,36 +131,18 @@ func (p *Peer) Version() uint {
 }
 
 // GetDagInfo retrieves the current DAG hashes and the last coordinated checkpoint epoch of the peer.
-func (p *Peer) GetDagInfo() (lastFinNr uint64, dag *common.HashArray) {
+func (p *Peer) GetDagInfo() (lastFinNr uint64) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	lastFinNr = p.lastFinNr
-	if p.dag != nil {
-		dag = p.dag
-	}
-	return lastFinNr, dag
-}
-
-// IsNewlyConnected check is handled by sync.
-func (p *Peer) IsNewlyConnected() bool {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-	return p.isNewCon
-}
-
-// ResetNewlyConnected  reset newly connected status (handled by sync).
-func (p *Peer) ResetNewlyConnected() {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-	p.isNewCon = false
+	return lastFinNr
 }
 
 // SetDagInfo updates the lastFinNr, hash and dag of the peer.
-func (p *Peer) SetDagInfo(lastFinNr uint64, dag *common.HashArray) {
+func (p *Peer) SetDagInfo(lastFinNr uint64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	p.dag = dag
 	p.lastFinNr = lastFinNr
 }
 
@@ -354,7 +335,8 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 		RequestId: id,
 		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			Origin:  &HashOrNumber{Hash: hash},
+			Hashes:  &common.HashArray{hash},
+			Origin:  &HashOrNumber{},
 			Amount:  uint64(1),
 			Skip:    uint64(0),
 			Reverse: false,
@@ -376,24 +358,6 @@ func (p *Peer) RequestHeadersByHashes(hashes common.HashArray) error {
 			Amount:  uint64(len(hashes)),
 			Skip:    uint64(0),
 			Reverse: false,
-		},
-	})
-}
-
-// RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
-// specified header query, based on the hash of an origin block.
-func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
-	p.Log().Info("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
-	id := rand.Uint64()
-
-	requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
-		RequestId: id,
-		GetBlockHeadersPacket: &GetBlockHeadersPacket{
-			Origin:  &HashOrNumber{Hash: origin},
-			Amount:  uint64(amount),
-			Skip:    uint64(skip),
-			Reverse: reverse,
 		},
 	})
 }
