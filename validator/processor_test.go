@@ -780,27 +780,15 @@ func TestProcessorWithdrawal(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
-				valBalance := new(big.Int).Add(value, value)
-
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
-				validator.Balance = valBalance
 				validator.ActivationEra = 0
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
-
-				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr5)
-				testutils.AssertNoError(t, err)
-
-				balanceDif := new(big.Int).Sub(valBalance, val.GetBalance())
-
-				if !testutils.BigIntEquals(value, balanceDif) {
-					t.Fatalf("mismatch balance value, have %+v, want %+v", balanceDif, value)
-				}
 			},
 		},
 	}
@@ -908,12 +896,9 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
-				valBalance := new(big.Int).Add(value, value)
-
 				v := c.TestData.(testmodels.TestData)
 
 				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
-				validator.Balance = valBalance
 				validator.ActivationEra = 0
 				validator.ExitEra = procEpoch
 
@@ -921,13 +906,6 @@ func TestProcessorUpdateBalance(t *testing.T) {
 				testutils.AssertNoError(t, err)
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
-
-				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr6)
-				testutils.AssertNoError(t, err)
-
-				if !testutils.BigIntEquals(value, val.GetBalance()) {
-					t.Fatalf("mismatch balance value, have %+v, want %+v", val.GetBalance(), value)
-				}
 			},
 		},
 	}

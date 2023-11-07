@@ -16,6 +16,11 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
+const (
+	uint64Size = 8
+	uint32Size = 4
+)
+
 type blockchain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 	GetBlock(hash common.Hash) *types.Block
