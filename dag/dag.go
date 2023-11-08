@@ -157,7 +157,6 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		errStr := errSynchronization.Error()
 		res.Error = &errStr
 		log.Error("Handle Finalize: response (busy)", "result", res, "err", errStr)
-		// 		return res
 	}
 
 	d.bc.DagMuLock()
@@ -299,7 +298,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 		"resSpine", res.LFSpine.Hex(),
 		"resRoot", res.CpRoot.Hex(),
 	)
-	log.Info("^^^^^^^^^^^^ TIME",
+	log.Info("TIME",
 		"elapsed", common.PrettyDuration(time.Since(start)),
 		"func:", "Finalize",
 	)
@@ -313,7 +312,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 // 4. if chain head reached - switch off sync mode
 func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.HashArray, cp *types.Checkpoint) error {
 	defer func(start time.Time) {
-		log.Info("^^^^^^^^^^^^ TIME",
+		log.Info("TIME",
 			"elapsed", common.PrettyDuration(time.Since(start)),
 			"func:", "dag.handleSyncUnloadedBlocks",
 		)
@@ -628,7 +627,7 @@ func (d *Dag) workLoop() {
 				continue
 			}
 			currentEpoch := d.bc.GetSlotInfo().SlotToEpoch(d.bc.GetSlotInfo().CurrentSlot())
-			log.Debug("######### curEpoch to eraInfo toEpoch", "epoch", currentEpoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
+			log.Debug("curEpoch to eraInfo toEpoch", "epoch", currentEpoch, "d.bc.GetEraInfo().ToEpoch()", d.bc.GetEraInfo().ToEpoch())
 
 			var (
 				err          error
@@ -653,22 +652,10 @@ func (d *Dag) workLoop() {
 				"endTransSlot", endTransitionSlot,
 			)
 
-			// TODO: uncomment this code for subnetwork support, add subnet and get it to the creators getter (line 253)
-			//if d.bc.Config().IsForkSlotSubNet1(currentSlot) {
-			//	creators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, currentSlot,subnet)
-			//	if err != nil {
-			//		d.errChan <- err
-			//	}
-			//} else {}
-			// TODO: move it to else condition
-
 			slotCreators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, slot)
 			if err != nil {
 				d.errChan <- err
 			}
-
-			// todo check
-			log.Info("CheckShuffle - dag SlotCreators", "slot", slot, "creators", slotCreators)
 
 			go d.work(slot, slotCreators)
 		}

@@ -50,13 +50,16 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:          big.NewInt(111000111),
-		SecondsPerSlot:   4,
-		SlotsPerEpoch:    32,
-		EpochsPerEra:     8,
-		TransitionPeriod: 2,
-		ForkSlotSubNet1:  math.MaxUint64,
-		EffectiveBalance: big.NewInt(3200),
+		ChainID:                big.NewInt(111000111),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		EpochsPerEra:           8,
+		TransitionPeriod:       2,
+		ValidatorsStateAddress: nil,
+		ValidatorsPerSlot:      6,
+		EffectiveBalance:       big.NewInt(3200),
+		ForkSlotSubNet1:        math.MaxUint64,
+		ForkSlotDelegate:       math.MaxUint64,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -82,13 +85,16 @@ var (
 
 	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
 	DevNetChainConfig = &ChainConfig{
-		ChainID:          big.NewInt(333777555),
-		SecondsPerSlot:   4,
-		SlotsPerEpoch:    32,
-		EpochsPerEra:     8,
-		TransitionPeriod: 2,
-		ForkSlotSubNet1:  math.MaxUint64,
-		EffectiveBalance: big.NewInt(3200),
+		ChainID:                big.NewInt(333777555),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		EpochsPerEra:           8,
+		TransitionPeriod:       2,
+		ValidatorsStateAddress: nil,
+		ValidatorsPerSlot:      6,
+		EffectiveBalance:       big.NewInt(3200),
+		ForkSlotSubNet1:        math.MaxUint64,
+		ForkSlotDelegate:       math.MaxUint64,
 	}
 
 	// DevNetTrustedCheckpoint contains the light client trusted checkpoint for the DevNet.
@@ -117,17 +123,31 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
+	AllEthashProtocolChanges = &ChainConfig{
+		ChainID:                big.NewInt(1337),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		EpochsPerEra:           8,
+		TransitionPeriod:       2,
+		ValidatorsStateAddress: nil,
+		ValidatorsPerSlot:      6,
+		EffectiveBalance:       big.NewInt(3200),
+		ForkSlotSubNet1:        math.MaxUint64,
+		ForkSlotDelegate:       math.MaxUint64,
+	}
 
-	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
-	// and accepted by the Ethereum core developers into the Clique consensus.
-	//
-	// This configuration is intentionally not using keyed fields to force anyone
-	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
-
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
-	TestRules       = TestChainConfig.Rules()
+	TestChainConfig = &ChainConfig{
+		ChainID:                big.NewInt(1337),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		EpochsPerEra:           8,
+		TransitionPeriod:       2,
+		ValidatorsStateAddress: nil,
+		ValidatorsPerSlot:      6,
+		EffectiveBalance:       big.NewInt(3200),
+		ForkSlotSubNet1:        math.MaxUint64,
+		ForkSlotDelegate:       math.MaxUint64,
+	}
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -186,18 +206,16 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// coordinator slot settings
-	SecondsPerSlot   uint64 `json:"secondsPerSlot"`
-	SlotsPerEpoch    uint64 `json:"slotsPerEpoch"`
-	EpochsPerEra     uint64 `json:"epochsPerEra"`
-	TransitionPeriod uint64 `json:"transitionPeriod"` // The number of epochs before new era starts
-
-	// Fork slots
-	ForkSlotSubNet1 uint64 `json:"forkSlotSubNet1,omitempty"`
-
+	SecondsPerSlot         uint64 `json:"secondsPerSlot"`
+	SlotsPerEpoch          uint64 `json:"slotsPerEpoch"`
+	EpochsPerEra           uint64 `json:"epochsPerEra"`
+	TransitionPeriod       uint64 `json:"transitionPeriod"` // The number of epochs before new era starts
 	ValidatorsStateAddress *common.Address
-	ValidatorsPerSlot      uint64 `json:"validatorsPerSlot"`
-
-	EffectiveBalance *big.Int `json:"effectiveBalance"`
+	ValidatorsPerSlot      uint64   `json:"validatorsPerSlot"`
+	EffectiveBalance       *big.Int `json:"effectiveBalance"`
+	// Fork slots
+	ForkSlotSubNet1  uint64 `json:"forkSlotSubNet1,omitempty"`
+	ForkSlotDelegate uint64 `json:"forkSlotDelegate,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -220,23 +238,29 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, ForkSlotSubNet1: %v, "+
-		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v}",
+	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
 		c.EpochsPerEra,
 		c.TransitionPeriod,
-		c.ForkSlotSubNet1,
 		c.ValidatorsPerSlot,
 		c.ValidatorsStateAddress,
 		c.EffectiveBalance,
+		c.ForkSlotSubNet1,
+		c.ForkSlotDelegate,
 	)
 }
 
 // IsForkSlotSubNet1 returns true if provided slot greater or equal of the fork slot ForkSlotSubNet1.
 func (c *ChainConfig) IsForkSlotSubNet1(slot uint64) bool {
 	return slot >= c.ForkSlotSubNet1
+}
+
+// IsForkSlotDelegate returns true if provided slot greater or equal of the fork slot ForkSlotDelegate.
+func (c *ChainConfig) IsForkSlotDelegate(slot uint64) bool {
+	return slot >= c.ForkSlotDelegate
 }
 
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
@@ -249,16 +273,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}
 	var lastFork fork
 	for _, cur := range []fork{
-		//{name: "homesteadBlock", block: c.HomesteadBlock},
-		//{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
-		//{name: "eip150Block", block: c.EIP150Block},
-		//{name: "eip155Block", block: c.EIP155Block},
-		//{name: "eip158Block", block: c.EIP158Block},
-		//{name: "byzantiumBlock", block: c.ByzantiumBlock},
-		//{name: "constantinopleBlock", block: c.ConstantinopleBlock},
-		//{name: "petersburgBlock", block: c.PetersburgBlock},
-		//{name: "istanbulBlock", block: c.IstanbulBlock},
-		//{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
 		//{name: "berlinBlock", block: c.BerlinBlock},
 		//{name: "londonBlock", block: c.LondonBlock},
 	} {

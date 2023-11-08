@@ -177,6 +177,7 @@ func TestSetupGenesisWithValidators(t *testing.T) {
 			SecondsPerSlot:         4,
 			SlotsPerEpoch:          32,
 			ForkSlotSubNet1:        1000,
+			ForkSlotDelegate:       1000,
 			ValidatorsStateAddress: nil,
 			EffectiveBalance:       big.NewInt(3200),
 		},

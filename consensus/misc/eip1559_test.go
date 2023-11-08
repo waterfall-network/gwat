@@ -18,7 +18,6 @@ package misc
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 	"testing"
 
@@ -31,18 +30,22 @@ import (
 // do not use e.g. SetInt() on the numbers. For testing only
 func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 	return &params.ChainConfig{
-		ChainID:           original.ChainID,
-		SecondsPerSlot:    4,
-		SlotsPerEpoch:     32,
-		ForkSlotSubNet1:   math.MaxUint64,
-		ValidatorsPerSlot: 4,
-		EffectiveBalance:  big.NewInt(3200),
+		ChainID:                original.ChainID,
+		SecondsPerSlot:         original.SecondsPerSlot,
+		SlotsPerEpoch:          original.SlotsPerEpoch,
+		EpochsPerEra:           original.EpochsPerEra,
+		TransitionPeriod:       original.TransitionPeriod,
+		ValidatorsStateAddress: original.ValidatorsStateAddress,
+		ValidatorsPerSlot:      original.ValidatorsPerSlot,
+		EffectiveBalance:       original.EffectiveBalance,
+		ForkSlotSubNet1:        original.ForkSlotSubNet1,
+		ForkSlotDelegate:       original.ForkSlotDelegate,
 	}
 }
 
 func config() *params.ChainConfig {
-	config := copyConfig(params.TestChainConfig)
-	return config
+	conf := copyConfig(params.TestChainConfig)
+	return conf
 }
 
 // TestBlockGasLimits tests the gasLimit checks for blocks both across

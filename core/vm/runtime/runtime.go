@@ -58,8 +58,9 @@ func setDefaults(cfg *Config) {
 			ChainID:          big.NewInt(1),
 			SecondsPerSlot:   4,
 			SlotsPerEpoch:    32,
-			ForkSlotSubNet1:  math.MaxUint64,
 			EffectiveBalance: big.NewInt(3200),
+			ForkSlotSubNet1:  math.MaxUint64,
+			ForkSlotDelegate: math.MaxUint64,
 		}
 	}
 
