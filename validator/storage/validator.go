@@ -121,11 +121,13 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 	// get len of base validator data
 	startOffset = endOfset
 	endOfset = startOffset + uint32Size
-	baseDataLen := binary.BigEndian.Uint32(data[startOffset:endOfset])
-
+	baseDataLen := int(binary.BigEndian.Uint32(data[startOffset:endOfset]))
+	if baseDataLen > len(data) {
+		return errBadBinaryData
+	}
 	// get base validator data
 	startOffset = endOfset
-	endOfset = startOffset + int(baseDataLen)
+	endOfset = startOffset + baseDataLen
 	baseValData := &rlpBaseValidator{}
 	if err := rlp.DecodeBytes(data[startOffset:endOfset], baseValData); err != nil {
 		return err

@@ -15,6 +15,7 @@ var (
 	errNoSubnetValidators      = errors.New("there are no validators for subnet")
 	errNoEpochValidators       = errors.New("there are no validators for epoch")
 	errNoValidators            = errors.New("there ara no validators")
+	errBadBinaryData           = errors.New("bad binary data")
 )
 
 const (
