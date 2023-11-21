@@ -4021,6 +4021,9 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 // which have to be finalized after checkpoint up to block.
 func (bc *BlockChain) CollectAncestorsAftCpByParents(parents common.HashArray, cpHash common.Hash) (isCpAncestor bool, ancestors types.HeaderMap, unloaded common.HashArray, err error) {
 	cpHeader := bc.GetHeader(cpHash)
+	if cpHeader == nil || cpHeader.Height > 0 && cpHeader.Nr() == 0 {
+		return false, nil, nil, ErrCpNotFinalized
+	}
 	return bc.hc.CollectAncestorsAftCpByParents(parents, cpHeader)
 }
 
