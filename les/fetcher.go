@@ -162,12 +162,7 @@ func newLightFetcher(chain *light.LightChain, peers *serverPeerSet, ulc *ulc, ch
 	heighter := func() uint64 { return chain.GetLastFinalizedHeader().Nr() }
 	dropper := func(id string) { peers.unregister(id) }
 	inserter := func(headers []*types.Header) (int, error) {
-		// Disable PoW checking explicitly if we are running in ulc mode.
-		checkFreq := 1
-		if ulc != nil {
-			checkFreq = 0
-		}
-		return chain.InsertHeaderChain(headers, checkFreq)
+		return chain.InsertHeaderChain(headers)
 	}
 	f := &lightFetcher{
 		ulc:         ulc,
