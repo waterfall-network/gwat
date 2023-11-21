@@ -689,6 +689,9 @@ func TestProcessorApproveCall(t *testing.T) {
 				call(t, v.Caller, v.TokenAddress, nil, approveOp, c.Errs)
 
 				allowanceOp, err := operation.NewAllowanceOperation(wrc20Address, owner, approveAddress)
+				if err != nil {
+					t.Fatal(err)
+				}
 
 				total, err := processor.Allowance(allowanceOp)
 				if err != nil {

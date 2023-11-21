@@ -162,7 +162,7 @@ func (s *storage) Flush() {
 	s.stream.Flush()
 }
 
-//NewFieldEntry creates new FieldEntry from FieldInfo
+// NewFieldEntry creates new FieldEntry from FieldInfo
 func NewFieldEntry(fieldInfo FieldInfo) (FieldEntry, error) {
 	descriptor := fieldInfo.Descriptor()
 	tp := descriptor.ValueProperties().Type()
@@ -233,7 +233,7 @@ type fieldEntry struct {
 	decoder Decoder
 }
 
-//Read reads field value to a pointer
+// Read reads field value to a pointer
 func (f *fieldEntry) Read(stream *StorageStream, toPtr interface{}) error {
 	buf := make([]byte, f.Length())
 	_, err := stream.ReadAt(buf, f.offset)
@@ -244,7 +244,7 @@ func (f *fieldEntry) Read(stream *StorageStream, toPtr interface{}) error {
 	return f.decode(buf, toPtr)
 }
 
-//Write writes field value to stream
+// Write writes field value to stream
 func (f *fieldEntry) Write(stream *StorageStream, val interface{}) error {
 	buf, err := f.encode(val)
 	if err != nil {
@@ -273,7 +273,7 @@ type mapEntry struct {
 	keyDecoder, valueDecoder Decoder
 }
 
-//Read expects pointer to KeyValuePair struct
+// Read expects pointer to KeyValuePair struct
 func (m *mapEntry) Read(s *StorageStream, toPtr interface{}) error {
 	kvPair, ok := toPtr.(*KeyValuePair)
 	if !ok {
@@ -293,7 +293,7 @@ func (m *mapEntry) Read(s *StorageStream, toPtr interface{}) error {
 	return m.decodeValue(res, kvPair.Value())
 }
 
-//Write expects pointer to KeyValuePair struct
+// Write expects pointer to KeyValuePair struct
 func (m *mapEntry) Write(s *StorageStream, val interface{}) error {
 	kvPair, ok := val.(*KeyValuePair)
 	if !ok {
@@ -333,32 +333,32 @@ func (m *mapEntry) decodeValue(buf []byte, ptr interface{}) error {
 func encodeScalar(v interface{}) ([]byte, error) {
 	var err error
 	var buf []byte
-	switch v.(type) {
+	switch v := v.(type) {
 	case bool:
-		if v.(bool) {
+		if v {
 			buf = []byte{1}
 		} else {
 			buf = []byte{0}
 		}
 	case uint8:
-		buf = []byte{v.(uint8)}
+		buf = []byte{v}
 	case uint16:
 		buf = make([]byte, 2)
-		binary.BigEndian.PutUint16(buf, v.(uint16))
+		binary.BigEndian.PutUint16(buf, v)
 	case uint32:
 		buf = make([]byte, 4)
-		binary.BigEndian.PutUint32(buf, v.(uint32))
+		binary.BigEndian.PutUint32(buf, v)
 	case uint64:
 		buf = make([]byte, 8)
-		binary.BigEndian.PutUint64(buf, v.(uint64))
+		binary.BigEndian.PutUint64(buf, v)
 	case int32:
 		buf = make([]byte, 4)
-		binary.BigEndian.PutUint64(buf, uint64(v.(int64)))
+		binary.BigEndian.PutUint32(buf, uint32(v))
 	case int64:
 		buf = make([]byte, 8)
-		binary.BigEndian.PutUint64(buf, uint64(v.(int64)))
+		binary.BigEndian.PutUint64(buf, uint64(v))
 	case string:
-		buf = []byte(v.(string))
+		buf = []byte(v)
 	default:
 		buf, err = encodeUint256(v)
 		if err == nil {
