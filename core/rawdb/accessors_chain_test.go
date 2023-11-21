@@ -87,7 +87,7 @@ func TestBodyStorage(t *testing.T) {
 	WriteBody(db, hash, body)
 	if entry := ReadBody(db, hash); entry == nil {
 		t.Fatalf("Stored body not found")
-	} else if types.DeriveSha(types.Transactions(entry.Transactions), newHasher()) != types.DeriveSha(types.Transactions(body.Transactions), newHasher()) {
+	} else if types.DeriveSha(entry.Transactions, newHasher()) != types.DeriveSha(types.Transactions(body.Transactions), newHasher()) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, body)
 	}
 	if entry := ReadBodyRLP(db, hash); entry == nil {
@@ -140,7 +140,7 @@ func TestBlockStorage(t *testing.T) {
 	}
 	if entry := ReadBody(db, block.Hash()); entry == nil {
 		t.Fatalf("Stored body not found")
-	} else if types.DeriveSha(types.Transactions(entry.Transactions), newHasher()) != types.DeriveSha(block.Transactions(), newHasher()) {
+	} else if types.DeriveSha(entry.Transactions, newHasher()) != types.DeriveSha(block.Transactions(), newHasher()) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, block.Body())
 	}
 	// Delete the block and verify the execution

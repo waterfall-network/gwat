@@ -219,9 +219,15 @@ func (c *Console) initExtensions() error {
 // initAdmin creates additional admin APIs implemented by the bridge.
 func (c *Console) initAdmin(vm *goja.Runtime, bridge *bridge) {
 	if admin := getObject(vm, "admin"); admin != nil {
-		admin.Set("sleepBlocks", jsre.MakeCallback(vm, bridge.SleepBlocks))
-		admin.Set("sleep", jsre.MakeCallback(vm, bridge.Sleep))
-		admin.Set("clearHistory", c.clearHistory)
+		if err := admin.Set("sleepBlocks", jsre.MakeCallback(vm, bridge.SleepBlocks)); err != nil {
+			fmt.Fprintln(os.Stderr, "Error setting sleepBlocks:", err)
+		}
+		if err := admin.Set("sleep", jsre.MakeCallback(vm, bridge.Sleep)); err != nil {
+			fmt.Fprintln(os.Stderr, "Error setting sleep:", err)
+		}
+		if err := admin.Set("clearHistory", c.clearHistory); err != nil {
+			fmt.Fprintln(os.Stderr, "Error setting clearHistory:", err)
+		}
 	}
 }
 
