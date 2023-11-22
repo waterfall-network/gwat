@@ -123,9 +123,6 @@ func (cs *chainSyncer) loop() {
 	for {
 		si := cs.handler.chain.GetSlotInfo()
 		if si != nil {
-			//var op *chainSyncOp
-			if pevt.kind == evtBroadcast {
-			}
 			pevt.kind = evtDefault
 			select {
 			case pevt = <-cs.peerEventCh:

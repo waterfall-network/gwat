@@ -3989,7 +3989,7 @@ func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...Explor
 			_loaded = memo[0][ph].loaded
 			_finalized = memo[0][ph].finalized
 			_graph = memo[0][ph].graph
-			_cache = memo[0]
+			// _cache = memo[0]
 			_err = memo[0][ph].err
 		} else {
 			_unloaded, _loaded, _finalized, _graph, _cache, _err = bc.ExploreChainRecursive(ph, memo[0])

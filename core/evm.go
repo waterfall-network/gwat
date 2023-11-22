@@ -82,28 +82,17 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 		if len(cache) == 0 {
 			cache = append(cache, ref.ParentHashes[0])
 		}
-		//if idx := ref.Nr() - n - 1; idx < uint64(len(cache)) {
-		//	return cache[idx]
-		//}
 
 		// No luck in the cache, but we can start iterating from the last element we already know
 		lastKnownHash := cache[len(cache)-1]
-		//lastKnownNumber := ref.Nr() - uint64(len(cache))
 
-		for {
-			header := chain.GetHeader(lastKnownHash)
-			if header == nil {
-				break
-			}
-			cache = append(cache, header.ParentHashes[0])
-			lastKnownHash = header.ParentHashes[0]
-			return lastKnownHash
-			//lastKnownNumber = header.Nr() - 1
-			//if n == lastKnownNumber {
-			//	return lastKnownHash
-			//}
+		header := chain.GetHeader(lastKnownHash)
+		if header == nil {
+			return common.Hash{}
 		}
-		return common.Hash{}
+		cache = append(cache, header.ParentHashes[0])
+		lastKnownHash = header.ParentHashes[0]
+		return lastKnownHash
 	}
 }
 
