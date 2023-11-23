@@ -696,7 +696,7 @@ func (shm *SlotSpineMap) GetOrderedHashes() *common.HashArray {
 	hashes := make(common.HashArray, 0, len(*shm))
 	//sort by slots
 	slots := common.SorterAscU64{}
-	for sl, _ := range *shm {
+	for sl := range *shm {
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)

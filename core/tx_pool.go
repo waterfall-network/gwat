@@ -805,6 +805,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	estimateGas, err := pool.chain.EstimateGas(msg, head)
+	if err != nil {
+		return err
+	}
 
 	if tx.Gas() < estimateGas && !isValidatorOp {
 		return ErrIntrinsicGas

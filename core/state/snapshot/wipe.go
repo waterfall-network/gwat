@@ -31,6 +31,8 @@ import (
 // and delete all the data associated with the snapshot (accounts, storage,
 // metadata). After all is done, the snapshot range of the database is compacted
 // to free up unused data blocks.
+//
+//nolint:unused
 func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
 	// Wipe the snapshot root marker synchronously
 	if full {

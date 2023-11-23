@@ -10,12 +10,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
-type testSpineCase struct {
-	input          Blocks
-	expectedOutput *Block
-	description    string
-}
-
 type BlockChainMock struct {
 	blocks map[common.Hash]*Block
 }
@@ -280,78 +274,6 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 	}
 
 }
-
-//func TestCalculateSpine(t *testing.T) {
-//	maxHeightExpectedOutput := NewBlock(&Header{Height: 2}, nil, nil, nil)
-//	maxParentHashesLenExpectedOutput := NewBlock(&Header{
-//		Height:       1,
-//		ParentHashes: make(common.HashArray, 2),
-//	}, nil, nil, nil)
-//
-//	cases := []*testSpineCase{
-//		{
-//			input:          Blocks{},
-//			expectedOutput: nil,
-//			description:    "empty blocks slice",
-//		},
-//		{
-//			input:          nil,
-//			expectedOutput: nil,
-//			description:    "nil blocks slice",
-//		},
-//		{
-//			input: Blocks{
-//				NewBlock(&Header{
-//					Height: 1,
-//				}, nil, nil, nil),
-//				maxHeightExpectedOutput,
-//			},
-//			expectedOutput: maxHeightExpectedOutput,
-//			description:    "maxHeight block",
-//		},
-//		{
-//			input: Blocks{
-//				NewBlock(&Header{
-//					Height:       1,
-//					ParentHashes: make(common.HashArray, 1),
-//				}, nil, nil, nil),
-//				maxParentHashesLenExpectedOutput,
-//			},
-//			expectedOutput: maxParentHashesLenExpectedOutput,
-//			description:    "maxParentHashesLen block",
-//		},
-//	}
-//
-//	maxHashBlockCase := &testSpineCase{
-//		input: Blocks{
-//			NewBlock(&Header{
-//				Height: 1,
-//				ParentHashes: common.HashArray{
-//					common.Hash{1},
-//				},
-//			}, nil, nil, nil),
-//			NewBlock(&Header{
-//				Height: 1,
-//				ParentHashes: common.HashArray{
-//					common.Hash{2},
-//				},
-//			}, nil, nil, nil),
-//		},
-//		description: "maxHash block",
-//	}
-//	if maxHashBlockCase.input[0].Hash().String() > maxHashBlockCase.input[1].Hash().String() {
-//		maxHashBlockCase.expectedOutput = maxHashBlockCase.input[0]
-//	} else {
-//		maxHashBlockCase.expectedOutput = maxHashBlockCase.input[1]
-//	}
-//	cases = append(cases, maxHashBlockCase)
-//
-//	for _, testCase := range cases {
-//		if output := CalculateSpine(testCase.input); output != testCase.expectedOutput {
-//			t.Errorf("Failed \"%s\" \n", testCase.description)
-//		}
-//	}
-//}
 
 func TestSortBySlot(t *testing.T) {
 	blocks := Blocks{

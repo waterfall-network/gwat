@@ -378,31 +378,30 @@ func decodeScalar(buf []byte, vPtr interface{}) error {
 		return newBadTypeErr(vPtr)
 	}
 
-	switch vPtr.(type) {
+	switch vPtr := vPtr.(type) {
 	case *bool:
 		if bytes.Compare(buf, []byte{1}) == 0 {
-			*vPtr.(*bool) = true
+			*vPtr = true
 		}
 	case *uint8:
-		*vPtr.(*uint8) = buf[0]
+		*vPtr = buf[0]
 	case *uint16:
-		*vPtr.(*uint16) = binary.BigEndian.Uint16(buf)
+		*vPtr = binary.BigEndian.Uint16(buf)
 	case *uint32:
-		*vPtr.(*uint32) = binary.BigEndian.Uint32(buf)
+		*vPtr = binary.BigEndian.Uint32(buf)
 	case *uint64:
-		*vPtr.(*uint64) = binary.BigEndian.Uint64(buf)
+		*vPtr = binary.BigEndian.Uint64(buf)
 	case *int32:
-		*vPtr.(*int32) = int32(binary.BigEndian.Uint32(buf))
+		*vPtr = int32(binary.BigEndian.Uint32(buf))
 	case *int64:
-		*vPtr.(*int64) = int64(binary.BigEndian.Uint64(buf))
+		*vPtr = int64(binary.BigEndian.Uint64(buf))
 	case *string:
-		*vPtr.(*string) = string(buf)
+		*vPtr = string(buf)
 	default:
 		err := decodeUint256(buf, vPtr)
 		if err == nil {
 			break
 		}
-
 		return newBadTypeErr(vPtr)
 	}
 
@@ -480,7 +479,6 @@ func decodeArray(buf []byte, arrPtr interface{}) error {
 
 			err = decodeScalar(buf[:elemSize], newElem.Interface())
 			if err != nil {
-				arrPtr = nil
 				return err
 			}
 

@@ -14,7 +14,8 @@ run:
     - core/genesis_alloc.go
     - dag/test_models.go
     - token/operation/test_utils.go
-    - .*test.go
+    - cmd/gwat/accountcmd_test.go
+    # - .*test.go
 
 linters:
   disable-all: true
@@ -29,7 +30,7 @@ linters:
     - typecheck
     - unused
     - staticcheck
-    - bidichk
+    # - bidichk
     - durationcheck
     - exportloopref
     - whitespace
@@ -76,3 +77,6 @@ issues:
     - 'SA4010: this result of append is never used, except maybe in other appends'
     - 'ineffectual assignment to home'
     - 'SA4006: this value of `home` is never used'
+    - 'SA1019: package github.com/golang/protobuf/proto is deprecated'
+    - 'SA1019: package golang.org/x/crypto/openpgp is deprecated'
+    - 'SA1019: package golang.org/x/crypto/ripemd160'

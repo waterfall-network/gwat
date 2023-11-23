@@ -214,6 +214,7 @@ func (e *fe2) set(e2 *fe2) *fe2 {
 	return e
 }
 
+//nolint:unused
 func (e *fe2) rand(r io.Reader) (*fe2, error) {
 	a0, err := new(fe).rand(r)
 	if err != nil {

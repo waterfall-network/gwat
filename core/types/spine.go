@@ -44,7 +44,7 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 		plenMap := heightPlenMap[hk]
 		// sort by number of parents
 		plenKeys := make(common.SorterDescU64, 0, len(plenMap))
-		for plk, _ := range plenMap {
+		for plk := range plenMap {
 			plenKeys = append(plenKeys, plk)
 		}
 		sort.Sort(plenKeys)
@@ -53,7 +53,7 @@ func SpineSortBlocks(blocks []*Block) []*Block {
 			hashMap := plenMap[k]
 			// sort by hash
 			hashKeys := make(common.HashArray, 0, len(hashMap))
-			for h, _ := range hashMap {
+			for h := range hashMap {
 				hashKeys = append(hashKeys, h)
 			}
 			hashKeys = hashKeys.Sort()
@@ -175,7 +175,7 @@ func SpineGetDagChain(bc BlockChain, spine *Block) (Blocks, error) {
 	}
 	//sort by slots
 	slots := common.SorterAscU64{}
-	for sl, _ := range blocksBySlot {
+	for sl := range blocksBySlot {
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)

@@ -460,7 +460,7 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 
 func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, error) {
 	dag := common.HashArray{}
-	dagHashes := common.HashArray{}
+	var dagHashes common.HashArray
 	limitReached := false
 	log.Info("Sync handling: start",
 		"baseSpine", query.BaseSpine.Hex(),
