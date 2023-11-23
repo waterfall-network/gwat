@@ -1642,7 +1642,7 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 	}
 	//sort by slots
 	slots := common.SorterAscU64{}
-	for sl, _ := range blocksBySlot {
+	for sl := range blocksBySlot {
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)

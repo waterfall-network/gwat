@@ -655,7 +655,7 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	}
 	//sort by slots
 	slots := common.SorterAscU64{}
-	for sl, _ := range blocksBySlot {
+	for sl := range blocksBySlot {
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)

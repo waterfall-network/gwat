@@ -34,9 +34,9 @@ const (
 )
 
 var (
-	useAVX2 bool
-	useAVX  bool
-	useSSE4 bool
+	useAVX2 bool //nolint:unused
+	useAVX  bool //nolint:unused
+	useSSE4 bool //nolint:unused
 )
 
 var (

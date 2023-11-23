@@ -75,7 +75,7 @@ func CalculateSpines(blocks Blocks, lastFinSlot uint64) (SlotSpineMap, error) {
 	spines := make(SlotSpineMap)
 	//sort by slots
 	slots := common.SorterAscU64{}
-	for sl, _ := range blocksBySlot {
+	for sl := range blocksBySlot {
 		// exclude finalized slots
 		if sl > lastFinSlot {
 			slots = append(slots, sl)

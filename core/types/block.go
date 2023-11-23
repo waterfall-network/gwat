@@ -270,7 +270,7 @@ func (b *Body) ToBytes() ([]byte, error) {
 
 	txsLen := len(txsBytes)
 
-	res := make([]byte, txsLen+uint32Length, txsLen+uint32Length)
+	res := make([]byte, txsLen+uint32Length)
 	copy(res[:uint32Length], common.Uint64ToBytes(uint64(txsLen)))
 	copy(res[uint32Length:], txsBytes)
 
