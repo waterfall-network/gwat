@@ -39,7 +39,6 @@ func NewWithdrawalOperation(
 	}
 
 	return op, nil
-
 }
 
 func (op *withdrawalOperation) MarshalBinary() ([]byte, error) {

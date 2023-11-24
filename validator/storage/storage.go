@@ -72,9 +72,7 @@ func (s *storage) SetValidator(stateDb vm.StateDB, val *Validator) error {
 }
 
 func (s *storage) GetValidator(stateDb vm.StateDB, address common.Address) (*Validator, error) {
-	var valData ValidatorBinary
-
-	valData = stateDb.GetCode(address)
+	var valData ValidatorBinary = stateDb.GetCode(address)
 	if valData == nil {
 		return nil, ErrNoStateValidatorInfo
 	}

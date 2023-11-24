@@ -84,7 +84,6 @@ func (ds *dataSource) Ended() bool {
 }
 
 func Generate(input []byte) randTest {
-
 	var allKeys [][]byte
 	r := newDataSource(input)
 	genKey := func() []byte {

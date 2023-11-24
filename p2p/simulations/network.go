@@ -931,7 +931,6 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 				if !haveSvc {
 					cleanedServices = append(cleanedServices, svc)
 				}
-
 			}
 			snap.Nodes[i].Node.Config.Lifecycles = cleanedServices
 		}

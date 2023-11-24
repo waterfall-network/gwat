@@ -2088,6 +2088,13 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 			tmpTips.Add(bdag)
 		}
 		ancestorsHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, block.CpHash())
+		if err != nil {
+			log.Error("Failed to collect ancestor hashes from tips.",
+				"Function", "CollectAncestorsHashesByTips",
+				"Tips", tmpTips,
+				"Block Checkpoint Hash", block.CpHash().Hex(),
+				"Error Details", err)
+		}
 		bc.AddTips(&types.BlockDAG{
 			Hash:                   block.Hash(),
 			Height:                 block.Height(),
@@ -2410,8 +2417,16 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	}
 
 	haveBlocks, err := bc.HaveEpochBlocks(blockEpoch - 1)
+	if err != nil {
+		log.Error("Block verification error: Failed to determine if the previous epoch contains blocks.",
+			"blockHash", block.Hash().Hex(),
+			"block slot", block.Slot(),
+			"blockEpoch", blockEpoch,
+			"coinbase", block.Coinbase().Hex(),
+		)
+	}
 	if haveBlocks {
-		log.Warn("Empty block verification failed: previous epoch have blocks",
+		log.Warn("Empty block verification failed: previous epoch has blocks",
 			"blockHash", block.Hash().Hex(),
 			"block slot", block.Slot(),
 			"blockEpoch", blockEpoch,
@@ -2624,7 +2639,6 @@ func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
 
 // insertBlocks inserts blocks to chain
 func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string) (int, error) {
-
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil
@@ -3268,7 +3282,6 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 
 // CommitBlockTransactions commits transactions of red blocks.
 func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state.StateDB) (*state.StateDB, []*types.Receipt, []*types.Log, uint64) {
-
 	log.Info("Commit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
@@ -4667,24 +4680,20 @@ func (bc *BlockChain) doCall(msg Message, header *types.Header, tp *token.Proces
 
 // searchValidCheckpoint descending search of the first valid checkpoint
 func (bc *BlockChain) searchValidCheckpoint(fromEpoch uint64) *types.Checkpoint {
-	for ; fromEpoch >= 0; fromEpoch-- {
+	for {
 		cpSpine := rawdb.ReadEpoch(bc.db, fromEpoch)
-		if cpSpine == (common.Hash{}) {
-			if fromEpoch == 0 {
-				return nil
+		if cpSpine != (common.Hash{}) {
+			cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
+			if cp != nil {
+				return cp
 			}
-			continue
 		}
-		cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
-		if cp == nil {
-			if fromEpoch == 0 {
-				return nil
-			}
-			continue
+
+		if fromEpoch == 0 {
+			return nil
 		}
-		return cp
+		fromEpoch--
 	}
-	return nil
 }
 
 // searchBlockFinalizationCp searching for checkpoint of block finalization by number.

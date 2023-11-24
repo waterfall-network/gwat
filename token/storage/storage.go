@@ -317,10 +317,6 @@ func (m *mapEntry) encodeKey(v interface{}) ([]byte, error) {
 	return encode(m.keyEncoder, v)
 }
 
-func (m *mapEntry) decodeKey(buf []byte, ptr interface{}) error {
-	return decode(m.keyDecoder, buf, ptr)
-}
-
 func (m *mapEntry) encodeValue(v interface{}) ([]byte, error) {
 	return encode(m.valueEncoder, v)
 }
@@ -380,7 +376,7 @@ func decodeScalar(buf []byte, vPtr interface{}) error {
 
 	switch vPtr := vPtr.(type) {
 	case *bool:
-		if bytes.Compare(buf, []byte{1}) == 0 {
+		if bytes.Equal(buf, []byte{1}) {
 			*vPtr = true
 		}
 	case *uint8:
@@ -415,9 +411,9 @@ func encodeArray(arr interface{}) ([]byte, error) {
 		return nil, ErrArrayExpected
 	}
 
-	switch arr.(type) {
+	switch arr := arr.(type) {
 	case []byte:
-		return arr.([]byte), nil
+		return arr, nil
 	default:
 		val := reflect.ValueOf(arr)
 		buf := make([]byte, 0, int(tp.Elem().Size())*val.Len())
@@ -447,9 +443,9 @@ func decodeArray(buf []byte, arrPtr interface{}) error {
 	valuePtr := reflect.ValueOf(arrPtr)
 	value := valuePtr.Elem()
 
-	switch arrPtr.(type) {
+	switch arrPtr := arrPtr.(type) {
 	case *[]byte:
-		*arrPtr.(*[]byte) = buf
+		*arrPtr = buf
 		return nil
 	default:
 		tp := reflect.TypeOf(value.Interface())

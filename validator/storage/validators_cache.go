@@ -145,7 +145,6 @@ func (c *ValidatorsCache) delValidator(validator Validator, epoch uint64) {
 	for i, v := range c.allValidatorsCache[epoch] {
 		if v.Address == validator.Address {
 			c.allValidatorsCache[epoch] = append(c.allValidatorsCache[epoch][:i], c.allValidatorsCache[epoch][i+1:]...)
-
 		}
 	}
 }

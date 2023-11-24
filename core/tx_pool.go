@@ -784,16 +784,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	} else {
 		isValidatorOp = tx.To() != nil && pool.chainconfig.ValidatorsStateAddress != nil && *tx.To() == *pool.chainconfig.ValidatorsStateAddress
 	}
-
-	var txData []byte
 	if !isTokenOp {
-		txData = tx.Data()
-	}
-
-	if isValidatorOp {
-		txData = tx.Data()
-		if err := pool.handleValidatorTransaction(txData, from, tx.Value()); err != nil {
-			return err
+		txData := tx.Data()
+		if isValidatorOp {
+			err := pool.handleValidatorTransaction(txData, from, tx.Value())
+			if err != nil {
+				return err
+			}
 		}
 	}
 
