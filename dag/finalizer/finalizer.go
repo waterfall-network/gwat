@@ -378,8 +378,8 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 
 	lfNr := f.bc.GetLastFinalizedNumber()
 	baseHeader := f.bc.GetHeader(*baseSpine)
-	if baseHeader == nil {
-		return spines, baseSpine, nil
+	if baseHeader == nil || baseHeader.Height > 0 && baseHeader.Nr() == 0 {
+		return spines, baseSpine, fmt.Errorf("base spine header not found")
 	}
 
 	curSlot := baseHeader.Slot

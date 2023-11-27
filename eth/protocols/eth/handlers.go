@@ -650,7 +650,7 @@ func getHashesBySlotRange(backend Backend, from, to uint64, limit int, terminalH
 	var limitReached bool
 	si := backend.Chain().GetSlotInfo()
 	hashes := make(common.HashArray, 0, limit)
-	for slot := from; slot < to; slot++ {
+	for slot := from; slot <= to; slot++ {
 		slh := backend.Chain().GetBlockHashesBySlot(slot)
 		if len(slh) > 0 {
 			// if received terminalHash
