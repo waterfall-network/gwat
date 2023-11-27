@@ -29,7 +29,7 @@ import (
 )
 
 func tmpdir(t *testing.T) string {
-	dir, err := os.TempDir("", "geth-test")
+	dir, err := os.MkdirTemp("", "geth-test")
 	if err != nil {
 		t.Fatal(err)
 	}

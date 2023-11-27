@@ -40,7 +40,7 @@ func makeReceipt(addr common.Address) *types.Receipt {
 }
 
 func BenchmarkFilters(b *testing.B) {
-	dir, err := os.TempDir("", "filtertest")
+	dir, err := os.MkdirTemp("", "filtertest")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func BenchmarkFilters(b *testing.B) {
 }
 
 func TestFilters(t *testing.T) {
-	dir, err := os.TempDir("", "filtertest")
+	dir, err := os.MkdirTemp("", "filtertest")
 	if err != nil {
 		t.Fatal(err)
 	}

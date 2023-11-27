@@ -64,7 +64,7 @@ func MatchTests(tests []Test, expr string) []Test {
 // If the report writer is non-nil, a test report is written to it in real time.
 func RunTests(tests []Test, report io.Writer) []Result {
 	if report == nil {
-		report = os.Discard
+		report = io.Discard
 	}
 	results := run(tests, newConsoleOutput(report))
 	fails := CountFailures(results)

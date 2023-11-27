@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -154,7 +155,7 @@ func abigen(c *cli.Context) error {
 		)
 		input := c.GlobalString(abiFlag.Name)
 		if input == "-" {
-			abi, err = os.ReadAll(os.Stdin)
+			abi, err = io.ReadAll(os.Stdin)
 		} else {
 			abi, err = os.ReadFile(input)
 		}

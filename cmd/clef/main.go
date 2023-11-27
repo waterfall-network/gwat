@@ -536,7 +536,7 @@ func ipcEndpoint(ipcPath, datadir string) string {
 	// Resolve names into the data directory full paths otherwise
 	if filepath.Base(ipcPath) == ipcPath {
 		if datadir == "" {
-			return filepath.Join(os.TempDir(), ipcPath)
+			return filepath.Join(os.MkdirTemp(), ipcPath)
 		}
 		return filepath.Join(datadir, ipcPath)
 	}

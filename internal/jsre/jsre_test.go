@@ -40,7 +40,7 @@ func (no *testNativeObjectBinding) TestMethod(call goja.FunctionCall) goja.Value
 }
 
 func newWithTestJS(t *testing.T, testjs string) (*JSRE, string) {
-	dir, err := os.TempDir("", "jsre-test")
+	dir, err := os.MkdirTemp("", "jsre-test")
 	if err != nil {
 		t.Fatal("cannot create temporary directory:", err)
 	}

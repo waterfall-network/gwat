@@ -299,7 +299,7 @@ func testSeedQuery() error {
 }
 
 func TestDBPersistency(t *testing.T) {
-	root, err := os.TempDir("", "nodedb-")
+	root, err := os.MkdirTemp("", "nodedb-")
 	if err != nil {
 		t.Fatalf("failed to create temporary data folder: %v", err)
 	}

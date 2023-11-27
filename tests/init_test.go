@@ -42,7 +42,7 @@ var (
 )
 
 func readJSON(reader io.Reader, value interface{}) error {
-	data, err := os.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return fmt.Errorf("error reading JSON file: %v", err)
 	}

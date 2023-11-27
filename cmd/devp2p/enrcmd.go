@@ -51,7 +51,7 @@ func enrdump(ctx *cli.Context) error {
 		var b []byte
 		var err error
 		if file == "-" {
-			b, err = os.ReadAll(os.Stdin)
+			b, err = io.ReadAll(os.Stdin)
 		} else {
 			b, err = os.ReadFile(file)
 		}

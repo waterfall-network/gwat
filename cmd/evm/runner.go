@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	goruntime "runtime"
@@ -163,7 +164,7 @@ func runCmd(ctx *cli.Context) error {
 			// If - is specified, it means that code comes from stdin
 			if codeFileFlag == "-" {
 				//Try reading from stdin
-				if hexcode, err = os.ReadAll(os.Stdin); err != nil {
+				if hexcode, err = io.ReadAll(os.Stdin); err != nil {
 					fmt.Printf("Could not load code from stdin: %v\n", err)
 					os.Exit(1)
 				}

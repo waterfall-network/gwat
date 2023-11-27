@@ -519,7 +519,7 @@ func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer
 	var db ethdb.Database
 
-	if dir, err := os.TempDir("", "disklayer-test"); err != nil {
+	if dir, err := os.MkdirTemp("", "disklayer-test"); err != nil {
 		t.Fatal(err)
 	} else {
 		defer os.RemoveAll(dir)

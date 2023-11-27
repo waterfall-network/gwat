@@ -421,7 +421,7 @@ func NewAdapter(adapterType string, services adapters.LifecycleConstructors) (ad
 		//	case "socket":
 		//		adapter = adapters.NewSocketAdapter(services)
 	case "exec":
-		baseDir, err0 := os.TempDir("", "les-test")
+		baseDir, err0 := os.MkdirTemp("", "les-test")
 		if err0 != nil {
 			return nil, teardown, err0
 		}
