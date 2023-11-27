@@ -20,8 +20,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/json"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -210,7 +210,7 @@ func TestCallTracerLegacy(t *testing.T) {
 }
 
 func testCallTracer(tracer string, dirPath string, t *testing.T) {
-	files, err := ioutil.ReadDir(filepath.Join("testdata", dirPath))
+	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
@@ -223,7 +223,7 @@ func testCallTracer(tracer string, dirPath string, t *testing.T) {
 			t.Parallel()
 
 			// Call tracer test found, read if from disk
-			blob, err := ioutil.ReadFile(filepath.Join("testdata", dirPath, file.Name()))
+			blob, err := os.ReadFile(filepath.Join("testdata", dirPath, file.Name()))
 			if err != nil {
 				t.Fatalf("failed to read testcase: %v", err)
 			}
@@ -392,7 +392,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 }
 
 func BenchmarkTracers(b *testing.B) {
-	files, err := ioutil.ReadDir(filepath.Join("testdata", "call_tracer"))
+	files, err := os.ReadDir(filepath.Join("testdata", "call_tracer"))
 	if err != nil {
 		b.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
@@ -402,7 +402,7 @@ func BenchmarkTracers(b *testing.B) {
 		}
 		file := file // capture range variable
 		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
-			blob, err := ioutil.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
+			blob, err := os.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
 			if err != nil {
 				b.Fatalf("failed to read testcase: %v", err)
 			}

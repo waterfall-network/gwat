@@ -10,12 +10,13 @@ run:
     - les
     - light
     - cmd/puppeth
+    - tests
   skip-files:
     - core/genesis_alloc.go
     - dag/test_models.go
     - token/operation/test_utils.go
     - cmd/gwat/accountcmd_test.go
-    # - .*test.go
+    - .*test*
 
 linters:
   disable-all: true
@@ -68,15 +69,14 @@ issues:
       text: 'SA1019: "github.com/golang/protobuf/proto" is deprecated: Use the "google.golang.org/protobuf/proto" package instead.'
     - path: accounts/usbwallet/trezor/
       text: 'SA1019: "github.com/golang/protobuf/proto" is deprecated: Use the "google.golang.org/protobuf/proto" package instead.'
+    - path: ethstats/ethstats.go
+      text: 'SA4003: no value of type uint64 is less than 0'
   exclude:
     - 'SA1019: event.TypeMux is deprecated: use Feed'
     - 'SA1019: strings.Title is deprecated'
     - 'SA1019: strings.Title has been deprecated since Go 1.18 and an alternative has been available since Go 1.0: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead.'
     - 'SA1029: should not use built-in type string as key for value'
-    - 'SA1015:'
     - 'SA4010: this result of append is never used, except maybe in other appends'
-    - 'ineffectual assignment to home'
-    - 'SA4006: this value of `home` is never used'
     - 'SA1019: package github.com/golang/protobuf/proto is deprecated'
     - 'SA1019: package golang.org/x/crypto/openpgp is deprecated'
     - 'SA1019: package golang.org/x/crypto/ripemd160'

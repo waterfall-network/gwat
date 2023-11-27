@@ -110,11 +110,6 @@ func (lc *LightChain) GetTransactionReceipt(txHash common.Hash) (rc *types.Recei
 	panic("implement me")
 }
 
-func (lc *LightChain) GetBlock(hash common.Hash) *types.Block {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (lc *LightChain) GetEpoch(epoch uint64) common.Hash {
 	//TODO implement me
 	panic("implement me")
@@ -349,17 +344,18 @@ func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.Raw
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
 func (lc *LightChain) HasBlock(hash common.Hash) bool {
-	blk, _ := lc.GetBlock(NoOdr, hash)
+	blk, _ := lc.GetBlock(hash)
 	return blk != nil
 }
 
 // GetBlock retrieves a block from the database or ODR service by hash and number,
 // caching it if found.
-func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
+func (lc *LightChain) GetBlock(hash common.Hash) (*types.Block, error) {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := lc.blockCache.Get(hash); ok {
 		return block.(*types.Block), nil
 	}
+	ctx := context.Background()
 	block, err := GetBlock(ctx, lc.odr, hash)
 	if err != nil {
 		return nil, err
@@ -372,7 +368,7 @@ func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash) (*types.Bl
 // GetBlockByHash retrieves a block from the database or ODR service by hash,
 // caching it if found.
 func (lc *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return lc.GetBlock(ctx, hash)
+	return lc.GetBlock(hash)
 }
 
 // GetBlockByNumber retrieves a block from the database or ODR service by
@@ -382,7 +378,7 @@ func (lc *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*typ
 	if hash == (common.Hash{}) || err != nil {
 		return nil, err
 	}
-	return lc.GetBlock(ctx, hash)
+	return lc.GetBlock(hash)
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress

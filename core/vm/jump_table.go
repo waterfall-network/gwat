@@ -177,7 +177,6 @@ func newSpuriousDragonInstructionSet() JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].dynamicGas = gasExpEIP158
 	return instructionSet
-
 }
 
 // EIP 150 a.k.a Tangerine Whistle

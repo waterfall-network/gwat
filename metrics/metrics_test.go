@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"sync"
 	"testing"
@@ -13,7 +12,7 @@ const FANOUT = 128
 
 // Stop the compiler from complaining during debugging.
 var (
-	_ = ioutil.Discard
+	_ = os.Discard
 	_ = log.LstdFlags
 )
 
@@ -78,7 +77,7 @@ func BenchmarkMetrics(b *testing.B) {
 					//log.Println("done Write")
 					return
 				default:
-					WriteOnce(r, ioutil.Discard)
+					WriteOnce(r, os.Discard)
 				}
 			}
 		}()

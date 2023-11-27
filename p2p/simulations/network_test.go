@@ -36,7 +36,6 @@ import (
 // Tests that a created snapshot with a minimal service only contains the expected connections
 // and that a network when loaded with this snapshot only contains those same connections
 func TestSnapshot(t *testing.T) {
-
 	// PART I
 	// create snapshot from ring network
 
@@ -204,7 +203,6 @@ OuterTwo:
 			t.Fatal(ctx.Err())
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
-
 				// fail on any disconnect
 				if !ev.Conn.Up {
 					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)

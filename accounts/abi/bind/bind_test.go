@@ -18,7 +18,6 @@ package bind
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1923,7 +1922,7 @@ func TestGolangBindings(t *testing.T) {
 		t.Skip("go sdk not found for testing")
 	}
 	// Create a temporary workspace for the test suite
-	ws, err := ioutil.TempDir("", "binding-test")
+	ws, err := os.TempDir("", "binding-test")
 	if err != nil {
 		t.Fatalf("failed to create temporary workspace: %v", err)
 	}
@@ -1946,7 +1945,7 @@ func TestGolangBindings(t *testing.T) {
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
-		if err = ioutil.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+".go"), []byte(bind), 0600); err != nil {
+		if err = os.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+".go"), []byte(bind), 0600); err != nil {
 			t.Fatalf("test %d: failed to write binding: %v", i, err)
 		}
 		// Generate the test file with the injected test code
@@ -1962,7 +1961,7 @@ func TestGolangBindings(t *testing.T) {
 				%s
 			}
 		`, tt.imports, tt.name, tt.tester)
-		if err := ioutil.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
 			t.Fatalf("test %d: failed to write tests: %v", i, err)
 		}
 	}

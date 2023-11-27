@@ -234,7 +234,6 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				if res.Sub(balance, big.NewInt(1)).Cmp(balanceAfter) != 0 {
 					t.Fatal()
 				}
-
 			},
 		},
 		{
@@ -436,7 +435,6 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 			c.Fn(&c, &common.Address{})
 		})
 	}
-
 }
 
 func TestProcessorBurnOperationCall(t *testing.T) {

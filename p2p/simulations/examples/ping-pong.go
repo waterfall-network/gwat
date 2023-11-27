@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"sync/atomic"
@@ -63,7 +62,7 @@ func main() {
 		adapter = adapters.NewSimAdapter(services)
 
 	case "exec":
-		tmpdir, err := ioutil.TempDir("", "p2p-example")
+		tmpdir, err := os.TempDir("", "p2p-example")
 		if err != nil {
 			log.Crit("error creating temp dir", "err", err)
 		}
@@ -156,7 +155,7 @@ func (p *pingPongService) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 				errC <- err
 				return
 			}
-			payload, err := ioutil.ReadAll(msg.Payload)
+			payload, err := os.ReadAll(msg.Payload)
 			if err != nil {
 				errC <- err
 				return

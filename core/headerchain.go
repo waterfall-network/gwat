@@ -834,7 +834,6 @@ type CollectAncestorsResult struct {
 	isCpAncestor bool
 	ancestors    types.HeaderMap
 	unloaded     common.HashArray
-	cache        CollectAncestorsResultMap
 	err          error
 }
 type CollectAncestorsResultMap map[common.Hash]*CollectAncestorsResult

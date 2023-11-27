@@ -18,7 +18,6 @@ package graphql
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net/http"
 	"strings"
@@ -38,7 +37,7 @@ import (
 )
 
 func TestBuildSchema(t *testing.T) {
-	ddir, err := ioutil.TempDir("", "graphql-buildschema")
+	ddir, err := os.TempDir("", "graphql-buildschema")
 	if err != nil {
 		t.Fatalf("failed to create temporary datadir: %v", err)
 	}
@@ -146,7 +145,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := os.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
 		}
@@ -182,7 +181,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := os.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
 		}

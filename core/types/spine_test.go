@@ -272,7 +272,6 @@ func TestCalculateOptimisticCandidates(t *testing.T) {
 			testutils.AssertEqual(t, testCase.expectedBlocks, candidates)
 		})
 	}
-
 }
 
 func TestSortBySlot(t *testing.T) {

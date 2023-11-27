@@ -37,7 +37,7 @@ func NewCache() *ValidatorsCache {
 	return &ValidatorsCache{
 		allValidatorsCache:            make(map[uint64][]Validator),
 		subnetValidatorsCache:         make(map[uint64]map[uint64][]common.Address),
-		shuffledValidatorsCache:       make(map[uint64][][]common.Address, 0),
+		shuffledValidatorsCache:       make(map[uint64][][]common.Address),
 		shuffledSubnetValidatorsCache: make(map[uint64]map[uint64][][]common.Address),
 		allMu:                         new(sync.Mutex),
 		subnetMu:                      new(sync.Mutex),

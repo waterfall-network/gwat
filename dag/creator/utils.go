@@ -2,7 +2,7 @@ package creator
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 
@@ -107,7 +107,7 @@ func unlockAccount(ks *keystore.KeyStore, address string, pos int, passwords []s
 
 // MakePasswordList reads password lines from the file specified by the global --password flag.
 func makePasswordList(path string) []string {
-	text, err := ioutil.ReadFile(path)
+	text, err := os.ReadFile(path)
 	if err != nil {
 		log.Error("Failed to read password file", "error", err)
 		return nil

@@ -97,7 +97,6 @@ func TestSwapOrNot(t *testing.T) {
 			if !reflect.DeepEqual(input, test.expectedOutput) {
 				t.Errorf("expected output: %v, got: %v", test.expectedOutput, input)
 			}
-
 		})
 	}
 }

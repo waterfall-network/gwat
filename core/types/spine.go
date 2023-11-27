@@ -196,7 +196,6 @@ func SpineGetDagChain(bc BlockChain, spine *Block) (Blocks, error) {
 			err = fmt.Errorf("bad sequence")
 			log.Error("☠ Calculate dag chain failed (bad sequence)", "err", err)
 			return nil, err
-
 		}
 	}
 	return orderedBlocks, nil

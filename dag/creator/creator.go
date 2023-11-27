@@ -621,7 +621,6 @@ func (c *Creator) create(header *types.Header, update bool) {
 	if update {
 		c.updateSnapshot(header)
 	}
-	return
 }
 
 // isSyncing returns tru while sync pocess
