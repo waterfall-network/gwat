@@ -557,40 +557,6 @@ func (d *Downloader) getMode() SyncMode {
 	return SyncMode(atomic.LoadUint32(&d.mode))
 }
 
-// syncWithPeer starts a block synchronization based on the hash chain from the
-// specified peer and head hash.
-// Deprecated
-func (d *Downloader) syncWithPeer(p *peerConnection, dag common.HashArray) (err error) {
-	d.mux.Post(StartEvent{})
-	defer func() {
-		// reset on error
-		if err != nil {
-			d.mux.Post(FailedEvent{err})
-		} else {
-			latest := d.lightchain.GetLastFinalizedHeader()
-			d.mux.Post(DoneEvent{latest})
-		}
-	}()
-	if p.version < eth.ETH66 {
-		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, eth.ETH66)
-	}
-	mode := d.getMode()
-
-	defer func(start time.Time) {
-		log.Debug("Sync terminated", "elapsed", common.PrettyDuration(time.Since(start)))
-	}(time.Now())
-
-	log.Info("Synchronising with the network", "peer", p.id, "eth", p.version, "mode", mode, "dag", dag)
-
-	// if remote peer has unknown dag blocks only
-	// sync such blocks only
-	if err = d.syncWithPeerUnknownDagBlocks(p, dag); err != nil {
-		log.Error("Sync of unknown dag blocks failed", "err", err)
-		return err
-	}
-	return nil
-}
-
 // syncWithPeerUnknownDagBlocks if remote peer has unknown dag blocks only sync such blocks only
 func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.HashArray) (err error) {
 	// Make sure only one goroutine is ever allowed past this point at once
@@ -846,7 +812,6 @@ func (d *Downloader) fetchParts(
 	setIdle func(*peerConnection, int, time.Time),
 	kind string,
 ) error {
-
 	// Create a ticker to detect expired retrieval tasks
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -1015,22 +980,6 @@ func (d *Downloader) fetchParts(
 	}
 }
 
-// processFullSyncContent takes fetch results from the queue and imports them into the chain.
-func (d *Downloader) processFullSyncContent() error {
-	for {
-		results := d.queue.Results(true)
-		if len(results) == 0 {
-			return nil
-		}
-		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
-		}
-		if err := d.importBlockResults(results); err != nil {
-			return err
-		}
-	}
-}
-
 func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	// Check for any early termination requests
 	if len(results) == 0 {
@@ -1066,210 +1015,6 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	} else {
 		lastFinNr := d.blockchain.GetLastFinalizedNumber()
 		log.Info("Synchronised part of finalized chain", "mode", d.mode, "lastFinNr", lastFinNr)
-	}
-	return nil
-}
-
-// processFastSyncContent takes fetch results from the queue and writes them to the
-// database. It also controls the synchronisation of state nodes of the pivot block.
-func (d *Downloader) processFastSyncContent() error {
-	// Start syncing state of the reported head block. This should get us most of
-	// the state of the pivot block.
-	d.pivotLock.RLock()
-	sync := d.syncState(d.pivotHeader.Root)
-	d.pivotLock.RUnlock()
-
-	defer func() {
-		// The `sync` object is replaced every time the pivot moves. We need to
-		// defer close the very last active one, hence the lazy evaluation vs.
-		// calling defer sync.Cancel() !!!
-		sync.Cancel()
-	}()
-
-	closeOnErr := func(s *stateSync) {
-		if err := s.Wait(); err != nil && err != errCancelStateFetch && err != errCanceled && err != snap.ErrCancelled {
-			d.queue.Close() // wake up Results
-		}
-	}
-	go closeOnErr(sync)
-
-	// To cater for moving pivot points, track the pivot block and subsequently
-	// accumulated download results separately.
-	var (
-		oldPivot *fetchResult   // Locked in pivot block, might change eventually
-		oldTail  []*fetchResult // Downloaded content after the pivot
-	)
-	for {
-		// Wait for the next batch of downloaded data to be available, and if the pivot
-		// block became stale, move the goalpost
-		results := d.queue.Results(oldPivot == nil) // Block if we're not monitoring pivot staleness
-		if len(results) == 0 {
-			// If pivot sync is done, stop
-			if oldPivot == nil {
-				return sync.Cancel()
-			}
-			// If sync failed, stop
-			select {
-			case <-d.cancelCh:
-				sync.Cancel()
-				return errCanceled
-			default:
-			}
-		}
-		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
-		}
-		// If we haven't downloaded the pivot block yet, check pivot staleness
-		// notifications from the header downloader
-		d.pivotLock.RLock()
-		pivot := d.pivotHeader
-		d.pivotLock.RUnlock()
-
-		if oldPivot == nil {
-			if pivot.Root != sync.root {
-				sync.Cancel()
-				sync = d.syncState(pivot.Root)
-
-				go closeOnErr(sync)
-			}
-		} else {
-			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
-		}
-		// Split around the pivot block and process the two sides via fast/full sync
-		if atomic.LoadInt32(&d.committed) == 0 {
-			latest := results[len(results)-1].Header
-			// If the height is above the pivot block by 2 sets, it means the pivot
-			// become stale in the network and it was garbage collected, move to a
-			// new pivot.
-			//
-			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those
-			// need to be taken into account, otherwise we're detecting the pivot move
-			// late and will drop peers due to unavailable state!!!
-			if height := *latest.Number; height >= *pivot.Number+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				log.Warn("Pivot became stale, moving", "old", pivot.Nr(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
-				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
-
-				d.pivotLock.Lock()
-				d.pivotHeader = pivot
-				d.pivotLock.Unlock()
-
-				// Write out the pivot into the database so a rollback beyond it will
-				// reenable fast sync
-				rawdb.WriteLastPivotNumber(d.stateDB, *pivot.Number)
-			}
-		}
-		P, beforeP, afterP := splitAroundPivot(*pivot.Number, results)
-		if err := d.commitFastSyncData(beforeP, sync); err != nil {
-			return err
-		}
-		if P != nil {
-			// If new pivot block found, cancel old state retrieval and restart
-			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header.Root)
-
-				go closeOnErr(sync)
-				oldPivot = P
-			}
-			// Wait for completion, occasionally checking for pivot staleness
-			select {
-			case <-sync.done:
-				if sync.err != nil {
-					return sync.err
-				}
-				if err := d.commitPivotBlock(P); err != nil {
-					return err
-				}
-				oldPivot = nil
-
-			case <-time.After(time.Second):
-				oldTail = afterP
-				continue
-			}
-		}
-		// Fast sync done, pivot commit done, full import
-		if err := d.importBlockResults(afterP); err != nil {
-			return err
-		}
-	}
-}
-
-func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
-	if len(results) == 0 {
-		return nil, nil, nil
-	}
-	if lastNum := *results[len(results)-1].Header.Number; lastNum < pivot {
-		// the pivot is somewhere in the future
-		return nil, results, nil
-	}
-	// This can also be optimized, but only happens very seldom
-	for _, result := range results {
-		num := *result.Header.Number
-		switch {
-		case num < pivot:
-			before = append(before, result)
-		case num == pivot:
-			p = result
-		default:
-			after = append(after, result)
-		}
-	}
-	return p, before, after
-}
-
-func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *stateSync) error {
-	// Check for any early termination requests
-	if len(results) == 0 {
-		return nil
-	}
-	select {
-	case <-d.quitCh:
-		return errCancelContentProcessing
-	case <-stateSync.done:
-		if err := stateSync.Wait(); err != nil {
-			return err
-		}
-	default:
-	}
-	// Retrieve the a batch of results to import
-	first, last := results[0].Header, results[len(results)-1].Header
-	log.Debug("Inserting fast-sync blocks", "items", len(results),
-		"firstnum", first.Nr(), "firsthash", first.Hash(),
-		"lastnumn", last.Nr(), "lasthash", last.Hash(),
-	)
-	blocks := make([]*types.Block, len(results))
-	receipts := make([]types.Receipts, len(results))
-	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions)
-		receipts[i] = result.Receipts
-	}
-	if index, err := d.blockchain.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
-		log.Error("Downloaded item processing failed", "number", results[index].Header.Nr(), "hash", results[index].Header.Hash().Hex(), "err", err)
-		return fmt.Errorf("%w: %v", errInvalidChain, err)
-	}
-	return nil
-}
-
-func (d *Downloader) commitPivotBlock(result *fetchResult) error {
-	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions)
-	log.Debug("Committing fast sync pivot as new head", "number", block.Nr(), "hash", block.Hash().Hex())
-
-	// Commit the pivot block as the new head, will require full sync from here on
-	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
-		return err
-	}
-	if err := d.blockchain.FastSyncCommitHead(block.Hash()); err != nil {
-		return err
-	}
-	atomic.StoreInt32(&d.committed, 1)
-
-	// If we had a bloom filter for the state sync, deallocate it now. Note, we only
-	// deallocate internally, but keep the empty wrapper. This ensures that if we do
-	// a rollback after committing the pivot and restarting fast sync, we don't end
-	// up using a nil bloom. Empty bloom is fine, it just returns that it does not
-	// have the info we need, so reach down to the database instead.
-	if d.stateBloom != nil {
-		d.stateBloom.Close()
 	}
 	return nil
 }
@@ -1348,66 +1093,6 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 		return nil
 	case <-cancel:
 		return errNoSyncActive
-	}
-}
-
-// fetchDagHashesBySlots retrieves the dag chain hashes by slot range.
-func (d *Downloader) fetchDagHashesBySlots(p *peerConnection, from, to uint64) (dag common.HashArray, err error) {
-	//slots limit 1024
-	slotsLimit := eth.LimitDagHashes / d.lightchain.Config().ValidatorsPerSlot
-	if to-from > slotsLimit {
-		return nil, errDataSizeLimitExceeded
-	}
-	p.log.Info("Retrieving remote dag hashes by slot: start", "from", from, "to", to)
-
-	//multi peers sync support
-	if !d.isPeerSync(p.id) {
-		d.setPeerSync(p.id)
-		defer d.resetPeerSync(p.id)
-	}
-	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
-
-	err = p.peer.RequestHashesBySlots(from, to)
-	if err != nil {
-		return nil, err
-	}
-
-	ttl := d.peers.rates.TargetTimeout()
-	timeout := time.After(ttl)
-
-	for {
-		if err != nil {
-			log.Error("Sync: error while handling peer", "err", err, "peer", p.id, "fn", "fetchDagHashesBySlots")
-		}
-		err = nil
-		select {
-		case <-d.cancelCh:
-			return nil, errCanceled
-		case packet := <-d.dagCh:
-			err = d.redirectPacketToSyncPeerChan(packet, dagCh)
-		case packet := <-d.headerCh:
-			err = d.redirectPacketToSyncPeerChan(packet, headerCh)
-		case packet := <-d.bodyCh:
-			err = d.redirectPacketToSyncPeerChan(packet, bodyCh)
-		case packet := <-d.receiptCh:
-			err = d.redirectPacketToSyncPeerChan(packet, receiptCh)
-		case packet := <-peerCh:
-			// handle redirected packet at peer chan
-			log.Info("Sync: dag by slots: received packet", "packet.peer", packet.PeerId(), "peer", p.id)
-			// Discard anything not from the origin peer
-			if packet.PeerId() != p.id {
-				log.Error("Sync: dag by slots: received from incorrect peer", "packet.peer", packet.PeerId(), "peer", p.id)
-				break
-			}
-			dag = packet.(*dagPack).dag
-			if len(dag) == 0 {
-				log.Info("Sync: No block hashes found for provided slots", "from:", from, "to:", to)
-			}
-			return dag, err
-		case <-timeout:
-			p.log.Debug("Waiting for dag timed out", "elapsed", ttl)
-			return nil, errTimeout
-		}
 	}
 }
 
@@ -2063,113 +1748,6 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 	return lastHash, err
 }
 
-// peerSyncDagChainHeadBySlots downloads and set on current node not finalized chain from remote peer.
-func (d *Downloader) peerSyncDagChainHeadBySlots(p *peerConnection, baseSpine common.Hash) (fullySynced bool, err error) {
-	defer func(ts time.Time) {
-		log.Info("^^^^^^^^^^^^ TIME",
-			"elapsed", common.PrettyDuration(time.Since(ts)),
-			"func:", "peerSyncDagChainHeadBySlots",
-		)
-	}(time.Now())
-
-	baseHeader := d.lightchain.GetHeaderByHash(baseSpine)
-	si := d.lightchain.GetSlotInfo()
-
-	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
-
-	p.log.Info("Sync by slots: chunking",
-		"CurrSlot", si.CurrentSlot(),
-		"base.Slot", baseHeader.Slot,
-		"baseSpine", baseSpine.Hex(),
-	)
-
-	d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
-	for from := baseHeader.Slot; from <= si.CurrentSlot(); {
-		to := from + d.slotRangeLimit()
-		if err = d.syncBySlots(p, from, to); err != nil {
-			p.log.Error("Sync by slots: error", "err", err, "from", from, "to", to)
-			return false, err
-		}
-		from = to
-	}
-	return true, nil
-}
-
-func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
-	var (
-		remoteHashes common.HashArray
-		err          error
-	)
-
-	defer func(ts time.Time) {
-		log.Info("^^^^^^^^^^^^ TIME",
-			"elapsed", common.PrettyDuration(time.Since(ts)),
-			"slots", to-from,
-			"len(hashes)", len(remoteHashes),
-			"func:", "syncBySlots",
-		)
-	}(time.Now())
-
-	p.log.Info("Sync by slots: start", "from", from, "to", to)
-	// fetch dag hashes
-	remoteHashes, err = d.fetchDagHashesBySlots(p, from, to)
-	if err != nil {
-		p.log.Error("Sync by slots: error 0", "err", err, "from", from, "to", to)
-		return err
-	}
-
-	// filter existed blocks
-	dag := make(common.HashArray, 0, len(remoteHashes))
-	dagBlocks := d.blockchain.GetBlocksByHashes(remoteHashes)
-	for h, b := range dagBlocks {
-		if b == nil && h != (common.Hash{}) {
-			dag = append(dag, h)
-		}
-	}
-
-	if len(dag) == 0 {
-		return nil
-	}
-
-	log.Info("Sync by slots: dag hashes retrieved", "dag", len(dag))
-
-	headers, err := d.fetchDagHeaders(p, dag)
-	log.Info("Sync by slots: dag headers retrieved", "count", len(headers), "headers", len(headers), "err", err)
-	if err != nil {
-		p.log.Error("Sync by slots: error 2", "err", err, "from", from, "to", to)
-		return err
-	}
-	// request bodies for retrieved headers only
-	dag = make(common.HashArray, 0, len(headers))
-	for _, hdr := range headers {
-		if hdr != nil {
-			dag = append(dag, hdr.Hash())
-		}
-	}
-	if len(dag) == 0 {
-		return nil
-	}
-	txsMap, err := d.fetchDagTxs(p, dag)
-	log.Info("Sync by slots: dag transactions retrieved", "count", len(txsMap), "txs", len(txsMap), "err", err)
-	if err != nil {
-		p.log.Error("Sync by slots: error 3", "err", err, "from", from, "to", to)
-		return err
-	}
-
-	blocks := make(types.Blocks, len(headers), len(dagBlocks))
-	for i, header := range headers {
-		txs := txsMap[header.Hash()]
-		block := types.NewBlockWithHeader(header).WithBody(txs)
-		blocks[i] = block
-	}
-
-	if bl, err := d.blockchain.WriteSyncBlocks(blocks, true); err != nil {
-		log.Error("Sync by slots: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
-		return err
-	}
-	return nil
-}
-
 func (d *Downloader) multiPeersHeadSync(baseSpine common.Hash, spines common.HashArray) error {
 	var err error
 	if d.Synchronising() {
@@ -2256,7 +1834,6 @@ func (d *Downloader) multiPeersHeadSync(baseSpine common.Hash, spines common.Has
 	defer d.multiPeerReset()
 
 	var wg sync.WaitGroup // Step 2: Create a WaitGroup instance
-	doneChan := make(chan struct{}, 1)
 	sem := make(chan struct{}, MaxPeerCon)
 	for i := 0; i < MaxPeerCon; i++ {
 		sem <- struct{}{}
@@ -2285,28 +1862,27 @@ Loop:
 			d.setPeerSync(con.id)
 
 			wg.Add(1)
-			go func(con *peerConnection) {
-				ii := i
+			go func(i int, con *peerConnection) {
 				defer d.resetPeerSync(con.id)
 				defer wg.Done()
 				if err = d.multiPeerGetHashes(con, baseSpine, spines); err != nil {
 					if errors.Is(err, errTimeout) {
-						log.Warn("Sync head failed: timed out", "i", ii, "peer", con.id, "err", err)
+						log.Warn("Sync head failed: timed out", "i", i, "peer", con.id, "err", err)
 					}
 					if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || //errors.Is(err, errTimeout) ||
 						errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
 						errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
-						log.Warn("Sync head failed, dropping peer", "i", ii, "peer", con.id, "err", err)
+						log.Warn("Sync head failed, dropping peer", "i", i, "peer", con.id, "err", err)
 						if d.dropPeer == nil {
 							// The dropPeer method is nil when `--copydb` is used for a local copy.
 							// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
 							log.Warn("Sync head: downloader wants to drop peer, but peerdrop-function is not set", "peer", con.id)
 						} else {
-							log.Warn("Sync head failed, dropping peer", "i", ii, "peer", con.id)
+							log.Warn("Sync head failed, dropping peer", "i", i, "peer", con.id)
 							d.dropPeer(con.id)
 						}
 					}
-					log.Info("Sync head: finished peer", "i", ii, "peer", con.id)
+					log.Info("Sync head: finished peer", "i", i, "peer", con.id)
 					sem <- struct{}{}
 					return
 				} else {
@@ -2315,29 +1891,24 @@ Loop:
 						cancel()
 					}
 				}
-			}(con)
+			}(i, con)
 		}
 	}
 	wg.Wait()
-	doneChan <- struct{}{}
 	log.Info("Sync head: hashes retrieved", "dag", d.syncPeerHashes)
 
 	// single peer sync
-	for {
-		select {
-		case <-doneChan:
-			for pid, dag := range d.syncPeerHashes {
-				con := d.peers.Peer(pid)
-				err = d.syncWithPeerUnknownDagBlocks(con, dag)
-				if err != nil {
-					log.Error("Sync head: block fetching failed", "err", err, "peer", pid, "blocks", dag)
-				}
-			}
-			log.Info("Sync head:", "dag", d.syncPeerHashes)
-			cancel()
-			return nil
+
+	for pid, dag := range d.syncPeerHashes {
+		con := d.peers.Peer(pid)
+		err = d.syncWithPeerUnknownDagBlocks(con, dag)
+		if err != nil {
+			log.Error("Sync head: block fetching failed", "err", err, "peer", pid, "blocks", dag)
 		}
 	}
+	log.Info("Sync head:", "dag", d.syncPeerHashes)
+	cancel()
+	return nil
 }
 
 // multiPeerSyncDagChainHeadBySlots downloads and set on current node unfinalized chain from remote peer.

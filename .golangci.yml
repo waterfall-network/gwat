@@ -80,3 +80,4 @@ issues:
     - 'SA1019: package github.com/golang/protobuf/proto is deprecated'
     - 'SA1019: package golang.org/x/crypto/openpgp is deprecated'
     - 'SA1019: package golang.org/x/crypto/ripemd160'
+    - 'SA1015: using time.Tick leaks the underlying ticker'

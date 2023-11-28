@@ -566,7 +566,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 }
 
 type logEntry struct {
-	name string
+	// name string
 	//entryType string
 	indexed bool
 	data    []byte

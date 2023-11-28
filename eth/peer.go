@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"sync"
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -40,9 +39,7 @@ type ethPeer struct {
 	*eth.Peer
 	snapExt *snapPeer // Satellite `snap` connection
 
-	syncDrop *time.Timer   // Connection dropper if `eth` sync progress isn't validated in time
-	snapWait chan struct{} // Notification channel for snap connections
-	lock     sync.RWMutex  // Mutex protecting the internal fields
+	syncDrop *time.Timer // Connection dropper if `eth` sync progress isn't validated in time
 }
 
 // info gathers and returns some `eth` protocol metadata known about a peer.

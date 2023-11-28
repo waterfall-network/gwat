@@ -92,8 +92,7 @@ var (
 )
 
 var (
-	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
-	statsReportInterval = 8 * time.Second // Time interval to report transaction pool stats
+	evictionInterval = time.Minute // Time interval to check for evictable transactions
 )
 
 var (
@@ -479,29 +478,6 @@ func (pool *TxPool) loop() {
 				} else {
 					pool.moveToProcessingAccelerated(txs)
 				}
-
-				//for _, tx := range txs.Transactions {
-				//	// while sync - just removing tx from pool
-				//	if syncMode {
-				//		pool.removeTx(tx.Hash(), true)
-				//		//pool.removeProcessedTx(tx)
-				//	} else {
-				//		//tStart := time.Now()
-				//		param := &types.TransactionBlocks{
-				//			Transaction:  tx,
-				//			BlocksHashes: common.HashArray{txs.BlockHash},
-				//		}
-				//		//log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing cycle 0",
-				//		//	"elapsed", common.PrettyDuration(time.Since(tStart)),
-				//		//	"func:", "moveToProcessing",
-				//		//)
-				//		pool.moveToProcessing(param)
-				//		//log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing cycle 1",
-				//		//	"elapsed", common.PrettyDuration(time.Since(tStart)),
-				//		//	"func:", "moveToProcessing",
-				//		//)
-				//	}
-				//}
 			}()
 
 		case txs := <-pool.rmTxCh:
@@ -518,7 +494,6 @@ func (pool *TxPool) loop() {
 				defer pool.mu.Unlock()
 				for _, tx := range txs {
 					pool.removeTx(tx.Hash(), true)
-					//pool.removeProcessedTx(tx)
 				}
 			}()
 		}
@@ -1551,50 +1526,6 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 		// Reduce the pending counter
 		pendingGauge.Dec(int64(1))
 		return
-	}
-}
-
-func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
-	txNonce := tx.Nonce()
-
-	addr, _ := types.Sender(pool.signer, tx)
-
-	if pending := pool.pending[addr]; pending != nil {
-		pendingLteNonce := pending.Forward(txNonce + 1)
-		for _, t := range pendingLteNonce {
-			pending.Delete(t)
-		}
-		// If no more pending transactions are left, remove the list
-		if pending.Empty() {
-			delete(pool.pending, addr)
-		}
-		// Reduce the pending counter
-		pendingGauge.Dec(int64(1))
-	}
-
-	if queue := pool.queue[addr]; queue != nil {
-		queueLteNonce := queue.Forward(txNonce + 1)
-		for _, t := range queueLteNonce {
-			queue.Delete(t)
-		}
-		// If no more queue transactions are left, remove the list
-		if queue.Empty() {
-			delete(pool.queue, addr)
-			delete(pool.beats, addr)
-		}
-		// Reduce the queue counter
-		queuedGauge.Dec(1)
-	}
-
-	if processing := pool.processing[addr]; processing != nil {
-		processingLteNonce := processing.Forward(txNonce + 1)
-		for _, t := range processingLteNonce {
-			processing.Delete(t)
-		}
-		// If no more processing transactions are left, remove the list
-		if processing.Empty() {
-			delete(pool.processing, addr)
-		}
 	}
 }
 

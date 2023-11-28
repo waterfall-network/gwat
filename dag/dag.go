@@ -642,6 +642,9 @@ func (d *Dag) workLoop() {
 			}
 
 			endTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochEnd(d.bc.GetEraInfo().ToEpoch())
+			if err != nil {
+				log.Error("Error calculating end transition slot", "error", err)
+			}
 
 			log.Info("New slot",
 				"slot", slot,
@@ -783,9 +786,5 @@ func (d *Dag) resetCheckpoint() {
 
 // isSlotLocked compare incoming epoch/slot with the latest epoch/slot of chain.
 func (d *Dag) isSlotLocked(slot uint64) bool {
-	if slot <= d.bc.GetLastFinalizedHeader().Slot {
-		return true
-	}
-
-	return false
+	return slot <= d.bc.GetLastFinalizedHeader().Slot
 }

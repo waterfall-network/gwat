@@ -871,7 +871,6 @@ func (q *queue) deliver(id string,
 	validate func(index int, header *types.Header) error,
 	reconstruct func(index int, result *fetchResult),
 ) (int, error) {
-
 	// Short circuit if the data was never requested
 	request := pendPool[id]
 	if request == nil {
