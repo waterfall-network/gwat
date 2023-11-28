@@ -7,10 +7,10 @@ run:
   #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
   skip-dirs-use-default: true
   skip-dirs:
-    - les
     - light
     - cmd/puppeth
     - tests
+    - crypto/bls12381 # todo: lint after test
   skip-files:
     - core/genesis_alloc.go
     - dag/test_models.go

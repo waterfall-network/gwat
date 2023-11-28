@@ -88,7 +88,6 @@ var (
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errNoSyncActive            = errors.New("no sync active")
 	errTooOld                  = errors.New("peer's protocol version too old")
-	errNoAncestorFound         = errors.New("no common ancestor found")
 	errDataSizeLimitExceeded   = errors.New("data size limit exceeded")
 	errSyncPeerNotFound        = errors.New("sync peer not found")
 )
@@ -98,7 +97,6 @@ type Downloader struct {
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
 	checkpoint uint64   // Checkpoint block number to enforce head against (e.g. fast sync)
-	genesis    uint64   // Genesis block number to limit sync to (e.g. light client CHT)
 	queue      *queue   // Scheduler for selecting the hashes to download
 	peers      *peerSet // Set of active peers from which download can proceed
 
@@ -721,56 +719,6 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 	return filled, proced, err
 }
 
-// fetchBodies iteratively downloads the scheduled block bodies, taking any
-// available peers, reserving a chunk of blocks for each, waiting for delivery
-// and also periodically checking for timeouts.
-func (d *Downloader) fetchBodies(from uint64) error {
-	log.Debug("Downloading block bodies", "origin", from)
-
-	var (
-		deliver = func(packet dataPack) (int, error) {
-			pack := packet.(*bodyPack)
-			return d.queue.DeliverBodies(pack.peerID, pack.transactions)
-		}
-		expire   = func() map[string]int { return d.queue.ExpireBodies(d.peers.rates.TargetTimeout()) }
-		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchBodies(req) }
-		capacity = func(p *peerConnection) int { return p.BlockCapacity(d.peers.rates.TargetRoundTrip()) }
-		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) { p.SetBodiesIdle(accepted, deliveryTime) }
-	)
-	err := d.fetchParts(d.bodyCh, deliver, d.bodyWakeCh, expire,
-		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ReserveBodies,
-		d.bodyFetchHook, fetch, d.queue.CancelBodies, capacity, d.peers.BodyIdlePeers, setIdle, "bodies")
-
-	log.Debug("Block body download terminated", "err", err)
-	return err
-}
-
-// fetchReceipts iteratively downloads the scheduled block receipts, taking any
-// available peers, reserving a chunk of receipts for each, waiting for delivery
-// and also periodically checking for timeouts.
-func (d *Downloader) fetchReceipts(from uint64) error {
-	log.Debug("Downloading transaction receipts", "origin", from)
-
-	var (
-		deliver = func(packet dataPack) (int, error) {
-			pack := packet.(*receiptPack)
-			return d.queue.DeliverReceipts(pack.peerID, pack.receipts)
-		}
-		expire   = func() map[string]int { return d.queue.ExpireReceipts(d.peers.rates.TargetTimeout()) }
-		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchReceipts(req) }
-		capacity = func(p *peerConnection) int { return p.ReceiptCapacity(d.peers.rates.TargetRoundTrip()) }
-		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
-			p.SetReceiptsIdle(accepted, deliveryTime)
-		}
-	)
-	err := d.fetchParts(d.receiptCh, deliver, d.receiptWakeCh, expire,
-		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ReserveReceipts,
-		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "receipts")
-
-	log.Debug("Transaction receipt download terminated", "err", err)
-	return err
-}
-
 // fetchParts iteratively downloads scheduled block parts, taking any available
 // peers, reserving a chunk of fetch requests for each, waiting for delivery and
 // also periodically checking for timeouts.
@@ -978,45 +926,6 @@ func (d *Downloader) fetchParts(
 			}
 		}
 	}
-}
-
-func (d *Downloader) importBlockResults(results []*fetchResult) error {
-	// Check for any early termination requests
-	if len(results) == 0 {
-		return nil
-	}
-	select {
-	case <-d.quitCh:
-		return errCancelContentProcessing
-	default:
-	}
-	// Retrieve the a batch of results to import
-	first, last := results[0].Header, results[len(results)-1].Header
-	log.Debug("Inserting downloaded chain", "items", len(results), "firsthash", first.Hash().Hex(), "lasthash", last.Hash().Hex())
-	blocks := make([]*types.Block, len(results))
-	for i, result := range results {
-		bh := types.NewBlockWithHeader(result.Header)
-		blocks[i] = bh.WithBody(result.Transactions)
-	}
-
-	//if index, err := d.blockchain.InsertChain(blocks); err != nil {
-	if index, err := d.blockchain.SyncInsertChain(blocks); err != nil {
-		if index < len(results) {
-			log.Error("Downloaded item processing failed", "Nr", blocks[0].Nr(), "Height", blocks[0].Height(), "hash", blocks[0].Hash().Hex(), "err", err)
-			log.Error("Downloaded item processing failed", "Nr", results[index].Header.Nr(), "Height", results[index].Header.Height, "hash", results[index].Header.Hash().Hex(), "err", err)
-		} else {
-			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
-			// when it needs to preprocess blocks to import a sidechain.
-			// The importer will put together a new list of blocks to import, which is a superset
-			// of the blocks delivered from the downloader, and the indexing will be off.
-			log.Error("Downloaded item processing failed on sidechain import", "index", index, "err", err)
-		}
-		return fmt.Errorf("%w: %v", errInvalidChain, err)
-	} else {
-		lastFinNr := d.blockchain.GetLastFinalizedNumber()
-		log.Info("Synchronised part of finalized chain", "mode", d.mode, "lastFinNr", lastFinNr)
-	}
-	return nil
 }
 
 // DeliverDag injects a dag chain received from a remote node.

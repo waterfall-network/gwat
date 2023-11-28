@@ -36,83 +36,6 @@ type binaryIterator struct {
 	fail            error
 }
 
-// initBinaryAccountIterator creates a simplistic iterator to step over all the
-// accounts in a slow, but easily verifiable way. Note this function is used for
-// initialization, use `newBinaryAccountIterator` as the API.
-func (dl *diffLayer) initBinaryAccountIterator() Iterator {
-	parent, ok := dl.parent.(*diffLayer)
-	if !ok {
-		l := &binaryIterator{
-			a:               dl.AccountIterator(common.Hash{}),
-			b:               dl.Parent().AccountIterator(common.Hash{}),
-			accountIterator: true,
-		}
-		l.aDone = !l.a.Next()
-		l.bDone = !l.b.Next()
-		return l
-	}
-	l := &binaryIterator{
-		a:               dl.AccountIterator(common.Hash{}),
-		b:               parent.initBinaryAccountIterator(),
-		accountIterator: true,
-	}
-	l.aDone = !l.a.Next()
-	l.bDone = !l.b.Next()
-	return l
-}
-
-// initBinaryStorageIterator creates a simplistic iterator to step over all the
-// storage slots in a slow, but easily verifiable way. Note this function is used
-// for initialization, use `newBinaryStorageIterator` as the API.
-func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
-	parent, ok := dl.parent.(*diffLayer)
-	if !ok {
-		// If the storage in this layer is already destructed, discard all
-		// deeper layers but still return an valid single-branch iterator.
-		a, destructed := dl.StorageIterator(account, common.Hash{})
-		if destructed {
-			l := &binaryIterator{
-				a:       a,
-				account: account,
-			}
-			l.aDone = !l.a.Next()
-			l.bDone = true
-			return l
-		}
-		// The parent is disk layer, don't need to take care "destructed"
-		// anymore.
-		b, _ := dl.Parent().StorageIterator(account, common.Hash{})
-		l := &binaryIterator{
-			a:       a,
-			b:       b,
-			account: account,
-		}
-		l.aDone = !l.a.Next()
-		l.bDone = !l.b.Next()
-		return l
-	}
-	// If the storage in this layer is already destructed, discard all
-	// deeper layers but still return an valid single-branch iterator.
-	a, destructed := dl.StorageIterator(account, common.Hash{})
-	if destructed {
-		l := &binaryIterator{
-			a:       a,
-			account: account,
-		}
-		l.aDone = !l.a.Next()
-		l.bDone = true
-		return l
-	}
-	l := &binaryIterator{
-		a:       a,
-		b:       parent.initBinaryStorageIterator(account),
-		account: account,
-	}
-	l.aDone = !l.a.Next()
-	l.bDone = !l.b.Next()
-	return l
-}
-
 // Next steps the iterator forward one element, returning false if exhausted,
 // or an error if iteration failed for some reason (e.g. root being iterated
 // becomes stale and garbage collected).
@@ -190,24 +113,4 @@ func (it *binaryIterator) Slot() []byte {
 		return nil
 	}
 	return blob
-}
-
-// Release recursively releases all the iterators in the stack.
-func (it *binaryIterator) Release() {
-	it.a.Release()
-	it.b.Release()
-}
-
-// newBinaryAccountIterator creates a simplistic account iterator to step over
-// all the accounts in a slow, but easily verifiable way.
-func (dl *diffLayer) newBinaryAccountIterator() AccountIterator {
-	iter := dl.initBinaryAccountIterator()
-	return iter.(AccountIterator)
-}
-
-// newBinaryStorageIterator creates a simplistic account iterator to step over
-// all the storage slots in a slow, but easily verifiable way.
-func (dl *diffLayer) newBinaryStorageIterator(account common.Hash) StorageIterator {
-	iter := dl.initBinaryStorageIterator(account)
-	return iter.(StorageIterator)
 }

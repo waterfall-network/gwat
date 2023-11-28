@@ -1548,8 +1548,6 @@ func (d *Downloader) processHeaders(origin uint64) error {
 		}
 	}()
 	// Wait for batches of headers to process
-	//gotHeaders := false
-
 	for {
 		select {
 		case <-d.cancelCh:
@@ -1566,38 +1564,6 @@ func (d *Downloader) processHeaders(origin uint64) error {
 					case <-d.cancelCh:
 					}
 				}
-				//// If no headers were retrieved at all, the peer violated its TD promise that it had a
-				//// better chain compared to ours. The only exception is if its promised blocks were
-				//// already imported by other means (e.g. fetcher):
-				////
-				//// R <remote peer>, L <local node>: Both at block 10
-				//// R: Mine block 11, and propagate it to L
-				//// L: Queue block 11 for import
-				//// L: Notice that R's head and TD increased compared to ours, start sync
-				//// L: Import of block 11 finishes
-				//// L: Sync begins, and finds common ancestor at 11
-				//// L: Request new headers up from 11 (R's TD was higher, it must have something)
-				//// R: Nothing to give
-				//if mode != LightSync {
-				//	head := d.blockchain.CurrentBlock()
-				//	if !gotHeaders && td.Cmp(d.blockchain.GetTd(head.Hash(), head.Nr())) > 0 {
-				//		return errStallingPeer
-				//	}
-				//}
-
-				//// If fast or light syncing, ensure promised headers are indeed delivered. This is
-				//// needed to detect scenarios where an attacker feeds a bad pivot and then bails out
-				//// of delivering the post-pivot blocks that would flag the invalid content.
-				////
-				//// This check cannot be executed "as is" for full imports, since blocks may still be
-				//// queued for processing when the header download completes. However, as long as the
-				//// peer gave us something useful, we're already happy/progressed (above check).
-				//if mode == FastSync || mode == LightSync {
-				//	head := d.lightchain.CurrentHeader()
-				//	if td.Cmp(d.lightchain.GetTd(head.Hash(), head.Nr())) > 0 {
-				//		return errStallingPeer
-				//	}
-				//}
 
 				// Disable any rollback and return
 				rollback = 0
