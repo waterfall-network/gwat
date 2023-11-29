@@ -24,7 +24,7 @@ const (
 
 type blockchain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
-	GetBlock(ctx context.Context,hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	GetEpoch(epoch uint64) common.Hash
