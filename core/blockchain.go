@@ -89,6 +89,7 @@ var (
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
 	errInvalidBlock         = errors.New("invalid block")
+	ErrBadBlockNr           = errors.New("bad block nr")
 	errBlockNotFound        = errors.New("block not found")
 )
 
@@ -998,8 +999,38 @@ func (bc *BlockChain) rmBlockData(hash common.Hash, slot *uint64) {
 func (bc *BlockChain) RollbackFinalization(spineHash common.Hash, lfNr uint64) error {
 	newLfBlock := bc.GetBlock(spineHash)
 	if newLfBlock == nil {
-		log.Error("Rollback finalization: block not found", "spineHash", fmt.Sprintf("%#x", spineHash), "lfNr", lfNr)
+		log.Error("Rollback finalization: block not found",
+			"spineHash", fmt.Sprintf("%#x", spineHash), "lfNr", lfNr)
 		return ErrBlockNotFound
+	}
+	if newLfBlock.Nr() == 0 && spineHash != bc.Genesis().Hash() {
+		blNr := rawdb.ReadFinalizedNumberByHash(bc.db, spineHash)
+		if blNr == nil {
+			log.Error("Rollback finalization: head block is not finalized",
+				"bl.Nr", newLfBlock.Nr(),
+				"bl.Height", newLfBlock.Height(),
+				"bl.Hash", fmt.Sprintf("%#x", spineHash),
+				"lfNr", lfNr)
+			return ErrBadBlockNr
+		}
+
+		log.Warn("Rollback finalization: received bad block nr",
+			"retry_blNr", *blNr,
+			"bl.Nr", newLfBlock.Nr(),
+			"bl.Height", newLfBlock.Height(),
+			"bl.Hash", fmt.Sprintf("%#x", spineHash),
+			"lfNr", lfNr)
+
+		// update block number
+		newLfBlock.SetNumber(blNr)
+		bc.hc.numberCache.Remove(spineHash)
+		bc.hc.numberCache.Add(spineHash, *blNr)
+
+		bc.hc.headerCache.Remove(spineHash)
+		bc.hc.headerCache.Add(spineHash, newLfBlock.Header())
+
+		bc.blockCache.Remove(spineHash)
+		bc.blockCache.Add(spineHash, newLfBlock)
 	}
 
 	lastFinBlock := bc.GetLastFinalizedHeader()
