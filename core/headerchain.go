@@ -106,22 +106,24 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, procInte
 		blockDagCache: blockDagCache,
 	}
 
-	heihgt := uint64(0)
-	hc.genesisHeader = hc.GetHeaderByNumber(heihgt)
+	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
 
+	lfNr := uint64(0)
 	hc.lastFinalisedHeader.Store(hc.genesisHeader)
 	if head := rawdb.ReadLastFinalizedHash(chainDb); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
-			heihgt = *rawdb.ReadFinalizedNumberByHash(chainDb, head)
-			hc.lastFinalisedHeader.Store(chead)
+			if pNr := rawdb.ReadFinalizedNumberByHash(chainDb, head); pNr != nil {
+				lfNr = *pNr
+				hc.lastFinalisedHeader.Store(chead)
+			}
 		}
 	}
 	hc.lastFinalisedHash = hc.GetLastFinalizedHeader().Hash()
 	hc.tips.Store(&types.Tips{})
-	headHeaderGauge.Update(int64(heihgt))
+	headHeaderGauge.Update(int64(lfNr))
 	return hc, nil
 }
 

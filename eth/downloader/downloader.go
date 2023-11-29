@@ -1193,7 +1193,8 @@ func (d *Downloader) peerSyncBySpinesByChunk(p *peerConnection, baseSpine common
 	)
 
 	fromHash := baseSpine
-	for i := 0; ; {
+	const iterLimit = 10 //xeth.LimitDagHashes = 10240 hashes
+	for i := 0; ; i++ {
 		lastHash, err := d.syncBySpines(p, fromHash, terminalSpine)
 		if err != nil {
 			p.log.Error("Sync by spines: error",
@@ -1215,7 +1216,7 @@ func (d *Downloader) peerSyncBySpinesByChunk(p *peerConnection, baseSpine common
 			log.Info("Sync by spines: success")
 			break
 		}
-		if lastHash == (common.Hash{}) {
+		if lastHash == (common.Hash{}) || lastHash == fromHash || i > iterLimit {
 			return errCanceled
 		}
 		// sync next part

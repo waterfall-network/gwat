@@ -323,6 +323,10 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 	if len(spines) == 0 {
 		return nil
 	}
+	baseHeader := d.bc.GetHeaderByHash(baseSpine)
+	if baseHeader == nil || baseHeader.Nr() == 0 && baseHeader.Height > 0 {
+		return fmt.Errorf("bad base spine")
+	}
 	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {
 		return err
@@ -619,7 +623,7 @@ func (d *Dag) workLoop() {
 				continue
 			}
 			if !d.bc.IsSynced() {
-				log.Info("dag workloop !d.bc.IsSynced()", "IsSynced", d.bc.IsSynced())
+				log.Info("dag workloop !d.bc.IsSynced()", "slot", slot, "IsSynced", d.bc.IsSynced())
 				d.resetCheckpoint()
 				continue
 			}
