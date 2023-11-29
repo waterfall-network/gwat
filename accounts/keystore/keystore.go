@@ -69,7 +69,6 @@ type KeyStore struct {
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
 	updating    bool                    // Whether the event notification loop is running
-	passwordDir string
 
 	mu       sync.RWMutex
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing

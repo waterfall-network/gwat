@@ -10,7 +10,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"

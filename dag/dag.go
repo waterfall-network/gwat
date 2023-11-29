@@ -6,6 +6,7 @@
 package dag
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -50,7 +51,7 @@ type blockChain interface {
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
 	GetHeaderByHash(common.Hash) *types.Header
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetLastFinalizedNumber() uint64
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap

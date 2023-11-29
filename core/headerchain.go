@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	crand "crypto/rand"
 	"errors"
 	"fmt"
@@ -825,7 +826,7 @@ func (hc *HeaderChain) Config() *params.ChainConfig { return hc.config }
 
 // GetBlock implements consensus.ChainReader, and returns nil for every input as
 // a header chain does not have blocks available for retrieval.
-func (hc *HeaderChain) GetBlock(hash common.Hash) *types.Block {
+func (hc *HeaderChain) GetBlock(ctx context.Context, hash common.Hash) *types.Block {
 	return nil
 }
 

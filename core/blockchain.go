@@ -19,6 +19,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -995,7 +996,8 @@ func (bc *BlockChain) rmBlockData(hash common.Hash, slot *uint64) {
 // 2. removes finalisation data from last finalized up to lfNr
 // 3. move all unfinalized blocks to dag and provide consistented tips
 func (bc *BlockChain) RollbackFinalization(spineHash common.Hash, lfNr uint64) error {
-	newLfBlock := bc.GetBlock(spineHash)
+	ctx := context.Background()
+	newLfBlock := bc.GetBlock(ctx, spineHash)
 	if newLfBlock == nil {
 		log.Error("Rollback finalization: block not found", "spineHash", fmt.Sprintf("%#x", spineHash), "lfNr", lfNr)
 		return ErrBlockNotFound
@@ -3704,6 +3706,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	// Since we don't import them here, we expect ErrUnknownAncestor for the remaining
 	// ones. Any other errors means that the block is invalid, and should not be written
 	// to disk.
+	ctx := context.Background()
 	err := consensus.ErrPrunedAncestor
 	for ; block != nil && errors.Is(err, consensus.ErrPrunedAncestor); block, err = it.next() {
 		if !bc.HasBlock(block.Hash()) {
@@ -3742,7 +3745,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	)
 	for i := len(hashes) - 1; i >= 0; i-- {
 		// Append the next block to our batch
-		block := bc.GetBlock(hashes[i])
+		block := bc.GetBlock(ctx, hashes[i])
 
 		blocks = append(blocks, block)
 		memory += block.Size()

@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -88,7 +89,7 @@ type blockchain interface {
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	GetEpoch(epoch uint64) common.Hash
 }
 

@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -153,8 +154,9 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 	}
 	// Create the parent state database
 	var parent *types.Block
+	ctx := context.Background()
 	for _, h := range block.ParentHashes() {
-		pb := eth.blockchain.GetBlock(h)
+		pb := eth.blockchain.GetBlock(ctx, h)
 		if pb != nil && pb.Nr() == pb.Height() {
 			parent = pb
 			break

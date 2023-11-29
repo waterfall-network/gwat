@@ -44,10 +44,9 @@ type httpConfig struct {
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
-	Origins   []string
-	Modules   []string
-	prefix    string // path prefix on which to mount ws handler
-	jwtSecret []byte // optional JWT secret
+	Origins []string
+	Modules []string
+	prefix  string // path prefix on which to mount ws handler
 }
 
 type rpcHandler struct {

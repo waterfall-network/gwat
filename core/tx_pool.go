@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -118,8 +119,6 @@ var (
 	// throttleTxMeter counts how many transactions are rejected due to too-many-changes between
 	// txpool reorgs.
 	throttleTxMeter = metrics.NewRegisteredMeter("txpool/throttle", nil)
-	// reorgDurationTimer measures how long time a txpool reorg takes.
-	reorgDurationTimer = metrics.NewRegisteredTimer("txpool/reorgtime", nil)
 	// dropBetweenReorgHistogram counts how many drops we experience between two reorg runs. It is expected
 	// that this number is pretty low, since txpool reorgs happen very frequently.
 	dropBetweenReorgHistogram = metrics.NewRegisteredHistogram("txpool/dropbetweenreorg", nil, metrics.NewExpDecaySample(1028, 0.015))
@@ -148,7 +147,7 @@ const (
 type blockChain interface {
 	GetLastFinalizedBlock() *types.Block
 	GetLastFinalizedHeader() *types.Header
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
 	ReadFinalizedNumberByHash(hash common.Hash) *uint64
 	GetBlockByNumber(number uint64) *types.Block
@@ -1640,9 +1639,6 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		)
 	}(time.Now())
 
-	//defer func(t0 time.Time) {
-	//	reorgDurationTimer.Update(time.Since(t0))
-	//}(time.Now())
 	defer close(done)
 
 	var promoteAddrs []common.Address
@@ -1731,6 +1727,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
+	ctx := context.Background()
 	oldNum := pool.chain.ReadFinalizedNumberByHash(oldHead.Hash())
 	newNum := pool.chain.ReadFinalizedNumberByHash(newHead.Hash())
 
@@ -1742,8 +1739,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
 			var (
-				rem    = pool.chain.GetBlock(oldHead.Hash())
-				add    = pool.chain.GetBlock(newHead.Hash())
+				rem    = pool.chain.GetBlock(ctx, oldHead.Hash())
+				add    = pool.chain.GetBlock(ctx, newHead.Hash())
 				remNum = *oldNum
 				addNum = *newNum
 			)

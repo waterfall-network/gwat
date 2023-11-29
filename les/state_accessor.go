@@ -42,7 +42,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		return nil, vm.BlockContext{}, nil, errors.New("no transaction in genesis")
 	}
 	// Create the parent state database
-	parent, err := leth.blockchain.GetBlock(block.ParentHashes()[0])
+	parent, err := leth.blockchain.GetBlock(ctx, block.ParentHashes()[0])
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, err
 	}

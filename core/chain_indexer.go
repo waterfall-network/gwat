@@ -323,50 +323,6 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	}
 }
 
-// processSection processes an entire section by calling backend functions while
-// ensuring the continuity of the passed headers. Since the chain mutex is not
-// held while processing, the continuity can be broken by a long reorg, in which
-// case the function returns with an error.
-func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (common.Hash, error) {
-	c.log.Debug("Processing new chain section", "section", section)
-
-	// Reset and partial processing
-	if err := c.backend.Reset(c.ctx, section, lastHead); err != nil {
-		c.setValidSections(0)
-		return common.Hash{}, err
-	}
-
-	cp := rawdb.ReadLastCoordinatedCheckpoint(c.chainDb)
-	if cp == nil {
-		return common.Hash{}, fmt.Errorf("current checkpoint unknown during section processing")
-	}
-	cpNr := rawdb.ReadFinalizedNumberByHash(c.chainDb, cp.Spine)
-	if cpNr == nil {
-		return common.Hash{}, fmt.Errorf("current checkpoint number not found during section processing")
-	}
-	for number := section * c.sectionSize; number < (section+1)*c.sectionSize && number < *cpNr; number++ {
-		hash := rawdb.ReadFinalizedHashByNumber(c.chainDb, number)
-		if hash == (common.Hash{}) {
-			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
-		}
-		header := rawdb.ReadHeader(c.chainDb, hash)
-		if header == nil {
-			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
-		}
-		//else if !header.ParentHashes.Has(lastHead) {
-		//	return common.Hash{}, fmt.Errorf("chain reorged during section processing")
-		//}
-		if err := c.backend.Process(c.ctx, header); err != nil {
-			return common.Hash{}, err
-		}
-		lastHead = header.Hash()
-	}
-	if err := c.backend.Commit(); err != nil {
-		return common.Hash{}, err
-	}
-	return lastHead, nil
-}
-
 // verifyLastHead compares last stored section head with the corresponding block hash in the
 // actual canonical chain and rolls back reorged sections if necessary to ensure that stored
 // sections are all valid

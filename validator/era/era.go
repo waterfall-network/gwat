@@ -24,7 +24,6 @@ type Blockchain interface {
 	GetHeaderByHash(common.Hash) *types.Header
 	EnterNextEra(uint64, common.Hash) *Era
 	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
-	//SyncEraToSlot(slot uint64)
 }
 
 type Era struct {

@@ -17,7 +17,9 @@ run:
     - token/operation/test_utils.go
     - cmd/gwat/accountcmd_test.go
     - .*test*
-
+    - core/state/snapshot/iterator_binary.go # todo: lint after test
+    - core/blockchain_insert.go # todo: lint after test
+    - core/state/snapshot/wipe.go # todo: lint after test
 linters:
   disable-all: true
   enable:
@@ -71,6 +73,8 @@ issues:
       text: 'SA1019: "github.com/golang/protobuf/proto" is deprecated: Use the "google.golang.org/protobuf/proto" package instead.'
     - path: ethstats/ethstats.go
       text: 'SA4003: no value of type uint64 is less than 0'
+    - path: eth/downloader/downloader.go
+      text: 'field `synchroniseMock` is unused (unused)'
   exclude:
     - 'SA1019: event.TypeMux is deprecated: use Feed'
     - 'SA1019: strings.Title is deprecated'

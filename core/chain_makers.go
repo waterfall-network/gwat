@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -180,8 +181,9 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 	if len(blocks) == 0 || bc == nil {
 		return
 	}
+	ctx := context.Background()
 	lcp := bc.GetLastCoordinatedCheckpoint()
-	cpBlock := bc.GetBlock(lcp.Spine)
+	cpBlock := bc.GetBlock(ctx, lcp.Spine)
 	bc.AddTips(&types.BlockDAG{
 		Hash:                   cpBlock.Hash(),
 		Height:                 cpBlock.Height(),

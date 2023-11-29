@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -169,7 +170,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Block {
 	}, nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) GetBlock(hash common.Hash) *types.Block {
+func (bc *testBlockChain) GetBlock(tx context.Context, hash common.Hash) *types.Block {
 	//return bc.CurrentBlock()
 	if hash == bc.genesisBlock.Hash() {
 		return bc.genesisBlock
