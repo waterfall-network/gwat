@@ -21,7 +21,7 @@ stages:
 
 lint:
   stage: test
-  image: golangci/golangci-lint:v1.52.2
+  image: golangci/golangci-lint:v1.55.2
   tags:
     - docker
   rules:
