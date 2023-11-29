@@ -3,6 +3,7 @@ before_script:
   - echo "machine $CI_SERVER_HOST login gitlab-ci-token password $CI_JOB_TOKEN" >> ~/.netrc
   - export GOPRIVATE=${CI_SERVER_HOST}
 stages:
+  - test
   - build
   - release
 
@@ -17,6 +18,17 @@ stages:
     cp ./build/bin/gwat ./dist/gwat
     cp -r /tmp/version.go params/version.go
 
+
+lint:
+  stage: test
+  image: golangci/golangci-lint:v1.52.2
+  tags:
+    - docker
+  rules:
+    - if: $CI_COMMIT_REF_NAME != "main" && $CI_COMMIT_TAG == null
+      when: on_success
+  script: 
+    - golangci-lint run -v --out-format=github-actions --config=.golangci.yml --out-format colored-line-number
 
 build branch:
   stage: build
