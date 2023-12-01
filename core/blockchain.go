@@ -3083,6 +3083,23 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 func (bc *BlockChain) CollectAncestorsHashesByTips(tips types.Tips, cpHash common.Hash) (common.HashArray, error) {
 	cpHeader := bc.GetHeader(cpHash)
+	cpBlDag := bc.GetBlockDag(cpHash)
+	if cpBlDag == nil {
+		_, anc, _, err := bc.CollectAncestorsAftCpByParents(cpHeader.ParentHashes, cpHeader.CpHash)
+		if err != nil {
+			return nil, err
+		}
+		cpBlDag = &types.BlockDAG{
+			Hash:                   cpHeader.Hash(),
+			Height:                 cpHeader.Height,
+			Slot:                   cpHeader.Slot,
+			CpHash:                 cpHeader.CpHash,
+			CpHeight:               bc.GetHeader(cpHeader.CpHash).Height,
+			OrderedAncestorsHashes: anc.Hashes(),
+		}
+		bc.SaveBlockDag(cpBlDag)
+	}
+
 	ancestorsHashes := make(common.HashArray, 0)
 	for _, tip := range tips {
 		if tip.Hash == cpHash {
@@ -3110,9 +3127,12 @@ func (bc *BlockChain) CollectAncestorsHashesByTips(tips types.Tips, cpHash commo
 		ancestors := bc.GetHeadersByHashes(ancHashes)
 		for h, anc := range ancestors {
 			// skipping if finalised before current checkpoint
-			if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() < cpHeader.Nr() {
+			if anc.Height > 0 && anc.Nr() > 0 && cpBlDag.OrderedAncestorsHashes.Has(anc.Hash()) {
 				continue
 			}
+			//if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() < cpHeader.Nr() {
+			//	continue
+			//}
 			ancestorsHashes = append(ancestorsHashes, h)
 		}
 		ancestorsHashes = append(ancestorsHashes, tip.Hash)
@@ -3127,6 +3147,16 @@ func (bc *BlockChain) CalcBlockHeightByTips(tips types.Tips, cpHash common.Hash)
 		return 0, err
 	}
 	cpHeader := bc.GetHeader(cpHash)
+
+	log.Info("Calculate block height",
+		"ancestors", len(ancestors),
+		"cpHeight", cpHeader.Height,
+		"cpNr", cpHeader.Nr(),
+		"cpHash", cpHash.Hex(),
+		//"ancestors", ancestors,
+		//"tips", tips.Print(),
+	)
+
 	return bc.calcBlockHeight(cpHeader.Height, len(ancestors)), nil
 }
 

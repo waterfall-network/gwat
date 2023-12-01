@@ -881,6 +881,29 @@ func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpH
 	}
 	//collect ancestors
 	cpHead := hc.GetHeader(cpHash)
+	cpBlDag := hc.GetBlockDag(cpHash)
+	if cpBlDag == nil {
+		prevCpHead := hc.GetHeader(cpHead.CpHash)
+		if prevCpHead == nil {
+			log.Error("CollectAncestorsAftCpByTips failed: cp of cp not found")
+			return isCpAncestor, ancestors, unloaded, tips
+		}
+		_, anc, _, err := hc.CollectAncestorsAftCpByParents(cpHead.ParentHashes, prevCpHead)
+		if err != nil {
+			log.Error("CollectAncestorsAftCpByTips get ancestors failed", "err", err)
+			return isCpAncestor, ancestors, unloaded, tips
+		}
+		cpBlDag = &types.BlockDAG{
+			Hash:                   cpHead.Hash(),
+			Height:                 cpHead.Height,
+			Slot:                   cpHead.Slot,
+			CpHash:                 cpHead.CpHash,
+			CpHeight:               hc.GetHeader(cpHead.CpHash).Height,
+			OrderedAncestorsHashes: anc.Hashes(),
+		}
+		hc.SaveBlockDag(cpBlDag)
+	}
+
 	ancestors = hc.GetHeadersByHashes(ancHashes)
 	for h, anc := range ancestors {
 		if anc == nil {
@@ -892,10 +915,14 @@ func (hc *HeaderChain) CollectAncestorsAftCpByTips(parents common.HashArray, cpH
 			delete(ancestors, h)
 			continue
 		}
-		if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() <= cpHead.Nr() {
+		if anc.Height > 0 && anc.Nr() > 0 && cpBlDag.OrderedAncestorsHashes.Has(anc.Hash()) {
 			delete(ancestors, h)
 			continue
 		}
+		//if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() <= cpHead.Nr() {
+		//	delete(ancestors, h)
+		//	continue
+		//}
 	}
 	return isCpAncestor, ancestors, unloaded, tips
 }
