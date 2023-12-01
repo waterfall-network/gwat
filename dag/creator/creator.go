@@ -294,7 +294,7 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 		return nil, err
 	}
 
-	log.Info("Creator calculate block height", "newHeight", newHeight)
+	log.Info("Creator calculate block height", "newHeight", newHeight, "cpHash", checkpoint.Spine.Hex())
 
 	era := c.bc.GetEraInfo().Number()
 	if c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) >= c.bc.GetEraInfo().NextEraFirstEpoch() {
