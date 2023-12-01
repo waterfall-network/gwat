@@ -21,6 +21,7 @@ package geth
 
 import (
 	"encoding/json"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethclient"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
 )
