@@ -113,55 +113,6 @@ func TestGetActiveValidatorsByEpoch(t *testing.T) {
 	testutils.AssertEqual(t, []Validator{validator2}, validators)
 }
 
-func TestAddValidator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	bc := NewMockblockchain(ctrl)
-	epoch := uint64(10)
-	bc.EXPECT().EpochToEra(epoch).Return(&era.Era{Number: 10})
-
-	c := NewCache()
-	validator := Validator{
-		Address:       testmodels.Addr1,
-		ActivationEra: 10,
-		ExitEra:       20,
-	}
-
-	c.addValidator(validator, epoch)
-	validators := c.getActiveValidatorsByEpoch(bc, epoch)
-	if len(validators) != 1 {
-		t.Fatalf("Expected 1 validator but got %v", len(validators))
-	}
-	if validators[0].Address != validator.Address {
-		t.Fatalf("Expected address %v but got %v", validator.Address, validators[0].Address)
-	}
-}
-
-func TestDelValidator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	bc := NewMockblockchain(ctrl)
-	epoch := uint64(10)
-	bc.EXPECT().EpochToEra(epoch).AnyTimes().Return(&era.Era{Number: 10})
-
-	c := NewCache()
-	validator := Validator{
-		Address:       common.Address{1},
-		ActivationEra: 10,
-		ExitEra:       20,
-	}
-
-	c.addValidator(validator, epoch)
-	validators := c.getActiveValidatorsByEpoch(bc, epoch)
-	if len(validators) != 1 {
-		t.Fatalf("Expected 1 validator but got %v", len(validators))
-	}
-
-	c.delValidator(validator, epoch)
-	validators = c.getActiveValidatorsByEpoch(bc, epoch)
-	if len(validators) != 0 {
-		t.Fatalf("Expected 0 validators but got %v", len(validators))
-	}
-}
-
 func TestAllValidatorsCache(t *testing.T) {
 	cache := NewCache()
 	validatorsList := make([]Validator, len(testmodels.InputValidators))

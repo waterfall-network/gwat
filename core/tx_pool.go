@@ -1101,7 +1101,7 @@ func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error {
 
 // This is like AddRemotes with a single transaction, but waits for pool reorganization. Tests use this method.
 //
-//nolint:unused
+//nolint:unused // tests only
 func (pool *TxPool) addRemoteSync(tx *types.Transaction) error {
 	errs := pool.AddRemotesSync([]*types.Transaction{tx})
 	return errs[0]
