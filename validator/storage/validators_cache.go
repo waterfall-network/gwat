@@ -98,57 +98,6 @@ func (c *ValidatorsCache) getActiveValidatorsByEpoch(bc blockchain, epoch uint64
 	return validators
 }
 
-//nolint:unused
-func (c *ValidatorsCache) addSubnetValidators(epoch, subnet uint64, validators []common.Address) {
-	c.subnetMu.Lock()
-	defer c.subnetMu.Unlock()
-
-	_, ok := c.subnetValidatorsCache[epoch]
-	if !ok {
-		c.subnetValidatorsCache[epoch] = make(map[uint64][]common.Address)
-	}
-
-	c.subnetValidatorsCache[epoch][subnet] = validators
-}
-
-//nolint:unused
-func (c *ValidatorsCache) getSubnetValidators(epoch, subnet uint64) ([]common.Address, error) {
-	c.subnetMu.Lock()
-	defer c.subnetMu.Unlock()
-
-	epochValidators, ok := c.subnetValidatorsCache[epoch]
-	if !ok {
-		return nil, errNoEpochValidators
-	}
-
-	subnetValidators, ok := epochValidators[subnet]
-	if !ok {
-		return nil, errNoSubnetValidators
-	}
-
-	return subnetValidators, nil
-}
-
-//nolint:unused
-func (c *ValidatorsCache) addValidator(validator Validator, epoch uint64) {
-	c.allMu.Lock()
-	defer c.allMu.Unlock()
-
-	c.allValidatorsCache[epoch] = append(c.allValidatorsCache[epoch], validator)
-}
-
-//nolint:unused
-func (c *ValidatorsCache) delValidator(validator Validator, epoch uint64) {
-	c.allMu.Lock()
-	defer c.allMu.Unlock()
-
-	for i, v := range c.allValidatorsCache[epoch] {
-		if v.Address == validator.Address {
-			c.allValidatorsCache[epoch] = append(c.allValidatorsCache[epoch][:i], c.allValidatorsCache[epoch][i+1:]...)
-		}
-	}
-}
-
 // addShuffledValidators set shuffled validators addresses to the cache.
 // Input parameters are array of uint64 (epoch, subnet). Sequence is required!!!
 func (c *ValidatorsCache) addShuffledValidators(shuffledValidators [][]common.Address, filter []uint64) error {
