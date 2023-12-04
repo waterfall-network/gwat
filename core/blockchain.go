@@ -2390,7 +2390,6 @@ func (bc *BlockChain) verifyBlockHeight(block *types.Block, ancestorsCount int) 
 }
 
 func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
-
 	timeTrack := time.Now()
 
 	////todo RM test !!!
