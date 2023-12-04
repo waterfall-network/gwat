@@ -68,7 +68,7 @@ var (
 	errInvalidBody           = errors.New("retrieved block body is invalid")
 	errInvalidReceipt        = errors.New("retrieved receipt is invalid")
 	errInvalidDag            = errors.New("retrieved dag chain is invalid")
-	errInvalidBaseSpine      = errors.New("invalid base spine")
+	ErrInvalidBaseSpine      = errors.New("invalid base spine")
 	errCancelStateFetch      = errors.New("state data download canceled (requested)")
 	errCanceled              = errors.New("syncing canceled (requested)")
 	errNoSyncActive          = errors.New("no sync active")
@@ -1004,8 +1004,8 @@ func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) er
 		switch err {
 		case nil:
 			return nil
-		case errInvalidBaseSpine:
-			return errInvalidBaseSpine
+		case ErrInvalidBaseSpine:
+			return ErrInvalidBaseSpine
 		case errBusy, errCanceled:
 			log.Warn("Sync failed, trying next peer",
 				"err", err,
@@ -1139,7 +1139,7 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 		} else {
 			log.Error("Check peer: invalid base spine", "slot", baseHeader.Slot, "height", baseHeader.Height, "nr", baseHeader.Nr(), "height", baseHeader.Hash().Hex())
 		}
-		return false, nil, errInvalidBaseSpine
+		return false, nil, ErrInvalidBaseSpine
 	}
 	baseNr := baseHeader.Nr()
 	baseRemote, err := d.fetchHeaderByNr(p, baseNr)

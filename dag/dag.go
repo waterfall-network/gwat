@@ -325,7 +325,7 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 	}
 	baseHeader := d.bc.GetHeaderByHash(baseSpine)
 	if baseHeader == nil || baseHeader.Nr() == 0 && baseHeader.Height > 0 {
-		return fmt.Errorf("bad base spine")
+		return downloader.ErrInvalidBaseSpine
 	}
 	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {
