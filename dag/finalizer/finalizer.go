@@ -203,7 +203,14 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 		return err
 	}
 
-	log.Info("🔗 block finalized", "Number", finNr, "b.nr", block.Nr(), "Slot", block.Slot(), "Height", block.Height(), "hash", block.Hash().Hex())
+	log.Info("🔗 block finalized",
+		"Number", finNr,
+		"b.nr", block.Nr(),
+		"Slot", block.Slot(),
+		"Height", block.Height(),
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+	)
 	return nil
 }
 

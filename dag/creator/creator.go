@@ -234,6 +234,13 @@ func (c *Creator) RunBlockCreation(slot uint64,
 			c.current.txs[account] = &txsWithCumulativeGas{}
 			c.current.txsMu.Unlock()
 			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, needEmptyBlock)
+			wg.Wait()
+			log.Warn("BLOCK CREATION TIME - TOTAL(TODO: multiCreator off)",
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"func:", "RunBlockCreation",
+				"slot", slot,
+			)
+			return nil
 		}
 	}
 	wg.Wait()

@@ -2188,19 +2188,37 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	defer func(ts time.Time) {
 		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(ts)),
-			"func:", "VerifyBlock:Total",
+			"fn:", "VerifyBlock:Total",
+			"txs", len(block.Transactions()),
+			"hash", block.Hash(),
 		)
 	}(time.Now())
+
+	timeTrack := time.Now()
 
 	// Verify block slot
 	if !bc.verifyBlockSlot(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockSlot",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block era
 	if !bc.verifyBlockEra(block) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockEra",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	slotCreators, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
 	if err != nil {
@@ -2208,32 +2226,81 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		return false, err
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "GetCreatorsBySlot",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block coinbase
 	if !bc.verifyBlockCoinbase(block, slotCreators) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockCoinbase",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	err = bc.verifyEmptyBlock(block, slotCreators)
 	if err != nil {
 		return false, err
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyEmptyBlock",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify baseFee
 	if !bc.verifyBlockBaseFee(block) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockBaseFee",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	// Verify body hash and transactions hash
 	if !bc.verifyBlockHashes(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block used gas
 	if !bc.verifyBlockUsedGas(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockUsedGas",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "CollectAncestorsAftCpByTips",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
@@ -2258,12 +2325,35 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyCheckpoint",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block height
 	if !bc.verifyBlockHeight(block, len(ancestors)) {
 		return false, nil
 	}
 
-	return bc.verifyBlockParents(block)
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHeight",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
+	valid, err := bc.verifyBlockParents(block)
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockParents",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
+	return valid, err
 }
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
