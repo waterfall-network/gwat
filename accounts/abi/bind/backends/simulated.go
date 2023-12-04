@@ -42,8 +42,10 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // This nil assignment ensures at compile time that SimulatedBackend implements bind.ContractBackend.
@@ -77,8 +79,36 @@ type SimulatedBackend struct {
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
-	genesis.MustCommit(database)
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
+	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc, Validators: depositData}
+	genesisBlock := genesis.MustCommit(database)
+
+	// Use genesis hash as seed for first and second epochs
+	genesisCp := &types.Checkpoint{
+		Epoch:    0,
+		FinEpoch: 0,
+		Root:     common.Hash{},
+		Spine:    genesisBlock.Hash(),
+	}
+	rawdb.WriteLastCoordinatedCheckpoint(database, genesisCp)
+	rawdb.WriteCoordinatedCheckpoint(database, genesisCp)
+	rawdb.WriteEpoch(database, 0, genesisCp.Spine)
+
+	genesisEraLength := era.EstimateEraLength(genesis.Config, uint64(len(genesis.Validators)))
+	genesisEra := era.Era{0, 0, genesisEraLength - 1, genesisBlock.Root()}
+	rawdb.WriteEra(database, genesisEra.Number, genesisEra)
+	rawdb.WriteCurrentEra(database, genesisEra.Number)
 	// i.o. ethash.NewFaker()
 	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, vm.Config{}, nil)
 
@@ -113,7 +143,6 @@ func (b *SimulatedBackend) Commit() {
 
 	nr := b.pendingBlock.Height()
 	b.pendingBlock.SetNumber(&nr)
-
 	if _, err := b.blockchain.SyncInsertChain([]*types.Block{b.pendingBlock}); err != nil {
 		panic(err) // This cannot happen unless the simulator is wrong, fail in that case
 	}
@@ -794,6 +823,11 @@ func (b *SimulatedBackend) Blockchain() *core.BlockChain {
 // callMsg implements core.Message to allow passing it as a transaction simulator.
 type callMsg struct {
 	ethereum.CallMsg
+}
+
+// SetGas implements core.Message.
+func (callMsg) SetGas(gas uint64) types.Message {
+	panic("unimplemented")
 }
 
 func (m callMsg) From() common.Address         { return m.CallMsg.From }
