@@ -2420,9 +2420,9 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 		"BodyHash", block.BodyHash().Hex(),
 		"calcBodyHash", calcBodyHash.Hex(),
 	)
-	timeTrack = time.Now()
 
 	////todo uncomment
+	//timeTrack = time.Now()
 	//// Verify transactions hash
 	//calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
 	//
