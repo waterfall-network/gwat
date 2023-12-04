@@ -717,6 +717,8 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 				"want", params.TxGas,
 				"cumulativeGas", header.GasLimit,
 				"GasLimit", gasLimit,
+				"gasPool<TxGas", c.current.gasPool.Gas() < params.TxGas,
+				"cumulativeGas>GasLimit", c.current.txs[header.Coinbase].cumulativeGas > header.GasLimit,
 			)
 			break
 		}

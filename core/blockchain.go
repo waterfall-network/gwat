@@ -2391,14 +2391,19 @@ func (bc *BlockChain) verifyBlockHeight(block *types.Block, ancestorsCount int) 
 
 func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 
-	//todo RM test !!!
-	if true {
-		return true
-	}
+	timeTrack := time.Now()
+
+	////todo RM test !!!
+	//if true {
+	//	return true
+	//}
 
 	// Verify body hash
 	blockBody := block.Body()
-	if blockBody.CalculateHash() != block.BodyHash() {
+
+	calcBodyHash := blockBody.CalculateHash()
+
+	if calcBodyHash != block.BodyHash() {
 		log.Warn("Block verification: invalid body hash",
 			"hash", block.Hash().Hex(),
 			"bl.bodyHash", block.BodyHash().Hex(),
@@ -2406,16 +2411,38 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 		)
 		return false
 	}
-	// Verify transactions hash
-	calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
-	if calcTxHash != block.TxHash() {
-		log.Warn("Block verification: invalid transactions hash",
-			"hash", block.Hash().Hex(),
-			"txHash", block.TxHash().Hex(),
-			"calc.txHash", calcTxHash.Hex(),
-		)
-		return false
-	}
+
+	log.Info("VALIDATION TIME verifyBlockHashes (TODO TX VALIDATE)",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+		"BodyHash", block.BodyHash().Hex(),
+		"calcBodyHash", calcBodyHash.Hex(),
+	)
+	timeTrack = time.Now()
+
+	////todo uncomment
+	//// Verify transactions hash
+	//calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
+	//
+	//log.Info("VALIDATION TIME verifyBlockHashes 111",
+	//	"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+	//	"fn:", "verifyBlockHashes",
+	//	"txs", len(block.Transactions()),
+	//	"hash", block.Hash().Hex(),
+	//	"TxHash", block.TxHash(),
+	//	"calcTxHash", calcTxHash.Hex(),
+	//)
+	//
+	//if calcTxHash != block.TxHash() {
+	//	log.Warn("Block verification: invalid transactions hash",
+	//		"hash", block.Hash().Hex(),
+	//		"txHash", block.TxHash().Hex(),
+	//		"calc.txHash", calcTxHash.Hex(),
+	//	)
+	//	return false
+	//}
 	return true
 }
 
@@ -3852,6 +3879,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 	return it.index, err
 }
 
+// Deprecated
 // insertSideChain is called when an import batch hits upon a pruned ancestor
 // error, which happens when a sidechain with a sufficiently old fork-block is
 // found.
