@@ -1353,8 +1353,11 @@ func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
 	for i := len(transactions) - 1; i >= 0; i-- {
 		btx := transactions[i]
 		tx.Transaction = btx
-
-		addr, err := types.Sender(pool.signer, tx.Transaction) // already validated during insertion
+		poolTx := pool.all.Get(tx.Transaction.Hash())
+		if poolTx == nil {
+			poolTx = tx.Transaction
+		}
+		addr, err := types.Sender(pool.signer, poolTx) // already validated during insertion
 		if err != nil {
 			log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())
 			return
