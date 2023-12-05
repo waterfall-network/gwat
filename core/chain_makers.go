@@ -316,11 +316,11 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 		GasLimit:     parent.GasLimit(),
 		Height:       parent.Height() + 1,
 		Slot:         parent.Slot() + 1,
-		//Number:   parent.Height() + 1,
-		Time: time,
+		CpHash:       parent.Hash(),
+		Time:         time,
 	}
 	// This base fee calculation is for testing
-	header.BaseFee = misc.CalcSlotBaseFee(config, config.ValidatorsPerSlot, 2048, 105000000)
+	header.BaseFee = misc.CalcSlotBaseFee(config, config.ValidatorsPerSlot, 64, 105000000)
 
 	return header
 }
