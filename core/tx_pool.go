@@ -476,7 +476,6 @@ func (pool *TxPool) loop() {
 						pool.removeTx(tx.Hash(), true)
 					}
 				} else {
-
 					defer func(tStart time.Time) {
 						log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing block (moveToProcessingAccelerated)",
 							"elapsed", common.PrettyDuration(time.Since(tStart)),
@@ -486,7 +485,6 @@ func (pool *TxPool) loop() {
 							"syncMode", syncMode,
 						)
 					}(time.Now())
-
 					pool.moveToProcessingAccelerated(txs)
 				}
 			}()
