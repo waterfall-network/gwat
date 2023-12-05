@@ -462,6 +462,7 @@ func (pool *TxPool) loop() {
 						"elapsed", common.PrettyDuration(time.Since(tStart)),
 						"func:", "moveToProcessing",
 						"txs", len(txs.Transactions),
+						"block", txs.BlockHash.Hex(),
 						"syncMode", syncMode,
 					)
 				}(time.Now())
