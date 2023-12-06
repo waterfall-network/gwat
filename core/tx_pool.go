@@ -1353,14 +1353,28 @@ func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
 	for i := len(transactions) - 1; i >= 0; i-- {
 		btx := transactions[i]
 		tx.Transaction = btx
-		poolTx := pool.all.Get(tx.Transaction.Hash())
-		if poolTx == nil {
-			poolTx = tx.Transaction
-		}
-		addr, err := types.Sender(pool.signer, poolTx) // already validated during insertion
-		if err != nil {
-			log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())
-			return
+
+		// retrieving sender addr of tx
+		var addr common.Address
+		if pAddr := types.SenderFromCache(pool.signer, tx.Transaction); pAddr == nil {
+			// get by pooled tx
+			poolTx := pool.all.Get(tx.Transaction.Hash())
+			if poolTx == nil {
+				poolTx = tx.Transaction
+			}
+			sndr, err := types.Sender(pool.signer, poolTx) // already validated during insertion
+			if err != nil {
+				log.Error("TxPool: move to processing: get sender failed",
+					"txHash", tx.Hash().Hex(),
+					"blHash", txs.BlockHash.Hex(),
+					"err", err.Error())
+				return
+			}
+			addr = sndr
+			//cache sender to block tx
+			types.CacheSender(pool.signer, &sndr, tx.Transaction)
+		} else {
+			addr = *pAddr
 		}
 
 		if curAdr == addr {

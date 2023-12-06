@@ -2798,8 +2798,9 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		return 0, nil
 	}
 
-	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
+	//todo check is cacher required
+	//// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
+	//senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -2827,10 +2828,10 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 	block, err := it.next()
 
 	switch {
-	// First block is pruned, insert as sidechain and reorg
-	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("Insert blocks: pruned ancestor, inserting as sidechain", "op", op, "hash", block.Hash().Hex())
-		return bc.insertSideChain(block, it)
+	//// First block is pruned, insert as sidechain and reorg
+	//case errors.Is(err, consensus.ErrPrunedAncestor):
+	//	log.Warn("Insert blocks: pruned ancestor, inserting as sidechain", "op", op, "hash", block.Hash().Hex())
+	//	return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
 	case err != nil:
@@ -4385,11 +4386,12 @@ func (bc *BlockChain) MoveTxsToProcessing(block *types.Block) {
 
 	txs := types.NewBlockTransactions(block.Hash())
 	bc.handleBlockValidatorSyncTxs(block)
-	txs.Transactions = append(txs.Transactions, block.Transactions()...)
+	//txs.Transactions = append(txs.Transactions, block.Transactions()...)
+	txs.Transactions = block.Transactions()
 
-	sort.Slice(txs.Transactions, func(i, j int) bool {
-		return txs.Transactions[i].Nonce() < txs.Transactions[j].Nonce()
-	})
+	//sort.Slice(txs.Transactions, func(i, j int) bool {
+	//	return txs.Transactions[i].Nonce() < txs.Transactions[j].Nonce()
+	//})
 
 	bc.moveTxsToProcessing(txs)
 }

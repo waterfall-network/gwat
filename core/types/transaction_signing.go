@@ -107,12 +107,12 @@ func MustSignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) *Transaction 
 // not match the signer used in the current call.
 func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	if sc := tx.from.Load(); sc != nil {
-		sigCache := sc.(sigCache)
+		sigCached := sc.(sigCache)
 		// If the signer used to derive from in a previous
 		// call is not the same as used current, invalidate
 		// the cache.
-		if sigCache.signer.Equal(signer) {
-			return sigCache.from, nil
+		if sigCached.signer.Equal(signer) {
+			return sigCached.from, nil
 		}
 	}
 
@@ -122,6 +122,25 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	}
 	tx.from.Store(sigCache{signer: signer, from: addr})
 	return addr, nil
+}
+
+func SenderFromCache(signer Signer, tx *Transaction) *common.Address {
+	if sc := tx.from.Load(); sc != nil {
+		sigCached := sc.(sigCache)
+		if sigCached.signer.Equal(signer) {
+			from := sigCached.from
+			return &from
+		}
+	}
+	return nil
+}
+
+func CacheSender(signer Signer, sender *common.Address, tx *Transaction) {
+	if sender == nil {
+		tx.from.Store(nil)
+		return
+	}
+	tx.from.Store(sigCache{signer: signer, from: *sender})
 }
 
 // Signer encapsulates transaction signature handling. The name of this type is slightly
