@@ -506,7 +506,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		)
 	}
 
-	log.Info("Block creation: assigned txs", "len(pendingTxs)", len(pendingTxs), "len(syncData)", len(syncData))
+	log.Info("Block creation: assigned op for", "senders", len(pendingTxs), "validators", len(syncData))
 
 	// Short circuit if no pending transactions
 	if len(pendingTxs) == 0 && len(syncData) == 0 {

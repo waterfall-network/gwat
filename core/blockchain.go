@@ -2399,9 +2399,7 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 
 	// Verify body hash
 	blockBody := block.Body()
-
 	calcBodyHash := blockBody.CalculateHash()
-
 	if calcBodyHash != block.BodyHash() {
 		log.Warn("Block verification: invalid body hash",
 			"hash", block.Hash().Hex(),
@@ -4701,6 +4699,15 @@ func (bc *BlockChain) IsSynced() bool {
 
 func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 	currentSlot := bc.GetTips().GetMaxSlot()
+
+	//todo remove tmp test code
+	delaySlot := bc.slotInfo.CurrentSlot() - 3
+	if currentSlot > delaySlot {
+		log.Info("TODO RM: GetOptimisticSpines delaying", "tipsSlot", currentSlot, "delaySlot", delaySlot)
+		currentSlot = delaySlot
+	}
+	//todo remove tmp test code
+
 	if currentSlot <= gtSlot {
 		return []common.HashArray{}, nil
 	}
