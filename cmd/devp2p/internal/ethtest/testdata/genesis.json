@@ -6,7 +6,13 @@
         "eip155Block": 0,
         "eip158Block": 0,
         "byzantiumBlock": 0,
-        "ethash": {}
+        "secondsPerSlot": 4,
+        "slotsPerEpoch": 8,
+        "forkSlotSubNet1": 20,
+        "validatorsPerSlot": 4,
+        "epochsPerEra": 8,
+        "transitionPeriod": 2,
+        "effectiveBalance": 3200
     },
     "nonce": "0xdeadbeefdeadbeef",
     "timestamp": "0x0",
@@ -21,5 +27,5 @@
     },
     "number": "0x0",
     "gasUsed": "0x0",
-    "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    "parentHashes": ["0x0000000000000000000000000000000000000000000000000000000000000000"]
 }

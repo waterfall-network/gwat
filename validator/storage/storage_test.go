@@ -103,7 +103,7 @@ func TestGetValidators(t *testing.T) {
 	})
 
 	for _, address := range testmodels.InputValidators {
-		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
+		validator := NewValidator(common.BlsPubKey{}, address, nil)
 
 		validatorsList = append(validatorsList, *validator)
 		err := store.SetValidator(stateDb, validator)
