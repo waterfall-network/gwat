@@ -2391,17 +2391,9 @@ func (bc *BlockChain) verifyBlockHeight(block *types.Block, ancestorsCount int) 
 
 func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 	timeTrack := time.Now()
-
-	//todo RM test !!!
-	if true {
-		return true
-	}
-
 	// Verify body hash
 	blockBody := block.Body()
-
 	calcBodyHash := blockBody.CalculateHash()
-
 	if calcBodyHash != block.BodyHash() {
 		log.Warn("Block verification: invalid body hash",
 			"hash", block.Hash().Hex(),
@@ -2420,28 +2412,27 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 		"calcBodyHash", calcBodyHash.Hex(),
 	)
 
-	////todo uncomment
-	//timeTrack = time.Now()
-	//// Verify transactions hash
-	//calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
-	//
-	//log.Info("VALIDATION TIME verifyBlockHashes 111",
-	//	"elapsed", common.PrettyDuration(time.Since(timeTrack)),
-	//	"fn:", "verifyBlockHashes",
-	//	"txs", len(block.Transactions()),
-	//	"hash", block.Hash().Hex(),
-	//	"TxHash", block.TxHash(),
-	//	"calcTxHash", calcTxHash.Hex(),
-	//)
-	//
-	//if calcTxHash != block.TxHash() {
-	//	log.Warn("Block verification: invalid transactions hash",
-	//		"hash", block.Hash().Hex(),
-	//		"txHash", block.TxHash().Hex(),
-	//		"calc.txHash", calcTxHash.Hex(),
-	//	)
-	//	return false
-	//}
+	timeTrack = time.Now()
+	// Verify transactions hash
+	calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
+
+	log.Info("VALIDATION TIME verifyBlockHashes 111",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+		"TxHash", block.TxHash(),
+		"calcTxHash", calcTxHash.Hex(),
+	)
+
+	if calcTxHash != block.TxHash() {
+		log.Warn("Block verification: invalid transactions hash",
+			"hash", block.Hash().Hex(),
+			"txHash", block.TxHash().Hex(),
+			"calc.txHash", calcTxHash.Hex(),
+		)
+		return false
+	}
 	return true
 }
 
