@@ -8,7 +8,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
@@ -53,7 +52,7 @@ func TestHandleGetOptimisticSpines(t *testing.T) {
 	bc.EXPECT().GetBlock(spineBlockTest.Hash()).Return(spineBlockTest)
 	down.EXPECT().Synchronising().Return(true)
 	result = dag.HandleGetOptimisticSpines(spineBlockTest.Hash())
-	expectedErr := creator.ErrSynchronization.Error()
+	expectedErr := errSynchronization.Error()
 	expectedResult = types.OptimisticSpinesResult{
 		Error: &expectedErr,
 	}

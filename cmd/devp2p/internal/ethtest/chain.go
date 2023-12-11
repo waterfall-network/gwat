@@ -21,15 +21,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/forkid"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 type Chain struct {
@@ -109,6 +110,25 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+	gen.Validators = depositData
+	gen.ParentHashes = common.HashArray{
+		common.Hash{0x01},
+		common.Hash{0x02},
+		common.Hash{0x03},
+	}
+
 	gblock := gen.ToBlock(nil)
 
 	blocks, err := blocksFromFile(chainfile, gblock)
@@ -121,7 +141,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 }
 
 func loadGenesis(genesisFile string) (core.Genesis, error) {
-	chainConfig, err := ioutil.ReadFile(genesisFile)
+	chainConfig, err := os.ReadFile(genesisFile)
 	if err != nil {
 		return core.Genesis{}, err
 	}
@@ -150,6 +170,7 @@ func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, erro
 	blocks[0] = gblock
 	for i := 0; ; i++ {
 		var b types.Block
+
 		if err := stream.Decode(&b); err == io.EOF {
 			break
 		} else if err != nil {

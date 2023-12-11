@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 // TestEthProtocolNegotiation tests whether the test suite
@@ -116,7 +116,7 @@ func TestEthProtocolNegotiation(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			tt.conn.negotiateEthProtocol(tt.caps)
-			assert.Equal(t, tt.expected, uint32(tt.conn.negotiatedProtoVersion))
+			testutils.AssertEqual(t, tt.expected, uint32(tt.conn.negotiatedProtoVersion))
 		})
 	}
 }
@@ -195,7 +195,7 @@ func TestChain_GetHeaders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			assert.Equal(t, headers, tt.expected)
+			testutils.AssertEqual(t, headers, tt.expected)
 		})
 	}
 }

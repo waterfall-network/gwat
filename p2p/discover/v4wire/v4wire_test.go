@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
@@ -42,14 +43,15 @@ var testPackets = []struct {
 		},
 	},
 	{
-		input: "e9614ccfd9fc3e74360018522d30e1419a143407ffcce748de3e22116b7e8dc92ff74788c0b6663aaa3d67d641936511c8f8d6ad8698b820a7cf9e1be7155e9a241f556658c55428ec0563514365799a4be2be5a685a80971ddcfa80cb422cdd0101ec04cb847f000001820cfa8215a8d790000000000000000000000000000000018208ae820d058443b9a3550102",
+		input: "16c76e51331150e5c8ebd19ab6f2efb12ac4fadb5f1b31349a28f4aa6db5d1ec5bd0221b76ede94975775aaf5629b005bc463c9182aeea6d20f08b686ce726f215a709bb2cdb5edbbb2d2e08ae374b0686efabddee9ceb4e969d37113a3779d50001f84d04cb847f000001820cfa8215a8d790000000000000000000000000000000018208ae820d058443b9a35501a0000000000000000000000000000000000000000000000000000000000000000102",
 		wantPacket: &Ping{
-			Version:    4,
-			From:       Endpoint{net.ParseIP("127.0.0.1").To4(), 3322, 5544},
-			To:         Endpoint{net.ParseIP("::1"), 2222, 3333},
-			Expiration: 1136239445,
-			ENRSeq:     1,
-			Rest:       []rlp.RawValue{{0x02}},
+			Version:     4,
+			From:        Endpoint{net.ParseIP("127.0.0.1").To4(), 3322, 5544},
+			To:          Endpoint{net.ParseIP("::1"), 2222, 3333},
+			Expiration:  1136239445,
+			ENRSeq:      1,
+			GenesisHash: common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+			Rest:        []rlp.RawValue{{0x02}},
 		},
 	},
 	{
@@ -105,6 +107,16 @@ func TestForwardCompatibility(t *testing.T) {
 		if err != nil {
 			t.Fatalf("invalid hex: %s", test.input)
 		}
+
+		encodedBytes, _, err := Encode(testkey, test.wantPacket.(Packet))
+		if err != nil {
+			t.Errorf("error encoding packet: %v", err)
+			continue
+		}
+
+		// Convert bytes to a hexadecimal string
+		hexString := hex.EncodeToString(encodedBytes)
+		t.Logf("Encoded to Hex: %s", hexString)
 		packet, nodekey, _, err := Decode(input)
 		if err != nil {
 			t.Errorf("did not accept packet %s\n%v", test.input, err)
