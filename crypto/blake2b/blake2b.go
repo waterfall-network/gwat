@@ -37,9 +37,6 @@ var (
 	useAVX2 bool
 	useAVX  bool
 	useSSE4 bool
-	_       = useAVX2
-	_       = useAVX
-	_       = useSSE4
 )
 
 var (

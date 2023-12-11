@@ -73,7 +73,6 @@ type blockChain interface {
 	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
 	GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error)
-	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
 	EpochToEra(uint64) *era.Era
 	Genesis() *types.Block
 

@@ -28,7 +28,6 @@ import (
 
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -221,7 +220,6 @@ type BlockChain interface {
 	RemoveTips(hashes common.HashArray)
 	ResetTips() error
 	GetUnsynchronizedTipsHashes() common.HashArray
-	ExploreChainRecursive(headHash common.Hash, memo ...core.ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache core.ExploreResultMap, err error)
 	//SetSyncProvider set provider of access to synchronization functionality
 	SetSyncProvider(provider types.SyncProvider)
 	IsSynced() bool
