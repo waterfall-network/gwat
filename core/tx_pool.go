@@ -1285,9 +1285,6 @@ func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
 		pool.all.Add(t, false)
 		if t.Hash() == tx.Hash() {
 			for _, hash := range tx.BlocksHashes {
-				//if !pool.processing[addr].txs.blocksHashes[tx.Hash()].Has(hash) {
-				//	pool.processing[addr].PutTxBlockHash(tx.Hash(), hash)
-				//}
 				pool.processing[addr].PutTxBlockHash(tx.Hash(), hash)
 			}
 		}
@@ -1388,109 +1385,33 @@ func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
 		curAdr = addr
 
 		pendingLteNonce := types.Transactions{}
-		//var wg1 sync.WaitGroup
-		//wg1.Add(1)
-		//go func() {
-		//	defer wg1.Done()
-		//move to processing all txs with nonce <= nonce of current tx
-		if pending := pool.pending[addr]; pending != nil {
-			pendingLteNonce = pending.Forward(btx.Nonce() + 1)
-			for _, t := range pendingLteNonce {
-				pending.Delete(t)
-			}
-			// If no more pending transactions are left, remove the list
-			if pending.Empty() {
-				delete(pool.pending, addr)
-			}
-		}
-		//}()
-
-		queueLteNonce := types.Transactions{}
-		//wg1.Add(1)
-		//go func() {
-		//	defer wg1.Done()
-		//move to processing all txs with nonce <= nonce of current tx
-		if queue := pool.queue[addr]; queue != nil {
-			queueLteNonce = queue.Forward(btx.Nonce() + 1)
-			//queueLteNonce = queue.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
-			for _, t := range queueLteNonce {
-				queue.Delete(t)
-			}
-			// If no more queue transactions are left, remove the list
-			if queue.Empty() {
-				delete(pool.queue, addr)
-				delete(pool.beats, addr)
-			}
-		}
-		//}()
-
-		//wg1.Add(1)
-		//go func() {
-		//	defer wg1.Done()
-		curNonce := pool.currentState.GetNonce(addr)
-		if curNonce > btx.Nonce() {
-			if pool.processing[addr] != nil {
-				pool.processing[addr].Forward(curNonce)
-			}
-			return
-		}
-		//}()
-		//wg1.Wait()
-
-		// Update the account nonce if needed
-		pool.pendingNonces.setIfGreater(addr, btx.Nonce()+1)
-		processingNonce := btx.Nonce()
-
-		//var wg2 sync.WaitGroup
-		//wg2.Add(1)
-		//go func() {
-		//	defer wg2.Done()
-		// add to processing
-		moveTxs := append(pendingLteNonce, queueLteNonce...)
-		moveTxs = append(moveTxs, btx)
-		for _, t := range moveTxs {
-			pool.processing[addr].Add(t, pool.config.PriceBump)
-			pool.all.Add(t, false)
-		}
-		//}()
-
-		//wg2.Add(1)
-		//go func() {
-		//	defer wg2.Done()
-		// check no gap with pending
-		if pending := pool.pending[addr]; pending != nil {
-			pendingNonce := (*pending.txs.index)[0]
-			if pendingNonce > processingNonce+1 {
-				//if gap move all to queue
-				pendingGtNonce := pending.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() > processingNonce+1 })
-				for _, t := range pendingGtNonce {
-					pool.pending[addr].Delete(t)
-					if pool.queue[addr] == nil {
-						pool.queue[addr] = newTxList(true)
-					}
-					pool.queue[addr].Add(t, pool.config.PriceBump)
-					//pool.enqueueTx(t.Hash(), tx, false, false)
+		var wg1 sync.WaitGroup
+		wg1.Add(1)
+		go func() {
+			defer wg1.Done()
+			//move to processing all txs with nonce <= nonce of current tx
+			if pending := pool.pending[addr]; pending != nil {
+				pendingLteNonce = pending.Forward(btx.Nonce() + 1)
+				for _, t := range pendingLteNonce {
+					pending.Delete(t)
 				}
 				// If no more pending transactions are left, remove the list
 				if pending.Empty() {
 					delete(pool.pending, addr)
 				}
 			}
-		}
+		}()
 
-		// if no gap to queue - move to pending
-		if queue := pool.queue[addr]; queue != nil {
-			//lowestNonce := queue.txs.FirstElement().Nonce()
-			lowestNonce := (*queue.txs.index)[0]
-			if lowestNonce <= processingNonce+1 {
-				for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
-					t := queue.txs.Get(i)
+		queueLteNonce := types.Transactions{}
+		wg1.Add(1)
+		go func() {
+			defer wg1.Done()
+			//move to processing all txs with nonce <= nonce of current tx
+			if queue := pool.queue[addr]; queue != nil {
+				queueLteNonce = queue.Forward(btx.Nonce() + 1)
+				//queueLteNonce = queue.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
+				for _, t := range queueLteNonce {
 					queue.Delete(t)
-					if pool.pending[addr] == nil {
-						pool.pending[addr] = newTxList(true)
-					}
-					pool.pending[addr].Add(t, pool.config.PriceBump)
-					//pool.promoteTx(addr, t.Hash(), t)
 				}
 				// If no more queue transactions are left, remove the list
 				if queue.Empty() {
@@ -1498,14 +1419,90 @@ func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
 					delete(pool.beats, addr)
 				}
 			}
-		}
+		}()
+
+		wg1.Add(1)
+		go func() {
+			defer wg1.Done()
+			curNonce := pool.currentState.GetNonce(addr)
+			if curNonce > btx.Nonce() {
+				if pool.processing[addr] != nil {
+					pool.processing[addr].Forward(curNonce)
+				}
+				return
+			}
+		}()
+		wg1.Wait()
 
 		// Update the account nonce if needed
-		if pool.pending[addr] != nil {
-			pool.pendingNonces.setIfGreater(addr, pool.pending[addr].LastElement().Nonce()+1)
-		}
-		//}()
-		//wg2.Wait()
+		pool.pendingNonces.setIfGreater(addr, btx.Nonce()+1)
+		processingNonce := btx.Nonce()
+
+		var wg2 sync.WaitGroup
+		wg2.Add(1)
+		go func() {
+			defer wg2.Done()
+			// add to processing
+			moveTxs := append(pendingLteNonce, queueLteNonce...)
+			moveTxs = append(moveTxs, btx)
+			for _, t := range moveTxs {
+				pool.processing[addr].Add(t, pool.config.PriceBump)
+				pool.all.Add(t, false)
+			}
+		}()
+
+		wg2.Add(1)
+		go func() {
+			defer wg2.Done()
+			// check no gap with pending
+			if pending := pool.pending[addr]; pending != nil {
+				pendingNonce := (*pending.txs.index)[0]
+				if pendingNonce > processingNonce+1 {
+					//if gap move all to queue
+					pendingGtNonce := pending.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() > processingNonce+1 })
+					for _, t := range pendingGtNonce {
+						pool.pending[addr].Delete(t)
+						if pool.queue[addr] == nil {
+							pool.queue[addr] = newTxList(true)
+						}
+						pool.queue[addr].Add(t, pool.config.PriceBump)
+						//pool.enqueueTx(t.Hash(), tx, false, false)
+					}
+					// If no more pending transactions are left, remove the list
+					if pending.Empty() {
+						delete(pool.pending, addr)
+					}
+				}
+			}
+
+			// if no gap to queue - move to pending
+			if queue := pool.queue[addr]; queue != nil {
+				//lowestNonce := queue.txs.FirstElement().Nonce()
+				lowestNonce := (*queue.txs.index)[0]
+				if lowestNonce <= processingNonce+1 {
+					for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
+						t := queue.txs.Get(i)
+						queue.Delete(t)
+						if pool.pending[addr] == nil {
+							pool.pending[addr] = newTxList(true)
+						}
+						pool.pending[addr].Add(t, pool.config.PriceBump)
+						//pool.promoteTx(addr, t.Hash(), t)
+					}
+					// If no more queue transactions are left, remove the list
+					if queue.Empty() {
+						delete(pool.queue, addr)
+						delete(pool.beats, addr)
+					}
+				}
+			}
+
+			// Update the account nonce if needed
+			if pool.pending[addr] != nil {
+				pool.pendingNonces.setIfGreater(addr, pool.pending[addr].LastElement().Nonce()+1)
+			}
+		}()
+		wg2.Wait()
 	}
 }
 

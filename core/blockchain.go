@@ -2418,28 +2418,27 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 		"calcBodyHash", calcBodyHash.Hex(),
 	)
 
-	////todo uncomment
-	//timeTrack = time.Now()
-	//// Verify transactions hash
-	//calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
-	//
-	//log.Info("VALIDATION TIME verifyBlockHashes 111",
-	//	"elapsed", common.PrettyDuration(time.Since(timeTrack)),
-	//	"fn:", "verifyBlockHashes",
-	//	"txs", len(block.Transactions()),
-	//	"hash", block.Hash().Hex(),
-	//	"TxHash", block.TxHash(),
-	//	"calcTxHash", calcTxHash.Hex(),
-	//)
-	//
-	//if calcTxHash != block.TxHash() {
-	//	log.Warn("Block verification: invalid transactions hash",
-	//		"hash", block.Hash().Hex(),
-	//		"txHash", block.TxHash().Hex(),
-	//		"calc.txHash", calcTxHash.Hex(),
-	//	)
-	//	return false
-	//}
+	timeTrack = time.Now()
+	// Verify transactions hash
+	calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
+
+	log.Info("VALIDATION TIME verifyBlockHashes 111",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+		"TxHash", block.TxHash(),
+		"calcTxHash", calcTxHash.Hex(),
+	)
+
+	if calcTxHash != block.TxHash() {
+		log.Warn("Block verification: invalid transactions hash",
+			"hash", block.Hash().Hex(),
+			"txHash", block.TxHash().Hex(),
+			"calc.txHash", calcTxHash.Hex(),
+		)
+		return false
+	}
 	return true
 }
 
@@ -3465,7 +3464,7 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 
 // CommitBlockTransactions commits transactions of red blocks.
 func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state.StateDB) (*state.StateDB, []*types.Receipt, []*types.Log, uint64) {
-	log.Info("Commit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
+	log.Info("Commit block transactions", "txs", len(block.Transactions()), "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
 	signer := types.MakeSigner(bc.chainConfig)
