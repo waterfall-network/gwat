@@ -4692,15 +4692,6 @@ func (bc *BlockChain) IsSynced() bool {
 
 func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 	currentSlot := bc.GetTips().GetMaxSlot()
-
-	//todo remove tmp test code
-	delaySlot := bc.slotInfo.CurrentSlot() - 3
-	if currentSlot > delaySlot {
-		log.Info("TODO RM: GetOptimisticSpines delaying", "tipsSlot", currentSlot, "delaySlot", delaySlot)
-		currentSlot = delaySlot
-	}
-	//todo remove tmp test code
-
 	if currentSlot <= gtSlot {
 		return []common.HashArray{}, nil
 	}
