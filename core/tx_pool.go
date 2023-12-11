@@ -1285,9 +1285,6 @@ func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
 		pool.all.Add(t, false)
 		if t.Hash() == tx.Hash() {
 			for _, hash := range tx.BlocksHashes {
-				//if !pool.processing[addr].txs.blocksHashes[tx.Hash()].Has(hash) {
-				//	pool.processing[addr].PutTxBlockHash(tx.Hash(), hash)
-				//}
 				pool.processing[addr].PutTxBlockHash(tx.Hash(), hash)
 			}
 		}
@@ -1435,7 +1432,6 @@ func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
 				return
 			}
 		}()
-
 		wg1.Wait()
 
 		// Update the account nonce if needed
@@ -1506,7 +1502,6 @@ func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
 				pool.pendingNonces.setIfGreater(addr, pool.pending[addr].LastElement().Nonce()+1)
 			}
 		}()
-
 		wg2.Wait()
 	}
 }

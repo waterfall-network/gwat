@@ -3458,7 +3458,7 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 
 // CommitBlockTransactions commits transactions of red blocks.
 func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state.StateDB) (*state.StateDB, []*types.Receipt, []*types.Log, uint64) {
-	log.Info("Commit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
+	log.Info("Commit block transactions", "txs", len(block.Transactions()), "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
 	signer := types.MakeSigner(bc.chainConfig)
@@ -4692,6 +4692,15 @@ func (bc *BlockChain) IsSynced() bool {
 
 func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error) {
 	currentSlot := bc.GetTips().GetMaxSlot()
+
+	//todo remove tmp test code
+	delaySlot := bc.slotInfo.CurrentSlot() - 3
+	if currentSlot > delaySlot {
+		log.Info("TODO RM: GetOptimisticSpines delaying", "tipsSlot", currentSlot, "delaySlot", delaySlot)
+		currentSlot = delaySlot
+	}
+	//todo remove tmp test code
+
 	if currentSlot <= gtSlot {
 		return []common.HashArray{}, nil
 	}
