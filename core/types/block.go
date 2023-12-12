@@ -270,7 +270,7 @@ func (b *Body) ToBytes() ([]byte, error) {
 
 	txsLen := len(txsBytes)
 
-	res := make([]byte, txsLen+uint32Length, txsLen+uint32Length)
+	res := make([]byte, txsLen+uint32Length)
 	copy(res[:uint32Length], common.Uint64ToBytes(uint64(txsLen)))
 	copy(res[uint32Length:], txsBytes)
 
@@ -696,7 +696,7 @@ func (shm *SlotSpineMap) GetOrderedHashes() *common.HashArray {
 	hashes := make(common.HashArray, 0, len(*shm))
 	//sort by slots
 	slots := common.SorterAscU64{}
-	for sl, _ := range *shm {
+	for sl := range *shm {
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)

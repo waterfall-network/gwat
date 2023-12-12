@@ -28,7 +28,6 @@ func NewStorageStream(tokenAddr common.Address, statedb vm.StateDB) *StorageStre
 }
 
 func (s *StorageStream) WriteAt(b []byte, off *big.Int) (int, error) {
-
 	return s.do(b, off, func(streamBuf, b []byte) int {
 		return copy(streamBuf, b)
 	})

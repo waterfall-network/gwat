@@ -136,18 +136,13 @@ type blockOrHeaderInject struct {
 	fetchBodies bodyRequesterFn   // Fetcher function to retrieve the body of an announced block
 }
 
-// number returns the block number of the injected object.
-func (inject *blockOrHeaderInject) number() uint64 {
-	return inject.nrCounter
-}
-
-// number returns the block number of the injected object.
+// incrNumber returns the next number.
 func (inject *blockOrHeaderInject) incrNumber() uint64 {
 	inject.nrCounter++
 	return inject.nrCounter
 }
 
-// number returns the block hash of the injected object.
+// hash returns the block hash of the injected object.
 func (inject *blockOrHeaderInject) hash() common.Hash {
 	if inject.header != nil {
 		return inject.header.Hash()
@@ -667,7 +662,6 @@ func (f *BlockFetcher) loop() {
 						} else {
 							f.forgetHash(hash)
 						}
-
 					}
 					if matched {
 						task.transactions = append(task.transactions[:i], task.transactions[i+1:]...)

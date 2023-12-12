@@ -18,6 +18,7 @@
 package ethconfig
 
 import (
+	"log"
 	"math/big"
 	"os"
 	"os/user"
@@ -82,6 +83,7 @@ func init() {
 	if home == "" {
 		if user, err := user.Current(); err == nil {
 			home = user.HomeDir
+			log.Printf("Setting home directory to %s\n", home)
 		}
 	}
 }

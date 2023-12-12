@@ -103,13 +103,13 @@ func TestValidatorSync_MarshalJSON(t *testing.T) {
 		{
 			name: "Marshal-1",
 			src:  src_1,
-			want: fmt.Sprintf("%s", exp),
+			want: exp,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, _ := tt.src.MarshalJSON()
-			got := fmt.Sprintf("%s", res)
+			got := res
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got:  %v\nwant: %v", got, tt.want)
 			}
@@ -400,13 +400,13 @@ func TestFinalizationParams_MarshalJSON(t *testing.T) {
 		{
 			name: "Marshal-1",
 			src:  src_1,
-			want: fmt.Sprintf("%s", exp),
+			want: exp,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, _ := tt.src.MarshalJSON()
-			got := fmt.Sprintf("%s", res)
+			got := res
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got:  %v\nwant: %v", got, tt.want)
 			}

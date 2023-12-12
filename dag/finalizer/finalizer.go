@@ -5,6 +5,7 @@
 package finalizer
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync/atomic"
@@ -37,7 +38,7 @@ type BlockChain interface {
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 	UpdateFinalizingState(block *types.Block, stateBlock *types.Block) error
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64)
 	ReadFinalizedNumberByHash(hash common.Hash) *uint64
 	ReadFinalizedHashByNumber(number uint64) common.Hash
@@ -91,6 +92,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 		return nil
 	}
 
+	ctx := context.Background()
 	lastFinBlock := f.bc.GetLastFinalizedBlock()
 
 	if err := f.SetSpineState(baseSpine, lastFinBlock.Nr()); err != nil {
@@ -153,7 +155,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 			}
 			lastFinBlock = block
 		}
-		lastBlock := f.bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
+		lastBlock := f.bc.GetBlock(ctx, orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 
 		// TODO: deprecated

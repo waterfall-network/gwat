@@ -90,7 +90,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		CpBloom       *Bloom            `json:"cpLogsBloom"      gencodec:"required"`
 		Coinbase     *common.Address `json:"miner"            gencodec:"required"`
 		TxHash       *common.Hash    `json:"transactionsRoot" gencodec:"required"`
-		BodyHash     *common.Hash    `json:"bodyRoot" 		  gencodec:"required"`
+		BodyHash     *common.Hash    `json:"bodyRoot"         gencodec:"required"`
 		GasLimit     *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
 		Time         *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
 		Extra        *hexutil.Bytes  `json:"extraData"        gencodec:"required"`

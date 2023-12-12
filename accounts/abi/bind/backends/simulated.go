@@ -796,6 +796,11 @@ type callMsg struct {
 	ethereum.CallMsg
 }
 
+// SetGas implements core.Message.
+func (callMsg) SetGas(gas uint64) types.Message {
+	panic("unimplemented")
+}
+
 func (m callMsg) From() common.Address         { return m.CallMsg.From }
 func (m callMsg) Nonce() uint64                { return 0 }
 func (m callMsg) IsFake() bool                 { return true }

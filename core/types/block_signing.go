@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/ecdsa"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 )

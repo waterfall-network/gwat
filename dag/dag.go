@@ -6,6 +6,7 @@
 package dag
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -50,7 +51,7 @@ type blockChain interface {
 	AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync)
 	GetLastFinalizedHeader() *types.Header
 	GetHeaderByHash(common.Hash) *types.Header
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetLastFinalizedNumber() uint64
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
@@ -72,7 +73,6 @@ type blockChain interface {
 	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
 	GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error)
-	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
 	EpochToEra(uint64) *era.Era
 	Genesis() *types.Block
 
@@ -646,6 +646,9 @@ func (d *Dag) workLoop() {
 			}
 
 			endTransitionSlot, err := d.bc.GetSlotInfo().SlotOfEpochEnd(d.bc.GetEraInfo().ToEpoch())
+			if err != nil {
+				log.Error("Error calculating end transition slot", "error", err)
+			}
 
 			log.Info("New slot",
 				"slot", slot,
@@ -787,9 +790,5 @@ func (d *Dag) resetCheckpoint() {
 
 // isSlotLocked compare incoming epoch/slot with the latest epoch/slot of chain.
 func (d *Dag) isSlotLocked(slot uint64) bool {
-	if slot <= d.bc.GetLastFinalizedHeader().Slot {
-		return true
-	}
-
-	return false
+	return slot <= d.bc.GetLastFinalizedHeader().Slot
 }

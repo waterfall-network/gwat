@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/keystore"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
@@ -67,16 +65,6 @@ func (w *wizard) deployNode(boot bool) {
 		fmt.Printf("Where should data be stored on the remote machine? (default = %s)\n", infos.datadir)
 		infos.datadir = w.readDefaultString(infos.datadir)
 	}
-	if w.conf.Genesis.Config.Ethash != nil && !boot {
-		fmt.Println()
-		if infos.ethashdir == "" {
-			fmt.Printf("Where should the ethash mining DAGs be stored on the remote machine?\n")
-			infos.ethashdir = w.readString()
-		} else {
-			fmt.Printf("Where should the ethash mining DAGs be stored on the remote machine? (default = %s)\n", infos.ethashdir)
-			infos.ethashdir = w.readDefaultString(infos.ethashdir)
-		}
-	}
 	// Figure out which port to listen on
 	fmt.Println()
 	fmt.Printf("Which TCP/UDP port to listen on? (default = %d)\n", infos.port)
@@ -103,50 +91,6 @@ func (w *wizard) deployNode(boot bool) {
 	}
 	// If the node is a miner/signer, load up needed credentials
 	if !boot {
-		if w.conf.Genesis.Config.Ethash != nil {
-			// Ethash based miners only need an etherbase to mine against
-			fmt.Println()
-			if infos.etherbase == "" {
-				fmt.Printf("What address should the miner use?\n")
-				for {
-					if address := w.readAddress(); address != nil {
-						infos.etherbase = address.Hex()
-						break
-					}
-				}
-			} else {
-				fmt.Printf("What address should the miner use? (default = %s)\n", infos.etherbase)
-				infos.etherbase = w.readDefaultAddress(common.HexToAddress(infos.etherbase)).Hex()
-			}
-		} else if w.conf.Genesis.Config.Clique != nil {
-			// If a previous signer was already set, offer to reuse it
-			if infos.keyJSON != "" {
-				if key, err := keystore.DecryptKey([]byte(infos.keyJSON), infos.keyPass); err != nil {
-					infos.keyJSON, infos.keyPass = "", ""
-				} else {
-					fmt.Println()
-					fmt.Printf("Reuse previous (%s) signing account (y/n)? (default = yes)\n", key.Address.Hex())
-					if !w.readDefaultYesNo(true) {
-						infos.keyJSON, infos.keyPass = "", ""
-					}
-				}
-			}
-			// Clique based signers need a keyfile and unlock password, ask if unavailable
-			if infos.keyJSON == "" {
-				fmt.Println()
-				fmt.Println("Please paste the signer's key JSON:")
-				infos.keyJSON = w.readJSON()
-
-				fmt.Println()
-				fmt.Println("What's the unlock password for the account? (won't be echoed)")
-				infos.keyPass = w.readPassword()
-
-				if _, err := keystore.DecryptKey([]byte(infos.keyJSON), infos.keyPass); err != nil {
-					log.Error("Failed to decrypt key with given password")
-					return
-				}
-			}
-		}
 		// Establish the gas dynamics to be enforced by the signer
 		fmt.Println()
 		fmt.Printf("What gas limit should empty blocks target (MGas)? (default = %0.3f)\n", infos.gasTarget)

@@ -27,7 +27,6 @@ import (
 
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -184,11 +183,6 @@ func (dl *downloadTester) ResetTips() error {
 }
 
 func (dl *downloadTester) GetUnsynchronizedTipsHashes() common.HashArray {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (dl *downloadTester) ExploreChainRecursive(headHash common.Hash, memo ...core.ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache core.ExploreResultMap, err error) {
 	//TODO implement me
 	panic("implement me")
 }

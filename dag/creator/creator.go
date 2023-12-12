@@ -339,11 +339,11 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 				dagBlock := c.bc.GetBlockDag(hash)
 				if dagBlock == nil {
 					parentBlock := c.bc.GetHeader(hash)
-					cpHeader := c.bc.GetHeader(parentBlock.CpHash)
 					if parentBlock == nil {
 						log.Warn("Creator reorg tips failed: bad parent in dag", "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex(), "parent", hash.Hex())
 						continue
 					}
+					cpHeader := c.bc.GetHeader(parentBlock.CpHash)
 					//if block not finalized
 					log.Warn("Creator reorg tips: active BlockDag not found", "parent", hash.Hex(), "parent.slot", parentBlock.Slot, "parent.height", parentBlock.Height, "slot", block.Slot(), "height", block.Height(), "hash", block.Hash().Hex())
 					isCpAncestor, ancestors, unloaded, err := c.bc.CollectAncestorsAftCpByParents(block.ParentHashes(), block.CpHash())
@@ -621,7 +621,6 @@ func (c *Creator) create(header *types.Header, update bool) {
 	if update {
 		c.updateSnapshot(header)
 	}
-	return
 }
 
 // isSyncing returns tru while sync pocess

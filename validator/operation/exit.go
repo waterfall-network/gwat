@@ -2,6 +2,7 @@ package operation
 
 import (
 	"encoding/binary"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 )
 
@@ -46,7 +47,6 @@ func NewExitOperation(
 	}
 
 	return op, nil
-
 }
 
 func (op *exitOperation) MarshalBinary() ([]byte, error) {

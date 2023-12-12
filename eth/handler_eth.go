@@ -201,7 +201,6 @@ func (h *ethHandler) handleDag(peer *eth.Peer, dag common.HashArray) error {
 // handleBlockAnnounces is invoked from a peer's message handler when it transmits a
 // batch of block announcements for the local node to process.
 func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
-
 	// todo check it
 	if !h.chain.IsSynced() {
 		log.Warn("*********** skip handle: handleBlockAnnounces", "!h.chain.IsSynced()", !h.chain.IsSynced())

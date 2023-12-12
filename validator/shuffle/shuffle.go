@@ -34,10 +34,6 @@ func ShuffleValidators(validators []common.Address, seed common.Hash) ([]common.
 	return shuffledList, nil
 }
 
-func shuffleList(validators []common.Address, seed common.Hash) ([]common.Address, error) {
-	return innerShuffleList(validators, seed, true /* shuffle */)
-}
-
 func unshuffleList(validators []common.Address, seed common.Hash) ([]common.Address, error) {
 	return innerShuffleList(validators, seed, false /* un-shuffle */)
 }

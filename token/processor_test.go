@@ -234,7 +234,6 @@ func TestProcessorTransferFromOperationCall(t *testing.T) {
 				if res.Sub(balance, big.NewInt(1)).Cmp(balanceAfter) != 0 {
 					t.Fatal()
 				}
-
 			},
 		},
 		{
@@ -436,7 +435,6 @@ func TestProcessorTransferOperationCall(t *testing.T) {
 			c.Fn(&c, &common.Address{})
 		})
 	}
-
 }
 
 func TestProcessorBurnOperationCall(t *testing.T) {
@@ -689,6 +687,9 @@ func TestProcessorApproveCall(t *testing.T) {
 				call(t, v.Caller, v.TokenAddress, nil, approveOp, c.Errs)
 
 				allowanceOp, err := operation.NewAllowanceOperation(wrc20Address, owner, approveAddress)
+				if err != nil {
+					t.Fatal(err)
+				}
 
 				total, err := processor.Allowance(allowanceOp)
 				if err != nil {

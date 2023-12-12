@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -92,8 +93,7 @@ var (
 )
 
 var (
-	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
-	statsReportInterval = 8 * time.Second // Time interval to report transaction pool stats
+	evictionInterval = time.Minute // Time interval to check for evictable transactions
 )
 
 var (
@@ -119,8 +119,6 @@ var (
 	// throttleTxMeter counts how many transactions are rejected due to too-many-changes between
 	// txpool reorgs.
 	throttleTxMeter = metrics.NewRegisteredMeter("txpool/throttle", nil)
-	// reorgDurationTimer measures how long time a txpool reorg takes.
-	reorgDurationTimer = metrics.NewRegisteredTimer("txpool/reorgtime", nil)
 	// dropBetweenReorgHistogram counts how many drops we experience between two reorg runs. It is expected
 	// that this number is pretty low, since txpool reorgs happen very frequently.
 	dropBetweenReorgHistogram = metrics.NewRegisteredHistogram("txpool/dropbetweenreorg", nil, metrics.NewExpDecaySample(1028, 0.015))
@@ -149,7 +147,7 @@ const (
 type blockChain interface {
 	GetLastFinalizedBlock() *types.Block
 	GetLastFinalizedHeader() *types.Header
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
 	ReadFinalizedNumberByHash(hash common.Hash) *uint64
 	GetBlockByNumber(number uint64) *types.Block
@@ -479,29 +477,6 @@ func (pool *TxPool) loop() {
 				} else {
 					pool.moveToProcessingAccelerated(txs)
 				}
-
-				//for _, tx := range txs.Transactions {
-				//	// while sync - just removing tx from pool
-				//	if syncMode {
-				//		pool.removeTx(tx.Hash(), true)
-				//		//pool.removeProcessedTx(tx)
-				//	} else {
-				//		//tStart := time.Now()
-				//		param := &types.TransactionBlocks{
-				//			Transaction:  tx,
-				//			BlocksHashes: common.HashArray{txs.BlockHash},
-				//		}
-				//		//log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing cycle 0",
-				//		//	"elapsed", common.PrettyDuration(time.Since(tStart)),
-				//		//	"func:", "moveToProcessing",
-				//		//)
-				//		pool.moveToProcessing(param)
-				//		//log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing cycle 1",
-				//		//	"elapsed", common.PrettyDuration(time.Since(tStart)),
-				//		//	"func:", "moveToProcessing",
-				//		//)
-				//	}
-				//}
 			}()
 
 		case txs := <-pool.rmTxCh:
@@ -518,7 +493,6 @@ func (pool *TxPool) loop() {
 				defer pool.mu.Unlock()
 				for _, tx := range txs {
 					pool.removeTx(tx.Hash(), true)
-					//pool.removeProcessedTx(tx)
 				}
 			}()
 		}
@@ -784,16 +758,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	} else {
 		isValidatorOp = tx.To() != nil && pool.chainconfig.ValidatorsStateAddress != nil && *tx.To() == *pool.chainconfig.ValidatorsStateAddress
 	}
-
-	var txData []byte
 	if !isTokenOp {
-		txData = tx.Data()
-	}
-
-	if isValidatorOp {
-		txData = tx.Data()
-		if err := pool.handleValidatorTransaction(txData, from, tx.Value()); err != nil {
-			return err
+		txData := tx.Data()
+		if isValidatorOp {
+			err := pool.handleValidatorTransaction(txData, from, tx.Value())
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -805,6 +776,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	estimateGas, err := pool.chain.EstimateGas(msg, head)
+	if err != nil {
+		return err
+	}
 
 	if tx.Gas() < estimateGas && !isValidatorOp {
 		return ErrIntrinsicGas
@@ -1126,6 +1100,8 @@ func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error {
 }
 
 // This is like AddRemotes with a single transaction, but waits for pool reorganization. Tests use this method.
+//
+//nolint:unused // tests only
 func (pool *TxPool) addRemoteSync(tx *types.Transaction) error {
 	errs := pool.AddRemotesSync([]*types.Transaction{tx})
 	return errs[0]
@@ -1552,50 +1528,6 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	}
 }
 
-func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
-	txNonce := tx.Nonce()
-
-	addr, _ := types.Sender(pool.signer, tx)
-
-	if pending := pool.pending[addr]; pending != nil {
-		pendingLteNonce := pending.Forward(txNonce + 1)
-		for _, t := range pendingLteNonce {
-			pending.Delete(t)
-		}
-		// If no more pending transactions are left, remove the list
-		if pending.Empty() {
-			delete(pool.pending, addr)
-		}
-		// Reduce the pending counter
-		pendingGauge.Dec(int64(1))
-	}
-
-	if queue := pool.queue[addr]; queue != nil {
-		queueLteNonce := queue.Forward(txNonce + 1)
-		for _, t := range queueLteNonce {
-			queue.Delete(t)
-		}
-		// If no more queue transactions are left, remove the list
-		if queue.Empty() {
-			delete(pool.queue, addr)
-			delete(pool.beats, addr)
-		}
-		// Reduce the queue counter
-		queuedGauge.Dec(1)
-	}
-
-	if processing := pool.processing[addr]; processing != nil {
-		processingLteNonce := processing.Forward(txNonce + 1)
-		for _, t := range processingLteNonce {
-			processing.Delete(t)
-		}
-		// If no more processing transactions are left, remove the list
-		if processing.Empty() {
-			delete(pool.processing, addr)
-		}
-	}
-}
-
 // requestReset requests a pool reset to the new head block.
 // The returned channel is closed when the reset has occurred.
 func (pool *TxPool) requestReset(oldHead *types.Header, newHead *types.Header) chan struct{} {
@@ -1700,7 +1632,6 @@ func (pool *TxPool) scheduleReorgLoop() {
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
-
 	defer func(tStart time.Time) {
 		log.Debug("^^^^^^^^^^^^ TIME txpool runReorg",
 			"elapsed", common.PrettyDuration(time.Since(tStart)),
@@ -1708,9 +1639,6 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		)
 	}(time.Now())
 
-	//defer func(t0 time.Time) {
-	//	reorgDurationTimer.Update(time.Since(t0))
-	//}(time.Now())
 	defer close(done)
 
 	var promoteAddrs []common.Address
@@ -1799,6 +1727,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
+	ctx := context.Background()
 	oldNum := pool.chain.ReadFinalizedNumberByHash(oldHead.Hash())
 	newNum := pool.chain.ReadFinalizedNumberByHash(newHead.Hash())
 
@@ -1807,12 +1736,11 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		if depth := uint64(math.Abs(float64(*oldNum) - float64(*newNum))); depth > 64 {
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
 		} else {
-
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
 			var (
-				rem    = pool.chain.GetBlock(oldHead.Hash())
-				add    = pool.chain.GetBlock(newHead.Hash())
+				rem    = pool.chain.GetBlock(ctx, oldHead.Hash())
+				add    = pool.chain.GetBlock(ctx, newHead.Hash())
 				remNum = *oldNum
 				addNum = *newNum
 			)
@@ -2199,10 +2127,6 @@ func newAccountSet(signer types.Signer, addrs ...common.Address) *accountSet {
 func (as *accountSet) contains(addr common.Address) bool {
 	_, exist := as.accounts[addr]
 	return exist
-}
-
-func (as *accountSet) empty() bool {
-	return len(as.accounts) == 0
 }
 
 // containsTx checks if the sender of a given tx is within the set. If the sender

@@ -369,10 +369,6 @@ func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 	return b.eth.stateAtBlock(ctx, block, reexec)
 }
 
-func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
-}
-
 func (b *LesApiBackend) ValidatorsStorage() valStore.Storage {
 	return b.eth.blockchain.ValidatorStorage()
 }

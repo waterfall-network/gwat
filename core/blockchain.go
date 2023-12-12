@@ -19,6 +19,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -193,7 +194,6 @@ type BlockChain struct {
 	hc             *HeaderChain
 	rmLogsFeed     event.Feed
 	chainFeed      event.Feed
-	chainSideFeed  event.Feed
 	chainHeadFeed  event.Feed
 	logsFeed       event.Feed
 	blockProcFeed  event.Feed
@@ -997,7 +997,8 @@ func (bc *BlockChain) rmBlockData(hash common.Hash, slot *uint64) {
 // 2. removes finalisation data from last finalized up to lfNr
 // 3. move all unfinalized blocks to dag and provide consistented tips
 func (bc *BlockChain) RollbackFinalization(spineHash common.Hash, lfNr uint64) error {
-	newLfBlock := bc.GetBlock(spineHash)
+	ctx := context.Background()
+	newLfBlock := bc.GetBlock(ctx, spineHash)
 	if newLfBlock == nil {
 		log.Error("Rollback finalization: block not found",
 			"spineHash", fmt.Sprintf("%#x", spineHash), "lfNr", lfNr)
@@ -1673,7 +1674,7 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 	}
 	//sort by slots
 	slots := common.SorterAscU64{}
-	for sl, _ := range blocksBySlot {
+	for sl := range blocksBySlot {
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)
@@ -2119,6 +2120,13 @@ func (bc *BlockChain) syncInsertChain(chain types.Blocks) (int, error) {
 			tmpTips.Add(bdag)
 		}
 		ancestorsHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, block.CpHash())
+		if err != nil {
+			log.Error("Failed to collect ancestor hashes from tips.",
+				"Function", "CollectAncestorsHashesByTips",
+				"Tips", tmpTips,
+				"Block Checkpoint Hash", block.CpHash().Hex(),
+				"Error Details", err)
+		}
 		bc.AddTips(&types.BlockDAG{
 			Hash:                   block.Hash(),
 			Height:                 block.Height(),
@@ -2441,8 +2449,16 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	}
 
 	haveBlocks, err := bc.HaveEpochBlocks(blockEpoch - 1)
+	if err != nil {
+		log.Error("Block verification error: Failed to determine if the previous epoch contains blocks.",
+			"blockHash", block.Hash().Hex(),
+			"block slot", block.Slot(),
+			"blockEpoch", blockEpoch,
+			"coinbase", block.Coinbase().Hex(),
+		)
+	}
 	if haveBlocks {
-		log.Warn("Empty block verification failed: previous epoch have blocks",
+		log.Warn("Empty block verification failed: previous epoch has blocks",
 			"blockHash", block.Hash().Hex(),
 			"block slot", block.Slot(),
 			"blockEpoch", blockEpoch,
@@ -2655,7 +2671,6 @@ func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
 
 // insertBlocks inserts blocks to chain
 func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string) (int, error) {
-
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil
@@ -3329,7 +3344,6 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 
 // CommitBlockTransactions commits transactions of red blocks.
 func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state.StateDB) (*state.StateDB, []*types.Receipt, []*types.Log, uint64) {
-
 	log.Info("Commit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
@@ -3753,6 +3767,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	// Since we don't import them here, we expect ErrUnknownAncestor for the remaining
 	// ones. Any other errors means that the block is invalid, and should not be written
 	// to disk.
+	ctx := context.Background()
 	err := consensus.ErrPrunedAncestor
 	for ; block != nil && errors.Is(err, consensus.ErrPrunedAncestor); block, err = it.next() {
 		if !bc.HasBlock(block.Hash()) {
@@ -3791,7 +3806,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	)
 	for i := len(hashes) - 1; i >= 0; i-- {
 		// Append the next block to our batch
-		block := bc.GetBlock(hashes[i])
+		block := bc.GetBlock(ctx, hashes[i])
 
 		blocks = append(blocks, block)
 		memory += block.Size()
@@ -3976,106 +3991,6 @@ func (bc *BlockChain) GetUnsynchronizedTipsHashes() common.HashArray {
 
 func (bc *BlockChain) WriteCurrentTips() {
 	bc.hc.writeCurrentTips(false)
-}
-
-type ExploreResult struct {
-	unloaded  common.HashArray
-	loaded    common.HashArray
-	finalized common.HashArray
-	graph     *types.GraphDag
-	cache     ExploreResultMap
-	err       error
-}
-
-type ExploreResultMap map[common.Hash]*ExploreResult
-
-// ExploreChainRecursive recursively collect chain info about
-// locally unknown, existed and latest finalized parent blocks,
-// creates GraphDag structure until latest finalized ancestors.
-func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache ExploreResultMap, err error) {
-	if len(memo) == 0 {
-		memo = append(memo, make(ExploreResultMap))
-	}
-	lfNr := bc.GetLastFinalizedBlock().Nr()
-
-	block := bc.GetBlockByHash(headHash)
-	if block == nil {
-		return common.HashArray{headHash}, loaded, finalized, graph, memo[0], err
-	}
-	if block.Nr() > lfNr {
-		block.SetNumber(nil)
-	}
-	graph = &types.GraphDag{
-		Hash:   headHash,
-		Height: 0,
-		Graph:  []*types.GraphDag{},
-		State:  types.BSS_NOT_LOADED,
-	}
-	if block == nil {
-		// if block not loaded
-		return common.HashArray{headHash}, loaded, finalized, graph, memo[0], nil
-	}
-	graph.State = types.BSS_LOADED
-	graph.Height = block.Height()
-	if nr := block.Number(); nr != nil {
-		// if finalized
-		graph.State = types.BSS_FINALIZED
-		graph.Number = *nr
-		return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
-	}
-	loaded = common.HashArray{headHash}
-	if block.ParentHashes() == nil || len(block.ParentHashes()) < 1 {
-		if block.Hash() == bc.genesisBlock.Hash() {
-			return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
-		}
-		log.Warn("Detect block without parents", "hash", block.Hash().Hex(), "height", block.Height(), "slot", block.Slot())
-		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
-		return unloaded, loaded, finalized, graph, memo[0], err
-	}
-
-	//parentHashes := types.GetOrderedParentHashes(bc, block)
-	//for _, ph := range parentHashes {
-	for _, ph := range block.ParentHashes() {
-		var (
-			_unloaded  common.HashArray
-			_loaded    common.HashArray
-			_finalized common.HashArray
-			_graph     *types.GraphDag
-			_cache     ExploreResultMap
-			_err       error
-		)
-
-		if memo[0][ph] != nil {
-			_unloaded = memo[0][ph].unloaded
-			_loaded = memo[0][ph].loaded
-			_finalized = memo[0][ph].finalized
-			_graph = memo[0][ph].graph
-			_cache = memo[0]
-			_err = memo[0][ph].err
-		} else {
-			_unloaded, _loaded, _finalized, _graph, _cache, _err = bc.ExploreChainRecursive(ph, memo[0])
-			if memo[0] == nil {
-				memo[0] = make(ExploreResultMap, 1)
-			}
-			memo[0][ph] = &ExploreResult{
-				unloaded:  _unloaded,
-				loaded:    _loaded,
-				finalized: _finalized,
-				graph:     _graph,
-				cache:     _cache,
-				err:       _err,
-			}
-		}
-		unloaded = unloaded.Concat(_unloaded)
-		unloaded.Deduplicate()
-		loaded = loaded.Concat(_loaded)
-		loaded.Deduplicate()
-		finalized = finalized.Concat(_finalized)
-		finalized.Deduplicate()
-		graph.Graph = append(graph.Graph, _graph)
-		err = _err
-	}
-	return unloaded, loaded, finalized, graph, cache, err
 }
 
 // CollectAncestorsAftCpByParents recursively collect ancestors by block parents
@@ -4731,24 +4646,20 @@ func (bc *BlockChain) doCall(msg Message, header *types.Header, tp *token.Proces
 
 // searchValidCheckpoint descending search of the first valid checkpoint
 func (bc *BlockChain) searchValidCheckpoint(fromEpoch uint64) *types.Checkpoint {
-	for ; fromEpoch >= 0; fromEpoch-- {
+	for {
 		cpSpine := rawdb.ReadEpoch(bc.db, fromEpoch)
-		if cpSpine == (common.Hash{}) {
-			if fromEpoch == 0 {
-				return nil
+		if cpSpine != (common.Hash{}) {
+			cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
+			if cp != nil {
+				return cp
 			}
-			continue
 		}
-		cp := rawdb.ReadCoordinatedCheckpoint(bc.db, cpSpine)
-		if cp == nil {
-			if fromEpoch == 0 {
-				return nil
-			}
-			continue
+
+		if fromEpoch == 0 {
+			return nil
 		}
-		return cp
+		fromEpoch--
 	}
-	return nil
 }
 
 // searchBlockFinalizationCp searching for checkpoint of block finalization by number.
