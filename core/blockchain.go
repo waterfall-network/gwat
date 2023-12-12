@@ -2188,19 +2188,37 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	defer func(ts time.Time) {
 		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(ts)),
-			"func:", "VerifyBlock:Total",
+			"fn:", "VerifyBlock:Total",
+			"txs", len(block.Transactions()),
+			"hash", block.Hash(),
 		)
 	}(time.Now())
+
+	timeTrack := time.Now()
 
 	// Verify block slot
 	if !bc.verifyBlockSlot(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockSlot",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block era
 	if !bc.verifyBlockEra(block) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockEra",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	slotCreators, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
 	if err != nil {
@@ -2208,32 +2226,81 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		return false, err
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "GetCreatorsBySlot",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block coinbase
 	if !bc.verifyBlockCoinbase(block, slotCreators) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockCoinbase",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	err = bc.verifyEmptyBlock(block, slotCreators)
 	if err != nil {
 		return false, err
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyEmptyBlock",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify baseFee
 	if !bc.verifyBlockBaseFee(block) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockBaseFee",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	// Verify body hash and transactions hash
 	if !bc.verifyBlockHashes(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block used gas
 	if !bc.verifyBlockUsedGas(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockUsedGas",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "CollectAncestorsAftCpByTips",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
@@ -2258,12 +2325,35 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyCheckpoint",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block height
 	if !bc.verifyBlockHeight(block, len(ancestors)) {
 		return false, nil
 	}
 
-	return bc.verifyBlockParents(block)
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHeight",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
+	valid, err := bc.verifyBlockParents(block)
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockParents",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
+	return valid, err
 }
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
@@ -2300,9 +2390,11 @@ func (bc *BlockChain) verifyBlockHeight(block *types.Block, ancestorsCount int) 
 }
 
 func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
+	timeTrack := time.Now()
 	// Verify body hash
 	blockBody := block.Body()
-	if blockBody.CalculateHash() != block.BodyHash() {
+	calcBodyHash := blockBody.CalculateHash()
+	if calcBodyHash != block.BodyHash() {
 		log.Warn("Block verification: invalid body hash",
 			"hash", block.Hash().Hex(),
 			"bl.bodyHash", block.BodyHash().Hex(),
@@ -2310,8 +2402,29 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 		)
 		return false
 	}
+
+	log.Info("VALIDATION TIME verifyBlockHashes (TODO TX VALIDATE)",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+		"BodyHash", block.BodyHash().Hex(),
+		"calcBodyHash", calcBodyHash.Hex(),
+	)
+
+	timeTrack = time.Now()
 	// Verify transactions hash
 	calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
+
+	log.Info("VALIDATION TIME verifyBlockHashes 111",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+		"TxHash", block.TxHash(),
+		"calcTxHash", calcTxHash.Hex(),
+	)
+
 	if calcTxHash != block.TxHash() {
 		log.Warn("Block verification: invalid transactions hash",
 			"hash", block.Hash().Hex(),
@@ -2676,8 +2789,9 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		return 0, nil
 	}
 
-	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
+	//todo check is cacher required
+	//// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
+	//senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -2705,10 +2819,10 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 	block, err := it.next()
 
 	switch {
-	// First block is pruned, insert as sidechain and reorg
-	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("Insert blocks: pruned ancestor, inserting as sidechain", "op", op, "hash", block.Hash().Hex())
-		return bc.insertSideChain(block, it)
+	//// First block is pruned, insert as sidechain and reorg
+	//case errors.Is(err, consensus.ErrPrunedAncestor):
+	//	log.Warn("Insert blocks: pruned ancestor, inserting as sidechain", "op", op, "hash", block.Hash().Hex())
+	//	return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
 	case err != nil:
@@ -3344,7 +3458,7 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 
 // CommitBlockTransactions commits transactions of red blocks.
 func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state.StateDB) (*state.StateDB, []*types.Receipt, []*types.Log, uint64) {
-	log.Info("Commit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
+	log.Info("Commit block transactions", "txs", len(block.Transactions()), "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
 	signer := types.MakeSigner(bc.chainConfig)
@@ -3756,6 +3870,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 	return it.index, err
 }
 
+// Deprecated
 // insertSideChain is called when an import batch hits upon a pruned ancestor
 // error, which happens when a sidechain with a sufficiently old fork-block is
 // found.
@@ -4162,11 +4277,12 @@ func (bc *BlockChain) MoveTxsToProcessing(block *types.Block) {
 
 	txs := types.NewBlockTransactions(block.Hash())
 	bc.handleBlockValidatorSyncTxs(block)
-	txs.Transactions = append(txs.Transactions, block.Transactions()...)
+	//txs.Transactions = append(txs.Transactions, block.Transactions()...)
+	txs.Transactions = block.Transactions()
 
-	sort.Slice(txs.Transactions, func(i, j int) bool {
-		return txs.Transactions[i].Nonce() < txs.Transactions[j].Nonce()
-	})
+	//sort.Slice(txs.Transactions, func(i, j int) bool {
+	//	return txs.Transactions[i].Nonce() < txs.Transactions[j].Nonce()
+	//})
 
 	bc.moveTxsToProcessing(txs)
 }

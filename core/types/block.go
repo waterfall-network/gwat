@@ -343,21 +343,7 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher Tr
 // The values of TxHash and Bloom in header
 // are ignored and set to values derived from the given txs and uncles.
 func NewStatelessBlock(header *Header, txs []*Transaction, hasher TrieHasher) *Block {
-	b := &Block{header: CopyHeader(header)}
-
-	// TODO: panic if len(txs) != len(receipts)
-	if len(txs) == 0 {
-		b.header.TxHash = EmptyRootHash
-	} else {
-		b.header.TxHash = DeriveSha(Transactions(txs), hasher)
-		b.transactions = make(Transactions, len(txs))
-		copy(b.transactions, txs)
-	}
-
-	// calc BodyHash
-	b.header.BodyHash = b.Body().CalculateHash()
-
-	return b
+	return NewBlock(header, txs, nil, hasher)
 }
 
 // NewBlockWithHeader creates a block with the given header data. The

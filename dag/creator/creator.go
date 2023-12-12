@@ -497,7 +497,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		)
 	}
 
-	log.Info("Block creation: assigned txs", "len(pendingTxs)", len(pendingTxs), "len(syncData)", len(syncData))
+	log.Info("Block creation: assigned op for", "senders", len(pendingTxs), "validators", len(syncData))
 
 	// Short circuit if no pending transactions
 	if len(pendingTxs) == 0 && len(syncData) == 0 {
@@ -619,7 +619,7 @@ func (c *Creator) create(header *types.Header, update bool) {
 	)
 
 	if update {
-		c.updateSnapshot(header)
+		c.updateSnapshot(block)
 	}
 }
 
@@ -657,16 +657,10 @@ func (c *Creator) makeCurrent() error {
 
 // updateSnapshot updates pending snapshot block and state.
 // Note this function assumes the current variable is thread safe.
-func (c *Creator) updateSnapshot(header *types.Header) {
+func (c *Creator) updateSnapshot(block *types.Block) {
 	c.snapshotMu.Lock()
 	defer c.snapshotMu.Unlock()
-
-	c.snapshotBlock = types.NewBlock(
-		header,
-		c.getUnhandledTxs(header.Coinbase),
-		nil,
-		trie.NewStackTrie(nil),
-	)
+	c.snapshotBlock = block
 }
 
 func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header, isValidatorOp bool) error {
@@ -706,7 +700,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 		)
 	}(time.Now())
 
-	var coalescedLogs []*types.Log
+	//var coalescedLogs []*types.Log
 
 	for {
 		// If we don't have enough gas for any further transactions then we're done
@@ -716,6 +710,8 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 				"want", params.TxGas,
 				"cumulativeGas", header.GasLimit,
 				"GasLimit", gasLimit,
+				"gasPool<TxGas", c.current.gasPool.Gas() < params.TxGas,
+				"cumulativeGas>GasLimit", c.current.txs[header.Coinbase].cumulativeGas > header.GasLimit,
 			)
 			break
 		}
@@ -761,21 +757,21 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 		return true
 	}
 
-	if !c.IsRunning() && len(coalescedLogs) > 0 {
-		// We don't push the pendingLogsEvent while we are creating. The reason is that
-		// when we are creating, the Creator will regenerate a created block every 3 seconds.
-		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
-
-		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
-		// logs by filling in the block hash when the block was mined by the local miner. This can
-		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		cpy := make([]*types.Log, len(coalescedLogs))
-		for i, l := range coalescedLogs {
-			cpy[i] = new(types.Log)
-			*cpy[i] = *l
-		}
-		c.pendingLogsFeed.Send(cpy)
-	}
+	//if !c.IsRunning() && len(coalescedLogs) > 0 {
+	//	// We don't push the pendingLogsEvent while we are creating. The reason is that
+	//	// when we are creating, the Creator will regenerate a created block every 3 seconds.
+	//	// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+	//
+	//	// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+	//	// logs by filling in the block hash when the block was mined by the local miner. This can
+	//	// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+	//	cpy := make([]*types.Log, len(coalescedLogs))
+	//	for i, l := range coalescedLogs {
+	//		cpy[i] = new(types.Log)
+	//		*cpy[i] = *l
+	//	}
+	//	c.pendingLogsFeed.Send(cpy)
+	//}
 	return false
 }
 
