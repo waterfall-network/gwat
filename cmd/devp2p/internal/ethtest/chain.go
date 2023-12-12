@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -88,9 +87,7 @@ func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 		for i := 1; i < int(req.Amount); i++ {
 			blockNumber -= (1 - req.Skip)
 			headers[i] = c.blocks[blockNumber].Header()
-
 		}
-
 		return headers, nil
 	}
 
@@ -121,7 +118,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 }
 
 func loadGenesis(genesisFile string) (core.Genesis, error) {
-	chainConfig, err := ioutil.ReadFile(genesisFile)
+	chainConfig, err := os.ReadFile(genesisFile)
 	if err != nil {
 		return core.Genesis{}, err
 	}

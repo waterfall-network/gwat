@@ -353,7 +353,12 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteEpoch(db, 0, genesisCp.Spine)
 
 	genesisEraLength := era.EstimateEraLength(g.Config, uint64(len(g.Validators)))
-	genesisEra := era.Era{0, 0, genesisEraLength - 1, genesisBlock.Root()}
+	genesisEra := era.Era{
+		Number: 0,
+		From:   0,
+		To:     genesisEraLength - 1,
+		Root:   genesisBlock.Root(),
+	}
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(db, genesisEra.Number)
 

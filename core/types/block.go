@@ -270,7 +270,7 @@ func (b *Body) ToBytes() ([]byte, error) {
 
 	txsLen := len(txsBytes)
 
-	res := make([]byte, txsLen+uint32Length, txsLen+uint32Length)
+	res := make([]byte, txsLen+uint32Length)
 	copy(res[:uint32Length], common.Uint64ToBytes(uint64(txsLen)))
 	copy(res[uint32Length:], txsBytes)
 
@@ -343,21 +343,7 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt, hasher Tr
 // The values of TxHash and Bloom in header
 // are ignored and set to values derived from the given txs and uncles.
 func NewStatelessBlock(header *Header, txs []*Transaction, hasher TrieHasher) *Block {
-	b := &Block{header: CopyHeader(header)}
-
-	// TODO: panic if len(txs) != len(receipts)
-	if len(txs) == 0 {
-		b.header.TxHash = EmptyRootHash
-	} else {
-		b.header.TxHash = DeriveSha(Transactions(txs), hasher)
-		b.transactions = make(Transactions, len(txs))
-		copy(b.transactions, txs)
-	}
-
-	// calc BodyHash
-	b.header.BodyHash = b.Body().CalculateHash()
-
-	return b
+	return NewBlock(header, txs, nil, hasher)
 }
 
 // NewBlockWithHeader creates a block with the given header data. The
@@ -696,7 +682,7 @@ func (shm *SlotSpineMap) GetOrderedHashes() *common.HashArray {
 	hashes := make(common.HashArray, 0, len(*shm))
 	//sort by slots
 	slots := common.SorterAscU64{}
-	for sl, _ := range *shm {
+	for sl := range *shm {
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)

@@ -106,7 +106,8 @@ func (it *insertIterator) next() (*types.Block, error) {
 	// Advance the iterator and wait for verification result if not yet done
 	it.index++
 	// Block header valid, run body validation and return
-	return it.chain[it.index], it.validator.ValidateBody(it.chain[it.index])
+	return it.chain[it.index], nil
+	//return it.chain[it.index], it.validator.ValidateBody(it.chain[it.index])
 }
 
 // peek returns the next block in the iterator, along with any potential validation

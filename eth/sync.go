@@ -21,7 +21,6 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/protocols/eth"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
@@ -76,31 +75,11 @@ type chainSyncer struct {
 	doneCh      chan error // non-nil when sync is running
 }
 
-// chainSyncOp is a scheduled sync operation.
-type chainSyncOp struct {
-	mode      downloader.SyncMode
-	peer      *eth.Peer
-	lastFinNr uint64
-	dag       common.HashArray
-	dagOnly   bool
-}
-
 // newChainSyncer creates a chainSyncer.
 func newChainSyncer(handler *handler) *chainSyncer {
 	return &chainSyncer{
 		handler:     handler,
 		peerEventCh: make(chan peerEvt),
-	}
-}
-
-// handlePeerEvent notifies the syncer about a change in the peer set.
-// This is called for new peers and every time a peer announces a new chain block.
-func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer, kind peerEvtKind) bool {
-	select {
-	case cs.peerEventCh <- peerEvt{kind}:
-		return true
-	case <-cs.handler.quitSync:
-		return false
 	}
 }
 
@@ -123,9 +102,6 @@ func (cs *chainSyncer) loop() {
 	for {
 		si := cs.handler.chain.GetSlotInfo()
 		if si != nil {
-			//var op *chainSyncOp
-			if pevt.kind == evtBroadcast {
-			}
 			pevt.kind = evtDefault
 			select {
 			case pevt = <-cs.peerEventCh:

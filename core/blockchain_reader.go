@@ -17,6 +17,8 @@
 package core
 
 import (
+	"context"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -165,7 +167,7 @@ func (bc *BlockChain) HasFastBlock(hash common.Hash) bool {
 
 // GetBlock retrieves a block from the database by hash and number,
 // caching it if found.
-func (bc *BlockChain) GetBlock(hash common.Hash) *types.Block {
+func (bc *BlockChain) GetBlock(ctx context.Context, hash common.Hash) *types.Block {
 	finNr := bc.hc.GetBlockFinalizedNumber(hash)
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
@@ -188,14 +190,16 @@ func (bc *BlockChain) GetBlock(hash common.Hash) *types.Block {
 
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
 func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
-	return bc.GetBlock(hash)
+	ctx := context.Background()
+	return bc.GetBlock(ctx, hash)
 }
 
 // GetBlocksByHashes retrieves block by hash.
 func (bc *BlockChain) GetBlocksByHashes(hashes common.HashArray) types.BlockMap {
+	ctx := context.Background()
 	blocks := make(types.BlockMap, len(hashes))
 	for _, hash := range hashes {
-		blocks[hash] = bc.GetBlock(hash)
+		blocks[hash] = bc.GetBlock(ctx, hash)
 	}
 	return blocks
 }
@@ -210,7 +214,8 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 			return nil
 		}
 	}
-	block := bc.GetBlock(hash)
+	ctx := context.Background()
+	block := bc.GetBlock(ctx, hash)
 	if block != nil {
 		block.SetNumber(&number)
 	}
@@ -356,7 +361,8 @@ func (bc *BlockChain) HasState(hash common.Hash) bool {
 // in the database or not, caching it if present.
 func (bc *BlockChain) HasBlockAndState(hash common.Hash) bool {
 	// Check first that the block itself is known
-	block := bc.GetBlock(hash)
+	ctx := context.Background()
+	block := bc.GetBlock(ctx, hash)
 	if block == nil {
 		return false
 	}

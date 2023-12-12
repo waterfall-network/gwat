@@ -75,6 +75,46 @@ type LightChain struct {
 	disableCheckFreq int32 // disables header verification
 }
 
+func (lc *LightChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) EnterNextEra(u uint64, hash common.Hash) *era.Era {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) EpochToEra(epoch uint64) *era.Era {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) GetValidatorSyncData(InitTxHash common.Hash) *types.ValidatorSync {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) GetTransaction(txHash common.Hash) (tx *types.Transaction, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) GetEpoch(epoch uint64) common.Hash {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (lc *LightChain) Database() ethdb.Database {
 	return lc.chainDb
 }
@@ -304,7 +344,8 @@ func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.Raw
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
 func (lc *LightChain) HasBlock(hash common.Hash) bool {
-	blk, _ := lc.GetBlock(NoOdr, hash)
+	ctx := context.Background()
+	blk, _ := lc.GetBlock(ctx, hash)
 	return blk != nil
 }
 

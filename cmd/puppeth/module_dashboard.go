@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"math/rand"
@@ -552,30 +551,23 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 		bootPython[i] = "'" + boot + "'"
 	}
 	template.Must(template.New("").Parse(dashboardContent)).Execute(indexfile, map[string]interface{}{
-		"Network":           network,
-		"NetworkID":         conf.Genesis.Config.ChainID,
-		"NetworkTitle":      strings.Title(network),
-		"EthstatsPage":      config.ethstats,
-		"ExplorerPage":      config.explorer,
-		"FaucetPage":        config.faucet,
-		"GethGenesis":       network + ".json",
-		"Bootnodes":         conf.bootnodes,
-		"BootnodesFlat":     strings.Join(conf.bootnodes, ","),
-		"Ethstats":          statsLogin,
-		"Ethash":            conf.Genesis.Config.Ethash != nil,
-		"CppGenesis":        network + "-cpp.json",
-		"CppBootnodes":      strings.Join(bootCpp, " "),
-		"HarmonyGenesis":    network + "-harmony.json",
-		"HarmonyBootnodes":  strings.Join(bootHarmony, " "),
-		"ParityGenesis":     network + "-parity.json",
-		"PythonGenesis":     network + "-python.json",
-		"PythonBootnodes":   strings.Join(bootPython, ","),
-		"Homestead":         conf.Genesis.Config.HomesteadBlock,
-		"Tangerine":         conf.Genesis.Config.EIP150Block,
-		"Spurious":          conf.Genesis.Config.EIP155Block,
-		"Byzantium":         conf.Genesis.Config.ByzantiumBlock,
-		"Constantinople":    conf.Genesis.Config.ConstantinopleBlock,
-		"ConstantinopleFix": conf.Genesis.Config.PetersburgBlock,
+		"Network":          network,
+		"NetworkID":        conf.Genesis.Config.ChainID,
+		"NetworkTitle":     strings.Title(network),
+		"EthstatsPage":     config.ethstats,
+		"ExplorerPage":     config.explorer,
+		"FaucetPage":       config.faucet,
+		"GethGenesis":      network + ".json",
+		"Bootnodes":        conf.bootnodes,
+		"BootnodesFlat":    strings.Join(conf.bootnodes, ","),
+		"Ethstats":         statsLogin,
+		"CppGenesis":       network + "-cpp.json",
+		"CppBootnodes":     strings.Join(bootCpp, " "),
+		"HarmonyGenesis":   network + "-harmony.json",
+		"HarmonyBootnodes": strings.Join(bootHarmony, " "),
+		"ParityGenesis":    network + "-parity.json",
+		"PythonGenesis":    network + "-python.json",
+		"PythonBootnodes":  strings.Join(bootPython, ","),
 	})
 	files[filepath.Join(workdir, "index.html")] = indexfile.Bytes()
 
@@ -583,35 +575,10 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	genesis, _ := conf.Genesis.MarshalJSON()
 	files[filepath.Join(workdir, network+".json")] = genesis
 
-	if conf.Genesis.Config.Ethash != nil {
-		cppSpec, err := newAlethGenesisSpec(network, conf.Genesis)
-		if err != nil {
-			return nil, err
-		}
-		cppSpecJSON, _ := json.Marshal(cppSpec)
-		files[filepath.Join(workdir, network+"-cpp.json")] = cppSpecJSON
-
-		harmonySpecJSON, _ := conf.Genesis.MarshalJSON()
-		files[filepath.Join(workdir, network+"-harmony.json")] = harmonySpecJSON
-
-		paritySpec, err := newParityChainSpec(network, conf.Genesis, conf.bootnodes)
-		if err != nil {
-			return nil, err
-		}
-		paritySpecJSON, _ := json.Marshal(paritySpec)
-		files[filepath.Join(workdir, network+"-parity.json")] = paritySpecJSON
-
-		pyethSpec, err := newPyEthereumGenesisSpec(network, conf.Genesis)
-		if err != nil {
-			return nil, err
-		}
-		pyethSpecJSON, _ := json.Marshal(pyethSpec)
-		files[filepath.Join(workdir, network+"-python.json")] = pyethSpecJSON
-	} else {
-		for _, client := range []string{"cpp", "harmony", "parity", "python"} {
-			files[filepath.Join(workdir, network+"-"+client+".json")] = []byte{}
-		}
+	for _, client := range []string{"cpp", "harmony", "parity", "python"} {
+		files[filepath.Join(workdir, network+"-"+client+".json")] = []byte{}
 	}
+
 	files[filepath.Join(workdir, "puppeth.png")] = dashboardMascot
 
 	// Upload the deployment files to the remote server (and clean up afterwards)

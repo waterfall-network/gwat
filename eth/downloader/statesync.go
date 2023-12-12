@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/sha3"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -28,7 +30,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
-	"golang.org/x/crypto/sha3"
 )
 
 // stateReq represents a batch of state fetch requests grouped together into
@@ -57,23 +58,6 @@ type stateSyncStats struct {
 	duplicate  uint64 // Number of state entries downloaded twice
 	unexpected uint64 // Number of non-requested state entries received
 	pending    uint64 // Number of still pending state entries
-}
-
-// syncState starts downloading state with the given root hash.
-func (d *Downloader) syncState(root common.Hash) *stateSync {
-	// Create the state sync
-	s := newStateSync(d, root)
-	select {
-	case d.stateSyncStart <- s:
-		// If we tell the statesync to restart with a new root, we also need
-		// to wait for it to actually also start -- when old requests have timed
-		// out or been delivered
-		<-s.started
-	case <-d.quitCh:
-		s.err = errCancelStateFetch
-		close(s.done)
-	}
-	return s
 }
 
 // stateFetcher manages the active state sync and accepts requests
@@ -290,23 +274,6 @@ type trieTask struct {
 // peers already attempted retrieval from to detect stalled syncs and abort.
 type codeTask struct {
 	attempts map[string]struct{}
-}
-
-// newStateSync creates a new state trie download scheduler. This method does not
-// yet start the sync. The user needs to call run to initiate.
-func newStateSync(d *Downloader, root common.Hash) *stateSync {
-	return &stateSync{
-		d:         d,
-		root:      root,
-		sched:     state.NewStateSync(root, d.stateDB, d.stateBloom, nil),
-		keccak:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
-		trieTasks: make(map[common.Hash]*trieTask),
-		codeTasks: make(map[common.Hash]*codeTask),
-		deliver:   make(chan *stateReq),
-		cancel:    make(chan struct{}),
-		done:      make(chan struct{}),
-		started:   make(chan struct{}),
-	}
 }
 
 // run starts the task assignment and response processing loop, blocking until
@@ -611,5 +578,43 @@ func (s *stateSync) updateStats(written, duplicate, unexpected int, duration tim
 	}
 	if written > 0 {
 		rawdb.WriteFastTrieProgress(s.d.stateDB, s.d.syncStatsState.processed)
+	}
+}
+
+// syncState starts downloading state with the given root hash.
+//
+// nolint:unused // todo: state sync
+func (d *Downloader) syncState(root common.Hash) *stateSync {
+	// Create the state sync
+	s := newStateSync(d, root)
+	select {
+	case d.stateSyncStart <- s:
+		// If we tell the statesync to restart with a new root, we also need
+		// to wait for it to actually also start -- when old requests have timed
+		// out or been delivered
+		<-s.started
+	case <-d.quitCh:
+		s.err = errCancelStateFetch
+		close(s.done)
+	}
+	return s
+}
+
+// newStateSync creates a new state trie download scheduler. This method does not
+// yet start the sync. The user needs to call run to initiate.
+//
+// nolint:unused // todo: state sync
+func newStateSync(d *Downloader, root common.Hash) *stateSync {
+	return &stateSync{
+		d:         d,
+		root:      root,
+		sched:     state.NewStateSync(root, d.stateDB, d.stateBloom, nil),
+		keccak:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
+		trieTasks: make(map[common.Hash]*trieTask),
+		codeTasks: make(map[common.Hash]*codeTask),
+		deliver:   make(chan *stateReq),
+		cancel:    make(chan struct{}),
+		done:      make(chan struct{}),
+		started:   make(chan struct{}),
 	}
 }

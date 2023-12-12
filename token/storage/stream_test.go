@@ -120,7 +120,6 @@ func TestWriteStream(t *testing.T) {
 			c.Fn(&c, &address)
 		})
 	}
-
 }
 
 func read(t *testing.T, s *StorageStream, b []byte, off *big.Int, errs []error) {

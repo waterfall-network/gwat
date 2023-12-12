@@ -1137,7 +1137,7 @@ func DeleteEra(db ethdb.KeyValueWriter, number uint64) {
 
 // ReadCurrentEra reads the current era number from the database.
 func ReadCurrentEra(db ethdb.KeyValueReader) uint64 {
-	key := append(currentEraPrefix)
+	key := currentEraPrefix
 	valueBytes, err := db.Get(key)
 	if err != nil {
 		log.Warn("Failed to read current era", "err", err)
@@ -1147,7 +1147,7 @@ func ReadCurrentEra(db ethdb.KeyValueReader) uint64 {
 
 // WriteCurrentEra writes the current era number to the database.
 func WriteCurrentEra(db ethdb.KeyValueWriter, number uint64) {
-	key := append(currentEraPrefix)
+	key := currentEraPrefix
 	valueBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(valueBytes, number)
 	err := db.Put(key, valueBytes)
@@ -1158,7 +1158,7 @@ func WriteCurrentEra(db ethdb.KeyValueWriter, number uint64) {
 
 // DeleteCurrentEra deletes the current era number from the database.
 func DeleteCurrentEra(db ethdb.KeyValueWriter) {
-	key := append(currentEraPrefix)
+	key := currentEraPrefix
 	err := db.Delete(key)
 	if err != nil {
 		log.Warn("Failed to delete current era", "err", err)

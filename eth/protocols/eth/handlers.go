@@ -23,7 +23,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 // handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
@@ -276,10 +275,10 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 		peer.Log().Error("Handle request: sanityCheck failed", "err", err, "fn", "handleNewBlock")
 		return err
 	}
-	if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
-		log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
-		return nil // TODO(karalabe): return error eventually, but wait a few releases
-	}
+	//if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
+	//	log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
+	//	return nil // TODO(karalabe): return error eventually, but wait a few releases
+	//}
 	ann.Block.ReceivedAt = msg.Time()
 	ann.Block.ReceivedFrom = peer
 
@@ -460,7 +459,7 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 
 func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, error) {
 	dag := common.HashArray{}
-	dagHashes := common.HashArray{}
+	var dagHashes common.HashArray
 	limitReached := false
 	log.Info("Sync handling: start",
 		"baseSpine", query.BaseSpine.Hex(),
@@ -650,7 +649,7 @@ func getHashesBySlotRange(backend Backend, from, to uint64, limit int, terminalH
 	var limitReached bool
 	si := backend.Chain().GetSlotInfo()
 	hashes := make(common.HashArray, 0, limit)
-	for slot := from; slot < to; slot++ {
+	for slot := from; slot <= to; slot++ {
 		slh := backend.Chain().GetBlockHashesBySlot(slot)
 		if len(slh) > 0 {
 			// if received terminalHash

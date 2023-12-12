@@ -113,7 +113,6 @@ func TestLastFinalizedBlockWf(t *testing.T) {
 	if entry := ReadLastFinalizedNumber(db); entry != lastFinHeight1 {
 		t.Fatalf("lastFinBlock1 hash mismatch: have %d, want %d", entry, lastFinHeight1)
 	}
-
 }
 
 // Tests that head headers and head blocks can be assigned, individually.
