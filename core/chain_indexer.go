@@ -242,26 +242,6 @@ func (c *ChainIndexer) eventLoop(cpNr uint64, events chan ChainHeadEvent, sub ev
 				continue
 			}
 			c.newHead(ev.Block.CpNumber(), false)
-
-			//todo deprecated
-			//header := ev.Block.Header()
-			//if !header.ParentHashes.Has(prevHash) {
-			//	// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
-			//	// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
-			//	if h := rawdb.ReadFinalizedHashByNumber(c.chainDb, prevHeader.Nr()); h != prevHash {
-			//		log.Error("Bloom indexer: indexer bad prev header", "slot", prevHeader.Slot, "nr", prevHeader.Nr(), "height", prevHeader.Height, "db.Hash", h.Hex(), "hash", prevHash.Hex())
-			//		if h == (common.Hash{}) {
-			//			continue
-			//		}
-			//		if prevHeader.Nr() > 0 {
-			//			if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-			//				c.newHead(h.Nr(), true)
-			//			}
-			//		}
-			//	}
-			//}
-			//c.newHead(header.Nr(), false)
-			//prevHeader, prevHash = header, header.Hash()
 		}
 	}
 }
