@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"os"
 	"strings"
 	"testing"
@@ -33,6 +33,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/jsre"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 const (
@@ -86,7 +87,7 @@ type tester struct {
 // Please ensure you call Close() on the returned tester to avoid leaks.
 func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
-	workspace, err := ioutil.TempDir("", "console-tester-")
+	workspace, err := os.MkdirTemp("", "console-tester-")
 	if err != nil {
 		t.Fatalf("failed to create temporary keystore: %v", err)
 	}
@@ -96,8 +97,26 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
+
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
+	genesis := core.DeveloperGenesisBlock(15, common.Address{})
+	genesis.Validators = depositData
+	genesis.Coinbase = common.HexToAddress(testAddress)
+
 	ethConf := &ethconfig.Config{
-		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
+		Genesis: genesis,
+		Creator: creator.Config{Etherbase: common.HexToAddress(testAddress)},
 	}
 	if confOverride != nil {
 		confOverride(ethConf)
