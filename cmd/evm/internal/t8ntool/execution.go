@@ -95,6 +95,7 @@ type rejectedTx struct {
 }
 
 // Apply applies a set of transactions to a pre-state
+// Deprecated
 func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	txs types.Transactions, miningReward int64,
 	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error)) (*state.StateDB, *ExecutionResult, error) {
