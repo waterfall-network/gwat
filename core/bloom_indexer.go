@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -67,7 +68,10 @@ func (b *BloomIndexer) Reset(ctx context.Context, section uint64, lastSectionHea
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
 // the index.
 func (b *BloomIndexer) Process(ctx context.Context, header *types.Header) error {
-	b.gen.AddBloom(uint(header.Height-b.section*b.size), header.Bloom)
+	if header.Nr() == 0 && header.Height > 0 {
+		return fmt.Errorf("bad finalization number")
+	}
+	b.gen.AddBloom(uint(header.Nr()-b.section*b.size), header.Bloom)
 	b.head = header.Hash()
 	return nil
 }
