@@ -3864,6 +3864,17 @@ var outputBlockFormatter = function(block) {
  * @returns {Object} log
 */
 var outputLogFormatter = function(log) {
+  // format error log
+  // err log
+  var types_EvtErrorLogSignature = "177f242d20ff7dc4598657e4355abd2b0df8f6351283a95d209db56ce73ef6e9"
+  var topLen = Array.isArray(log.topics) ? log.topics.length : 0
+  for (var i=0; i < topLen; i++) {
+    if (log.topics[i].toString().replace(/^0x/, "") === types_EvtErrorLogSignature.toString().replace(/^0x/,"")) {
+      log.data = utils.toAscii(log.data)
+      break
+    }
+  }
+
     if(log.blockNumber)
         log.blockNumber = utils.toDecimal(log.blockNumber);
     if(log.transactionIndex)
