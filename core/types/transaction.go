@@ -416,6 +416,15 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 }
 
+func (s Transactions) Hashes() common.HashArray {
+	hashes := make(common.HashArray, 0)
+	for _, transaction := range s {
+		hashes = append(hashes, transaction.Hash())
+	}
+
+	return hashes
+}
+
 // TxDifference returns a new set which is the difference between a and b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
@@ -574,6 +583,7 @@ type Message struct {
 	data       []byte
 	accessList AccessList
 	isFake     bool
+	txHash     common.Hash
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
@@ -605,7 +615,9 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
 		isFake:     false,
+		txHash:     tx.Hash(),
 	}
+
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
@@ -615,17 +627,22 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	return msg, err
 }
 
-func (m Message) From() common.Address   { return m.from }
-func (m Message) To() *common.Address    { return m.to }
-func (m Message) GasPrice() *big.Int     { return m.gasPrice }
-func (m Message) GasFeeCap() *big.Int    { return m.gasFeeCap }
-func (m Message) GasTipCap() *big.Int    { return m.gasTipCap }
-func (m Message) Value() *big.Int        { return m.amount }
-func (m Message) Gas() uint64            { return m.gasLimit }
+func (m Message) From() common.Address { return m.from }
+func (m Message) To() *common.Address  { return m.to }
+func (m Message) GasPrice() *big.Int   { return m.gasPrice }
+func (m Message) GasFeeCap() *big.Int  { return m.gasFeeCap }
+func (m Message) GasTipCap() *big.Int  { return m.gasTipCap }
+func (m Message) Value() *big.Int      { return m.amount }
+func (m Message) Gas() uint64          { return m.gasLimit }
+func (m Message) SetGas(gas uint64) Message {
+	m.gasLimit = gas
+	return m
+}
 func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) IsFake() bool           { return m.isFake }
+func (m Message) TxHash() common.Hash    { return m.txHash }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {
@@ -634,4 +651,21 @@ func copyAddressPtr(a *common.Address) *common.Address {
 	}
 	cpy := *a
 	return &cpy
+}
+
+type TransactionBlocks struct {
+	*Transaction
+	BlocksHashes common.HashArray
+}
+
+type BlockTransactions struct {
+	Transactions
+	BlockHash common.Hash
+}
+
+func NewBlockTransactions(blockHash common.Hash) *BlockTransactions {
+	return &BlockTransactions{
+		Transactions: make(Transactions, 0),
+		BlockHash:    blockHash,
+	}
 }

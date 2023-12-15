@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // stateAtBlock retrieves the state database associated with a certain block.
@@ -152,8 +154,9 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 	}
 	// Create the parent state database
 	var parent *types.Block
+	ctx := context.Background()
 	for _, h := range block.ParentHashes() {
-		pb := eth.blockchain.GetBlock(h)
+		pb := eth.blockchain.GetBlock(ctx, h)
 		if pb != nil && pb.Nr() == pb.Height() {
 			parent = pb
 			break
@@ -184,8 +187,9 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
 		tp := token.NewProcessor(context, statedb)
+		vp := validator.NewProcessor(context, statedb, eth.BlockChain())
 		statedb.Prepare(tx.Hash(), idx)
-		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state

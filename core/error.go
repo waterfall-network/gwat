@@ -23,9 +23,6 @@ import (
 )
 
 var (
-	// ErrBannedHash is returned if a block to import is on the banned list.
-	ErrBannedHash = errors.New("banned hash")
-
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
@@ -37,8 +34,13 @@ var (
 	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.
 	ErrInsertUncompletedDag = errors.New("insert uncompleted dag chain")
 
+	// ErrCpIsnotAncestor is returned when checkpoint is not in past of block.
+	ErrCpIsnotAncestor = errors.New("checkpoint is not ancestor")
+
 	// ErrSpineStateNF is returned when spine state not found.
 	ErrSpineStateNF = errors.New("spine state not found")
+
+	ErrBlockNotFound = errors.New("block not found")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
@@ -98,4 +100,7 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// ErrCpNotFinalized is returned if the checkpoint is not finalized yet.
+	ErrCpNotFinalized = errors.New("checkpoint is not finalized")
 )

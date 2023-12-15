@@ -25,7 +25,6 @@ import (
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/bloombits"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -39,6 +38,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 // EthAPIBackend implements ethapi.Backend for full nodes
@@ -62,6 +63,10 @@ func (b *EthAPIBackend) GetLastFinalizedNumber() uint64 {
 // ChainConfig returns the active chain configuration.
 func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.blockchain.Config()
+}
+
+func (b *EthAPIBackend) Blockchain() *core.BlockChain {
+	return b.eth.blockchain
 }
 
 // GetLastFinalizedBlock retrieves current last finalized block.
@@ -90,7 +95,7 @@ func (b *EthAPIBackend) SetHead(hash common.Hash) {
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.dag.Creator().PendingBlock()
+		block, _ := b.eth.dag.Creator().Pending()
 		return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
@@ -128,7 +133,7 @@ func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*ty
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.dag.Creator().PendingBlock()
+		block, _ := b.eth.dag.Creator().Pending()
 		return block, nil
 	}
 	// Otherwise resolve and return the block
@@ -157,7 +162,7 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Nr()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
-		block := b.eth.blockchain.GetBlock(hash)
+		block := b.eth.blockchain.GetBlock(ctx, hash)
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}
@@ -246,6 +251,13 @@ func (b *EthAPIBackend) GetTP(ctx context.Context, state *state.StateDB, header 
 	return token.NewProcessor(context, state), tpError, nil
 }
 
+// GetVP retrieves the validator processor.
+func (b *EthAPIBackend) GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error) {
+	tpError := func() error { return nil }
+	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
+	return validator.NewProcessor(context, state, b.BlockChain()), tpError, nil
+}
+
 func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return b.eth.BlockChain().SubscribeRemovedLogsEvent(ch)
 }
@@ -260,10 +272,6 @@ func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Sub
 
 func (b *EthAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return b.eth.BlockChain().SubscribeChainHeadEvent(ch)
-}
-
-func (b *EthAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainSideEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
@@ -300,7 +308,7 @@ func (b *EthAPIBackend) Stats() (pending, queued, processing int) {
 	return b.eth.txPool.Stats()
 }
 
-func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks) {
 	return b.eth.TxPool().Content()
 }
 
@@ -371,10 +379,6 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
-func (b *EthAPIBackend) Engine() consensus.Engine {
-	return b.eth.engine
-}
-
 func (b *EthAPIBackend) GetLastFinalizedHeader() *types.Header {
 	return b.eth.blockchain.GetLastFinalizedHeader()
 }
@@ -389,4 +393,20 @@ func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
+}
+
+func (b *EthAPIBackend) ValidatorsStorage() valStore.Storage {
+	return b.eth.blockchain.ValidatorStorage()
+}
+
+func (b *EthAPIBackend) Genesis() *types.Block {
+	return b.eth.blockchain.Genesis()
+}
+
+func (b *EthAPIBackend) BlockChain() *core.BlockChain {
+	return b.eth.blockchain
+}
+
+func (b *EthAPIBackend) BlockHashesBySlot(ctx context.Context, slot uint64) common.HashArray {
+	return b.eth.blockchain.GetBlockHashesBySlot(slot)
 }

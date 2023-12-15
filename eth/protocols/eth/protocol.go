@@ -42,10 +42,12 @@ var ProtocolVersions = []uint{ETH66}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 19}
+var protocolLengths = map[uint]uint64{ETH66: 20}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
+
+const LimitDagHashes = 32 * 8 * 4 //32slot * 8 blocks * 4 epoches = 1024
 
 const (
 	StatusMsg                     = 0x00
@@ -65,6 +67,7 @@ const (
 	PooledTransactionsMsg         = 0x0a
 	GetDagMsg                     = 0x11
 	DagMsg                        = 0x12
+	GetHashesBySlotsMsg           = 0x13
 )
 
 var (
@@ -77,6 +80,7 @@ var (
 	errGenesisMismatch         = errors.New("genesis mismatch")
 	errForkIDRejected          = errors.New("fork ID rejected")
 	errInvalidDag              = errors.New("invalid dag")
+	errBadRequestParam         = errors.New("bad request params")
 )
 
 // Packet represents a p2p message in the `wfdag` protocol.
@@ -90,7 +94,7 @@ type StatusPacket struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
 	LastFinNr       uint64
-	Dag             *common.HashArray
+	Dag             *common.HashArray // Deprecated
 	Genesis         common.Hash
 	ForkID          forkid.ID
 }
@@ -120,7 +124,7 @@ type TransactionsPacket []*types.Transaction
 
 // GetBlockHeadersPacket represents a block header query.
 type GetBlockHeadersPacket struct {
-	Hashes  *common.HashArray // хеши блоков по которым запрашиваются заголовки
+	Hashes  *common.HashArray // request headers by hashes
 	Origin  *HashOrNumber     // Block from which to retrieve headers
 	Amount  uint64            // Maximum number of headers to retrieve
 	Skip    uint64            // Blocks to skip between consecutive headers
@@ -313,7 +317,10 @@ type PooledTransactionsRLPPacket66 struct {
 }
 
 // GetDagPacket represents a dag query.
-type GetDagPacket uint64
+type GetDagPacket struct {
+	BaseSpine     common.Hash
+	TerminalSpine common.Hash // if zero hash - include full dag chain
+}
 
 // GetDagPacket represents a dag query over wfdag/66.
 type GetDagPacket66 struct {
@@ -328,6 +335,18 @@ type DagPacket common.HashArray
 type DagPacket66 struct {
 	RequestId uint64
 	DagPacket
+}
+
+// GetHashesBySlotsPacket represents a query hashes by slots range.
+type GetHashesBySlotsPacket struct {
+	From uint64
+	To   uint64
+}
+
+// GetHashesBySlotsPacket66 represents a query hashes by slots range over wfdag/66.
+type GetHashesBySlotsPacket66 struct {
+	RequestId uint64
+	GetHashesBySlotsPacket
 }
 
 func (*StatusPacket) Name() string { return "Status" }
@@ -380,3 +399,6 @@ func (*GetDagPacket) Kind() byte   { return GetDagMsg }
 
 func (*DagPacket) Name() string { return "Dag" }
 func (*DagPacket) Kind() byte   { return DagMsg }
+
+func (*GetHashesBySlotsPacket) Name() string { return "GetHashesBySlots" }
+func (*GetHashesBySlotsPacket) Kind() byte   { return GetHashesBySlotsMsg }

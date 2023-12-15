@@ -134,33 +134,50 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 // NodeInfo represents a short summary of the `eth` sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Versions  []uint              `json:"versions"`  // Protocol versions
-	Network   uint64              `json:"network"`   // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
-	Genesis   common.Hash         `json:"genesis"`   // SHA3 hash of the host's genesis block
-	Config    *params.ChainConfig `json:"config"`    // Chain configuration for the fork rules
-	LastFinNr uint64              `json:"lastFinNr"` // Last Finalized Number of node
-	Dag       *common.HashArray   `json:"dag"`       // all current dag hashes: nil - has not synchronized tips
+	Versions    []uint              `json:"versions"`    // Protocol versions
+	Network     uint64              `json:"network"`     // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
+	Genesis     common.Hash         `json:"genesis"`     // SHA3 hash of the host's genesis block
+	Config      *params.ChainConfig `json:"config"`      // Chain configuration for the fork rules
+	LastFinNr   uint64              `json:"lastFinNr"`   // Last Finalized Number of node
+	LastCpFinNr uint64              `json:"lastCpFinNr"` // Last Finalized Number of checkpoint base spine
+	Dag         *common.HashArray   `json:"dag"`         // all current dag hashes: nil - has not synchronized tips
+	SlotInfo    *types.SlotInfo     `json:"slotInfo"`    // slot info
 }
 
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
 func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	var (
-		lastFinNr                   = chain.GetLastFinalizedNumber()
-		dagHashes *common.HashArray = nil
-		unsync                      = chain.GetUnsynchronizedTipsHashes()
+		lastFinNr   = chain.GetLastFinalizedNumber()
+		lastCpFinNr uint64
+		dagHashes   *common.HashArray
+		unsync      = chain.GetUnsynchronizedTipsHashes()
+		slotInfo    = chain.GetSlotInfo()
 	)
-	if len(unsync) == 0 {
-		dagHashes = chain.GetDagHashes()
-	} else {
+	dagHashes = chain.GetDagHashes()
+	if len(unsync) > 0 {
+		dh := dagHashes.Difference(unsync)
+		dagHashes = &dh
 		log.Warn("cannot calculate dag hashes", "unsynchronized tips", unsync)
 	}
+
+	// Use checkpoint spine as CpBlock
+	checkpoint := chain.GetLastCoordinatedCheckpoint()
+	cpHeader := chain.GetHeader(checkpoint.Spine)
+	if cpHeader != nil {
+		lastCpFinNr = cpHeader.Nr()
+	} else {
+		log.Warn("cp base spine not found", "cpSpine", checkpoint.Spine, "cpEpoch", checkpoint.Epoch)
+	}
+
 	return &NodeInfo{
-		Versions:  ProtocolVersions,
-		Network:   network,
-		Genesis:   chain.Genesis().Hash(),
-		Config:    chain.Config(),
-		LastFinNr: lastFinNr,
-		Dag:       dagHashes, // nil - has not synchronized tips
+		Versions:    ProtocolVersions,
+		Network:     network,
+		Genesis:     chain.Genesis().Hash(),
+		Config:      chain.Config(),
+		LastFinNr:   lastFinNr,
+		LastCpFinNr: lastCpFinNr,
+		Dag:         dagHashes,
+		SlotInfo:    slotInfo,
 	}
 }
 
@@ -199,6 +216,7 @@ var eth66 = map[uint64]msgHandler{
 	PooledTransactionsMsg:         handlePooledTransactions66,
 	GetDagMsg:                     handleGetDag66,
 	DagMsg:                        handleDag66,
+	GetHashesBySlotsMsg:           handleGetHashesBySlots66,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote

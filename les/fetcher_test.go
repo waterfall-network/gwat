@@ -23,7 +23,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 )
 
@@ -134,7 +133,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 
 	// Send a reorged announcement
 	blocks, _ := core.GenerateChain(rawdb.ReadChainConfig(s.db, s.backend.Blockchain().Genesis().Hash()), s.backend.Blockchain().GetBlockByNumber(3),
-		sealer.New(s.db), s.db, 2, func(i int, gen *core.BlockGen) {
+		s.db, 2, func(i int, gen *core.BlockGen) {
 			gen.OffsetTime(-9) // higher block difficulty
 		})
 	s.backend.Blockchain().InsertChain(blocks)

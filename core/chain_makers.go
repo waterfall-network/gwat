@@ -17,12 +17,11 @@
 package core
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -31,6 +30,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 // BlockGen creates blocks for testing.
@@ -47,7 +47,6 @@ type BlockGen struct {
 	receipts []*types.Receipt
 
 	config *params.ChainConfig
-	engine consensus.Engine
 }
 
 // SetCoinbase sets the coinbase of the generated block.
@@ -93,7 +92,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, bc)
 	if err != nil {
 		panic(err)
 	}
@@ -173,7 +172,7 @@ func AddBlocksToFinalized(chain *BlockChain, blocks []*types.Block) error {
 		blocks[i].SetNumber(&nr)
 	}
 	if _, err := chain.SyncInsertChain(blocks); err != nil {
-		return errors.New(fmt.Sprintf("failed to insert initial blocks: %v", err))
+		return fmt.Errorf("failed to insert initial blocks: %v", err)
 	}
 	return nil
 }
@@ -182,16 +181,18 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 	if len(blocks) == 0 || bc == nil {
 		return
 	}
-	LFB := bc.GetLastFinalizedBlock()
+	ctx := context.Background()
+	lcp := bc.GetLastCoordinatedCheckpoint()
+	cpBlock := bc.GetBlock(ctx, lcp.Spine)
 	bc.AddTips(&types.BlockDAG{
-		Hash:                LFB.Hash(),
-		Height:              LFB.Height(),
-		Slot:                LFB.Slot(),
-		LastFinalizedHash:   LFB.Hash(),
-		LastFinalizedHeight: LFB.Nr(),
-		DagChainHashes:      common.HashArray{},
+		Hash:                   cpBlock.Hash(),
+		Height:                 cpBlock.Height(),
+		Slot:                   cpBlock.Slot(),
+		CpHash:                 cpBlock.Hash(),
+		CpHeight:               cpBlock.Height(),
+		OrderedAncestorsHashes: common.HashArray{},
 	})
-	tips := bc.GetTips()
+	tips := bc.GetTips().Copy()
 
 	for _, block := range blocks {
 		//update state of tips
@@ -199,21 +200,21 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 		bc.RemoveTips(block.ParentHashes())
 		//2. create for new blockDag
 		finDag := tips.GetFinalizingDag()
-		tmpDagChainHashes := tips.GetOrderedDagChainHashes()
+		ancestorsHashes := tips.GetOrderedAncestorsHashes()
 		if finDag.Hash == bc.Genesis().Hash() {
-			tmpDagChainHashes = tmpDagChainHashes.Difference(common.HashArray{bc.Genesis().Hash()})
+			ancestorsHashes = ancestorsHashes.Difference(common.HashArray{bc.Genesis().Hash()})
 		}
 		blockDag := &types.BlockDAG{
-			Hash:                block.Hash(),
-			Height:              block.Height(),
-			Slot:                block.Slot(),
-			LastFinalizedHash:   block.LFHash(),
-			LastFinalizedHeight: block.LFNumber(),
-			DagChainHashes:      tmpDagChainHashes,
+			Hash:                   block.Hash(),
+			Height:                 block.Height(),
+			Slot:                   block.Slot(),
+			CpHash:                 cpBlock.Hash(),
+			CpHeight:               cpBlock.Height(),
+			OrderedAncestorsHashes: ancestorsHashes,
 		}
-		rawdb.WriteBlockDag(bc.db, blockDag)
+		bc.SaveBlockDag(blockDag)
 		bc.AddTips(blockDag)
-		bc.RemoveTips(tmpDagChainHashes)
+		bc.RemoveTips(ancestorsHashes)
 		//bc.ReviseTips()
 	}
 }
@@ -230,63 +231,62 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
 	if config == nil {
 		config = params.TestChainConfig
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config}
+		b.header = makeHeader(config, parent, statedb)
 
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
 		}
-		if b.engine != nil {
-			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.receipts)
+		// Finalize and seal the block
+		b.header.Root = statedb.IntermediateRoot(true)
+		block := types.NewBlock(b.header, b.txs, b.receipts, trie.NewStackTrie(nil))
 
-			// Write state changes to db
-			root, err := statedb.Commit(true)
-			if err != nil {
-				panic(fmt.Sprintf("state write error: %v", err))
-			}
-			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
-				panic(fmt.Sprintf("trie write error: %v", err))
-			}
-
-			//save block
-			blockBatch := db.NewBatch()
-			rawdb.WriteBlock(blockBatch, block)
-			rawdb.WriteReceipts(blockBatch, block.Hash(), b.receipts)
-			rawdb.WritePreimages(blockBatch, statedb.Preimages())
-			// create transaction lookup for applied txs.
-			for i, tx := range block.Transactions() {
-				if b.receipts[i] != nil {
-					// create transaction lookup
-					rawdb.WriteTxLookupEntry(db, tx.Hash(), block.Hash())
-				}
-			}
-			if err := blockBatch.Write(); err != nil {
-				log.Crit("Failed to write block into disk", "err", err)
-			}
-			parents := block.ParentHashes()
-			child := block.Hash()
-			batch := db.NewBatch()
-			for _, parHash := range parents {
-				children := rawdb.ReadChildren(db, parHash)
-				children = append(children, child)
-				rawdb.WriteChildren(batch, parHash, children)
-			}
-			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write block children", "err", err)
-			}
-
-			return block, b.receipts
+		// Write state changes to db
+		root, err := statedb.Commit(true)
+		if err != nil {
+			panic(fmt.Sprintf("state write error: %v", err))
 		}
-		return nil, nil
+		if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+			panic(fmt.Sprintf("trie write error: %v", err))
+		}
+
+		//save block
+		blockBatch := db.NewBatch()
+		rawdb.WriteBlock(blockBatch, block)
+		rawdb.WriteReceipts(blockBatch, block.Hash(), b.receipts)
+		rawdb.WritePreimages(blockBatch, statedb.Preimages())
+		// create transaction lookup for applied txs.
+		for i, tx := range block.Transactions() {
+			if b.receipts[i] != nil {
+				// create transaction lookup
+				rawdb.WriteTxLookupEntry(db, tx.Hash(), block.Hash())
+			}
+		}
+		if err := blockBatch.Write(); err != nil {
+			log.Crit("Failed to write block into disk", "err", err)
+		}
+		rawdb.AddSlotBlockHash(db, block.Slot(), block.Hash())
+
+		parents := block.ParentHashes()
+		child := block.Hash()
+		batch := db.NewBatch()
+		for _, parHash := range parents {
+			children := rawdb.ReadChildren(db, parHash)
+			children = append(children, child)
+			rawdb.WriteChildren(batch, parHash, children)
+		}
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to write block children", "err", err)
+		}
+
+		return block, b.receipts
 	}
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
@@ -301,7 +301,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
-func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
+func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.StateDB) *types.Header {
 	var time uint64
 	if parent.Time() == 0 {
 		time = 10
@@ -318,21 +318,8 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		//Number:   parent.Height() + 1,
 		Time: time,
 	}
-	header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
+	// This base fee calculation is for testing
+	header.BaseFee = misc.CalcSlotBaseFee(config, config.ValidatorsPerSlot, 2048, 105000000)
+
 	return header
 }
-
-type fakeChainReader struct {
-	config *params.ChainConfig
-}
-
-// Config returns the chain configuration.
-func (cr *fakeChainReader) Config() *params.ChainConfig {
-	return cr.config
-}
-
-func (cr *fakeChainReader) GetLastFinalizedHeader() *types.Header          { return nil }
-func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header  { return nil }
-func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header { return nil }
-func (cr *fakeChainReader) GetHeader(hash common.Hash) *types.Header       { return nil }
-func (cr *fakeChainReader) GetBlock(hash common.Hash) *types.Block         { return nil }

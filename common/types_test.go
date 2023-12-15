@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -186,7 +187,6 @@ func BenchmarkAddressHex(b *testing.B) {
 }
 
 func TestMixedcaseAccount_Address(t *testing.T) {
-
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
 	// Note: 0X{checksum_addr} is not valid according to spec above
 
@@ -223,9 +223,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		if err := json.Unmarshal([]byte(r), &r2); err == nil {
 			t.Errorf("Expected failure, input %v", r)
 		}
-
 	}
-
 }
 
 func TestHash_Scan(t *testing.T) {
@@ -876,6 +874,168 @@ func TestHashArray_Reverse(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("HashArray.Reverse() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestHashArray_Deduplicate(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          HashArray
+		expectedOutput HashArray
+	}{
+		{
+			name:           "Case 1: No duplicates",
+			input:          HashArray{{1}, {2}, {3}, {4}, {5}},
+			expectedOutput: HashArray{{1}, {2}, {3}, {4}, {5}},
+		},
+		{
+			name:           "Case 2: With duplicates",
+			input:          HashArray{{1}, {2}, {3}, {2}, {1}},
+			expectedOutput: HashArray{{1}, {2}, {3}},
+		},
+		{
+			name:           "Case 3: All duplicates",
+			input:          HashArray{{1}, {1}, {1}, {1}, {1}},
+			expectedOutput: HashArray{{1}},
+		},
+		{
+			name:           "Case 4: Complex case",
+			input:          HashArray{{5}, {3}, {7}, {3}, {5}, {6}, {8}, {7}, {6}, {8}, {9}},
+			expectedOutput: HashArray{{5}, {3}, {7}, {6}, {8}, {9}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.input.Deduplicate()
+			if !reflect.DeepEqual(tc.input, tc.expectedOutput) {
+				t.Errorf("Expected output %v, but got %v", tc.expectedOutput, tc.input)
+			}
+		})
+	}
+}
+
+func BenchmarkHashArray_Deduplicate(b *testing.B) {
+	testCases := []struct {
+		name  string
+		input HashArray
+	}{
+		{
+			name:  "Case 1: No duplicates",
+			input: HashArray{{1}, {2}, {3}, {4}, {5}},
+		},
+		{
+			name:  "Case 2: With duplicates",
+			input: HashArray{{1}, {2}, {3}, {2}, {1}},
+		},
+		{
+			name:  "Case 3: All duplicates",
+			input: HashArray{{1}, {1}, {1}, {1}, {1}},
+		},
+		{
+			name:  "Case 4: Complex case",
+			input: HashArray{{5}, {3}, {7}, {3}, {5}, {6}, {8}, {7}, {6}, {8}, {9}},
+		},
+	}
+
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			var memStatsStart, memStatsEnd runtime.MemStats
+
+			runtime.ReadMemStats(&memStatsStart)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				tc.input.Deduplicate()
+			}
+			b.StopTimer()
+
+			runtime.ReadMemStats(&memStatsEnd)
+
+			memUsage := memStatsEnd.Alloc - memStatsStart.Alloc
+			b.ReportMetric(float64(memUsage)/float64(b.N), "bytes/op")
+		})
+	}
+}
+
+func TestHashArray_Unique(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          HashArray
+		expectedOutput HashArray
+	}{
+		{
+			name:           "Case 1: No duplicates",
+			input:          HashArray{{1}, {2}, {3}, {4}, {5}},
+			expectedOutput: HashArray{{1}, {2}, {3}, {4}, {5}},
+		},
+		{
+			name:           "Case 2: With duplicates",
+			input:          HashArray{{1}, {2}, {3}, {2}, {1}},
+			expectedOutput: HashArray{{1}, {2}, {3}},
+		},
+		{
+			name:           "Case 3: All duplicates",
+			input:          HashArray{{1}, {1}, {1}, {1}, {1}},
+			expectedOutput: HashArray{{1}},
+		},
+		{
+			name:           "Case 4: Complex case",
+			input:          HashArray{{5}, {3}, {7}, {3}, {5}, {6}, {8}, {7}, {6}, {8}, {9}},
+			expectedOutput: HashArray{{5}, {3}, {7}, {6}, {8}, {9}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.input = tc.input.Uniq()
+			if !reflect.DeepEqual(tc.input, tc.expectedOutput) {
+				tc.input.Deduplicate()
+				t.Errorf("Expected output %v, but got %v", tc.expectedOutput, tc.input)
+			}
+		})
+	}
+}
+
+func BenchmarkHashArray_Unique(b *testing.B) {
+	testCases := []struct {
+		name  string
+		input HashArray
+	}{
+		{
+			name:  "Case 1: No duplicates",
+			input: HashArray{{1}, {2}, {3}, {4}, {5}},
+		},
+		{
+			name:  "Case 2: With duplicates",
+			input: HashArray{{1}, {2}, {3}, {2}, {1}},
+		},
+		{
+			name:  "Case 3: All duplicates",
+			input: HashArray{{1}, {1}, {1}, {1}, {1}},
+		},
+		{
+			name:  "Case 4: Complex case",
+			input: HashArray{{5}, {3}, {7}, {3}, {5}, {6}, {8}, {7}, {6}, {8}, {9}},
+		},
+	}
+
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			var memStatsStart, memStatsEnd runtime.MemStats
+
+			runtime.ReadMemStats(&memStatsStart)
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				tc.input.Uniq()
+			}
+			b.StopTimer()
+
+			runtime.ReadMemStats(&memStatsEnd)
+
+			memUsage := memStatsEnd.Alloc - memStatsStart.Alloc
+			b.ReportMetric(float64(memUsage)/float64(b.N), "bytes/op")
 		})
 	}
 }

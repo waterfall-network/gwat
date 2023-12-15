@@ -714,6 +714,7 @@ func (t *freezerTable) DumpIndex(start, stop int64) {
 	t.dumpIndex(os.Stdout, start, stop)
 }
 
+//nolint:unused // tests only
 func (t *freezerTable) dumpIndexString(start, stop int64) string {
 	var out bytes.Buffer
 	out.WriteString("\n")

@@ -31,19 +31,18 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/ethapi"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 var (
@@ -54,16 +53,17 @@ var (
 
 type testBackend struct {
 	chainConfig *params.ChainConfig
-	engine      consensus.Engine
 	chaindb     ethdb.Database
 	chain       *core.BlockChain
 }
 
+func (b *testBackend) Blockchain() *core.BlockChain {
+	return b.chain
+}
+
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
-	db := rawdb.NewMemoryDatabase()
 	backend := &testBackend{
 		chainConfig: params.TestChainConfig,
-		engine:      sealer.New(db),
 		chaindb:     rawdb.NewMemoryDatabase(),
 	}
 	// Generate blocks for testing
@@ -72,7 +72,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		gendb   = rawdb.NewMemoryDatabase()
 		genesis = gspec.MustCommit(gendb)
 	)
-	blocks, _ := core.GenerateChain(backend.chainConfig, genesis, backend.engine, gendb, n, generator)
+	blocks, _ := core.GenerateChain(backend.chainConfig, genesis, gendb, n, generator)
 
 	// Import the canonical chain
 	gspec.MustCommit(backend.chaindb)
@@ -83,7 +83,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:     0,
 		TrieDirtyDisabled: true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, backend.chainConfig, backend.engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, backend.chainConfig, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -132,10 +132,6 @@ func (b *testBackend) ChainConfig() *params.ChainConfig {
 	return b.chainConfig
 }
 
-func (b *testBackend) Engine() consensus.Engine {
-	return b.engine
-}
-
 func (b *testBackend) ChainDb() ethdb.Database {
 	return b.chaindb
 }
@@ -171,7 +167,8 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		}
 		vmenv := vm.NewEVM(context, txContext, statedb, b.chainConfig, vm.Config{})
 		tp := token.NewProcessor(context, statedb)
-		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		vp := validator.NewProcessor(context, statedb, b.chain)
+		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		statedb.Finalise(true)

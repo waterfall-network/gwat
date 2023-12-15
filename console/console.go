@@ -19,7 +19,6 @@ package console
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -141,7 +140,7 @@ func (c *Console) init(preload []string) error {
 
 	// Configure the input prompter for history and tab completion.
 	if c.prompter != nil {
-		if content, err := ioutil.ReadFile(c.histPath); err != nil {
+		if content, err := os.ReadFile(c.histPath); err != nil {
 			c.prompter.SetHistory(nil)
 		} else {
 			c.history = strings.Split(string(content), "\n")
@@ -219,9 +218,15 @@ func (c *Console) initExtensions() error {
 // initAdmin creates additional admin APIs implemented by the bridge.
 func (c *Console) initAdmin(vm *goja.Runtime, bridge *bridge) {
 	if admin := getObject(vm, "admin"); admin != nil {
-		admin.Set("sleepBlocks", jsre.MakeCallback(vm, bridge.SleepBlocks))
-		admin.Set("sleep", jsre.MakeCallback(vm, bridge.Sleep))
-		admin.Set("clearHistory", c.clearHistory)
+		if err := admin.Set("sleepBlocks", jsre.MakeCallback(vm, bridge.SleepBlocks)); err != nil {
+			fmt.Fprintln(os.Stderr, "Error setting sleepBlocks:", err)
+		}
+		if err := admin.Set("sleep", jsre.MakeCallback(vm, bridge.Sleep)); err != nil {
+			fmt.Fprintln(os.Stderr, "Error setting sleep:", err)
+		}
+		if err := admin.Set("clearHistory", c.clearHistory); err != nil {
+			fmt.Fprintln(os.Stderr, "Error setting clearHistory:", err)
+		}
 	}
 }
 
@@ -299,7 +304,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 // Welcome show summary of current Geth instance and some metadata about the
 // console's available modules.
 func (c *Console) Welcome() {
-	message := "Welcome to the Geth JavaScript console!\n\n"
+	message := "Welcome to the GWAT JavaScript console!\n\n"
 
 	// Print some generic Geth metadata
 	if res, err := c.jsre.Run(`
@@ -476,7 +481,7 @@ func (c *Console) Execute(path string) error {
 
 // Stop cleans up the console and terminates the runtime environment.
 func (c *Console) Stop(graceful bool) error {
-	if err := ioutil.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
+	if err := os.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
 		return err
 	}
 	if err := os.Chmod(c.histPath, 0600); err != nil { // Force 0600, even if it was different previously

@@ -17,18 +17,21 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	cmath "gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	tokenOp "gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -55,6 +58,7 @@ The state transitioning model does all the necessary work to work out a valid ne
 type StateTransition struct {
 	gp         *GasPool
 	tp         *token.Processor
+	vp         *validator.Processor
 	msg        Message
 	gas        uint64
 	gasPrice   *big.Int
@@ -76,12 +80,14 @@ type Message interface {
 	GasFeeCap() *big.Int
 	GasTipCap() *big.Int
 	Gas() uint64
+	SetGas(gas uint64) types.Message
 	Value() *big.Int
 
 	Nonce() uint64
 	IsFake() bool
 	Data() []byte
 	AccessList() types.AccessList
+	TxHash() common.Hash
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -120,11 +126,22 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isValidatorOp bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation {
 		gas = params.TxGasContractCreation
+	} else if isValidatorOp {
+		valOp, err := operation.DecodeBytes(data)
+		if err != nil {
+			return 0, err
+		}
+		switch valOp.(type) {
+		case operation.ValidatorSync:
+			return 0, nil
+		default:
+			gas = params.TxGas
+		}
 	} else {
 		gas = params.TxGas
 	}
@@ -158,11 +175,12 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:        gp,
 		evm:       evm,
 		tp:        tokenProcessor,
+		vp:        validatorProcessor,
 		msg:       msg,
 		gasPrice:  msg.GasPrice(),
 		gasFeeCap: msg.GasFeeCap(),
@@ -180,8 +198,8 @@ func NewStateTransition(evm *vm.EVM, tokenProcessor *token.Processor, msg Messag
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, tokenProcessor, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor, msg Message, gp *GasPool) (*ExecutionResult, error) {
+	return NewStateTransition(evm, tokenProcessor, validatorProcessor, msg, gp).TransitionDb()
 }
 
 // to returns the recipient of the message.
@@ -193,9 +211,20 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	mgval := new(big.Int).SetUint64(st.msg.Gas())
-	mgval = mgval.Mul(mgval, st.gasPrice)
-	balanceCheck := mgval
+	txFee := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.evm.Context.BaseFee)
+
+	if st.msg.GasTipCap() != nil {
+		tips := st.msg.GasTipCap()
+		if st.msg.GasFeeCap() != nil {
+			if st.msg.GasFeeCap().Cmp(new(big.Int).Add(st.evm.Context.BaseFee, tips)) < 0 {
+				tips = new(big.Int).Sub(st.msg.GasFeeCap(), st.evm.Context.BaseFee)
+			}
+		}
+
+		txFee = new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), new(big.Int).Add(st.evm.Context.BaseFee, tips))
+	}
+
+	balanceCheck := txFee
 	if st.gasFeeCap != nil {
 		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
@@ -210,7 +239,7 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval)
+	st.state.SubBalance(st.msg.From(), txFee)
 	return nil
 }
 
@@ -221,6 +250,8 @@ func (st *StateTransition) PreCheck() error {
 
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
+	var isValOp bool
+
 	if !st.msg.IsFake() {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(st.msg.From())
@@ -231,12 +262,17 @@ func (st *StateTransition) preCheck() error {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
 				st.msg.From().Hex(), msgNonce, stNonce)
 		}
-		// Make sure the sender is an EOA
-		if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
-			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
-				st.msg.From().Hex(), codeHash)
+
+		if st.msg.To() != nil && bytes.Equal(st.evm.ChainConfig().ValidatorsStateAddress.Bytes(), st.msg.To().Bytes()) && st.state.IsValidatorAddress(st.msg.From()) {
+			isValOp = true
+		} else {
+			if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) && !st.state.IsValidatorAddress(st.msg.From()) {
+				return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+					st.msg.From().Hex(), codeHash)
+			}
 		}
 	}
+
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
 
 	// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
@@ -255,7 +291,7 @@ func (st *StateTransition) preCheck() error {
 		}
 		// This will panic if baseFee is nil, but basefee presence is verified
 		// as part of header validation.
-		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
+		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 && !isValOp {
 			return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
 				st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
 		}
@@ -295,19 +331,25 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	sender := vm.AccountRef(msg.From())
 
 	// Check if it's token related operations
-	opCode, err := operation.GetOpCode(msg.Data())                  // It's token operation if data was successfully parsed
-	isTokenCreation := err == nil && opCode == operation.CreateCode // It's token creation if opCode is CreateCode
-	isContractCreation := msg.To() == nil && !isTokenCreation       // If to address is empty, and it's not token creation op code
+
+	txType := GetTxType(msg, st.vp, st.tp)
+
+	isTokenOp := txType == TokenCreationTxType || txType == TokenMethodTxType
+	isValidatorOp := txType == ValidatorMethodTxType || txType == ValidatorSyncTxType
+	isContractCreation := txType == ContractCreationTxType
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), isContractCreation, isValidatorOp)
 	if err != nil {
 		return nil, err
 	}
-	if st.gas < gas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+
+	if txType != ValidatorSyncTxType {
+		if st.gas < gas {
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+		}
+		st.gas -= gas
 	}
-	st.gas -= gas
 
 	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
@@ -326,13 +368,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// check if "to" address belongs to token, otherwise it's a contract
-		if isTokenCreation || st.tp.IsToken(st.to()) {
+		if isTokenOp {
 			// perform token operation if its valid op code
-			op, err := operation.DecodeBytes(msg.Data())
+			op, err := tokenOp.DecodeBytes(msg.Data())
 			if err != nil {
 				return nil, err
 			}
 			ret, vmerr = st.tp.Call(sender, st.to(), st.value, op)
+		} else if isValidatorOp {
+			ret, vmerr = st.vp.Call(sender, st.to(), st.value, st.msg)
 		} else {
 			// Increment the nonce for the next transaction
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
@@ -343,9 +387,21 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// After EIP-3529: refunds are capped to gasUsed / 5
 	st.refundGas(params.RefundQuotientEIP3529)
-	effectiveTip := st.gasPrice
-	effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+
+	reward := misc.CalcCreatorReward(st.msg.Gas(), st.evm.Context.BaseFee)
+
+	if st.msg.GasTipCap() != nil {
+		tips := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.msg.GasTipCap())
+		if st.msg.GasFeeCap() != nil {
+			if st.msg.GasFeeCap().Cmp(new(big.Int).Add(st.evm.Context.BaseFee, st.msg.GasTipCap())) < 0 {
+				tips = new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), new(big.Int).Sub(st.msg.GasFeeCap(), st.evm.Context.BaseFee))
+			}
+		}
+
+		reward = new(big.Int).Add(reward, tips)
+	}
+
+	st.state.AddBalance(st.evm.Context.Coinbase, reward)
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
@@ -374,4 +430,50 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
+}
+
+const (
+	DefaultTxType TxType = iota
+	TokenCreationTxType
+	TokenMethodTxType
+	ContractCreationTxType
+	ContractMethodTxType
+	ValidatorMethodTxType
+	ValidatorSyncTxType
+	UnknownTxType
+)
+
+type TxType uint64
+
+func GetTxType(msg Message, vp *validator.Processor, tp *token.Processor) TxType {
+	if len(msg.Data()) == 0 {
+		return DefaultTxType
+	}
+
+	if msg.To() == nil {
+		opCode, err := tokenOp.GetOpCode(msg.Data())
+		if err == nil && opCode == tokenOp.CreateCode {
+			return TokenCreationTxType
+		}
+		return ContractCreationTxType
+	}
+
+	if tp != nil && tp.IsToken(*msg.To()) {
+		return TokenMethodTxType
+	}
+
+	if vp != nil && vp.IsValidatorOp(msg.To()) {
+		valOp, err := operation.DecodeBytes(msg.Data())
+		if err != nil {
+			return UnknownTxType
+		}
+		switch valOp.(type) {
+		case operation.ValidatorSync:
+			return ValidatorSyncTxType
+		default:
+			return ValidatorMethodTxType
+		}
+	}
+
+	return ContractMethodTxType
 }

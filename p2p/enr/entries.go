@@ -21,6 +21,7 @@ import (
 	"io"
 	"net"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
@@ -153,6 +154,12 @@ func (v IPv6) EncodeRLP(w io.Writer) error {
 		return fmt.Errorf("invalid IPv6 address: %v", net.IP(v))
 	}
 	return rlp.Encode(w, ip6)
+}
+
+type ENRGenesis common.Hash
+
+func (g ENRGenesis) ENRKey() string {
+	return "enrGen"
 }
 
 // DecodeRLP implements rlp.Decoder.

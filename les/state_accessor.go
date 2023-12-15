@@ -18,60 +18,13 @@ package les
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/light"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 )
 
 // stateAtBlock retrieves the state database associated with a certain block.
 func (leth *LightEthereum) stateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, error) {
 	return light.NewState(ctx, block.Header(), leth.odr), nil
-}
-
-// stateAtTransaction returns the execution environment of a certain transaction.
-func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	// Short circuit if it's genesis block.
-	if block.Nr() == 0 {
-		return nil, vm.BlockContext{}, nil, errors.New("no transaction in genesis")
-	}
-	// Create the parent state database
-	parent, err := leth.blockchain.GetBlock(ctx, block.ParentHashes()[0])
-	if err != nil {
-		return nil, vm.BlockContext{}, nil, err
-	}
-	statedb, err := leth.stateAtBlock(ctx, parent, reexec)
-	if err != nil {
-		return nil, vm.BlockContext{}, nil, err
-	}
-	if txIndex == 0 && len(block.Transactions()) == 0 {
-		return nil, vm.BlockContext{}, statedb, nil
-	}
-	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(leth.blockchain.Config())
-	for idx, tx := range block.Transactions() {
-		// Assemble the transaction call message and return if the requested offset
-		msg, _ := tx.AsMessage(signer, block.BaseFee())
-		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
-		statedb.Prepare(tx.Hash(), idx)
-		if idx == txIndex {
-			return msg, context, statedb, nil
-		}
-		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(context, txContext, statedb, leth.blockchain.Config(), vm.Config{})
-		tp := token.NewProcessor(context, statedb)
-		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
-			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
-		}
-		// Ensure any modifications are committed to the state
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(true)
-	}
-	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

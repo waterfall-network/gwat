@@ -28,10 +28,10 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 const testHead = 32
@@ -39,6 +39,21 @@ const testHead = 32
 type testBackend struct {
 	chain   *core.BlockChain
 	pending bool // pending block available
+}
+
+func (b *testBackend) ValidatorsStorage() valStore.Storage {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *testBackend) Genesis() *types.Block {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *testBackend) BlockChain() *core.BlockChain {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
@@ -106,13 +121,12 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	config.LondonBlock = londonBlock
+	//config.LondonBlock = londonBlock
 	db := rawdb.NewMemoryDatabase()
-	engine := sealer.New(db)
 	genesis, _ := gspec.Commit(db)
 
 	// Generate testing blocks
-	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, testHead+1, func(i int, b *core.BlockGen) {
+	blocks, _ := core.GenerateChain(gspec.Config, genesis, db, testHead+1, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
 		var txdata types.TxData
@@ -141,7 +155,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.Commit(diskdb)
-	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, &config, engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, &config, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}

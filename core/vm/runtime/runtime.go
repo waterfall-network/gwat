@@ -37,6 +37,8 @@ type Config struct {
 	Coinbase    common.Address
 	BlockHeight *big.Int
 	BlockNumber *big.Int
+	Slot        uint64
+	Era         uint64
 	Time        *big.Int
 	GasLimit    uint64
 	GasPrice    *big.Int
@@ -53,10 +55,11 @@ type Config struct {
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
 		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:         big.NewInt(1),
-			SecondsPerSlot:  4,
-			SlotsPerEpoch:   32,
-			ForkSlotSubNet1: math.MaxUint64,
+			ChainID:          big.NewInt(1),
+			SecondsPerSlot:   4,
+			SlotsPerEpoch:    32,
+			ForkSlotSubNet1:  math.MaxUint64,
+			EffectiveBalance: big.NewInt(3200),
 		}
 	}
 

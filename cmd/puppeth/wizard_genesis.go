@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"net/http"
@@ -42,16 +41,7 @@ func (w *wizard) makeGenesis() {
 		Timestamp: uint64(time.Now().Unix()),
 		GasLimit:  4700000,
 		Alloc:     make(core.GenesisAlloc),
-		Config: &params.ChainConfig{
-			HomesteadBlock:      big.NewInt(0),
-			EIP150Block:         big.NewInt(0),
-			EIP155Block:         big.NewInt(0),
-			EIP158Block:         big.NewInt(0),
-			ByzantiumBlock:      big.NewInt(0),
-			ConstantinopleBlock: big.NewInt(0),
-			PetersburgBlock:     big.NewInt(0),
-			IstanbulBlock:       big.NewInt(0),
-		},
+		Config:    &params.ChainConfig{},
 	}
 	// Figure out which consensus engine to choose
 	fmt.Println()
@@ -63,17 +53,12 @@ func (w *wizard) makeGenesis() {
 	switch {
 	case choice == "1":
 		// In case of ethash, we're pretty much done
-		genesis.Config.Ethash = new(params.EthashConfig)
 		genesis.ExtraData = make([]byte, 32)
 
 	case choice == "" || choice == "2":
 		// In the case of clique, configure the consensus parameters
-		genesis.Config.Clique = &params.CliqueConfig{
-			Period: 15,
-		}
 		fmt.Println()
 		fmt.Println("How many seconds should blocks take? (default = 15)")
-		genesis.Config.Clique.Period = uint64(w.readDefaultInt(15))
 
 		// We also need the initial list of signers
 		fmt.Println()
@@ -198,48 +183,6 @@ func (w *wizard) manageGenesis() {
 	switch choice {
 	case "1":
 		// Fork rule updating requested, iterate over each fork
-		fmt.Println()
-		fmt.Printf("Which block should Homestead come into effect? (default = %v)\n", w.conf.Genesis.Config.HomesteadBlock)
-		w.conf.Genesis.Config.HomesteadBlock = w.readDefaultBigInt(w.conf.Genesis.Config.HomesteadBlock)
-
-		fmt.Println()
-		fmt.Printf("Which block should EIP150 (Tangerine Whistle) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP150Block)
-		w.conf.Genesis.Config.EIP150Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP150Block)
-
-		fmt.Println()
-		fmt.Printf("Which block should EIP155 (Spurious Dragon) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP155Block)
-		w.conf.Genesis.Config.EIP155Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP155Block)
-
-		fmt.Println()
-		fmt.Printf("Which block should EIP158/161 (also Spurious Dragon) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP158Block)
-		w.conf.Genesis.Config.EIP158Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP158Block)
-
-		fmt.Println()
-		fmt.Printf("Which block should Byzantium come into effect? (default = %v)\n", w.conf.Genesis.Config.ByzantiumBlock)
-		w.conf.Genesis.Config.ByzantiumBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ByzantiumBlock)
-
-		fmt.Println()
-		fmt.Printf("Which block should Constantinople come into effect? (default = %v)\n", w.conf.Genesis.Config.ConstantinopleBlock)
-		w.conf.Genesis.Config.ConstantinopleBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ConstantinopleBlock)
-		if w.conf.Genesis.Config.PetersburgBlock == nil {
-			w.conf.Genesis.Config.PetersburgBlock = w.conf.Genesis.Config.ConstantinopleBlock
-		}
-		fmt.Println()
-		fmt.Printf("Which block should Petersburg come into effect? (default = %v)\n", w.conf.Genesis.Config.PetersburgBlock)
-		w.conf.Genesis.Config.PetersburgBlock = w.readDefaultBigInt(w.conf.Genesis.Config.PetersburgBlock)
-
-		fmt.Println()
-		fmt.Printf("Which block should Istanbul come into effect? (default = %v)\n", w.conf.Genesis.Config.IstanbulBlock)
-		w.conf.Genesis.Config.IstanbulBlock = w.readDefaultBigInt(w.conf.Genesis.Config.IstanbulBlock)
-
-		fmt.Println()
-		fmt.Printf("Which block should Berlin come into effect? (default = %v)\n", w.conf.Genesis.Config.BerlinBlock)
-		w.conf.Genesis.Config.BerlinBlock = w.readDefaultBigInt(w.conf.Genesis.Config.BerlinBlock)
-
-		fmt.Println()
-		fmt.Printf("Which block should London come into effect? (default = %v)\n", w.conf.Genesis.Config.LondonBlock)
-		w.conf.Genesis.Config.LondonBlock = w.readDefaultBigInt(w.conf.Genesis.Config.LondonBlock)
-
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")
 		fmt.Printf("Chain configuration updated:\n\n%s\n", out)
 
@@ -260,7 +203,7 @@ func (w *wizard) manageGenesis() {
 
 		// Export the native genesis spec used by puppeth and Geth
 		gethJson := filepath.Join(folder, fmt.Sprintf("%s.json", w.network))
-		if err := ioutil.WriteFile(gethJson, out, 0644); err != nil {
+		if err := os.WriteFile(gethJson, out, 0644); err != nil {
 			log.Error("Failed to save genesis file", "err", err)
 			return
 		}
@@ -302,7 +245,7 @@ func saveGenesis(folder, network, client string, spec interface{}) {
 	path := filepath.Join(folder, fmt.Sprintf("%s-%s.json", network, client))
 
 	out, _ := json.MarshalIndent(spec, "", "  ")
-	if err := ioutil.WriteFile(path, out, 0644); err != nil {
+	if err := os.WriteFile(path, out, 0644); err != nil {
 		log.Error("Failed to save genesis file", "client", client, "err", err)
 		return
 	}

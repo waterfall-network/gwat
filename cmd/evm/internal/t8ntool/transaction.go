@@ -32,6 +32,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -135,8 +136,22 @@ func Transaction(ctx *cli.Context) error {
 		} else {
 			r.Address = sender
 		}
+
+		var isTokenOp, isValidatorOp, isContractCreation bool
+
+		isValidatorOp = tx.To() != nil && chainConfig.ValidatorsStateAddress != nil && *tx.To() == *chainConfig.ValidatorsStateAddress
+
+		if tx.To() == nil {
+			_, err = operation.GetOpCode(tx.Data())
+			if err == nil {
+				isTokenOp = true
+			}
+		}
+
+		isContractCreation = tx.To() == nil && !isValidatorOp && !isTokenOp
+
 		// Check intrinsic gas
-		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil); err != nil {
+		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), isContractCreation, isValidatorOp); err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue

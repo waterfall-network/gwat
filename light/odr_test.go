@@ -32,12 +32,12 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 var (
@@ -200,8 +200,9 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		context := core.NewEVMBlockContext(header, chain, nil)
 		vmenv := vm.NewEVM(context, txContext, st, config, vm.Config{NoBaseFee: true})
 		tp := token.NewProcessor(context, st)
+		vp := validator.NewProcessor(context, st, bc)
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
-		result, _ := core.ApplyMessage(vmenv, tp, msg, gp)
+		result, _ := core.ApplyMessage(vmenv, tp, vp, msg, gp)
 		res = append(res, result.Return()...)
 		if st.Error() != nil {
 			return res, st.Error()
@@ -261,15 +262,14 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	)
 	gspec.MustCommit(ldb)
 	// Assemble the test environment
-	db := rawdb.NewMemoryDatabase()
-	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, sealer.New(db), vm.Config{}, nil)
-	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, sealer.New(db), sdb, 4, testChainGen)
+	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, vm.Config{}, nil)
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, sdb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		t.Fatal(err)
 	}
 
 	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: TestClientIndexerConfig}
-	lightchain, err := NewLightChain(odr, params.TestChainConfig, sealer.New(db), nil)
+	lightchain, err := NewLightChain(odr, params.TestChainConfig, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

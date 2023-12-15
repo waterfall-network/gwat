@@ -27,7 +27,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 const (
@@ -91,7 +90,7 @@ type chainHeightFn func() uint64
 type headersInsertFn func(headers []*types.Header) (int, error)
 
 // chainInsertFn is a callback type to insert a batch of blocks into the local chain.
-type chainInsertFn func(string, types.Blocks) (int, error, *common.HashArray)
+type chainInsertFn func(string, *types.Block) error
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
@@ -137,18 +136,13 @@ type blockOrHeaderInject struct {
 	fetchBodies bodyRequesterFn   // Fetcher function to retrieve the body of an announced block
 }
 
-// number returns the block number of the injected object.
-func (inject *blockOrHeaderInject) number() uint64 {
-	return inject.nrCounter
-}
-
-// number returns the block number of the injected object.
+// incrNumber returns the next number.
 func (inject *blockOrHeaderInject) incrNumber() uint64 {
 	inject.nrCounter++
 	return inject.nrCounter
 }
 
-// number returns the block hash of the injected object.
+// hash returns the block hash of the injected object.
 func (inject *blockOrHeaderInject) hash() common.Hash {
 	if inject.header != nil {
 		return inject.header.Hash()
@@ -202,7 +196,17 @@ type BlockFetcher struct {
 }
 
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
-func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertHeaders headersInsertFn, insertChain chainInsertFn, dropPeer peerDropFn) *BlockFetcher {
+func NewBlockFetcher(
+	light bool,
+	getHeader HeaderRetrievalFn,
+	getBlock blockRetrievalFn,
+	verifyHeader headerVerifierFn,
+	broadcastBlock blockBroadcasterFn,
+	chainHeight chainHeightFn,
+	insertHeaders headersInsertFn,
+	insertChain chainInsertFn,
+	dropPeer peerDropFn,
+) *BlockFetcher {
 	return &BlockFetcher{
 		light:          light,
 		notify:         make(chan *blockAnnounce),
@@ -373,8 +377,21 @@ func (f *BlockFetcher) loop() {
 			}
 
 			if f.light {
+				log.Info("Propagate light header: fetched",
+					"peer", op.origin,
+					"slot", op.header.Slot,
+					"hash", op.header.Hash().Hex(),
+					"parents", op.header.ParentHashes)
+
 				f.importHeaders(op.origin, op.header)
 			} else {
+				log.Info("Propagate block: fetched",
+					"peer", op.origin,
+					"slot", op.block.Slot(),
+					"hash", op.block.Hash().Hex(),
+					"txs", len(op.block.Transactions()),
+					"parents", op.block.ParentHashes())
+
 				f.importBlocks(op.origin, op.block)
 			}
 		}
@@ -385,6 +402,7 @@ func (f *BlockFetcher) loop() {
 			return
 
 		case notification := <-f.notify:
+			log.Info("Propagate block: announced", "peer", notification.origin, "hash", notification.hash)
 			// A block was announced, make sure the peer isn't DOSing us
 			blockAnnounceInMeter.Mark(1)
 
@@ -629,7 +647,8 @@ func (f *BlockFetcher) loop() {
 							continue
 						}
 						if bodyHash == (common.Hash{}) {
-							bodyHash = types.CalcBlockBodyHash(task.transactions[i], trie.NewStackTrie(nil))
+							body := types.Body{Transactions: task.transactions[i]}
+							bodyHash = body.CalculateHash()
 						}
 						if bodyHash != announce.header.BodyHash {
 							continue
@@ -643,7 +662,6 @@ func (f *BlockFetcher) loop() {
 						} else {
 							f.forgetHash(hash)
 						}
-
 					}
 					if matched {
 						task.transactions = append(task.transactions[:i], task.transactions[i+1:]...)
@@ -801,16 +819,15 @@ func (f *BlockFetcher) importHeaders(peer string, header *types.Header) {
 // block's number is at the same height as the current import phase, it updates
 // the phase states accordingly.
 func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
+	// Run the import on a new thread
 	hash := block.Hash()
 
-	// Run the import on a new thread
-	log.Debug("Importing propagated block", "peer", peer, "number", block.Nr(), "hash", hash.Hex())
 	go func() {
 		defer func() { f.done <- hash }()
 
 		// If the no parents, abort insertion
 		if len(block.ParentHashes()) == 0 {
-			log.Debug("No parents of propagated block", "peer", peer, "hash", hash, "parent", block.ParentHashes())
+			log.Error("Propagate block: no parents", "peer", peer, "hash", hash, "parent", block.ParentHashes())
 			return
 		}
 		// Quickly validate the header and propagate the block if it passes
@@ -822,13 +839,13 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 
 		default:
 			// Something went very wrong, drop the peer
-			log.Warn("Propagated block verification failed", "peer", peer, "slot", block.Slot(), "number", block.Nr(), "height", block.Height(), "hash", hash.Hex(), "err", err)
+			log.Warn("Propagate block: verification failed", "peer", peer, "slot", block.Slot(), "number", block.Nr(), "height", block.Height(), "hash", hash.Hex(), "err", err)
 			f.dropPeer(peer)
 			return
 		}
 		// Run the actual import and log any issues
-		if _, err, unl := f.insertChain(peer, types.Blocks{block}); err != nil {
-			log.Error("Propagated block import failed", "peer", peer, "number", block.Nr(), "height", block.Height(), "hash", hash.Hex(), "err", err, "unknown", unl)
+		if err := f.insertChain(peer, block); err != nil {
+			log.Error("Propagate block: import failed", "peer", peer, "number", block.Nr(), "height", block.Height(), "hash", hash.Hex(), "err", err)
 			return
 		}
 		// If import succeeded, broadcast the block

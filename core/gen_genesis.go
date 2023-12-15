@@ -24,8 +24,9 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		GasLimit     math.HexOrDecimal64                         `json:"gasLimit"   gencodec:"required"`
 		Coinbase     common.Address                              `json:"coinbase"`
 		Alloc        map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
+		Validators   []common.Address                            `json:"validators"`
 		GasUsed      math.HexOrDecimal64                         `json:"gasUsed"`
-		ParentHashes []common.Hash                               `json:"ParentHashes"`
+		ParentHashes []common.Hash                               `json:"parentHashes"`
 		Slot         math.HexOrDecimal64                         `json:"slot"`
 		Height       math.HexOrDecimal64                         `json:"height"`
 		BaseFee      *math.HexOrDecimal256                       `json:"baseFeePerGas"`
@@ -42,6 +43,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 			enc.Alloc[common.UnprefixedAddress(k)] = v
 		}
 	}
+	enc.Validators = g.Validators.Addresses()
 	enc.GasUsed = math.HexOrDecimal64(g.GasUsed)
 	enc.ParentHashes = g.ParentHashes
 	enc.Slot = math.HexOrDecimal64(g.Slot)
@@ -59,9 +61,9 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		GasLimit     *math.HexOrDecimal64                        `json:"gasLimit"   gencodec:"required"`
 		Coinbase     *common.Address                             `json:"coinbase"`
 		Alloc        map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
-		Deposit      *common.Address                             `json:"deposit"    gencodec:"required"`
+		Validators   DepositData                                 `json:"validators"`
 		GasUsed      *math.HexOrDecimal64                        `json:"gasUsed"`
-		ParentHashes *[]common.Hash                              `json:"parentHashes"`
+		ParentHashes []common.Hash                               `json:"parentHashes"`
 		Slot         *math.HexOrDecimal64                        `json:"slot"`
 		Height       *math.HexOrDecimal64                        `json:"height"`
 		BaseFee      *math.HexOrDecimal256                       `json:"baseFeePerGas"`
@@ -93,11 +95,14 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 	for k, v := range dec.Alloc {
 		g.Alloc[common.Address(k)] = v
 	}
+	if dec.Validators != nil {
+		g.Validators = dec.Validators
+	}
 	if dec.GasUsed != nil {
 		g.GasUsed = uint64(*dec.GasUsed)
 	}
 	if dec.ParentHashes != nil {
-		g.ParentHashes = *dec.ParentHashes
+		g.ParentHashes = dec.ParentHashes
 	}
 	if dec.Slot != nil {
 		g.Slot = uint64(*dec.Slot)

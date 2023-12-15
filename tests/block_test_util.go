@@ -33,7 +33,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
@@ -111,13 +110,12 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	if gblock.Root() != t.json.Genesis.StateRoot {
 		return fmt.Errorf("genesis block state root does not match test: computed=%x, test=%x", gblock.Root().Bytes()[:6], t.json.Genesis.StateRoot[:6])
 	}
-	engine := sealer.New(db)
 	cache := &core.CacheConfig{TrieCleanLimit: 0}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
 	}
-	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(db, cache, config, vm.Config{}, nil)
 	if err != nil {
 		return err
 	}

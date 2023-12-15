@@ -38,6 +38,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
@@ -142,10 +143,11 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				txContext := core.NewEVMTxContext(msg)
 				vmenv := vm.NewEVM(context, txContext, statedb, config, vm.Config{NoBaseFee: true})
 				tp := token.NewProcessor(context, statedb)
+				vp := validator.NewProcessor(context, statedb, bc)
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
-				result, _ := core.ApplyMessage(vmenv, tp, msg, gp)
+				result, _ := core.ApplyMessage(vmenv, tp, vp, msg, gp)
 				res = append(res, result.Return()...)
 			}
 		} else {
@@ -157,8 +159,9 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			txContext := core.NewEVMTxContext(msg)
 			vmenv := vm.NewEVM(context, txContext, state, config, vm.Config{NoBaseFee: true})
 			tp := token.NewProcessor(context, state)
+			vp := validator.NewProcessor(context, state, bc)
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
-			result, _ := core.ApplyMessage(vmenv, tp, msg, gp)
+			result, _ := core.ApplyMessage(vmenv, tp, vp, msg, gp)
 			if state.Error() == nil {
 				res = append(res, result.Return()...)
 			}

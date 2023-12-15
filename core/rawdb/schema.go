@@ -36,8 +36,14 @@ var (
 	// lastCanonicalHashKey tracks the latest known canonical full block's hash.
 	lastCanonicalHashKey = []byte("LCHash")
 
-	// lastCoordHashKey tracks the latest known hash from coordinator.
-	lastCoordHashKey = []byte("LCoordHash")
+	// lastCoordCpKey tracks the latest known hash from coordinator.
+	lastCoordCpKey = []byte("LCoordCp")
+
+	// coordCpPrefix + cpSpine.
+	coordCpPrefix = []byte("CoordCp")
+
+	// epochCpPrefix + epoch.
+	epochCpPrefix = []byte("EpochCp")
 
 	// tipsHashesKey tracks the latest known tips hashes.
 	tipsHashesKey = []byte("TipsHashes")
@@ -85,10 +91,17 @@ var (
 	headerPrefix     = []byte("h") // headerPrefix + hash -> header
 	headerHashSuffix = []byte("n") // headerPrefix + headerHashSuffix -> hash
 
-	childrenPrefix              = []byte("C")   // childrenPrefix + parentHash -> children (HashArray)
+	childrenPrefix              = []byte("Cld") // childrenPrefix + parentHash -> children (HashArray)
 	blockDagPrefix              = []byte("DAG") // blockDagPrefix + hash -> BlockDAG
 	finalizedNumberByHashPrefix = []byte("fhn") // finalizedNumberByHashPrefix + hash -> finNr (uint64 big endian)
 	finalizedHashByNumberPrefix = []byte("fnh") // finalizedHashByNumberPrefix + finNr (uint64 big endian) -> hash
+	eraPrefix                   = []byte("era")
+	currentEraPrefix            = []byte("currentera")
+	slotBlockKey                = []byte("slotBlocks")
+
+	// validator sync data
+	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
+	valSyncNotProcKey = []byte("vsnprockeys") // tracks the not processed validators' sync operation.
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -98,7 +111,6 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
-	CreatorsPrefix        = []byte("m")
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
@@ -208,21 +220,6 @@ func codeKey(hash common.Hash) []byte {
 	return append(CodePrefix, hash.Bytes()...)
 }
 
-func creatorKey(slot uint64) []byte {
-	res := make([]byte, 0, len(CreatorsPrefix))
-	res = append(res, CreatorsPrefix...)
-	res = append(res, Uint64ToByteSlice(slot)...)
-
-	return res
-}
-
-func IsCreatorKey(key []byte) (bool, []byte) {
-	if bytes.HasPrefix(key, CreatorsPrefix) && len(key) == len(CreatorsPrefix)+8 { // uint64 = 8 bytes
-		return true, key[len(CreatorsPrefix):]
-	}
-	return false, nil
-}
-
 // IsCodeKey reports whether the given byte slice is the key of contract code,
 // if so return the raw code hash as well.
 func IsCodeKey(key []byte) (bool, []byte) {
@@ -255,4 +252,28 @@ func blockDagKey(hash common.Hash) []byte {
 // childrenKey = childrenPrefix + hash
 func childrenKey(hash common.Hash) []byte {
 	return append(childrenPrefix, hash.Bytes()...)
+}
+
+// eraKey = eraKey + era
+func eraKey(era uint64) []byte {
+	return append(eraPrefix, Uint64ToByteSlice(era)...)
+}
+
+// validatorSyncKey = valSyncOpPrefix + initTxHash
+func validatorSyncKey(initTxHash common.Hash) []byte {
+	return append(valSyncOpPrefix, initTxHash.Bytes()...)
+}
+
+// coordCpKey = coordCpPrefix + cpSpine
+func coordCpKey(cpSpine common.Hash) []byte {
+	return append(coordCpPrefix, cpSpine.Bytes()...)
+}
+
+// epochCpKey = coordCpPrefix + epoch
+func epochCpKey(epoch uint64) []byte {
+	return append(epochCpPrefix, Uint64ToByteSlice(epoch)...)
+}
+
+func slotBlocksKey(slot uint64) []byte {
+	return append(slotBlockKey, Uint64ToByteSlice(slot)...)
 }

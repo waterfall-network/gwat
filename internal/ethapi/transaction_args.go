@@ -28,7 +28,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -74,22 +73,22 @@ func (arg *TransactionArgs) data() []byte {
 }
 
 // setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, head *types.Header) error {
+	if head == nil {
+		head = b.GetLastFinalizedHeader()
+	}
+
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// After london, default to 1559 unless gasPrice is set
-	head := b.GetLastFinalizedHeader()
 	// If user specifies both maxPriorityfee and maxFee, then we do not
 	// need to consult the chain for defaults. It's definitely a London tx.
 	if args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil {
 		// In this clause, user left some fields unspecified.
 		if args.GasPrice == nil {
 			if args.MaxPriorityFeePerGas == nil {
-				tip, err := b.SuggestGasTipCap(ctx)
-				if err != nil {
-					return err
-				}
+				tip := new(big.Int)
 				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 			}
 			if args.MaxFeePerGas == nil {
@@ -142,26 +141,35 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
+		gas := hexutil.Uint64(b.RPCGasCap() / 2)
+		args.Gas = &gas
 		// These fields are immutable during the estimation, safe to
 		// pass the pointer directly.
-		data := args.data()
-		callArgs := TransactionArgs{
-			From:                 args.From,
-			To:                   args.To,
-			GasPrice:             args.GasPrice,
-			MaxFeePerGas:         args.MaxFeePerGas,
-			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
-			Value:                args.Value,
-			Data:                 (*hexutil.Bytes)(&data),
-			AccessList:           args.AccessList,
-		}
-		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+		//data := args.data()
+		//callArgs := TransactionArgs{
+		//	From:                 args.From,
+		//	To:                   args.To,
+		//	GasPrice:             args.GasPrice,
+		//	MaxFeePerGas:         args.MaxFeePerGas,
+		//	MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+		//	Value:                args.Value,
+		//	Data:                 (*hexutil.Bytes)(&data),
+		//	AccessList:           args.AccessList,
+		//}
 		//estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
-		estimated, err := DoEstimateGasQuick(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
+		//estimated, err := DoEstimateGasQuick(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
+		msg, err := args.ToMessage(b.RPCGasCap(), head.BaseFee)
 		if err != nil {
 			return err
 		}
-		args.Gas = &estimated
+
+		estimated, err := b.BlockChain().EstimateGas(msg, head)
+		if err != nil {
+			return err
+		}
+
+		gas = hexutil.Uint64(estimated)
+		args.Gas = &gas
 		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
 	if args.ChainID == nil {

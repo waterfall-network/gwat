@@ -25,7 +25,6 @@ import (
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/bloombits"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -40,6 +39,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 type LesApiBackend struct {
@@ -47,6 +48,10 @@ type LesApiBackend struct {
 	allowUnprotectedTxs bool
 	eth                 *LightEthereum
 	gpo                 *gasprice.Oracle
+}
+
+func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions, map[common.Address][]*types.TransactionBlocks) {
+	return b.eth.txPool.Content()
 }
 
 func (b *LesApiBackend) GetLastFinalizedNumber() uint64 {
@@ -59,6 +64,11 @@ func (b *LesApiBackend) GetLastFinalizedNumber() uint64 {
 
 func (b *LesApiBackend) GetLastFinalizedHeader() *types.Header {
 	return b.eth.blockchain.GetLastFinalizedHeader()
+}
+
+func (b *LesApiBackend) BlockHashesBySlot(ctx context.Context, slot uint64) common.HashArray {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (b *LesApiBackend) GetLastFinalizedBlock() *types.Block {
@@ -229,6 +239,11 @@ func (b *LesApiBackend) GetTP(ctx context.Context, state *state.StateDB, header 
 	return token.NewProcessor(context, state), state.Error, nil
 }
 
+func (b *LesApiBackend) GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*validator.Processor, func() error, error) {
+	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
+	return validator.NewProcessor(context, state, b.BlockChain()), state.Error, nil
+}
+
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return b.eth.txPool.Add(ctx, signedTx)
 }
@@ -253,15 +268,11 @@ func (b *LesApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (
 	return b.eth.txPool.GetNonce(ctx, addr)
 }
 
-func (b *LesApiBackend) Stats() (pending int, queued int) {
-	return b.eth.txPool.Stats(), 0
+func (b *LesApiBackend) Stats() (pending, queued, processing int) {
+	return b.eth.txPool.Stats(), 0, 0
 }
 
-func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	return b.eth.txPool.Content()
-}
-
-func (b *LesApiBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+func (b *LesApiBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions, types.Transactions) {
 	return b.eth.txPool.ContentFrom(addr)
 }
 
@@ -275,10 +286,6 @@ func (b *LesApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Sub
 
 func (b *LesApiBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeChainHeadEvent(ch)
-}
-
-func (b *LesApiBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return b.eth.blockchain.SubscribeChainSideEvent(ch)
 }
 
 func (b *LesApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
@@ -354,10 +361,6 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
-func (b *LesApiBackend) Engine() consensus.Engine {
-	return b.eth.engine
-}
-
 func (b *LesApiBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.GetLastFinalizedHeader()
 }
@@ -366,6 +369,15 @@ func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 	return b.eth.stateAtBlock(ctx, block, reexec)
 }
 
-func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
+func (b *LesApiBackend) ValidatorsStorage() valStore.Storage {
+	return b.eth.blockchain.ValidatorStorage()
+}
+
+func (b *LesApiBackend) Genesis() *types.Block {
+	return b.eth.blockchain.Genesis()
+}
+
+func (b *LesApiBackend) BlockChain() *core.BlockChain {
+	//TODO implement me
+	panic("implement me")
 }

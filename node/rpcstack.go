@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"sort"
@@ -40,6 +39,7 @@ type httpConfig struct {
 	CorsAllowedOrigins []string
 	Vhosts             []string
 	prefix             string // path prefix on which to mount http handler
+	jwtSecret          []byte // optional JWT secret
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
@@ -157,6 +157,7 @@ func (h *httpServer) start() error {
 	}
 	// Log http endpoint.
 	h.log.Info("HTTP server started",
+		"auth", h.httpConfig.jwtSecret != nil,
 		"endpoint", listener.Addr(),
 		"prefix", h.httpConfig.prefix,
 		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
@@ -285,7 +286,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	}
 	h.httpConfig = config
 	h.httpHandler.Store(&rpcHandler{
-		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts),
+		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
 		server:  srv,
 	})
 	return nil
@@ -362,10 +363,14 @@ func isWebsocket(r *http.Request) bool {
 }
 
 // NewHTTPHandlerStack returns wrapped http-related handlers
-func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string) http.Handler {
+func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSecret []byte) http.Handler {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
+	if len(jwtSecret) != 0 {
+		handler = newJWTHandler(jwtSecret, handler)
+	}
+
 	return newGzipHandler(handler)
 }
 
@@ -416,7 +421,6 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// It's an IP address, we can serve that
 		h.next.ServeHTTP(w, r)
 		return
-
 	}
 	// Not an IP address, but a hostname. Need to validate
 	if _, exist := h.vhosts["*"]; exist {
@@ -432,7 +436,7 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 var gzPool = sync.Pool{
 	New: func() interface{} {
-		w := gzip.NewWriter(ioutil.Discard)
+		w := gzip.NewWriter(io.Discard)
 		return w
 	},
 }

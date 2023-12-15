@@ -36,7 +36,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	ethash "gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/filters"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
@@ -44,6 +43,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // This nil assignment ensures at compile time that SimulatedBackend implements bind.ContractBackend.
@@ -80,8 +80,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
 	genesis.MustCommit(database)
 	// i.o. ethash.NewFaker()
-	engine := ethash.New(database)
-	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, engine, vm.Config{}, nil)
+	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, vm.Config{}, nil)
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -132,9 +131,7 @@ func (b *SimulatedBackend) Rollback() {
 }
 
 func (b *SimulatedBackend) rollback(parent *types.Block) {
-	// i.o. ethash.NewFaker()
-	engine := ethash.New(b.database)
-	blocks, _ := core.GenerateChain(b.config, parent, engine, b.database, 1, func(int, *core.BlockGen) {})
+	blocks, _ := core.GenerateChain(b.config, parent, b.database, 1, func(int, *core.BlockGen) {})
 	for _, bl := range blocks {
 		nr := bl.Height()
 		bl.SetNumber(&nr)
@@ -632,9 +629,10 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// about the transaction and calling mechanisms.
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	tp := token.NewProcessor(evmContext, stateDB)
+	vp := validator.NewProcessor(evmContext, stateDB, b.Blockchain())
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
-	return core.NewStateTransition(vmEnv, tp, msg, gasPool).TransitionDb()
+	return core.NewStateTransition(vmEnv, tp, vp, msg, gasPool).TransitionDb()
 }
 
 // SendTransaction updates the pending block to include the given transaction.
@@ -659,9 +657,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
 	// Include tx in chain
-	// i.o. ethash.NewFaker()
-	engine := ethash.New(b.database)
-	blocks, _ := core.GenerateChain(b.config, block, engine, b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, block, b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
 		}
@@ -779,9 +775,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 		return errors.New("Could not adjust time on non-empty block")
 	}
 
-	// i.o. ethash.NewFaker()
-	engine := ethash.New(b.database)
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.GetLastFinalizedBlock(), engine, b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.GetLastFinalizedBlock(), b.database, 1, func(number int, block *core.BlockGen) {
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
 	stateDB, _ := b.blockchain.State()
@@ -802,6 +796,11 @@ type callMsg struct {
 	ethereum.CallMsg
 }
 
+// SetGas implements core.Message.
+func (callMsg) SetGas(gas uint64) types.Message {
+	panic("unimplemented")
+}
+
 func (m callMsg) From() common.Address         { return m.CallMsg.From }
 func (m callMsg) Nonce() uint64                { return 0 }
 func (m callMsg) IsFake() bool                 { return true }
@@ -813,6 +812,7 @@ func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
 func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
 func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
 func (m callMsg) AccessList() types.AccessList { return m.CallMsg.AccessList }
+func (m callMsg) TxHash() common.Hash          { return m.CallMsg.TxHash }
 
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.

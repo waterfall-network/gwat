@@ -52,16 +52,18 @@ func (h *nonceHeap) Pop() interface{} {
 // txSortedMap is a nonce->transaction hash map with a heap based index to allow
 // iterating over the contents in a nonce-incrementing way.
 type txSortedMap struct {
-	items map[uint64]*types.Transaction // Hash map storing the transaction data
-	index *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
-	cache types.Transactions            // Cache of the transactions already sorted
+	items        map[uint64]*types.Transaction // Hash map storing the transaction data
+	blocksHashes map[common.Hash]common.HashArray
+	index        *nonceHeap         // Heap of nonces of all the stored transactions (non-strict mode)
+	cache        types.Transactions // Cache of the transactions already sorted
 }
 
 // newTxSortedMap creates a new nonce-sorted transaction map.
 func newTxSortedMap() *txSortedMap {
 	return &txSortedMap{
-		items: make(map[uint64]*types.Transaction),
-		index: new(nonceHeap),
+		items:        make(map[uint64]*types.Transaction),
+		blocksHashes: make(map[common.Hash]common.HashArray),
+		index:        new(nonceHeap),
 	}
 }
 
@@ -89,8 +91,12 @@ func (m *txSortedMap) Forward(threshold uint64) types.Transactions {
 	// Pop off heap items until the threshold is reached
 	for m.index.Len() > 0 && (*m.index)[0] < threshold {
 		nonce := heap.Pop(m.index).(uint64)
+		tx := m.items[nonce]
 		removed = append(removed, m.items[nonce])
 		delete(m.items, nonce)
+		if len(m.blocksHashes) > 0 && tx != nil && m.blocksHashes[tx.Hash()] != nil {
+			delete(m.blocksHashes, tx.Hash())
+		}
 	}
 	// If we had a cached order, shift the front
 	if m.cache != nil {
@@ -396,6 +402,7 @@ func (l *txList) Delete(tx *types.Transaction) bool {
 	if removed := l.txs.Remove(nonce); !removed {
 		return false
 	}
+	delete(l.txs.blocksHashes, tx.Hash())
 	return true
 }
 
@@ -431,6 +438,26 @@ func (l *txList) Flatten() types.Transactions {
 // transaction with the highest nonce
 func (l *txList) LastElement() *types.Transaction {
 	return l.txs.LastElement()
+}
+
+func (l *txList) GetTxBlocksHashes(txHash common.Hash) common.HashArray {
+	blockHash, ok := l.txs.blocksHashes[txHash]
+	if !ok {
+		return nil
+	}
+
+	return blockHash
+}
+
+func (l *txList) PutTxBlockHash(txHash common.Hash, blockHash common.Hash) {
+	v := l.txs.blocksHashes[txHash]
+	if len(v) == 0 {
+		l.txs.blocksHashes[txHash] = common.HashArray{blockHash}
+		return
+	}
+	if !v.Has(blockHash) {
+		l.txs.blocksHashes[txHash] = append(v, blockHash)
+	}
 }
 
 // priceHeap is a heap.Interface implementation over transactions for retrieving

@@ -25,12 +25,10 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/bloombits"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/filters"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/gasprice"
@@ -70,7 +68,6 @@ type LightEthereum struct {
 
 	ApiBackend     *LesApiBackend
 	eventMux       *event.TypeMux
-	engine         consensus.Engine
 	accountManager *accounts.Manager
 	netRPCService  *ethapi.PublicNetAPI
 
@@ -110,7 +107,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		eventMux:       stack.EventMux(),
 		reqDist:        newRequestDistributor(peers, &mclock.System{}),
 		accountManager: stack.AccountManager(),
-		engine:         sealer.New(chainDb),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		p2pServer:      stack.Server(),
@@ -139,7 +135,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
-	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, checkpoint); err != nil {
+	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, checkpoint); err != nil {
 		return nil, err
 	}
 	leth.chainReader = leth.blockchain
@@ -288,7 +284,6 @@ func (s *LightDummyAPI) Mining() bool {
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *LightEthereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.ApiBackend)
-	apis = append(apis, s.engine.APIs(s.BlockChain().HeaderChain())...)
 	return append(apis, []rpc.API{
 		{
 			Namespace: "eth",
@@ -330,7 +325,6 @@ func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
 
 func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
 func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
-func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
 func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
@@ -382,7 +376,6 @@ func (s *LightEthereum) Stop() error {
 	s.blockchain.Stop()
 	s.handler.stop()
 	s.txPool.Stop()
-	s.engine.Close()
 	s.pruner.close()
 	s.eventMux.Stop()
 	rawdb.PopUncleanShutdownMarker(s.chainDb)

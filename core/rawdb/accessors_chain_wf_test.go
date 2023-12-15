@@ -18,6 +18,8 @@ package rawdb
 
 import (
 	"fmt"
+	"math/big"
+	"reflect"
 	"testing"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -90,7 +92,7 @@ func TestLastFinalizedBlockWf(t *testing.T) {
 		t.Fatalf("finBlock hash mismatch: have %v, want %v", entry, finBlock1.Hash())
 	}
 
-	// Check LastFinalizedHash
+	// Check CpHash
 	if entry := ReadLastFinalizedHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non empty hash: %v", entry)
 	}
@@ -100,7 +102,7 @@ func TestLastFinalizedBlockWf(t *testing.T) {
 		t.Fatalf("lastFinBlock hash mismatch: have %v, want %v", entry, lastFinBlock.Hash())
 	}
 
-	// Check LastFinalizedHeight WriteFinalizedHashNumber
+	// Check CpHeight WriteFinalizedHashNumber
 	if entry := ReadLastFinalizedNumber(db); entry != uint64(0) {
 		t.Fatalf("Non empty hash: %v", entry)
 	}
@@ -111,7 +113,6 @@ func TestLastFinalizedBlockWf(t *testing.T) {
 	if entry := ReadLastFinalizedNumber(db); entry != lastFinHeight1 {
 		t.Fatalf("lastFinBlock1 hash mismatch: have %d, want %d", entry, lastFinHeight1)
 	}
-
 }
 
 // Tests that head headers and head blocks can be assigned, individually.
@@ -126,11 +127,11 @@ func TestBlockDAGWf(t *testing.T) {
 	finBlock := types.NewBlockWithHeader(&types.Header{Extra: []byte("test FinBlock")})
 
 	blockDag := &types.BlockDAG{
-		Hash:                finBlock.Hash(),
-		Height:              finBlock.Height(),
-		LastFinalizedHash:   finBlock.Hash(),
-		LastFinalizedHeight: 1455646545646,
-		DagChainHashes:      common.HashArray{common.Hash{}, finBlock.Hash(), common.Hash{}},
+		Hash:                   finBlock.Hash(),
+		Height:                 finBlock.Height(),
+		CpHash:                 finBlock.Hash(),
+		CpHeight:               1455646545646,
+		OrderedAncestorsHashes: common.HashArray{common.Hash{}, finBlock.Hash(), common.Hash{}},
 	}
 
 	WriteBlockDag(db, blockDag)
@@ -141,5 +142,123 @@ func TestBlockDAGWf(t *testing.T) {
 	DeleteBlockDag(db, blockDag.Hash)
 	if entry := ReadBlockDag(db, finBlock.Hash()); entry != nil {
 		t.Fatalf("BlockDag D-R failed:  %#v != nil", entry)
+	}
+}
+
+func TestValidatorSyncWf_Ok(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	src_1 := &types.ValidatorSync{
+		OpType:     2,
+		ProcEpoch:  45645,
+		Index:      45645,
+		Creator:    common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:     new(big.Int),
+		TxHash:     &common.Hash{7, 8, 9},
+		InitTxHash: common.Hash{1, 2, 3},
+	}
+	src_1.Amount.SetString("32789456000000", 10)
+
+	WriteValidatorSync(db, src_1)
+	entry := ReadValidatorSync(db, src_1.InitTxHash)
+	if fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
+		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, src_1)
+	}
+
+	DeleteValidatorSync(db, src_1.InitTxHash)
+	if entry := ReadValidatorSync(db, src_1.InitTxHash); entry != nil {
+		t.Fatalf("ValidatorSync D-R failed:  %#v != nil", entry)
+	}
+}
+
+func TestValidatorSyncWf_Ok_noTxHash(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	src_1 := &types.ValidatorSync{
+		OpType:    2,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:    new(big.Int),
+		//TxHash:     &common.Hash{7, 8, 9},
+		InitTxHash: common.Hash{1, 2, 3},
+	}
+	src_1.Amount.SetString("32789456000000", 10)
+
+	WriteValidatorSync(db, src_1)
+	entry := ReadValidatorSync(db, src_1.InitTxHash)
+	if fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
+		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, src_1)
+	}
+
+	DeleteValidatorSync(db, src_1.InitTxHash)
+	if entry := ReadValidatorSync(db, src_1.InitTxHash); entry != nil {
+		t.Fatalf("ValidatorSync D-R failed:  %#v != nil", entry)
+	}
+}
+
+func TestValidatorSyncWf_Ok_noAmount(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	src_1 := &types.ValidatorSync{
+		OpType:    1,
+		ProcEpoch: 45645,
+		Index:     45645,
+		Creator:   common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		//Amount:     new(big.Int),
+		TxHash:     &common.Hash{7, 8, 9},
+		InitTxHash: common.Hash{1, 2, 3},
+	}
+	//src_1.Amount.SetString("32789456000000", 10)
+
+	WriteValidatorSync(db, src_1)
+	entry := ReadValidatorSync(db, src_1.InitTxHash)
+	if fmt.Sprintf("%v", entry) != fmt.Sprintf("%v", src_1) {
+		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, src_1)
+	}
+
+	DeleteValidatorSync(db, src_1.InitTxHash)
+	if entry := ReadValidatorSync(db, src_1.InitTxHash); entry != nil {
+		t.Fatalf("ValidatorSync D-R failed:  %#v != nil", entry)
+	}
+}
+
+func TestNotProcessedValidatorSyncWf(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	src_1 := &types.ValidatorSync{
+		OpType:     types.Activate,
+		ProcEpoch:  45645,
+		Index:      45645,
+		Creator:    common.Address{0x11, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:     new(big.Int),
+		TxHash:     nil,
+		InitTxHash: common.Hash{1, 2, 3},
+	}
+	src_2 := &types.ValidatorSync{
+		OpType:     types.Deactivate,
+		ProcEpoch:  45645,
+		Index:      45645,
+		Creator:    common.Address{0x22, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:     new(big.Int),
+		TxHash:     nil,
+		InitTxHash: common.Hash{1, 2, 3},
+	}
+	src_3 := &types.ValidatorSync{
+		OpType:     types.UpdateBalance,
+		ProcEpoch:  45645,
+		Index:      45645,
+		Creator:    common.Address{0x33, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		Amount:     new(big.Int),
+		TxHash:     nil,
+		InitTxHash: common.Hash{1, 2, 3},
+	}
+	src_3.Amount.SetString("32789456000000", 10)
+
+	valSyncOps := []*types.ValidatorSync{src_1, src_2, src_3}
+
+	WriteNotProcessedValidatorSyncOps(db, valSyncOps)
+	if entry := ReadNotProcessedValidatorSyncOps(db); reflect.DeepEqual(entry, valSyncOps) {
+		t.Fatalf("ValidatorSync W-R failed:  %#v != %#v", entry, valSyncOps)
 	}
 }

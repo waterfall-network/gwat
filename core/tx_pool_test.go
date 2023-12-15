@@ -17,10 +17,10 @@
 package core
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -36,6 +36,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 var (
@@ -87,6 +88,30 @@ type testBlockChain struct {
 	genesisBlock       *types.Block
 }
 
+func (bc *testBlockChain) GetLastFinalizedHeader() *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) EstimateGas(msg types.Message, header *types.Header) (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) Config() *params.ChainConfig {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) IsSynced() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) Genesis() *types.Block {
+	return bc.genesisBlock
+}
+
 func (bc *testBlockChain) Synchronising() bool {
 	return false
 }
@@ -97,11 +122,6 @@ func (bc *testBlockChain) FinSynchronising() bool {
 }
 
 func (bc *testBlockChain) DagSynchronising() bool {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (bc *testBlockChain) HeadSynchronising() bool {
 	//TODO implement me
 	panic("implement me")
 }
@@ -150,7 +170,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Block {
 	}, nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) GetBlock(hash common.Hash) *types.Block {
+func (bc *testBlockChain) GetBlock(tx context.Context, hash common.Hash) *types.Block {
 	//return bc.CurrentBlock()
 	if hash == bc.genesisBlock.Hash() {
 		return bc.genesisBlock
@@ -166,12 +186,16 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) even
 	return bc.chainHeadFeed.Subscribe(ch)
 }
 
-func (bc *testBlockChain) SubscribeProcessing(ch chan<- *types.Transaction) event.Subscription {
+func (bc *testBlockChain) SubscribeProcessing(ch chan<- types.Transactions) event.Subscription {
 	return bc.moveToProcessingFeed.Subscribe(ch)
 }
 
-func (bc *testBlockChain) SubscribeRemoveTxFromPool(ch chan<- *types.Transaction) event.Subscription {
+func (bc *testBlockChain) SubscribeRemoveTxFromPool(ch chan<- types.Transactions) event.Subscription {
 	return bc.removeTxFromPoolFeed.Subscribe(ch)
+}
+
+func (bc *testBlockChain) ValidatorStorage() valStore.Storage {
+	return valStore.NewStorage(&params.ChainConfig{})
 }
 
 func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Transaction {
@@ -2308,7 +2332,7 @@ func testTransactionJournaling(t *testing.T, nolocals bool) {
 	t.Parallel()
 
 	// Create a temporary file for the journal
-	file, err := ioutil.TempFile("", "")
+	file, err := os.TempFile("", "")
 	if err != nil {
 		t.Fatalf("failed to create temporary journal: %v", err)
 	}

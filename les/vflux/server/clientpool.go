@@ -59,9 +59,9 @@ type ClientPool struct {
 	*priorityPool
 	*balanceTracker
 
-	setup  *serverSetup
-	clock  mclock.Clock
-	closed bool
+	setup *serverSetup
+	clock mclock.Clock
+
 	ns     *nodestate.NodeStateMachine
 	synced func() bool
 

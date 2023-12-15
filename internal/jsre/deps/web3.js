@@ -3831,9 +3831,14 @@ var outputBlockFormatter = function(block) {
     if (block.baseFeePerGas !== undefined) {
       block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
     }
+    if (block.cpBaseFeePerGas !== undefined) {
+      block.cpBaseFeePerGas = utils.toBigNumber(block.cpBaseFeePerGas);
+    }
+    block.cpNumber = utils.toDecimal(block.cpNumber);
+    block.cpGasUsed = utils.toDecimal(block.cpGasUsed);
     block.height = utils.toDecimal(block.height);
-    block.lfNumber = utils.toDecimal(block.lfNumber);
     block.slot = utils.toDecimal(block.slot);
+    block.era = utils.toDecimal(block.era);
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);
@@ -3947,6 +3952,9 @@ var outputSyncingFormatter = function(result) {
     }
 
     result.startingBlock = utils.toDecimal(result.startingBlock);
+    result.finalizedSlot = utils.toDecimal(result.finalizedSlot);
+    result.currentSlot = utils.toDecimal(result.currentSlot);
+    result.maxDagSlot = utils.toDecimal(result.maxDagSlot);
     result.currentBlock = utils.toDecimal(result.currentBlock);
     result.highestBlock = utils.toDecimal(result.highestBlock);
     if (result.knownStates) {
@@ -5307,6 +5315,13 @@ var methods = function () {
         outputFormatter: formatters.outputBlockFormatter
     });
 
+    var syncing = new Method({
+      name: 'syncing',
+      call: 'eth_syncing',
+      params: 0,
+      outputFormatter: formatters.outputSyncingFormatter
+    });
+
     var getUncle = new Method({
         name: 'getUncle',
         call: uncleCall,
@@ -5441,6 +5456,12 @@ var methods = function () {
         params: 0
     });
 
+  var getCpLFNumber = new Method({
+    name: 'getCpLFNumber',
+    call: 'eth_getCpLFNumber',
+    params: 0
+  });
+
     return [
         getBalance,
         getStorageAt,
@@ -5464,7 +5485,9 @@ var methods = function () {
         compileLLL,
         compileSerpent,
         submitWork,
-        getWork
+        getWork,
+        getCpLFNumber,
+        syncing,
     ];
 };
 

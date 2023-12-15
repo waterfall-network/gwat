@@ -26,7 +26,7 @@ func (tips Tips) Add(blockDag *BlockDAG) Tips {
 		return tips
 	}
 
-	blockDag.DagChainHashes = blockDag.DagChainHashes.Uniq()
+	blockDag.OrderedAncestorsHashes.Deduplicate()
 
 	tips[blockDag.Hash] = blockDag
 	return tips
@@ -63,14 +63,14 @@ func (tips Tips) Copy() Tips {
 	return cpy
 }
 
-// GetOrderedDagChainHashes collect all dag hashes in finalizing order
-// used to create for next blockDag DagChainHashes
-func (tips Tips) GetOrderedDagChainHashes() common.HashArray {
+// GetOrderedAncestorsHashes collect all dag hashes in finalizing order
+// used to create for next blockDag OrderedAncestorsHashes
+func (tips Tips) GetOrderedAncestorsHashes() common.HashArray {
 	allHashes := common.HashArray{}
 	dagHashes := tips.getOrderedHashes()
 	for _, dagHash := range dagHashes {
 		dag := tips.Get(dagHash)
-		allHashes = append(allHashes, dag.DagChainHashes...)
+		allHashes = append(allHashes, dag.OrderedAncestorsHashes...)
 		allHashes = append(allHashes, dagHash).Uniq()
 	}
 	return allHashes.Uniq()
@@ -92,11 +92,11 @@ func (tips Tips) GetFinalizingDag() *BlockDAG {
 	return tips.Get(dagHashes[0])
 }
 
-// GetAncestorsHashes retrieve all DagChainHashes
+// GetAncestorsHashes retrieve all OrderedAncestorsHashes
 func (tips Tips) GetAncestorsHashes() common.HashArray {
 	ancestors := common.HashArray{}
 	for _, dag := range tips {
-		ancestors = append(ancestors, dag.DagChainHashes...)
+		ancestors = append(ancestors, dag.OrderedAncestorsHashes...)
 	}
 	return ancestors
 }
@@ -115,7 +115,7 @@ func (tips Tips) getOrderedHashes() common.HashArray {
 		heightMap[key] = append(heightMap[key], dag.Hash)
 	}
 	// sort by height
-	keys := make(common.SorterDeskU64, 0, len(heightMap))
+	keys := make(common.SorterDescU64, 0, len(heightMap))
 	for k := range heightMap {
 		keys = append(keys, k)
 	}
@@ -144,13 +144,13 @@ func (tips Tips) GetMaxSlot() uint64 {
 // BlockDAG represents a currently no descendants block
 // of directed acyclic graph and related data.
 type BlockDAG struct {
-	Hash                common.Hash
-	Height              uint64
-	Slot                uint64
-	LastFinalizedHash   common.Hash
-	LastFinalizedHeight uint64
+	Hash     common.Hash
+	Height   uint64
+	Slot     uint64
+	CpHash   common.Hash
+	CpHeight uint64
 	// ordered non-finalized ancestors hashes
-	DagChainHashes common.HashArray
+	OrderedAncestorsHashes common.HashArray
 }
 
 // ToBytes encodes the BlockDAG structure
@@ -167,15 +167,15 @@ func (b *BlockDAG) ToBytes() []byte {
 	binary.BigEndian.PutUint64(slot, b.Slot)
 	res = append(res, slot...)
 
-	res = append(res, b.LastFinalizedHash.Bytes()...)
+	res = append(res, b.CpHash.Bytes()...)
 	lastFinHeight := make([]byte, 8)
-	binary.BigEndian.PutUint64(lastFinHeight, b.LastFinalizedHeight)
+	binary.BigEndian.PutUint64(lastFinHeight, b.CpHeight)
 	res = append(res, lastFinHeight...)
 
 	lenDC := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenDC, uint32(len(b.DagChainHashes)))
+	binary.BigEndian.PutUint32(lenDC, uint32(len(b.OrderedAncestorsHashes)))
 	res = append(res, lenDC...)
-	res = append(res, b.DagChainHashes.ToBytes()...)
+	res = append(res, b.OrderedAncestorsHashes.ToBytes()...)
 
 	return res
 }
@@ -196,18 +196,18 @@ func (b *BlockDAG) SetBytes(data []byte) *BlockDAG {
 
 	start = end
 	end += common.HashLength
-	b.LastFinalizedHash = common.BytesToHash(data[start:end])
+	b.CpHash = common.BytesToHash(data[start:end])
 
 	start = end
 	end += 8
-	b.LastFinalizedHeight = binary.BigEndian.Uint64(data[start:end])
+	b.CpHeight = binary.BigEndian.Uint64(data[start:end])
 
 	start = end
 	end += 4
 	lenDC := binary.BigEndian.Uint32(data[start:end])
 	start = end
 	end += common.HashLength * int(lenDC)
-	b.DagChainHashes = common.HashArrayFromBytes(data[start:end])
+	b.OrderedAncestorsHashes = common.HashArrayFromBytes(data[start:end])
 
 	return b
 }
@@ -216,178 +216,6 @@ func (b *BlockDAG) SetBytes(data []byte) *BlockDAG {
 func (b *BlockDAG) Print() string {
 	mapB, _ := json.Marshal(b)
 	return string(mapB)
-}
-
-/********** DagGraph **********/
-// BlockState represents state of GraphDag structure
-type BlockState uint8
-
-const (
-	BSS_NOT_LOADED BlockState = 0
-	BSS_LOADED     BlockState = 1
-	BSS_FINALIZED  BlockState = 2
-)
-
-// GraphDag represents Graph of DAG
-type GraphDag struct {
-	Hash   common.Hash
-	Height uint64
-	Number uint64
-	Graph  []*GraphDag
-	State  BlockState
-	chLen  *uint64
-}
-
-// GetLastFinalizedAncestor searches the GraphDag of the last finalised ancestor
-func (gd *GraphDag) GetLastFinalizedAncestor() *GraphDag {
-	var (
-		lastHeight uint64    = 0
-		res        *GraphDag = nil
-	)
-	ancestors := gd.GetAncestors()
-	//find height of finalized blue block
-	for _, itm := range ancestors {
-		if itm.Height == itm.Number && (lastHeight < itm.Number || lastHeight == 0) {
-			lastHeight = itm.Number
-			res = itm
-		}
-	}
-	return res
-}
-
-// GetDagChainHashes retrieves ordered DagChainHashes for
-// tips item
-func (gd *GraphDag) GetDagChainHashes() *common.HashArray {
-	ancestors := gd.GetOrderedLoadedAncestors()
-	if ancestors == nil {
-		return nil
-	}
-	finalityPoints := &common.HashArray{}
-	for _, itm := range ancestors {
-		*finalityPoints = append(*finalityPoints, itm.Hash)
-	}
-	res := (*finalityPoints).Uniq()
-	return &res
-}
-
-// todo deprecated (don't use)
-// GetOrderedLoadedAncestors retrieves ordered ancestors
-func (gd *GraphDag) GetOrderedLoadedAncestors() []*GraphDag {
-	//1) calculate order for parents
-	lenMap := map[uint64][]*GraphDag{}
-	for _, itm := range gd.Graph {
-		if itm.State == BSS_NOT_LOADED {
-			return nil
-		}
-		if itm.State == BSS_FINALIZED {
-			continue
-		}
-		itm.chLen = itm.chainLen()
-		key := itm.chLen
-		if key == nil {
-			return nil
-		}
-		lenMap[*key] = append(lenMap[*key], itm)
-	}
-	// sort by height
-	keys := make(common.SorterDeskU64, 0, len(lenMap))
-	for k := range lenMap {
-		keys = append(keys, k)
-	}
-	sort.Sort(keys)
-	parents := []*GraphDag{}
-	for _, k := range keys {
-		// sort by hash
-		hashes := common.HashArray{}
-		for _, itm := range lenMap[k] {
-			hashes = append(hashes, itm.Hash)
-		}
-		for _, h := range hashes.Sort() {
-			for _, val := range lenMap[k] {
-				if val.Hash == h {
-					parents = append(parents, val)
-					break
-				}
-			}
-		}
-	}
-	//2) recursive calculate order for all ancestors
-	ancestors := []*GraphDag{}
-	for _, itm := range parents {
-		recRes := itm.GetOrderedLoadedAncestors()
-		if recRes == nil {
-			return nil
-		}
-		ancestors = append(ancestors, recRes...)
-		ancestors = append(ancestors, itm)
-	}
-	//3) uniq items
-	check := common.HashArray{}
-	uniqAncestors := []*GraphDag{}
-	for _, itm := range ancestors {
-		if !check.Has(itm.Hash) {
-			uniqAncestors = append(uniqAncestors, itm)
-			check = append(check, itm.Hash)
-		}
-	}
-	return uniqAncestors
-}
-
-// GetAncestorsHashes retrieves graph ancestors
-func (gd *GraphDag) GetAncestorsHashes() common.HashArray {
-	res := common.HashArray{}
-	for _, itm := range gd.GetAncestors() {
-		res = append(res, itm.Hash)
-	}
-	return res
-}
-
-// GetAncestors retrieves graph ancestors
-func (gd *GraphDag) GetAncestors() []*GraphDag {
-	parents := gd.Graph
-	//1) recursive calculate order for all ancestors
-	ancestors := []*GraphDag{}
-	for _, itm := range parents {
-		recRes := itm.GetAncestors()
-		if recRes == nil {
-			return nil
-		}
-		ancestors = append(ancestors, recRes...)
-		ancestors = append(ancestors, itm)
-	}
-	//2) uniq items
-	check := common.HashArray{}
-	uniqAncestors := []*GraphDag{}
-	for _, itm := range ancestors {
-		if !check.Has(itm.Hash) {
-			uniqAncestors = append(uniqAncestors, itm)
-			check = append(check, itm.Hash)
-		}
-	}
-	return uniqAncestors
-}
-
-// chainLen calculates the length of dag chain of GraphDag
-func (gd *GraphDag) chainLen() *uint64 {
-	var length uint64 = 1
-	if gd.State == BSS_NOT_LOADED {
-		return nil
-	}
-	if gd.State == BSS_FINALIZED {
-		return &gd.Number
-	}
-	if len(gd.Graph) < 1 {
-		return nil
-	}
-	for _, itm := range gd.Graph {
-		res := itm.chainLen()
-		if res == nil {
-			return nil
-		}
-		length += *res
-	}
-	gd.chLen = &length
-	return &length
 }
 
 /********** HeaderMap **********/
@@ -487,7 +315,7 @@ func (hm HeaderMap) FinalizingSort() common.HashArray {
 		heightMap[key] = append(heightMap[key], h.Hash())
 	}
 	// sort by height
-	keys := make(common.SorterAskU64, 0, len(heightMap))
+	keys := make(common.SorterAscU64, 0, len(heightMap))
 	for k := range heightMap {
 		keys = append(keys, k)
 	}
@@ -498,70 +326,6 @@ func (hm HeaderMap) FinalizingSort() common.HashArray {
 		sortedHashes = sortedHashes.Concat(heightMap[k].Sort())
 	}
 	return sortedHashes
-}
-
-// ToTipsGraphDag GraphDag for tips
-func (hm HeaderMap) ToTipsGraphDag(genesis *common.Hash) []*GraphDag {
-	// create GraphDag fore each header
-	gdMap := map[common.Hash]*GraphDag{}
-	for k, h := range hm {
-		if h == nil {
-			gdMap[k] = &GraphDag{
-				Hash:  k,
-				Graph: []*GraphDag{},
-				State: BSS_NOT_LOADED,
-			}
-			continue
-		}
-		state := BSS_LOADED
-		if h.Nr() > 0 || (genesis != nil && h.Hash() == *genesis) {
-			state = BSS_FINALIZED
-		}
-		gdMap[h.Hash()] = &GraphDag{
-			Hash:   h.Hash(),
-			Height: h.Height,
-			Number: h.Nr(),
-			Graph:  []*GraphDag{},
-			State:  state,
-		}
-	}
-	for _, h := range hm {
-		gdMap[h.Hash()] = hm.fillGraphDagRecursive(gdMap[h.Hash()], gdMap)
-	}
-	// find top dags
-	allHashes := hm.Hashes()
-	for _, gd := range gdMap {
-		ancestors := gd.GetAncestorsHashes()
-		if ancestors != nil {
-			allHashes = allHashes.Difference(ancestors)
-		}
-	}
-	//make result
-	res := []*GraphDag{}
-	for _, h := range allHashes {
-		res = append(res, gdMap[h])
-	}
-	return res
-}
-
-func (hm HeaderMap) fillGraphDagRecursive(gd *GraphDag, gdMap map[common.Hash]*GraphDag) *GraphDag {
-	if hm[gd.Hash] == nil {
-		return gd
-	}
-	existed := common.HashArray{}
-	for _, parent := range gd.Graph {
-		existed = append(existed, parent.Hash)
-	}
-	for _, parent := range hm[gd.Hash].ParentHashes {
-		if existed.Has(parent) {
-			continue
-		}
-		if parentGd := gdMap[parent]; parentGd != nil {
-			gdParent := hm.fillGraphDagRecursive(gdMap[parent], gdMap)
-			gd.Graph = append(gd.Graph, gdParent)
-		}
-	}
-	return gd
 }
 
 /********** BlockMap **********/
@@ -680,6 +444,10 @@ func (si *SlotInfo) SlotToEpoch(slot uint64) uint64 {
 	return val
 }
 
+func (si *SlotInfo) SlotInEpoch(slot uint64) uint64 {
+	return slot % si.SlotsPerEpoch
+}
+
 // SlotOfEpochStart returns the first slot number of the
 // current epoch.
 func (si *SlotInfo) SlotOfEpochStart(epoch uint64) (uint64, error) {
@@ -704,9 +472,13 @@ func (si *SlotInfo) SlotOfEpochEnd(epoch uint64) (uint64, error) {
 }
 
 func (si *SlotInfo) Copy() *SlotInfo {
-	return &SlotInfo{
-		GenesisTime:    si.GenesisTime,
-		SecondsPerSlot: si.SecondsPerSlot,
-		SlotsPerEpoch:  si.SlotsPerEpoch,
+	if si != nil {
+		return &SlotInfo{
+			GenesisTime:    si.GenesisTime,
+			SecondsPerSlot: si.SecondsPerSlot,
+			SlotsPerEpoch:  si.SlotsPerEpoch,
+		}
+	} else {
+		return nil
 	}
 }

@@ -28,7 +28,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
@@ -45,9 +44,8 @@ func TestNodeIterator(t *testing.T) {
 	)
 	gspec.MustCommit(lightdb)
 
-	db := rawdb.NewMemoryDatabase()
-	blockchain, _ := core.NewBlockChain(fulldb, nil, params.TestChainConfig, sealer.New(db), vm.Config{}, nil)
-	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, sealer.New(db), fulldb, 4, testChainGen)
+	blockchain, _ := core.NewBlockChain(fulldb, nil, params.TestChainConfig, vm.Config{}, nil)
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, fulldb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}

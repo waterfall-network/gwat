@@ -46,7 +46,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -87,23 +86,23 @@ var (
 	debExecutables = []debExecutable{
 		{
 			BinaryName:  "abigen",
-			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
+			Description: "Source code generator to convert Waterfall contract definitions into easy to use, compile-time type-safe Go packages.",
 		},
 		{
 			BinaryName:  "bootnode",
-			Description: "Ethereum bootnode.",
+			Description: "Gwat bootnode.",
 		},
 		{
 			BinaryName:  "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			BinaryName:  "geth",
-			Description: "Ethereum CLI client.",
+			BinaryName:  "gwat",
+			Description: "Gwat CLI client.",
 		},
 		{
 			BinaryName:  "puppeth",
-			Description: "Ethereum private network manager.",
+			Description: "Waterfall private network manager.",
 		},
 		{
 			BinaryName:  "rlpdump",
@@ -111,13 +110,13 @@ var (
 		},
 		{
 			BinaryName:  "clef",
-			Description: "Ethereum account management tool.",
+			Description: "Waterfall account management tool.",
 		},
 	}
 
 	// A debian package is created for all executables listed here.
 	debEthereum = debPackage{
-		Name:        "ethereum",
+		Name:        "waterfall",
 		Version:     params.Version,
 		Executables: debExecutables,
 	}
@@ -463,7 +462,7 @@ func doDocker(cmdline []string) {
 	var (
 		image    = flag.Bool("image", false, `Whether to build and push an arch specific docker image`)
 		manifest = flag.String("manifest", "", `Push a multi-arch docker image for the specified architectures (usually "amd64,arm64")`)
-		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
+		upload   = flag.String("upload", "", `Where to upload the docker image (usually "waterfall/client-go")`)
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -629,7 +628,7 @@ func doDebianSource(cmdline []string) {
 	var (
 		cachedir = flag.String("cachedir", "./build/cache", `Filesystem path to cache the downloaded Go bundles at`)
 		signer   = flag.String("signer", "", `Signing key name, also used as package author`)
-		upload   = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
+		upload   = flag.String("upload", "", `Where to upload the source package (usually "waterfall/waterfall")`)
 		sshUser  = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
 		workdir  = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 		now      = time.Now()
@@ -726,7 +725,7 @@ func ppaUpload(workdir, ppa, sshUser string, files []string) {
 	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
 		idfile = filepath.Join(workdir, "sshkey")
 		if _, err := os.Stat(idfile); os.IsNotExist(err) {
-			ioutil.WriteFile(idfile, sshkey, 0600)
+			os.WriteFile(idfile, sshkey, 0600)
 		}
 	}
 	// Upload
@@ -749,7 +748,7 @@ func makeWorkdir(wdflag string) string {
 	if wdflag != "" {
 		err = os.MkdirAll(wdflag, 0744)
 	} else {
-		wdflag, err = ioutil.TempDir("", "geth-build-")
+		wdflag, err = os.MkdirTemp("", "geth-build-")
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -870,7 +869,7 @@ func (meta debMetadata) ExeConflicts(exe debExecutable) string {
 		// be preferred and the conflicting files should be handled via
 		// alternates. We might do this eventually but using a conflict is
 		// easier now.
-		return "ethereum, " + exe.Package()
+		return "waterfall, " + exe.Package()
 	}
 	return ""
 }

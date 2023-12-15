@@ -7,7 +7,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/token/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/token/testmodels"
 )
 
 var (
@@ -35,7 +36,7 @@ type testData struct {
 }
 
 func TestWriteStream(t *testing.T) {
-	cases := []testutils.TestCase{
+	cases := []testmodels.TestCase{
 		{
 			CaseName: "Test full result without offset",
 			TestData: testData{
@@ -44,7 +45,7 @@ func TestWriteStream(t *testing.T) {
 				off: big.NewInt(0),
 			},
 			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
 				runWithoutFlush(t, a, c)
 			},
 		},
@@ -56,7 +57,7 @@ func TestWriteStream(t *testing.T) {
 				off: off,
 			},
 			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
 				runWithoutFlush(t, a, c)
 			},
 		},
@@ -68,7 +69,7 @@ func TestWriteStream(t *testing.T) {
 				off: off,
 			},
 			Errs: []error{},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
 				v := c.TestData.(testData)
 				stream := NewStorageStream(*a, stateDb)
 				write(t, stream, v.scr, big.NewInt(0), c.Errs)
@@ -85,7 +86,7 @@ func TestWriteStream(t *testing.T) {
 				off: big.NewInt(0),
 			},
 			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
 				runWithoutFlush(t, a, c)
 			},
 		},
@@ -97,7 +98,7 @@ func TestWriteStream(t *testing.T) {
 				off: off,
 			},
 			Errs: []error{nil},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
 				runWithFlush(t, a, c)
 			},
 		},
@@ -109,7 +110,7 @@ func TestWriteStream(t *testing.T) {
 				off: new(big.Int).Neg(off),
 			},
 			Errs: []error{ErrInvalidOff},
-			Fn: func(c *testutils.TestCase, a *common.Address) {
+			Fn: func(c *testmodels.TestCase, a *common.Address) {
 				runWithFlush(t, a, c)
 			},
 		},
@@ -119,7 +120,6 @@ func TestWriteStream(t *testing.T) {
 			c.Fn(&c, &address)
 		})
 	}
-
 }
 
 func read(t *testing.T, s *StorageStream, b []byte, off *big.Int, errs []error) {
@@ -140,7 +140,7 @@ func write(t *testing.T, s *StorageStream, b []byte, off *big.Int, errs []error)
 	}
 }
 
-func runWithoutFlush(t *testing.T, a *common.Address, c *testutils.TestCase) {
+func runWithoutFlush(t *testing.T, a *common.Address, c *testmodels.TestCase) {
 	v := c.TestData.(testData)
 	stream := NewStorageStream(*a, stateDb)
 	write(t, stream, v.scr, v.off, c.Errs)
@@ -149,7 +149,7 @@ func runWithoutFlush(t *testing.T, a *common.Address, c *testutils.TestCase) {
 	testutils.CompareBytes(t, v.dst, v.scr)
 }
 
-func runWithFlush(t *testing.T, a *common.Address, c *testutils.TestCase) {
+func runWithFlush(t *testing.T, a *common.Address, c *testmodels.TestCase) {
 	v := c.TestData.(testData)
 	stream := NewStorageStream(*a, stateDb)
 	write(t, stream, v.scr, v.off, c.Errs)

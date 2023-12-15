@@ -36,6 +36,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -97,7 +98,6 @@ type rejectedTx struct {
 func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	txs types.Transactions, miningReward int64,
 	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error)) (*state.StateDB, *ExecutionResult, error) {
-
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
@@ -160,9 +160,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		snapshot := statedb.Snapshot()
 		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
 		tp := token.NewProcessor(vmContext, statedb)
+		vp := validator.NewProcessor(vmContext, statedb, nil)
 
 		// (ret []byte, usedGas uint64, failed bool, err error)
-		msgResult, err := core.ApplyMessage(evm, tp, msg, gaspool)
+		msgResult, err := core.ApplyMessage(evm, tp, vp, msg, gaspool)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From(), "error", err)

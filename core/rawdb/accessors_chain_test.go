@@ -20,9 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"math/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -32,6 +30,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -86,7 +86,7 @@ func TestBodyStorage(t *testing.T) {
 	WriteBody(db, hash, body)
 	if entry := ReadBody(db, hash); entry == nil {
 		t.Fatalf("Stored body not found")
-	} else if types.DeriveSha(types.Transactions(entry.Transactions), newHasher()) != types.DeriveSha(types.Transactions(body.Transactions), newHasher()) {
+	} else if types.DeriveSha(entry.Transactions, newHasher()) != types.DeriveSha(types.Transactions(body.Transactions), newHasher()) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, body)
 	}
 	if entry := ReadBodyRLP(db, hash); entry == nil {
@@ -139,7 +139,7 @@ func TestBlockStorage(t *testing.T) {
 	}
 	if entry := ReadBody(db, block.Hash()); entry == nil {
 		t.Fatalf("Stored body not found")
-	} else if types.DeriveSha(types.Transactions(entry.Transactions), newHasher()) != types.DeriveSha(block.Transactions(), newHasher()) {
+	} else if types.DeriveSha(entry.Transactions, newHasher()) != types.DeriveSha(block.Transactions(), newHasher()) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, block.Body())
 	}
 	// Delete the block and verify the execution
@@ -185,76 +185,6 @@ func TestPartialBlockStorage(t *testing.T) {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
 		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
-	}
-}
-
-// Tests block storage and retrieval operations.
-func TestBadBlockStorage(t *testing.T) {
-	db := NewMemoryDatabase()
-
-	// Create a test block to move around the database and make sure it's really new
-	block := types.NewBlockWithHeader(&types.Header{
-		Number:      func() *uint64 { nr := uint64(1); return &nr }(),
-		Extra:       []byte("bad block"),
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-	})
-	if entry := ReadBadBlock(db, block.Hash()); entry != nil {
-		t.Fatalf("Non existent block returned: %v", entry)
-	}
-	// Write and verify the block in the database
-	WriteBadBlock(db, block)
-	if entry := ReadBadBlock(db, block.Hash()); entry == nil {
-		t.Fatalf("Stored block not found")
-	} else if entry.Hash() != block.Hash() {
-		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
-	}
-	// Write one more bad block
-	nr := uint64(2)
-	blockTwo := types.NewBlockWithHeader(&types.Header{
-		Number:      &nr,
-		Height:      nr,
-		Extra:       []byte("bad block two"),
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-	})
-	WriteBadBlock(db, blockTwo)
-
-	// Write the block one again, should be filtered out.
-	WriteBadBlock(db, block)
-	badBlocks := ReadAllBadBlocks(db)
-	if len(badBlocks) != 2 {
-		t.Fatalf("Failed to load all bad blocks")
-	}
-
-	// Write a bunch of bad blocks, all the blocks are should sorted
-	// in reverse order. The extra blocks should be truncated.
-	for _, n := range rand.Perm(100) {
-		nrBl := uint64(n)
-		block := types.NewBlockWithHeader(&types.Header{
-			Number:      &nrBl,
-			Height:      nrBl,
-			Extra:       []byte("bad block"),
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
-		})
-		WriteBadBlock(db, block)
-	}
-	badBlocks = ReadAllBadBlocks(db)
-	if len(badBlocks) != badBlockToKeep {
-		t.Fatalf("The number of persised bad blocks in incorrect %d", len(badBlocks))
-	}
-	for i := 0; i < len(badBlocks)-1; i++ {
-		if badBlocks[i].Nr() < badBlocks[i+1].Nr() {
-			t.Fatalf("The bad blocks are not sorted #[%d](%d) < #[%d](%d)", i, i+1, badBlocks[i].Nr(), badBlocks[i+1].Nr())
-		}
-	}
-
-	// Delete all bad blocks
-	DeleteBadBlocks(db)
-	badBlocks = ReadAllBadBlocks(db)
-	if len(badBlocks) != 0 {
-		t.Fatalf("Failed to delete bad blocks")
 	}
 }
 
@@ -410,7 +340,7 @@ func checkReceiptsRLP(have, want types.Receipts) error {
 
 func TestAncientStorage(t *testing.T) {
 	// Freezer style fast import the chain.
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -505,7 +435,7 @@ func TestCanonicalHashIteration(t *testing.T) {
 // This measures the write speed of the WriteAncientBlocks operation.
 func BenchmarkWriteAncientBlocks(b *testing.B) {
 	// Open freezer database.
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		b.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -789,7 +719,7 @@ func TestDeriveLogFields(t *testing.T) {
 
 func BenchmarkDecodeRLPLogs(b *testing.B) {
 	// Encoded receipts from block 0x14ee094309fbe8f70b65f45ebcc08fb33f126942d97464aad5eb91cfd1e2d269
-	buf, err := ioutil.ReadFile("testdata/stored_receipts.bin")
+	buf, err := os.ReadFile("testdata/stored_receipts.bin")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -811,4 +741,210 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestWriteAndReadEra(t *testing.T) {
+	// Create an in-memory database for testing
+	db := NewMemoryDatabase()
+
+	// Define a test era
+	testEra := era.NewEra(0, 1000, 2000, common.Hash{})
+
+	// Test writing the era to the database
+	WriteEra(db, 1, *testEra)
+
+	// Test reading the era from the database
+	readEra := ReadEra(db, 1)
+	if readEra == nil {
+		t.Errorf("ReadEra error")
+	}
+
+	// Verify that the era read from the database is equal to the test era
+	if testEra.To != readEra.To {
+		t.Errorf("GetEra returned incorrect end epoch: expected %d, got %d", testEra.To, readEra.To)
+	}
+	if testEra.From != readEra.From {
+		t.Errorf("GetEra returned incorrect begin epoch: expected %d, got %d", testEra.From, readEra.From)
+	}
+	if !reflect.DeepEqual(testEra, readEra) {
+		t.Errorf("GetEra returned incorrect era: expected %+v, got %+v", testEra, readEra)
+	}
+}
+
+func TestReadWriteCurrentEra(t *testing.T) {
+	// Create an in-memory key-value database for testing
+	db := NewMemoryDatabase()
+
+	// Test case 1: write current era number to database and verify it was written correctly
+	eraNumber1 := uint64(1234567890)
+	WriteCurrentEra(db, eraNumber1)
+	eraNumber1Read := ReadCurrentEra(db)
+	if eraNumber1Read != eraNumber1 {
+		t.Errorf("Expected era number %d but got %d", eraNumber1, eraNumber1Read)
+	}
+
+	// Test case 2: overwrite current era number in database and verify it was updated correctly
+	eraNumber2 := uint64(9876543210)
+	WriteCurrentEra(db, eraNumber2)
+	eraNumber2Read := ReadCurrentEra(db)
+	if eraNumber2Read != eraNumber2 {
+		t.Errorf("Expected era number %d but got %d", eraNumber2, eraNumber2Read)
+	}
+
+	// Test case 3: read non-existent current era number from database and verify it returns zero
+	db.Delete(append(currentEraPrefix))
+	eraNumber3 := ReadCurrentEra(db)
+	if eraNumber3 != 0 {
+		t.Errorf("Expected era number 0 but got %d", eraNumber3)
+	}
+}
+
+func TestFindEra(t *testing.T) {
+	// Create a mock database
+	db := NewMemoryDatabase()
+
+	// Test case 0: There are no eras in the database
+	lastEra := FindEra(db, 5)
+	if lastEra != nil {
+		t.Errorf("Expected nil, got %v", lastEra)
+	}
+
+	// Create some eras and add them to the database
+	era0 := era.NewEra(0, 0, 10, common.Hash{})
+	WriteEra(db, era0.Number, *era0)
+
+	era1 := era.NewEra(1, 11, 20, common.Hash{})
+	WriteEra(db, era1.Number, *era1)
+
+	era2 := era.NewEra(2, 21, 30, common.Hash{})
+	WriteEra(db, era2.Number, *era2)
+
+	// Test case 1: Return exact era
+	lastEra = FindEra(db, 1)
+	if lastEra == nil {
+		t.Error("Expected an era, got nil")
+	} else if lastEra.Number != 1 {
+		t.Errorf("Expected era 2, got era %d", lastEra.Number)
+	}
+
+	// Test case 2: The last era exists
+	lastEra = FindEra(db, 5)
+	if lastEra == nil {
+		t.Error("Expected an era, got nil")
+	} else if lastEra.Number != 2 {
+		t.Errorf("Expected era 2, got era %d", lastEra.Number)
+	}
+}
+
+func TestWriteAndReadCoordinatedCheckpoint(t *testing.T) {
+	// Create an in-memory database for testing
+	memDB := NewMemoryDatabase()
+
+	// Create a checkpoint to write to the database
+	checkpoint := &types.Checkpoint{
+		Epoch: 1,
+		Root:  common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+		Spine: common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
+	}
+
+	// Write the checkpoint to the database
+	//WriteCoordinatedCheckpoint(memDB, checkpoint.Epoch, checkpoint)
+	WriteCoordinatedCheckpoint(memDB, checkpoint)
+
+	// Read the checkpoint back from the database
+	readCheckpoint := ReadCoordinatedCheckpoint(memDB, checkpoint.Spine)
+
+	// Ensure the read checkpoint matches the original checkpoint
+	if !bytes.Equal(checkpoint.Bytes(), readCheckpoint.Bytes()) {
+		t.Errorf("Expected checkpoint bytes to be %v, but got %v", checkpoint.Bytes(), readCheckpoint.Bytes())
+	}
+	if checkpoint.Epoch != readCheckpoint.Epoch {
+		t.Errorf("Expected checkpoint epoch to be %v, but got %v", checkpoint.Epoch, readCheckpoint.Epoch)
+	}
+	if checkpoint.Root != readCheckpoint.Root {
+		t.Errorf("Expected checkpoint root to be %v, but got %v", checkpoint.Root, readCheckpoint.Root)
+	}
+	if checkpoint.Spine != readCheckpoint.Spine {
+		t.Errorf("Expected checkpoint spine to be %v, but got %v", checkpoint.Spine, readCheckpoint.Spine)
+	}
+}
+
+func TestWriteAndReadEpoch(t *testing.T) {
+	// Create an in-memory database for testing
+	memDB := NewMemoryDatabase()
+
+	// Create a checkpoint to write to the database
+	checkpoint := &types.Checkpoint{
+		FinEpoch: 5,
+		Epoch:    1,
+		Root:     common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+		Spine:    common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
+	}
+
+	// Read not existed data from the database
+	emptySpine := ReadEpoch(memDB, checkpoint.FinEpoch)
+	if emptySpine != (common.Hash{}) {
+		t.Errorf("Expected checkpoint bytes to be %v, but got %v", common.Hash{}.Hex(), emptySpine.Hex())
+	}
+
+	// Write the data to the database
+	WriteEpoch(memDB, checkpoint.FinEpoch, checkpoint.Spine)
+	// Read data back from the database
+	cpSpine := ReadEpoch(memDB, checkpoint.FinEpoch)
+	// Ensure the read checkpoint matches the original checkpoint
+	if checkpoint.Spine != cpSpine {
+		t.Errorf("Expected checkpoint bytes to be %v, but got %v", checkpoint.Spine.Hex(), cpSpine.Hex())
+	}
+
+	// Delete the data from the database
+	DeleteEpoch(memDB, checkpoint.FinEpoch)
+	// Read data back from the database
+	delSpine := ReadEpoch(memDB, checkpoint.FinEpoch)
+	// Ensure the read checkpoint matches the original checkpoint
+	if delSpine != (common.Hash{}) {
+		t.Errorf("Expected checkpoint bytes to be %v, but got %v", common.Hash{}.Hex(), cpSpine.Hex())
+	}
+}
+
+func TestWriteAndReadSlotBlocksHashes(t *testing.T) {
+	slot := uint64(testutils.RandomInt(0, 100))
+	hashesCount := testutils.RandomInt(5, 20)
+	blocksHashes := common.HashArray{}
+	for i := 0; i < hashesCount; i++ {
+		blocksHashes = append(blocksHashes, common.BytesToHash(testutils.RandomData(32)))
+	}
+
+	db := NewMemoryDatabase()
+	WriteSlotBlocksHashes(db, slot, blocksHashes)
+	dbBlocksHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, dbBlocksHashes)
+}
+
+func TestUpdateSlotBlocks(t *testing.T) {
+	slot := uint64(testutils.RandomInt(0, 100))
+	hashesCount := testutils.RandomInt(5, 20)
+	newBlock := types.NewBlock(&types.Header{
+		Slot:   slot,
+		TxHash: common.BytesToHash(testutils.RandomData(32)),
+		Root:   common.BytesToHash(testutils.RandomData(32)),
+	}, nil, nil, nil)
+
+	db := NewMemoryDatabase()
+
+	blocksHashes := common.HashArray{}
+	for i := 0; i < hashesCount; i++ {
+		blocksHashes = append(blocksHashes, common.BytesToHash(testutils.RandomData(32)))
+	}
+
+	WriteSlotBlocksHashes(db, slot, blocksHashes)
+	slotBlocksHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, slotBlocksHashes)
+
+	AddSlotBlockHash(db, newBlock.Slot(), newBlock.Hash())
+	updatedHashes := ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, append(blocksHashes, newBlock.Hash()), updatedHashes)
+
+	DeleteSlotBlockHash(db, newBlock.Slot(), newBlock.Hash())
+	updatedHashes = ReadSlotBlocksHashes(db, slot)
+	testutils.AssertEqual(t, blocksHashes, updatedHashes)
 }

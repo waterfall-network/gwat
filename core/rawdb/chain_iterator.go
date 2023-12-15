@@ -54,6 +54,10 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		} else {
 			hash = common.BytesToHash(h)
 		}
+
+		if i == 0 {
+			log.Info("Save genesis hash", "hash", hash, "fn", "InitDatabaseFromFreezer")
+		}
 		WriteFinalizedHashNumber(batch, hash, i)
 		// If enough data was accumulated in memory or we're at the last block, dump to disk
 		if batch.ValueSize() > ethdb.IdealBatchSize {
@@ -263,6 +267,8 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 }
 
 // indexTransactionsForTesting is the internal debug version with an additional hook.
+//
+//nolint:unused // tests only
 func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	indexTransactions(db, from, to, interrupt, hook)
 }
@@ -355,6 +361,8 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 }
 
 // unindexTransactionsForTesting is the internal debug version with an additional hook.
+//
+//nolint:unused // tests only
 func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	unindexTransactions(db, from, to, interrupt, hook)
 }

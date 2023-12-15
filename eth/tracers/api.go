@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"sync"
@@ -30,9 +29,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
@@ -43,6 +40,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 const (
@@ -66,10 +64,10 @@ type Backend interface {
 	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
-	Engine() consensus.Engine
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error)
+	Blockchain() *core.BlockChain
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -85,10 +83,6 @@ func NewAPI(backend Backend) *API {
 type chainContext struct {
 	api *API
 	ctx context.Context
-}
-
-func (context *chainContext) Engine() consensus.Engine {
-	return context.api.backend.Engine()
 }
 
 func (context *chainContext) GetHeader(hash common.Hash) *types.Header {
@@ -439,22 +433,11 @@ func (api *API) TraceBlock(ctx context.Context, blob []byte, config *TraceConfig
 // TraceBlockFromFile returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
 func (api *API) TraceBlockFromFile(ctx context.Context, file string, config *TraceConfig) ([]*txTraceResult, error) {
-	blob, err := ioutil.ReadFile(file)
+	blob, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file: %v", err)
 	}
 	return api.TraceBlock(ctx, blob, config)
-}
-
-// TraceBadBlock returns the structured logs created during the execution of
-// EVM against a block pulled from the pool of bad ones and returns them as a JSON
-// object.
-func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
-	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
-	if block == nil {
-		return nil, fmt.Errorf("bad block %#x not found", hash)
-	}
-	return api.traceBlock(ctx, block, config)
 }
 
 // StandardTraceBlockToFile dumps the structured logs created during the
@@ -472,10 +455,6 @@ func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, 
 // of intermediate roots: the stateroot after each transaction.
 func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config *TraceConfig) ([]common.Hash, error) {
 	block, _ := api.blockByHash(ctx, hash)
-	if block == nil {
-		// Check in the bad blocks
-		block = rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
-	}
 	if block == nil {
 		return nil, fmt.Errorf("block %#x not found", hash)
 	}
@@ -519,9 +498,10 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			txContext = core.NewEVMTxContext(msg)
 			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 			tp        = token.NewProcessor(vmctx, statedb)
+			vp        = validator.NewProcessor(vmctx, statedb, api.backend.Blockchain())
 		)
 		statedb.Prepare(tx.Hash(), i)
-		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
 			// We intentionally don't return the error here: if we do, then the RPC server will not
 			// return the roots. Most likely, the caller already knows that a certain transaction fails to
@@ -536,17 +516,6 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
 	}
 	return roots, nil
-}
-
-// StandardTraceBadBlockToFile dumps the structured logs created during the
-// execution of EVM against a block pulled from the pool of bad ones to the
-// local file system and returns a list of files to the caller.
-func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error) {
-	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
-	if block == nil {
-		return nil, fmt.Errorf("bad block %#x not found", hash)
-	}
-	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
 // traceBlock configures a new tracer according to the provided configuration, and
@@ -615,7 +584,8 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		statedb.Prepare(tx.Hash(), i)
 		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
 		tp := token.NewProcessor(blockCtx, statedb)
-		if _, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+		vp := validator.NewProcessor(blockCtx, statedb, api.backend.Blockchain())
+		if _, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			failed = err
 			break
 		}
@@ -723,7 +693,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			if !canon {
 				prefix = fmt.Sprintf("%valt-", prefix)
 			}
-			dump, err = ioutil.TempFile(os.TempDir(), prefix)
+			dump, err = os.CreateTemp(os.TempDir(), prefix)
 			if err != nil {
 				return nil, err
 			}
@@ -740,8 +710,9 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		tp := token.NewProcessor(vmctx, statedb)
+		vp := validator.NewProcessor(vmctx, statedb, api.backend.Blockchain())
 		statedb.Prepare(tx.Hash(), i)
-		_, err = core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(msg.Gas()))
+		_, err = core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if writer != nil {
 			writer.Flush()
 		}
@@ -906,11 +877,12 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	tp := token.NewProcessor(vmctx, statedb)
+	vp := validator.NewProcessor(vmctx, statedb, api.backend.Blockchain())
 
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
 
-	result, err := core.ApplyMessage(vmenv, tp, message, new(core.GasPool).AddGas(message.Gas()))
+	result, err := core.ApplyMessage(vmenv, tp, vp, message, new(core.GasPool).AddGas(message.Gas()))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}

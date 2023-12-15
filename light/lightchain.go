@@ -26,7 +26,6 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
@@ -36,6 +35,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 var (
@@ -50,10 +51,8 @@ type LightChain struct {
 	hc            *core.HeaderChain
 	indexerConfig *IndexerConfig
 	chainDb       ethdb.Database
-	engine        consensus.Engine
 	odr           OdrBackend
 	chainFeed     event.Feed
-	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
@@ -61,6 +60,10 @@ type LightChain struct {
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
 	blockCache   *lru.Cache // Cache for the most recent entire blocks
+
+	slotInfo         *types.SlotInfo // coordinator slot settings
+	validatorStorage valStore.Storage
+	eraInfo          *era.EraInfo
 
 	chainmu sync.RWMutex // protects header inserts
 	quit    chan struct{}
@@ -72,35 +75,108 @@ type LightChain struct {
 	disableCheckFreq int32 // disables header verification
 }
 
-func (lc *LightChain) CurrentHeader() *types.Header {
+func (lc *LightChain) GetLastCoordinatedCheckpoint() *types.Checkpoint {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (lc *LightChain) WriteSyncDagBlock(block *types.Block) (status int, err error) {
+func (lc *LightChain) EnterNextEra(u uint64, hash common.Hash) *era.Era {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) EpochToEra(epoch uint64) *era.Era {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) GetValidatorSyncData(InitTxHash common.Hash) *types.ValidatorSync {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) GetTransaction(txHash common.Hash) (tx *types.Transaction, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) GetEpoch(epoch uint64) common.Hash {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) Database() ethdb.Database {
+	return lc.chainDb
+}
+
+func (lc *LightChain) GetConfig() *params.ChainConfig {
+	return lc.Config()
+}
+
+func (lc *LightChain) GetEraInfo() *era.EraInfo {
+	return lc.eraInfo
+}
+
+func (lc *LightChain) IsSynced() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) Synchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) FinSynchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) DagSynchronising() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) IsRollbackActive() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (lc *LightChain) CurrentHeader() *types.Header {
+	//TODO implement me
 	panic("implement me")
 }
 
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
+	chainDB := odr.Database()
 
 	bc := &LightChain{
-		chainDb:       odr.Database(),
+		chainDb:       chainDB,
 		indexerConfig: odr.IndexerConfig(),
 		odr:           odr,
 		quit:          make(chan struct{}),
 		bodyCache:     bodyCache,
 		bodyRLPCache:  bodyRLPCache,
 		blockCache:    blockCache,
-		engine:        engine,
 	}
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
+	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
@@ -114,20 +190,15 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
-	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
-	for hash := range core.BadHashes {
-		if header := bc.GetHeaderByHash(hash); header != nil {
-			height := rawdb.ReadFinalizedNumberByHash(bc.chainDb, hash)
-			if height == nil {
-				continue
-			}
-			prevHeight := *height - 1
-			prevHash := rawdb.ReadFinalizedHashByNumber(bc.chainDb, prevHeight)
-			log.Error("Found bad hash, rewinding chain", "hash", prevHash)
-			bc.SetHead(prevHash)
-			log.Info("Chain rewind was successful, resuming normal operation")
-		}
-	}
+
+	bc.validatorStorage = valStore.NewStorage(config)
+
+	bc.SetSlotInfo(&types.SlotInfo{
+		GenesisTime:    bc.genesisBlock.Time(),
+		SecondsPerSlot: config.SecondsPerSlot,
+		SlotsPerEpoch:  config.SlotsPerEpoch,
+	})
+
 	return bc, nil
 }
 
@@ -219,15 +290,14 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to reset genesis block", "err", err)
 	}
+
+	rawdb.AddSlotBlockHash(lc.chainDb, genesis.Slot(), genesis.Hash())
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
 	lc.hc.SetLastFinalisedHeader(lc.genesisBlock.Header(), uint64(0))
 }
 
 // Accessors
-
-// Engine retrieves the light chain's consensus engine.
-func (lc *LightChain) Engine() consensus.Engine { return lc.engine }
 
 // Genesis returns the genesis block
 func (lc *LightChain) Genesis() *types.Block {
@@ -274,7 +344,8 @@ func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.Raw
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
 func (lc *LightChain) HasBlock(hash common.Hash) bool {
-	blk, _ := lc.GetBlock(NoOdr, hash)
+	ctx := context.Background()
+	blk, _ := lc.GetBlock(ctx, hash)
 	return blk != nil
 }
 
@@ -370,8 +441,8 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 				lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: ev.Block})
 			}
 			lc.chainFeed.Send(ev)
-		case core.ChainSideEvent:
-			lc.chainSideFeed.Send(ev)
+		default:
+			log.Warn("Unsupported event")
 		}
 	}
 }
@@ -387,12 +458,9 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 //
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
-func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
-	if atomic.LoadInt32(&lc.disableCheckFreq) == 1 {
-		checkFreq = 0
-	}
+func (lc *LightChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	start := time.Now()
-	if i, err := lc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := lc.hc.ValidateHeaderChain(chain); err != nil {
 		return i, err
 	}
 
@@ -555,11 +623,6 @@ func (lc *LightChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) eve
 	return lc.scope.Track(lc.chainHeadFeed.Subscribe(ch))
 }
 
-// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
-func (lc *LightChain) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return lc.scope.Track(lc.chainSideFeed.Subscribe(ch))
-}
-
 // SubscribeLogsEvent implements the interface of filters.Backend
 // LightChain does not send logs events, so return an empty subscription.
 func (lc *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
@@ -580,4 +643,36 @@ func (lc *LightChain) DisableCheckFreq() {
 // EnableCheckFreq enables header validation.
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
+}
+
+func (lc *LightChain) ValidatorStorage() valStore.Storage {
+	return lc.validatorStorage
+}
+
+// SetSlotInfo set new slot info.
+func (lc *LightChain) SetSlotInfo(si *types.SlotInfo) error {
+	if si == nil {
+		return core.ErrBadSlotInfo
+	}
+	lc.slotInfo = si.Copy()
+	return nil
+}
+
+// GetSlotInfo get current slot info.
+func (lc *LightChain) GetSlotInfo() *types.SlotInfo {
+	return lc.slotInfo.Copy()
+}
+
+func (lc *LightChain) GetCoordinatedCheckpointEpoch(epoch uint64) uint64 {
+	if epoch >= 2 {
+		epoch = epoch - 2
+	}
+
+	return epoch
+}
+
+// StateAt returns a new mutable state based on a particular point in time.
+func (lc *LightChain) StateAt(root common.Hash) (*state.StateDB, error) {
+	//TODO implement me
+	panic("implement me")
 }

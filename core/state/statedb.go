@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -301,6 +302,7 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	if stateObject == nil {
 		return common.Hash{}
 	}
+
 	return common.BytesToHash(stateObject.CodeHash())
 }
 
@@ -1045,4 +1047,14 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
+}
+
+func (s *StateDB) IsValidatorAddress(address common.Address) bool {
+	code := s.GetCode(address)
+	if len(code) == 0 {
+		return false
+	}
+	// validator address at the first position
+	stAdr := code[0:common.AddressLength]
+	return bytes.Equal(stAdr, address.Bytes())
 }

@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"net/url"
@@ -39,6 +38,8 @@ const (
 // https://www.jsonrpc.org/historical/json-rpc-over-http.html#id13
 var acceptedContentTypes = []string{contentType, "application/json-rpc", "application/jsonrequest"}
 
+type HTTPAuth func(h http.Header) error
+
 type httpConn struct {
 	client    *http.Client
 	url       string
@@ -46,6 +47,7 @@ type httpConn struct {
 	closeCh   chan interface{}
 	mu        sync.Mutex // protects headers
 	headers   http.Header
+	auth      HTTPAuth
 }
 
 // httpConn is treated specially by Client.
@@ -169,7 +171,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", hc.url, ioutil.NopCloser(bytes.NewReader(body)))
+	req, err := http.NewRequestWithContext(ctx, "POST", hc.url, io.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +181,12 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	hc.mu.Lock()
 	req.Header = hc.headers.Clone()
 	hc.mu.Unlock()
+
+	if hc.auth != nil {
+		if err := hc.auth(req.Header); err != nil {
+			return nil, err
+		}
+	}
 
 	// do request
 	resp, err := hc.client.Do(req)

@@ -3,6 +3,7 @@ before_script:
   - echo "machine $CI_SERVER_HOST login gitlab-ci-token password $CI_JOB_TOKEN" >> ~/.netrc
   - export GOPRIVATE=${CI_SERVER_HOST}
 stages:
+  - test
   - build
   - release
 
@@ -11,12 +12,23 @@ stages:
   script: &job_build |-
     cp -r params/version.go /tmp/version.go
     sed -i "s/\\\u2692/${CI_COMMIT_SHORT_SHA}/g" params/version.go
-    go run build/ci.go install ./cmd/geth ./cmd/bootnode
+    go run build/ci.go install ./cmd/gwat ./cmd/bootnode
     mkdir -p ./dist
     cp ./build/bin/bootnode ./dist/gwat-bootnode
-    cp ./build/bin/geth ./dist/gwat
+    cp ./build/bin/gwat ./dist/gwat
     cp -r /tmp/version.go params/version.go
 
+
+lint:
+  stage: test
+  image: golangci/golangci-lint:v1.55.2
+  tags:
+    - docker
+  rules:
+    - if: $CI_COMMIT_REF_NAME != "main" && $CI_COMMIT_TAG == null
+      when: on_success
+  script: 
+    - golangci-lint run -v
 
 build branch:
   stage: build

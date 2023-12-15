@@ -34,6 +34,16 @@ const (
 	DefaultWSPort      = 8546        // Default TCP port for the websocket RPC server
 	DefaultGraphQLHost = "localhost" // Default host interface for the GraphQL server
 	DefaultGraphQLPort = 8547        // Default TCP port for the GraphQL server
+	DefaultAuthPort    = 8551
+	DefaultAuthAddr    = "localhost"
+)
+
+var (
+	DefaultAuthCors    = []string{"localhost"} // Default cors domain for the authenticated apis
+	DefaultAuthVhosts  = []string{"localhost"} // Default virtual hosts for the authenticated apis
+	DefaultAuthPrefix  = ""                    // Default prefix for the authenticated apis
+	DefaultAuthOrigins = []string{"localhost"}
+	DefaultAuthModules = []string{"dag", "eth"}
 )
 
 // DefaultConfig contains reasonable default settings.
@@ -46,6 +56,9 @@ var DefaultConfig = Config{
 	WSPort:              DefaultWSPort,
 	WSModules:           []string{"net", "web3"},
 	GraphQLVirtualHosts: []string{"localhost"},
+	//AuthPort:            DefaultAuthPort,
+	//AuthAddr:            DefaultAuthAddr,
+	AuthVirtualHosts: DefaultAuthVhosts,
 	P2P: p2p.Config{
 		ListenAddr: ":30303",
 		MaxPeers:   50,
@@ -61,19 +74,19 @@ func DefaultDataDir() string {
 	if home != "" {
 		switch runtime.GOOS {
 		case "darwin":
-			return filepath.Join(home, "Library", "Ethereum")
+			return filepath.Join(home, "Library", "Waterfall")
 		case "windows":
 			// We used to put everything in %HOME%\AppData\Roaming, but this caused
 			// problems with non-typical setups. If this fallback location exists and
 			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
-			fallback := filepath.Join(home, "AppData", "Roaming", "Ethereum")
+			fallback := filepath.Join(home, "AppData", "Roaming", "Waterfall")
 			appdata := windowsAppData()
 			if appdata == "" || isNonEmptyDir(fallback) {
 				return fallback
 			}
-			return filepath.Join(appdata, "Ethereum")
+			return filepath.Join(appdata, "Waterfall")
 		default:
-			return filepath.Join(home, ".ethereum")
+			return filepath.Join(home, ".waterfall")
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later

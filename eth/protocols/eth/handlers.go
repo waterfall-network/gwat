@@ -23,7 +23,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
 // handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
@@ -31,6 +30,7 @@ func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the complex header query
 	var query GetBlockHeadersPacket66
 	if err := msg.Decode(&query); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleGetBlockHeaders66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	var response []*types.Header
@@ -46,6 +46,7 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 	hashMode := query.Origin.Hash != (common.Hash{})
 	first := true
 	maxNonCanonical := uint64(100)
+	bc := backend.Chain()
 
 	// Gather headers until the fetch or network limits is reached
 	var (
@@ -62,16 +63,17 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		if hashMode {
 			if first {
 				first = false
-				origin = backend.Chain().GetHeaderByHash(query.Origin.Hash)
-				//if origin != nil {
-				//	query.Origin.Number = origin.Number.Uint64()
-				//}
+				origin = bc.GetHeaderByHash(query.Origin.Hash)
+				if origin != nil && (origin.Height > 0 && origin.Nr() > 0 || origin.Hash() == bc.Genesis().Hash()) {
+					query.Origin.Number = origin.Nr()
+				} else {
+					origin = nil
+				}
 			} else {
-				//origin = backend.Chain().GetHeader(query.Origin.Hash, query.Origin.Number)
-				origin = backend.Chain().GetHeader(query.Origin.Hash)
+				origin = bc.GetHeaderByNumber(query.Origin.Number)
 			}
 		} else {
-			origin = backend.Chain().GetHeaderByNumber(query.Origin.Number)
+			origin = bc.GetHeaderByNumber(query.Origin.Number)
 		}
 		if origin == nil {
 			break
@@ -87,14 +89,14 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 			if ancestor == 0 {
 				unknown = true
 			} else {
-				query.Origin.Hash, query.Origin.Number = backend.Chain().GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
+				query.Origin.Hash, query.Origin.Number = bc.GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
 				unknown = (query.Origin.Hash == common.Hash{})
 			}
 		case hashMode && !query.Reverse:
 			// Hash based traversal towards the leaf block
 			var (
 				//current = origin.Number.Uint64()
-				nr             = backend.Chain().ReadFinalizedNumberByHash(origin.Hash())
+				nr             = bc.ReadFinalizedNumberByHash(origin.Hash())
 				current uint64 = 0
 				next    uint64 = 0
 			)
@@ -107,9 +109,9 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 				unknown = true
 			}
 			//} else {
-			if header := backend.Chain().GetHeaderByNumber(next); header != nil {
+			if header := bc.GetHeaderByNumber(next); header != nil {
 				nextHash := header.Hash()
-				expOldHash, _ := backend.Chain().GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
+				expOldHash, _ := bc.GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
 				if expOldHash == query.Origin.Hash {
 					query.Origin.Hash, query.Origin.Number = nextHash, next
 				} else {
@@ -139,6 +141,7 @@ func handleGetBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block body retrieval message
 	var query GetBlockBodiesPacket66
 	if err := msg.Decode(&query); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleGetBlockBodies66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	response := answerGetBlockBodiesQuery(backend, query.GetBlockBodiesPacket, peer)
@@ -159,6 +162,8 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 		if data := backend.Chain().GetBodyRLP(hash); len(data) != 0 {
 			bodies = append(bodies, data)
 			bytes += len(data)
+		} else {
+			bodies = append(bodies, rlp.RawValue{})
 		}
 	}
 	return bodies
@@ -168,6 +173,7 @@ func handleGetNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the trie node data retrieval message
 	var query GetNodeDataPacket66
 	if err := msg.Decode(&query); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleGetNodeData66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	response := answerGetNodeDataQuery(backend, query.GetNodeDataPacket, peer)
@@ -207,6 +213,7 @@ func handleGetReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
 	var query GetReceiptsPacket66
 	if err := msg.Decode(&query); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleGetReceipts66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	response := answerGetReceiptsQuery(backend, query.GetReceiptsPacket, peer)
@@ -246,6 +253,7 @@ func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of new block announcements just arrived
 	ann := new(NewBlockHashesPacket)
 	if err := msg.Decode(ann); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleNewBlockhashes")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	// Mark the hashes as present at the remote node
@@ -260,15 +268,17 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	// Retrieve and decode the propagated block
 	ann := new(NewBlockPacket)
 	if err := msg.Decode(ann); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleNewBlock")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	if err := ann.sanityCheck(); err != nil {
+		peer.Log().Error("Handle request: sanityCheck failed", "err", err, "fn", "handleNewBlock")
 		return err
 	}
-	if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
-		log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
-		return nil // TODO(karalabe): return error eventually, but wait a few releases
-	}
+	//if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
+	//	log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.TxHash())
+	//	return nil // TODO(karalabe): return error eventually, but wait a few releases
+	//}
 	ann.Block.ReceivedAt = msg.Time()
 	ann.Block.ReceivedFrom = peer
 
@@ -282,6 +292,7 @@ func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of headers arrived to one of our previous requests
 	res := new(BlockHeadersPacket66)
 	if err := msg.Decode(res); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleBlockHeaders66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, BlockHeadersMsg, res.RequestId)
@@ -293,6 +304,7 @@ func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of block bodies arrived to one of our previous requests
 	res := new(BlockBodiesPacket66)
 	if err := msg.Decode(res); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleBlockBodies66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, BlockBodiesMsg, res.RequestId)
@@ -304,6 +316,7 @@ func handleNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of node state data arrived to one of our previous requests
 	res := new(NodeDataPacket66)
 	if err := msg.Decode(res); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleNodeData66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, NodeDataMsg, res.RequestId)
@@ -315,6 +328,7 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket66)
 	if err := msg.Decode(res); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleReceipts66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, ReceiptsMsg, res.RequestId)
@@ -326,10 +340,12 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	// New transaction announcement arrived, make sure we have
 	// a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
+		peer.Log().Debug("Handle request: skip handle tx (node is syncing)", "fn", "handleNewPooledTransactionHashes", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
 		return nil
 	}
 	ann := new(NewPooledTransactionHashesPacket)
 	if err := msg.Decode(ann); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleNewPooledTransactionHashes")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	// Schedule all the unknown hashes for retrieval
@@ -343,6 +359,7 @@ func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) err
 	// Decode the pooled transactions retrieval message
 	var query GetPooledTransactionsPacket66
 	if err := msg.Decode(&query); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleGetPooledTransactions66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsPacket, peer)
@@ -379,17 +396,20 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 
 func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
-	if !backend.AcceptTxs() {
+	if !backend.AcceptTxs() || !backend.Chain().IsSynced() {
+		peer.Log().Debug("Handle request: skip handle tx (node is syncing)", "fn", "handleTransactions", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
 		return nil
 	}
 	// Transactions can be processed, parse all of them and deliver to the pool
 	var txs TransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleTransactions")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	for i, tx := range txs {
 		// Validate and mark the remote transaction
 		if tx == nil {
+			peer.Log().Error("Handle request: nil tx", "err", errDecode, "fn", "handleTransactions")
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
 		peer.markTransaction(tx.Hash())
@@ -399,17 +419,20 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 
 func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
-	if !backend.AcceptTxs() {
+	if !backend.AcceptTxs() || !backend.Chain().IsSynced() {
+		peer.Log().Debug("Handle request: skip handle tx (node is syncing)", "fn", "handlePooledTransactions66", "AcceptTxs", backend.AcceptTxs(), "IsSynced", backend.Chain().IsSynced())
 		return nil
 	}
 	// Transactions can be processed, parse all of them and deliver to the pool
 	var txs PooledTransactionsPacket66
 	if err := msg.Decode(&txs); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handlePooledTransactions66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	for i, tx := range txs.PooledTransactionsPacket {
 		// Validate and mark the remote transaction
 		if tx == nil {
+			peer.Log().Error("Handle request: nil tx", "err", errDecode, "fn", "handlePooledTransactions66")
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
 		peer.markTransaction(tx.Hash())
@@ -423,64 +446,270 @@ func handleGetDag66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode retrieval message
 	var query GetDagPacket66
 	if err := msg.Decode(&query); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleGetDag66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	dag, _, err := answerGetDagQuery(backend, query.GetDagPacket, peer)
+	dag, err := answerGetDagQuery(backend, query.GetDagPacket)
 	if err != nil {
-		return err
+		peer.Log().Error("Handle request: failed", "err", err, "fn", "handleGetDag66")
+		return peer.ReplyDagData(query.RequestId, common.HashArray{})
 	}
-	dag = dag.Uniq()
 	return peer.ReplyDagData(query.RequestId, dag)
 }
 
-func answerGetDagQuery(backend Backend, query GetDagPacket, peer *Peer) (common.HashArray, uint64, error) {
-	// Gather dag data
+func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, error) {
 	dag := common.HashArray{}
-	finalized := common.HashArray{}
-	fromFinNr := uint64(query)
-
-	//expCache := core.ExploreResultMap{}
-	//for _, h := range backend.Chain().GetTips().GetHashes() {
-	//	unloaded, loaded, _, _, exc, err := backend.Chain().ExploreChainRecursive(h, expCache)
-	//	if err != nil {
-	//		return dag, 0, err
-	//	}
-	//	expCache = exc
-	//	if len(unloaded) > 0 {
-	//		return dag, 0, fmt.Errorf("%w", errInvalidDag)
-	//	}
-	//	dag = dag.Concat(loaded)
-	//
-	//	// if tips set to last finalized block - add it
-	//	if len(loaded) == 0 {
-	//		lfBlock := backend.Chain().GetLastFinalizedBlock()
-	//		if lfBlock.Hash() == h {
-	//			dag = append(dag, h)
-	//		}
-	//	}
-	//}
-
-	dag = backend.Chain().GetTips().GetOrderedDagChainHashes()
-	lastFinNr := backend.Chain().GetLastFinalizedNumber()
-	if fromFinNr > lastFinNr {
-		return dag, 0, fmt.Errorf("%w", errInvalidDag)
+	var dagHashes common.HashArray
+	limitReached := false
+	log.Info("Sync handling: start",
+		"baseSpine", query.BaseSpine.Hex(),
+		"terminalSpine", query.TerminalSpine.Hex(),
+	)
+	// baseSpine
+	baseHeader := backend.Chain().GetHeaderByHash(query.BaseSpine)
+	if baseHeader == nil {
+		return dag, fmt.Errorf("%w", errInvalidDag)
 	}
-	for i := uint64(1); fromFinNr+i <= lastFinNr; i++ {
-		finHash := backend.Chain().ReadFinalizedHashByNumber(fromFinNr + i)
-		if finHash != (common.Hash{}) {
-			finalized = append(finalized, finHash)
+	isBaseFinalized := baseHeader.Height > 0 && baseHeader.Nr() > 0 || baseHeader.Hash() == backend.Chain().Genesis().Hash()
+
+	// terminalSpine
+	var terminalSpine common.Hash
+	if query.TerminalSpine != (common.Hash{}) {
+		terminalSpine = query.TerminalSpine
+	} else {
+		tSlot := uint64(0)
+		for h, t := range backend.Chain().GetTips() {
+			if t.Slot >= tSlot {
+				terminalSpine = h
+			}
+		}
+		if terminalSpine == (common.Hash{}) {
+			return dag, fmt.Errorf("%w", errInvalidDag)
 		}
 	}
-	dag = finalized.Concat(dag)
-	return dag, fromFinNr, nil
+	log.Info("Sync handling: terminal header",
+		"baseSpine", query.BaseSpine.Hex(),
+		"terminalSpine", query.TerminalSpine.Hex(),
+		"terminalHeader", terminalSpine,
+	)
+	// retrieve terminal header
+	terminalHeader := backend.Chain().GetHeaderByHash(terminalSpine)
+	if terminalHeader == nil {
+		return dag, fmt.Errorf("%w", errInvalidDag)
+	}
+	isTerminalFinalized := terminalHeader.Height > 0 && terminalHeader.Nr() > 0
+
+	switch {
+	case isBaseFinalized && isTerminalFinalized:
+		//collect blocks by range of finalized numbers only
+		fromNr := baseHeader.Nr()
+		toNr := terminalHeader.Nr()
+		log.Info("Sync handling: case 1",
+			"baseSpine", query.BaseSpine.Hex(),
+			"terminalSpine", query.TerminalSpine.Hex(),
+			"isBaseFinalized", isBaseFinalized,
+			"isTerminalFinalized", isTerminalFinalized,
+			"fromNr", fromNr,
+			"toNr", toNr,
+		)
+		if fromNr > toNr {
+			return dag, errBadRequestParam
+		}
+		dag = getHashesByNumberRange(backend, fromNr, toNr, LimitDagHashes)
+		limitReached = len(dag) >= LimitDagHashes
+
+	case isBaseFinalized && !isTerminalFinalized:
+		//1. collect finalized part
+		fromNr := baseHeader.Nr()
+		lfHeader := backend.Chain().GetLastFinalizedHeader()
+		toNr := lfHeader.Nr()
+		//check data limitation
+		if toNr-fromNr > LimitDagHashes {
+			toNr = fromNr + LimitDagHashes
+		}
+		log.Info("Sync handling: case 2.0",
+			"baseSpine", query.BaseSpine.Hex(),
+			"terminalSpine", query.TerminalSpine.Hex(),
+			"isBaseFinalized", isBaseFinalized,
+			"isTerminalFinalized", isTerminalFinalized,
+			"fromNr", fromNr,
+			"toNr", toNr,
+		)
+		dag = getHashesByNumberRange(backend, fromNr, toNr, LimitDagHashes)
+		limitReached = len(dag) >= LimitDagHashes
+
+		//2. if data less than LimitDagHashes
+		// - collect not finalized part (by slots)
+		if len(dag) < LimitDagHashes {
+			fromSlot := lfHeader.Slot
+			toSlot := terminalHeader.Slot
+			// expecting that lfHeader.Hash will be received twice
+			limit := LimitDagHashes - len(dag) + 1
+			log.Info("Sync handling: case 2.1",
+				"baseSpine", query.BaseSpine.Hex(),
+				"terminalSpine", query.TerminalSpine.Hex(),
+				"isBaseFinalized", isBaseFinalized,
+				"isTerminalFinalized", isTerminalFinalized,
+				"fromSlot", fromSlot,
+				"toSlot", toSlot,
+				"limit", limit,
+			)
+			dagHashes, limitReached = getHashesBySlotRange(backend, fromSlot, toSlot, limit, query.TerminalSpine)
+			dag = append(dag, dagHashes...)
+			dag.Deduplicate()
+		}
+
+	case !isBaseFinalized && !isTerminalFinalized:
+		//	collect not finalized part (by slots) only
+		fromSlot := baseHeader.Slot
+		toSlot := terminalHeader.Slot
+		if fromSlot > toSlot {
+			return dag, errBadRequestParam
+		}
+		// expecting that baseHash will be received too
+		limit := LimitDagHashes + 1
+		log.Info("Sync handling: case 3",
+			"baseSpine", query.BaseSpine.Hex(),
+			"terminalSpine", query.TerminalSpine.Hex(),
+			"isBaseFinalized", isBaseFinalized,
+			"isTerminalFinalized", isTerminalFinalized,
+			"fromSlot", fromSlot,
+			"toSlot", toSlot,
+			"limit", limit,
+		)
+		dagHashes, limitReached = getHashesBySlotRange(backend, fromSlot, toSlot, limit, query.TerminalSpine)
+		if i := dagHashes.IndexOf(baseHeader.Hash()); i >= 0 {
+			dag = append(dagHashes[:i], dagHashes[i+1:]...)
+		} else {
+			dag = dagHashes
+		}
+	default:
+		log.Error("Sync handling: case default",
+			"baseSpine", query.BaseSpine.Hex(),
+			"terminalSpine", query.TerminalSpine.Hex(),
+			"isBaseFinalized", isBaseFinalized,
+			"isTerminalFinalized", isTerminalFinalized,
+		)
+		return dag, errBadRequestParam
+	}
+
+	log.Info("Sync handling: dag retrieved",
+		"baseSpine", query.BaseSpine.Hex(),
+		"terminalSpine", query.TerminalSpine.Hex(),
+		"isBaseFinalized", isBaseFinalized,
+		"isTerminalFinalized", isTerminalFinalized,
+		"limitReached", limitReached,
+		"dag", dag,
+	)
+	// if requested all not-finalized blocks and limit not reached
+	// - add zero hash
+	if query.TerminalSpine == (common.Hash{}) && !limitReached {
+		dag = append(dag, common.Hash{})
+	}
+	// if limit is exceeded - cut off right side
+	if len(dag) > LimitDagHashes {
+		dag = dag[:LimitDagHashes]
+	}
+	log.Info("Sync handling: dag response",
+		"baseSpine", query.BaseSpine.Hex(),
+		"terminalSpine", query.TerminalSpine.Hex(),
+		"isBaseFinalized", isBaseFinalized,
+		"isTerminalFinalized", isTerminalFinalized,
+		"limitReached", limitReached,
+		"dag", dag,
+	)
+	return dag, nil
+}
+
+func getHashesByNumberRange(backend Backend, fromNr, toNr uint64, limit int) common.HashArray {
+	dag := common.HashArray{}
+	if limit <= 0 {
+		return dag
+	}
+	if fromNr > toNr {
+		return dag
+	}
+	//check data limitation
+	if toNr-fromNr > uint64(limit) {
+		toNr = fromNr + uint64(limit)
+	}
+	for nr := uint64(1); fromNr+nr <= toNr; nr++ {
+		finHash := backend.Chain().ReadFinalizedHashByNumber(fromNr + nr)
+		if finHash != (common.Hash{}) {
+			dag = append(dag, finHash)
+		}
+	}
+	return dag
+}
+
+func getHashesBySlotRange(backend Backend, from, to uint64, limit int, terminalHash common.Hash) (common.HashArray, bool) {
+	if limit <= 0 {
+		return common.HashArray{}, true
+	}
+	var limitReached bool
+	si := backend.Chain().GetSlotInfo()
+	hashes := make(common.HashArray, 0, limit)
+	for slot := from; slot <= to; slot++ {
+		slh := backend.Chain().GetBlockHashesBySlot(slot)
+		if len(slh) > 0 {
+			// if received terminalHash
+			// - add terminalHash only and stop
+			if slh.Has(terminalHash) {
+				hashes = append(hashes, terminalHash)
+				break
+			}
+			// if limit reached
+			// - add the first only and stop
+			if len(hashes)+len(slh) >= limit {
+				hashes = append(hashes, slh[0])
+				limitReached = true
+				break
+			}
+			hashes = append(hashes, slh...)
+		}
+		if si != nil && slot >= si.CurrentSlot() {
+			break
+		}
+	}
+	return hashes, limitReached
 }
 
 func handleDag66(backend Backend, msg Decoder, peer *Peer) error {
-	// A gag hashes arrived to one of our previous requests
+	// A dag hashes arrived to one of our previous requests
 	res := new(DagPacket66)
 	if err := msg.Decode(res); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleDag66")
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, DagMsg, res.RequestId)
 	return backend.Handle(peer, &res.DagPacket)
+}
+
+func handleGetHashesBySlots66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode retrieval message
+	var query GetHashesBySlotsPacket66
+	if err := msg.Decode(&query); err != nil {
+		peer.Log().Error("Handle request: decode failed", "err", err, "fn", "handleGetHashesBySlots66")
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	//Gather hashes by slots.
+	from, to := query.From, query.To
+	maxHashLen := (to - from) * backend.Chain().Config().ValidatorsPerSlot
+	// check length limit
+	if maxHashLen > LimitDagHashes {
+		peer.Log().Error("Handle request: failed", "err", "maxHashLen > LimitDagHashes", "fn", "handleGetHashesBySlots66", "maxHashLen", maxHashLen, "LimitDagHashes", LimitDagHashes)
+		return fmt.Errorf("%w: %v > %v (get hashes by slots)", errMsgTooLarge, maxHashLen, LimitDagHashes)
+	}
+	hashes := make(common.HashArray, 0, maxHashLen)
+	si := backend.Chain().GetSlotInfo()
+	for slot := from; slot < to; slot++ {
+		slh := backend.Chain().GetBlockHashesBySlot(slot)
+		if len(slh) > 0 {
+			hashes = append(hashes, slh...)
+		}
+		if si != nil && slot >= si.CurrentSlot() {
+			break
+		}
+	}
+	return peer.ReplyDagData(query.RequestId, hashes.Uniq())
 }

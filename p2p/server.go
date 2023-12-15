@@ -126,7 +126,7 @@ type Config struct {
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for
 	// each peer.
-	Protocols []Protocol `toml:"-"`
+	Protocols []Protocol `toml:"-" json:"-"`
 
 	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
@@ -154,6 +154,8 @@ type Config struct {
 
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
+
+	p2pGenesis common.Hash
 
 	clock mclock.Clock
 }
@@ -400,6 +402,7 @@ func (srv *Server) Stop() {
 		// this unblocks listener Accept
 		srv.listener.Close()
 	}
+	srv.quit <- struct{}{}
 	close(srv.quit)
 	srv.lock.Unlock()
 	srv.loopWG.Wait()
@@ -563,7 +566,7 @@ func (srv *Server) setupDiscovery() error {
 		if !realaddr.IP.IsLoopback() {
 			srv.loopWG.Add(1)
 			go func() {
-				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "Gwat discovery")
 				srv.loopWG.Done()
 			}()
 		}
@@ -584,6 +587,7 @@ func (srv *Server) setupDiscovery() error {
 			Bootnodes:   srv.BootstrapNodes,
 			Unhandled:   unhandled,
 			Log:         srv.log,
+			Genesis:     srv.p2pGenesis,
 		}
 		ntab, err := discover.ListenV4(conn, srv.localnode, cfg)
 		if err != nil {
@@ -670,7 +674,7 @@ func (srv *Server) setupListening() error {
 		if !tcp.IP.IsLoopback() && srv.NAT != nil {
 			srv.loopWG.Add(1)
 			go func() {
-				nat.Map(srv.NAT, srv.quit, "tcp", tcp.Port, tcp.Port, "ethereum p2p")
+				nat.Map(srv.NAT, srv.quit, "tcp", tcp.Port, tcp.Port, "Gwat p2p")
 				srv.loopWG.Done()
 			}()
 		}
@@ -1118,4 +1122,8 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	return infos
+}
+
+func (srv *Server) SetP2PGenesis(genesis common.Hash) {
+	srv.p2pGenesis = genesis
 }

@@ -18,6 +18,7 @@
 package common
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 )
 
@@ -136,4 +137,14 @@ func TrimRightZeroes(s []byte) []byte {
 		}
 	}
 	return s[:idx]
+}
+
+func Uint64ToBytes(u uint64) []byte {
+	b := make([]byte, 8)
+	//binary.BigEndian.PutUint64(b, u)
+	binary.LittleEndian.PutUint64(b, u)
+	return b
+}
+func BytesToUint64(b []byte) uint64 {
+	return binary.LittleEndian.Uint64(b)
 }

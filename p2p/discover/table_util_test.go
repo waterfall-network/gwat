@@ -27,6 +27,7 @@ import (
 	"sort"
 	"sync"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
@@ -43,7 +44,7 @@ func init() {
 
 func newTestTable(t transport) (*Table, *enode.DB) {
 	db, _ := enode.OpenDB("")
-	tab, _ := newTable(t, db, nil, log.Root())
+	tab, _ := newTable(t, db, nil, log.Root(),16, &common.Hash{})
 	go tab.loop()
 	return tab, db
 }

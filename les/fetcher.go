@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -154,21 +153,16 @@ type lightFetcher struct {
 }
 
 // newLightFetcher creates a light fetcher instance.
-func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *serverPeerSet, ulc *ulc, chaindb ethdb.Database, reqDist *requestDistributor, syncFn func(p *serverPeer)) *lightFetcher {
+func newLightFetcher(chain *light.LightChain, peers *serverPeerSet, ulc *ulc, chaindb ethdb.Database, reqDist *requestDistributor, syncFn func(p *serverPeer)) *lightFetcher {
 	// Construct the fetcher by offering all necessary APIs
 	validator := func(header *types.Header) error {
 		// Disable seal verification explicitly if we are running in ulc mode.
-		return engine.VerifyHeader(chain, header, ulc == nil)
+		return nil
 	}
 	heighter := func() uint64 { return chain.GetLastFinalizedHeader().Nr() }
 	dropper := func(id string) { peers.unregister(id) }
 	inserter := func(headers []*types.Header) (int, error) {
-		// Disable PoW checking explicitly if we are running in ulc mode.
-		checkFreq := 1
-		if ulc != nil {
-			checkFreq = 0
-		}
-		return chain.InsertHeaderChain(headers, checkFreq)
+		return chain.InsertHeaderChain(headers)
 	}
 	f := &lightFetcher{
 		ulc:         ulc,

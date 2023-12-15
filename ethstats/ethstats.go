@@ -34,7 +34,6 @@ import (
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/mclock"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
@@ -83,7 +82,6 @@ type fullNodeBackend interface {
 type Service struct {
 	server  *p2p.Server // Peer-to-peer server to retrieve networking infos
 	backend backend
-	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
 	node string // Name of the node to display on the monitoring page
 	pass string // Password to authorize access to the monitoring page
@@ -167,14 +165,13 @@ func parseEthstatsURL(url string) (parts []string, err error) {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, backend backend, engine consensus.Engine, url string) error {
+func New(node *node.Node, backend backend, url string) error {
 	parts, err := parseEthstatsURL(url)
 	if err != nil {
 		return err
 	}
 	ethstats := &Service{
 		backend: backend,
-		engine:  engine,
 		server:  node.Server(),
 		node:    parts[0],
 		pass:    parts[1],
@@ -585,17 +582,6 @@ type txStats struct {
 	Hash common.Hash `json:"hash"`
 }
 
-// uncleStats is a custom wrapper around an uncle array to force serializing
-// empty arrays instead of returning null for them.
-type uncleStats []*types.Header
-
-func (s uncleStats) MarshalJSON() ([]byte, error) {
-	if uncles := ([]*types.Header)(s); len(uncles) > 0 {
-		return json.Marshal(uncles)
-	}
-	return []byte("[]"), nil
-}
-
 // reportBlock retrieves the current chain head and reports it to the stats server.
 func (s *Service) reportBlock(conn *connWrapper, block *types.Block) error {
 	// Gather the block details from the header or block chain
@@ -645,7 +631,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	}
 
 	// Assemble and return the block stats
-	author, _ := s.engine.Author(header)
+	author := header.Coinbase
 
 	return &blockStats{
 		Height:       header.Height,
@@ -749,7 +735,6 @@ type nodeStats struct {
 	Active   bool `json:"active"`
 	Syncing  bool `json:"syncing"`
 	Mining   bool `json:"mining"`
-	Hashrate int  `json:"hashrate"`
 	Peers    int  `json:"peers"`
 	GasPrice int  `json:"gasPrice"`
 	Uptime   int  `json:"uptime"`
@@ -761,7 +746,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	// Gather the syncing and mining infos from the local miner instance
 	var (
 		mining   bool
-		hashrate int
 		syncing  bool
 		gasprice int
 	)
@@ -769,7 +753,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
 		mining = fullBackend.Creator().IsRunning()
-		hashrate = int(fullBackend.Creator().Hashrate())
 
 		sync := fullBackend.SyncProgress()
 		// todo fix
@@ -796,7 +779,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		"stats": &nodeStats{
 			Active:   true,
 			Mining:   mining,
-			Hashrate: hashrate,
 			Peers:    s.server.PeerCount(),
 			GasPrice: gasprice,
 			Syncing:  syncing,

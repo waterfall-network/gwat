@@ -62,6 +62,9 @@ type ChainIndexerChain interface {
 
 	// IsRollbackActive returns true if rollback proc of chain head is running.
 	IsRollbackActive() bool
+
+	// IsSynced returns true if node fully synchronized
+	IsSynced() bool
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
@@ -107,7 +110,14 @@ type ChainIndexer struct {
 // NewChainIndexer creates a new chain indexer to do background processing on
 // chain segments of a given size after certain number of confirmations passed.
 // The throttling parameter might be used to prevent database thrashing.
-func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string) *ChainIndexer {
+func NewChainIndexer(
+	chainDb ethdb.Database,
+	indexDb ethdb.Database,
+	backend ChainIndexerBackend,
+	section, confirm uint64,
+	throttling time.Duration,
+	kind string,
+) *ChainIndexer {
 	c := &ChainIndexer{
 		chainDb:     chainDb,
 		indexDb:     indexDb,
@@ -124,7 +134,7 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
 
 	go c.updateLoop()
-
+	c.log.Info("Bloom indexer: run", "sectionSize", section)
 	return c
 }
 
@@ -157,7 +167,7 @@ func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	sub := chain.SubscribeChainHeadEvent(events)
 	header := chain.GetLastFinalizedHeader()
 	c.syncProvider = chain
-	go c.eventLoop(header, events, sub)
+	go c.eventLoop(header.CpNumber, events, sub)
 }
 
 // Close tears down all goroutines belonging to the indexer and returns any error
@@ -173,6 +183,7 @@ func (c *ChainIndexer) Close() error {
 	if err := <-errc; err != nil {
 		errs = append(errs, err)
 	}
+
 	// If needed, tear down the secondary event loop
 	if atomic.LoadUint32(&c.active) != 0 {
 		c.quit <- errc
@@ -202,19 +213,16 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
-func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
+// func (c *ChainIndexer) eventLoop(cpHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
+func (c *ChainIndexer) eventLoop(cpNr uint64, events chan ChainHeadEvent, sub event.Subscription) {
 	// Mark the chain indexer as active, requiring an additional teardown
 	atomic.StoreUint32(&c.active, 1)
 
 	defer sub.Unsubscribe()
 
 	// Fire the initial new head event to start any outstanding processing
-	c.newHead(lastFinalisedHeader.Nr(), false)
+	c.newHead(cpNr, false)
 
-	var (
-		prevHeader = lastFinalisedHeader
-		prevHash   = lastFinalisedHeader.Hash()
-	)
 	for {
 		select {
 		case errc := <-c.quit:
@@ -230,29 +238,10 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 				return
 			}
 			// check any proc to reorg chain
-			if c.syncProvider.HeadSynchronising() || c.syncProvider.IsRollbackActive() {
+			if !c.syncProvider.IsSynced() || c.syncProvider.IsRollbackActive() {
 				continue
 			}
-			header := ev.Block.Header()
-			if !header.ParentHashes.Has(prevHash) {
-				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
-				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
-
-				if h := rawdb.ReadFinalizedHashByNumber(c.chainDb, prevHeader.Nr()); h != prevHash {
-					log.Error("Indexer bad prev header", "slot", prevHeader.Slot, "nr", prevHeader.Nr(), "height", prevHeader.Height, "db.Hash", h.Hex(), "hash", prevHash.Hex())
-					if h == (common.Hash{}) {
-						continue
-					}
-					if prevHeader.Nr() > 0 {
-						if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-							c.newHead(h.Nr(), true)
-						}
-					}
-				}
-			}
-			c.newHead(header.Nr(), false)
-
-			prevHeader, prevHash = header, header.Hash()
+			c.newHead(ev.Block.CpNumber(), false)
 		}
 	}
 }
@@ -261,7 +250,7 @@ func (c *ChainIndexer) eventLoop(lastFinalisedHeader *types.Header, events chan 
 func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
+	//check is reorg deprecated
 	// If a reorg happened, invalidate all sections until that point
 	if reorg {
 		// Revert the known section number to the reorg point
@@ -303,7 +292,7 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 				// syncing reached the checkpoint, verify section head
 				syncedHead := rawdb.ReadFinalizedHashByNumber(c.chainDb, c.checkpointSections*c.sectionSize-1)
 				if syncedHead != c.checkpointHead {
-					c.log.Error("Synced chain does not match checkpoint", "number", c.checkpointSections*c.sectionSize-1, "expected", c.checkpointHead, "synced", syncedHead)
+					c.log.Error("Bloom indexer: synced chain does not match checkpoint", "number", c.checkpointSections*c.sectionSize-1, "expected", c.checkpointHead, "synced", syncedHead)
 					return
 				}
 			}
@@ -333,6 +322,11 @@ func (c *ChainIndexer) updateLoop() {
 			return
 
 		case <-c.update:
+			log.Info("Bloom indexer: got update event",
+				"processing", c.knownSections > c.storedSections,
+				"knownSections", c.knownSections,
+				"storedSections", c.storedSections,
+			)
 			// Section headers completed (or rolled back), update the index
 			c.lock.Lock()
 			if c.knownSections > c.storedSections {
@@ -340,7 +334,7 @@ func (c *ChainIndexer) updateLoop() {
 				if time.Since(updated) > 8*time.Second {
 					if c.knownSections > c.storedSections+1 {
 						updating = true
-						c.log.Info("Upgrading chain index", "percentage", c.storedSections*100/c.knownSections)
+						c.log.Info("Bloom indexer: upgrading chain index", "percentage", c.storedSections*100/c.knownSections)
 					}
 					updated = time.Now()
 				}
@@ -361,32 +355,35 @@ func (c *ChainIndexer) updateLoop() {
 						return
 					default:
 					}
-					c.log.Error("Section processing failed", "error", err)
+					c.log.Error("Bloom indexer: Section processing failed", "error", err)
 				}
 				c.lock.Lock()
 
 				// If processing succeeded and no reorgs occurred, mark the section completed
 				if err == nil && (section == 0 || oldHead == c.SectionHead(section-1)) {
+					log.Info("Bloom indexer: section processed", "section", section, "lastBlock", newHead.Hex())
 					c.setSectionHead(section, newHead)
 					c.setValidSections(section + 1)
 					if c.storedSections == c.knownSections && updating {
 						updating = false
-						c.log.Info("Finished upgrading chain index")
+						c.log.Info("Bloom indexer: finished upgrading chain index")
 					}
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
+					// used for less only
 					for _, child := range c.children {
-						c.log.Trace("Cascading chain index update", "head", c.cascadedHead)
+						c.log.Info("Bloom indexer: check update - loop Cascading chain index update", "head", c.cascadedHead)
 						child.newHead(c.cascadedHead, false)
 					}
 				} else {
 					// If processing failed, don't retry until further notification
-					c.log.Debug("Chain index processing failed", "section", section, "err", err)
+					c.log.Info("Bloom indexer: Chain index processing failed", "section", section, "err", err)
 					c.verifyLastHead()
 					c.knownSections = c.storedSections
 				}
 			}
 			// If there are still further sections to process, reschedule
 			if c.knownSections > c.storedSections {
+				log.Info("Bloom indexer: AfterFunc")
 				time.AfterFunc(c.throttling, func() {
 					select {
 					case c.update <- struct{}{}:
@@ -404,7 +401,7 @@ func (c *ChainIndexer) updateLoop() {
 // held while processing, the continuity can be broken by a long reorg, in which
 // case the function returns with an error.
 func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (common.Hash, error) {
-	c.log.Debug("Processing new chain section", "section", section)
+	c.log.Info("Bloom indexer: processing new chain section", "section", section, "lastHead", lastHead.Hex())
 
 	// Reset and partial processing
 	if err := c.backend.Reset(c.ctx, section, lastHead); err != nil {
@@ -415,20 +412,40 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 	for number := section * c.sectionSize; number < (section+1)*c.sectionSize; number++ {
 		hash := rawdb.ReadFinalizedHashByNumber(c.chainDb, number)
 		if hash == (common.Hash{}) {
-			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
+			err := fmt.Errorf("canonical block #%d unknown", number)
+			c.log.Error("Bloom indexer: processing section",
+				"err", err,
+				"section", section,
+				"lastHead", lastHead.Hex(),
+			)
+			return common.Hash{}, err
 		}
 		header := rawdb.ReadHeader(c.chainDb, hash)
 		if header == nil {
-			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
-		} else if !header.ParentHashes.Has(lastHead) {
-			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
+			err := fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
+			c.log.Error("Bloom indexer: processing section",
+				"err", err,
+				"section", section,
+				"lastHead", lastHead.Hex(),
+			)
+			return common.Hash{}, err
 		}
 		if err := c.backend.Process(c.ctx, header); err != nil {
+			c.log.Error("Bloom indexer: processing section (process)",
+				"err", err,
+				"section", section,
+				"lastHead", lastHead.Hex(),
+			)
 			return common.Hash{}, err
 		}
 		lastHead = header.Hash()
 	}
 	if err := c.backend.Commit(); err != nil {
+		c.log.Error("Bloom indexer: processing section (commit)",
+			"err", err,
+			"section", section,
+			"lastHead", lastHead.Hex(),
+		)
 		return common.Hash{}, err
 	}
 	return lastHead, nil
@@ -439,7 +456,8 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 // sections are all valid
 func (c *ChainIndexer) verifyLastHead() {
 	for c.storedSections > 0 && c.storedSections > c.checkpointSections {
-		if c.SectionHead(c.storedSections-1) == rawdb.ReadFinalizedHashByNumber(c.chainDb, c.storedSections*c.sectionSize-1) {
+		secHeadNr := c.storedSections*c.sectionSize - 1
+		if c.SectionHead(c.storedSections-1) == rawdb.ReadFinalizedHashByNumber(c.chainDb, secHeadNr) {
 			return
 		}
 		c.setValidSections(c.storedSections - 1)

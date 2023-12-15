@@ -689,8 +689,10 @@ func (jst *Tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	rules := env.ChainConfig().Rules()
 	jst.activePrecompiles = vm.ActivePrecompiles(rules)
 
+	isValidatorOp := env.ChainConfig().ValidatorsStateAddress != nil && to == *env.ChainConfig().ValidatorsStateAddress
+
 	// Compute intrinsic gas
-	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE")
+	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE", isValidatorOp)
 	if err != nil {
 		return
 	}

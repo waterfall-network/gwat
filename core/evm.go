@@ -20,7 +20,6 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 )
@@ -28,9 +27,6 @@ import (
 // ChainContext supports retrieving headers and consensus parameters from the
 // current blockchain to be used during transaction processing.
 type ChainContext interface {
-	// Engine retrieves the chain's consensus engine.
-	Engine() consensus.Engine
-
 	// GetHeader returns the hash corresponding to their hash.
 	GetHeader(common.Hash) *types.Header
 }
@@ -44,7 +40,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	if author == nil {
-		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
+		beneficiary = header.Coinbase // Ignore error, we're past header validation
 	} else {
 		beneficiary = *author
 	}
@@ -61,6 +57,8 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		Time:        new(big.Int).SetUint64(header.Time),
 		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
+		Era:         header.Era,
+		Slot:        header.Slot,
 	}
 }
 
@@ -84,28 +82,17 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 		if len(cache) == 0 {
 			cache = append(cache, ref.ParentHashes[0])
 		}
-		//if idx := ref.Nr() - n - 1; idx < uint64(len(cache)) {
-		//	return cache[idx]
-		//}
 
 		// No luck in the cache, but we can start iterating from the last element we already know
 		lastKnownHash := cache[len(cache)-1]
-		//lastKnownNumber := ref.Nr() - uint64(len(cache))
 
-		for {
-			header := chain.GetHeader(lastKnownHash)
-			if header == nil {
-				break
-			}
-			cache = append(cache, header.ParentHashes[0])
-			lastKnownHash = header.ParentHashes[0]
-			return lastKnownHash
-			//lastKnownNumber = header.Nr() - 1
-			//if n == lastKnownNumber {
-			//	return lastKnownHash
-			//}
+		header := chain.GetHeader(lastKnownHash)
+		if header == nil {
+			return common.Hash{}
 		}
-		return common.Hash{}
+		cache = append(cache, header.ParentHashes[0])
+		lastKnownHash = header.ParentHashes[0]
+		return lastKnownHash
 	}
 }
 

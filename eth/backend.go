@@ -21,15 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/bloombits"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
@@ -37,8 +34,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/dag"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/filters"
@@ -54,9 +49,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/dnsdisc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	val "gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -78,7 +73,6 @@ type Ethereum struct {
 	chainDb ethdb.Database // Block chain database
 
 	eventMux       *event.TypeMux
-	engine         consensus.Engine
 	accountManager *accounts.Manager
 
 	bloomRequests     chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
@@ -87,7 +81,6 @@ type Ethereum struct {
 
 	APIBackend *EthAPIBackend
 
-	creator   *creator.Creator
 	gasPrice  *big.Int
 	etherbase common.Address
 
@@ -145,7 +138,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
-		engine:            sealer.New(chainDb),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Creator.GasPrice,
@@ -160,7 +152,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
-	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
+	log.Info("Initialising Gwat protocol", "network", config.NetworkId, "dbversion", dbVer)
 
 	if !config.SkipBcVersionCheck {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
@@ -188,10 +180,21 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, &config.TxLookupLimit)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, vmConfig, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
 	}
+
+	// set slotInfo on startup
+	if err := eth.blockchain.SetSlotInfo(&types.SlotInfo{
+		GenesisTime:    eth.blockchain.Genesis().Time(),
+		SecondsPerSlot: chainConfig.SecondsPerSlot,
+		SlotsPerEpoch:  chainConfig.SlotsPerEpoch,
+	}); err != nil {
+		return nil, err
+	}
+	log.Info("Loaded SlotInfo", "info", eth.blockchain.GetSlotInfo())
+
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -224,9 +227,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.dag = dag.New(eth, chainConfig, eth.EventMux(), &config.Creator, eth.engine)
+	eth.dag = dag.New(eth, eth.EventMux(), &config.Creator)
 
-	eth.dag.Creator().SetExtra(makeExtraData(config.Creator.ExtraData))
+	currentEraNumber := rawdb.ReadCurrentEra(chainDb)
+	if eraInfo := rawdb.ReadEra(chainDb, currentEraNumber); eraInfo != nil {
+		eth.blockchain.SetNewEraInfo(*eraInfo)
+	}
+
+	go eth.dag.StartWork()
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
@@ -256,6 +264,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
+
+	stack.Server().SetP2PGenesis(eth.blockchain.Genesis().Hash())
 	// Check for unclean shutdown
 	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
 		log.Error("Could not update unclean-shutdown-marker list", "error", err)
@@ -272,33 +282,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	return eth, nil
 }
 
-func makeExtraData(extra []byte) []byte {
-	if len(extra) == 0 {
-		// create default extradata
-		extra, _ = rlp.EncodeToBytes([]interface{}{
-			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
-			"geth",
-			runtime.Version(),
-			runtime.GOOS,
-		})
-	}
-	if uint64(len(extra)) > params.MaximumExtraDataSize {
-		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
-		extra = nil
-	}
-	return extra
-}
-
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
 
-	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.BlockChain())...)
-
 	// Append token APIs
 	apis = append(apis, token.GetAPIs(s.APIBackend)...)
+
+	// Append validator APIs
+	apis = append(apis, val.GetAPIs(s.APIBackend, s.blockchain)...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
@@ -350,7 +343,7 @@ func (s *Ethereum) APIs() []rpc.API {
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
-	s.blockchain.ResetWithGenesisBlock(gb)
+	s.blockchain.SetHead(gb.Hash())
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
@@ -376,66 +369,19 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
 }
 
-// isLocalBlock checks whether the specified block is mined
-// by local miner accounts.
-//
-// We regard two types of accounts as local miner account: etherbase
-// and accounts specified via `txpool.locals` flag.
-func (s *Ethereum) isLocalBlock(block *types.Block) bool {
-	author, err := s.engine.Author(block.Header())
-	if err != nil {
-		log.Warn("Failed to retrieve block author", "number", block.Nr(), "height", block.Height(), "hash", block.Hash().Hex(), "err", err)
-		return false
-	}
-	// Check whether the given address is etherbase.
-	s.lock.RLock()
-	etherbase := s.etherbase
-	s.lock.RUnlock()
-	if author == etherbase {
-		return true
-	}
-	// support multi creator mode
-	for _, acc := range s.accountManager.Accounts() {
-		if etherbase == acc {
-			return true
-		}
-	}
-	// Check whether the given address is specified by `txpool.local`
-	// CLI flag.
-	for _, account := range s.config.TxPool.Locals {
-		if account == author {
-			return true
-		}
-	}
-	return false
-}
-
 // SetEtherbase sets the mining reward address.
 func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 	s.lock.Lock()
 	s.etherbase = etherbase
 	s.lock.Unlock()
-
-	s.dag.Creator().SetEtherbase(etherbase)
 }
 
 // StartMining starts the miner with the given number of CPU threads. If mining
 // is already running, this method adjust the number of threads allowed to use
 // and updates the minimum price required by the transaction pool.
 func (s *Ethereum) StartMining(threads int) error {
-	// Update the thread count within the consensus engine
-	type threaded interface {
-		SetThreads(threads int)
-	}
-	if th, ok := s.engine.(threaded); ok {
-		log.Info("Updated mining threads", "threads", threads)
-		if threads == 0 {
-			threads = -1 // Disable the miner from within
-		}
-		th.SetThreads(threads)
-	}
 	// If the creator was not running, initialize it
-	if !s.dag.Creator().IsRunning() {
+	if !s.dag.Creator().IsRunning() && len(s.AccountManager().Accounts()) > 0 {
 		// Propagate the initial price point to the transaction pool
 		s.lock.RLock()
 		price := s.gasPrice
@@ -448,46 +394,37 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Cannot start mining without etherbase", "err", err)
 			return fmt.Errorf("etherbase missing: %v", err)
 		}
-		if clique, ok := s.engine.(*sealer.Sealer); ok {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
-			clique.Authorize(eb, wallet.SignData)
+		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+		if wallet == nil || err != nil {
+			log.Error("Etherbase account unavailable locally", "err", err)
+			return fmt.Errorf("signer missing: %v", err)
 		}
+
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
 		atomic.StoreUint32(&s.handler.acceptTxs, 1)
 
-		go s.dag.Creator().Start(eb)
+		s.dag.Creator().Start()
+	} else {
+		log.Info("Mining not started: No accounts found in keystore and creator is not active")
 	}
 	return nil
 }
 
 func (s *Ethereum) CreatorAuthorize(creator common.Address) error {
 	// Configure the local mining address
-	if clique, ok := s.engine.(*sealer.Sealer); ok {
-		wallet, err := s.accountManager.Find(accounts.Account{Address: creator})
-		if wallet == nil || err != nil {
-			log.Error("Etherbase account unavailable locally", "err", err)
-			return fmt.Errorf("signer missing: %v", err)
-		}
-		clique.Authorize(creator, wallet.SignData)
+	wallet, err := s.accountManager.Find(accounts.Account{Address: creator})
+	if wallet == nil || err != nil {
+		log.Error("Etherbase account unavailable locally", "err", err)
+		return fmt.Errorf("signer missing: %v", err)
 	}
+
 	return nil
 }
 
 // StopMining terminates the miner, both at the consensus engine level as well as
 // at the block creation level.
 func (s *Ethereum) StopMining() {
-	// Update the thread count within the consensus engine
-	type threaded interface {
-		SetThreads(threads int)
-	}
-	if th, ok := s.engine.(threaded); ok {
-		th.SetThreads(-1)
-	}
 	// Stop the block creating itself
 	s.dag.Creator().Stop()
 }
@@ -496,7 +433,6 @@ func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
 func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
@@ -531,6 +467,7 @@ func (s *Ethereum) Start() error {
 		}
 		maxPeers -= s.config.LightPeers
 	}
+	// todo rm/comment
 	// Start the networking layer and the light server if requested
 	s.handler.Start(maxPeers)
 	return nil
@@ -539,21 +476,32 @@ func (s *Ethereum) Start() error {
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
+	start := time.Now()
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
+	log.Info("Terminate: ethDialCandidates", "elapsed", common.PrettyDuration(time.Since(start)))
 	s.snapDialCandidates.Close()
+	log.Info("Terminate: snapDialCandidates", "elapsed", common.PrettyDuration(time.Since(start)))
 	s.handler.Stop()
+	log.Info("Terminate: handler", "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// Then stop everything else.
-	s.bloomIndexer.Close()
-	close(s.closeBloomHandler)
+	s.dag.StopWork()
+	log.Info("Terminate: dag", "elapsed", common.PrettyDuration(time.Since(start)))
 	s.txPool.Stop()
-	s.dag.Creator().Stop()
+	log.Info("Terminate: txPool", "elapsed", common.PrettyDuration(time.Since(start)))
+	s.bloomIndexer.Close()
+	log.Info("Terminate: bloomIndexer", "elapsed", common.PrettyDuration(time.Since(start)))
+	close(s.closeBloomHandler)
+	log.Info("Terminate: closeBloomHandler", "elapsed", common.PrettyDuration(time.Since(start)))
 	s.blockchain.Stop()
-	s.engine.Close()
+	log.Info("Terminate: blockchain", "elapsed", common.PrettyDuration(time.Since(start)))
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
+	log.Info("Terminate: Unclean Shutdown Marker", "elapsed", common.PrettyDuration(time.Since(start)))
 	s.chainDb.Close()
+	log.Info("Terminate: chain Db", "elapsed", common.PrettyDuration(time.Since(start)))
 	s.eventMux.Stop()
+	log.Info("Terminate: eventMux", "elapsed", common.PrettyDuration(time.Since(start)))
 
 	return nil
 }

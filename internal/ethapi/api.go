@@ -35,16 +35,17 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -88,6 +89,10 @@ type feeHistoryResult struct {
 }
 
 func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOrHex, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+	if !s.b.BlockChain().IsSynced() {
+		return nil, fmt.Errorf("node is not synchronized")
+	}
+
 	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, int(blockCount), lastBlock, rewardPercentiles)
 	if err != nil {
 		return nil, err
@@ -122,15 +127,10 @@ func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.Decim
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
 func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
-	progress := s.b.SyncProgress()
-
-	//// Return not syncing if the synchronisation already completed
-	//if progress.CurrentBlock >= progress.HighestBlock {
-	//	return false, nil
-	//}
-	if progress.Stage == "none" {
+	if s.b.BlockChain().IsSynced() {
 		return false, nil
 	}
+	progress := s.b.SyncProgress()
 	// Otherwise gather the block sync stats
 	return map[string]interface{}{
 		"startingBlock": hexutil.Uint64(progress.StartingBlock),
@@ -138,9 +138,9 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 		"highestBlock":  hexutil.Uint64(progress.HighestBlock),
 		"pulledStates":  hexutil.Uint64(progress.PulledStates),
 		"knownStates":   hexutil.Uint64(progress.KnownStates),
-		"stage":         progress.Stage,
-		"lastCoordSlot": progress.LastCoordSlot,
-		"maxBlockSlot":  progress.MaxBlockSlot,
+		"finalizedSlot": hexutil.Uint64(progress.FinalizedSlot),
+		"maxDagSlot":    hexutil.Uint64(progress.FinalizedSlot),
+		"currentSlot":   hexutil.Uint64(progress.CurrentSlot),
 	}, nil
 }
 
@@ -155,34 +155,42 @@ func NewPublicTxPoolAPI(b Backend) *PublicTxPoolAPI {
 }
 
 // Content returns the transactions contained within the transaction pool.
-func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
-	content := map[string]map[string]map[string]*RPCTransaction{
-		"pending":    make(map[string]map[string]*RPCTransaction),
-		"queued":     make(map[string]map[string]*RPCTransaction),
-		"processing": make(map[string]map[string]*RPCTransaction),
+func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]interface{} {
+	content := map[string]map[string]map[string]interface{}{
+		"pending":    make(map[string]map[string]interface{}),
+		"queued":     make(map[string]map[string]interface{}),
+		"processing": make(map[string]map[string]interface{}),
 	}
 	pending, queue, processing := s.b.TxPoolContent()
 	curHeader := s.b.GetLastFinalizedHeader()
+	bc := s.b.BlockChain()
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "Content")
+	numValidators := uint64(len(validators))
+	genesisGasLimit := bc.Genesis().GasLimit()
 	// Flatten the pending transactions
 	for account, txs := range pending {
-		dump := make(map[string]*RPCTransaction)
+		dump := make(map[string]interface{})
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["pending"][account.Hex()] = dump
 	}
 	// Flatten the queued transactions
 	for account, txs := range queue {
-		dump := make(map[string]*RPCTransaction)
+		dump := make(map[string]interface{})
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["queued"][account.Hex()] = dump
 	}
 	for account, txs := range processing {
-		dump := make(map[string]*RPCTransaction)
+		dump := make(map[string]interface{})
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCProcessingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["processing"][account.Hex()] = dump
 	}
@@ -194,24 +202,32 @@ func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string
 	content := make(map[string]map[string]*RPCTransaction, 2)
 	pending, queue, processing := s.b.TxPoolContentFrom(addr)
 	curHeader := s.b.GetLastFinalizedHeader()
+	bc := s.b.BlockChain()
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "ContentFrom")
+	numValidators := uint64(len(validators))
+	genesisGasLimit := bc.Genesis().GasLimit()
 
 	// Build the pending transactions
 	dump := make(map[string]*RPCTransaction, len(pending))
 	for _, tx := range pending {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 	}
 	content["pending"] = dump
 
 	// Build the queued transactions
 	dump = make(map[string]*RPCTransaction, len(queue))
 	for _, tx := range queue {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 	}
 	content["queued"] = dump
 
 	dump = make(map[string]*RPCTransaction, len(queue))
 	for _, tx := range processing {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
 	}
 	content["processing"] = dump
 
@@ -264,7 +280,7 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	for account, txs := range processing {
 		dump := make(map[string]string)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx.Transaction)
 		}
 		content["processing"][account.Hex()] = dump
 	}
@@ -382,8 +398,16 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 		log.Info("Your new key was generated", "address", acc.Address)
 		log.Warn("Please backup your key file!", "path", acc.URL.Path)
 		log.Warn("Please remember your password!")
+
+		s.b.Dag().Creator().SetNodeCreators([]common.Address{acc.Address})
+
+		if !s.b.Dag().Creator().IsRunning() {
+			s.b.Dag().Creator().Start()
+		}
+
 		return acc.Address, nil
 	}
+
 	return common.Address{}, err
 }
 
@@ -460,7 +484,8 @@ func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args *Transacti
 		return nil, err
 	}
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	head := s.b.GetLastFinalizedBlock().Header()
+	if err := args.setDefaults(ctx, s.b, head); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -647,6 +672,23 @@ func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 	return hexutil.Uint64(nr)
 }
 
+// GetCpLFNumber returns the lf block number of the cp spine.
+func (s *PublicBlockChainAPI) GetCpLFNumber() uint64 {
+	var (
+		lastCpFinNr uint64
+	)
+
+	checkpoint := s.b.BlockChain().GetLastCoordinatedCheckpoint()
+	cpHeader := s.b.BlockChain().GetHeader(checkpoint.Spine)
+	if cpHeader != nil {
+		lastCpFinNr = cpHeader.Nr()
+	} else {
+		log.Warn("cp base spine not found", "cpSpine", checkpoint.Spine, "cpEpoch", checkpoint.Epoch)
+	}
+
+	return lastCpFinNr
+}
+
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
@@ -788,6 +830,9 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	if state == nil || err != nil {
 		return nil, err
 	}
+	if address == *s.b.ChainConfig().ValidatorsStateAddress || state.IsValidatorAddress(address) {
+		return nil, nil
+	}
 	code := state.GetCode(address)
 	return code, state.Error()
 }
@@ -898,14 +943,21 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return nil, err
 	}
+	vp, vpError, err := b.GetVP(ctx, state, header)
+	if err != nil {
+		return nil, err
+	}
 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	result, err := core.ApplyMessage(evm, tp, msg, gp)
+	result, err := core.ApplyMessage(evm, tp, vp, msg, gp)
 	if err := vmError(); err != nil {
 		return nil, err
 	}
 	if err := tpError(); err != nil {
+		return nil, err
+	}
+	if err := vpError(); err != nil {
 		return nil, err
 	}
 
@@ -1208,12 +1260,23 @@ func DoEstimateGasQuick(ctx context.Context, b Backend, args TransactionArgs, bl
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
+	var err error
+
+	header := s.b.GetLastFinalizedHeader()
 	if blockNrOrHash != nil {
-		bNrOrHash = *blockNrOrHash
+		header, err = s.b.HeaderByNumberOrHash(ctx, *blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
 	}
-	return DoEstimateGasQuick(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
-	//return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+
+	args.Gas = nil
+	err = args.setDefaults(ctx, s.b, header)
+	if err != nil {
+		return 0, err
+	}
+
+	return *args.Gas, err
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
@@ -1282,11 +1345,16 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
 		"hash":             head.Hash(),
 		"slot":             hexutil.Uint64(head.Slot),
+		"era":              hexutil.Uint64(head.Era),
 		"height":           hexutil.Uint64(head.Height),
 		"number":           head.Number,
 		"parentHashes":     head.ParentHashes,
-		"lfHash":           head.LFHash,
-		"lfNumber":         hexutil.Uint64(head.LFNumber),
+		"cpHash":           head.CpHash,
+		"cpNumber":         hexutil.Uint64(head.CpNumber),
+		"cpGasUsed":        hexutil.Uint64(head.CpGasUsed),
+		"cpReceiptsRoot":   head.CpReceiptHash,
+		"cpStateRoot":      head.CpRoot,
+		"cpLogsBloom":      head.CpBloom,
 		"miner":            head.Coinbase,
 		"transactionsRoot": head.TxHash,
 		"gasLimit":         hexutil.Uint64(head.GasLimit),
@@ -1300,8 +1368,16 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"bodyRoot":         head.BodyHash,
 	}
 
+	if head.V != nil && head.R != nil && head.S != nil {
+		result["v"] = (*hexutil.Big)(head.V)
+		result["r"] = (*hexutil.Big)(head.R)
+		result["s"] = (*hexutil.Big)(head.S)
+	}
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
+	}
+	if head.CpBaseFee != nil {
+		result["cpBaseFeePerGas"] = (*hexutil.Big)(head.CpBaseFee)
 	}
 	if head.Number != nil {
 		result["number"] = hexutil.Uint64(head.Nr())
@@ -1432,12 +1508,80 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockFinNr 
 }
 
 // newRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
-func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, config *params.ChainConfig) *RPCTransaction {
-	var baseFee *big.Int
-	if current != nil {
-		baseFee = misc.CalcBaseFee(config, current)
-	}
+func newRPCPendingTransaction(tx *types.Transaction, config *params.ChainConfig, numValidators uint64, gasLimit uint64, creatorsPerSlot uint64) *RPCTransaction {
+	baseFee := misc.CalcSlotBaseFee(config, creatorsPerSlot, numValidators, gasLimit)
 	return newRPCTransaction(tx, common.Hash{}, nil, 0, baseFee, config)
+}
+
+type RPCProcessingTransaction struct {
+	BlockHash    *common.Hash      `json:"blockHash"`
+	BlockNumber  *hexutil.Uint64   `json:"blockNumber"`
+	BlocksHashes *common.HashArray `json:"blocksHashes"`
+	From         common.Address    `json:"from"`
+	Gas          hexutil.Uint64    `json:"gas"`
+	GasPrice     *hexutil.Big      `json:"gasPrice"`
+	GasFeeCap    *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	GasTipCap    *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
+	Hash         common.Hash       `json:"hash"`
+	Input        hexutil.Bytes     `json:"input"`
+	Nonce        hexutil.Uint64    `json:"nonce"`
+	To           *common.Address   `json:"to"`
+	Value        *hexutil.Big      `json:"value"`
+	Type         hexutil.Uint64    `json:"type"`
+	Accesses     *types.AccessList `json:"accessList,omitempty"`
+	ChainID      *hexutil.Big      `json:"chainId,omitempty"`
+	V            *hexutil.Big      `json:"v"`
+	R            *hexutil.Big      `json:"r"`
+	S            *hexutil.Big      `json:"s"`
+}
+
+func newRPCProcessingTransaction(tx *types.TransactionBlocks, config *params.ChainConfig, numValidators uint64, gasLimit uint64, creatorsPerSlot uint64) *RPCProcessingTransaction {
+	baseFee := misc.CalcSlotBaseFee(config, creatorsPerSlot, numValidators, gasLimit)
+	signer := types.MakeSigner(config)
+	from, _ := types.Sender(signer, tx.Transaction)
+	v, r, s := tx.RawSignatureValues()
+	result := &RPCProcessingTransaction{
+		Type:     hexutil.Uint64(tx.Type()),
+		From:     from,
+		Gas:      hexutil.Uint64(tx.Gas()),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		Hash:     tx.Hash(),
+		Input:    hexutil.Bytes(tx.Data()),
+		To:       tx.To(),
+		Value:    (*hexutil.Big)(tx.Value()),
+		V:        (*hexutil.Big)(v),
+		R:        (*hexutil.Big)(r),
+		S:        (*hexutil.Big)(s),
+		Nonce:    hexutil.Uint64(tx.Nonce()),
+	}
+
+	result.BlocksHashes = &tx.BlocksHashes
+	if len(tx.BlocksHashes) > 0 {
+		result.BlockHash = &tx.BlocksHashes[0]
+	}
+
+	switch tx.Type() {
+	case types.AccessListTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+	case types.DynamicFeeTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// if the transaction has been mined, compute the effective gas price
+		if baseFee != nil && len(tx.BlocksHashes) > 0 {
+			// price = min(tip, gasFeeCap - baseFee) + baseFee
+			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			result.GasPrice = (*hexutil.Big)(price)
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+	}
+
+	return result
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
@@ -1510,7 +1654,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	nogas := args.Gas == nil
 
 	// Ensure any missing fields are filled, extract the recipient and input data
-	if err := args.setDefaults(ctx, b); err != nil {
+	if err := args.setDefaults(ctx, b, header); err != nil {
 		return nil, 0, nil, err
 	}
 	var to common.Address
@@ -1537,7 +1681,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// and it's convered by the sender only anyway.
 		if nogas {
 			args.Gas = nil
-			if err := args.setDefaults(ctx, b); err != nil {
+			if err := args.setDefaults(ctx, b, header); err != nil {
 				return nil, 0, nil, err // shouldn't happen, just in case
 			}
 		}
@@ -1561,7 +1705,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
-		res, err := core.ApplyMessage(vmenv, tp, msg, new(core.GasPool).AddGas(msg.Gas()))
+		vp, _, err := b.GetVP(ctx, statedb, header)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		res, err := core.ApplyMessage(vmenv, tp, vp, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
@@ -1676,7 +1824,15 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
 		curHeader := s.b.GetLastFinalizedHeader()
-		return newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig()), nil
+		bc := s.b.BlockChain()
+		creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+		if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
+			creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+		}
+		validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "GetTransactionByHash")
+		numValidators := uint64(len(validators))
+		genesisGasLimit := bc.Genesis().GasLimit()
+		return newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount), nil
 	}
 
 	// Transaction unknown, return as such
@@ -1777,6 +1933,11 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
 	// If the transaction fee cap is already specified, ensure the
 	// fee of the given transaction is _reasonable_.
+
+	if !b.BlockChain().IsSynced() {
+		return common.Hash{}, errors.New("node is syncing, transaction cannot be processed at this moment")
+	}
+
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
 		return common.Hash{}, err
 	}
@@ -1822,7 +1983,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 	}
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -1840,7 +2001,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 // processing (signing + broadcast).
 func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
@@ -1906,7 +2067,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
 	}
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, nil); err != nil {
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
@@ -1940,10 +2101,18 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	}
 	curHeader := s.b.GetLastFinalizedHeader()
 	transactions := make([]*RPCTransaction, 0, len(pending))
+	bc := s.b.BlockChain()
+	creatorsPerSlotCount := bc.Config().ValidatorsPerSlot
+	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
+		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
+	}
+	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "PendingTransactions")
+	numValidators := uint64(len(validators))
+	genesisGasLimit := bc.Genesis().GasLimit()
 	for _, tx := range pending {
 		from, _ := types.Sender(s.signer, tx)
 		if _, exists := accounts[from]; exists {
-			transactions = append(transactions, newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig()))
+			transactions = append(transactions, newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount))
 		}
 	}
 	return transactions, nil
@@ -1955,7 +2124,7 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs Transact
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, fmt.Errorf("missing transaction nonce in transaction spec")
 	}
-	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
+	if err := sendArgs.setDefaults(ctx, s.b, nil); err != nil {
 		return common.Hash{}, err
 	}
 	matchTx := sendArgs.toTransaction()
@@ -2029,45 +2198,6 @@ func (api *PublicDebugAPI) GetBlockRlp(ctx context.Context, number uint64) (hexu
 		return nil, fmt.Errorf("block #%d not found", number)
 	}
 	return rlp.EncodeToBytes(block)
-}
-
-// TestSignCliqueBlock fetches the given block number, and attempts to sign it as a sealer header with the
-// given address, returning the address of the recovered signature
-//
-// This is a temporary method to debug the externalsigner integration,
-// TODO: Remove this method when the integration is mature
-func (api *PublicDebugAPI) TestSignCliqueBlock(ctx context.Context, address common.Address, number uint64) (common.Address, error) {
-	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
-	if block == nil {
-		return common.Address{}, fmt.Errorf("block #%d not found", number)
-	}
-	header := block.Header()
-	header.Extra = make([]byte, 32+65)
-	encoded := sealer.CliqueRLP(header)
-
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: address}
-	wallet, err := api.b.AccountManager().Find(account)
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	signature, err := wallet.SignData(account, accounts.MimetypeClique, encoded)
-	if err != nil {
-		return common.Address{}, err
-	}
-	sealHash := sealer.SealHash(header).Bytes()
-	log.Info("test signing of sealer block",
-		"Sealhash", fmt.Sprintf("%x", sealHash),
-		"signature", fmt.Sprintf("%x", signature))
-	pubkey, err := crypto.Ecrecover(sealHash, signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-
-	return signer, nil
 }
 
 // PrintBlock retrieves a block and returns its pretty printed form.
@@ -2155,7 +2285,7 @@ func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
 	feeEth := new(big.Float).Quo(new(big.Float).SetInt(new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(gas))), new(big.Float).SetInt(big.NewInt(params.Ether)))
 	feeFloat, _ := feeEth.Float64()
 	if feeFloat > cap {
-		return fmt.Errorf("tx fee (%.2f ether) exceeds the configured cap (%.2f ether)", feeFloat, cap)
+		return fmt.Errorf("tx fee (%.2f water) exceeds the configured cap (%.2f water)", feeFloat, cap)
 	}
 	return nil
 }
@@ -2181,14 +2311,14 @@ func NewPublicDagAPI(b Backend) *PublicDagAPI {
 	return &PublicDagAPI{b: b, am: b.AccountManager()}
 }
 
-// Sync start consensus procedure.
-func (api *PublicDagAPI) Sync(ctx context.Context, data *types.ConsensusInfo) (*types.ConsensusResult, error) {
-	return api.b.Dag().HandleConsensus(data, api.am.Accounts()), nil
-}
-
 // Finalize finalize blocks.
 func (api *PublicDagAPI) Finalize(ctx context.Context, data *types.FinalizationParams) (*types.FinalizationResult, error) {
 	return api.b.Dag().HandleFinalize(data), nil
+}
+
+// CoordinatedState returns current coordinated state.
+func (api *PublicDagAPI) CoordinatedState(ctx context.Context) (*types.FinalizationResult, error) {
+	return api.b.Dag().HandleCoordinatedState(), nil
 }
 
 // GetCandidates retrieves finalization candidates.
@@ -2196,14 +2326,9 @@ func (api *PublicDagAPI) GetCandidates(ctx context.Context, slot uint64) (*types
 	return api.b.Dag().HandleGetCandidates(slot), nil
 }
 
-// HeadSyncReady set initial state to start head sync with coordinating network.
-func (api *PublicDagAPI) HeadSyncReady(ctx context.Context, checkpoint *types.ConsensusInfo) (bool, error) {
-	return api.b.Dag().HandleHeadSyncReady(checkpoint)
-}
-
-// HeadSync run head sync with coordinating network.
-func (api *PublicDagAPI) HeadSync(ctx context.Context, data []types.ConsensusInfo) (bool, error) {
-	return api.b.Dag().HandleHeadSync(data)
+// GetOptimisticSpines retrieves optimistic spines.
+func (api *PublicDagAPI) GetOptimisticSpines(ctx context.Context, lastFinSpine common.Hash) (*types.OptimisticSpinesResult, error) {
+	return api.b.Dag().HandleGetOptimisticSpines(lastFinSpine), nil
 }
 
 // ValidateSpines validate given sequence of spines.
@@ -2211,7 +2336,47 @@ func (api *PublicDagAPI) ValidateSpines(ctx context.Context, data common.HashArr
 	return api.b.Dag().HandleValidateSpines(data)
 }
 
+// ValidateFinalization validate given spines sequence of finalization.
+func (api *PublicDagAPI) ValidateFinalization(ctx context.Context, data common.HashArray) (bool, error) {
+	return api.b.Dag().HandleValidateFinalization(data)
+}
+
 // SyncSlotInfo sync slot info.
 func (api *PublicDagAPI) SyncSlotInfo(ctx context.Context, data types.SlotInfo) (bool, error) {
 	return api.b.Dag().HandleSyncSlotInfo(data)
+}
+
+// PublicWatAPI provides an API to access the gwat public consensus functionality.
+// It offers only methods that operate on public data that is freely available to anyone.
+type PublicWatAPI struct {
+	b Backend
+}
+
+// NewPublicWatAPI creates a new waterfall blockchain API.
+func NewPublicWatAPI(b Backend) *PublicWatAPI {
+	return &PublicWatAPI{b}
+}
+
+// GetDagHashes retrieves dag hashes.
+func (api *PublicWatAPI) GetDagHashes(ctx context.Context) *common.HashArray {
+	return api.b.BlockChain().GetDagHashes()
+}
+
+// GetEra retrieves current era.
+func (api *PublicWatAPI) GetEra(ctx context.Context, era *uint64) (*era.Era, error) {
+	if era == nil {
+		return api.b.BlockChain().GetEraInfo().GetEra(), nil
+	}
+
+	dbEra := rawdb.ReadEra(api.b.ChainDb(), *era)
+	if dbEra == nil {
+		return nil, errors.New("era not found")
+	}
+
+	return dbEra, nil
+}
+
+// GetSlotHashes retrieves all block hashes for a given slot.
+func (s *PublicWatAPI) GetSlotHashes(ctx context.Context, slot uint64) common.HashArray {
+	return s.b.BlockHashesBySlot(ctx, slot)
 }

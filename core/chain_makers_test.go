@@ -10,7 +10,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/sealer"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
@@ -72,7 +71,7 @@ func addBlocksToDag(bc *BlockChain, blocks []*types.Block) error {
 		if blc.Number() != nil {
 			return errors.New("block is finalised")
 		}
-		bd := bc.ReadBockDag(block.Hash())
+		bd := bc.GetBlockDag(block.Hash())
 		if bd == nil || bd.Hash != block.Hash() || bd.Height != block.Height() {
 			return errors.New("BlockDag does not response block")
 		}
@@ -92,10 +91,9 @@ func getTestBlockchainAndBlocks() (*BlockChain, []*types.Block) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	genspec.MustCommit(db)
-	engine := sealer.New(db)
 
-	bc, _ := NewBlockChain(db, nil, params.TestChainConfig, engine, vm.Config{}, nil)
-	blocks, _ := GenerateChain(params.AllCliqueProtocolChanges, bc.genesisBlock, engine, bc.db, 3, nil)
+	bc, _ := NewBlockChain(db, nil, params.TestChainConfig, vm.Config{}, nil)
+	blocks, _ := GenerateChain(params.AllCliqueProtocolChanges, bc.genesisBlock, bc.db, 3, nil)
 
 	return bc, blocks
 }

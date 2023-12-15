@@ -19,7 +19,6 @@ package node
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -40,6 +39,7 @@ const (
 	datadirStaticNodes     = "static-nodes.json"  // Path within the datadir to the static node list
 	datadirTrustedNodes    = "trusted-nodes.json" // Path within the datadir to the trusted node list
 	datadirNodeDatabase    = "nodes"              // Path within the datadir to store the node infos
+	datadirJWTKey          = "jwtsecret"          // Path within the datadir to the node's jwt secret
 )
 
 // Config represents a small collection of configuration values to fine tune the
@@ -190,6 +190,19 @@ type Config struct {
 
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
+
+	// JWTSecret is the path to the hex-encoded jwt secret.
+	JWTSecret string `toml:",omitempty"`
+
+	// AuthAddr is the listening address on which authenticated APIs are provided.
+	AuthAddr string `toml:",omitempty"`
+
+	// AuthPort is the port number on which authenticated APIs are provided.
+	AuthPort int `toml:",omitempty"`
+
+	// AuthVirtualHosts is the list of virtual hostnames which are allowed on incoming requests
+	// for the authenticated api. This is by default {'localhost'}.
+	AuthVirtualHosts []string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -456,7 +469,7 @@ func getKeyStoreDir(conf *Config) (string, bool, error) {
 	isEphemeral := false
 	if keydir == "" {
 		// There is no datadir.
-		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+		keydir, err = os.MkdirTemp("", "go-ethereum-keystore")
 		isEphemeral = true
 	}
 

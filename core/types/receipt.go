@@ -49,6 +49,9 @@ const (
 	ReceiptStatusSuccessful = uint64(1)
 )
 
+// EvtErrorLogSignature receipt error log topic
+var EvtErrorLogSignature = crypto.Keccak256Hash([]byte("error"))
+
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// Consensus fields: These fields are defined by the Yellow Paper

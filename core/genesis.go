@@ -28,17 +28,18 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/contracts/deposit"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
+	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -46,15 +47,39 @@ import (
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
+type ValidatorData struct {
+	Pubkey            string `json:"pubkey"`
+	CreatorAddress    string `json:"creator_address"`
+	WithdrawalAddress string `json:"withdrawal_address"`
+	Amount            uint64 `json:"amount"`
+}
+
+type DepositData []*ValidatorData
+
+func (d DepositData) Addresses() []common.Address {
+	addresses := make([]common.Address, 0)
+	uniqAddresses := make(map[common.Address]struct{})
+	for _, data := range d {
+		address := common.HexToAddress(data.CreatorAddress)
+		if _, ok := uniqAddresses[address]; !ok {
+			addresses = append(addresses, address)
+			uniqAddresses[address] = struct{}{}
+		}
+	}
+
+	return addresses
+}
+
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
-	Config    *params.ChainConfig `json:"config"`
-	Timestamp uint64              `json:"timestamp"`
-	ExtraData []byte              `json:"extraData"`
-	GasLimit  uint64              `json:"gasLimit"   gencodec:"required"`
-	Coinbase  common.Address      `json:"coinbase"`
-	Alloc     GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Config     *params.ChainConfig `json:"config"`
+	Timestamp  uint64              `json:"timestamp"`
+	ExtraData  []byte              `json:"extraData"`
+	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
+	Coinbase   common.Address      `json:"coinbase"`
+	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
+	Validators DepositData
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -91,14 +116,16 @@ type GenesisAccount struct {
 
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
-	Nonce     math.HexOrDecimal64
-	Timestamp math.HexOrDecimal64
-	ExtraData hexutil.Bytes
-	GasLimit  math.HexOrDecimal64
-	GasUsed   math.HexOrDecimal64
-	Number    math.HexOrDecimal64
-	BaseFee   *math.HexOrDecimal256
-	Alloc     map[common.UnprefixedAddress]GenesisAccount
+	Timestamp    math.HexOrDecimal64
+	ExtraData    hexutil.Bytes
+	GasLimit     math.HexOrDecimal64
+	GasUsed      math.HexOrDecimal64
+	BaseFee      *math.HexOrDecimal256
+	Alloc        map[common.UnprefixedAddress]GenesisAccount
+	Validators   []common.Address
+	ParentHashes []common.Hash
+	Slot         math.HexOrDecimal64
+	Height       math.HexOrDecimal64
 }
 
 type genesisAccountMarshaling struct {
@@ -273,7 +300,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		ParentHashes: g.ParentHashes,
 		Slot:         g.Slot,
 		Height:       g.Height,
-		Extra:        g.ExtraData,
 		GasLimit:     g.GasLimit,
 		GasUsed:      g.GasUsed,
 		BaseFee:      g.BaseFee,
@@ -282,33 +308,66 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
+
+	validatorsStateAddress := g.GenerateValidatorStateAddress()
+
 	if g.Config != nil {
-		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+		g.Config.ValidatorsStateAddress = validatorsStateAddress
+	} else {
+		g.Config = &params.ChainConfig{ValidatorsStateAddress: validatorsStateAddress}
+	}
+
+	head.BaseFee = misc.CalcSlotBaseFee(g.Config, g.Config.ValidatorsPerSlot, uint64(len(g.Validators.Addresses())), g.GasLimit)
+	validatorStorage := valStore.NewStorage(g.Config)
+
+	validatorStorage.SetValidatorsList(statedb, g.Validators.Addresses())
+	for i, val := range g.Validators {
+		pubKey := common.HexToBlsPubKey(val.Pubkey)
+		address := common.HexToAddress(val.CreatorAddress)
+		withdrawalAddress := common.HexToAddress(val.WithdrawalAddress)
+		v := valStore.NewValidator(pubKey, address, &withdrawalAddress)
+		v.SetIndex(uint64(i))
+		v.SetActivationEra(uint64(0))
+
+		err := validatorStorage.SetValidator(statedb, v)
+		if err != nil {
+			log.Error("can`t set validator from genesis", "error", err)
 		}
 	}
 
-	g.CreateDepositContract(statedb, head)
-
 	root := statedb.IntermediateRoot(false)
 	head.Root = root
+	head.Era = 0
 
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
 
-	return types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
-}
+	genesisBlock := types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
 
-// CreateDepositContract creates deposit contract for genesis state.
-func (g *Genesis) CreateDepositContract(statedb *state.StateDB, preHead *types.Header) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	context := NewEVMBlockContext(preHead, nil, &common.Address{})
-	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, g.configOrDefault(common.Hash{}), vm.Config{})
-	//create deposit address from contract data
-	depositAddr := crypto.Keccak256Address(common.FromHex(deposit.DepositContractBin))
-	log.Info("Deposit contract address", "address", depositAddr)
-	return vmenv.CreateGenesisContract(depositAddr, common.FromHex(deposit.DepositContractBin))
+	// Use genesis hash as seed for first and second epochs
+	genesisCp := &types.Checkpoint{
+		Epoch:    0,
+		FinEpoch: 0,
+		Root:     common.Hash{},
+		Spine:    genesisBlock.Hash(),
+	}
+	rawdb.WriteLastCoordinatedCheckpoint(db, genesisCp)
+	rawdb.WriteCoordinatedCheckpoint(db, genesisCp)
+	rawdb.WriteEpoch(db, 0, genesisCp.Spine)
+
+	genesisEraLength := era.EstimateEraLength(g.Config, uint64(len(g.Validators)))
+	genesisEra := era.Era{
+		Number: 0,
+		From:   0,
+		To:     genesisEraLength - 1,
+		Root:   genesisBlock.Root(),
+	}
+	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
+	rawdb.WriteCurrentEra(db, genesisEra.Number)
+
+	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root)
+
+	return genesisBlock
 }
 
 // Commit writes the block and state of a genesis specification to the database.
@@ -329,18 +388,19 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.WriteReceipts(db, block.Hash(), nil)
 	rawdb.WriteLastCanonicalHash(db, block.Hash())
 
+	log.Info("Save genesis hash", "hash", block.Hash(), "fn", "Commit(genesis)")
 	rawdb.WriteFinalizedHashNumber(db, block.Hash(), 0)
 	rawdb.WriteLastFinalizedHash(db, block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
-
+	rawdb.AddSlotBlockHash(db, block.Slot(), block.Hash())
 	//set genesis blockDag
 	genesisDag := &types.BlockDAG{
-		Hash:                block.Hash(),
-		Height:              0,
-		Slot:                0,
-		LastFinalizedHash:   block.Hash(),
-		LastFinalizedHeight: 0,
-		DagChainHashes:      common.HashArray{},
+		Hash:                   block.Hash(),
+		Height:                 0,
+		Slot:                   0,
+		CpHash:                 block.Hash(),
+		CpHeight:               0,
+		OrderedAncestorsHashes: common.HashArray{},
 	}
 	rawdb.WriteBlockDag(db, genesisDag)
 	rawdb.WriteTipsHashes(db, common.HashArray{genesisDag.Hash})
@@ -356,6 +416,20 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 	return block
+}
+
+func (g *Genesis) GenerateValidatorStateAddress() *common.Address {
+	buf := make([]byte, len(g.Validators)*common.AddressLength)
+	for i, validator := range g.Validators.Addresses() {
+		beginning := i * common.AddressLength
+		end := beginning + common.AddressLength
+		copy(buf[beginning:end], validator[:])
+	}
+
+	validatorsStateAddress := crypto.Keccak256Address(buf)
+	log.Info("Validators state address", "address", validatorsStateAddress)
+
+	return &validatorsStateAddress
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.

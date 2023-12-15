@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
@@ -28,6 +27,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -37,15 +37,13 @@ import (
 type StateProcessor struct {
 	config *params.ChainConfig // Chain configuration options
 	bc     *BlockChain         // Canonical block chain
-	engine consensus.Engine    // Consensus engine used for block rewards
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, bc *BlockChain) *StateProcessor {
 	return &StateProcessor{
 		config: config,
 		bc:     bc,
-		engine: engine,
 	}
 }
 
@@ -68,6 +66,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
+	validatorProcessor := validator.NewProcessor(blockContext, statedb, p.bc)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config), header.BaseFee)
@@ -77,7 +76,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.Prepare(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockHash, tx, usedGas, vmenv, tokenProcessor)
+		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockHash, tx, usedGas, vmenv, tokenProcessor, validatorProcessor)
 		if err != nil {
 			log.Error(fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err).Error())
 			//continue
@@ -87,20 +86,25 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions())
+	header.Root = statedb.IntermediateRoot(true)
 
 	return receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, tokenProcessor *token.Processor) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, tokenProcessor *token.Processor, validatorProcessor *validator.Processor) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, tokenProcessor, msg, gp)
+	result, err := ApplyMessage(evm, tokenProcessor, validatorProcessor, msg, gp)
 	if err != nil {
-		return nil, err
+		result = &ExecutionResult{
+			UsedGas:    0,
+			Err:        err,
+			ReturnData: nil,
+		}
+		addErrLog(statedb, msg, blockHash, err)
 	}
 
 	// Update the state with pending changes.
@@ -120,7 +124,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
-	if msg.To() == nil {
+	if msg.To() == nil && !result.Failed() {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
@@ -132,11 +136,34 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	return receipt, err
 }
 
+func addErrLog(statedb *state.StateDB, msg types.Message, blockHash common.Hash, err error) {
+	if statedb.GetLogs(msg.TxHash(), blockHash) != nil {
+		return
+	}
+	topics := []common.Hash{types.EvtErrorLogSignature}
+	data := []byte(err.Error())
+	statedb.AddLog(&types.Log{
+		Address: msg.From(),
+		Topics:  topics,
+		Data:    data,
+	})
+}
+
 // ApplyTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig,
+	bc ChainContext,
+	author *common.Address,
+	gp *GasPool,
+	statedb *state.StateDB,
+	header *types.Header,
+	tx *types.Transaction,
+	usedGas *uint64,
+	cfg vm.Config,
+	chain *BlockChain,
+) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config), header.BaseFee)
 	if err != nil {
 		return nil, err
@@ -146,5 +173,6 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 
 	tokenProcessor := token.NewProcessor(blockContext, statedb)
-	return applyTransaction(msg, config, bc, author, gp, statedb, header.Hash(), tx, usedGas, vmenv, tokenProcessor)
+	validatorProcessor := validator.NewProcessor(blockContext, statedb, chain)
+	return applyTransaction(msg, config, bc, author, gp, statedb, header.Hash(), tx, usedGas, vmenv, tokenProcessor, validatorProcessor)
 }

@@ -498,6 +498,27 @@ func (ks *KeyStore) ImportPreSaleKey(keyJSON []byte, passphrase string) (account
 	return a, nil
 }
 
+// IsUnlocked checks if an account is unlocked.
+func (ks *KeyStore) IsUnlocked(a accounts.Account) bool {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+
+	_, found := ks.unlocked[a.Address]
+	return found
+}
+
+func (ks *KeyStore) GetKey(address common.Address) (*ecdsa.PrivateKey, error) {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+
+	unlockedKey, found := ks.unlocked[address]
+	if !found {
+		return nil, ErrLocked
+	}
+
+	return unlockedKey.PrivateKey, nil
+}
+
 // zeroKey zeroes a private key in memory.
 func zeroKey(k *ecdsa.PrivateKey) {
 	b := k.D.Bits()
