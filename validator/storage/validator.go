@@ -86,7 +86,7 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 	}
 
 	//create bin data
-	binDataLen := common.AddressLength + uint32Size + len(baseData)
+	binDataLen := common.AddressLength + common.Uint32Size + len(baseData)
 	binData := make([]byte, binDataLen)
 
 	var startOffset, endOfset int
@@ -98,7 +98,7 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 
 	// set len of base validator data
 	startOffset = endOfset
-	endOfset = startOffset + uint32Size
+	endOfset = startOffset + common.Uint32Size
 	binary.BigEndian.PutUint32(binData[startOffset:endOfset], uint32(len(baseData)))
 
 	// set base validator data
@@ -120,7 +120,7 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 
 	// get len of base validator data
 	startOffset = endOfset
-	endOfset = startOffset + uint32Size
+	endOfset = startOffset + common.Uint32Size
 	baseDataLen := int(binary.BigEndian.Uint32(data[startOffset:endOfset]))
 	if baseDataLen > len(data) {
 		return errBadBinaryData

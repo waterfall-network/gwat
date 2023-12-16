@@ -50,13 +50,6 @@ func NewPublicValidatorAPI(b Backend, chain Blockchain) *PublicValidatorAPI {
 	return &PublicValidatorAPI{b, chain}
 }
 
-type DepositArgs struct {
-	PubKey            *common.BlsPubKey    `json:"pubkey"`             // validator public key
-	CreatorAddress    *common.Address      `json:"creator_address"`    // attached creator account
-	WithdrawalAddress *common.Address      `json:"withdrawal_address"` // attached withdrawal credentials
-	Signature         *common.BlsSignature `json:"signature"`
-}
-
 // GetAPIs provides api access
 func GetAPIs(apiBackend Backend, chain Blockchain) []rpc.API {
 	return []rpc.API{
@@ -69,7 +62,14 @@ func GetAPIs(apiBackend Backend, chain Blockchain) []rpc.API {
 	}
 }
 
-// DepositData creates a validators deposit data for deposit tx.
+type DepositArgs struct {
+	PubKey            *common.BlsPubKey    `json:"pubkey"`             // validator public key
+	CreatorAddress    *common.Address      `json:"creator_address"`    // attached creator account
+	WithdrawalAddress *common.Address      `json:"withdrawal_address"` // attached withdrawal credentials
+	Signature         *common.BlsSignature `json:"signature"`
+}
+
+// Validator_DepositData creates a validators deposit data for deposit tx.
 func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args DepositArgs) (hexutil.Bytes, error) {
 	if args.PubKey == nil {
 		return nil, operation.ErrNoPubKey
@@ -101,7 +101,7 @@ func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args Depos
 	return b, nil
 }
 
-// DepositCount returns a validators deposit count.
+// Validator_DepositCount returns a validators deposit count.
 func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
 	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
 	if blockNrOrHash != nil {
@@ -119,6 +119,69 @@ func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNr
 
 	count := validatorProcessor.getDepositCount()
 	return hexutil.Uint64(count), stateDb.Error()
+}
+
+type DelegateRulesArgs struct {
+	ProfitShare *map[common.Address]uint8 `json:"profit_share"` // map of participants profit share in %
+	StakeShare  *map[common.Address]uint8 `json:"stake_share"`  // map of participants stake share in % (after exit)
+	Exit        *[]common.Address         `json:"exit"`         // addresses of role  to init exit
+	Withdrawal  *[]common.Address         `json:"withdrawal"`   // addresses of role  to init exit
+}
+
+type DelegateStakeArgs struct {
+	PubKey         *common.BlsPubKey    `json:"pubkey"`          // validator public key
+	CreatorAddress *common.Address      `json:"creator_address"` // attached creator account
+	Signature      *common.BlsSignature `json:"signature"`       // sig
+	TrialPeriod    *uint64              `json:"trial_period"`    // period while trial_rules are active (in slots, starts from activation slot)
+	TrialRules     *DelegateRulesArgs   `json:"trial_rules"`     // rules for trial period
+	Rules          *DelegateRulesArgs   `json:"rules"`           // rules after trial period
+}
+
+// Validator_DelegatedStakeData creates a validators delegated stake tx data.
+func (s *PublicValidatorAPI) Validator_DelegateStakeData(_ context.Context, args DelegateStakeArgs) (hexutil.Bytes, error) {
+	if args.PubKey == nil {
+		return nil, operation.ErrNoPubKey
+	}
+	if args.CreatorAddress == nil {
+		return nil, operation.ErrNoCreatorAddress
+	}
+	if args.Signature == nil {
+		return nil, operation.ErrNoSignature
+	}
+
+	if args.Rules == nil {
+		return nil, operation.ErrNoRules
+	}
+	if args.TrialPeriod == nil {
+		def := uint64(0)
+		args.TrialPeriod = &def
+	}
+	if args.TrialRules == nil {
+		args.TrialRules = &DelegateRulesArgs{}
+	}
+
+	ar := args.Rules
+	rules, err := operation.NewDelegateStakeRules(*ar.ProfitShare, *ar.StakeShare, *ar.Exit, *ar.Withdrawal)
+	if err != nil {
+		return nil, err
+	}
+	atr := args.TrialRules
+	trialRules, err := operation.NewDelegateStakeRules(*atr.ProfitShare, *atr.StakeShare, *atr.Exit, *atr.Withdrawal)
+	if err != nil {
+		return nil, err
+	}
+
+	var op operation.Operation
+	if op, err = operation.NewDelegateStakeOperation(*args.PubKey, *args.CreatorAddress, *args.Signature, rules, *args.TrialPeriod, trialRules); err != nil {
+		return nil, err
+	}
+
+	b, err := operation.EncodeToBytes(op)
+	if err != nil {
+		log.Warn("Failed to encode validator delegate state operation", "err", err)
+		return nil, err
+	}
+	return b, nil
 }
 
 type ExitRequestArgs struct {

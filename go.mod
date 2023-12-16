@@ -90,6 +90,7 @@ require (
 	github.com/opentracing/opentracing-go v1.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7 // indirect
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
