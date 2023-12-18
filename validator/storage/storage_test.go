@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -94,7 +95,11 @@ func TestGetValidators(t *testing.T) {
 		To:     0,
 		Root:   common.Hash{},
 	})
-	bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
+
+	bc.EXPECT().GetBlock(
+		gomock.AssignableToTypeOf(context.Background()),
+		gomock.AssignableToTypeOf(blockHash),
+	).AnyTimes().Return(block)
 	bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
 	bc.EXPECT().GetLastCoordinatedCheckpoint().AnyTimes().Return(&types.Checkpoint{
 		Epoch: uint64(testutils.RandomInt(0, 99999)),
@@ -192,7 +197,7 @@ func TestGetShuffledValidators(t *testing.T) {
 		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
 		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
 	})
-	bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
+	bc.EXPECT().GetBlock(gomock.AssignableToTypeOf(context.Background()), gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(block)
 	bc.EXPECT().StateAt(gomock.AssignableToTypeOf(blockHash)).AnyTimes().Return(stateDb, nil)
 	bc.EXPECT().GetLastCoordinatedCheckpoint().AnyTimes().Return(&types.Checkpoint{
 		Epoch: 10,
