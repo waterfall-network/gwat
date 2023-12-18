@@ -108,7 +108,7 @@ func TestGetValidators(t *testing.T) {
 	})
 
 	for _, address := range testmodels.InputValidators {
-		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
+		validator := NewValidator(common.BlsPubKey{}, address, nil)
 
 		validatorsList = append(validatorsList, *validator)
 		err := store.SetValidator(stateDb, validator)
@@ -210,15 +210,15 @@ func TestGetShuffledValidators(t *testing.T) {
 		To:     0,
 		Root:   common.Hash{},
 	})
-	bc.EXPECT().GetEpoch(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(common.Hash{})
+	bc.EXPECT().GetEpoch(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(common.Hash{0x11})
 
 	store := NewStorage(testmodels.TestChainConfig)
 	store.SetValidatorsList(stateDb, testmodels.InputValidators)
 
 	validatorList := make([]Validator, len(testmodels.InputValidators))
 	for i, address := range testmodels.InputValidators {
-		validator := NewValidator(common.BlsPubKey{}, address, &common.Address{0x0000000000000000000000000000000000000000})
-		validator.ActivationEra = uint64(i)
+		validator := NewValidator(common.BlsPubKey{}, address, nil)
+		validator.ActivationEra = uint64(i + 1)
 		validatorList[i] = *validator
 		store.SetValidator(stateDb, validator)
 		testutils.AssertNoError(t, err)
@@ -233,6 +233,6 @@ func TestGetShuffledValidators(t *testing.T) {
 	result, err = store.GetCreatorsBySlot(bc, slot)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, []common.Address{
-		testmodels.Addr3,
-		testmodels.Addr6}, result)
+		testmodels.Addr8,
+		testmodels.Addr3}, result)
 }
