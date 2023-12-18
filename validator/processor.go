@@ -250,6 +250,29 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"creator", v.CreatorAddress().Hex(),
 			)
 		}
+	case operation.DelegateStake:
+		ret, err = p.validatorDelegateStake(caller, toAddr, value, v)
+		if err != nil {
+			log.Error("Validator delegate stake: err",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", value.String(),
+				"from", caller.Address(),
+				"creator", v.CreatorAddress().Hex(),
+				"pubKey", v.PubKey().Hex(),
+
+				"err", err,
+			)
+		} else {
+			log.Info("Validator delegate stake: success",
+				"opCode", op.OpCode(),
+				"tx", msg.TxHash().Hex(),
+				"amount", value.String(),
+				"from", caller.Address(),
+				"creator", v.CreatorAddress().Hex(),
+				"pubKey", v.PubKey().Hex(),
+			)
+		}
 	}
 
 	if err != nil {
@@ -264,6 +287,10 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		return nil, ErrInvalidToAddress
 	}
 
+	if value == nil || value.Cmp(MinDepositVal) < 0 {
+		return nil, ErrTooLowDepositValue
+	}
+
 	// check amount can add to log
 	if !common.BnCanCastToUint64(new(big.Int).Div(value, common.BigGwei)) {
 		return nil, ErrInvalidAmount
@@ -271,9 +298,6 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	from := caller.Address()
 
-	if value == nil || value.Cmp(MinDepositVal) < 0 {
-		return nil, ErrTooLowDepositValue
-	}
 	balanceFrom := p.state.GetBalance(from)
 	if balanceFrom.Cmp(value) < 0 {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForOp, from.Hex())
@@ -435,6 +459,67 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
+}
+
+func (p *Processor) validatorDelegateStake(caller Ref, toAddr common.Address, value *big.Int, op operation.DelegateStake) (_ []byte, err error) {
+	//todo rm
+	if true {
+		panic("Implement me")
+	}
+
+	if !p.IsValidatorOp(&toAddr) {
+		return nil, ErrInvalidToAddress
+	}
+
+	if value == nil || value.Cmp(MinDepositVal) < 0 {
+		return nil, ErrTooLowDepositValue
+	}
+
+	// check amount can add to log
+	if !common.BnCanCastToUint64(new(big.Int).Div(value, common.BigGwei)) {
+		return nil, ErrInvalidAmount
+	}
+
+	from := caller.Address()
+
+	balanceFrom := p.state.GetBalance(from)
+	if balanceFrom.Cmp(value) < 0 {
+		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForOp, from.Hex())
+	}
+
+	//todo
+	withdrawalAddress := common.Address{}
+
+	validator := valStore.NewValidator(op.PubKey(), op.CreatorAddress(), &withdrawalAddress)
+
+	// if validator already exist
+	currValidator, _ := p.Storage().GetValidator(p.state, op.CreatorAddress())
+
+	if currValidator != nil {
+		if currValidator.ActivationEra < math.MaxUint64 {
+			return nil, errors.New("validator deposit failed (validator already activated)")
+		}
+
+		if currValidator.PubKey != op.PubKey() {
+			return nil, errors.New("validator deposit failed (mismatch public key)")
+		}
+		validator = currValidator
+	}
+
+	validator.AddStake(from, value)
+
+	err = p.Storage().SetValidator(p.state, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), withdrawalAddress, value, op.Signature(), p.getDepositCount())
+	p.eventEmmiter.Deposit(toAddr, logData)
+	p.incrDepositCount()
+	// burn value from sender balance
+	p.state.SubBalance(from, value)
+
+	return value.FillBytes(make([]byte, 32)), nil
 }
 
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {

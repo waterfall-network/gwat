@@ -88,6 +88,7 @@ func TestProcessorDeposit(t *testing.T) {
 				balanceFromBfr := processor.state.GetBalance(from)
 
 				msg.EXPECT().Data().AnyTimes().Return(opData)
+				msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 
@@ -165,15 +166,14 @@ func TestProcessorActivate(t *testing.T) {
 	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
 	bc.EXPECT().Database().AnyTimes().Return(db)
 	bc.EXPECT().GetValidatorSyncData(
-		gomock.AssignableToTypeOf(common.Address{}),
-		gomock.AssignableToTypeOf(types.Activate)).
+		gomock.AssignableToTypeOf(common.Hash{})).
 		AnyTimes().Return(&types.ValidatorSync{
 		OpType:     activateOperation.OpType(),
 		ProcEpoch:  activateOperation.ProcEpoch(),
 		Index:      activateOperation.Index(),
 		Creator:    activateOperation.Creator(),
 		Amount:     activateOperation.Amount(),
-		InitTxHash: common.Hash{1, 2, 3},
+		InitTxHash: initTxHash,
 	})
 	bc.EXPECT().EpochToEra(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(&era.Era{Number: 6})
 
@@ -506,8 +506,7 @@ func TestProcessorDeactivate(t *testing.T) {
 	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
 	bc.EXPECT().Database().AnyTimes().Return(db)
 	bc.EXPECT().GetValidatorSyncData(
-		gomock.AssignableToTypeOf(common.Address{}),
-		gomock.AssignableToTypeOf(types.Deactivate)).
+		gomock.AssignableToTypeOf(common.Hash{})).
 		AnyTimes().Return(&types.ValidatorSync{
 		OpType:     deactivateOp.OpType(),
 		ProcEpoch:  deactivateOp.ProcEpoch(),
@@ -817,8 +816,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 		SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
 	})
 	bc.EXPECT().GetValidatorSyncData(
-		gomock.AssignableToTypeOf(common.Address{}),
-		gomock.AssignableToTypeOf(types.UpdateBalance)).
+		gomock.AssignableToTypeOf(common.Hash{})).
 		AnyTimes().Return(&types.ValidatorSync{
 		OpType:     updateBalanceOperation.OpType(),
 		ProcEpoch:  updateBalanceOperation.ProcEpoch(),
@@ -962,7 +960,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				valSyncData.Amount = nil
-				bc.EXPECT().GetValidatorSyncData(creatorAddress, valSyncData.OpType).Return(&valSyncData)
+				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				processor.ctx.Slot = math.MaxUint64
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				processor.ctx.Slot = 0
@@ -977,7 +975,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Errs: []error{ErrNoSavedValSyncOp},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				bc.EXPECT().GetValidatorSyncData(creatorAddress, valSyncData.OpType).Return(nil)
+				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(nil)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
 		},
@@ -992,7 +990,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 				hash := common.BytesToHash(testutils.RandomStringInBytes(32))
 				valSyncData.TxHash = &hash
-				bc.EXPECT().GetValidatorSyncData(creatorAddress, valSyncData.OpType).Return(&valSyncData)
+				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				valSyncData.TxHash = &txHash
 			},
@@ -1007,7 +1005,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				valSyncData.OpType = types.Deactivate
-				bc.EXPECT().GetValidatorSyncData(creatorAddress, types.Activate).Return(&valSyncData)
+				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				valSyncData.OpType = types.Activate
 			},
@@ -1022,7 +1020,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				valSyncData.Creator = withdrawalAddress
-				bc.EXPECT().GetValidatorSyncData(creatorAddress, valSyncData.OpType).Return(&valSyncData)
+				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				valSyncData.Creator = creatorAddress
 			},
@@ -1037,7 +1035,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				valSyncData.Index = index + 1
-				bc.EXPECT().GetValidatorSyncData(creatorAddress, valSyncData.OpType).Return(&valSyncData)
+				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				valSyncData.Index = index
 			},
@@ -1052,7 +1050,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				valSyncData.ProcEpoch = procEpoch + 1
-				bc.EXPECT().GetValidatorSyncData(creatorAddress, valSyncData.OpType).Return(&valSyncData)
+				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				valSyncData.ProcEpoch = procEpoch
 			},
@@ -1067,10 +1065,124 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				valSyncData.Amount = amount.Add(amount, amount)
-				bc.EXPECT().GetValidatorSyncData(creatorAddress, valSyncData.OpType).Return(&valSyncData)
+				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
 		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(c)
+		})
+	}
+}
+
+func TestProcessorDelegateStake(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+	msg := NewMockmessage(ctrl)
+
+	var (
+		//DelegateStakeRules
+		dsProfitShare = map[common.Address]uint8{
+			common.HexToAddress("0x1111111111111111111111111111111111111111"): 10,
+			common.HexToAddress("0x2222222222222222222222222222222222222222"): 30,
+			common.HexToAddress("0x3333333333333333333333333333333333333333"): 60,
+		}
+		dsStakeShare = map[common.Address]uint8{
+			common.HexToAddress("0x4444444444444444444444444444444444444444"): 70,
+			common.HexToAddress("0x5555555555555555555555555555555555555555"): 30,
+		}
+		dsExit       = []common.Address{common.HexToAddress("0x6666666666666666666666666666666666666666")}
+		dsWithdrawal = []common.Address{common.HexToAddress("0x7777777777777777777777777777777777777777")}
+	)
+
+	bc := NewMockblockchain(ctrl)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
+	to := processor.GetValidatorsStateAddress()
+
+	rules, _ := operation.NewDelegateStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+	trialRules, _ := operation.NewDelegateStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+
+	depositOperation, err := operation.NewDelegateStakeOperation(
+		pubKey,
+		testmodels.Addr1,
+		signature,
+		rules,
+		321,
+		trialRules,
+	)
+	testutils.AssertNoError(t, err)
+
+	opData, err := operation.EncodeToBytes(depositOperation)
+	testutils.AssertNoError(t, err)
+	cases := []*testmodels.TestCase{
+		{
+			CaseName: "Deposit: OK",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
+				processor.state.AddBalance(from, bal)
+				balanceFromBfr := processor.state.GetBalance(from)
+
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+				msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				balanceFromAft := processor.state.GetBalance(from)
+				balDif := new(big.Int).Sub(balanceFromBfr, balanceFromAft)
+				if balDif.Cmp(value) != 0 {
+					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
+				}
+			},
+		},
+		//{
+		//	CaseName: "Deposit: ErrTooLowDepositValue (val = nil)",
+		//	TestData: testmodels.TestData{
+		//		Caller: vm.AccountRef(from),
+		//		AddrTo: to,
+		//	},
+		//	Errs: []error{ErrTooLowDepositValue},
+		//	Fn: func(c *testmodels.TestCase) {
+		//		v := c.TestData.(testmodels.TestData)
+		//		call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
+		//	},
+		//},
+		//{
+		//	CaseName: "Deposit: ErrTooLowDepositValue (val = 1 wat)",
+		//	TestData: testmodels.TestData{
+		//		Caller: vm.AccountRef(from),
+		//		AddrTo: to,
+		//	},
+		//	Errs: []error{ErrTooLowDepositValue},
+		//	Fn: func(c *testmodels.TestCase) {
+		//		v := c.TestData.(testmodels.TestData)
+		//		val1, _ := new(big.Int).SetString("1000000000000000000", 10)
+		//		call(t, processor, v.Caller, v.AddrTo, val1, msg, c.Errs)
+		//	},
+		//},
+		//{
+		//	CaseName: "Deposit: invalid address to",
+		//	TestData: testmodels.TestData{
+		//		Caller: vm.AccountRef(from),
+		//		AddrTo: from,
+		//	},
+		//	Errs: []error{ErrInvalidToAddress},
+		//	Fn: func(c *testmodels.TestCase) {
+		//		v := c.TestData.(testmodels.TestData)
+		//		call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
+		//	},
+		//},
 	}
 
 	for _, c := range cases {

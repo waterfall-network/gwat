@@ -5,6 +5,7 @@
 package validator
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -58,16 +59,6 @@ func (mr *MockRefMockRecorder) Address() *gomock.Call {
 type Mockblockchain struct {
 	ctrl     *gomock.Controller
 	recorder *MockblockchainMockRecorder
-}
-
-func (m *Mockblockchain) GetTransaction(txHash common.Hash) (tx *types.Transaction, blHash common.Hash, index uint64) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *Mockblockchain) GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64) {
-	//TODO implement me
-	panic("implement me")
 }
 
 // MockblockchainMockRecorder is the mock recorder for Mockblockchain.
@@ -144,17 +135,17 @@ func (mr *MockblockchainMockRecorder) EpochToEra(epoch interface{}) *gomock.Call
 }
 
 // GetBlock mocks base method.
-func (m *Mockblockchain) GetBlock(hash common.Hash) *types.Block {
+func (m *Mockblockchain) GetBlock(ctx context.Context, hash common.Hash) *types.Block {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlock", hash)
+	ret := m.ctrl.Call(m, "GetBlock", ctx, hash)
 	ret0, _ := ret[0].(*types.Block)
 	return ret0
 }
 
 // GetBlock indicates an expected call of GetBlock.
-func (mr *MockblockchainMockRecorder) GetBlock(hash interface{}) *gomock.Call {
+func (mr *MockblockchainMockRecorder) GetBlock(ctx, hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*Mockblockchain)(nil).GetBlock), hash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*Mockblockchain)(nil).GetBlock), ctx, hash)
 }
 
 // GetEpoch mocks base method.
@@ -227,18 +218,50 @@ func (mr *MockblockchainMockRecorder) GetSlotInfo() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlotInfo", reflect.TypeOf((*Mockblockchain)(nil).GetSlotInfo))
 }
 
-// GetValidatorSyncData mocks base method.
-func (m *Mockblockchain) GetValidatorSyncData(initTxHash common.Hash) *types.ValidatorSync {
+// GetTransaction mocks base method.
+func (m *Mockblockchain) GetTransaction(txHash common.Hash) (*types.Transaction, common.Hash, uint64) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetValidatorSyncData", initTxHash)
+	ret := m.ctrl.Call(m, "GetTransaction", txHash)
+	ret0, _ := ret[0].(*types.Transaction)
+	ret1, _ := ret[1].(common.Hash)
+	ret2, _ := ret[2].(uint64)
+	return ret0, ret1, ret2
+}
+
+// GetTransaction indicates an expected call of GetTransaction.
+func (mr *MockblockchainMockRecorder) GetTransaction(txHash interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransaction", reflect.TypeOf((*Mockblockchain)(nil).GetTransaction), txHash)
+}
+
+// GetTransactionReceipt mocks base method.
+func (m *Mockblockchain) GetTransactionReceipt(txHash common.Hash) (*types.Receipt, common.Hash, uint64) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransactionReceipt", txHash)
+	ret0, _ := ret[0].(*types.Receipt)
+	ret1, _ := ret[1].(common.Hash)
+	ret2, _ := ret[2].(uint64)
+	return ret0, ret1, ret2
+}
+
+// GetTransactionReceipt indicates an expected call of GetTransactionReceipt.
+func (mr *MockblockchainMockRecorder) GetTransactionReceipt(txHash interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionReceipt", reflect.TypeOf((*Mockblockchain)(nil).GetTransactionReceipt), txHash)
+}
+
+// GetValidatorSyncData mocks base method.
+func (m *Mockblockchain) GetValidatorSyncData(InitTxHash common.Hash) *types.ValidatorSync {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValidatorSyncData", InitTxHash)
 	ret0, _ := ret[0].(*types.ValidatorSync)
 	return ret0
 }
 
 // GetValidatorSyncData indicates an expected call of GetValidatorSyncData.
-func (mr *MockblockchainMockRecorder) GetValidatorSyncData(creator, op interface{}) *gomock.Call {
+func (mr *MockblockchainMockRecorder) GetValidatorSyncData(InitTxHash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidatorSyncData", reflect.TypeOf((*Mockblockchain)(nil).GetValidatorSyncData), creator, op)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidatorSyncData", reflect.TypeOf((*Mockblockchain)(nil).GetValidatorSyncData), InitTxHash)
 }
 
 // StartTransitionPeriod mocks base method.
