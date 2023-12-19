@@ -11,6 +11,8 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 func TestAddBlocksToChain(t *testing.T) {
@@ -83,14 +85,41 @@ func getTestBlockchainAndBlocks() (*BlockChain, []*types.Block) {
 	db := rawdb.NewMemoryDatabase()
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr := crypto.PubkeyToAddress(key.PublicKey)
-	genspec := &Genesis{
-		ExtraData: make([]byte, 96),
-		Alloc: map[common.Address]GenesisAccount{
-			addr: {Balance: big.NewInt(10000000000000000)},
-		},
-		BaseFee: big.NewInt(params.InitialBaseFee),
+	depositData := make(DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
 	}
-	genspec.MustCommit(db)
+	genspec := Genesis{
+		Config:     params.AllEthashProtocolChanges,
+		GasLimit:   1000000000000000000,
+		Alloc:      map[common.Address]GenesisAccount{addr: {Balance: big.NewInt(1000000000000000000)}},
+		Validators: depositData,
+	}
+
+	genesisBlock := genspec.MustCommit(db)
+
+	// Use genesis hash as seed for first and second epochs
+	genesisCp := &types.Checkpoint{
+		Epoch:    0,
+		FinEpoch: 0,
+		Root:     common.Hash{},
+		Spine:    genesisBlock.Hash(),
+	}
+	rawdb.WriteLastCoordinatedCheckpoint(db, genesisCp)
+	rawdb.WriteCoordinatedCheckpoint(db, genesisCp)
+	rawdb.WriteEpoch(db, 0, genesisCp.Spine)
+
+	genesisEraLength := era.EstimateEraLength(genspec.Config, uint64(len(genspec.Validators)))
+	genesisEra := era.Era{0, 0, genesisEraLength - 1, genesisBlock.Root()}
+	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
+	rawdb.WriteCurrentEra(db, genesisEra.Number)
 
 	bc, _ := NewBlockChain(db, nil, params.TestChainConfig, vm.Config{}, nil)
 	blocks, _ := GenerateChain(params.AllCliqueProtocolChanges, bc.genesisBlock, bc.db, 3, nil)
