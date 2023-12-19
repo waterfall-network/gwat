@@ -19,6 +19,7 @@ type Validator struct {
 	ActivationEra     uint64            `json:"activationEra"`
 	ExitEra           uint64            `json:"exitEra"`
 	Stake             []*StakeByAddress `json:"stake"`
+	DelegateStake     DelegateStakeData `json:"delegateStake"`
 }
 
 func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {

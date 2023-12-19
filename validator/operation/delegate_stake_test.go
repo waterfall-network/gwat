@@ -404,7 +404,7 @@ func TestDelegateStakeRules_validate(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return createOp.validate()
+		return createOp.Validate()
 	}
 
 	operationDecode := func(b []byte, i interface{}) error {

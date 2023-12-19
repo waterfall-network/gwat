@@ -41,7 +41,7 @@ func (op *delegateStakeOperation) init(
 	if rules == nil {
 		rules = &DelegateStakeRules{}
 	}
-	if err := rules.validate(); err != nil {
+	if err := rules.Validate(); err != nil {
 		return fmt.Errorf("delegate rules err: %w", err)
 	}
 
@@ -50,12 +50,12 @@ func (op *delegateStakeOperation) init(
 	}
 	// while trial
 	if trialPeriod > 0 && len(trialRules.ProfitShare()) > 0 {
-		if err := trialRules.validateProfitShare(); err != nil {
+		if err := trialRules.ValidateProfitShare(); err != nil {
 			return fmt.Errorf("delegate trial rules err: %w", err)
 		}
 	}
 	if trialPeriod > 0 && len(trialRules.StakeShare()) > 0 {
-		if err := trialRules.validateStakeShare(); err != nil {
+		if err := trialRules.ValidateStakeShare(); err != nil {
 			return fmt.Errorf("delegate trial rules err: %w", err)
 		}
 	}
@@ -292,11 +292,11 @@ func (dr *DelegateStakeRules) init(
 	return nil
 }
 
-func (dr *DelegateStakeRules) validate() error {
-	if err := dr.validateProfitShare(); err != nil {
+func (dr *DelegateStakeRules) Validate() error {
+	if err := dr.ValidateProfitShare(); err != nil {
 		return err
 	}
-	if err := dr.validateStakeShare(); err != nil {
+	if err := dr.ValidateStakeShare(); err != nil {
 		return err
 	}
 	if err := dr.validateExit(); err != nil {
@@ -308,7 +308,7 @@ func (dr *DelegateStakeRules) validate() error {
 	return nil
 }
 
-func (dr *DelegateStakeRules) validateProfitShare() error {
+func (dr *DelegateStakeRules) ValidateProfitShare() error {
 	//check the percentage values are correct
 	var totalPrc uint
 	for _, v := range dr.profitShare {
@@ -320,7 +320,7 @@ func (dr *DelegateStakeRules) validateProfitShare() error {
 	return nil
 }
 
-func (dr *DelegateStakeRules) validateStakeShare() error {
+func (dr *DelegateStakeRules) ValidateStakeShare() error {
 	var totalPrc uint
 	for _, v := range dr.stakeShare {
 		totalPrc += uint(v)
