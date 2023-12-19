@@ -6,6 +6,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 var (
@@ -63,6 +64,59 @@ func TestValidator_MarshalingBinary(t *testing.T) {
 		t.Logf("Stake %d: Address: %s, Expected Address: %s, Sum: %d, Expected Sum: %d",
 			i, stake.Address, expectedStake.Address, stake.Sum, expectedStake.Sum)
 	}
+}
+
+func TestValidatorDelegateStake_MarshalingBinary(t *testing.T) {
+	var (
+		//DelegateStakeRules
+		profitShare = map[common.Address]uint8{
+			common.HexToAddress("0x1111111111111111111111111111111111111111"): 10,
+			common.HexToAddress("0x2222222222222222222222222222222222222222"): 30,
+			common.HexToAddress("0x3333333333333333333333333333333333333333"): 60,
+		}
+		stakeShare = map[common.Address]uint8{
+			common.HexToAddress("0x4444444444444444444444444444444444444444"): 70,
+			common.HexToAddress("0x5555555555555555555555555555555555555555"): 30,
+		}
+		exit        = []common.Address{common.HexToAddress("0x6666666666666666666666666666666666666666")}
+		withdrawal  = []common.Address{common.HexToAddress("0x7777777777777777777777777777777777777777")}
+		trialPeriod = uint64(321)
+	)
+
+	rules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	testutils.AssertNoError(t, err)
+	trialRules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	testutils.AssertNoError(t, err)
+
+	dsr, err := NewDelegateStakeData(rules, trialPeriod, trialRules)
+	testutils.AssertNoError(t, err)
+	testValidator.DelegateStake = dsr
+
+	data, err := testValidator.MarshalBinary()
+	testutils.AssertNoError(t, err)
+
+	v := new(Validator)
+	err = v.UnmarshalBinary(data)
+	testutils.AssertNoError(t, err)
+
+	testutils.AssertEqual(t, v.PubKey, testValidator.PubKey)
+	testutils.AssertEqual(t, v.Address, testValidator.Address)
+	testutils.AssertEqual(t, v.WithdrawalAddress, testValidator.WithdrawalAddress)
+	testutils.AssertEqual(t, v.Index, testValidator.Index)
+	testutils.AssertEqual(t, v.ActivationEra, testValidator.ActivationEra)
+	testutils.AssertEqual(t, v.ExitEra, testValidator.ExitEra)
+
+	testutils.AssertEqual(t, len(v.Stake), len(testValidator.Stake))
+	for i, stake := range v.Stake {
+		expectedStake := testValidator.Stake[i]
+		testutils.AssertEqual(t, stake.Address, expectedStake.Address)
+		testutils.AssertEqual(t, stake.Sum, expectedStake.Sum)
+	}
+
+	// delegate stake
+	testutils.AssertEqual(t, dsr.Rules, v.DelegateStake.Rules)
+	testutils.AssertEqual(t, dsr.TrialPeriod, v.DelegateStake.TrialPeriod)
+	testutils.AssertEqual(t, dsr.TrialRules, v.DelegateStake.TrialRules)
 }
 
 func TestValidatorSettersGetters(t *testing.T) {

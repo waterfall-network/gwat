@@ -12,14 +12,14 @@ import (
 
 type Validator struct {
 	// the Address property must be the first for IsValidatorAddress
-	Address           common.Address    `json:"address"`
-	PubKey            common.BlsPubKey  `json:"pubKey"`
-	WithdrawalAddress *common.Address   `json:"withdrawalAddress"`
-	Index             uint64            `json:"index"`
-	ActivationEra     uint64            `json:"activationEra"`
-	ExitEra           uint64            `json:"exitEra"`
-	Stake             []*StakeByAddress `json:"stake"`
-	DelegateStake     DelegateStakeData `json:"delegateStake"`
+	Address           common.Address     `json:"address"`
+	PubKey            common.BlsPubKey   `json:"pubKey"`
+	WithdrawalAddress *common.Address    `json:"withdrawalAddress"`
+	Index             uint64             `json:"index"`
+	ActivationEra     uint64             `json:"activationEra"`
+	ExitEra           uint64             `json:"exitEra"`
+	Stake             []*StakeByAddress  `json:"stake"`
+	DelegateStake     *DelegateStakeData `json:"delegateStake"`
 }
 
 func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {
@@ -31,6 +31,7 @@ func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *c
 		ActivationEra:     math.MaxUint64,
 		ExitEra:           math.MaxUint64,
 		Stake:             []*StakeByAddress{},
+		DelegateStake:     nil,
 	}
 }
 
@@ -86,8 +87,15 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
+	// marshal binary extended data
+	// delegate stake data
+	delegateBin, err := v.DelegateStake.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
 	//create bin data
-	binDataLen := common.AddressLength + common.Uint32Size + len(baseData)
+	binDataLen := common.AddressLength + common.Uint32Size + len(baseData) + len(delegateBin) + common.Uint32Size
 	binData := make([]byte, binDataLen)
 
 	var startOffset, endOfset int
@@ -107,6 +115,16 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 	endOfset = startOffset + len(baseData)
 	copy(binData[startOffset:endOfset], baseData)
 
+	// set extended data
+	//set len of delegate stake data
+	startOffset = endOfset
+	endOfset = startOffset + common.Uint32Size
+	binary.BigEndian.PutUint32(binData[startOffset:endOfset], uint32(len(delegateBin)))
+	// delegate stake data
+	startOffset = endOfset
+	endOfset = startOffset + len(delegateBin)
+	copy(binData[startOffset:endOfset], delegateBin)
+
 	return binData, nil
 }
 
@@ -123,7 +141,7 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 	startOffset = endOfset
 	endOfset = startOffset + common.Uint32Size
 	baseDataLen := int(binary.BigEndian.Uint32(data[startOffset:endOfset]))
-	if baseDataLen > len(data) {
+	if baseDataLen > len(data[endOfset:]) {
 		return errBadBinaryData
 	}
 	// get base validator data
@@ -143,6 +161,27 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 
 	if *v.WithdrawalAddress == (common.Address{}) {
 		v.WithdrawalAddress = nil
+	}
+
+	// retrieve extended data
+	extendedData := data[endOfset:]
+	if len(extendedData) > 0 {
+		// delegate stake data
+		// retrieve data len
+		startOffset = 0
+		endOfset = startOffset + common.Uint32Size
+		delegateDataLen := int(binary.BigEndian.Uint32(extendedData[startOffset:endOfset]))
+		if delegateDataLen > len(extendedData[endOfset:]) {
+			return errBadBinaryData
+		}
+		// get delegate data
+		startOffset = endOfset
+		endOfset = startOffset + delegateDataLen
+		delegateStake, err := NewDelegateStakeDataFromBinary(extendedData[startOffset:endOfset])
+		if err != nil {
+			return err
+		}
+		v.DelegateStake = delegateStake
 	}
 
 	return nil
