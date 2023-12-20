@@ -462,11 +462,6 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 }
 
 func (p *Processor) validatorDelegateStake(caller Ref, toAddr common.Address, value *big.Int, op operation.DelegateStake) (_ []byte, err error) {
-	//todo rm
-	if true {
-		panic("Implement me")
-	}
-
 	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
@@ -491,6 +486,11 @@ func (p *Processor) validatorDelegateStake(caller Ref, toAddr common.Address, va
 	withdrawalAddress := common.Address{}
 
 	validator := valStore.NewValidator(op.PubKey(), op.CreatorAddress(), &withdrawalAddress)
+
+	validator.DelegateStake, err = valStore.NewDelegateStakeData(op.Rules(), op.TrialPeriod(), op.TrialRules())
+	if err != nil {
+		return nil, err
+	}
 
 	// if validator already exist
 	currValidator, _ := p.Storage().GetValidator(p.state, op.CreatorAddress())

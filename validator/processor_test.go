@@ -374,6 +374,7 @@ func TestProcessorExit(t *testing.T) {
 	opData, err := operation.EncodeToBytes(exitOperation)
 	testutils.AssertNoError(t, err)
 	msg.EXPECT().Data().AnyTimes().Return(opData)
+	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
 
 	cases := []*testmodels.TestCase{
 		{
@@ -505,15 +506,14 @@ func TestProcessorDeactivate(t *testing.T) {
 	})
 	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
 	bc.EXPECT().Database().AnyTimes().Return(db)
-	bc.EXPECT().GetValidatorSyncData(
-		gomock.AssignableToTypeOf(common.Hash{})).
+	bc.EXPECT().GetValidatorSyncData(gomock.AssignableToTypeOf(common.Hash{})).
 		AnyTimes().Return(&types.ValidatorSync{
 		OpType:     deactivateOp.OpType(),
 		ProcEpoch:  deactivateOp.ProcEpoch(),
 		Index:      deactivateOp.Index(),
 		Creator:    deactivateOp.Creator(),
 		Amount:     deactivateOp.Amount(),
-		InitTxHash: common.Hash{1, 2, 3},
+		InitTxHash: initTxHash,
 	})
 	bc.EXPECT().EpochToEra(uint64(100)).AnyTimes().Return(&testmodels.TestEra)
 
@@ -523,7 +523,7 @@ func TestProcessorDeactivate(t *testing.T) {
 	opData, err := operation.EncodeToBytes(deactivateOp)
 	testutils.AssertNoError(t, err)
 	msg.EXPECT().Data().AnyTimes().Return(opData)
-	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
+	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{1, 2, 3})
 
 	cases := []*testmodels.TestCase{
 		{
@@ -823,7 +823,7 @@ func TestProcessorUpdateBalance(t *testing.T) {
 		Index:      updateBalanceOperation.Index(),
 		Creator:    updateBalanceOperation.Creator(),
 		Amount:     updateBalanceOperation.Amount(),
-		InitTxHash: common.Hash{1, 2, 3},
+		InitTxHash: initTxHash,
 	})
 	bc.EXPECT().EpochToEra(uint64(100)).AnyTimes().Return(&testmodels.TestEra)
 
