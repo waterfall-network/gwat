@@ -90,11 +90,7 @@ func TestValidatorSync_MarshalJSON(t *testing.T) {
 	src_1.Amount.SetString("32789456000000", 10)
 
 	//fmt.Println()
-	exp := "{\"opType\":\"0x2\"," +
-		"\"procEpoch\":\"0xb24d\"," +
-		"\"index\":\"0xb24d\"," +
-		"\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\"," +
-		"\"amount\":\"0x1dd263e09400\",\"txHash\":null,\"InitTxHash\":\"0x0102030000000000000000000000000000000000000000000000000000000000\"}"
+	exp := "{\"initTxHash\":\"0x0102030000000000000000000000000000000000000000000000000000000000\",\"opType\":\"0x2\",\"procEpoch\":\"0xb24d\",\"index\":\"0xb24d\",\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"amount\":\"0x1dd263e09400\",\"txHash\":null}"
 	tests := []struct {
 		name string
 		src  *ValidatorSync
@@ -263,6 +259,7 @@ func TestCheckpoint_MarshalJSON(t *testing.T) {
 	}
 	//fmt.Println()
 	exp := "{\"epoch\":\"0xb24d\"," +
+		"\"finEpoch\":\"0xb24f\"," +
 		"\"root\":\"0x1111111111111111110000000000000000000000000000000000000000000000\"," +
 		"\"spine\":\"0x2222222222222222220000000000000000000000000000000000000000000000\"}"
 	tests := []struct {
@@ -390,8 +387,7 @@ func TestFinalizationParams_MarshalJSON(t *testing.T) {
 	src_1.ValSyncData[0].Amount.SetString("32789456000000", 10)
 
 	//fmt.Println()
-	exp := "{\"spines\":[\"0x2222000000000000000000000000000000000000000000000000000000000000\",\"0x3333000000000000000000000000000000000000000000000000000000000000\"],\"baseSpine\":\"0x1111000000000000000000000000000000000000000000000000000000000000\",\"checkpoint\":{\"epoch\":\"0xb24d\",\"finEpoch\":\"0xb24f\",\"root\":\"0x1111111111111111110000000000000000000000000000000000000000000000\",\"spine\":\"0x2222222222222222220000000000000000000000000000000000000000000000\"},\"valSyncData\":[{\"opType\":\"0x2\",\"procEpoch\":\"0xb24d\",\"index\":\"0xb24d\",\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"amount\":\"0x1dd263e09400\",\"txHash\":null,\"InitTxHash\":\"0x0102030000000000000000000000000000000000000000000000000000000000\"}],\"syncMode\":\"0x2\"}"
-
+	exp := "{\"spines\":[\"0x2222000000000000000000000000000000000000000000000000000000000000\",\"0x3333000000000000000000000000000000000000000000000000000000000000\"],\"baseSpine\":\"0x1111000000000000000000000000000000000000000000000000000000000000\",\"checkpoint\":{\"epoch\":\"0xb24d\",\"finEpoch\":\"0xb24f\",\"root\":\"0x1111111111111111110000000000000000000000000000000000000000000000\",\"spine\":\"0x2222222222222222220000000000000000000000000000000000000000000000\"},\"valSyncData\":[{\"initTxHash\":\"0x0102030000000000000000000000000000000000000000000000000000000000\",\"opType\":\"0x2\",\"procEpoch\":\"0xb24d\",\"index\":\"0xb24d\",\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"amount\":\"0x1dd263e09400\",\"txHash\":null}],\"syncMode\":\"0x2\"}"
 	tests := []struct {
 		name string
 		src  *FinalizationParams

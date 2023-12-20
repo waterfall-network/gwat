@@ -23,7 +23,6 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
@@ -110,6 +109,18 @@ func TestGenesisHashes(t *testing.T) {
 		},
 	}
 	for i, c := range cases {
+		depositData := make(DepositData, 0)
+		for i := 0; i < 64; i++ {
+			valData := &ValidatorData{
+				Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+				CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+				WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+				Amount:            3200,
+			}
+
+			depositData = append(depositData, valData)
+		}
+		c.genesis.Validators = depositData
 		b := c.genesis.MustCommit(rawdb.NewMemoryDatabase())
 		if got := b.Hash(); got != c.hash {
 			t.Errorf("case: %d, want: %s, got: %s", i, c.hash.Hex(), got.Hex())
@@ -118,7 +129,7 @@ func TestGenesisHashes(t *testing.T) {
 }
 
 func TestSetupGenesisWithValidators(t *testing.T) {
-	expectedHash := common.HexToHash("0x0dbc388cfc8dd97f1f505c911935fdbb0ad2c3e860836ccbbbcc5fe59ec29fd4")
+	expectedHash := common.HexToHash("0xcf3214ba22ec4c54637ce5b9bf3a16723a18d7a803f47a675377fbcd785db9ae")
 
 	validators := make([]common.Address, 50)
 
@@ -173,7 +184,5 @@ func TestSetupGenesisWithValidators(t *testing.T) {
 		copy(buf[beginning:end], validator[:])
 	}
 
-	validatorsStateAddress := crypto.Keccak256Address(buf)
-
-	testutils.AssertEqual(t, *config.ValidatorsStateAddress, validatorsStateAddress)
+	testutils.AssertEqual(t, *config.ValidatorsStateAddress, *genesis.GenerateValidatorStateAddress())
 }
