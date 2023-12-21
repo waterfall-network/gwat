@@ -980,8 +980,8 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		return nil, err
 	}
 
+	var transferFrom common.Address
 	percentFee := uint8(0)
-	transferFrom := common.Address{}
 	transferTo := caller.Address()
 	transferValue, paymentValue := big.NewInt(0), big.NewInt(0)
 	switch std {

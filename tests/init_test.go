@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -43,7 +42,7 @@ var (
 )
 
 func readJSON(reader io.Reader, value interface{}) error {
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return fmt.Errorf("error reading JSON file: %v", err)
 	}
@@ -124,11 +123,6 @@ func (tm *testMatcher) fails(pattern string, reason string) {
 
 func (tm *testMatcher) runonly(pattern string) {
 	tm.runonlylistpat = regexp.MustCompile(pattern)
-}
-
-// config defines chain config for tests matching the pattern.
-func (tm *testMatcher) config(pattern string, cfg params.ChainConfig) {
-	tm.configpat = append(tm.configpat, testConfig{regexp.MustCompile(pattern), cfg})
 }
 
 // findSkip matches name against test skip patterns.

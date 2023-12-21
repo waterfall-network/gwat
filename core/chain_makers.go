@@ -17,7 +17,7 @@
 package core
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"math/big"
 
@@ -172,7 +172,7 @@ func AddBlocksToFinalized(chain *BlockChain, blocks []*types.Block) error {
 		blocks[i].SetNumber(&nr)
 	}
 	if _, err := chain.SyncInsertChain(blocks); err != nil {
-		return errors.New(fmt.Sprintf("failed to insert initial blocks: %v", err))
+		return fmt.Errorf("failed to insert initial blocks: %v", err)
 	}
 	return nil
 }
@@ -181,8 +181,9 @@ func AddBlocksToDag(bc *BlockChain, blocks []*types.Block) {
 	if len(blocks) == 0 || bc == nil {
 		return
 	}
+	ctx := context.Background()
 	lcp := bc.GetLastCoordinatedCheckpoint()
-	cpBlock := bc.GetBlock(lcp.Spine)
+	cpBlock := bc.GetBlock(ctx, lcp.Spine)
 	bc.AddTips(&types.BlockDAG{
 		Hash:                   cpBlock.Hash(),
 		Height:                 cpBlock.Height(),
@@ -286,8 +287,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 		}
 
 		return block, b.receipts
-
-		return nil, nil
 	}
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)

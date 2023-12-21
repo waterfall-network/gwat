@@ -316,12 +316,10 @@ func TestTips(t *testing.T) {
 	if res != exp {
 		t.Fatalf("Tips.GetStableStateHash failed, got %v != %v", res, exp)
 	}
-
 }
 
 // TestTipsSkippedSlots test case happen while extremal network loading
 func TestTipsSkippedSlots(t *testing.T) {
-
 	blockDag0 := &BlockDAG{
 		Hash:     common.HexToHash("0x073e11c4fbb1c9e774cc54366af5a299f73aaf28fcbbe856fb18e158e2f5bc13"),
 		Height:   uint64(3190),
@@ -612,7 +610,6 @@ func TestTipsSkippedSlots(t *testing.T) {
 	if res != exp {
 		t.Fatalf("Tips.GetOrderedAncestorsHashes failed, got %v != %v", res, exp)
 	}
-
 }
 
 func TestHeaderMap(t *testing.T) {

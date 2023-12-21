@@ -162,7 +162,7 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Nr()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
-		block := b.eth.blockchain.GetBlock(hash)
+		block := b.eth.blockchain.GetBlock(ctx, hash)
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}

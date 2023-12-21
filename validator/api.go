@@ -30,7 +30,7 @@ type Backend interface {
 type Blockchain interface {
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	Database() ethdb.Database

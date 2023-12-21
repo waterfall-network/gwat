@@ -259,30 +259,6 @@ func (mr *MockblockChainMockRecorder) EpochToEra(arg0 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EpochToEra", reflect.TypeOf((*MockblockChain)(nil).EpochToEra), arg0)
 }
 
-// ExploreChainRecursive mocks base method.
-func (m *MockblockChain) ExploreChainRecursive(arg0 common.Hash, arg1 ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0}
-	for _, a := range arg1 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ExploreChainRecursive", varargs...)
-	ret0, _ := ret[0].(common.HashArray)
-	ret1, _ := ret[1].(common.HashArray)
-	ret2, _ := ret[2].(common.HashArray)
-	ret3, _ := ret[3].(*types.GraphDag)
-	ret4, _ := ret[4].(core.ExploreResultMap)
-	ret5, _ := ret[5].(error)
-	return ret0, ret1, ret2, ret3, ret4, ret5
-}
-
-// ExploreChainRecursive indicates an expected call of ExploreChainRecursive.
-func (mr *MockblockChainMockRecorder) ExploreChainRecursive(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExploreChainRecursive", reflect.TypeOf((*MockblockChain)(nil).ExploreChainRecursive), varargs...)
-}
-
 // Genesis mocks base method.
 func (m *MockblockChain) Genesis() *types.Block {
 	m.ctrl.T.Helper()

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -23,7 +24,7 @@ const (
 
 type blockchain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	GetSlotInfo() *types.SlotInfo
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	GetEpoch(epoch uint64) common.Hash
@@ -72,9 +73,7 @@ func (s *storage) SetValidator(stateDb vm.StateDB, val *Validator) error {
 }
 
 func (s *storage) GetValidator(stateDb vm.StateDB, address common.Address) (*Validator, error) {
-	var valData ValidatorBinary
-
-	valData = stateDb.GetCode(address)
+	var valData ValidatorBinary = stateDb.GetCode(address)
 	if valData == nil {
 		return nil, ErrNoStateValidatorInfo
 	}

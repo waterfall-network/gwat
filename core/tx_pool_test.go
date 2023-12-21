@@ -17,10 +17,10 @@
 package core
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -152,6 +152,21 @@ type testBlockChain struct {
 	genesisBlock       *types.Block
 }
 
+func (bc *testBlockChain) GetLastFinalizedHeader() *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) EstimateGas(msg types.Message, header *types.Header) (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) Config() *params.ChainConfig {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (bc *testBlockChain) IsSynced() bool {
 	//TODO implement me
 	panic("implement me")
@@ -217,7 +232,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Block {
 	}, nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) GetBlock(hash common.Hash) *types.Block {
+func (bc *testBlockChain) GetBlock(tx context.Context, hash common.Hash) *types.Block {
 	//return bc.CurrentBlock()
 	if hash == bc.genesisBlock.Hash() {
 		return bc.genesisBlock
@@ -2368,7 +2383,7 @@ func testTransactionJournaling(t *testing.T, nolocals bool) {
 	t.Parallel()
 
 	// Create a temporary file for the journal
-	file, err := ioutil.TempFile("", "")
+	file, err := os.TempFile("", "")
 	if err != nil {
 		t.Fatalf("failed to create temporary journal: %v", err)
 	}

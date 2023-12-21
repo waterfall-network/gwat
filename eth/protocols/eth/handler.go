@@ -149,9 +149,9 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	var (
 		lastFinNr   = chain.GetLastFinalizedNumber()
 		lastCpFinNr uint64
-		dagHashes   *common.HashArray = nil
-		unsync                        = chain.GetUnsynchronizedTipsHashes()
-		slotInfo                      = chain.GetSlotInfo()
+		dagHashes   *common.HashArray
+		unsync      = chain.GetUnsynchronizedTipsHashes()
+		slotInfo    = chain.GetSlotInfo()
 	)
 	dagHashes = chain.GetDagHashes()
 	if len(unsync) > 0 {

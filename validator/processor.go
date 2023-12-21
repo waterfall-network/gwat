@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -88,7 +89,7 @@ type blockchain interface {
 	GetLastCoordinatedCheckpoint() *types.Checkpoint
 	ValidatorStorage() valStore.Storage
 	StateAt(root common.Hash) (*state.StateDB, error)
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	GetEpoch(epoch uint64) common.Hash
 }
 
@@ -566,61 +567,10 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 }
 
 type logEntry struct {
-	name      string
-	entryType string
-	indexed   bool
-	data      []byte
-}
-
-func newDataLogEntry(data []byte) logEntry {
-	return logEntry{
-		indexed: false,
-		data:    data,
-	}
-}
-
-func newIndexedPubkeyLogEntry(name string, data []byte) logEntry {
-	return logEntry{
-		name:      name,
-		entryType: pubkeyLogType,
-		indexed:   true,
-		data:      data,
-	}
-}
-func newIndexedSignatureLogEntry(name string, data []byte) logEntry {
-	return logEntry{
-		name:      name,
-		entryType: signatureLogType,
-		indexed:   true,
-		data:      data,
-	}
-}
-
-func newIndexedAddressLogEntry(name string, data []byte) logEntry {
-	return logEntry{
-		name:      name,
-		entryType: addressLogType,
-		indexed:   true,
-		data:      data,
-	}
-}
-
-func newUint256LogEntry(name string, data []byte) logEntry {
-	return logEntry{
-		name:      name,
-		entryType: uint256LogType,
-		indexed:   false,
-		data:      data,
-	}
-}
-
-func newBoolLogEntry(name string, data []byte) logEntry {
-	return logEntry{
-		name:      name,
-		entryType: boolLogType,
-		indexed:   false,
-		data:      data,
-	}
+	// name string
+	//entryType string
+	indexed bool
+	data    []byte
 }
 
 type EventEmmiter struct {

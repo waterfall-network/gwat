@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -92,8 +93,7 @@ var (
 )
 
 var (
-	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
-	statsReportInterval = 8 * time.Second // Time interval to report transaction pool stats
+	evictionInterval = time.Minute // Time interval to check for evictable transactions
 )
 
 var (
@@ -119,8 +119,6 @@ var (
 	// throttleTxMeter counts how many transactions are rejected due to too-many-changes between
 	// txpool reorgs.
 	throttleTxMeter = metrics.NewRegisteredMeter("txpool/throttle", nil)
-	// reorgDurationTimer measures how long time a txpool reorg takes.
-	reorgDurationTimer = metrics.NewRegisteredTimer("txpool/reorgtime", nil)
 	// dropBetweenReorgHistogram counts how many drops we experience between two reorg runs. It is expected
 	// that this number is pretty low, since txpool reorgs happen very frequently.
 	dropBetweenReorgHistogram = metrics.NewRegisteredHistogram("txpool/dropbetweenreorg", nil, metrics.NewExpDecaySample(1028, 0.015))
@@ -149,7 +147,7 @@ const (
 type blockChain interface {
 	GetLastFinalizedBlock() *types.Block
 	GetLastFinalizedHeader() *types.Header
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
 	ReadFinalizedNumberByHash(hash common.Hash) *uint64
 	GetBlockByNumber(number uint64) *types.Block
@@ -464,6 +462,7 @@ func (pool *TxPool) loop() {
 						"elapsed", common.PrettyDuration(time.Since(tStart)),
 						"func:", "moveToProcessing",
 						"txs", len(txs.Transactions),
+						"block", txs.BlockHash.Hex(),
 						"syncMode", syncMode,
 					)
 				}(time.Now())
@@ -477,31 +476,17 @@ func (pool *TxPool) loop() {
 						pool.removeTx(tx.Hash(), true)
 					}
 				} else {
+					defer func(tStart time.Time) {
+						log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing block (moveToProcessingAccelerated)",
+							"elapsed", common.PrettyDuration(time.Since(tStart)),
+							"func:", "moveToProcessing",
+							"txs", len(txs.Transactions),
+							"block", txs.BlockHash.Hex(),
+							"syncMode", syncMode,
+						)
+					}(time.Now())
 					pool.moveToProcessingAccelerated(txs)
 				}
-
-				//for _, tx := range txs.Transactions {
-				//	// while sync - just removing tx from pool
-				//	if syncMode {
-				//		pool.removeTx(tx.Hash(), true)
-				//		//pool.removeProcessedTx(tx)
-				//	} else {
-				//		//tStart := time.Now()
-				//		param := &types.TransactionBlocks{
-				//			Transaction:  tx,
-				//			BlocksHashes: common.HashArray{txs.BlockHash},
-				//		}
-				//		//log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing cycle 0",
-				//		//	"elapsed", common.PrettyDuration(time.Since(tStart)),
-				//		//	"func:", "moveToProcessing",
-				//		//)
-				//		pool.moveToProcessing(param)
-				//		//log.Info("^^^^^^^^^^^^ TIME txpool moveToProcessing cycle 1",
-				//		//	"elapsed", common.PrettyDuration(time.Since(tStart)),
-				//		//	"func:", "moveToProcessing",
-				//		//)
-				//	}
-				//}
 			}()
 
 		case txs := <-pool.rmTxCh:
@@ -518,7 +503,6 @@ func (pool *TxPool) loop() {
 				defer pool.mu.Unlock()
 				for _, tx := range txs {
 					pool.removeTx(tx.Hash(), true)
-					//pool.removeProcessedTx(tx)
 				}
 			}()
 		}
@@ -784,16 +768,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	} else {
 		isValidatorOp = tx.To() != nil && pool.chainconfig.ValidatorsStateAddress != nil && *tx.To() == *pool.chainconfig.ValidatorsStateAddress
 	}
-
-	var txData []byte
 	if !isTokenOp {
-		txData = tx.Data()
-	}
-
-	if isValidatorOp {
-		txData = tx.Data()
-		if err := pool.handleValidatorTransaction(txData, from, tx.Value()); err != nil {
-			return err
+		txData := tx.Data()
+		if isValidatorOp {
+			err := pool.handleValidatorTransaction(txData, from, tx.Value())
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -805,6 +786,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	estimateGas, err := pool.chain.EstimateGas(msg, head)
+	if err != nil {
+		return err
+	}
 
 	if tx.Gas() < estimateGas && !isValidatorOp {
 		return ErrIntrinsicGas
@@ -1126,6 +1110,8 @@ func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error {
 }
 
 // This is like AddRemotes with a single transaction, but waits for pool reorganization. Tests use this method.
+//
+//nolint:unused // tests only
 func (pool *TxPool) addRemoteSync(tx *types.Transaction) error {
 	errs := pool.AddRemotesSync([]*types.Transaction{tx})
 	return errs[0]
@@ -1299,9 +1285,7 @@ func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
 		pool.all.Add(t, false)
 		if t.Hash() == tx.Hash() {
 			for _, hash := range tx.BlocksHashes {
-				if !pool.processing[addr].txs.blocksHashes[tx.Hash()].Has(hash) {
-					pool.processing[addr].PutTxBlockHash(tx.Hash(), tx.BlocksHashes)
-				}
+				pool.processing[addr].PutTxBlockHash(tx.Hash(), hash)
 			}
 		}
 	}
@@ -1359,121 +1343,75 @@ func (pool *TxPool) moveToProcessing(tx *types.TransactionBlocks) {
 }
 
 func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
-	tx := &types.TransactionBlocks{
-		BlocksHashes: common.HashArray{txs.BlockHash},
-	}
 	var curAdr common.Address
 	transactions := txs.Transactions
 	for i := len(transactions) - 1; i >= 0; i-- {
 		btx := transactions[i]
-		tx.Transaction = btx
 
-		addr, err := types.Sender(pool.signer, tx.Transaction) // already validated during insertion
-		if err != nil {
-			log.Error("cannot find TX sender", "TX hash", tx.Hash(), "err", err.Error())
-			return
+		// retrieving sender addr of tx
+		var addr common.Address
+		if pAddr := types.SenderFromCache(pool.signer, btx); pAddr == nil {
+			// get by pooled tx
+			poolTx := pool.all.Get(btx.Hash())
+			if poolTx == nil {
+				poolTx = btx
+			}
+			sndr, err := types.Sender(pool.signer, poolTx) // already validated during insertion
+			if err != nil {
+				log.Error("TxPool: move to processing: get sender failed",
+					"txHash", btx.Hash().Hex(),
+					"blHash", txs.BlockHash.Hex(),
+					"err", err.Error())
+				return
+			}
+			addr = sndr
+			//cache sender to block tx
+			types.CacheSender(pool.signer, &sndr, btx)
+		} else {
+			addr = *pAddr
 		}
 
+		//check processing txList exists
+		if pool.processing[addr] == nil {
+			pool.processing[addr] = newTxList(true)
+		}
+		// add for tx the block hash
+		pool.processing[addr].PutTxBlockHash(btx.Hash(), txs.BlockHash)
+
+		//skip if sender address has not changed
 		if curAdr == addr {
 			continue
 		}
 		curAdr = addr
 
-		//move to processing all txs with nonce <= nonce of current tx
 		pendingLteNonce := types.Transactions{}
-		if pending := pool.pending[addr]; pending != nil {
-			pendingLteNonce = pending.Forward(tx.Nonce() + 1)
-			for _, t := range pendingLteNonce {
-				pending.Delete(t)
-			}
-			// If no more pending transactions are left, remove the list
-			if pending.Empty() {
-				delete(pool.pending, addr)
-			}
-		}
-
-		//move to processing all txs with nonce <= nonce of current tx
-		queueLteNonce := types.Transactions{}
-		if queue := pool.queue[addr]; queue != nil {
-			queueLteNonce = queue.Forward(tx.Nonce() + 1)
-			//queueLteNonce = queue.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
-			for _, t := range queueLteNonce {
-				queue.Delete(t)
-			}
-			// If no more queue transactions are left, remove the list
-			if queue.Empty() {
-				delete(pool.queue, addr)
-				delete(pool.beats, addr)
-			}
-		}
-
-		curNonce := pool.currentState.GetNonce(addr)
-		if curNonce > tx.Nonce() {
-			if pool.processing[addr] != nil {
-				pool.processing[addr].Forward(curNonce)
-				// If no more pending transactions are left, remove the list
-				if pool.processing[addr].Empty() {
-					delete(pool.processing, addr)
-				}
-			}
-			return
-		}
-
-		//check txList exists
-		if pool.processing[addr] == nil {
-			pool.processing[addr] = newTxList(true)
-		}
-		moveTxs := append(pendingLteNonce, queueLteNonce...)
-		moveTxs = append(moveTxs, tx.Transaction)
-		for _, t := range moveTxs {
-			pool.processing[addr].Add(t, pool.config.PriceBump)
-			pool.all.Add(t, false)
-			if t.Hash() == tx.Hash() {
-				for _, hash := range tx.BlocksHashes {
-					if !pool.processing[addr].txs.blocksHashes[tx.Hash()].Has(hash) {
-						pool.processing[addr].PutTxBlockHash(tx.Hash(), tx.BlocksHashes)
-					}
-				}
-			}
-		}
-
-		// Update the account nonce if needed
-		pool.pendingNonces.setIfGreater(addr, tx.Nonce()+1)
-		processingNonce := tx.Nonce()
-		// check no gap with pending
-		if pending := pool.pending[addr]; pending != nil {
-			pendingNonce := (*pending.txs.index)[0]
-			if pendingNonce > processingNonce+1 {
-				//if gap move all to queue
-				pendingGtNonce := pending.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() > processingNonce+1 })
-				for _, t := range pendingGtNonce {
-					pool.pending[addr].Delete(t)
-					if pool.queue[addr] == nil {
-						pool.queue[addr] = newTxList(true)
-					}
-					pool.queue[addr].Add(t, pool.config.PriceBump)
-					//pool.enqueueTx(t.Hash(), tx, false, false)
+		var wg1 sync.WaitGroup
+		wg1.Add(1)
+		go func() {
+			defer wg1.Done()
+			//move to processing all txs with nonce <= nonce of current tx
+			if pending := pool.pending[addr]; pending != nil {
+				pendingLteNonce = pending.Forward(btx.Nonce() + 1)
+				for _, t := range pendingLteNonce {
+					pending.Delete(t)
 				}
 				// If no more pending transactions are left, remove the list
 				if pending.Empty() {
 					delete(pool.pending, addr)
 				}
 			}
-		}
+		}()
 
-		// if no gap to queue - move to pending
-		if queue := pool.queue[addr]; queue != nil {
-			//lowestNonce := queue.txs.FirstElement().Nonce()
-			lowestNonce := (*queue.txs.index)[0]
-			if lowestNonce <= processingNonce+1 {
-				for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
-					t := queue.txs.Get(i)
+		queueLteNonce := types.Transactions{}
+		wg1.Add(1)
+		go func() {
+			defer wg1.Done()
+			//move to processing all txs with nonce <= nonce of current tx
+			if queue := pool.queue[addr]; queue != nil {
+				queueLteNonce = queue.Forward(btx.Nonce() + 1)
+				//queueLteNonce = queue.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() <= tx.Nonce() })
+				for _, t := range queueLteNonce {
 					queue.Delete(t)
-					if pool.pending[addr] == nil {
-						pool.pending[addr] = newTxList(true)
-					}
-					pool.pending[addr].Add(t, pool.config.PriceBump)
-					//pool.promoteTx(addr, t.Hash(), t)
 				}
 				// If no more queue transactions are left, remove the list
 				if queue.Empty() {
@@ -1481,12 +1419,90 @@ func (pool *TxPool) moveToProcessingAccelerated(txs *types.BlockTransactions) {
 					delete(pool.beats, addr)
 				}
 			}
-		}
+		}()
+
+		wg1.Add(1)
+		go func() {
+			defer wg1.Done()
+			curNonce := pool.currentState.GetNonce(addr)
+			if curNonce > btx.Nonce() {
+				if pool.processing[addr] != nil {
+					pool.processing[addr].Forward(curNonce)
+				}
+				return
+			}
+		}()
+		wg1.Wait()
 
 		// Update the account nonce if needed
-		if pool.pending[addr] != nil {
-			pool.pendingNonces.setIfGreater(addr, pool.pending[addr].LastElement().Nonce()+1)
-		}
+		pool.pendingNonces.setIfGreater(addr, btx.Nonce()+1)
+		processingNonce := btx.Nonce()
+
+		var wg2 sync.WaitGroup
+		wg2.Add(1)
+		go func() {
+			defer wg2.Done()
+			// add to processing
+			moveTxs := append(pendingLteNonce, queueLteNonce...)
+			moveTxs = append(moveTxs, btx)
+			for _, t := range moveTxs {
+				pool.processing[addr].Add(t, pool.config.PriceBump)
+				pool.all.Add(t, false)
+			}
+		}()
+
+		wg2.Add(1)
+		go func() {
+			defer wg2.Done()
+			// check no gap with pending
+			if pending := pool.pending[addr]; pending != nil {
+				pendingNonce := (*pending.txs.index)[0]
+				if pendingNonce > processingNonce+1 {
+					//if gap move all to queue
+					pendingGtNonce := pending.txs.Filter(func(t *types.Transaction) bool { return t.Nonce() > processingNonce+1 })
+					for _, t := range pendingGtNonce {
+						pool.pending[addr].Delete(t)
+						if pool.queue[addr] == nil {
+							pool.queue[addr] = newTxList(true)
+						}
+						pool.queue[addr].Add(t, pool.config.PriceBump)
+						//pool.enqueueTx(t.Hash(), tx, false, false)
+					}
+					// If no more pending transactions are left, remove the list
+					if pending.Empty() {
+						delete(pool.pending, addr)
+					}
+				}
+			}
+
+			// if no gap to queue - move to pending
+			if queue := pool.queue[addr]; queue != nil {
+				//lowestNonce := queue.txs.FirstElement().Nonce()
+				lowestNonce := (*queue.txs.index)[0]
+				if lowestNonce <= processingNonce+1 {
+					for i := lowestNonce; queue.txs.Get(i) != nil; i++ {
+						t := queue.txs.Get(i)
+						queue.Delete(t)
+						if pool.pending[addr] == nil {
+							pool.pending[addr] = newTxList(true)
+						}
+						pool.pending[addr].Add(t, pool.config.PriceBump)
+						//pool.promoteTx(addr, t.Hash(), t)
+					}
+					// If no more queue transactions are left, remove the list
+					if queue.Empty() {
+						delete(pool.queue, addr)
+						delete(pool.beats, addr)
+					}
+				}
+			}
+
+			// Update the account nonce if needed
+			if pool.pending[addr] != nil {
+				pool.pendingNonces.setIfGreater(addr, pool.pending[addr].LastElement().Nonce()+1)
+			}
+		}()
+		wg2.Wait()
 	}
 }
 
@@ -1549,50 +1565,6 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 		// Reduce the pending counter
 		pendingGauge.Dec(int64(1))
 		return
-	}
-}
-
-func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
-	txNonce := tx.Nonce()
-
-	addr, _ := types.Sender(pool.signer, tx)
-
-	if pending := pool.pending[addr]; pending != nil {
-		pendingLteNonce := pending.Forward(txNonce + 1)
-		for _, t := range pendingLteNonce {
-			pending.Delete(t)
-		}
-		// If no more pending transactions are left, remove the list
-		if pending.Empty() {
-			delete(pool.pending, addr)
-		}
-		// Reduce the pending counter
-		pendingGauge.Dec(int64(1))
-	}
-
-	if queue := pool.queue[addr]; queue != nil {
-		queueLteNonce := queue.Forward(txNonce + 1)
-		for _, t := range queueLteNonce {
-			queue.Delete(t)
-		}
-		// If no more queue transactions are left, remove the list
-		if queue.Empty() {
-			delete(pool.queue, addr)
-			delete(pool.beats, addr)
-		}
-		// Reduce the queue counter
-		queuedGauge.Dec(1)
-	}
-
-	if processing := pool.processing[addr]; processing != nil {
-		processingLteNonce := processing.Forward(txNonce + 1)
-		for _, t := range processingLteNonce {
-			processing.Delete(t)
-		}
-		// If no more processing transactions are left, remove the list
-		if processing.Empty() {
-			delete(pool.processing, addr)
-		}
 	}
 }
 
@@ -1700,7 +1672,6 @@ func (pool *TxPool) scheduleReorgLoop() {
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
-
 	defer func(tStart time.Time) {
 		log.Debug("^^^^^^^^^^^^ TIME txpool runReorg",
 			"elapsed", common.PrettyDuration(time.Since(tStart)),
@@ -1708,9 +1679,6 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		)
 	}(time.Now())
 
-	//defer func(t0 time.Time) {
-	//	reorgDurationTimer.Update(time.Since(t0))
-	//}(time.Now())
 	defer close(done)
 
 	var promoteAddrs []common.Address
@@ -1799,6 +1767,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
+	ctx := context.Background()
 	oldNum := pool.chain.ReadFinalizedNumberByHash(oldHead.Hash())
 	newNum := pool.chain.ReadFinalizedNumberByHash(newHead.Hash())
 
@@ -1807,12 +1776,11 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		if depth := uint64(math.Abs(float64(*oldNum) - float64(*newNum))); depth > 64 {
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
 		} else {
-
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
 			var (
-				rem    = pool.chain.GetBlock(oldHead.Hash())
-				add    = pool.chain.GetBlock(newHead.Hash())
+				rem    = pool.chain.GetBlock(ctx, oldHead.Hash())
+				add    = pool.chain.GetBlock(ctx, newHead.Hash())
 				remNum = *oldNum
 				addNum = *newNum
 			)
@@ -2199,10 +2167,6 @@ func newAccountSet(signer types.Signer, addrs ...common.Address) *accountSet {
 func (as *accountSet) contains(addr common.Address) bool {
 	_, exist := as.accounts[addr]
 	return exist
-}
-
-func (as *accountSet) empty() bool {
-	return len(as.accounts) == 0
 }
 
 // containsTx checks if the sender of a given tx is within the set. If the sender

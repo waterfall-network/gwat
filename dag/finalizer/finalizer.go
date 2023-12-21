@@ -5,6 +5,7 @@
 package finalizer
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync/atomic"
@@ -37,7 +38,7 @@ type BlockChain interface {
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetBlocksByHashes(hashes common.HashArray) types.BlockMap
 	UpdateFinalizingState(block *types.Block, stateBlock *types.Block) error
-	GetBlock(hash common.Hash) *types.Block
+	GetBlock(ctx context.Context, hash common.Hash) *types.Block
 	FinalizeTips(finHashes common.HashArray, lastFinHash common.Hash, lastFinNr uint64)
 	ReadFinalizedNumberByHash(hash common.Hash) *uint64
 	ReadFinalizedHashByNumber(number uint64) common.Hash
@@ -91,6 +92,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 		return nil
 	}
 
+	ctx := context.Background()
 	lastFinBlock := f.bc.GetLastFinalizedBlock()
 
 	if err := f.SetSpineState(baseSpine, lastFinBlock.Nr()); err != nil {
@@ -153,7 +155,7 @@ func (f *Finalizer) Finalize(spines *common.HashArray, baseSpine *common.Hash) e
 			}
 			lastFinBlock = block
 		}
-		lastBlock := f.bc.GetBlock(orderedChain[len(orderedChain)-1].Hash())
+		lastBlock := f.bc.GetBlock(ctx, orderedChain[len(orderedChain)-1].Hash())
 		log.Info("⛓ Finalization of spine completed", "blocks", len(orderedChain), "slot", lastBlock.Slot(), "calc.nr", lastFinNr, "nr", lastBlock.Nr(), "height", lastBlock.Height(), "hash", lastBlock.Hash().Hex())
 
 		// TODO: deprecated
@@ -201,7 +203,14 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 		return err
 	}
 
-	log.Info("🔗 block finalized", "Number", finNr, "b.nr", block.Nr(), "Slot", block.Slot(), "Height", block.Height(), "hash", block.Hash().Hex())
+	log.Info("🔗 block finalized",
+		"Number", finNr,
+		"b.nr", block.Nr(),
+		"Slot", block.Slot(),
+		"Height", block.Height(),
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+	)
 	return nil
 }
 
@@ -379,7 +388,7 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 	lfNr := f.bc.GetLastFinalizedNumber()
 	baseHeader := f.bc.GetHeader(*baseSpine)
 	if baseHeader == nil || baseHeader.Height > 0 && baseHeader.Nr() == 0 {
-		return spines, baseSpine, fmt.Errorf("base spine header not found")
+		return spines, baseSpine, downloader.ErrInvalidBaseSpine
 	}
 
 	curSlot := baseHeader.Slot

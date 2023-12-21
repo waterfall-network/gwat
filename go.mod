@@ -1,11 +1,9 @@
 module gitlab.waterfall.network/waterfall/protocol/gwat
 
-go 1.15
+go 1.20
 
 require (
-	github.com/Azure/azure-pipeline-go v0.2.2 // indirect
 	github.com/Azure/azure-storage-blob-go v0.7.0
-	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0
 	github.com/aws/aws-sdk-go-v2 v1.2.0
 	github.com/aws/aws-sdk-go-v2/config v1.1.1
@@ -65,4 +63,38 @@ require (
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20200619000410-60c24ae608a6
 	gopkg.in/urfave/cli.v1 v1.20.0
+)
+
+require (
+	github.com/Azure/azure-pipeline-go v0.2.2 // indirect
+	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
+	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.0.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.0.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.1.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.1.1 // indirect
+	github.com/aws/smithy-go v1.1.0 // indirect
+	github.com/cespare/xxhash/v2 v2.1.1 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
+	github.com/deepmap/oapi-codegen v1.8.2 // indirect
+	github.com/dlclark/regexp2 v1.4.1-0.20201116162257-a2a8dda75c91 // indirect
+	github.com/go-ole/go-ole v1.2.1 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
+	github.com/influxdata/line-protocol v0.0.0-20210311194329-9aa0e372d097 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.4 // indirect
+	github.com/mattn/go-ieproxy v0.0.0-20190702010315-6dee0af9227d // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/mitchellh/mapstructure v1.4.1 // indirect
+	github.com/mitchellh/pointerstructure v1.2.0 // indirect
+	github.com/naoina/go-stringutil v0.1.0 // indirect
+	github.com/opentracing/opentracing-go v1.1.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/tklauser/go-sysconf v0.3.5 // indirect
+	github.com/tklauser/numcpus v0.2.2 // indirect
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
+	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
+	google.golang.org/protobuf v1.23.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
