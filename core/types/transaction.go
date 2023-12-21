@@ -642,7 +642,11 @@ func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) IsFake() bool           { return m.isFake }
-func (m Message) TxHash() common.Hash    { return m.txHash }
+func (m Message) SetFake(isFake bool) Message {
+	m.isFake = isFake
+	return m
+}
+func (m Message) TxHash() common.Hash { return m.txHash }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {

@@ -3591,6 +3591,11 @@ func (bc *BlockChain) EstimateGasByEvm(msg Message,
 		cap uint64
 	)
 
+	isFakeVal := msg.IsFake()
+	defer func() {
+		msg.SetFake(isFakeVal)
+	}()
+
 	// Determine the highest gas limit can be used during the estimation.
 	if msg.Gas() >= params.TxGas {
 		hi = msg.Gas()
@@ -3638,6 +3643,7 @@ func (bc *BlockChain) EstimateGasByEvm(msg Message,
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (bool, *ExecutionResult, error) {
 		msg = msg.SetGas(gas)
+		msg = msg.SetFake(true)
 
 		result, err := bc.doCall(msg, header, tp, vp)
 		if err != nil {
