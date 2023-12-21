@@ -695,15 +695,17 @@ func (bc *BlockChain) SetValidatorSyncData(validatorSync *types.ValidatorSync) {
 func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.ValidatorSync) {
 	currOps := bc.GetNotProcessedValidatorSyncData()
 	isUpdated := false
+	valSyncDataKeys := map[common.Hash]interface{}{}
 	for _, vs := range valSyncData {
-		if currOps[vs.Key()] == nil {
+		valSyncDataKeys[vs.Key()] = struct{}{}
+		if npvs := currOps[vs.Key()]; npvs == nil || npvs.ProcEpoch > vs.ProcEpoch {
 			bc.notProcValSyncOps[vs.Key()] = vs
 			isUpdated = true
 		}
 	}
 	// rm handled operations
 	for k, vs := range bc.notProcValSyncOps {
-		if vs.TxHash != nil {
+		if vs.TxHash != nil && valSyncDataKeys[vs.Key()] == nil {
 			delete(bc.notProcValSyncOps, k)
 			isUpdated = true
 		}
