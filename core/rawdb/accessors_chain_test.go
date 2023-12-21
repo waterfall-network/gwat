@@ -206,7 +206,7 @@ func TestCanonicalMappingStorage(t *testing.T) {
 		t.Fatalf("Retrieved canonical mapping mismatch: have %v, want %v", entry, hash)
 	}
 	//DeleteCanonicalHash(db, number)
-	if entry := ReadFinalizedHashByNumber(db, number); entry != (common.Hash{}) {
+	if entry := ReadFinalizedHashByNumber(db, number); entry != (common.HexToHash("0xff00000000000000000000000000000000000000000000000000000000000000")) {
 		t.Fatalf("Deleted canonical mapping returned: %v", entry)
 	}
 }
@@ -341,7 +341,7 @@ func checkReceiptsRLP(have, want types.Receipts) error {
 
 func TestAncientStorage(t *testing.T) {
 	// Freezer style fast import the chain.
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
