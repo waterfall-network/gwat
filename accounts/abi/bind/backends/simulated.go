@@ -106,7 +106,12 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	rawdb.WriteEpoch(database, 0, genesisCp.Spine)
 
 	genesisEraLength := era.EstimateEraLength(genesis.Config, uint64(len(genesis.Validators)))
-	genesisEra := era.Era{0, 0, genesisEraLength - 1, genesisBlock.Root()}
+	genesisEra := era.Era{
+		Number: 0,
+		From:   0,
+		To:     genesisEraLength - 1,
+		Root:   genesisBlock.Root(),
+	}
 	rawdb.WriteEra(database, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(database, genesisEra.Number)
 	// i.o. ethash.NewFaker()
