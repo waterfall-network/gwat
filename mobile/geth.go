@@ -21,20 +21,9 @@ package geth
 
 import (
 	"encoding/json"
-	"fmt"
-	"path/filepath"
 
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethclient"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/ethstats"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/debug"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/les"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/nat"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth
@@ -109,83 +98,6 @@ func (conf *NodeConfig) String() string {
 // Node represents a Geth Ethereum node instance.
 type Node struct {
 	node *node.Node
-}
-
-// NewNode creates and configures a new Geth node.
-func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
-	// If no or partial configurations were specified, use defaults
-	if config == nil {
-		config = NewNodeConfig()
-	}
-	if config.MaxPeers == 0 {
-		config.MaxPeers = defaultNodeConfig.MaxPeers
-	}
-	if config.BootstrapNodes == nil || config.BootstrapNodes.Size() == 0 {
-		config.BootstrapNodes = defaultNodeConfig.BootstrapNodes
-	}
-
-	if config.PprofAddress != "" {
-		debug.StartPProf(config.PprofAddress, true)
-	}
-
-	// Create the empty networking stack
-	nodeConf := &node.Config{
-		Name:        clientIdentifier,
-		Version:     params.VersionWithMeta,
-		DataDir:     datadir,
-		KeyStoreDir: filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
-		P2P: p2p.Config{
-			NoDiscovery:      true,
-			DiscoveryV5:      true,
-			BootstrapNodesV5: config.BootstrapNodes.nodes,
-			ListenAddr:       ":0",
-			NAT:              nat.Any(),
-			MaxPeers:         config.MaxPeers,
-		},
-	}
-
-	rawStack, err := node.New(nodeConf)
-	if err != nil {
-		return nil, err
-	}
-
-	debug.Memsize.Add("node", rawStack)
-
-	var genesis *core.Genesis
-	if config.EthereumGenesis != "" {
-		// Parse the user supplied genesis spec if not mainnet
-		genesis = new(core.Genesis)
-		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
-			return nil, fmt.Errorf("invalid genesis spec: %v", err)
-		}
-		// If we have the DevNet testnet, hard code the chain configs too
-		if config.EthereumGenesis == DevNetGenesis() {
-			genesis.Config = params.DevNetChainConfig
-			//todo check it
-			if config.EthereumNetworkID == 1 {
-				config.EthereumNetworkID = 5
-			}
-		}
-	}
-	// Register the Ethereum protocol if requested
-	if config.EthereumEnabled {
-		ethConf := ethconfig.Defaults
-		ethConf.Genesis = genesis
-		ethConf.SyncMode = downloader.LightSync
-		ethConf.NetworkId = uint64(config.EthereumNetworkID)
-		ethConf.DatabaseCache = config.EthereumDatabaseCache
-		lesBackend, err := les.New(rawStack, &ethConf)
-		if err != nil {
-			return nil, fmt.Errorf("Gwat init: %v", err)
-		}
-		// If netstats reporting is requested, do it
-		if config.EthereumNetStats != "" {
-			if err := ethstats.New(rawStack, lesBackend.ApiBackend, config.EthereumNetStats); err != nil {
-				return nil, fmt.Errorf("netstats init: %v", err)
-			}
-		}
-	}
-	return &Node{rawStack}, nil
 }
 
 // Close terminates a running node along with all it's services, tearing internal state
