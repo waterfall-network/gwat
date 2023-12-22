@@ -67,7 +67,7 @@ func TestProcessorDeposit(t *testing.T) {
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature)
+	depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature, nil)
 	testutils.AssertNoError(t, err)
 
 	opData, err := operation.EncodeToBytes(depositOperation)
@@ -691,7 +691,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().AnyTimes().Return(testmodels.TestChainConfig)
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -702,6 +702,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 	opData, err := operation.EncodeToBytes(withdrawalOperation)
 	testutils.AssertNoError(t, err)
 	msg.EXPECT().Data().AnyTimes().Return(opData)
+	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{0x11})
 
 	cases := []*testmodels.TestCase{
 		{
@@ -725,12 +726,9 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Errs: []error{ErrInvalidFromAddresses},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-
 				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
-
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-
 				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
 			},
 		},
@@ -740,15 +738,12 @@ func TestProcessorWithdrawal(t *testing.T) {
 				Caller: vm.AccountRef(withdrawalAddress),
 				AddrTo: to,
 			},
-			Errs: []error{ErrNotActivatedValidator},
+			Errs: []error{ErrInvalidFromAddresses},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-
 				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
-
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
 		},
@@ -761,14 +756,12 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Errs: []error{ErrInsufficientFundsForOp},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-
 				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
-				validator.ActivationEra = 0
-
+				validator.AddStake(withdrawalAddress, big.NewInt(3200/4*2))
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-
-				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+				txVal := big.NewInt(3200 / 4 * 3)
+				call(t, processor, v.Caller, v.AddrTo, txVal, msg, c.Errs)
 			},
 		},
 		{
@@ -780,13 +773,10 @@ func TestProcessorWithdrawal(t *testing.T) {
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-
 				validator := storage.NewValidator(pubKey, testmodels.Addr5, &withdrawalAddress)
 				validator.ActivationEra = 0
-
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
 		},

@@ -183,6 +183,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"creator", v.CreatorAddress().Hex(),
 				"withdrawalAddress", v.WithdrawalAddress().Hex(),
 				"pubKey", v.PubKey().Hex(),
+				"delegatedStake", v.DelegatedStake() != nil,
 				"err", err,
 			)
 		} else {
@@ -194,6 +195,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"creator", v.CreatorAddress().Hex(),
 				"withdrawalAddress", v.WithdrawalAddress().Hex(),
 				"pubKey", v.PubKey().Hex(),
+				"delegatedStake", v.DelegatedStake() != nil,
 			)
 		}
 	case operation.ValidatorSync:
@@ -248,29 +250,6 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"tx", msg.TxHash().Hex(),
 				"amount", v.Amount().String(),
 				"creator", v.CreatorAddress().Hex(),
-			)
-		}
-	case operation.DelegateStake:
-		ret, err = p.validatorDelegateStake(caller, toAddr, value, v)
-		if err != nil {
-			log.Error("Validator delegate stake: err",
-				"opCode", op.OpCode(),
-				"tx", msg.TxHash().Hex(),
-				"amount", value.String(),
-				"from", caller.Address(),
-				"creator", v.CreatorAddress().Hex(),
-				"pubKey", v.PubKey().Hex(),
-
-				"err", err,
-			)
-		} else {
-			log.Info("Validator delegate stake: success",
-				"opCode", op.OpCode(),
-				"tx", msg.TxHash().Hex(),
-				"amount", value.String(),
-				"from", caller.Address(),
-				"creator", v.CreatorAddress().Hex(),
-				"pubKey", v.PubKey().Hex(),
 			)
 		}
 	}
@@ -413,7 +392,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		)
 		stakeByAddr := validator.StakeByAddress(from)
 		//withdrawal address must be one of the depositors
-		if stakeByAddr == nil {
+		if stakeByAddr == nil || stakeByAddr.Cmp(new(big.Int)) == 0 {
 			return nil, ErrInvalidFromAddresses
 		}
 		// check amount
