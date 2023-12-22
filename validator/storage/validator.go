@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/binary"
 	"fmt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	"math"
 	"math/big"
 
@@ -12,14 +13,14 @@ import (
 
 type Validator struct {
 	// the Address property must be the first for IsValidatorAddress
-	Address           common.Address     `json:"address"`
-	PubKey            common.BlsPubKey   `json:"pubKey"`
-	WithdrawalAddress *common.Address    `json:"withdrawalAddress"`
-	Index             uint64             `json:"index"`
-	ActivationEra     uint64             `json:"activationEra"`
-	ExitEra           uint64             `json:"exitEra"`
-	Stake             []*StakeByAddress  `json:"stake"`
-	DelegateStake     *DelegateStakeData `json:"delegateStake"`
+	Address           common.Address                `json:"address"`
+	PubKey            common.BlsPubKey              `json:"pubKey"`
+	WithdrawalAddress *common.Address               `json:"withdrawalAddress"`
+	Index             uint64                        `json:"index"`
+	ActivationEra     uint64                        `json:"activationEra"`
+	ExitEra           uint64                        `json:"exitEra"`
+	Stake             []*StakeByAddress             `json:"stake"`
+	DelegateStake     *operation.DelegatedStakeData `json:"delegateStake"`
 }
 
 func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {
@@ -177,7 +178,7 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 		// get delegate data
 		startOffset = endOfset
 		endOfset = startOffset + delegateDataLen
-		delegateStake, err := NewDelegateStakeDataFromBinary(extendedData[startOffset:endOfset])
+		delegateStake, err := operation.NewDelegateStakeDataFromBinary(extendedData[startOffset:endOfset])
 		if err != nil {
 			return err
 		}

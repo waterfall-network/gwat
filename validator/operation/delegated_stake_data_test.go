@@ -1,4 +1,4 @@
-package storage
+package operation
 
 import (
 	"fmt"
@@ -7,29 +7,15 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 func TestDelegateStakeData_NewDelegateStakeData(t *testing.T) {
-	var (
-		//DelegateStakeRules
-		profitShare = map[common.Address]uint8{
-			common.HexToAddress("0x1111111111111111111111111111111111111111"): 10,
-			common.HexToAddress("0x2222222222222222222222222222222222222222"): 30,
-			common.HexToAddress("0x3333333333333333333333333333333333333333"): 60,
-		}
-		stakeShare = map[common.Address]uint8{
-			common.HexToAddress("0x4444444444444444444444444444444444444444"): 70,
-			common.HexToAddress("0x5555555555555555555555555555555555555555"): 30,
-		}
-		exit        = []common.Address{common.HexToAddress("0x6666666666666666666666666666666666666666")}
-		withdrawal  = []common.Address{common.HexToAddress("0x7777777777777777777777777777777777777777")}
-		trialPeriod = uint64(321)
-	)
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+	trialPeriod := uint64(321)
 
-	rules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	rules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
 	dsr, err := NewDelegateStakeData(rules, trialPeriod, trialRules)
@@ -64,25 +50,13 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 			"elapsed", common.PrettyDuration(time.Since(tStart)),
 		)
 	}(time.Now())
-	var (
-		//DelegateStakeRules
-		profitShare = map[common.Address]uint8{
-			common.HexToAddress("0x1111111111111111111111111111111111111111"): 10,
-			common.HexToAddress("0x2222222222222222222222222222222222222222"): 30,
-			common.HexToAddress("0x3333333333333333333333333333333333333333"): 60,
-		}
-		stakeShare = map[common.Address]uint8{
-			common.HexToAddress("0x4444444444444444444444444444444444444444"): 70,
-			common.HexToAddress("0x5555555555555555555555555555555555555555"): 30,
-		}
-		exit        = []common.Address{common.HexToAddress("0x6666666666666666666666666666666666666666")}
-		withdrawal  = []common.Address{common.HexToAddress("0x7777777777777777777777777777777777777777")}
-		trialPeriod = uint64(321)
-	)
 
-	rules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+	trialPeriod := uint64(321)
+
+	rules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
 	dsr, err := NewDelegateStakeData(rules, trialPeriod, trialRules)
@@ -91,7 +65,7 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 	bin, err := dsr.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	unmarshaled := &DelegateStakeData{}
+	unmarshaled := &DelegatedStakeData{}
 	err = unmarshaled.UnmarshalBinary(bin)
 	testutils.AssertNoError(t, err)
 
@@ -106,7 +80,7 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 	binEmpty, err := dsrEmpty.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	unmarshaledEmpty := &DelegateStakeData{}
+	unmarshaledEmpty := &DelegatedStakeData{}
 	err = unmarshaled.UnmarshalBinary(binEmpty)
 	testutils.AssertNoError(t, err)
 
@@ -115,35 +89,22 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 	testutils.AssertEqual(t, dsrEmpty.TrialRules, unmarshaledEmpty.TrialRules)
 
 	// nil instance
-	var dsrNil *DelegateStakeData
+	var dsrNil *DelegatedStakeData
 	binNil, err := dsrNil.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	unmarshaledNil := &DelegateStakeData{}
+	unmarshaledNil := &DelegatedStakeData{}
 	err = unmarshaledNil.UnmarshalBinary(binNil)
 	testutils.AssertError(t, err, errDelegateStakeNilValBin)
 }
 
 func TestDelegateStakeData_NewDelegateStakeDataFromBinary(t *testing.T) {
-	var (
-		//DelegateStakeRules
-		profitShare = map[common.Address]uint8{
-			common.HexToAddress("0x1111111111111111111111111111111111111111"): 10,
-			common.HexToAddress("0x2222222222222222222222222222222222222222"): 30,
-			common.HexToAddress("0x3333333333333333333333333333333333333333"): 60,
-		}
-		stakeShare = map[common.Address]uint8{
-			common.HexToAddress("0x4444444444444444444444444444444444444444"): 70,
-			common.HexToAddress("0x5555555555555555555555555555555555555555"): 30,
-		}
-		exit        = []common.Address{common.HexToAddress("0x6666666666666666666666666666666666666666")}
-		withdrawal  = []common.Address{common.HexToAddress("0x7777777777777777777777777777777777777777")}
-		trialPeriod = uint64(321)
-	)
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+	trialPeriod := uint64(321)
 
-	rules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	rules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
 	dsr, err := NewDelegateStakeData(rules, trialPeriod, trialRules)
@@ -174,7 +135,7 @@ func TestDelegateStakeData_NewDelegateStakeDataFromBinary(t *testing.T) {
 	testutils.AssertEqual(t, fmt.Sprintf("%#X", dsrEmpty.TrialRules), fmt.Sprintf("%#X", dsrBinEmpty.TrialRules))
 
 	// nil instance
-	var dsrNil *DelegateStakeData
+	var dsrNil *DelegatedStakeData
 	binNil, err := dsrNil.MarshalBinary()
 	testutils.AssertNoError(t, err)
 

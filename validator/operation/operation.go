@@ -13,7 +13,6 @@ const (
 	DeactivateCode    = 0x04
 	UpdateBalanceCode = 0x05
 	WithdrawalCode    = 0x06
-	DelegateStakeCode = 0x20
 )
 
 // Prefix for the encoded data field of a validator operation
@@ -68,8 +67,6 @@ func DecodeBytes(b []byte) (Operation, error) {
 		op = &exitOperation{}
 	case WithdrawalCode:
 		op = &withdrawalOperation{}
-	case DelegateStakeCode:
-		op = &delegateStakeOperation{}
 	default:
 		return nil, ErrOpNotValid
 	}
@@ -104,8 +101,6 @@ func EncodeToBytes(op Operation) ([]byte, error) {
 		buf[1] = ExitCode
 	case *withdrawalOperation:
 		buf[1] = WithdrawalCode
-	case *delegateStakeOperation:
-		buf[1] = DelegateStakeCode
 	}
 
 	buf = append(buf, b...)

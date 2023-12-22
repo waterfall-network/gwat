@@ -67,28 +67,15 @@ func TestValidator_MarshalingBinary(t *testing.T) {
 }
 
 func TestValidatorDelegateStake_MarshalingBinary(t *testing.T) {
-	var (
-		//DelegateStakeRules
-		profitShare = map[common.Address]uint8{
-			common.HexToAddress("0x1111111111111111111111111111111111111111"): 10,
-			common.HexToAddress("0x2222222222222222222222222222222222222222"): 30,
-			common.HexToAddress("0x3333333333333333333333333333333333333333"): 60,
-		}
-		stakeShare = map[common.Address]uint8{
-			common.HexToAddress("0x4444444444444444444444444444444444444444"): 70,
-			common.HexToAddress("0x5555555555555555555555555555555555555555"): 30,
-		}
-		exit        = []common.Address{common.HexToAddress("0x6666666666666666666666666666666666666666")}
-		withdrawal  = []common.Address{common.HexToAddress("0x7777777777777777777777777777777777777777")}
-		trialPeriod = uint64(321)
-	)
+	profitShare, stakeShare, exit, withdrawal := operation.TestParamsDelegateStakeRules()
+	trialPeriod := uint64(321)
 
 	rules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 	trialRules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
-	dsr, err := NewDelegateStakeData(rules, trialPeriod, trialRules)
+	dsr, err := operation.NewDelegateStakeData(rules, trialPeriod, trialRules)
 	testutils.AssertNoError(t, err)
 	testValidator.DelegateStake = dsr
 
