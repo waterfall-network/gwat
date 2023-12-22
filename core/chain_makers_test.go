@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"math/big"
 	"testing"
@@ -64,9 +65,9 @@ func addBlocksToDag(bc *BlockChain, blocks []*types.Block) error {
 	if tipDag.Height != tipBlk.Height() {
 		return errors.New("Tips BlockDag: bad height")
 	}
-
+	ctx := context.Background()
 	for _, block := range blocks {
-		blc := bc.GetBlock(block.Hash())
+		blc := bc.GetBlock(ctx, block.Hash())
 		if blc == nil {
 			return errors.New("block is not saved")
 		}

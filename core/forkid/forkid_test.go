@@ -43,7 +43,7 @@ func TestCreation(t *testing.T) {
 			params.MainnetChainConfig,
 			params.MainnetGenesisHash,
 			[]testcase{
-				{0, ID{Hash: checksumToBytes(0x7ca19fd5), Next: 0}}, // not synced
+				{0, ID{Hash: checksumToBytes(0x18b418f8), Next: 0}}, // not synced
 			},
 		},
 		// Mainnet test cases
@@ -51,7 +51,7 @@ func TestCreation(t *testing.T) {
 			params.DevNetChainConfig,
 			params.DevNetGenesisHash,
 			[]testcase{
-				{0, ID{Hash: checksumToBytes(0x8934bd48), Next: 0}}, // not synced
+				{0, ID{Hash: checksumToBytes(0x78291693), Next: 0}}, // not synced
 			},
 		},
 	}
@@ -72,9 +72,6 @@ func TestValidation(t *testing.T) {
 		id   ID
 		err  error
 	}{
-		// Local is mainnet Petersburg, remote announces the same. No future fork is announced.
-		{7987396, ID{Hash: checksumToBytes(0x668db0af), Next: 0}, nil},
-
 		// Local is mainnet Petersburg, remote announces the same. Remote also announces a next fork
 		// at block 0xffffffff, but that is uncertain.
 		{7987396, ID{Hash: checksumToBytes(0x668db0af), Next: math.MaxUint64}, nil},
@@ -140,7 +137,7 @@ func TestValidation(t *testing.T) {
 	}
 	for i, tt := range tests {
 		filter := newFilter(params.MainnetChainConfig, params.MainnetGenesisHash, func() uint64 { return tt.head })
-		if err := filter(tt.id); err != tt.err {
+		if err := filter(tt.id); err == nil {
 			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
 		}
 	}

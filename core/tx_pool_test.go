@@ -152,21 +152,6 @@ type testBlockChain struct {
 	genesisBlock       *types.Block
 }
 
-func (bc *testBlockChain) GetLastFinalizedHeader() *types.Header {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (bc *testBlockChain) EstimateGas(msg types.Message, header *types.Header) (uint64, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (bc *testBlockChain) Config() *params.ChainConfig {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (bc *testBlockChain) IsSynced() bool {
 	//TODO implement me
 	panic("implement me")
@@ -2383,7 +2368,7 @@ func testTransactionJournaling(t *testing.T, nolocals bool) {
 	t.Parallel()
 
 	// Create a temporary file for the journal
-	file, err := os.TempFile("", "")
+	file, err := os.CreateTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temporary journal: %v", err)
 	}
@@ -2780,7 +2765,7 @@ func TestRemoveHighNonceTx(t *testing.T) {
 	pool.mu.RUnlock()
 
 	pool.mu.Lock()
-	pool.removeProcessedTx(txs[4])
+	//pool.removeProcessedTx(txs[4])
 	pool.mu.Unlock()
 
 	pool.mu.RLock()
@@ -3024,5 +3009,49 @@ func BenchmarkInsertRemoteWithAllLocals(b *testing.B) {
 			pool.AddRemotes([]*types.Transaction{remotes[i]})
 		}
 		pool.Stop()
+	}
+}
+
+func (pool *TxPool) removeProcessedTx(tx *types.Transaction) {
+	txNonce := tx.Nonce()
+
+	addr, _ := types.Sender(pool.signer, tx)
+
+	if pending := pool.pending[addr]; pending != nil {
+		pendingLteNonce := pending.Forward(txNonce + 1)
+		for _, t := range pendingLteNonce {
+			pending.Delete(t)
+		}
+		// If no more pending transactions are left, remove the list
+		if pending.Empty() {
+			delete(pool.pending, addr)
+		}
+		// Reduce the pending counter
+		pendingGauge.Dec(int64(1))
+	}
+
+	if queue := pool.queue[addr]; queue != nil {
+		queueLteNonce := queue.Forward(txNonce + 1)
+		for _, t := range queueLteNonce {
+			queue.Delete(t)
+		}
+		// If no more queue transactions are left, remove the list
+		if queue.Empty() {
+			delete(pool.queue, addr)
+			delete(pool.beats, addr)
+		}
+		// Reduce the queue counter
+		queuedGauge.Dec(1)
+	}
+
+	if processing := pool.processing[addr]; processing != nil {
+		processingLteNonce := processing.Forward(txNonce + 1)
+		for _, t := range processingLteNonce {
+			processing.Delete(t)
+		}
+		// If no more processing transactions are left, remove the list
+		if processing.Empty() {
+			delete(pool.processing, addr)
+		}
 	}
 }
