@@ -683,6 +683,7 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // FindCommonAncestor returns the last common ancestor of two block headers
+// Deprecated
 func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	if (a.Nr() == 0 && a.Height > 0) || (b.Nr() == 0 && b.Height > 0) {
 		panic("FindCommonAncestor: no implementation for dag part: core/rawdb/accessors_chain.go:782")

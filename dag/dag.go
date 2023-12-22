@@ -73,7 +73,6 @@ type blockChain interface {
 	SetOptimisticSpinesToCache(slot uint64, spines common.HashArray)
 	GetOptimisticSpinesFromCache(slot uint64) common.HashArray
 	GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, error)
-	ExploreChainRecursive(common.Hash, ...core.ExploreResultMap) (common.HashArray, common.HashArray, common.HashArray, *types.GraphDag, core.ExploreResultMap, error)
 	EpochToEra(uint64) *era.Era
 	Genesis() *types.Block
 
@@ -325,7 +324,7 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 	}
 	baseHeader := d.bc.GetHeaderByHash(baseSpine)
 	if baseHeader == nil || baseHeader.Nr() == 0 && baseHeader.Height > 0 {
-		return fmt.Errorf("bad base spine")
+		return downloader.ErrInvalidBaseSpine
 	}
 	isSync, err := d.hasUnloadedBlocks(spines)
 	if err != nil {

@@ -2188,19 +2188,37 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	defer func(ts time.Time) {
 		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(ts)),
-			"func:", "VerifyBlock:Total",
+			"fn:", "VerifyBlock:Total",
+			"txs", len(block.Transactions()),
+			"hash", block.Hash(),
 		)
 	}(time.Now())
+
+	timeTrack := time.Now()
 
 	// Verify block slot
 	if !bc.verifyBlockSlot(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockSlot",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block era
 	if !bc.verifyBlockEra(block) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockEra",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	slotCreators, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
 	if err != nil {
@@ -2208,32 +2226,81 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		return false, err
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "GetCreatorsBySlot",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block coinbase
 	if !bc.verifyBlockCoinbase(block, slotCreators) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockCoinbase",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	err = bc.verifyEmptyBlock(block, slotCreators)
 	if err != nil {
 		return false, err
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyEmptyBlock",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify baseFee
 	if !bc.verifyBlockBaseFee(block) {
 		return false, nil
 	}
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockBaseFee",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	// Verify body hash and transactions hash
 	if !bc.verifyBlockHashes(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block used gas
 	if !bc.verifyBlockUsedGas(block) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockUsedGas",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "CollectAncestorsAftCpByTips",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
 
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
@@ -2258,12 +2325,35 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		return false, nil
 	}
 
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyCheckpoint",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify block height
 	if !bc.verifyBlockHeight(block, len(ancestors)) {
 		return false, nil
 	}
 
-	return bc.verifyBlockParents(block)
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHeight",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
+	valid, err := bc.verifyBlockParents(block)
+
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockParents",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
+	return valid, err
 }
 
 func (bc *BlockChain) verifyBlockUsedGas(block *types.Block) bool {
@@ -2300,9 +2390,11 @@ func (bc *BlockChain) verifyBlockHeight(block *types.Block, ancestorsCount int) 
 }
 
 func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
+	timeTrack := time.Now()
 	// Verify body hash
 	blockBody := block.Body()
-	if blockBody.CalculateHash() != block.BodyHash() {
+	calcBodyHash := blockBody.CalculateHash()
+	if calcBodyHash != block.BodyHash() {
 		log.Warn("Block verification: invalid body hash",
 			"hash", block.Hash().Hex(),
 			"bl.bodyHash", block.BodyHash().Hex(),
@@ -2310,8 +2402,29 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 		)
 		return false
 	}
+
+	log.Info("VALIDATION TIME verifyBlockHashes (TODO TX VALIDATE)",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+		"BodyHash", block.BodyHash().Hex(),
+		"calcBodyHash", calcBodyHash.Hex(),
+	)
+
+	timeTrack = time.Now()
 	// Verify transactions hash
 	calcTxHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
+
+	log.Info("VALIDATION TIME verifyBlockHashes 111",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyBlockHashes",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+		"TxHash", block.TxHash(),
+		"calcTxHash", calcTxHash.Hex(),
+	)
+
 	if calcTxHash != block.TxHash() {
 		log.Warn("Block verification: invalid transactions hash",
 			"hash", block.Hash().Hex(),
@@ -2676,8 +2789,9 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		return 0, nil
 	}
 
-	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
+	//todo check is cacher required
+	//// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
+	//senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig), chain)
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -2705,10 +2819,10 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 	block, err := it.next()
 
 	switch {
-	// First block is pruned, insert as sidechain and reorg
-	case errors.Is(err, consensus.ErrPrunedAncestor):
-		log.Warn("Insert blocks: pruned ancestor, inserting as sidechain", "op", op, "hash", block.Hash().Hex())
-		return bc.insertSideChain(block, it)
+	//// First block is pruned, insert as sidechain and reorg
+	//case errors.Is(err, consensus.ErrPrunedAncestor):
+	//	log.Warn("Insert blocks: pruned ancestor, inserting as sidechain", "op", op, "hash", block.Hash().Hex())
+	//	return bc.insertSideChain(block, it)
 
 	// Some other error occurred, abort
 	case err != nil:
@@ -3098,6 +3212,23 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 func (bc *BlockChain) CollectAncestorsHashesByTips(tips types.Tips, cpHash common.Hash) (common.HashArray, error) {
 	cpHeader := bc.GetHeader(cpHash)
+	cpBlDag := bc.GetBlockDag(cpHash)
+	if cpBlDag == nil {
+		_, anc, _, err := bc.CollectAncestorsAftCpByParents(cpHeader.ParentHashes, cpHeader.CpHash)
+		if err != nil {
+			return nil, err
+		}
+		cpBlDag = &types.BlockDAG{
+			Hash:                   cpHeader.Hash(),
+			Height:                 cpHeader.Height,
+			Slot:                   cpHeader.Slot,
+			CpHash:                 cpHeader.CpHash,
+			CpHeight:               bc.GetHeader(cpHeader.CpHash).Height,
+			OrderedAncestorsHashes: anc.Hashes(),
+		}
+		bc.SaveBlockDag(cpBlDag)
+	}
+
 	ancestorsHashes := make(common.HashArray, 0)
 	for _, tip := range tips {
 		if tip.Hash == cpHash {
@@ -3125,9 +3256,12 @@ func (bc *BlockChain) CollectAncestorsHashesByTips(tips types.Tips, cpHash commo
 		ancestors := bc.GetHeadersByHashes(ancHashes)
 		for h, anc := range ancestors {
 			// skipping if finalised before current checkpoint
-			if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() < cpHeader.Nr() {
+			if anc.Height > 0 && anc.Nr() > 0 && cpBlDag.OrderedAncestorsHashes.Has(anc.Hash()) {
 				continue
 			}
+			//if anc.Height > 0 && anc.Nr() > 0 && anc.Nr() < cpHeader.Nr() {
+			//	continue
+			//}
 			ancestorsHashes = append(ancestorsHashes, h)
 		}
 		ancestorsHashes = append(ancestorsHashes, tip.Hash)
@@ -3142,6 +3276,16 @@ func (bc *BlockChain) CalcBlockHeightByTips(tips types.Tips, cpHash common.Hash)
 		return 0, err
 	}
 	cpHeader := bc.GetHeader(cpHash)
+
+	log.Info("Calculate block height",
+		"ancestors", len(ancestors),
+		"cpHeight", cpHeader.Height,
+		"cpNr", cpHeader.Nr(),
+		"cpHash", cpHash.Hex(),
+		//"ancestors", ancestors,
+		//"tips", tips.Print(),
+	)
+
 	return bc.calcBlockHeight(cpHeader.Height, len(ancestors)), nil
 }
 
@@ -3314,7 +3458,7 @@ func (bc *BlockChain) CollectStateDataByBlock(block *types.Block) (statedb *stat
 
 // CommitBlockTransactions commits transactions of red blocks.
 func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state.StateDB) (*state.StateDB, []*types.Receipt, []*types.Log, uint64) {
-	log.Info("Commit block transactions", "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
+	log.Info("Commit block transactions", "txs", len(block.Transactions()), "Nr", block.Nr(), "height", block.Height(), "slot", block.Slot(), "hash", block.Hash().Hex())
 
 	gasPool := new(GasPool).AddGas(block.GasLimit())
 	signer := types.MakeSigner(bc.chainConfig)
@@ -3726,6 +3870,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, error) {
 	return it.index, err
 }
 
+// Deprecated
 // insertSideChain is called when an import batch hits upon a pruned ancestor
 // error, which happens when a sidechain with a sufficiently old fork-block is
 // found.
@@ -3963,106 +4108,6 @@ func (bc *BlockChain) WriteCurrentTips() {
 	bc.hc.writeCurrentTips(false)
 }
 
-type ExploreResult struct {
-	unloaded  common.HashArray
-	loaded    common.HashArray
-	finalized common.HashArray
-	graph     *types.GraphDag
-	cache     ExploreResultMap
-	err       error
-}
-
-type ExploreResultMap map[common.Hash]*ExploreResult
-
-// ExploreChainRecursive recursively collect chain info about
-// locally unknown, existed and latest finalized parent blocks,
-// creates GraphDag structure until latest finalized ancestors.
-func (bc *BlockChain) ExploreChainRecursive(headHash common.Hash, memo ...ExploreResultMap) (unloaded, loaded, finalized common.HashArray, graph *types.GraphDag, cache ExploreResultMap, err error) {
-	if len(memo) == 0 {
-		memo = append(memo, make(ExploreResultMap))
-	}
-	lfNr := bc.GetLastFinalizedBlock().Nr()
-
-	block := bc.GetBlockByHash(headHash)
-	if block == nil {
-		return common.HashArray{headHash}, loaded, finalized, graph, memo[0], err
-	}
-	if block.Nr() > lfNr {
-		block.SetNumber(nil)
-	}
-	graph = &types.GraphDag{
-		Hash:   headHash,
-		Height: 0,
-		Graph:  []*types.GraphDag{},
-		State:  types.BSS_NOT_LOADED,
-	}
-	if block == nil {
-		// if block not loaded
-		return common.HashArray{headHash}, loaded, finalized, graph, memo[0], nil
-	}
-	graph.State = types.BSS_LOADED
-	graph.Height = block.Height()
-	if nr := block.Number(); nr != nil {
-		// if finalized
-		graph.State = types.BSS_FINALIZED
-		graph.Number = *nr
-		return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
-	}
-	loaded = common.HashArray{headHash}
-	if block.ParentHashes() == nil || len(block.ParentHashes()) < 1 {
-		if block.Hash() == bc.genesisBlock.Hash() {
-			return unloaded, loaded, common.HashArray{headHash}, graph, memo[0], nil
-		}
-		log.Warn("Detect block without parents", "hash", block.Hash().Hex(), "height", block.Height(), "slot", block.Slot())
-		err = fmt.Errorf("Detect block without parents hash=%s, height=%d", block.Hash().Hex(), block.Height())
-		return unloaded, loaded, finalized, graph, memo[0], err
-	}
-
-	//parentHashes := types.GetOrderedParentHashes(bc, block)
-	//for _, ph := range parentHashes {
-	for _, ph := range block.ParentHashes() {
-		var (
-			_unloaded  common.HashArray
-			_loaded    common.HashArray
-			_finalized common.HashArray
-			_graph     *types.GraphDag
-			_cache     ExploreResultMap
-			_err       error
-		)
-
-		if memo[0][ph] != nil {
-			_unloaded = memo[0][ph].unloaded
-			_loaded = memo[0][ph].loaded
-			_finalized = memo[0][ph].finalized
-			_graph = memo[0][ph].graph
-			// _cache = memo[0]
-			_err = memo[0][ph].err
-		} else {
-			_unloaded, _loaded, _finalized, _graph, _cache, _err = bc.ExploreChainRecursive(ph, memo[0])
-			if memo[0] == nil {
-				memo[0] = make(ExploreResultMap, 1)
-			}
-			memo[0][ph] = &ExploreResult{
-				unloaded:  _unloaded,
-				loaded:    _loaded,
-				finalized: _finalized,
-				graph:     _graph,
-				cache:     _cache,
-				err:       _err,
-			}
-		}
-		unloaded = unloaded.Concat(_unloaded)
-		unloaded.Deduplicate()
-		loaded = loaded.Concat(_loaded)
-		loaded.Deduplicate()
-		finalized = finalized.Concat(_finalized)
-		finalized.Deduplicate()
-		graph.Graph = append(graph.Graph, _graph)
-		err = _err
-	}
-	return unloaded, loaded, finalized, graph, cache, err
-}
-
 // CollectAncestorsAftCpByParents recursively collect ancestors by block parents
 // which have to be finalized after checkpoint up to block.
 func (bc *BlockChain) CollectAncestorsAftCpByParents(parents common.HashArray, cpHash common.Hash) (isCpAncestor bool, ancestors types.HeaderMap, unloaded common.HashArray, err error) {
@@ -4232,11 +4277,12 @@ func (bc *BlockChain) MoveTxsToProcessing(block *types.Block) {
 
 	txs := types.NewBlockTransactions(block.Hash())
 	bc.handleBlockValidatorSyncTxs(block)
-	txs.Transactions = append(txs.Transactions, block.Transactions()...)
+	//txs.Transactions = append(txs.Transactions, block.Transactions()...)
+	txs.Transactions = block.Transactions()
 
-	sort.Slice(txs.Transactions, func(i, j int) bool {
-		return txs.Transactions[i].Nonce() < txs.Transactions[j].Nonce()
-	})
+	//sort.Slice(txs.Transactions, func(i, j int) bool {
+	//	return txs.Transactions[i].Nonce() < txs.Transactions[j].Nonce()
+	//})
 
 	bc.moveTxsToProcessing(txs)
 }

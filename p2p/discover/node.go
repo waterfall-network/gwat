@@ -46,7 +46,7 @@ func encodePubkey(key *ecdsa.PublicKey) encPubkey {
 	return e
 }
 
-//nolint:unused
+//nolint:unused // tests only
 func decodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
 	if len(e) != len(encPubkey{}) {
 		return nil, errors.New("wrong size public key data")
@@ -61,7 +61,7 @@ func decodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
 	return p, nil
 }
 
-//nolint:unused
+//nolint:unused // tests only
 func (e encPubkey) id() enode.ID {
 	return enode.ID(crypto.Keccak256Hash(e[:]))
 }

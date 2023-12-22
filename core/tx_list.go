@@ -91,8 +91,12 @@ func (m *txSortedMap) Forward(threshold uint64) types.Transactions {
 	// Pop off heap items until the threshold is reached
 	for m.index.Len() > 0 && (*m.index)[0] < threshold {
 		nonce := heap.Pop(m.index).(uint64)
+		tx := m.items[nonce]
 		removed = append(removed, m.items[nonce])
 		delete(m.items, nonce)
+		if len(m.blocksHashes) > 0 && tx != nil && m.blocksHashes[tx.Hash()] != nil {
+			delete(m.blocksHashes, tx.Hash())
+		}
 	}
 	// If we had a cached order, shift the front
 	if m.cache != nil {
@@ -445,13 +449,15 @@ func (l *txList) GetTxBlocksHashes(txHash common.Hash) common.HashArray {
 	return blockHash
 }
 
-func (l *txList) PutTxBlockHash(txHash common.Hash, blockHash common.HashArray) {
-	_, ok := l.txs.blocksHashes[txHash]
-	if !ok {
-		l.txs.blocksHashes[txHash] = make(common.HashArray, 0)
+func (l *txList) PutTxBlockHash(txHash common.Hash, blockHash common.Hash) {
+	v := l.txs.blocksHashes[txHash]
+	if len(v) == 0 {
+		l.txs.blocksHashes[txHash] = common.HashArray{blockHash}
+		return
 	}
-
-	l.txs.blocksHashes[txHash] = append(l.txs.blocksHashes[txHash], blockHash...)
+	if !v.Has(blockHash) {
+		l.txs.blocksHashes[txHash] = append(v, blockHash)
+	}
 }
 
 // priceHeap is a heap.Interface implementation over transactions for retrieving

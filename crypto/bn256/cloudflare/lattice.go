@@ -18,7 +18,7 @@ var curveLattice = &lattice{
 	det: bigFromBase10("43776485743678550444492811490514550177096728800832068687396408373151616991234"),
 }
 
-//nolint:unused
+// nolint:unused // test only
 var targetLattice = &lattice{
 	vectors: [][]*big.Int{
 		{bigFromBase10("9931322734385697761"), bigFromBase10("9931322734385697761"), bigFromBase10("9931322734385697763"), bigFromBase10("9931322734385697764")},

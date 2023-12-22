@@ -203,7 +203,14 @@ func (f *Finalizer) finalizeBlock(finNr uint64, block types.Block, isHead bool) 
 		return err
 	}
 
-	log.Info("🔗 block finalized", "Number", finNr, "b.nr", block.Nr(), "Slot", block.Slot(), "Height", block.Height(), "hash", block.Hash().Hex())
+	log.Info("🔗 block finalized",
+		"Number", finNr,
+		"b.nr", block.Nr(),
+		"Slot", block.Slot(),
+		"Height", block.Height(),
+		"txs", len(block.Transactions()),
+		"hash", block.Hash().Hex(),
+	)
 	return nil
 }
 
@@ -381,7 +388,7 @@ func (f *Finalizer) forwardFinalization(spines *common.HashArray, baseSpine *com
 	lfNr := f.bc.GetLastFinalizedNumber()
 	baseHeader := f.bc.GetHeader(*baseSpine)
 	if baseHeader == nil || baseHeader.Height > 0 && baseHeader.Nr() == 0 {
-		return spines, baseSpine, fmt.Errorf("base spine header not found")
+		return spines, baseSpine, downloader.ErrInvalidBaseSpine
 	}
 
 	curSlot := baseHeader.Slot

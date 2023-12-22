@@ -98,7 +98,7 @@ func (c *ValidatorsCache) getActiveValidatorsByEpoch(bc blockchain, epoch uint64
 	return validators
 }
 
-//nolint:unused
+//nolint:unused // subnets support
 func (c *ValidatorsCache) addSubnetValidators(epoch, subnet uint64, validators []common.Address) {
 	c.subnetMu.Lock()
 	defer c.subnetMu.Unlock()
@@ -111,7 +111,7 @@ func (c *ValidatorsCache) addSubnetValidators(epoch, subnet uint64, validators [
 	c.subnetValidatorsCache[epoch][subnet] = validators
 }
 
-//nolint:unused
+//nolint:unused // subnets support
 func (c *ValidatorsCache) getSubnetValidators(epoch, subnet uint64) ([]common.Address, error) {
 	c.subnetMu.Lock()
 	defer c.subnetMu.Unlock()
@@ -129,7 +129,7 @@ func (c *ValidatorsCache) getSubnetValidators(epoch, subnet uint64) ([]common.Ad
 	return subnetValidators, nil
 }
 
-//nolint:unused
+//nolint:unused // subnets support
 func (c *ValidatorsCache) addValidator(validator Validator, epoch uint64) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
@@ -137,7 +137,7 @@ func (c *ValidatorsCache) addValidator(validator Validator, epoch uint64) {
 	c.allValidatorsCache[epoch] = append(c.allValidatorsCache[epoch], validator)
 }
 
-//nolint:unused
+//nolint:unused // subnets support
 func (c *ValidatorsCache) delValidator(validator Validator, epoch uint64) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()

@@ -55,7 +55,7 @@ func (st *Stack) push(d *uint256.Int) {
 	st.data = append(st.data, *d)
 }
 
-//nolint:unused
+//nolint:unused // tests only
 func (st *Stack) pushN(ds ...uint256.Int) {
 	// FIXME: Is there a way to pass args by pointers.
 	st.data = append(st.data, ds...)

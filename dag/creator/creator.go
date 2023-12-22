@@ -89,6 +89,7 @@ type Creator struct {
 	running int32 // The indicator whether the consensus engine is running or not.
 
 	nodeCreators map[common.Address]struct{}
+	creatorsMu   sync.RWMutex
 }
 
 // New creates new Creator instance
@@ -103,7 +104,19 @@ func New(config *Config, backend Backend, mux *event.TypeMux) *Creator {
 
 	creator.SetNodeCreators(backend.AccountManager().Accounts())
 
+	accCh := make(chan accounts.WalletEvent)
+	am := backend.AccountManager()
+	am.Subscribe(accCh)
+	go creator.accountsWatcherLoop(accCh)
+
 	return creator
+}
+
+func (c *Creator) accountsWatcherLoop(eventCh chan accounts.WalletEvent) {
+	for event := range eventCh {
+		c.SetNodeCreators(c.backend.AccountManager().Accounts())
+		log.Info("Creator: accounts evt", "kind", event.Kind, "url", event.Wallet.URL(), "accs", c.backend.AccountManager().Accounts())
+	}
 }
 
 // API
@@ -187,7 +200,13 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	tips types.Tips,
 	checkpoint *types.Checkpoint,
 ) error {
-	start := time.Now()
+	defer func(start time.Time) {
+		log.Info("BLOCK CREATION TIME - TOTAL",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "RunBlockCreation",
+			"slot", slot,
+		)
+	}(time.Now())
 
 	if c.isSyncing() {
 		log.Warn("Creator skipping due to synchronization")
@@ -237,13 +256,6 @@ func (c *Creator) RunBlockCreation(slot uint64,
 		}
 	}
 	wg.Wait()
-
-	log.Info("BLOCK CREATION TIME - TOTAL",
-		"elapsed", common.PrettyDuration(time.Since(start)),
-		"func:", "RunBlockCreation",
-		"slot", slot,
-	)
-
 	return nil
 }
 
@@ -294,7 +306,7 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 		return nil, err
 	}
 
-	log.Info("Creator calculate block height", "newHeight", newHeight)
+	log.Info("Creator calculate block height", "newHeight", newHeight, "cpHash", checkpoint.Spine.Hex())
 
 	era := c.bc.GetEraInfo().Number()
 	if c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) >= c.bc.GetEraInfo().NextEraFirstEpoch() {
@@ -497,7 +509,7 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		)
 	}
 
-	log.Info("Block creation: assigned txs", "len(pendingTxs)", len(pendingTxs), "len(syncData)", len(syncData))
+	log.Info("Block creation: assigned op for", "senders", len(pendingTxs), "validators", len(syncData))
 
 	// Short circuit if no pending transactions
 	if len(pendingTxs) == 0 && len(syncData) == 0 {
@@ -619,7 +631,7 @@ func (c *Creator) create(header *types.Header, update bool) {
 	)
 
 	if update {
-		c.updateSnapshot(header)
+		c.updateSnapshot(block)
 	}
 }
 
@@ -657,16 +669,10 @@ func (c *Creator) makeCurrent() error {
 
 // updateSnapshot updates pending snapshot block and state.
 // Note this function assumes the current variable is thread safe.
-func (c *Creator) updateSnapshot(header *types.Header) {
+func (c *Creator) updateSnapshot(block *types.Block) {
 	c.snapshotMu.Lock()
 	defer c.snapshotMu.Unlock()
-
-	c.snapshotBlock = types.NewBlock(
-		header,
-		c.getUnhandledTxs(header.Coinbase),
-		nil,
-		trie.NewStackTrie(nil),
-	)
+	c.snapshotBlock = block
 }
 
 func (c *Creator) appendTransaction(tx *types.Transaction, header *types.Header, isValidatorOp bool) error {
@@ -706,7 +712,7 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 		)
 	}(time.Now())
 
-	var coalescedLogs []*types.Log
+	//var coalescedLogs []*types.Log
 
 	for {
 		// If we don't have enough gas for any further transactions then we're done
@@ -716,6 +722,8 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 				"want", params.TxGas,
 				"cumulativeGas", header.GasLimit,
 				"GasLimit", gasLimit,
+				"gasPool<TxGas", c.current.gasPool.Gas() < params.TxGas,
+				"cumulativeGas>GasLimit", c.current.txs[header.Coinbase].cumulativeGas > header.GasLimit,
 			)
 			break
 		}
@@ -761,28 +769,30 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 		return true
 	}
 
-	if !c.IsRunning() && len(coalescedLogs) > 0 {
-		// We don't push the pendingLogsEvent while we are creating. The reason is that
-		// when we are creating, the Creator will regenerate a created block every 3 seconds.
-		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
-
-		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
-		// logs by filling in the block hash when the block was mined by the local miner. This can
-		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		cpy := make([]*types.Log, len(coalescedLogs))
-		for i, l := range coalescedLogs {
-			cpy[i] = new(types.Log)
-			*cpy[i] = *l
-		}
-		c.pendingLogsFeed.Send(cpy)
-	}
+	//if !c.IsRunning() && len(coalescedLogs) > 0 {
+	//	// We don't push the pendingLogsEvent while we are creating. The reason is that
+	//	// when we are creating, the Creator will regenerate a created block every 3 seconds.
+	//	// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+	//
+	//	// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+	//	// logs by filling in the block hash when the block was mined by the local miner. This can
+	//	// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+	//	cpy := make([]*types.Log, len(coalescedLogs))
+	//	for i, l := range coalescedLogs {
+	//		cpy[i] = new(types.Log)
+	//		*cpy[i] = *l
+	//	}
+	//	c.pendingLogsFeed.Send(cpy)
+	//}
 	return false
 }
 
 // isCreatorActive returns true if creator is assigned to create blocks in current slot.
 func (c *Creator) IsCreatorActive(coinbase common.Address) bool {
-	_, ok := c.nodeCreators[coinbase]
+	c.creatorsMu.Lock()
+	defer c.creatorsMu.Unlock()
 
+	_, ok := c.nodeCreators[coinbase]
 	return ok
 }
 
@@ -857,6 +867,9 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 }
 
 func (c *Creator) SetNodeCreators(accounts []common.Address) {
+	c.creatorsMu.Lock()
+	defer c.creatorsMu.Unlock()
+
 	if c.nodeCreators == nil {
 		c.nodeCreators = make(map[common.Address]struct{})
 	}
