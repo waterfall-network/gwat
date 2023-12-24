@@ -1098,10 +1098,6 @@ web3._extend({
 				handleHexField(options, 'withdrawal_address', AddressLength)
 				handleHexField(options, 'signature', BlsSigLength)
 
-				// TODO rm logs
-				console.log("deposit", JSON.stringify(options, null, 2))
-				console.log("delegating_stake", JSON.stringify(options.delegating_stake, null, 2))
-
 				// handle delegating stake data
 				if (options.delegating_stake) {
 					var dlgData = options.delegating_stake
