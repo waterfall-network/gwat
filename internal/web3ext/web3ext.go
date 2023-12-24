@@ -1047,43 +1047,32 @@ web3._extend({
 			call: 'wat_validator_DepositData',
 			params: 1,
 			inputFormatter: [function(options) {
-				handleHexField(options, 'pubkey', BlsPubKeyLength)
-				handleHexField(options, 'creator_address', AddressLength)
-				handleHexField(options, 'withdrawal_address', AddressLength)
-				handleHexField(options, 'signature', BlsSigLength)
-				return options;
-			}]
-		}),
-		new web3._extend.Method({
-			name: 'validator.delegateStakeData',
-			call: 'wat_validator_DelegateStakeData',
-			params: 1,
-			inputFormatter: [function(options) {
-				function handleDelegateRules (rules) {
+				function handleDelegatingRules(rules) {
 					function mapHandler(rules, key) {
 						var upData = {}
 						for (var k in rules[key]) {
 							var addr = k.replace('0x', '');
-							if (addr.length != AddressLength) throw new Error(key +': invalid length of address=0x'+addr+'.');
-							if (!isHex(addr)) throw new Error(key +': invalid hex of address=0x'+addr+'.');
+							if (addr.length != AddressLength) throw new Error(key + ': invalid length of address=0x' + addr + '.');
+							if (!isHex(addr)) throw new Error(key + ': invalid hex of address=0x' + addr + '.');
 							var val = rules[key][k];
 							val = web3._extend.utils.toDecimal(val);
-							if (!Number.isInteger(val) || val < 0) throw new Error(key +': invalid value='+val+' address=0x'+addr+'.\nRequire positive integer.');
+							if (!Number.isInteger(val) || val < 0) throw new Error(key + ': invalid value=' + val + ' address=0x' + addr + '.\nRequire positive integer.');
 							upData['0x' + addr] = val;
 						}
-						rules[key] = upData 
+						rules[key] = upData
 					}
+		
 					function arrHandler(rules, key) {
 						var upData = []
 						for (var k in rules[key]) {
 							var addr = (rules[key][k]).replace('0x', '');
-							if (addr.length != AddressLength) throw new Error(key +': invalid length of address=0x'+addr+'.');
-							if (!isHex(addr)) throw new Error(key +': invalid hex of address=0x'+addr+'.');
+							if (addr.length != AddressLength) throw new Error(key + ': invalid length of address=0x' + addr + '.');
+							if (!isHex(addr)) throw new Error(key + ': invalid hex of address=0x' + addr + '.');
 							upData.push('0x' + addr);
 						}
 						rules[key] = upData
 					}
-					
+		
 					if (rules.profit_share) {
 						var key = 'profit_share';
 						mapHandler(rules, key)
@@ -1102,18 +1091,29 @@ web3._extend({
 					}
 					return rules
 				}
-
+		
+				// handle base deposit data
 				handleHexField(options, 'pubkey', BlsPubKeyLength)
 				handleHexField(options, 'creator_address', AddressLength)
+				handleHexField(options, 'withdrawal_address', AddressLength)
 				handleHexField(options, 'signature', BlsSigLength)
-				if (options.trial_period) {
-					options.trial_period = web3._extend.utils.toDecimal(options.trial_period);
-				}
-				if (options.trial_rules) {
-					options.trial_rules = handleDelegateRules(options.trial_rules)
-				}
-				if (options.rules) {
-					options.rules = handleDelegateRules(options.rules)
+
+				// TODO rm logs
+				console.log("deposit", JSON.stringify(options, null, 2))
+				console.log("delegating_stake", JSON.stringify(options.delegating_stake, null, 2))
+
+				// handle delegating stake data
+				if (options.delegating_stake) {
+					var dlgData = options.delegating_stake
+					if (dlgData.trial_period) {
+						dlgData.trial_period = web3._extend.utils.toDecimal(dlgData.trial_period);
+					}
+					if (dlgData.trial_rules) {
+						dlgData.trial_rules = handleDelegatingRules(dlgData.trial_rules)
+					}
+					if (dlgData.rules) {
+						dlgData.rules = handleDelegatingRules(dlgData.rules)
+					}
 				}
 				return options;
 			}]
