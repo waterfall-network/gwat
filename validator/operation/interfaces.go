@@ -14,7 +14,7 @@ type Deposit interface {
 	CreatorAddress() common.Address
 	WithdrawalAddress() common.Address
 	Signature() common.BlsSignature
-	DelegatedStake() *DelegatedStakeData
+	DelegatingStake() *DelegatingStakeData
 }
 
 //// DelegateStake contains all attributes for validator deposit.

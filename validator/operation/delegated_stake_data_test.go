@@ -65,7 +65,7 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 	bin, err := dsr.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	unmarshaled := &DelegatedStakeData{}
+	unmarshaled := &DelegatingStakeData{}
 	err = unmarshaled.UnmarshalBinary(bin)
 	testutils.AssertNoError(t, err)
 
@@ -80,7 +80,7 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 	binEmpty, err := dsrEmpty.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	unmarshaledEmpty := &DelegatedStakeData{}
+	unmarshaledEmpty := &DelegatingStakeData{}
 	err = unmarshaled.UnmarshalBinary(binEmpty)
 	testutils.AssertNoError(t, err)
 
@@ -89,11 +89,11 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 	testutils.AssertEqual(t, dsrEmpty.TrialRules, unmarshaledEmpty.TrialRules)
 
 	// nil instance
-	var dsrNil *DelegatedStakeData
+	var dsrNil *DelegatingStakeData
 	binNil, err := dsrNil.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	unmarshaledNil := &DelegatedStakeData{}
+	unmarshaledNil := &DelegatingStakeData{}
 	err = unmarshaledNil.UnmarshalBinary(binNil)
 	testutils.AssertError(t, err, errDelegateStakeNilValBin)
 }
@@ -135,7 +135,7 @@ func TestDelegateStakeData_NewDelegateStakeDataFromBinary(t *testing.T) {
 	testutils.AssertEqual(t, fmt.Sprintf("%#X", dsrEmpty.TrialRules), fmt.Sprintf("%#X", dsrBinEmpty.TrialRules))
 
 	// nil instance
-	var dsrNil *DelegatedStakeData
+	var dsrNil *DelegatingStakeData
 	binNil, err := dsrNil.MarshalBinary()
 	testutils.AssertNoError(t, err)
 

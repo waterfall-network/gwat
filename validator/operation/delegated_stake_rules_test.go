@@ -10,7 +10,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
-/** DelegatedStakeRules */
+/** DelegatingStakeRules */
 func TestDelegateStakeRules_init(t *testing.T) {
 	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
 
@@ -35,7 +35,7 @@ func TestDelegateStakeRules_Copy(t *testing.T) {
 	testutils.AssertEqual(t, dsr.Exit(), cpy.Exit())
 	testutils.AssertEqual(t, dsr.Withdrawal(), cpy.Withdrawal())
 
-	dsrEmpty := &DelegatedStakeRules{}
+	dsrEmpty := &DelegatingStakeRules{}
 
 	cpyEmpty := dsrEmpty.Copy()
 	testutils.AssertEqual(t, dsrEmpty.ProfitShare(), cpyEmpty.ProfitShare())
@@ -176,7 +176,7 @@ func TestDelegateStakeRules_Marshaling(t *testing.T) {
 	fmt.Println(fmt.Sprintf("binary_size=%d", len(bin)))
 	testutils.AssertEqual(t, encoded, bin)
 
-	unmarshaled := &DelegatedStakeRules{}
+	unmarshaled := &DelegatingStakeRules{}
 	err = unmarshaled.UnmarshalBinary(bin)
 	testutils.AssertNoError(t, err)
 

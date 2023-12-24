@@ -10,7 +10,7 @@ type depositOperation struct {
 	creator_address    common.Address   // attached creator account
 	withdrawal_address common.Address   // attached withdrawal credentials
 	signature          common.BlsSignature
-	delegate           *DelegatedStakeData
+	delegate           *DelegatingStakeData
 }
 
 func (op *depositOperation) init(
@@ -18,7 +18,7 @@ func (op *depositOperation) init(
 	creator_address common.Address,
 	withdrawal_address common.Address,
 	signature common.BlsSignature,
-	delegate *DelegatedStakeData,
+	delegate *DelegatingStakeData,
 ) error {
 	if pubkey == (common.BlsPubKey{}) {
 		return ErrNoPubKey
@@ -64,7 +64,7 @@ func NewDepositOperation(
 	creator_address common.Address,
 	withdrawal_address common.Address,
 	signature common.BlsSignature,
-	delegate *DelegatedStakeData,
+	delegate *DelegatingStakeData,
 ) (Deposit, error) {
 	op := depositOperation{}
 	if err := op.init(pubkey, creator_address, withdrawal_address, signature, delegate); err != nil {
@@ -97,7 +97,7 @@ func (op *depositOperation) UnmarshalBinary(b []byte) error {
 	signature := common.BytesToBlsSig(b[startOffset:endOffset])
 
 	// retrieve extended data
-	var delegateStake *DelegatedStakeData
+	var delegateStake *DelegatingStakeData
 	extendedData := b[endOffset:]
 	if len(extendedData) > 0 {
 		// delegate stake data
@@ -178,7 +178,7 @@ func (op *depositOperation) Signature() common.BlsSignature {
 	return common.BytesToBlsSig(makeCopy(op.signature[:]))
 }
 
-func (op *depositOperation) DelegatedStake() *DelegatedStakeData {
+func (op *depositOperation) DelegatingStake() *DelegatingStakeData {
 	return op.delegate.Copy()
 }
 

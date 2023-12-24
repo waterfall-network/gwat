@@ -9,9 +9,9 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
-/** DelegatedStakeRules
+/** DelegatingStakeRules
  */
-type DelegatedStakeRules struct {
+type DelegatingStakeRules struct {
 	addrs       []common.Address
 	profitShare []uint8
 	stakeShare  []uint8
@@ -24,15 +24,15 @@ func NewDelegateStakeRules(
 	stakeShare map[common.Address]uint8,
 	exit []common.Address,
 	withdrawal []common.Address,
-) (*DelegatedStakeRules, error) {
-	dsr := DelegatedStakeRules{}
+) (*DelegatingStakeRules, error) {
+	dsr := DelegatingStakeRules{}
 	if err := dsr.init(profitShare, stakeShare, exit, withdrawal); err != nil {
 		return nil, err
 	}
 	return &dsr, nil
 }
 
-func (dr *DelegatedStakeRules) init(
+func (dr *DelegatingStakeRules) init(
 	profitShare map[common.Address]uint8,
 	stakeShare map[common.Address]uint8,
 	exit []common.Address,
@@ -111,7 +111,7 @@ func (dr *DelegatedStakeRules) init(
 	return nil
 }
 
-func (dr *DelegatedStakeRules) Validate() error {
+func (dr *DelegatingStakeRules) Validate() error {
 	if err := dr.ValidateProfitShare(); err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (dr *DelegatedStakeRules) Validate() error {
 	return nil
 }
 
-func (dr *DelegatedStakeRules) ValidateProfitShare() error {
+func (dr *DelegatingStakeRules) ValidateProfitShare() error {
 	//check the percentage values are correct
 	var totalPrc uint
 	for _, v := range dr.profitShare {
@@ -139,7 +139,7 @@ func (dr *DelegatedStakeRules) ValidateProfitShare() error {
 	return nil
 }
 
-func (dr *DelegatedStakeRules) ValidateStakeShare() error {
+func (dr *DelegatingStakeRules) ValidateStakeShare() error {
 	var totalPrc uint
 	for _, v := range dr.stakeShare {
 		totalPrc += uint(v)
@@ -150,21 +150,21 @@ func (dr *DelegatedStakeRules) ValidateStakeShare() error {
 	return nil
 }
 
-func (dr *DelegatedStakeRules) validateExit() error {
+func (dr *DelegatingStakeRules) validateExit() error {
 	if len(dr.Exit()) == 0 {
 		return ErrNoExitRoles
 	}
 	return nil
 }
 
-func (dr *DelegatedStakeRules) validateWithdrawal() error {
+func (dr *DelegatingStakeRules) validateWithdrawal() error {
 	if len(dr.Withdrawal()) == 0 {
 		return ErrNoWithdrawalRoles
 	}
 	return nil
 }
 
-func (dr *DelegatedStakeRules) Copy() *DelegatedStakeRules {
+func (dr *DelegatingStakeRules) Copy() *DelegatingStakeRules {
 	if dr == nil {
 		return nil
 	}
@@ -192,7 +192,7 @@ func (dr *DelegatedStakeRules) Copy() *DelegatedStakeRules {
 		withdrawal = make(bitfield.Bitlist, 0)
 	}
 
-	return &DelegatedStakeRules{
+	return &DelegatingStakeRules{
 		addrs:       addrs,
 		profitShare: profitShare,
 		stakeShare:  stakeShare,
@@ -202,7 +202,7 @@ func (dr *DelegatedStakeRules) Copy() *DelegatedStakeRules {
 }
 
 // ProfitShare returns map of participants profit share in %
-func (dr *DelegatedStakeRules) ProfitShare() map[common.Address]uint8 {
+func (dr *DelegatingStakeRules) ProfitShare() map[common.Address]uint8 {
 	data := map[common.Address]uint8{}
 	for i, a := range dr.addrs {
 		if v := dr.profitShare[i]; v > 0 {
@@ -213,7 +213,7 @@ func (dr *DelegatedStakeRules) ProfitShare() map[common.Address]uint8 {
 }
 
 // StakeShare returns map of participants stake share in % (after exit)
-func (dr *DelegatedStakeRules) StakeShare() map[common.Address]uint8 {
+func (dr *DelegatingStakeRules) StakeShare() map[common.Address]uint8 {
 	data := map[common.Address]uint8{}
 	for i, a := range dr.addrs {
 		if v := dr.stakeShare[i]; v > 0 {
@@ -224,7 +224,7 @@ func (dr *DelegatedStakeRules) StakeShare() map[common.Address]uint8 {
 }
 
 // Exit returns the addresses authorized to init exit procedure.
-func (dr *DelegatedStakeRules) Exit() []common.Address {
+func (dr *DelegatingStakeRules) Exit() []common.Address {
 	ixs := dr.exit.BitIndices()
 	data := make([]common.Address, len(ixs))
 	for i, ix := range ixs {
@@ -234,7 +234,7 @@ func (dr *DelegatedStakeRules) Exit() []common.Address {
 }
 
 // Withdrawal returns the addresses authorized to init exit procedure.
-func (dr *DelegatedStakeRules) Withdrawal() []common.Address {
+func (dr *DelegatingStakeRules) Withdrawal() []common.Address {
 	ixs := dr.withdrawal.BitIndices()
 	data := make([]common.Address, len(ixs))
 	for i, ix := range ixs {
@@ -251,7 +251,7 @@ type rlpDelegateStakeRules struct {
 	W []byte
 }
 
-func (dr *DelegatedStakeRules) MarshalBinary() ([]byte, error) {
+func (dr *DelegatingStakeRules) MarshalBinary() ([]byte, error) {
 	rd := &rlpDelegateStakeRules{
 		A: dr.addrs,
 		P: dr.profitShare,
@@ -262,7 +262,7 @@ func (dr *DelegatedStakeRules) MarshalBinary() ([]byte, error) {
 	return rlp.EncodeToBytes(rd)
 }
 
-func (dr *DelegatedStakeRules) UnmarshalBinary(b []byte) error {
+func (dr *DelegatingStakeRules) UnmarshalBinary(b []byte) error {
 	rd := &rlpDelegateStakeRules{}
 	if err := rlp.DecodeBytes(b, rd); err != nil {
 		return err

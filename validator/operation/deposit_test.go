@@ -159,9 +159,9 @@ func TestDelegateStake_Marshaling(t *testing.T) {
 	testutils.AssertEqual(t, delegatedDeposit.CreatorAddress(), unmarshaled.CreatorAddress())
 	testutils.AssertEqual(t, delegatedDeposit.WithdrawalAddress(), unmarshaled.WithdrawalAddress())
 	testutils.AssertEqual(t, delegatedDeposit.Signature(), unmarshaled.Signature())
-	testutils.AssertEqual(t, delegatedDeposit.DelegatedStake().Rules, unmarshaled.DelegatedStake().Rules)
-	testutils.AssertEqual(t, delegatedDeposit.DelegatedStake().TrialRules, unmarshaled.DelegatedStake().TrialRules)
-	testutils.AssertEqual(t, delegatedDeposit.DelegatedStake().TrialPeriod, unmarshaled.DelegatedStake().TrialPeriod)
+	testutils.AssertEqual(t, delegatedDeposit.DelegatingStake().Rules, unmarshaled.DelegatingStake().Rules)
+	testutils.AssertEqual(t, delegatedDeposit.DelegatingStake().TrialRules, unmarshaled.DelegatingStake().TrialRules)
+	testutils.AssertEqual(t, delegatedDeposit.DelegatingStake().TrialPeriod, unmarshaled.DelegatingStake().TrialPeriod)
 }
 
 func TestDelegateStake_nilMarshaling(t *testing.T) {
@@ -174,7 +174,7 @@ func TestDelegateStake_nilMarshaling(t *testing.T) {
 			"5a42795183ab5aa2f1b2dd1")
 	)
 
-	var delegate *DelegatedStakeData = nil
+	var delegate *DelegatingStakeData = nil
 
 	delegatedDeposit, err := NewDepositOperation(pubkey, creator_address, withdrawal_address, signature, delegate)
 	testutils.AssertNoError(t, err)
@@ -190,8 +190,8 @@ func TestDelegateStake_nilMarshaling(t *testing.T) {
 	testutils.AssertEqual(t, delegatedDeposit.CreatorAddress(), unmarshaled.CreatorAddress())
 	testutils.AssertEqual(t, delegatedDeposit.WithdrawalAddress(), unmarshaled.WithdrawalAddress())
 	testutils.AssertEqual(t, delegatedDeposit.Signature(), unmarshaled.Signature())
-	testutils.AssertEqual(t, delegate, delegatedDeposit.DelegatedStake())
-	testutils.AssertEqual(t, delegatedDeposit.DelegatedStake(), unmarshaled.DelegatedStake())
+	testutils.AssertEqual(t, delegate, delegatedDeposit.DelegatingStake())
+	testutils.AssertEqual(t, delegatedDeposit.DelegatingStake(), unmarshaled.DelegatingStake())
 }
 
 func TestDepositData_withDelegateStake(t *testing.T) {
@@ -251,7 +251,7 @@ func TestDepositData_withDelegateStake(t *testing.T) {
 		creatorAddress common.Address   // attached creator account
 		withdrawal     common.Address   // attached withdrawal credentials
 		signature      common.BlsSignature
-		delegateStake  *DelegatedStakeData
+		delegateStake  *DelegatingStakeData
 	}
 
 	cases := []operationTestCase{
@@ -325,11 +325,11 @@ func TestDepositData_withDelegateStake(t *testing.T) {
 		testutils.AssertEqual(t, o.withdrawal.Bytes(), opDecoded.WithdrawalAddress().Bytes())
 		testutils.AssertEqual(t, o.signature.Bytes(), opDecoded.Signature().Bytes())
 
-		testutils.AssertEqual(t, o.delegateStake.Copy(), opDecoded.DelegatedStake())
+		testutils.AssertEqual(t, o.delegateStake.Copy(), opDecoded.DelegatingStake())
 
 		o_rules, err := o.delegateStake.MarshalBinary()
 		testutils.AssertNoError(t, err)
-		d_rules, err := opDecoded.DelegatedStake().MarshalBinary()
+		d_rules, err := opDecoded.DelegatingStake().MarshalBinary()
 		testutils.AssertNoError(t, err)
 		testutils.AssertEqual(t, o_rules, d_rules)
 

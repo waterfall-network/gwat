@@ -3,24 +3,24 @@ package storage
 import (
 	"encoding/binary"
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	"math"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 type Validator struct {
 	// the Address property must be the first for IsValidatorAddress
-	Address           common.Address                `json:"address"`
-	PubKey            common.BlsPubKey              `json:"pubKey"`
-	WithdrawalAddress *common.Address               `json:"withdrawalAddress"`
-	Index             uint64                        `json:"index"`
-	ActivationEra     uint64                        `json:"activationEra"`
-	ExitEra           uint64                        `json:"exitEra"`
-	Stake             []*StakeByAddress             `json:"stake"`
-	DelegateStake     *operation.DelegatedStakeData `json:"delegateStake"`
+	Address           common.Address                 `json:"address"`
+	PubKey            common.BlsPubKey               `json:"pubKey"`
+	WithdrawalAddress *common.Address                `json:"withdrawalAddress"`
+	Index             uint64                         `json:"index"`
+	ActivationEra     uint64                         `json:"activationEra"`
+	ExitEra           uint64                         `json:"exitEra"`
+	Stake             []*StakeByAddress              `json:"stake"`
+	DelegateStake     *operation.DelegatingStakeData `json:"delegateStake"`
 }
 
 func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {
