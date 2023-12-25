@@ -17,17 +17,6 @@ type Deposit interface {
 	DelegatingStake() *DelegatingStakeData
 }
 
-//// DelegateStake contains all attributes for validator deposit.
-//type DelegateStake interface {
-//	Operation
-//	PubKey() common.BlsPubKey
-//	CreatorAddress() common.Address
-//	Signature() common.BlsSignature
-//	Rules() *DelegateStakeRules
-//	TrialPeriod() uint64
-//	TrialRules() *DelegateStakeRules
-//}
-
 // ValidatorSync contains all attributes for validator sync op.
 type ValidatorSync interface {
 	Operation

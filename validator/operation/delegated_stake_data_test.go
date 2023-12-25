@@ -9,16 +9,16 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
-func TestDelegateStakeData_NewDelegateStakeData(t *testing.T) {
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+func TestDelegatingStakeData_NewDelegatingStakeData(t *testing.T) {
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 	trialPeriod := uint64(321)
 
-	rules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	rules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
-	dsr, err := NewDelegateStakeData(rules, trialPeriod, trialRules)
+	dsr, err := NewDelegatingStakeData(rules, trialPeriod, trialRules)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, profitShare, dsr.Rules.ProfitShare())
 	testutils.AssertEqual(t, stakeShare, dsr.Rules.StakeShare())
@@ -31,7 +31,7 @@ func TestDelegateStakeData_NewDelegateStakeData(t *testing.T) {
 	testutils.AssertEqual(t, withdrawal, dsr.TrialRules.Withdrawal())
 
 	// empty instance
-	dsrEmpty, err := NewDelegateStakeData(nil, 0, nil)
+	dsrEmpty, err := NewDelegatingStakeData(nil, 0, nil)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, map[common.Address]uint8{}, dsrEmpty.Rules.ProfitShare())
 	testutils.AssertEqual(t, map[common.Address]uint8{}, dsrEmpty.Rules.StakeShare())
@@ -44,22 +44,22 @@ func TestDelegateStakeData_NewDelegateStakeData(t *testing.T) {
 	testutils.AssertEqual(t, []common.Address{}, dsrEmpty.TrialRules.Withdrawal())
 }
 
-func TestDelegateStakeData_Marshaling(t *testing.T) {
+func TestDelegatingStakeData_Marshaling(t *testing.T) {
 	defer func(tStart time.Time) {
 		fmt.Println("TOTAL TIME",
 			"elapsed", common.PrettyDuration(time.Since(tStart)),
 		)
 	}(time.Now())
 
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 	trialPeriod := uint64(321)
 
-	rules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	rules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
-	dsr, err := NewDelegateStakeData(rules, trialPeriod, trialRules)
+	dsr, err := NewDelegatingStakeData(rules, trialPeriod, trialRules)
 	testutils.AssertNoError(t, err)
 
 	bin, err := dsr.MarshalBinary()
@@ -74,7 +74,7 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 	testutils.AssertEqual(t, dsr.TrialRules, unmarshaled.TrialRules)
 
 	//// empty instance
-	dsrEmpty, err := NewDelegateStakeData(nil, 0, nil)
+	dsrEmpty, err := NewDelegatingStakeData(nil, 0, nil)
 	testutils.AssertNoError(t, err)
 
 	binEmpty, err := dsrEmpty.MarshalBinary()
@@ -95,25 +95,25 @@ func TestDelegateStakeData_Marshaling(t *testing.T) {
 
 	unmarshaledNil := &DelegatingStakeData{}
 	err = unmarshaledNil.UnmarshalBinary(binNil)
-	testutils.AssertError(t, err, errDelegateStakeNilValBin)
+	testutils.AssertError(t, err, errDelegatingStakeNilValBin)
 }
 
-func TestDelegateStakeData_NewDelegateStakeDataFromBinary(t *testing.T) {
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+func TestDelegatingStakeData_NewDelegatingStakeDataFromBinary(t *testing.T) {
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 	trialPeriod := uint64(321)
 
-	rules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	rules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
-	dsr, err := NewDelegateStakeData(rules, trialPeriod, trialRules)
+	dsr, err := NewDelegatingStakeData(rules, trialPeriod, trialRules)
 	testutils.AssertNoError(t, err)
 
 	bin, err := dsr.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	dsrBin, err := NewDelegateStakeDataFromBinary(bin)
+	dsrBin, err := NewDelegatingStakeDataFromBinary(bin)
 	testutils.AssertNoError(t, err)
 
 	testutils.AssertEqual(t, dsr.Rules, dsrBin.Rules)
@@ -121,13 +121,13 @@ func TestDelegateStakeData_NewDelegateStakeDataFromBinary(t *testing.T) {
 	testutils.AssertEqual(t, dsr.TrialRules, dsrBin.TrialRules)
 
 	//// empty instance
-	dsrEmpty, err := NewDelegateStakeData(nil, 0, nil)
+	dsrEmpty, err := NewDelegatingStakeData(nil, 0, nil)
 	testutils.AssertNoError(t, err)
 
 	binEmpty, err := dsrEmpty.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	dsrBinEmpty, err := NewDelegateStakeDataFromBinary(binEmpty)
+	dsrBinEmpty, err := NewDelegatingStakeDataFromBinary(binEmpty)
 	testutils.AssertNoError(t, err)
 
 	testutils.AssertEqual(t, fmt.Sprintf("%#X", dsrEmpty.Rules), fmt.Sprintf("%#X", dsrBinEmpty.Rules))
@@ -139,7 +139,7 @@ func TestDelegateStakeData_NewDelegateStakeDataFromBinary(t *testing.T) {
 	binNil, err := dsrNil.MarshalBinary()
 	testutils.AssertNoError(t, err)
 
-	dsrBinNil, err := NewDelegateStakeDataFromBinary(binNil)
+	dsrBinNil, err := NewDelegatingStakeDataFromBinary(binNil)
 	testutils.AssertNoError(t, err)
 	testutils.AssertEqual(t, dsrNil, dsrBinNil)
 }

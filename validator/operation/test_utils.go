@@ -63,7 +63,7 @@ func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, ope
 	}
 }
 
-func TestParamsDelegateStakeRules() (
+func TestParamsDelegatingStakeRules() (
 	profitShare, stakeShare map[common.Address]uint8,
 	exit, withdrawal []common.Address,
 ) {

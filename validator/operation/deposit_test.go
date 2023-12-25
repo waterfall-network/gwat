@@ -123,8 +123,8 @@ func TestDepositData(t *testing.T) {
 	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
-func TestDelegateStake_Marshaling(t *testing.T) {
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+func TestDelegatingStake_Marshaling(t *testing.T) {
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 
 	var (
 		pubkey             = common.HexToBlsPubKey("0x9728bc733c8fcedde0c3a33dac12da3ebbaa0eb74d813a34b600520e7976a260d85f057687e8c923d52c78715515348d")
@@ -135,11 +135,11 @@ func TestDelegateStake_Marshaling(t *testing.T) {
 			"5a42795183ab5aa2f1b2dd1")
 	)
 
-	rules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	rules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	delegate, err := NewDelegateStakeData(rules, 321, trialRules)
+	delegate, err := NewDelegatingStakeData(rules, 321, trialRules)
 	testutils.AssertNoError(t, err)
 
 	delegatedDeposit, err := NewDepositOperation(pubkey, creator_address, withdrawal_address, signature, delegate)
@@ -164,7 +164,7 @@ func TestDelegateStake_Marshaling(t *testing.T) {
 	testutils.AssertEqual(t, delegatedDeposit.DelegatingStake().TrialPeriod, unmarshaled.DelegatingStake().TrialPeriod)
 }
 
-func TestDelegateStake_nilMarshaling(t *testing.T) {
+func TestDelegatingStake_nilMarshaling(t *testing.T) {
 	var (
 		pubkey             = common.HexToBlsPubKey("0x9728bc733c8fcedde0c3a33dac12da3ebbaa0eb74d813a34b600520e7976a260d85f057687e8c923d52c78715515348d")
 		creator_address    = common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
@@ -194,8 +194,8 @@ func TestDelegateStake_nilMarshaling(t *testing.T) {
 	testutils.AssertEqual(t, delegatedDeposit.DelegatingStake(), unmarshaled.DelegatingStake())
 }
 
-func TestDepositData_withDelegateStake(t *testing.T) {
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+func TestDepositData_withDelegatingStake(t *testing.T) {
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 	var (
 		pubkey             = common.HexToBlsPubKey("0x9728bc733c8fcedde0c3a33dac12da3ebbaa0eb74d813a34b600520e7976a260d85f057687e8c923d52c78715515348d")
 		creator_address    = common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
@@ -235,34 +235,34 @@ func TestDepositData_withDelegateStake(t *testing.T) {
 			"7777777777870a1e3c0000000087000000461e000081a081c0")
 	)
 
-	rules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	rules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	delegate, err := NewDelegateStakeData(rules, 321, trialRules)
+	delegate, err := NewDelegatingStakeData(rules, 321, trialRules)
 	testutils.AssertNoError(t, err)
-	delegate2, err := NewDelegateStakeData(rules, 321, nil)
+	delegate2, err := NewDelegatingStakeData(rules, 321, nil)
 	testutils.AssertNoError(t, err)
-	delegate3, err := NewDelegateStakeData(nil, 321, trialRules)
+	delegate3, err := NewDelegatingStakeData(nil, 321, trialRules)
 	testutils.AssertNoError(t, err)
 
 	type decodedOp struct {
-		pubKey         common.BlsPubKey // validator public key
-		creatorAddress common.Address   // attached creator account
-		withdrawal     common.Address   // attached withdrawal credentials
-		signature      common.BlsSignature
-		delegateStake  *DelegatingStakeData
+		pubKey          common.BlsPubKey // validator public key
+		creatorAddress  common.Address   // attached creator account
+		withdrawal      common.Address   // attached withdrawal credentials
+		signature       common.BlsSignature
+		delegatingStake *DelegatingStakeData
 	}
 
 	cases := []operationTestCase{
 		{
 			caseName: "OK",
 			decoded: decodedOp{
-				pubKey:         pubkey,
-				creatorAddress: creator_address,
-				withdrawal:     withdrawal_address,
-				signature:      signature,
-				delegateStake:  delegate,
+				pubKey:          pubkey,
+				creatorAddress:  creator_address,
+				withdrawal:      withdrawal_address,
+				signature:       signature,
+				delegatingStake: delegate,
 			},
 			encoded: binDelegate,
 			errs:    []error{},
@@ -270,11 +270,11 @@ func TestDepositData_withDelegateStake(t *testing.T) {
 		{
 			caseName: "OK-2",
 			decoded: decodedOp{
-				pubKey:         pubkey,
-				creatorAddress: creator_address,
-				withdrawal:     withdrawal_address,
-				signature:      signature,
-				delegateStake:  delegate2,
+				pubKey:          pubkey,
+				creatorAddress:  creator_address,
+				withdrawal:      withdrawal_address,
+				signature:       signature,
+				delegatingStake: delegate2,
 			},
 			encoded: binDelegate2,
 			errs:    []error{},
@@ -282,11 +282,11 @@ func TestDepositData_withDelegateStake(t *testing.T) {
 		{
 			caseName: "ErrBadProfitShare",
 			decoded: decodedOp{
-				pubKey:         pubkey,
-				creatorAddress: creator_address,
-				withdrawal:     withdrawal_address,
-				signature:      signature,
-				delegateStake:  delegate3,
+				pubKey:          pubkey,
+				creatorAddress:  creator_address,
+				withdrawal:      withdrawal_address,
+				signature:       signature,
+				delegatingStake: delegate3,
 			},
 			encoded: binDelegate3,
 			errs:    []error{ErrBadProfitShare},
@@ -300,7 +300,7 @@ func TestDepositData_withDelegateStake(t *testing.T) {
 			o.creatorAddress,
 			o.withdrawal,
 			o.signature,
-			o.delegateStake,
+			o.delegatingStake,
 		)
 		if err != nil {
 			return err
@@ -325,9 +325,9 @@ func TestDepositData_withDelegateStake(t *testing.T) {
 		testutils.AssertEqual(t, o.withdrawal.Bytes(), opDecoded.WithdrawalAddress().Bytes())
 		testutils.AssertEqual(t, o.signature.Bytes(), opDecoded.Signature().Bytes())
 
-		testutils.AssertEqual(t, o.delegateStake.Copy(), opDecoded.DelegatingStake())
+		testutils.AssertEqual(t, o.delegatingStake.Copy(), opDecoded.DelegatingStake())
 
-		o_rules, err := o.delegateStake.MarshalBinary()
+		o_rules, err := o.delegatingStake.MarshalBinary()
 		testutils.AssertNoError(t, err)
 		d_rules, err := opDecoded.DelegatingStake().MarshalBinary()
 		testutils.AssertNoError(t, err)

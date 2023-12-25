@@ -19,7 +19,7 @@ type DelegatingStakeRules struct {
 	withdrawal  bitfield.Bitlist
 }
 
-func NewDelegateStakeRules(
+func NewDelegatingStakeRules(
 	profitShare map[common.Address]uint8,
 	stakeShare map[common.Address]uint8,
 	exit []common.Address,
@@ -243,7 +243,7 @@ func (dr *DelegatingStakeRules) Withdrawal() []common.Address {
 	return data
 }
 
-type rlpDelegateStakeRules struct {
+type rlpDelegatingStakeRules struct {
 	A []common.Address
 	P []uint8
 	S []uint8
@@ -252,7 +252,7 @@ type rlpDelegateStakeRules struct {
 }
 
 func (dr *DelegatingStakeRules) MarshalBinary() ([]byte, error) {
-	rd := &rlpDelegateStakeRules{
+	rd := &rlpDelegatingStakeRules{
 		A: dr.addrs,
 		P: dr.profitShare,
 		S: dr.stakeShare,
@@ -263,7 +263,7 @@ func (dr *DelegatingStakeRules) MarshalBinary() ([]byte, error) {
 }
 
 func (dr *DelegatingStakeRules) UnmarshalBinary(b []byte) error {
-	rd := &rlpDelegateStakeRules{}
+	rd := &rlpDelegatingStakeRules{}
 	if err := rlp.DecodeBytes(b, rd); err != nil {
 		return err
 	}

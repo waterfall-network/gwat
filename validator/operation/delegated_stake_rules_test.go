@@ -11,10 +11,10 @@ import (
 )
 
 /** DelegatingStakeRules */
-func TestDelegateStakeRules_init(t *testing.T) {
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+func TestDelegatingStakeRules_init(t *testing.T) {
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 
-	dsr, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	dsr, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
 	testutils.AssertEqual(t, profitShare, dsr.ProfitShare())
@@ -23,10 +23,10 @@ func TestDelegateStakeRules_init(t *testing.T) {
 	testutils.AssertEqual(t, withdrawal, dsr.Withdrawal())
 }
 
-func TestDelegateStakeRules_Copy(t *testing.T) {
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+func TestDelegatingStakeRules_Copy(t *testing.T) {
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 
-	dsr, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	dsr, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
 	cpy := dsr.Copy()
@@ -44,8 +44,8 @@ func TestDelegateStakeRules_Copy(t *testing.T) {
 	testutils.AssertEqual(t, dsrEmpty.Withdrawal(), cpyEmpty.Withdrawal())
 }
 
-func TestDelegateStakeRules_validate(t *testing.T) {
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+func TestDelegatingStakeRules_validate(t *testing.T) {
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 
 	type decodedOp struct {
 		profitShare map[common.Address]uint8
@@ -131,7 +131,7 @@ func TestDelegateStakeRules_validate(t *testing.T) {
 
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
-		createOp, err := NewDelegateStakeRules(
+		createOp, err := NewDelegatingStakeRules(
 			o.profitShare,
 			o.stakeShare,
 			o.exit,
@@ -150,13 +150,13 @@ func TestDelegateStakeRules_validate(t *testing.T) {
 	startSubTests(t, cases, operationEncode, operationDecode)
 }
 
-func TestDelegateStakeRules_Marshaling(t *testing.T) {
+func TestDelegatingStakeRules_Marshaling(t *testing.T) {
 	defer func(tStart time.Time) {
 		fmt.Println("TOTAL TIME",
 			"elapsed", common.PrettyDuration(time.Since(tStart)),
 		)
 	}(time.Now())
-	profitShare, stakeShare, exit, withdrawal := TestParamsDelegateStakeRules()
+	profitShare, stakeShare, exit, withdrawal := TestParamsDelegatingStakeRules()
 	encoded := hexutils.HexToBytes("f8a9f893941111111111111111111111111111111111111111" +
 		"942222222222222222222222222222222222222222" +
 		"943333333333333333333333333333333333333333" +
@@ -166,7 +166,7 @@ func TestDelegateStakeRules_Marshaling(t *testing.T) {
 		"947777777777777777777777777777777777777777" +
 		"870a1e3c0000000087000000461e000081a081c0")
 
-	dsr, err := NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	dsr, err := NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
 	bin, err := dsr.MarshalBinary()

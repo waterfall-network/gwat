@@ -12,17 +12,17 @@ import (
 )
 
 var (
-	errDelegateStakeNilValBin = errors.New("delegate stake binary data conforms to nil instance")
+	errDelegatingStakeNilValBin = errors.New("delegate stake binary data conforms to nil instance")
 )
 
 var (
-	minDsdLen = minDelegateStakeDataLen() //20
+	minDsdLen = minDelegatingStakeDataLen() //20
 )
 
 type DelegatingStakeData struct {
-	Rules       DelegatingStakeRules // rules after trial period
-	TrialPeriod uint64               // period while trial_rules are active (in slots, starts from activation slot)
-	TrialRules  DelegatingStakeRules // rules for trial period
+	Rules       DelegatingStakeRules `json:"rules"`        // rules after trial period
+	TrialPeriod uint64               `json:"trial_period"` // period while trial_rules are active (in slots, starts from activation slot)
+	TrialRules  DelegatingStakeRules `json:"trial_rules"`  // rules for trial period
 }
 
 func (dsd *DelegatingStakeData) init(
@@ -57,8 +57,8 @@ func (dsd *DelegatingStakeData) init(
 	return nil
 }
 
-// NewDelegateStakeOperation creates an operation for creating validator delegate stake
-func NewDelegateStakeData(
+// NewDelegatingStakeOperation creates an operation for creating validator delegate stake
+func NewDelegatingStakeData(
 	rules *DelegatingStakeRules,
 	trialPeriod uint64,
 	trialRules *DelegatingStakeRules,
@@ -70,13 +70,13 @@ func NewDelegateStakeData(
 	return &dsd, nil
 }
 
-// NewDelegateStakeDataFromBinary create new instance from binary data.
+// NewDelegatingStakeDataFromBinary create new instance from binary data.
 // Support to init nil values.
-func NewDelegateStakeDataFromBinary(bin []byte) (*DelegatingStakeData, error) {
+func NewDelegatingStakeDataFromBinary(bin []byte) (*DelegatingStakeData, error) {
 	dsd := &DelegatingStakeData{}
 	err := dsd.UnmarshalBinary(bin)
 	// if binary data conforms to nil instance
-	if errors.Is(err, errDelegateStakeNilValBin) {
+	if errors.Is(err, errDelegatingStakeNilValBin) {
 		return nil, nil
 	}
 	if err != nil {
@@ -85,7 +85,7 @@ func NewDelegateStakeDataFromBinary(bin []byte) (*DelegatingStakeData, error) {
 	return dsd, nil
 }
 
-type rlpDelegateStakeOperation struct {
+type rlpDelegatingStakeOperation struct {
 	R  []byte
 	TP uint64
 	TR []byte
@@ -105,7 +105,7 @@ func (dsd *DelegatingStakeData) MarshalBinary() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	rd := &rlpDelegateStakeOperation{
+	rd := &rlpDelegatingStakeOperation{
 		R:  bRules,
 		TP: dsd.TrialPeriod,
 		TR: bTRules,
@@ -127,7 +127,7 @@ func (dsd *DelegatingStakeData) UnmarshalBinary(b []byte) error {
 	if len(b) < minDsdLen {
 		// if binary data conforms to nil instance
 		if bytes.Equal(b, make([]byte, common.Uint32Size)) {
-			return errDelegateStakeNilValBin
+			return errDelegatingStakeNilValBin
 		}
 		return ErrBadDataLen
 	}
@@ -136,7 +136,7 @@ func (dsd *DelegatingStakeData) UnmarshalBinary(b []byte) error {
 		return ErrBadDataLen
 	}
 
-	rop := &rlpDelegateStakeOperation{}
+	rop := &rlpDelegatingStakeOperation{}
 	if err := rlp.DecodeBytes(b[common.Uint32Size:common.Uint32Size+dataLen], rop); err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (dsd *DelegatingStakeData) Copy() *DelegatingStakeData {
 	}
 }
 
-func minDelegateStakeDataLen() int {
+func minDelegatingStakeDataLen() int {
 	emptyBin, err := (&DelegatingStakeData{}).MarshalBinary()
 	if err != nil {
 		log.Crit("Validator: calc min delegate stake binary data length failed")

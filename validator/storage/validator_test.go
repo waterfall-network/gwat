@@ -66,18 +66,18 @@ func TestValidator_MarshalingBinary(t *testing.T) {
 	}
 }
 
-func TestValidatorDelegateStake_MarshalingBinary(t *testing.T) {
-	profitShare, stakeShare, exit, withdrawal := operation.TestParamsDelegateStakeRules()
+func TestValidatorDelegatingStake_MarshalingBinary(t *testing.T) {
+	profitShare, stakeShare, exit, withdrawal := operation.TestParamsDelegatingStakeRules()
 	trialPeriod := uint64(321)
 
-	rules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	rules, err := operation.NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
-	trialRules, err := operation.NewDelegateStakeRules(profitShare, stakeShare, exit, withdrawal)
+	trialRules, err := operation.NewDelegatingStakeRules(profitShare, stakeShare, exit, withdrawal)
 	testutils.AssertNoError(t, err)
 
-	dsr, err := operation.NewDelegateStakeData(rules, trialPeriod, trialRules)
+	dsr, err := operation.NewDelegatingStakeData(rules, trialPeriod, trialRules)
 	testutils.AssertNoError(t, err)
-	testValidator.DelegateStake = dsr
+	testValidator.DelegatingStake = dsr
 
 	data, err := testValidator.MarshalBinary()
 	testutils.AssertNoError(t, err)
@@ -101,9 +101,9 @@ func TestValidatorDelegateStake_MarshalingBinary(t *testing.T) {
 	}
 
 	// delegate stake
-	testutils.AssertEqual(t, dsr.Rules, v.DelegateStake.Rules)
-	testutils.AssertEqual(t, dsr.TrialPeriod, v.DelegateStake.TrialPeriod)
-	testutils.AssertEqual(t, dsr.TrialRules, v.DelegateStake.TrialRules)
+	testutils.AssertEqual(t, dsr.Rules, v.DelegatingStake.Rules)
+	testutils.AssertEqual(t, dsr.TrialPeriod, v.DelegatingStake.TrialPeriod)
+	testutils.AssertEqual(t, dsr.TrialRules, v.DelegatingStake.TrialRules)
 }
 
 func TestValidatorSettersGetters(t *testing.T) {

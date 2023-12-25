@@ -20,7 +20,7 @@ type Validator struct {
 	ActivationEra     uint64                         `json:"activationEra"`
 	ExitEra           uint64                         `json:"exitEra"`
 	Stake             []*StakeByAddress              `json:"stake"`
-	DelegateStake     *operation.DelegatingStakeData `json:"delegateStake"`
+	DelegatingStake   *operation.DelegatingStakeData `json:"delegatingStake"`
 }
 
 func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {
@@ -32,7 +32,7 @@ func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *c
 		ActivationEra:     math.MaxUint64,
 		ExitEra:           math.MaxUint64,
 		Stake:             []*StakeByAddress{},
-		DelegateStake:     nil,
+		DelegatingStake:   nil,
 	}
 }
 
@@ -90,7 +90,7 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 
 	// marshal binary extended data
 	// delegate stake data
-	delegateBin, err := v.DelegateStake.MarshalBinary()
+	delegateBin, err := v.DelegatingStake.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -178,11 +178,11 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 		// get delegate data
 		startOffset = endOfset
 		endOfset = startOffset + delegateDataLen
-		delegateStake, err := operation.NewDelegateStakeDataFromBinary(extendedData[startOffset:endOfset])
+		delegatingStake, err := operation.NewDelegatingStakeDataFromBinary(extendedData[startOffset:endOfset])
 		if err != nil {
 			return err
 		}
-		v.DelegateStake = delegateStake
+		v.DelegatingStake = delegatingStake
 	}
 
 	return nil

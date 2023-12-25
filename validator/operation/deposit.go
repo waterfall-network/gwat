@@ -97,7 +97,7 @@ func (op *depositOperation) UnmarshalBinary(b []byte) error {
 	signature := common.BytesToBlsSig(b[startOffset:endOffset])
 
 	// retrieve extended data
-	var delegateStake *DelegatingStakeData
+	var delegatingStake *DelegatingStakeData
 	extendedData := b[endOffset:]
 	if len(extendedData) > 0 {
 		// delegate stake data
@@ -111,13 +111,13 @@ func (op *depositOperation) UnmarshalBinary(b []byte) error {
 		// get delegate data
 		startOffset = endOfset
 		endOfset = startOffset + delegateDataLen
-		delegateStake, err = NewDelegateStakeDataFromBinary(extendedData[startOffset:endOfset])
+		delegatingStake, err = NewDelegatingStakeDataFromBinary(extendedData[startOffset:endOfset])
 		if err != nil {
 			return err
 		}
 	}
 
-	return op.init(pubKey, creatorAddress, withdrawalAddress, signature, delegateStake)
+	return op.init(pubKey, creatorAddress, withdrawalAddress, signature, delegatingStake)
 }
 
 // MarshalBinary marshals a create operation to byte encoding

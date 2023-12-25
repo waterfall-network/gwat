@@ -183,7 +183,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"creator", v.CreatorAddress().Hex(),
 				"withdrawalAddress", v.WithdrawalAddress().Hex(),
 				"pubKey", v.PubKey().Hex(),
-				"delegatedStake", v.DelegatedStake() != nil,
+				"delegatingStake", v.DelegatingStake() != nil,
 				"err", err,
 			)
 		} else {
@@ -195,7 +195,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"creator", v.CreatorAddress().Hex(),
 				"withdrawalAddress", v.WithdrawalAddress().Hex(),
 				"pubKey", v.PubKey().Hex(),
-				"delegatedStake", v.DelegatedStake() != nil,
+				"delegatingStake", v.DelegatingStake() != nil,
 			)
 		}
 	case operation.ValidatorSync:
