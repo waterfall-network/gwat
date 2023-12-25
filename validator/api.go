@@ -67,6 +67,20 @@ type DepositArgs struct {
 	CreatorAddress    *common.Address      `json:"creator_address"`    // attached creator account
 	WithdrawalAddress *common.Address      `json:"withdrawal_address"` // attached withdrawal credentials
 	Signature         *common.BlsSignature `json:"signature"`
+	DelegatingStake   *DelegatingStakeArgs `json:"delegating_stake"`
+}
+
+type DelegatingStakeArgs struct {
+	Rules       *DelegatingRulesArgs `json:"rules"`        // rules after trial period
+	TrialPeriod *uint64              `json:"trial_period"` // period while trial_rules are active (in slots, starts from activation slot)
+	TrialRules  *DelegatingRulesArgs `json:"trial_rules"`  // rules for trial period
+}
+
+type DelegatingRulesArgs struct {
+	ProfitShare *map[common.Address]uint8 `json:"profit_share"` // map of participants profit share in %
+	StakeShare  *map[common.Address]uint8 `json:"stake_share"`  // map of participants stake share in % (after exit)
+	Exit        *[]common.Address         `json:"exit"`         // addresses of role  to init exit
+	Withdrawal  *[]common.Address         `json:"withdrawal"`   // addresses of role  to init exit
 }
 
 // Validator_DepositData creates a validators deposit data for deposit tx.
@@ -85,11 +99,40 @@ func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args Depos
 	}
 
 	var (
-		op  operation.Operation
-		err error
+		op                operation.Operation
+		err               error
+		delegatingStake   *operation.DelegatingStakeData
+		rules, trialRules *operation.DelegatingStakeRules
 	)
+	if args.DelegatingStake != nil {
+		dlgStakeArg := args.DelegatingStake
+		if dlgStakeArg.Rules == nil {
+			return nil, operation.ErrNoRules
+		}
+		if dlgStakeArg.TrialPeriod == nil {
+			def := uint64(0)
+			dlgStakeArg.TrialPeriod = &def
+		}
+		if dlgStakeArg.TrialRules == nil {
+			dlgStakeArg.TrialRules = &DelegatingRulesArgs{}
+		}
+		ar := dlgStakeArg.Rules
+		rules, err = operation.NewDelegatingStakeRules(*ar.ProfitShare, *ar.StakeShare, *ar.Exit, *ar.Withdrawal)
+		if err != nil {
+			return nil, err
+		}
+		atr := dlgStakeArg.TrialRules
+		trialRules, err = operation.NewDelegatingStakeRules(*atr.ProfitShare, *atr.StakeShare, *atr.Exit, *atr.Withdrawal)
+		if err != nil {
+			return nil, err
+		}
 
-	if op, err = operation.NewDepositOperation(*args.PubKey, *args.CreatorAddress, *args.WithdrawalAddress, *args.Signature); err != nil {
+		if delegatingStake, err = operation.NewDelegatingStakeData(rules, *dlgStakeArg.TrialPeriod, trialRules); err != nil {
+			return nil, err
+		}
+	}
+
+	if op, err = operation.NewDepositOperation(*args.PubKey, *args.CreatorAddress, *args.WithdrawalAddress, *args.Signature, delegatingStake); err != nil {
 		return nil, err
 	}
 
