@@ -46,6 +46,8 @@ var (
 	ErrInvalidOpCode          = errors.New("invalid operation code")
 	ErrInvalidCreator         = errors.New("invalid creator address")
 	ErrInvalidAmount          = errors.New("invalid amount")
+	ErrMismatchDelegateData   = errors.New("validator deposit failed (mismatch delegate stake data)")
+	ErrDelegateForkRequire    = errors.New("can not process transaction before fork of delegating stake")
 )
 
 const (
@@ -286,7 +288,17 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	validator := valStore.NewValidator(op.PubKey(), op.CreatorAddress(), &withdrawalAddress)
 
-	// if validator already exist
+	if op.DelegatingStake() != nil {
+		if err = op.DelegatingStake().Rules.Validate(); err != nil {
+			return nil, err
+		}
+		validator.DelegatingStake, err = operation.NewDelegatingStakeData(&op.DelegatingStake().Rules, op.DelegatingStake().TrialPeriod, &op.DelegatingStake().TrialRules)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// if validator already exist - check data compliance
 	currValidator, _ := p.Storage().GetValidator(p.state, op.CreatorAddress())
 
 	if currValidator != nil {
@@ -297,6 +309,24 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		if currValidator.PubKey != op.PubKey() {
 			return nil, errors.New("validator deposit failed (mismatch public key)")
 		}
+
+		if *currValidator.WithdrawalAddress != op.WithdrawalAddress() {
+			return nil, errors.New("validator deposit failed (mismatch withdrawal address)")
+		}
+
+		//check delegating stake data are equal
+		curDlg, err := currValidator.DelegatingStake.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		opDlg, err := op.DelegatingStake().MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(curDlg, opDlg) {
+			return nil, ErrMismatchDelegateData
+		}
+
 		validator = currValidator
 	}
 
@@ -438,67 +468,6 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
-}
-
-func (p *Processor) validatorDelegateStake(caller Ref, toAddr common.Address, value *big.Int, op operation.DelegateStake) (_ []byte, err error) {
-	if !p.IsValidatorOp(&toAddr) {
-		return nil, ErrInvalidToAddress
-	}
-
-	if value == nil || value.Cmp(MinDepositVal) < 0 {
-		return nil, ErrTooLowDepositValue
-	}
-
-	// check amount can add to log
-	if !common.BnCanCastToUint64(new(big.Int).Div(value, common.BigGwei)) {
-		return nil, ErrInvalidAmount
-	}
-
-	from := caller.Address()
-
-	balanceFrom := p.state.GetBalance(from)
-	if balanceFrom.Cmp(value) < 0 {
-		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForOp, from.Hex())
-	}
-
-	//todo
-	withdrawalAddress := common.Address{}
-
-	validator := valStore.NewValidator(op.PubKey(), op.CreatorAddress(), &withdrawalAddress)
-
-	validator.DelegateStake, err = valStore.NewDelegateStakeData(op.Rules(), op.TrialPeriod(), op.TrialRules())
-	if err != nil {
-		return nil, err
-	}
-
-	// if validator already exist
-	currValidator, _ := p.Storage().GetValidator(p.state, op.CreatorAddress())
-
-	if currValidator != nil {
-		if currValidator.ActivationEra < math.MaxUint64 {
-			return nil, errors.New("validator deposit failed (validator already activated)")
-		}
-
-		if currValidator.PubKey != op.PubKey() {
-			return nil, errors.New("validator deposit failed (mismatch public key)")
-		}
-		validator = currValidator
-	}
-
-	validator.AddStake(from, value)
-
-	err = p.Storage().SetValidator(p.state, validator)
-	if err != nil {
-		return nil, err
-	}
-
-	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), withdrawalAddress, value, op.Signature(), p.getDepositCount())
-	p.eventEmmiter.Deposit(toAddr, logData)
-	p.incrDepositCount()
-	// burn value from sender balance
-	p.state.SubBalance(from, value)
-
-	return value.FillBytes(make([]byte, 32)), nil
 }
 
 func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (ret []byte, err error) {

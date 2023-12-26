@@ -39,17 +39,29 @@ func (op *depositOperation) init(
 
 	// validate delegate stake data
 	if delegate != nil {
+		delegate = delegate.Copy()
 		if err := delegate.Rules.Validate(); err != nil {
 			return err
 		}
-		// while trial
-		if delegate.TrialPeriod > 0 && len(delegate.Rules.ProfitShare()) > 0 {
-			if err := delegate.Rules.ValidateProfitShare(); err != nil {
+		if delegate.TrialPeriod > 0 &&
+			len(delegate.TrialRules.ProfitShare()) > 0 || len(delegate.TrialRules.Withdrawal()) > 0 {
+			if err := delegate.TrialRules.ValidateProfitShare(); err != nil {
+				return err
+			}
+			if err := delegate.TrialRules.validateWithdrawal(); err != nil {
 				return err
 			}
 		}
-		if delegate.TrialPeriod > 0 && len(delegate.Rules.StakeShare()) > 0 {
-			if err := delegate.Rules.ValidateStakeShare(); err != nil {
+		if delegate.TrialPeriod > 0 &&
+			len(delegate.TrialRules.StakeShare()) > 0 || len(delegate.TrialRules.Exit()) > 0 {
+			if err := delegate.TrialRules.ValidateStakeShare(); err != nil {
+				return err
+			}
+			if err := delegate.TrialRules.validateExit(); err != nil {
+				return err
+			}
+			//to share rewards in exit case
+			if err := delegate.TrialRules.ValidateProfitShare(); err != nil {
 				return err
 			}
 		}

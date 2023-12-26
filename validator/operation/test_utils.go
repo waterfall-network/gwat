@@ -3,9 +3,9 @@ package operation
 import (
 	"bytes"
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"testing"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 

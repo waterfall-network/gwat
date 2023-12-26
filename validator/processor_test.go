@@ -145,6 +145,359 @@ func TestProcessorDeposit(t *testing.T) {
 	}
 }
 
+func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	dsProfitShare, dsStakeShare, dsExit, dsWithdrawal := operation.TestParamsDelegatingStakeRules()
+
+	bc := NewMockblockchain(ctrl)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
+	to := processor.GetValidatorsStateAddress()
+
+	rules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+	trialRules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+	cases := []*testmodels.TestCase{
+		{
+			CaseName: "Deposit_DelegatingStake_OK",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				delegateData, err := operation.NewDelegatingStakeData(
+					rules,
+					321,
+					trialRules,
+				)
+				testutils.AssertNoError(t, err)
+
+				wdrAddr := withdrawalAddress
+				pk := pubKey
+				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData.Copy())
+				testutils.AssertNoError(t, err)
+
+				//set empty rules
+				depositOperation.DelegatingStake().Rules = operation.DelegatingStakeRules{}
+
+				opData, err := operation.EncodeToBytes(depositOperation)
+				testutils.AssertNoError(t, err)
+
+				v := c.TestData.(testmodels.TestData)
+
+				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
+				processor.state.AddBalance(from, bal)
+				balanceFromBfr := processor.state.GetBalance(from)
+
+				msg := NewMockmessage(ctrl)
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+				msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				balanceFromAft := processor.state.GetBalance(from)
+				balDif := new(big.Int).Sub(balanceFromBfr, balanceFromAft)
+				if balDif.Cmp(value) != 0 {
+					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
+				}
+
+				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				testutils.AssertNoError(t, err)
+				testutils.AssertEqual(t, testmodels.Addr1.Bytes(), val.Address.Bytes())
+				testutils.AssertEqual(t, pk.Bytes(), val.PubKey.Bytes())
+				testutils.AssertEqual(t, wdrAddr.Bytes(), val.WithdrawalAddress.Bytes())
+
+				//check delegate data
+				testutils.AssertEqual(t, dsProfitShare, val.DelegatingStake.Rules.ProfitShare())
+				testutils.AssertEqual(t, dsStakeShare, val.DelegatingStake.Rules.StakeShare())
+				testutils.AssertEqual(t, dsExit, val.DelegatingStake.Rules.Exit())
+				testutils.AssertEqual(t, dsWithdrawal, val.DelegatingStake.Rules.Withdrawal())
+
+				testutils.AssertEqual(t, uint64(321), val.DelegatingStake.TrialPeriod)
+				testutils.AssertEqual(t, dsProfitShare, val.DelegatingStake.TrialRules.ProfitShare())
+				testutils.AssertEqual(t, dsStakeShare, val.DelegatingStake.TrialRules.StakeShare())
+				testutils.AssertEqual(t, dsExit, val.DelegatingStake.TrialRules.Exit())
+				testutils.AssertEqual(t, dsWithdrawal, val.DelegatingStake.TrialRules.Withdrawal())
+			},
+		},
+
+		{
+			CaseName: "Deposit_DelegatingStake_validator_exists_OK",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				delegateData, err := operation.NewDelegatingStakeData(
+					rules,
+					321,
+					trialRules,
+				)
+				testutils.AssertNoError(t, err)
+
+				wdrAddr := withdrawalAddress
+				pk := pubKey
+				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData)
+				testutils.AssertNoError(t, err)
+
+				//create existed validator
+				validator := storage.NewValidator(depositOperation.PubKey(), depositOperation.CreatorAddress(), &wdrAddr)
+				validator.DelegatingStake = depositOperation.DelegatingStake()
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				opData, err := operation.EncodeToBytes(depositOperation)
+				testutils.AssertNoError(t, err)
+
+				v := c.TestData.(testmodels.TestData)
+
+				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
+				processor.state.AddBalance(from, bal)
+				balanceFromBfr := processor.state.GetBalance(from)
+
+				msg := NewMockmessage(ctrl)
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+				msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				balanceFromAft := processor.state.GetBalance(from)
+				balDif := new(big.Int).Sub(balanceFromBfr, balanceFromAft)
+				if balDif.Cmp(value) != 0 {
+					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
+				}
+
+				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				testutils.AssertNoError(t, err)
+				testutils.AssertEqual(t, testmodels.Addr1.Bytes(), val.Address.Bytes())
+				testutils.AssertEqual(t, pk.Bytes(), val.PubKey.Bytes())
+				testutils.AssertEqual(t, wdrAddr.Bytes(), val.WithdrawalAddress.Bytes())
+
+				//check delegate data
+				testutils.AssertEqual(t, dsProfitShare, val.DelegatingStake.Rules.ProfitShare())
+				testutils.AssertEqual(t, dsStakeShare, val.DelegatingStake.Rules.StakeShare())
+				testutils.AssertEqual(t, dsExit, val.DelegatingStake.Rules.Exit())
+				testutils.AssertEqual(t, dsWithdrawal, val.DelegatingStake.Rules.Withdrawal())
+
+				testutils.AssertEqual(t, uint64(321), val.DelegatingStake.TrialPeriod)
+				testutils.AssertEqual(t, dsProfitShare, val.DelegatingStake.TrialRules.ProfitShare())
+				testutils.AssertEqual(t, dsStakeShare, val.DelegatingStake.TrialRules.StakeShare())
+				testutils.AssertEqual(t, dsExit, val.DelegatingStake.TrialRules.Exit())
+				testutils.AssertEqual(t, dsWithdrawal, val.DelegatingStake.TrialRules.Withdrawal())
+			},
+		},
+
+		{
+			CaseName: "Deposit_DelegatingStake_validator_exists_&_no_trial_OK",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				delegateData, err := operation.NewDelegatingStakeData(
+					rules,
+					321,
+					nil,
+				)
+				testutils.AssertNoError(t, err)
+
+				wdrAddr := withdrawalAddress
+				pk := pubKey
+				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData)
+				testutils.AssertNoError(t, err)
+				opData, err := operation.EncodeToBytes(depositOperation)
+				testutils.AssertNoError(t, err)
+
+				depositOperation.UnmarshalBinary(opData)
+
+				//create existed validator
+				validator := storage.NewValidator(depositOperation.PubKey(), depositOperation.CreatorAddress(), &wdrAddr)
+				validator.DelegatingStake = depositOperation.DelegatingStake()
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				v := c.TestData.(testmodels.TestData)
+
+				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
+				processor.state.AddBalance(from, bal)
+				balanceFromBfr := processor.state.GetBalance(from)
+
+				msg := NewMockmessage(ctrl)
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+				msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				balanceFromAft := processor.state.GetBalance(from)
+				balDif := new(big.Int).Sub(balanceFromBfr, balanceFromAft)
+				if balDif.Cmp(value) != 0 {
+					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
+				}
+
+				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				testutils.AssertNoError(t, err)
+				testutils.AssertEqual(t, testmodels.Addr1.Bytes(), val.Address.Bytes())
+				testutils.AssertEqual(t, pk.Bytes(), val.PubKey.Bytes())
+				testutils.AssertEqual(t, wdrAddr.Bytes(), val.WithdrawalAddress.Bytes())
+
+				//check delegate data
+				testutils.AssertEqual(t, dsProfitShare, val.DelegatingStake.Rules.ProfitShare())
+				testutils.AssertEqual(t, dsStakeShare, val.DelegatingStake.Rules.StakeShare())
+				testutils.AssertEqual(t, dsExit, val.DelegatingStake.Rules.Exit())
+				testutils.AssertEqual(t, dsWithdrawal, val.DelegatingStake.Rules.Withdrawal())
+
+				testutils.AssertEqual(t, uint64(321), val.DelegatingStake.TrialPeriod)
+				testutils.AssertEqual(t, make(map[common.Address]uint8), val.DelegatingStake.TrialRules.ProfitShare())
+				testutils.AssertEqual(t, make(map[common.Address]uint8), val.DelegatingStake.TrialRules.StakeShare())
+				testutils.AssertEqual(t, make([]common.Address, 0), val.DelegatingStake.TrialRules.Exit())
+				testutils.AssertEqual(t, make([]common.Address, 0), val.DelegatingStake.TrialRules.Withdrawal())
+			},
+		},
+		{
+			CaseName: "Deposit_DelegatingStake_validator_exists_ErrMismatchDelegateData",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{ErrMismatchDelegateData},
+			Fn: func(c *testmodels.TestCase) {
+				changedRules, err := operation.NewDelegatingStakeRules(
+					map[common.Address]uint8{common.Address{0x16}: 100},
+					map[common.Address]uint8{},
+					nil,
+					[]common.Address{common.Address{0x16}},
+				)
+				testutils.AssertNoError(t, err)
+
+				delegateData, err := operation.NewDelegatingStakeData(
+					rules,
+					321,
+					changedRules,
+				)
+				testutils.AssertNoError(t, err)
+
+				wdrAddr := withdrawalAddress
+				pk := pubKey
+				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData)
+				testutils.AssertNoError(t, err)
+				opData, err := operation.EncodeToBytes(depositOperation)
+				testutils.AssertNoError(t, err)
+
+				depositOperation.UnmarshalBinary(opData)
+
+				//create existed validator
+				valDelegateData, err := operation.NewDelegatingStakeData(
+					rules,
+					321,
+					nil,
+				)
+				testutils.AssertNoError(t, err)
+				validator := storage.NewValidator(depositOperation.PubKey(), depositOperation.CreatorAddress(), &wdrAddr)
+				validator.DelegatingStake = valDelegateData.Copy()
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				v := c.TestData.(testmodels.TestData)
+
+				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
+				processor.state.AddBalance(from, bal)
+				//balanceFromBfr := processor.state.GetBalance(from)
+
+				msg := NewMockmessage(ctrl)
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+				msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				testutils.AssertNoError(t, err)
+				//check delegate data
+				testutils.AssertEqual(t, valDelegateData.Rules.ProfitShare(), val.DelegatingStake.Rules.ProfitShare())
+				testutils.AssertEqual(t, valDelegateData.Rules.StakeShare(), val.DelegatingStake.Rules.StakeShare())
+				testutils.AssertEqual(t, valDelegateData.Rules.Exit(), val.DelegatingStake.Rules.Exit())
+				testutils.AssertEqual(t, valDelegateData.Rules.Withdrawal(), val.DelegatingStake.Rules.Withdrawal())
+
+				testutils.AssertEqual(t, uint64(321), val.DelegatingStake.TrialPeriod)
+				testutils.AssertEqual(t, valDelegateData.TrialRules.ProfitShare(), val.DelegatingStake.TrialRules.ProfitShare())
+				testutils.AssertEqual(t, valDelegateData.TrialRules.StakeShare(), val.DelegatingStake.TrialRules.StakeShare())
+				testutils.AssertEqual(t, valDelegateData.TrialRules.Exit(), val.DelegatingStake.TrialRules.Exit())
+				testutils.AssertEqual(t, valDelegateData.TrialRules.Withdrawal(), val.DelegatingStake.TrialRules.Withdrawal())
+			},
+		},
+		{
+			CaseName: "Deposit_DelegatingStake_no_trial_OK",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				delegateData, err := operation.NewDelegatingStakeData(
+					rules,
+					321,
+					nil,
+				)
+				testutils.AssertNoError(t, err)
+
+				wdrAddr := withdrawalAddress
+				pk := pubKey
+				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData)
+				testutils.AssertNoError(t, err)
+
+				opData, err := operation.EncodeToBytes(depositOperation)
+				testutils.AssertNoError(t, err)
+
+				v := c.TestData.(testmodels.TestData)
+
+				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
+				processor.state.AddBalance(from, bal)
+				balanceFromBfr := processor.state.GetBalance(from)
+
+				msg := NewMockmessage(ctrl)
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+				msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				balanceFromAft := processor.state.GetBalance(from)
+				balDif := new(big.Int).Sub(balanceFromBfr, balanceFromAft)
+				if balDif.Cmp(value) != 0 {
+					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
+				}
+
+				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				testutils.AssertNoError(t, err)
+				testutils.AssertEqual(t, testmodels.Addr1.Bytes(), val.Address.Bytes())
+				testutils.AssertEqual(t, pk.Bytes(), val.PubKey.Bytes())
+				testutils.AssertEqual(t, wdrAddr.Bytes(), val.WithdrawalAddress.Bytes())
+
+				//check delegate data
+				testutils.AssertEqual(t, dsProfitShare, val.DelegatingStake.Rules.ProfitShare())
+				testutils.AssertEqual(t, dsStakeShare, val.DelegatingStake.Rules.StakeShare())
+				testutils.AssertEqual(t, dsExit, val.DelegatingStake.Rules.Exit())
+				testutils.AssertEqual(t, dsWithdrawal, val.DelegatingStake.Rules.Withdrawal())
+
+				testutils.AssertEqual(t, uint64(321), val.DelegatingStake.TrialPeriod)
+				testutils.AssertEqual(t, make(map[common.Address]uint8), val.DelegatingStake.TrialRules.ProfitShare())
+				testutils.AssertEqual(t, make(map[common.Address]uint8), val.DelegatingStake.TrialRules.StakeShare())
+				testutils.AssertEqual(t, make([]common.Address, 0), val.DelegatingStake.TrialRules.Exit())
+				testutils.AssertEqual(t, make([]common.Address, 0), val.DelegatingStake.TrialRules.Withdrawal())
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(c)
+		})
+	}
+}
+
 func TestProcessorActivate(t *testing.T) {
 	activateOperation, err := operation.NewValidatorSyncOperation(initTxHash, types.Activate, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress)
 	testutils.AssertNoError(t, err)
@@ -1059,120 +1412,6 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
 		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.CaseName, func(t *testing.T) {
-			c.Fn(c)
-		})
-	}
-}
-
-func TestProcessorDelegateStake(t *testing.T) {
-	ctrl = gomock.NewController(t)
-	defer ctrl.Finish()
-	msg := NewMockmessage(ctrl)
-
-	var (
-		//DelegateStakeRules
-		dsProfitShare = map[common.Address]uint8{
-			common.HexToAddress("0x1111111111111111111111111111111111111111"): 10,
-			common.HexToAddress("0x2222222222222222222222222222222222222222"): 30,
-			common.HexToAddress("0x3333333333333333333333333333333333333333"): 60,
-		}
-		dsStakeShare = map[common.Address]uint8{
-			common.HexToAddress("0x4444444444444444444444444444444444444444"): 70,
-			common.HexToAddress("0x5555555555555555555555555555555555555555"): 30,
-		}
-		dsExit       = []common.Address{common.HexToAddress("0x6666666666666666666666666666666666666666")}
-		dsWithdrawal = []common.Address{common.HexToAddress("0x7777777777777777777777777777777777777777")}
-	)
-
-	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
-
-	processor := NewProcessor(ctx, stateDb, bc)
-	to := processor.GetValidatorsStateAddress()
-
-	rules, _ := operation.NewDelegateStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
-	trialRules, _ := operation.NewDelegateStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
-
-	depositOperation, err := operation.NewDelegateStakeOperation(
-		pubKey,
-		testmodels.Addr1,
-		signature,
-		rules,
-		321,
-		trialRules,
-	)
-	testutils.AssertNoError(t, err)
-
-	opData, err := operation.EncodeToBytes(depositOperation)
-	testutils.AssertNoError(t, err)
-	cases := []*testmodels.TestCase{
-		{
-			CaseName: "Deposit: OK",
-			TestData: testmodels.TestData{
-				Caller: vm.AccountRef(from),
-				AddrTo: to,
-			},
-			Errs: []error{nil},
-			Fn: func(c *testmodels.TestCase) {
-				v := c.TestData.(testmodels.TestData)
-
-				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
-				processor.state.AddBalance(from, bal)
-				balanceFromBfr := processor.state.GetBalance(from)
-
-				msg.EXPECT().Data().AnyTimes().Return(opData)
-				msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
-
-				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
-
-				balanceFromAft := processor.state.GetBalance(from)
-				balDif := new(big.Int).Sub(balanceFromBfr, balanceFromAft)
-				if balDif.Cmp(value) != 0 {
-					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
-				}
-			},
-		},
-		//{
-		//	CaseName: "Deposit: ErrTooLowDepositValue (val = nil)",
-		//	TestData: testmodels.TestData{
-		//		Caller: vm.AccountRef(from),
-		//		AddrTo: to,
-		//	},
-		//	Errs: []error{ErrTooLowDepositValue},
-		//	Fn: func(c *testmodels.TestCase) {
-		//		v := c.TestData.(testmodels.TestData)
-		//		call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
-		//	},
-		//},
-		//{
-		//	CaseName: "Deposit: ErrTooLowDepositValue (val = 1 wat)",
-		//	TestData: testmodels.TestData{
-		//		Caller: vm.AccountRef(from),
-		//		AddrTo: to,
-		//	},
-		//	Errs: []error{ErrTooLowDepositValue},
-		//	Fn: func(c *testmodels.TestCase) {
-		//		v := c.TestData.(testmodels.TestData)
-		//		val1, _ := new(big.Int).SetString("1000000000000000000", 10)
-		//		call(t, processor, v.Caller, v.AddrTo, val1, msg, c.Errs)
-		//	},
-		//},
-		//{
-		//	CaseName: "Deposit: invalid address to",
-		//	TestData: testmodels.TestData{
-		//		Caller: vm.AccountRef(from),
-		//		AddrTo: from,
-		//	},
-		//	Errs: []error{ErrInvalidToAddress},
-		//	Fn: func(c *testmodels.TestCase) {
-		//		v := c.TestData.(testmodels.TestData)
-		//		call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
-		//	},
-		//},
 	}
 
 	for _, c := range cases {
