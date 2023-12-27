@@ -89,6 +89,7 @@ type Creator struct {
 	running int32 // The indicator whether the consensus engine is running or not.
 
 	nodeCreators map[common.Address]struct{}
+	creatorsMu   sync.RWMutex
 }
 
 // New creates new Creator instance
@@ -103,7 +104,19 @@ func New(config *Config, backend Backend, mux *event.TypeMux) *Creator {
 
 	creator.SetNodeCreators(backend.AccountManager().Accounts())
 
+	accCh := make(chan accounts.WalletEvent)
+	am := backend.AccountManager()
+	am.Subscribe(accCh)
+	go creator.accountsWatcherLoop(accCh)
+
 	return creator
+}
+
+func (c *Creator) accountsWatcherLoop(eventCh chan accounts.WalletEvent) {
+	for event := range eventCh {
+		c.SetNodeCreators(c.backend.AccountManager().Accounts())
+		log.Info("Creator: accounts evt", "kind", event.Kind, "url", event.Wallet.URL(), "accs", c.backend.AccountManager().Accounts())
+	}
 }
 
 // API
@@ -187,7 +200,13 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	tips types.Tips,
 	checkpoint *types.Checkpoint,
 ) error {
-	start := time.Now()
+	defer func(start time.Time) {
+		log.Info("BLOCK CREATION TIME - TOTAL",
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"func:", "RunBlockCreation",
+			"slot", slot,
+		)
+	}(time.Now())
 
 	if c.isSyncing() {
 		log.Warn("Creator skipping due to synchronization")
@@ -237,13 +256,6 @@ func (c *Creator) RunBlockCreation(slot uint64,
 		}
 	}
 	wg.Wait()
-
-	log.Info("BLOCK CREATION TIME - TOTAL",
-		"elapsed", common.PrettyDuration(time.Since(start)),
-		"func:", "RunBlockCreation",
-		"slot", slot,
-	)
-
 	return nil
 }
 
@@ -777,8 +789,10 @@ func (c *Creator) appendTransactions(txs *types.TransactionsByPriceAndNonce, hea
 
 // isCreatorActive returns true if creator is assigned to create blocks in current slot.
 func (c *Creator) IsCreatorActive(coinbase common.Address) bool {
-	_, ok := c.nodeCreators[coinbase]
+	c.creatorsMu.Lock()
+	defer c.creatorsMu.Unlock()
 
+	_, ok := c.nodeCreators[coinbase]
 	return ok
 }
 
@@ -853,6 +867,9 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 }
 
 func (c *Creator) SetNodeCreators(accounts []common.Address) {
+	c.creatorsMu.Lock()
+	defer c.creatorsMu.Unlock()
+
 	if c.nodeCreators == nil {
 		c.nodeCreators = make(map[common.Address]struct{})
 	}
