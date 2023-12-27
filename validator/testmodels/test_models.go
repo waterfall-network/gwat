@@ -47,7 +47,7 @@ func init() {
 		EpochsPerEra:           22,
 		TransitionPeriod:       2,
 		ForkSlotSubNet1:        9999999,
-		ForkSlotDelegate:       9999999,
+		ForkSlotDelegate:       0,
 		EffectiveBalance:       big.NewInt(3200),
 	}
 

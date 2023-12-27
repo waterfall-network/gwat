@@ -47,7 +47,6 @@ var (
 	ErrInvalidCreator         = errors.New("invalid creator address")
 	ErrInvalidAmount          = errors.New("invalid amount")
 	ErrMismatchDelegateData   = errors.New("validator deposit failed (mismatch delegate stake data)")
-	ErrDelegateForkRequire    = errors.New("can not process transaction before fork of delegating stake")
 )
 
 const (
@@ -289,6 +288,10 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	validator := valStore.NewValidator(op.PubKey(), op.CreatorAddress(), &withdrawalAddress)
 
 	if op.DelegatingStake() != nil {
+		//check activation fork
+		if !p.blockchain.Config().IsForkSlotDelegate(p.ctx.Slot) {
+			return nil, operation.ErrDelegateForkRequire
+		}
 		if err = op.DelegatingStake().Rules.Validate(); err != nil {
 			return nil, err
 		}

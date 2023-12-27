@@ -166,6 +166,7 @@ type blockChain interface {
 	IsSynced() bool
 	EstimateGas(msg types.Message, header *types.Header) (uint64, error)
 	Config() *params.ChainConfig
+	GetSlotInfo() *types.SlotInfo
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -876,6 +877,14 @@ func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.A
 	effectiveBalanceWei := new(big.Int).Mul(pool.chainconfig.EffectiveBalance, common.BigWat)
 	if stake := validator.TotalStake(); stake != nil && stake.Cmp(effectiveBalanceWei) >= 0 {
 		return fmt.Errorf("required amount of stake reached (req=%s deposited=%s wei)", effectiveBalanceWei.String(), stake.String())
+	}
+	//check activation fork
+	var curSlot uint64
+	if pool.chain.GetSlotInfo() == nil {
+		curSlot = pool.chain.GetSlotInfo().CurrentSlot()
+	}
+	if op.DelegatingStake() != nil && !pool.chainconfig.IsForkSlotDelegate(curSlot) {
+		return valOperation.ErrDelegateForkRequire
 	}
 	return nil
 }

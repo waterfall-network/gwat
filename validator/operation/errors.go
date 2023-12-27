@@ -19,8 +19,9 @@ var (
 	ErrPrefixNotValid = errors.New("not valid value for prefix")
 	ErrOpNotValid     = errors.New("op code is not valid")
 
-	ErrNoExitRoles       = errors.New("no exit roles")
-	ErrNoWithdrawalRoles = errors.New("no withdrawal roles")
-	ErrBadProfitShare    = errors.New("profit share totally must be 100%")
-	ErrBadStakeShare     = errors.New("stake share totally must be 100%")
+	ErrNoExitRoles         = errors.New("no exit roles")
+	ErrNoWithdrawalRoles   = errors.New("no withdrawal roles")
+	ErrBadProfitShare      = errors.New("profit share totally must be 100%")
+	ErrBadStakeShare       = errors.New("stake share totally must be 100%")
+	ErrDelegateForkRequire = errors.New("can not process transaction before fork of delegating stake")
 )
