@@ -153,7 +153,6 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 	bc := NewMockblockchain(ctrl)
 	bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
-
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
@@ -168,6 +167,11 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 			},
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
+				stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				bc := NewMockblockchain(ctrl)
+				bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
+				processor := NewProcessor(ctx, stateDb, bc)
+
 				delegateData, err := operation.NewDelegatingStakeData(
 					rules,
 					321,
@@ -597,6 +601,20 @@ func TestProcessorActivate(t *testing.T) {
 	msg.EXPECT().Data().AnyTimes().Return(opData)
 	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
 
+	//add init tx
+	depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr2, withdrawalAddress, signature, nil)
+	testutils.AssertNoError(t, err)
+	initTxData, err := operation.EncodeToBytes(depositOperation)
+	testutils.AssertNoError(t, err)
+	initTx := types.NewTx(&types.AccessListTx{Data: initTxData})
+	bc.EXPECT().GetTransaction(
+		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
+	initTxRcp := &types.Receipt{Status: types.ReceiptStatusSuccessful}
+	bc.EXPECT().GetTransactionReceipt(
+		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
+
 	cases := []*testmodels.TestCase{
 		{
 			CaseName: "Activate: Unknown validator",
@@ -937,6 +955,20 @@ func TestProcessorDeactivate(t *testing.T) {
 	msg.EXPECT().Data().AnyTimes().Return(opData)
 	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{1, 2, 3})
 
+	//add init tx
+	depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr4, withdrawalAddress, signature, nil)
+	testutils.AssertNoError(t, err)
+	initTxData, err := operation.EncodeToBytes(depositOperation)
+	testutils.AssertNoError(t, err)
+	initTx := types.NewTx(&types.AccessListTx{Data: initTxData})
+	bc.EXPECT().GetTransaction(
+		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
+	initTxRcp := &types.Receipt{Status: types.ReceiptStatusSuccessful}
+	bc.EXPECT().GetTransactionReceipt(
+		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
+
 	cases := []*testmodels.TestCase{
 		{
 			CaseName: "Deactivate: Unknown validator",
@@ -1009,7 +1041,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, uint64(7), val.GetExitEra())
+				testutils.AssertEqual(t, uint64(9), val.GetExitEra())
 			},
 		},
 		{
@@ -1043,7 +1075,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, uint64(7), val.GetExitEra())
+				testutils.AssertEqual(t, uint64(9), val.GetExitEra())
 			},
 		},
 		{
@@ -1085,7 +1117,7 @@ func TestProcessorDeactivate(t *testing.T) {
 				val, err = processor.storage.GetValidator(processor.state, testmodels.Addr4)
 				testutils.AssertNoError(t, err)
 
-				testutils.AssertEqual(t, uint64(7), val.GetExitEra())
+				testutils.AssertEqual(t, uint64(9), val.GetExitEra())
 			},
 		},
 	}
@@ -1211,7 +1243,8 @@ func TestProcessorUpdateBalance(t *testing.T) {
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
+
 	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
 		GenesisTime:    uint64(time.Now().Unix()),
 		SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
@@ -1237,6 +1270,20 @@ func TestProcessorUpdateBalance(t *testing.T) {
 	msg.EXPECT().Data().AnyTimes().Return(opData)
 	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
 
+	//add init tx
+	depositOperation, err := operation.NewWithdrawalOperation(testmodels.Addr6, new(big.Int))
+	testutils.AssertNoError(t, err)
+	initTxData, err := operation.EncodeToBytes(depositOperation)
+	testutils.AssertNoError(t, err)
+	initTx := types.NewTx(&types.AccessListTx{Data: initTxData})
+	bc.EXPECT().GetTransaction(
+		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
+	initTxRcp := &types.Receipt{Status: types.ReceiptStatusSuccessful}
+	bc.EXPECT().GetTransactionReceipt(
+		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
+
 	cases := []*testmodels.TestCase{
 		{
 			CaseName: "UpdateBalance: unknown validator",
@@ -1252,43 +1299,6 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			},
 		},
 		{
-			CaseName: "UpdateBalance: not activated validator",
-			TestData: testmodels.TestData{
-				Caller: vm.AccountRef(withdrawalAddress),
-				AddrTo: to,
-			},
-			Errs: []error{ErrNotActivatedValidator},
-			Fn: func(c *testmodels.TestCase) {
-				v := c.TestData.(testmodels.TestData)
-
-				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
-
-				err = processor.Storage().SetValidator(processor.state, validator)
-				testutils.AssertNoError(t, err)
-
-				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
-			},
-		},
-		{
-			CaseName: "UpdateBalance: no exit request",
-			TestData: testmodels.TestData{
-				Caller: vm.AccountRef(withdrawalAddress),
-				AddrTo: to,
-			},
-			Errs: []error{ErrNoExitRequest},
-			Fn: func(c *testmodels.TestCase) {
-				v := c.TestData.(testmodels.TestData)
-
-				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
-				validator.ActivationEra = 0
-
-				err = processor.Storage().SetValidator(processor.state, validator)
-				testutils.AssertNoError(t, err)
-
-				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
-			},
-		},
-		{
 			CaseName: "UpdateBalance: OK",
 			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(withdrawalAddress),
@@ -1301,6 +1311,24 @@ func TestProcessorUpdateBalance(t *testing.T) {
 				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
 				validator.ActivationEra = 0
 				validator.ExitEra = procEpoch
+
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+			},
+		},
+		{
+			CaseName: "UpdateBalance: not activated validator OK",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(withdrawalAddress),
+				AddrTo: to,
+			},
+			Errs: []error{},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
 
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
@@ -1392,6 +1420,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 				hash := common.BytesToHash(testutils.RandomStringInBytes(32))
 				valSyncData.TxHash = &hash
+				valSyncData.InitTxHash = common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303")
 				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				valSyncData.TxHash = &txHash

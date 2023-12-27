@@ -34,7 +34,6 @@ var (
 	ErrNotActivatedValidator  = errors.New("validator not activated yet")
 	ErrValidatorIsOut         = errors.New("validator is exited")
 	ErrInvalidToAddress       = errors.New("address to must be validators state address")
-	ErrNoExitRequest          = errors.New("exit request is require before withdrawal operation")
 	ErrTargetEraNotFound      = errors.New("target era not found")
 	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
 	ErrMismatchTxHashes       = errors.New("validator sync tx already exists")
