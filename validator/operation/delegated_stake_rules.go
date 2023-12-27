@@ -2,6 +2,7 @@ package operation
 
 import (
 	"bytes"
+	"encoding/json"
 	"sort"
 
 	"github.com/prysmaticlabs/go-bitfield"
@@ -273,4 +274,19 @@ func (dr *DelegatingStakeRules) UnmarshalBinary(b []byte) error {
 	dr.exit = rd.E
 	dr.withdrawal = rd.W
 	return nil
+}
+
+func (dr *DelegatingStakeRules) MarshalJSON() ([]byte, error) {
+	data := struct {
+		ProfitShare map[common.Address]uint8 `json:"profitShare"`
+		StakeShare  map[common.Address]uint8 `json:"stakeShare"`
+		Exit        []common.Address         `json:"exit"`
+		Withdrawal  []common.Address         `json:"withdrawal"`
+	}{
+		ProfitShare: dr.ProfitShare(),
+		StakeShare:  dr.StakeShare(),
+		Exit:        dr.Exit(),
+		Withdrawal:  dr.Withdrawal(),
+	}
+	return json.Marshal(data)
 }

@@ -20,9 +20,9 @@ var (
 )
 
 type DelegatingStakeData struct {
-	Rules       DelegatingStakeRules `json:"rules"`        // rules after trial period
-	TrialPeriod uint64               `json:"trial_period"` // period while trial_rules are active (in slots, starts from activation slot)
-	TrialRules  DelegatingStakeRules `json:"trial_rules"`  // rules for trial period
+	Rules       DelegatingStakeRules `json:"rules"`       // rules after trial period
+	TrialPeriod uint64               `json:"trialPeriod"` // period while trial_rules are active (in slots, starts from activation slot)
+	TrialRules  DelegatingStakeRules `json:"trialRules"`  // rules for trial period
 }
 
 func (dsd *DelegatingStakeData) init(
