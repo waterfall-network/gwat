@@ -58,6 +58,10 @@ func (v *Validator) Copy() *Validator {
 	return cpy
 }
 
+func (v *Validator) hasExtendedData() bool {
+	return v.DelegatingStake != nil
+}
+
 type rlpBaseValidator struct {
 	//Address           common.Address    `json:"address"`
 	PubKey            common.BlsPubKey  `json:"pubKey"`
@@ -89,14 +93,20 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 	}
 
 	// marshal binary extended data
-	// delegate stake data
-	delegateBin, err := v.DelegatingStake.MarshalBinary()
-	if err != nil {
-		return nil, err
+	var delegateBin []byte
+	var extenedDataLen int
+	//prevent modify state before any forks
+	if v.hasExtendedData() {
+		// delegate stake data
+		delegateBin, err = v.DelegatingStake.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		extenedDataLen = len(delegateBin) + common.Uint32Size
 	}
 
 	//create bin data
-	binDataLen := common.AddressLength + common.Uint32Size + len(baseData) + len(delegateBin) + common.Uint32Size
+	binDataLen := common.AddressLength + common.Uint32Size + len(baseData) + extenedDataLen
 	binData := make([]byte, binDataLen)
 
 	var startOffset, endOfset int
@@ -115,6 +125,11 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 	startOffset = endOfset
 	endOfset = startOffset + len(baseData)
 	copy(binData[startOffset:endOfset], baseData)
+
+	//prevent modify state before any forks
+	if !v.hasExtendedData() {
+		return binData, nil
+	}
 
 	// set extended data
 	//set len of delegate stake data

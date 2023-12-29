@@ -3,10 +3,11 @@ package operation
 import (
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/status-im/keycard-go/hexutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
-	"testing"
 )
 
 func TestDepositData(t *testing.T) {

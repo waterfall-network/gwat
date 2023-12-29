@@ -198,7 +198,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 			log.Info("Writing custom genesis block")
 		}
 		block, err := genesis.Commit(db)
-		log.Info("Writing custom genesis block", "hash", block.Hash().Hex())
+		log.Info("Writing custom genesis block", "hash", block.Hash().Hex(), "root", block.Root().Hex())
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -362,7 +362,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(db, genesisEra.Number)
 
-	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root)
+	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root.Hex())
 
 	return genesisBlock
 }
