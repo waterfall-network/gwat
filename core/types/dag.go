@@ -135,6 +135,7 @@ type ValidatorSync struct {
 	Creator    common.Address
 	Amount     *big.Int
 	TxHash     *common.Hash
+	Balance    *big.Int
 }
 
 type validatorSyncMarshaling struct {
@@ -145,6 +146,7 @@ type validatorSyncMarshaling struct {
 	Creator    *common.Address `json:"creator"`
 	Amount     *hexutil.Big    `json:"amount"`
 	TxHash     *common.Hash    `json:"txHash"`
+	Balance    *hexutil.Big    `json:"balance"`
 }
 
 func (vs *ValidatorSync) Copy() *ValidatorSync {
@@ -162,6 +164,9 @@ func (vs *ValidatorSync) Copy() *ValidatorSync {
 		cpy.TxHash = new(common.Hash)
 		copy(cpy.TxHash[:], vs.TxHash[:])
 	}
+	if vs.Balance != nil {
+		cpy.Balance = new(big.Int).Set(vs.Balance)
+	}
 	return cpy
 }
 
@@ -169,13 +174,14 @@ func (vs *ValidatorSync) Print() string {
 	if vs == nil {
 		return "{nil}"
 	}
-	return fmt.Sprintf("{InitTxHash: %#x, OpType: %d, ProcEpoch: %d, Index: %d, Creator: %#x, Amount: %d, TxHash: %#x}",
+	return fmt.Sprintf("{InitTxHash: %#x, OpType: %d, ProcEpoch: %d, Index: %d, Creator: %#x, Amount: %d, Balance: %d, TxHash: %#x}",
 		vs.InitTxHash,
 		vs.OpType,
 		vs.ProcEpoch,
 		vs.Index,
 		vs.Creator,
 		vs.Amount,
+		vs.Balance,
 		vs.TxHash,
 	)
 }
@@ -197,9 +203,13 @@ func (vs *ValidatorSync) MarshalJSON() ([]byte, error) {
 		Amount:     nil,
 		TxHash:     vs.TxHash,
 		InitTxHash: &vs.InitTxHash,
+		Balance:    nil,
 	}
 	if vs.Amount != nil {
 		out.Amount = (*hexutil.Big)(vs.Amount)
+	}
+	if vs.Balance != nil {
+		out.Balance = (*hexutil.Big)(vs.Balance)
 	}
 	return json.Marshal(out)
 }
@@ -229,6 +239,9 @@ func (vs *ValidatorSync) UnmarshalJSON(input []byte) error {
 	}
 	if dec.InitTxHash != nil {
 		vs.InitTxHash = *dec.InitTxHash
+	}
+	if dec.Balance != nil {
+		vs.Balance = (*big.Int)(dec.Balance)
 	}
 	return nil
 }
