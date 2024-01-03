@@ -59,6 +59,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 		"ProcEpoch", valSyncOp.ProcEpoch,
 		"OpType", valSyncOp.OpType,
 		"Amount", valSyncOp.Amount.String(),
+		"Balance", valSyncOp.Balance.String(),
 		"Index", valSyncOp.Index,
 		"InitTxHash", valSyncOp.InitTxHash.Hex(),
 	)

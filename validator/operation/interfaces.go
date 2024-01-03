@@ -27,6 +27,7 @@ type ValidatorSync interface {
 	InitTxHash() common.Hash
 	Amount() *big.Int
 	WithdrawalAddress() *common.Address
+	Balance() *big.Int
 }
 
 type Exit interface {

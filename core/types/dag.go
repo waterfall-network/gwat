@@ -174,14 +174,14 @@ func (vs *ValidatorSync) Print() string {
 	if vs == nil {
 		return "{nil}"
 	}
-	return fmt.Sprintf("{InitTxHash: %#x, OpType: %d, ProcEpoch: %d, Index: %d, Creator: %#x, Amount: %d, Balance: %d, TxHash: %#x}",
+	return fmt.Sprintf("{InitTxHash: %#x, OpType: %d, ProcEpoch: %d, Index: %d, Creator: %#x, Amount: %s, Balance: %s, TxHash: %#x}",
 		vs.InitTxHash,
 		vs.OpType,
 		vs.ProcEpoch,
 		vs.Index,
 		vs.Creator,
-		vs.Amount,
-		vs.Balance,
+		vs.Amount.String(),
+		vs.Balance.String(),
 		vs.TxHash,
 	)
 }

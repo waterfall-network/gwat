@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
@@ -561,7 +562,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
 	if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
 		stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
-		// withdrawal of insufficient deposit to activate validator
+		// Handle of refund of deposited amount in case of insufficient amount to activate validator
 		log.Info("Validator update balance: refunds of insufficient deposit",
 			"opCode", op.OpCode(),
 			"InitTxHash", op.InitTxHash().Hex(),

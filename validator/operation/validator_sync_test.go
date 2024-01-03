@@ -14,6 +14,7 @@ import (
 
 func TestValidatorSync(t *testing.T) {
 	type decodedOp struct {
+		version           VersionValSyncOp
 		initTxHash        common.Hash
 		opType            types.ValidatorSyncOp
 		procEpoch         uint64
@@ -21,6 +22,7 @@ func TestValidatorSync(t *testing.T) {
 		creator           common.Address
 		amount            *big.Int
 		withdrawalAddress *common.Address
+		balance           *big.Int
 	}
 
 	var (
@@ -29,6 +31,7 @@ func TestValidatorSync(t *testing.T) {
 		index             = uint64(0xbb)
 		creator           = common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
 		amount, _         = new(big.Int).SetString("32000000000000000000000", 10)
+		balance, _        = new(big.Int).SetString("64000000000000000000000", 10)
 		withdrawalAddress = &common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	)
 
@@ -63,7 +66,7 @@ func TestValidatorSync(t *testing.T) {
 		},
 
 		{
-			caseName: "exit OK",
+			caseName: "deactivation OK",
 			decoded: decodedOp{
 				initTxHash: initTxHash,
 				opType:     types.Deactivate,
@@ -103,18 +106,74 @@ func TestValidatorSync(t *testing.T) {
 				"06c6b935b8bbd4000000"),
 			errs: []error{},
 		},
+
+		//Ver1
+		{
+			caseName: "activation Ver1 OK",
+			decoded: decodedOp{
+				version:    Ver1,
+				initTxHash: initTxHash,
+				opType:     types.Activate,
+				procEpoch:  procEpoch,
+				index:      index,
+				creator:    creator,
+			},
+			encoded: hexutils.HexToBytes("f4" +
+				"02" +
+				"f85701b854f85280a00303030303030303030303030303030303030303030303030303030303030303" +
+				"81aa81bb94a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e9400000000000000000000000000000000000000008080"),
+			errs: []error{},
+		},
+		{
+			caseName: "deactivation Ver1 OK",
+			decoded: decodedOp{
+				version:    Ver1,
+				initTxHash: initTxHash,
+				opType:     types.Deactivate,
+				procEpoch:  procEpoch,
+				index:      index,
+				creator:    creator,
+			},
+			encoded: hexutils.HexToBytes("f4" +
+				"04" +
+				"f85701b854f85201a00303030303030303030303030303030303030303030303030303030303030303" +
+				"81aa81bb94a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e9400000000000000000000000000000000000000008080"),
+			errs: []error{},
+		},
+		{
+			caseName: "withdrawal Ver1 OK",
+			decoded: decodedOp{
+				version:           1,
+				initTxHash:        initTxHash,
+				opType:            types.UpdateBalance,
+				procEpoch:         procEpoch,
+				index:             index,
+				creator:           creator,
+				withdrawalAddress: withdrawalAddress,
+				amount:            amount,
+				balance:           balance,
+			},
+			encoded: hexutils.HexToBytes("f4" +
+				"05" +
+				"f86b01b868f86602a00303030303030303030303030303030303030303030303030303030303030303" +
+				"81aa81bb94a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e94ffffffffffffffffffffffffffffffffffffffff" +
+				"8a06c6b935b8bbd40000008a0d8d726b7177a8000000"),
+			errs: []error{},
+		},
 	}
 
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
 		createOp, err := NewValidatorSyncOperation(
-			o.initTxHash,
 			o.opType,
+			o.version,
+			o.initTxHash,
 			o.procEpoch,
 			o.index,
 			o.creator,
 			o.amount,
 			o.withdrawalAddress,
+			o.balance,
 		)
 		if err != nil {
 			return err
@@ -155,6 +214,9 @@ func TestValidatorSync(t *testing.T) {
 			}
 			if opDecoded.Amount().Cmp(o.amount) != 0 {
 				return fmt.Errorf("withdrawalAddress do not match:\nwant: %#x\nhave: %#x", o.amount.String(), opDecoded.Amount().String())
+			}
+			if opDecoded.Balance().Cmp(o.balance) != 0 {
+				return fmt.Errorf("balance do not match:\nwant: %#x\nhave: %#x", o.amount.String(), opDecoded.Amount().String())
 			}
 		}
 		return nil

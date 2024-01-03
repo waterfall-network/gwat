@@ -13,11 +13,13 @@ var (
 	ErrNoWithdrawalAddress = errors.New("withdrawal_address is required")
 	ErrNoSignature         = errors.New("signature is required")
 	ErrNoAmount            = errors.New("amount is required")
+	ErrNoBalance           = errors.New("balance is required")
 	ErrNoRules             = errors.New("rules is required")
 	ErrRawDataShort        = errors.New("binary data for validator operation is short")
 
 	ErrPrefixNotValid = errors.New("not valid value for prefix")
 	ErrOpNotValid     = errors.New("op code is not valid")
+	ErrOpBadVersion   = errors.New("op version is not valid")
 
 	ErrNoExitRoles         = errors.New("no exit roles")
 	ErrNoWithdrawalRoles   = errors.New("no withdrawal roles")

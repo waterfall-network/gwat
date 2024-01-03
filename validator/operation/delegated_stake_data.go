@@ -167,6 +167,14 @@ func (dsd *DelegatingStakeData) Copy() *DelegatingStakeData {
 	}
 }
 
+// IsEmpty returns true if no content rules to apply.
+func (dsd *DelegatingStakeData) IsEmpty() bool {
+	if dsd == nil {
+		return true
+	}
+	return len(dsd.Rules.Withdrawal()) == 0
+}
+
 func minDelegatingStakeDataLen() int {
 	emptyBin, err := (&DelegatingStakeData{}).MarshalBinary()
 	if err != nil {

@@ -311,6 +311,11 @@ func (v *Validator) UnsetStake() {
 	v.Stake = []*StakeByAddress{}
 }
 
+// HasDelegatingStake returns true if validator has delegating rules to apply.
+func (v *Validator) HasDelegatingStake() bool {
+	return !v.DelegatingStake.IsEmpty()
+}
+
 // ValidatorBinary is a Validator represented as an array of bytes.
 type ValidatorBinary []byte
 

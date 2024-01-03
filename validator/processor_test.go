@@ -562,7 +562,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 }
 
 func TestProcessorActivate(t *testing.T) {
-	activateOperation, err := operation.NewValidatorSyncOperation(initTxHash, types.Activate, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress)
+	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, 0, initTxHash, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -917,7 +917,7 @@ func TestProcessorExit(t *testing.T) {
 }
 
 func TestProcessorDeactivate(t *testing.T) {
-	deactivateOp, err := operation.NewValidatorSyncOperation(initTxHash, types.Deactivate, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress)
+	deactivateOp, err := operation.NewValidatorSyncOperation(types.Deactivate, 0, initTxHash, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -1234,7 +1234,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 }
 
 func TestProcessorUpdateBalance(t *testing.T) {
-	updateBalanceOperation, err := operation.NewValidatorSyncOperation(initTxHash, types.UpdateBalance, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress)
+	updateBalanceOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, 0, initTxHash, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -1294,7 +1294,6 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Errs: []error{storage.ErrNoStateValidatorInfo},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-
 				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
 			},
 		},
@@ -1307,14 +1306,11 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Errs: []error{nil},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-
 				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
 				validator.ActivationEra = 0
 				validator.ExitEra = procEpoch
-
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
 		},
@@ -1327,12 +1323,9 @@ func TestProcessorUpdateBalance(t *testing.T) {
 			Errs: []error{},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-
 				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
-
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
-
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
 		},
@@ -1371,7 +1364,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 
 	processor := NewProcessor(ctx, stateDb, bc)
 
-	activateOperation, err := operation.NewValidatorSyncOperation(initTxHash, types.Activate, procEpoch, index, creatorAddress, big.NewInt(123), &withdrawalAddress)
+	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, 0, initTxHash, procEpoch, index, creatorAddress, big.NewInt(123), &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	opData, err := operation.EncodeToBytes(activateOperation)
