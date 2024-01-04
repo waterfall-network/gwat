@@ -11,6 +11,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
@@ -23,7 +24,15 @@ type Backend interface {
 }
 
 // GetPendingValidatorSyncData retrieves currently processable validators sync operations.
-func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from common.Address, valSyncOp *types.ValidatorSync, nonce uint64, ks *keystore.KeyStore) (*types.Transaction, error) {
+func CreateValidatorSyncTx(
+	backend Backend,
+	stateBlockHash common.Hash,
+	from common.Address,
+	slot uint64,
+	valSyncOp *types.ValidatorSync,
+	nonce uint64,
+	ks *keystore.KeyStore,
+) (*types.Transaction, error) {
 	bc := backend.BlockChain()
 	_, err := ValidateValidatorSyncOp(bc, stateBlockHash, valSyncOp)
 	if err != nil {
@@ -53,8 +62,11 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 		wa := validator.GetWithdrawalAddress()
 		withdrawalAddress = wa
 	}
+	opVer := getValSyncVersionBySlot(bc.Config(), slot)
 
 	log.Info("Validator sync tx data",
+		"slot", slot,
+		"ver", opVer,
 		"Creator", valSyncOp.Creator.Hex(),
 		"ProcEpoch", valSyncOp.ProcEpoch,
 		"OpType", valSyncOp.OpType,
@@ -64,7 +76,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 		"InitTxHash", valSyncOp.InitTxHash.Hex(),
 	)
 
-	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress)
+	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress, opVer)
 	if err != nil {
 		return nil, err
 	}
@@ -141,12 +153,22 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 	return true, nil
 }
 
-func getValSyncTxData(valSyncOp types.ValidatorSync, withdrawal *common.Address) ([]byte, error) {
+func getValSyncTxData(valSyncOp types.ValidatorSync, withdrawal *common.Address, version operation.VersionValSyncOp) ([]byte, error) {
 	var (
 		op  operation.Operation
 		err error
 	)
-	if op, err = operation.NewValidatorSyncOperation(valSyncOp.InitTxHash, valSyncOp.OpType, valSyncOp.ProcEpoch, valSyncOp.Index, valSyncOp.Creator, valSyncOp.Amount, withdrawal); err != nil {
+	if op, err = operation.NewValidatorSyncOperation(
+		version,
+		valSyncOp.OpType,
+		valSyncOp.InitTxHash,
+		valSyncOp.ProcEpoch,
+		valSyncOp.Index,
+		valSyncOp.Creator,
+		valSyncOp.Amount,
+		withdrawal,
+		valSyncOp.Balance,
+	); err != nil {
 		return nil, err
 	}
 	b, err := operation.EncodeToBytes(op)
@@ -185,4 +207,12 @@ func GetPendingValidatorSyncData(bc *core.BlockChain) map[common.Hash]*types.Val
 		}
 	}
 	return vsPending
+}
+
+func getValSyncVersionBySlot(conf *params.ChainConfig, slot uint64) operation.VersionValSyncOp {
+	var ver operation.VersionValSyncOp
+	if conf.IsForkSlotDelegate(slot) {
+		ver = operation.Ver1
+	}
+	return ver
 }

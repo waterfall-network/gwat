@@ -562,7 +562,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 }
 
 func TestProcessorActivate(t *testing.T) {
-	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, 0, initTxHash, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress, nil)
+	activateOperation, err := operation.NewValidatorSyncOperation(0, types.Activate, initTxHash, procEpoch, 0, testmodels.Addr2, nil, &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -917,7 +917,7 @@ func TestProcessorExit(t *testing.T) {
 }
 
 func TestProcessorDeactivate(t *testing.T) {
-	deactivateOp, err := operation.NewValidatorSyncOperation(types.Deactivate, 0, initTxHash, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress, nil)
+	deactivateOp, err := operation.NewValidatorSyncOperation(0, types.Deactivate, initTxHash, procEpoch, 0, testmodels.Addr4, nil, &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -1234,7 +1234,7 @@ func TestProcessorWithdrawal(t *testing.T) {
 }
 
 func TestProcessorUpdateBalance(t *testing.T) {
-	updateBalanceOperation, err := operation.NewValidatorSyncOperation(types.UpdateBalance, 0, initTxHash, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress, nil)
+	updateBalanceOperation, err := operation.NewValidatorSyncOperation(0, types.UpdateBalance, initTxHash, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	ctrl = gomock.NewController(t)
@@ -1364,7 +1364,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 
 	processor := NewProcessor(ctx, stateDb, bc)
 
-	activateOperation, err := operation.NewValidatorSyncOperation(types.Activate, 0, initTxHash, procEpoch, index, creatorAddress, big.NewInt(123), &withdrawalAddress, nil)
+	activateOperation, err := operation.NewValidatorSyncOperation(0, types.Activate, initTxHash, procEpoch, index, creatorAddress, big.NewInt(123), &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	opData, err := operation.EncodeToBytes(activateOperation)

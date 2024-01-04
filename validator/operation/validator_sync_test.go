@@ -165,8 +165,8 @@ func TestValidatorSync(t *testing.T) {
 	operationEncode := func(b []byte, i interface{}) error {
 		o := i.(decodedOp)
 		createOp, err := NewValidatorSyncOperation(
-			o.opType,
 			o.version,
+			o.opType,
 			o.initTxHash,
 			o.procEpoch,
 			o.index,

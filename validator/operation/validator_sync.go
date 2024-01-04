@@ -88,8 +88,8 @@ func (op *validatorSyncOperation) init(
 
 // NewValidatorSyncOperation creates an operation for creating validator sync operation.
 func NewValidatorSyncOperation(
-	opType types.ValidatorSyncOp,
 	version VersionValSyncOp,
+	opType types.ValidatorSyncOp,
 	initTxHash common.Hash,
 	procEpoch uint64,
 	index uint64,
