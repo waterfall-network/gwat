@@ -524,6 +524,10 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 			Fn: func(c *testmodels.TestCase) {
 				testChainConfig := testmodels.TestChainConfig
 				testChainConfig.ForkSlotDelegate = 1000
+				defer func() {
+					testChainConfig.ForkSlotDelegate = 0
+				}()
+
 				bc.EXPECT().Config().Return(testChainConfig).AnyTimes()
 
 				delegateData, err := operation.NewDelegatingStakeData(
@@ -1327,6 +1331,307 @@ func TestProcessorUpdateBalance(t *testing.T) {
 				err = processor.Storage().SetValidator(processor.state, validator)
 				testutils.AssertNoError(t, err)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(c)
+		})
+	}
+}
+
+func TestProcessorUpdateBalance_DelegatingStake(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	//add init tx
+	withdrawalOperation, err := operation.NewWithdrawalOperation(testmodels.Addr6, new(big.Int))
+	testutils.AssertNoError(t, err)
+
+	initTxData, err := operation.EncodeToBytes(withdrawalOperation)
+	testutils.AssertNoError(t, err)
+	initTx := types.NewTx(&types.AccessListTx{Data: initTxData})
+
+	initMock := func() (
+		msg *Mockmessage,
+		bc *Mockblockchain,
+		processor *Processor,
+	) {
+		msg = NewMockmessage(ctrl)
+		msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{})
+
+		db := rawdb.NewMemoryDatabase()
+		eraInfo_0 := era.NewEraInfo(era.Era{
+			Number: 0,
+			From:   0,
+			To:     500,
+			Root:   common.BytesToHash(testutils.RandomData(32)),
+		})
+		rawdb.WriteEra(db, eraInfo_0.Number(), *eraInfo_0.GetEra())
+
+		bc = NewMockblockchain(ctrl)
+		bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
+		bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+			GenesisTime:    uint64(time.Now().Unix()),
+			SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
+			SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
+		})
+		bc.EXPECT().EpochToEra(uint64(100)).AnyTimes().Return(&testmodels.TestEra)
+		bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
+		bc.EXPECT().Database().AnyTimes().Return(db)
+		bc.EXPECT().GetTransaction(
+			common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
+		).Return(initTx, common.Hash{}, uint64(0)).AnyTimes()
+		initTxRcp := &types.Receipt{Status: types.ReceiptStatusSuccessful}
+		bc.EXPECT().GetTransactionReceipt(
+			common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
+		).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
+
+		processor = NewProcessor(ctx, stateDb, bc)
+
+		return
+	}
+
+	_, _, proc := initMock()
+	to := proc.GetValidatorsStateAddress()
+
+	dsProfitShare, dsStakeShare, dsExit, dsWithdrawal := operation.TestParamsDelegatingStakeRules()
+	rules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+	trialRules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+	//add delegation data
+	delegateData, err := operation.NewDelegatingStakeData(
+		rules,
+		2,
+		trialRules,
+	)
+	testutils.AssertNoError(t, err)
+
+	cases := []*testmodels.TestCase{
+		{
+			CaseName: "UpdateBalance: OK (profitShare only)",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(withdrawalAddress),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				msg, bc, processor := initMock()
+
+				balance, _ := new(big.Int).SetString("3200000000000000000000", 10)
+				opValue, _ := new(big.Int).SetString("200000000000000000000", 10)
+
+				expectBalances := map[common.Address]*big.Int{}
+				defer func() {
+					for acc, _ := range expectBalances {
+						processor.state.Suicide(acc) //reset balances
+					}
+				}()
+				//profitShare: 10%, 30%, 60%
+				expectBalances[common.HexToAddress("0x1111111111111111111111111111111111111111")], _ = new(big.Int).SetString("20000000000000000000", 10)
+				expectBalances[common.HexToAddress("0x2222222222222222222222222222222222222222")], _ = new(big.Int).SetString("60000000000000000000", 10)
+				expectBalances[common.HexToAddress("0x3333333333333333333333333333333333333333")], _ = new(big.Int).SetString("120000000000000000000", 10)
+				//stakeShare 70%, 30%
+				expectBalances[common.HexToAddress("0x4444444444444444444444444444444444444444")], _ = new(big.Int).SetString("0", 10)
+				expectBalances[common.HexToAddress("0x5555555555555555555555555555555555555555")], _ = new(big.Int).SetString("0", 10)
+
+				updateBalanceOperation, err := operation.NewValidatorSyncOperation(
+					operation.Ver1,
+					types.UpdateBalance,
+					initTxHash,
+					procEpoch,
+					0,
+					testmodels.Addr6,
+					opValue,
+					&withdrawalAddress,
+					balance,
+				)
+				testutils.AssertNoError(t, err)
+
+				bc.EXPECT().GetValidatorSyncData(
+					gomock.AssignableToTypeOf(common.Hash{}),
+				).Return(&types.ValidatorSync{
+					OpType:     updateBalanceOperation.OpType(),
+					ProcEpoch:  updateBalanceOperation.ProcEpoch(),
+					Index:      updateBalanceOperation.Index(),
+					Creator:    updateBalanceOperation.Creator(),
+					Amount:     updateBalanceOperation.Amount(),
+					Balance:    updateBalanceOperation.Balance(),
+					InitTxHash: initTxHash,
+				}).AnyTimes()
+
+				opData, err := operation.EncodeToBytes(updateBalanceOperation)
+				testutils.AssertNoError(t, err)
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+
+				v := c.TestData.(testmodels.TestData)
+				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
+				validator.DelegatingStake = delegateData
+				validator.ActivationEra = 0
+				validator.ExitEra = procEpoch
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+				//not trial rules
+				processor.ctx.Slot = validator.ActivationEra + delegateData.TrialPeriod + 1
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+				for acc, expBal := range expectBalances {
+					accBal := processor.state.GetBalance(acc)
+					if accBal.Cmp(expBal) != 0 {
+						t.Errorf("Balance of %#x failed:\nexp=%s\ngot=%s", acc, expBal.String(), accBal.String())
+					}
+				}
+			},
+		},
+
+		{
+			CaseName: "UpdateBalance: OK (stakeShare only)",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(withdrawalAddress),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				msg, bc, processor := initMock()
+
+				balance, _ := new(big.Int).SetString("3000000000000000000000", 10)
+				opValue, _ := new(big.Int).SetString("200000000000000000000", 10)
+
+				expectBalances := map[common.Address]*big.Int{}
+				defer func() {
+					for acc, _ := range expectBalances {
+						processor.state.Suicide(acc) //reset balances
+					}
+				}()
+				//profitShare: 10%, 30%, 60%
+				expectBalances[common.HexToAddress("0x1111111111111111111111111111111111111111")], _ = new(big.Int).SetString("0", 10)
+				expectBalances[common.HexToAddress("0x2222222222222222222222222222222222222222")], _ = new(big.Int).SetString("0", 10)
+				expectBalances[common.HexToAddress("0x3333333333333333333333333333333333333333")], _ = new(big.Int).SetString("0", 10)
+				//stakeShare 70%, 30%
+				expectBalances[common.HexToAddress("0x4444444444444444444444444444444444444444")], _ = new(big.Int).SetString("140000000000000000000", 10)
+				expectBalances[common.HexToAddress("0x5555555555555555555555555555555555555555")], _ = new(big.Int).SetString("60000000000000000000", 10)
+
+				updateBalanceOperation, err := operation.NewValidatorSyncOperation(
+					operation.Ver1,
+					types.UpdateBalance,
+					initTxHash,
+					procEpoch,
+					0,
+					testmodels.Addr6,
+					opValue,
+					&withdrawalAddress,
+					balance,
+				)
+				testutils.AssertNoError(t, err)
+				bc.EXPECT().GetValidatorSyncData(
+					gomock.AssignableToTypeOf(common.Hash{})).
+					AnyTimes().Return(&types.ValidatorSync{
+					OpType:     updateBalanceOperation.OpType(),
+					ProcEpoch:  updateBalanceOperation.ProcEpoch(),
+					Index:      updateBalanceOperation.Index(),
+					Creator:    updateBalanceOperation.Creator(),
+					Amount:     updateBalanceOperation.Amount(),
+					Balance:    updateBalanceOperation.Balance(),
+					InitTxHash: initTxHash,
+				})
+
+				opData, err := operation.EncodeToBytes(updateBalanceOperation)
+				testutils.AssertNoError(t, err)
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+
+				v := c.TestData.(testmodels.TestData)
+				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
+
+				validator.DelegatingStake = delegateData
+
+				validator.ActivationEra = 0
+				validator.ExitEra = procEpoch
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+				//not trial rules
+				processor.ctx.Slot = validator.ActivationEra + delegateData.TrialPeriod + 1
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+				for acc, expBal := range expectBalances {
+					accBal := processor.state.GetBalance(acc)
+					if accBal.Cmp(expBal) != 0 {
+						t.Errorf("Balance of %#x failed:\nexp=%s\ngot=%s", acc, expBal.String(), accBal.String())
+					}
+				}
+			},
+		},
+
+		{
+			CaseName: "UpdateBalance: OK (profitShare & stakeShare)",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(withdrawalAddress),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				msg, bc, processor := initMock()
+
+				balance, _ := new(big.Int).SetString("3100000000000000000000", 10)
+				opValue, _ := new(big.Int).SetString("200000000000000000000", 10)
+
+				expectBalances := map[common.Address]*big.Int{}
+				defer func() {
+					for acc, _ := range expectBalances {
+						processor.state.Suicide(acc) //reset balances
+					}
+				}()
+				//profitShare: 10%, 30%, 60%
+				expectBalances[common.HexToAddress("0x1111111111111111111111111111111111111111")], _ = new(big.Int).SetString("10000000000000000000", 10)
+				expectBalances[common.HexToAddress("0x2222222222222222222222222222222222222222")], _ = new(big.Int).SetString("30000000000000000000", 10)
+				expectBalances[common.HexToAddress("0x3333333333333333333333333333333333333333")], _ = new(big.Int).SetString("60000000000000000000", 10)
+				//stakeShare 70%, 30%
+				expectBalances[common.HexToAddress("0x4444444444444444444444444444444444444444")], _ = new(big.Int).SetString("70000000000000000000", 10)
+				expectBalances[common.HexToAddress("0x5555555555555555555555555555555555555555")], _ = new(big.Int).SetString("30000000000000000000", 10)
+
+				updateBalanceOperation, err := operation.NewValidatorSyncOperation(
+					operation.Ver1,
+					types.UpdateBalance,
+					initTxHash,
+					procEpoch,
+					0,
+					testmodels.Addr6,
+					opValue,
+					&withdrawalAddress,
+					balance,
+				)
+				testutils.AssertNoError(t, err)
+
+				bc.EXPECT().GetValidatorSyncData(
+					gomock.AssignableToTypeOf(common.Hash{})).
+					AnyTimes().Return(&types.ValidatorSync{
+					OpType:     updateBalanceOperation.OpType(),
+					ProcEpoch:  updateBalanceOperation.ProcEpoch(),
+					Index:      updateBalanceOperation.Index(),
+					Creator:    updateBalanceOperation.Creator(),
+					Amount:     updateBalanceOperation.Amount(),
+					Balance:    updateBalanceOperation.Balance(),
+					InitTxHash: initTxHash,
+				})
+
+				opData, err := operation.EncodeToBytes(updateBalanceOperation)
+				testutils.AssertNoError(t, err)
+				msg.EXPECT().Data().AnyTimes().Return(opData)
+
+				v := c.TestData.(testmodels.TestData)
+				validator := storage.NewValidator(pubKey, testmodels.Addr6, &withdrawalAddress)
+				validator.DelegatingStake = delegateData
+				validator.ActivationEra = 0
+				validator.ExitEra = procEpoch
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+				//not trial rules
+				processor.ctx.Slot = validator.ActivationEra + delegateData.TrialPeriod + 1
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+				for acc, expBal := range expectBalances {
+					accBal := processor.state.GetBalance(acc)
+					if accBal.Cmp(expBal) != 0 {
+						t.Errorf("Balance of %#x failed:\nexp=%s\ngot=%s", acc, expBal.String(), accBal.String())
+					}
+				}
 			},
 		},
 	}

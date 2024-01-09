@@ -20,6 +20,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/txlog"
 )
 
 var (
@@ -591,9 +592,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		withdrawalTo = &iTxFrom
 	} else if validator.HasDelegatingStake() {
 		// Handle delegate rules
-
-		panic("IMPLEMENT ME")
-
+		return p.applyDelegatingStakeRules(op, validator)
 	} else {
 		// Handle default withdrawal op
 		// set withdrawal credentials
@@ -609,93 +608,108 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 }
 
 func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, validator *valStore.Validator) ([]byte, error) {
+	log.Info("Validator update balance: apply delegate rules: start",
+		"opCode", op.OpCode(),
+		"InitTxHash", op.InitTxHash().Hex(),
+		"amount", op.Amount().String(),
+		"balance", op.Balance().String(),
+		"procEpoch", op.ProcEpoch(),
+		"vIndex", op.Index(),
+		"creator", op.Creator().Hex(),
+	)
+
 	bc := p.blockchain
 	//check delegating activation fork
 	if !bc.Config().IsForkSlotDelegate(p.ctx.Slot) {
 		return nil, operation.ErrDelegateForkRequire
 	}
 
+	//retrieve actual rules
 	var actualRules *operation.DelegatingStakeRules
+	var isTrial bool
 	// if validator is not activated yet - trial period
 	if validator.GetActivationEra() > p.ctx.Era {
 		actualRules = &validator.DelegatingStake.TrialRules
+		isTrial = true
 	} else {
 		activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
 		activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
 		if err != nil {
 			return nil, err
 		}
-		if activationSlot+validator.DelegatingStake.TrialPeriod <= p.ctx.Slot {
+		if activationSlot+validator.DelegatingStake.TrialPeriod >= p.ctx.Slot {
 			actualRules = &validator.DelegatingStake.TrialRules
+			isTrial = true
 		} else {
 			actualRules = &validator.DelegatingStake.Rules
 		}
 	}
 
-	////todo implement here
-	panic("IMPLEMENT ME")
+	opBalance := new(big.Int).Add(op.Balance(), op.Amount())
 
-	//todo rm
-	if actualRules == nil {
-		return op.Creator().Bytes(), nil
+	//Define withdrawals amounts of profit and stake
+	effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
+	profitBalance := new(big.Int).Sub(opBalance, effectiveBalanceWei)
+	if profitBalance.Sign() < 0 {
+		profitBalance = new(big.Int)
 	}
 
-	//
-	///*
-	//	1. Define type of active rules
-	//	2. Define withdrawals amounts of profit and stakes
-	//*/
-	//
-	//effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
-	//
-	//log.Info("Validator update balance: apply delegate rules: start",
-	//	"opCode", op.OpCode(),
-	//	"InitTxHash", op.InitTxHash().Hex(),
-	//	"amount", op.Amount().String(),
-	//	"procEpoch", op.ProcEpoch(),
-	//	"vIndex", op.Index(),
-	//	"creator", op.Creator().Hex(),
-	//)
-	//
-	//var withdrawalTo *common.Address
-	//// if total deposited amount is less than the effective balance
-	//// - deposit is insufficient to activate validator.
-	//effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
-	//if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
-	//	stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
-	//	// Handle of refund of deposited amount in case of insufficient amount to activate validator
-	//
-	//	// check initial tx
-	//	initTx, _, _ := p.blockchain.GetTransaction(op.InitTxHash())
-	//	if initTx == nil {
-	//		return nil, ErrTxNF
-	//	}
-	//	// check init tx data
-	//	iop, err := operation.DecodeBytes(initTx.Data())
-	//	if err != nil {
-	//		log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
-	//		return nil, err
-	//	}
-	//	if iop.OpCode() != operation.WithdrawalCode {
-	//		return nil, ErrInvalidOpCode
-	//	}
-	//	// withdrawal to sender of initial tx
-	//	signer := types.LatestSigner(p.blockchain.Config())
-	//	iTxFrom, _ := types.Sender(signer, initTx)
-	//	withdrawalTo = &iTxFrom
-	//} else if validator.HasDelegatingStake() {
-	//	// Handle delegate rules
-	//
-	//} else {
-	//	// Handle default withdrawal op
-	//	// set withdrawal credentials
-	//	withdrawalTo = validator.GetWithdrawalAddress()
-	//	if withdrawalTo == nil {
-	//		return nil, ErrNoWithdrawalCred
-	//	}
-	//}
-	//// transfer amount to withdrawal address
-	//p.state.AddBalance(*withdrawalTo, op.Amount())
+	stakeOpAmt := new(big.Int)
+	profitOpAmt := new(big.Int).Sub(profitBalance, op.Amount())
+	if profitOpAmt.Sign() <= 0 {
+		profitOpAmt = new(big.Int).Set(profitBalance)
+		stakeOpAmt = new(big.Int).Sub(op.Amount(), profitOpAmt)
+	}
+
+	// calculate share
+	upBalInfo := make([]txlog.ShareRuleAppling, 0, len(actualRules.StakeShare())+len(actualRules.ProfitShare()))
+	var percent *big.Int
+	if profitOpAmt.Sign() > 0 {
+		percent := new(big.Int).Div(profitOpAmt, big.NewInt(100))
+		for adr, share := range actualRules.ProfitShare() {
+			amt := new(big.Int).Mul(percent, big.NewInt(int64(share)))
+			upBalInfo = append(upBalInfo, txlog.ShareRuleAppling{
+				Address:  adr,
+				RuleType: txlog.ProfitShare,
+				IsTrial:  isTrial,
+				Amount:   amt,
+			})
+
+			log.Info("Validator update balance: apply delegate rules: up balance: ProfitShare",
+				"adr", adr.Hex(),
+				"isTrial", isTrial,
+				"Amount", amt.String(),
+				"InitTxHash", op.InitTxHash().Hex(),
+				"creator", op.Creator().Hex(),
+			)
+
+			// transfer amount to withdrawal address
+			p.state.AddBalance(adr, amt)
+		}
+	}
+	if stakeOpAmt.Sign() > 0 {
+		percent = new(big.Int).Div(stakeOpAmt, big.NewInt(100))
+		for adr, share := range actualRules.StakeShare() {
+			amt := new(big.Int).Mul(percent, big.NewInt(int64(share)))
+			upBalInfo = append(upBalInfo, txlog.ShareRuleAppling{
+				Address:  adr,
+				RuleType: txlog.StakeShare,
+				IsTrial:  isTrial,
+				Amount:   amt,
+			})
+
+			log.Info("Validator update balance: apply delegate rules: up balance: StakeShare",
+				"adr", adr.Hex(),
+				"isTrial", isTrial,
+				"Amount", amt.String(),
+				"InitTxHash", op.InitTxHash().Hex(),
+				"creator", op.Creator().Hex(),
+			)
+
+			// transfer amount to withdrawal address
+			p.state.AddBalance(adr, amt)
+		}
+	}
 
 	//todo
 	return op.Creator().Bytes(), nil
@@ -809,6 +823,9 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 		}
 		if initTxData.CreatorAddress() != valSyncOp.Creator() {
 			return ErrInvalidCreator
+		}
+		if valSyncOp.Version() == operation.Ver1 && valSyncOp.Balance() == nil {
+			return operation.ErrNoBalance
 		}
 	default:
 		return ErrInvalidOpCode
