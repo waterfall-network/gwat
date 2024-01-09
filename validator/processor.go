@@ -341,7 +341,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		return nil, err
 	}
 
-	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
+	logData := txlog.PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
 	p.eventEmmiter.Deposit(toAddr, logData)
 	p.incrDepositCount()
 	// burn value from sender balance
@@ -386,7 +386,7 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		return nil, ErrInvalidFromAddresses
 	}
 
-	logData := PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
+	logData := txlog.PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
 	p.eventEmmiter.ExitRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
@@ -467,7 +467,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	// create tx log
 	amtGwei := new(big.Int).Div(opAmount, common.BigGwei).Uint64()
 
-	logData := PackWithdrawalLogData(validator.GetPubKey(), op.CreatorAddress(), validator.GetIndex(), amtGwei)
+	logData := txlog.PackWithdrawalLogData(validator.GetPubKey(), op.CreatorAddress(), validator.GetIndex(), amtGwei)
 
 	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
 

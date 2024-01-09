@@ -43,6 +43,10 @@ var (
 		Era:         5,
 		Slot:        0,
 	}
+
+	testCreatorAddress = common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
+	testAmount         = big.NewInt(1000000000) // 1 ETH
+	testIndex          = uint64(123)
 )
 
 func init() {
@@ -1650,9 +1654,9 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 	valSyncData := types.ValidatorSync{
 		OpType:     0,
 		ProcEpoch:  procEpoch,
-		Index:      index,
-		Creator:    creatorAddress,
-		Amount:     amount,
+		Index:      testIndex,
+		Creator:    testCreatorAddress,
+		Amount:     testAmount,
 		TxHash:     nil,
 		InitTxHash: common.Hash{1, 2, 3},
 	}
@@ -1669,7 +1673,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 
 	processor := NewProcessor(ctx, stateDb, bc)
 
-	activateOperation, err := operation.NewValidatorSyncOperation(0, types.Activate, initTxHash, procEpoch, index, creatorAddress, big.NewInt(123), &withdrawalAddress, nil)
+	activateOperation, err := operation.NewValidatorSyncOperation(0, types.Activate, initTxHash, procEpoch, testIndex, testCreatorAddress, big.NewInt(123), &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)
 
 	opData, err := operation.EncodeToBytes(activateOperation)
@@ -1751,7 +1755,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 				valSyncData.Creator = withdrawalAddress
 				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
-				valSyncData.Creator = creatorAddress
+				valSyncData.Creator = testCreatorAddress
 			},
 		},
 		{
@@ -1763,10 +1767,10 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Errs: []error{ErrMismatchValSyncOp},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				valSyncData.Index = index + 1
+				valSyncData.Index = testIndex + 1
 				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
-				valSyncData.Index = index
+				valSyncData.Index = testIndex
 			},
 		},
 		{
@@ -1793,7 +1797,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			Errs: []error{ErrMismatchValSyncOp},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
-				valSyncData.Amount = amount.Add(amount, amount)
+				valSyncData.Amount = testAmount.Add(testAmount, testAmount)
 				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 			},
