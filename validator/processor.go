@@ -656,13 +656,13 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 	}
 
 	// calculate share
-	upBalInfo := make([]txlog.ShareRuleAppling, 0, len(actualRules.StakeShare())+len(actualRules.ProfitShare()))
+	upBalInfo := make([]txlog.ShareRuleApplying, 0, len(actualRules.StakeShare())+len(actualRules.ProfitShare()))
 	var percent *big.Int
 	if profitOpAmt.Sign() > 0 {
 		percent := new(big.Int).Div(profitOpAmt, big.NewInt(100))
 		for adr, share := range actualRules.ProfitShare() {
 			amt := new(big.Int).Mul(percent, big.NewInt(int64(share)))
-			upBalInfo = append(upBalInfo, txlog.ShareRuleAppling{
+			upBalInfo = append(upBalInfo, txlog.ShareRuleApplying{
 				Address:  adr,
 				RuleType: txlog.ProfitShare,
 				IsTrial:  isTrial,
@@ -685,7 +685,7 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 		percent = new(big.Int).Div(stakeOpAmt, big.NewInt(100))
 		for adr, share := range actualRules.StakeShare() {
 			amt := new(big.Int).Mul(percent, big.NewInt(int64(share)))
-			upBalInfo = append(upBalInfo, txlog.ShareRuleAppling{
+			upBalInfo = append(upBalInfo, txlog.ShareRuleApplying{
 				Address:  adr,
 				RuleType: txlog.StakeShare,
 				IsTrial:  isTrial,
