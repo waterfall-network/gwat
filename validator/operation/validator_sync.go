@@ -70,7 +70,6 @@ func (op *validatorSyncOperation) init(
 		if version > NoVer && balance == nil {
 			return ErrNoBalance
 		}
-
 	}
 	op.initTxHash = initTxHash
 	op.opType = opType

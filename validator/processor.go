@@ -13,7 +13,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
@@ -51,26 +50,21 @@ var (
 )
 
 const (
-	// 1024 bytes
-	MetadataMaxSize = 1 << 10
-
-	// Common fields
-	pubkeyLogType    = "pubkey"
-	signatureLogType = "signature"
-	addressLogType   = "address"
-	uint256LogType   = "uint256"
-	boolLogType      = "bool"
-	postpone         = 2
+	//	// 1024 bytes
+	//	MetadataMaxSize = 1 << 10
+	//
+	//	// Common fields
+	//	pubkeyLogType    = "pubkey"
+	//	signatureLogType = "signature"
+	//	addressLogType   = "address"
+	//	uint256LogType   = "uint256"
+	//	boolLogType      = "bool"
+	postpone = 2
 )
 
 var (
 	// minimal value - 10 wat
 	MinDepositVal, _ = new(big.Int).SetString("10000000000000000000", 10)
-
-	//Events signatures.
-	EvtDepositLogSignature    = crypto.Keccak256Hash([]byte("DepositLog"))
-	EvtExitReqLogSignature    = crypto.Keccak256Hash([]byte("ExitRequestLog"))
-	EvtWithdrawalLogSignature = crypto.Keccak256Hash([]byte("WithdrawaRequestLog"))
 )
 
 // Ref represents caller of the validator processor
@@ -106,7 +100,7 @@ type message interface {
 type Processor struct {
 	state        vm.StateDB
 	ctx          vm.BlockContext
-	eventEmmiter *EventEmmiter
+	eventEmmiter *txlog.EventEmmiter
 	storage      valStore.Storage
 	blockchain   blockchain
 }
@@ -116,7 +110,7 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, bc blockchain) *
 	return &Processor{
 		ctx:          blockCtx,
 		state:        stateDb,
-		eventEmmiter: NewEventEmmiter(stateDb),
+		eventEmmiter: txlog.NewEventEmmiter(stateDb),
 		storage:      valStore.NewStorage(bc.Config()),
 		blockchain:   bc,
 	}
@@ -713,56 +707,6 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 
 	//todo
 	return op.Creator().Bytes(), nil
-}
-
-type logEntry struct {
-	// name string
-	//entryType string
-	indexed bool
-	data    []byte
-}
-
-type EventEmmiter struct {
-	state vm.StateDB
-}
-
-func NewEventEmmiter(state vm.StateDB) *EventEmmiter {
-	return &EventEmmiter{state: state}
-}
-
-func (e *EventEmmiter) Deposit(evtAddr common.Address, data []byte) {
-	e.addLog(
-		evtAddr,
-		EvtDepositLogSignature,
-		data,
-	)
-}
-
-func (e *EventEmmiter) ExitRequest(evtAddr common.Address, data []byte) {
-	e.addLog(evtAddr, EvtExitReqLogSignature, data)
-}
-
-func (e *EventEmmiter) WithdrawalRequest(evtAddr common.Address, data []byte) {
-	e.addLog(evtAddr, EvtWithdrawalLogSignature, data)
-}
-
-func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, data []byte, logsEntries ...logEntry) {
-	//var data []byte
-	topics := []common.Hash{signature}
-
-	for _, entry := range logsEntries {
-		if entry.indexed {
-			topics = append(topics, common.BytesToHash(entry.data))
-		} else {
-			data = append(data, entry.data...)
-		}
-	}
-
-	e.state.AddLog(&types.Log{
-		Address: targetAddr,
-		Topics:  topics,
-		Data:    data,
-	})
 }
 
 // ValidateValidatorSyncOp validate validator sync op data with context of apply.
