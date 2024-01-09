@@ -5,6 +5,7 @@
 package dag
 
 import (
+	"context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -274,7 +275,7 @@ func (mr *MockblockChainMockRecorder) Genesis() *gomock.Call {
 }
 
 // GetBlock mocks base method.
-func (m *MockblockChain) GetBlock(hash common.Hash) *types.Block {
+func (m *MockblockChain) GetBlock(ctx context.Context, hash common.Hash) *types.Block {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBlock", hash)
 	ret0, _ := ret[0].(*types.Block)

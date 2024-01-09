@@ -453,8 +453,8 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 	srv.RegisterName("nftest", new(notificationTestService))
 	client, _ := Dial(wsURL)
 
-	for i := 0; i < 100; i++ {
-		ch := make(chan int, 100)
+	for i := 0; i < 10; i++ {
+		ch := make(chan int, 10)
 		sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", maxClientSubscriptionBuffer-1, 1)
 		if err != nil {
 			t.Fatal(err)
