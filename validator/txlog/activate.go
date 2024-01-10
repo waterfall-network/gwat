@@ -1,80 +1,68 @@
 package txlog
 
 import (
-	"math/big"
-
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
-type UpdateBalanceLogData struct {
+type ActivateLogData struct {
 	InitTxHash     common.Hash
 	CreatorAddress common.Address
 	ProcEpoch      uint64
-	Amount         *big.Int
+	ValidatorIndex uint64
 }
 
 // MarshalBinary marshals a create operation to byte encoding
-func (d *UpdateBalanceLogData) MarshalBinary() ([]byte, error) {
+func (d *ActivateLogData) MarshalBinary() ([]byte, error) {
 	cmp := d.Copy()
 	if cmp == nil {
-		cmp = &UpdateBalanceLogData{}
-	}
-	if cmp.Amount == nil {
-		cmp.Amount = new(big.Int)
+		cmp = &ActivateLogData{}
 	}
 	return rlp.EncodeToBytes(cmp)
 }
 
 // UnmarshalBinary unmarshals a create operation from byte encoding
-func (d *UpdateBalanceLogData) UnmarshalBinary(b []byte) error {
+func (d *ActivateLogData) UnmarshalBinary(b []byte) error {
 	return rlp.DecodeBytes(b, d)
 }
 
-func (d *UpdateBalanceLogData) Copy() *UpdateBalanceLogData {
+func (d *ActivateLogData) Copy() *ActivateLogData {
 	if d == nil {
 		return nil
 	}
-	var amt *big.Int
-	if d.Amount != nil {
-		amt = new(big.Int).Set(d.Amount)
-	}
-	return &UpdateBalanceLogData{
+	return &ActivateLogData{
 		InitTxHash:     common.BytesToHash(d.InitTxHash.Bytes()),
 		CreatorAddress: common.BytesToAddress(d.CreatorAddress.Bytes()),
 		ProcEpoch:      d.ProcEpoch,
-		Amount:         amt,
+		ValidatorIndex: d.ValidatorIndex,
 	}
 }
 
-// PackUpdateBalanceLogData packs the deposit log.
-func PackUpdateBalanceLogData(
+// PackActivateLogData packs the deposit log.
+func PackActivateLogData(
 	initTxHash common.Hash,
 	creatorAddress common.Address,
 	procEpoch uint64,
-	amount *big.Int,
+	validatorIndex uint64,
 ) ([]byte, error) {
-	if amount == nil {
-		return nil, ErrNoAmount
-	}
-	logData := &UpdateBalanceLogData{
+	logData := &ActivateLogData{
 		InitTxHash:     initTxHash,
 		CreatorAddress: creatorAddress,
 		ProcEpoch:      procEpoch,
-		Amount:         amount,
+		ValidatorIndex: validatorIndex,
 	}
 	return logData.MarshalBinary()
 }
 
-// UnpackUpdateBalanceLogData unpacks the data from a deposit log using the ABI decoder.
-func UnpackUpdateBalanceLogData(bin []byte) (
+// UnpackActivateLogData unpacks the data from a deposit log using the ABI decoder.
+func UnpackActivateLogData(bin []byte) (
 	initTxHash common.Hash,
 	creatorAddress common.Address,
 	procEpoch uint64,
-	amount *big.Int,
+	validatorIndex uint64,
 	err error,
 ) {
-	logData := &UpdateBalanceLogData{}
+	logData := &ActivateLogData{}
 	err = logData.UnmarshalBinary(bin)
 	if err != nil {
 		return
@@ -82,6 +70,6 @@ func UnpackUpdateBalanceLogData(bin []byte) (
 	initTxHash = logData.InitTxHash
 	creatorAddress = logData.CreatorAddress
 	procEpoch = logData.ProcEpoch
-	amount = logData.Amount
+	validatorIndex = logData.ValidatorIndex
 	return
 }
