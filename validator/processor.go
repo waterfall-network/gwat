@@ -546,6 +546,17 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
+
+	//check delegating activation fork
+	if p.blockchain.Config().IsForkSlotDelegate(p.ctx.Slot) {
+		//add tx log
+		logData, err := txlog.PackDeactivateLogData(op.InitTxHash(), op.Creator(), op.ProcEpoch(), op.Index())
+		if err != nil {
+			return nil, err
+		}
+		p.eventEmmiter.AddDeactivateLog(p.GetValidatorsStateAddress(), logData, op.Creator(), op.InitTxHash())
+	}
+
 	return op.Creator().Bytes(), nil
 }
 

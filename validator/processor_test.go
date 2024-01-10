@@ -808,7 +808,7 @@ func TestProcessorActivate(t *testing.T) {
 			},
 		},
 		{
-			CaseName: "Activate:_no_logs_before_DelegateFork",
+			CaseName: "Activate:no logs before DelegateFork",
 			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
 				AddrTo: to,
@@ -1210,6 +1210,118 @@ func TestProcessorDeactivate(t *testing.T) {
 				testutils.AssertEqual(t, uint64(9), val.GetExitEra())
 			},
 		},
+
+		{
+			CaseName: "Deactivate:no logs before DelegateFork",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(withdrawalAddress),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				stateDb1, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				processor := NewProcessor(ctx, stateDb1, bc)
+				processor.ctx.Slot = 0
+				//check log: no log before delegate fork
+				testutils.AssertEqual(t, 0, len(processor.state.Logs()))
+
+				v := c.TestData.(testmodels.TestData)
+
+				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
+				validator.ActivationEra = 0
+
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				//check log: no log before delegate fork
+				testutils.AssertEqual(t, 0, len(processor.state.Logs()))
+			},
+		},
+		{
+			CaseName: "Deactivate: add logs after DelegateFork",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(withdrawalAddress),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				processor = NewProcessor(ctx, stateDb, bc)
+				// set after DelegateSlot
+				processor.ctx.Slot = bc.Config().ForkSlotDelegate
+
+				v := c.TestData.(testmodels.TestData)
+
+				validator := storage.NewValidator(pubKey, testmodels.Addr4, &withdrawalAddress)
+				validator.ActivationEra = 0
+				validator.Index = 0
+
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr4)
+				testutils.AssertNoError(t, err)
+
+				//check log
+				log := processor.state.Logs()[0]
+				expLogData, err := txlog.PackDeactivateLogData(initTxHash, val.Address, procEpoch, val.Index)
+				testutils.AssertNoError(t, err)
+				testutils.AssertEqual(t, processor.GetValidatorsStateAddress(), log.Address)
+				testutils.AssertEqual(t, fmt.Sprintf("%#x", expLogData), fmt.Sprintf("%#x", log.Data))
+				//topic 0
+				testutils.AssertEqual(t, txlog.EvtDeactivateLogSignature, log.Topics[0])
+				//topic 1
+				testutils.AssertEqual(t, val.Address.Hash(), log.Topics[1])
+				//topic 3
+				testutils.AssertEqual(t, initTxHash, log.Topics[2])
+
+			},
+		},
+
+		/*
+			{
+				CaseName: "Activate: add logs after DelegateFork",
+				TestData: testmodels.TestData{
+					Caller: vm.AccountRef(from),
+					AddrTo: to,
+				},
+				Errs: []error{nil},
+				Fn: func(c *testmodels.TestCase) {
+					stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+					processor = NewProcessor(ctx, stateDb, bc)
+					// set after DelegateSlot
+					processor.ctx.Slot = bc.Config().ForkSlotDelegate
+
+					v := c.TestData.(testmodels.TestData)
+					validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
+					err = processor.Storage().SetValidator(processor.state, validator)
+					testutils.AssertNoError(t, err)
+
+					call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+					val, err := processor.storage.GetValidator(processor.state, testmodels.Addr2)
+					testutils.AssertNoError(t, err)
+
+					//check log
+					log := processor.state.Logs()[0]
+					expLogData, err := txlog.PackActivateLogData(initTxHash, val.Address, procEpoch, val.Index)
+					testutils.AssertNoError(t, err)
+					testutils.AssertEqual(t, processor.GetValidatorsStateAddress(), log.Address)
+					testutils.AssertEqual(t, fmt.Sprintf("%#x", expLogData), fmt.Sprintf("%#x", log.Data))
+					//topic 0
+					testutils.AssertEqual(t, txlog.EvtActivateLogSignature, log.Topics[0])
+					//topic 1
+					testutils.AssertEqual(t, val.Address.Hash(), log.Topics[1])
+					//topic 3
+					testutils.AssertEqual(t, initTxHash, log.Topics[2])
+				},
+			},
+		*/
+
 	}
 
 	for _, c := range cases {
