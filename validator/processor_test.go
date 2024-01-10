@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/txlog"
 )
 
 var (
@@ -175,6 +177,11 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 				bc := NewMockblockchain(ctrl)
 				bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
 				processor := NewProcessor(ctx, stateDb, bc)
+				// set after DelegateSlot
+				processor.ctx.Slot = bc.Config().ForkSlotDelegate
+				defer func() {
+					processor.ctx.Slot = 0
+				}()
 
 				delegateData, err := operation.NewDelegatingStakeData(
 					rules,
@@ -243,6 +250,11 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 				bc := NewMockblockchain(ctrl)
 				bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
 				processor := NewProcessor(ctx, stateDb, bc)
+				// set after DelegateSlot
+				processor.ctx.Slot = bc.Config().ForkSlotDelegate
+				defer func() {
+					processor.ctx.Slot = 0
+				}()
 
 				delegateData, err := operation.NewDelegatingStakeData(
 					rules,
@@ -308,6 +320,11 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 				bc := NewMockblockchain(ctrl)
 				bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
 				processor := NewProcessor(ctx, stateDb, bc)
+				// set after DelegateSlot
+				processor.ctx.Slot = bc.Config().ForkSlotDelegate
+				defer func() {
+					processor.ctx.Slot = 0
+				}()
 
 				delegateData, err := operation.NewDelegatingStakeData(
 					rules,
@@ -380,6 +397,11 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 				bc := NewMockblockchain(ctrl)
 				bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
 				processor := NewProcessor(ctx, stateDb, bc)
+				// set after DelegateSlot
+				processor.ctx.Slot = bc.Config().ForkSlotDelegate
+				defer func() {
+					processor.ctx.Slot = 0
+				}()
 
 				delegateData, err := operation.NewDelegatingStakeData(
 					rules,
@@ -453,6 +475,11 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 				bc := NewMockblockchain(ctrl)
 				bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
 				processor := NewProcessor(ctx, stateDb, bc)
+				// set after DelegateSlot
+				processor.ctx.Slot = bc.Config().ForkSlotDelegate
+				defer func() {
+					processor.ctx.Slot = 0
+				}()
 
 				changedRules, err := operation.NewDelegatingStakeRules(
 					map[common.Address]uint8{common.Address{0x16}: 100},
@@ -527,10 +554,11 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 			Errs: []error{operation.ErrDelegateForkRequire},
 			Fn: func(c *testmodels.TestCase) {
 				testChainConfig := testmodels.TestChainConfig
-				testChainConfig.ForkSlotDelegate = 1000
+				memForkSlotDelegate := testChainConfig.ForkSlotDelegate
 				defer func() {
-					testChainConfig.ForkSlotDelegate = 0
+					testChainConfig.ForkSlotDelegate = memForkSlotDelegate
 				}()
+				testChainConfig.ForkSlotDelegate = 1000
 
 				bc.EXPECT().Config().Return(testChainConfig).AnyTimes()
 
@@ -615,13 +643,9 @@ func TestProcessorActivate(t *testing.T) {
 	initTxData, err := operation.EncodeToBytes(depositOperation)
 	testutils.AssertNoError(t, err)
 	initTx := types.NewTx(&types.AccessListTx{Data: initTxData})
-	bc.EXPECT().GetTransaction(
-		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
-	).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
+	bc.EXPECT().GetTransaction(initTxHash).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
 	initTxRcp := &types.Receipt{Status: types.ReceiptStatusSuccessful}
-	bc.EXPECT().GetTransactionReceipt(
-		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
-	).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
+	bc.EXPECT().GetTransactionReceipt(initTxHash).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
 
 	cases := []*testmodels.TestCase{
 		{
@@ -781,6 +805,68 @@ func TestProcessorActivate(t *testing.T) {
 				}
 
 				testutils.AssertEqual(t, validator.Address, valList[0])
+			},
+		},
+		{
+			CaseName: "Activate:_no_logs_before_DelegateFork",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				stateDb1, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				processor := NewProcessor(ctx, stateDb1, bc)
+				processor.ctx.Slot = 0
+				//check log: no log before delegate fork
+				testutils.AssertEqual(t, 0, len(processor.state.Logs()))
+
+				v := c.TestData.(testmodels.TestData)
+				validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				//check log: no log before delegate fork
+				testutils.AssertEqual(t, 0, len(processor.state.Logs()))
+			},
+		},
+		{
+			CaseName: "Activate: add logs after DelegateFork",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(from),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				processor = NewProcessor(ctx, stateDb, bc)
+				// set after DelegateSlot
+				processor.ctx.Slot = bc.Config().ForkSlotDelegate
+
+				v := c.TestData.(testmodels.TestData)
+				validator := storage.NewValidator(pubKey, testmodels.Addr2, &withdrawalAddress)
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
+
+				val, err := processor.storage.GetValidator(processor.state, testmodels.Addr2)
+				testutils.AssertNoError(t, err)
+
+				//check log
+				log := processor.state.Logs()[0]
+				expLogData, err := txlog.PackActivateLogData(initTxHash, val.Address, procEpoch, val.Index)
+				testutils.AssertNoError(t, err)
+				testutils.AssertEqual(t, processor.GetValidatorsStateAddress(), log.Address)
+				testutils.AssertEqual(t, fmt.Sprintf("%#x", expLogData), fmt.Sprintf("%#x", log.Data))
+				//topic 0
+				testutils.AssertEqual(t, txlog.EvtActivateLogSignature, log.Topics[0])
+				//topic 1
+				testutils.AssertEqual(t, val.Address.Hash(), log.Topics[1])
+				//topic 3
+				testutils.AssertEqual(t, initTxHash, log.Topics[2])
 			},
 		},
 	}
@@ -969,13 +1055,9 @@ func TestProcessorDeactivate(t *testing.T) {
 	initTxData, err := operation.EncodeToBytes(depositOperation)
 	testutils.AssertNoError(t, err)
 	initTx := types.NewTx(&types.AccessListTx{Data: initTxData})
-	bc.EXPECT().GetTransaction(
-		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
-	).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
+	bc.EXPECT().GetTransaction(initTxHash).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
 	initTxRcp := &types.Receipt{Status: types.ReceiptStatusSuccessful}
-	bc.EXPECT().GetTransactionReceipt(
-		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
-	).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
+	bc.EXPECT().GetTransactionReceipt(initTxHash).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
 
 	cases := []*testmodels.TestCase{
 		{
@@ -1284,13 +1366,9 @@ func TestProcessorUpdateBalance(t *testing.T) {
 	initTxData, err := operation.EncodeToBytes(depositOperation)
 	testutils.AssertNoError(t, err)
 	initTx := types.NewTx(&types.AccessListTx{Data: initTxData})
-	bc.EXPECT().GetTransaction(
-		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
-	).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
+	bc.EXPECT().GetTransaction(initTxHash).AnyTimes().Return(initTx, common.Hash{}, uint64(0))
 	initTxRcp := &types.Receipt{Status: types.ReceiptStatusSuccessful}
-	bc.EXPECT().GetTransactionReceipt(
-		common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
-	).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
+	bc.EXPECT().GetTransactionReceipt(initTxHash).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
 
 	cases := []*testmodels.TestCase{
 		{
@@ -1358,6 +1436,12 @@ func TestProcessorUpdateBalance_DelegatingStake(t *testing.T) {
 	testutils.AssertNoError(t, err)
 	initTx := types.NewTx(&types.AccessListTx{Data: initTxData})
 
+	memForkSlotDelegate := testmodels.TestChainConfig.ForkSlotDelegate
+	defer func() {
+		testmodels.TestChainConfig.ForkSlotDelegate = memForkSlotDelegate
+	}()
+	testmodels.TestChainConfig.ForkSlotDelegate = 0
+
 	initMock := func() (
 		msg *Mockmessage,
 		bc *Mockblockchain,
@@ -1385,15 +1469,13 @@ func TestProcessorUpdateBalance_DelegatingStake(t *testing.T) {
 		bc.EXPECT().EpochToEra(uint64(100)).AnyTimes().Return(&testmodels.TestEra)
 		bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
 		bc.EXPECT().Database().AnyTimes().Return(db)
-		bc.EXPECT().GetTransaction(
-			common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
-		).Return(initTx, common.Hash{}, uint64(0)).AnyTimes()
+		bc.EXPECT().GetTransaction(initTxHash).Return(initTx, common.Hash{}, uint64(0)).AnyTimes()
 		initTxRcp := &types.Receipt{Status: types.ReceiptStatusSuccessful}
-		bc.EXPECT().GetTransactionReceipt(
-			common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303"),
-		).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
+		bc.EXPECT().GetTransactionReceipt(initTxHash).AnyTimes().Return(initTxRcp, common.Hash{}, uint64(0))
 
 		processor = NewProcessor(ctx, stateDb, bc)
+		// set after DelegateSlot
+		processor.ctx.Slot = bc.Config().ForkSlotDelegate
 
 		return
 	}
@@ -1722,7 +1804,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 				hash := common.BytesToHash(testutils.RandomStringInBytes(32))
 				valSyncData.TxHash = &hash
-				valSyncData.InitTxHash = common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303")
+				valSyncData.InitTxHash = initTxHash
 				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				valSyncData.TxHash = &txHash

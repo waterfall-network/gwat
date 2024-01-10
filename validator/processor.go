@@ -460,9 +460,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 
 	// create tx log
 	amtGwei := new(big.Int).Div(opAmount, common.BigGwei).Uint64()
-
 	logData := txlog.PackWithdrawalLogData(validator.GetPubKey(), op.CreatorAddress(), validator.GetIndex(), amtGwei)
-
 	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
@@ -513,6 +511,15 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 
 	p.Storage().AddValidatorToList(p.state, op.Index(), op.Creator())
 
+	//check delegating activation fork
+	if p.blockchain.Config().IsForkSlotDelegate(p.ctx.Slot) {
+		//add tx log
+		logData, err := txlog.PackActivateLogData(op.InitTxHash(), op.Creator(), op.ProcEpoch(), op.Index())
+		if err != nil {
+			return nil, err
+		}
+		p.eventEmmiter.AddActivateLog(p.GetValidatorsStateAddress(), logData, op.Creator(), op.InitTxHash())
+	}
 	return op.Creator().Bytes(), nil
 }
 

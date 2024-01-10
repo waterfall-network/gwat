@@ -2,6 +2,7 @@ package txlog
 
 import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
@@ -72,4 +73,18 @@ func UnpackActivateLogData(bin []byte) (
 	procEpoch = logData.ProcEpoch
 	validatorIndex = logData.ValidatorIndex
 	return
+}
+
+func (e *EventEmmiter) AddActivateLog(stateValAdr common.Address, data []byte, creatorAdr common.Address, initTxHash common.Hash) {
+	topics := []common.Hash{
+		EvtActivateLogSignature,
+		creatorAdr.Hash(),
+		initTxHash,
+	}
+
+	e.state.AddLog(&types.Log{
+		Address: stateValAdr,
+		Topics:  topics,
+		Data:    data,
+	})
 }
