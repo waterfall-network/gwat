@@ -616,6 +616,16 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	// transfer amount to withdrawal address
 	p.state.AddBalance(*withdrawalTo, op.Amount())
 
+	//check delegating activation fork
+	if p.blockchain.Config().IsForkSlotDelegate(p.ctx.Slot) {
+		//add tx log
+		logData, err := txlog.PackUpdateBalanceLogData(op.InitTxHash(), op.Creator(), op.ProcEpoch(), op.Amount())
+		if err != nil {
+			return nil, err
+		}
+		p.eventEmmiter.AddUpdateBalanceLog(p.GetValidatorsStateAddress(), logData, op.Creator(), op.InitTxHash(), withdrawalTo)
+	}
+
 	return op.Creator().Bytes(), nil
 }
 
@@ -674,13 +684,13 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 	}
 
 	// calculate share
-	upBalInfo := make([]txlog.ShareRuleApplying, 0, len(actualRules.StakeShare())+len(actualRules.ProfitShare()))
+	upBalInfo := make(txlog.DelegatingStakeLogData, 0, len(actualRules.StakeShare())+len(actualRules.ProfitShare()))
 	var percent *big.Int
 	if profitOpAmt.Sign() > 0 {
 		percent := new(big.Int).Div(profitOpAmt, big.NewInt(100))
 		for adr, share := range actualRules.ProfitShare() {
 			amt := new(big.Int).Mul(percent, big.NewInt(int64(share)))
-			upBalInfo = append(upBalInfo, txlog.ShareRuleApplying{
+			upBalInfo = append(upBalInfo, &txlog.ShareRuleApplying{
 				Address:  adr,
 				RuleType: txlog.ProfitShare,
 				IsTrial:  isTrial,
@@ -703,7 +713,7 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 		percent = new(big.Int).Div(stakeOpAmt, big.NewInt(100))
 		for adr, share := range actualRules.StakeShare() {
 			amt := new(big.Int).Mul(percent, big.NewInt(int64(share)))
-			upBalInfo = append(upBalInfo, txlog.ShareRuleApplying{
+			upBalInfo = append(upBalInfo, &txlog.ShareRuleApplying{
 				Address:  adr,
 				RuleType: txlog.StakeShare,
 				IsTrial:  isTrial,
@@ -723,7 +733,19 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 		}
 	}
 
-	//todo
+	//add update balance tx log
+	logData, err := txlog.PackUpdateBalanceLogData(op.InitTxHash(), op.Creator(), op.ProcEpoch(), op.Amount())
+	if err != nil {
+		return nil, err
+	}
+	p.eventEmmiter.AddUpdateBalanceLog(p.GetValidatorsStateAddress(), logData, op.Creator(), op.InitTxHash(), nil)
+	//add delegate stake tx log
+	logData, err = txlog.PackDelegatingStakeLogData(upBalInfo)
+	if err != nil {
+		return nil, err
+	}
+	p.eventEmmiter.AddDelegatingStakeLog(p.GetValidatorsStateAddress(), logData, upBalInfo.Topics())
+
 	return op.Creator().Bytes(), nil
 }
 

@@ -23,11 +23,11 @@ func TestDelegatingStakeLogData_Copy(t *testing.T) {
 		},
 	}
 
-	cmp := *logData.Copy()
+	cmp := logData.Copy()
 	testutils.AssertEqual(t, logData, cmp)
 
 	upBalDataEmpty := DelegatingStakeLogData{}
-	cmpEmpty := *upBalDataEmpty.Copy()
+	cmpEmpty := upBalDataEmpty.Copy()
 	testutils.AssertEqual(t, upBalDataEmpty, cmpEmpty)
 }
 
@@ -58,7 +58,7 @@ func TestDelegatingStakeLogData_Marshaling(t *testing.T) {
 
 func TestPackDelegatingStakeLogData(t *testing.T) {
 	var (
-		logData = &DelegatingStakeLogData{
+		logData = DelegatingStakeLogData{
 			{
 				Address:  common.Address{0x11},
 				RuleType: StakeShare,

@@ -1,9 +1,12 @@
 package txlog
 
 import (
+	"bytes"
 	"math/big"
+	"sort"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
@@ -40,7 +43,7 @@ func (d *ShareRuleApplying) Copy() *ShareRuleApplying {
 
 type DelegatingStakeLogData []*ShareRuleApplying
 
-func (d *DelegatingStakeLogData) Copy() *DelegatingStakeLogData {
+func (d *DelegatingStakeLogData) Copy() DelegatingStakeLogData {
 	if d == nil {
 		return nil
 	}
@@ -48,14 +51,37 @@ func (d *DelegatingStakeLogData) Copy() *DelegatingStakeLogData {
 	for i, v := range *d {
 		cpy[i] = v.Copy()
 	}
-	return &cpy
+	return cpy
+}
+
+func (d *DelegatingStakeLogData) Sort() DelegatingStakeLogData {
+	if d == nil {
+		return nil
+	}
+	s := d.Copy()[:]
+	sort.Slice(s, func(i, j int) bool {
+		return bytes.Compare(s[i].Address.Bytes(), s[j].Address.Bytes()) < 0
+	})
+	return s
+}
+
+func (d *DelegatingStakeLogData) Topics() []common.Hash {
+	if d == nil {
+		return nil
+	}
+	accs := make(common.HashArray, len(*d))
+	for i, v := range *d {
+		accs[i] = v.Address.Hash()
+	}
+	accs.Deduplicate()
+	return accs.Sort()
 }
 
 // MarshalBinary marshals a create operation to byte encoding
 func (d *DelegatingStakeLogData) MarshalBinary() ([]byte, error) {
 	cmp := d.Copy()
 	if cmp == nil {
-		cmp = &DelegatingStakeLogData{}
+		cmp = DelegatingStakeLogData{}
 	}
 	for _, v := range *d {
 		if v.Amount == nil {
@@ -74,16 +100,17 @@ func (d *DelegatingStakeLogData) UnmarshalBinary(b []byte) error {
 }
 
 // PackDelegatingStakeLogData packs the deposit log.
-func PackDelegatingStakeLogData(data *DelegatingStakeLogData) ([]byte, error) {
+func PackDelegatingStakeLogData(data DelegatingStakeLogData) ([]byte, error) {
 	if data == nil {
 		return []byte{}, nil
 	}
-	for _, v := range *data {
+	sorted := data.Sort()
+	for _, v := range sorted {
 		if v.Amount == nil {
 			return nil, ErrNoAmount
 		}
 	}
-	return data.MarshalBinary()
+	return sorted.MarshalBinary()
 }
 
 // UnpackDelegatingStakeLogData unpacks the data from a deposit log using the ABI decoder.
@@ -97,4 +124,13 @@ func UnpackDelegatingStakeLogData(bin []byte) (*DelegatingStakeLogData, error) {
 		return nil, err
 	}
 	return logData, nil
+}
+
+func (e *EventEmmiter) AddDelegatingStakeLog(stateValAdr common.Address, data []byte, topics []common.Hash) {
+	allTopics := append([]common.Hash{EvtDelegatingStakeSignature}, topics...)
+	e.state.AddLog(&types.Log{
+		Address: stateValAdr,
+		Topics:  allTopics,
+		Data:    data,
+	})
 }

@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
@@ -84,4 +85,21 @@ func UnpackUpdateBalanceLogData(bin []byte) (
 	procEpoch = logData.ProcEpoch
 	amount = logData.Amount
 	return
+}
+
+func (e *EventEmmiter) AddUpdateBalanceLog(stateValAdr common.Address, data []byte, creatorAdr common.Address, initTxHash common.Hash, withdrawalAdr *common.Address) {
+	topics := []common.Hash{
+		EvtUpdateBalanceLogSignature,
+		creatorAdr.Hash(),
+		initTxHash,
+	}
+	//skipping for delegate stake case
+	if withdrawalAdr != nil {
+		topics = append(topics, withdrawalAdr.Hash())
+	}
+	e.state.AddLog(&types.Log{
+		Address: stateValAdr,
+		Topics:  topics,
+		Data:    data,
+	})
 }

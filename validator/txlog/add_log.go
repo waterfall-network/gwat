@@ -13,9 +13,10 @@ var (
 	EvtExitReqLogSignature    = crypto.Keccak256Hash([]byte("ExitRequestLog"))
 	EvtWithdrawalLogSignature = crypto.Keccak256Hash([]byte("WithdrawaRequestLog"))
 	//validator sync op
-	EvtActivateLogSignature      = crypto.Keccak256Hash([]byte("activation"))
-	EvtDeactivateLogSignature    = crypto.Keccak256Hash([]byte("deactivation"))
-	EvtUpdateBalanceLogSignature = crypto.Keccak256Hash([]byte("UpdateBalance"))
+	EvtActivateLogSignature      = crypto.Keccak256Hash([]byte("activate"))
+	EvtDeactivateLogSignature    = crypto.Keccak256Hash([]byte("deactivate"))
+	EvtUpdateBalanceLogSignature = crypto.Keccak256Hash([]byte("update-balance"))
+	EvtDelegatingStakeSignature  = crypto.Keccak256Hash([]byte("delegating-stake"))
 )
 
 type logEntry struct {
