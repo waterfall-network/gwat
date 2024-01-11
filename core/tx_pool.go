@@ -813,7 +813,6 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 		case valOperation.Deposit:
 			return pool.checkDepositOperation(v, from, value)
 		}
-
 		return nil
 	}
 
@@ -862,6 +861,16 @@ func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.A
 	if amount.Cmp(val.MinDepositVal) < 0 {
 		return fmt.Errorf("too low value (min deposit = %s wei)", val.MinDepositVal.String())
 	}
+	//check delegating stake activation fork
+	var curSlot uint64
+	if pool.chain.GetSlotInfo() == nil {
+		curSlot = pool.chain.GetSlotInfo().CurrentSlot()
+	}
+	if op.DelegatingStake() != nil {
+		if !pool.chainconfig.IsForkSlotDelegate(curSlot) {
+			return valOperation.ErrDelegateForkRequire
+		}
+	}
 
 	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
 	if err == valStore.ErrNoStateValidatorInfo {
@@ -879,13 +888,9 @@ func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.A
 	if stake := validator.TotalStake(); stake != nil && stake.Cmp(effectiveBalanceWei) >= 0 {
 		return fmt.Errorf("required amount of stake reached (req=%s deposited=%s wei)", effectiveBalanceWei.String(), stake.String())
 	}
-	//check activation fork
-	var curSlot uint64
-	if pool.chain.GetSlotInfo() == nil {
-		curSlot = pool.chain.GetSlotInfo().CurrentSlot()
-	}
-	if op.DelegatingStake() != nil && !pool.chainconfig.IsForkSlotDelegate(curSlot) {
-		return valOperation.ErrDelegateForkRequire
+	// check op data conforms to validator data
+	if err := val.ValidatePartialDepositOp(validator, op); err != nil {
+		return err
 	}
 	return nil
 }

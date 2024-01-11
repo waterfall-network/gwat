@@ -31,11 +31,10 @@ var (
 	ErrInvalidFromAddresses   = errors.New("withdrawal and sender addresses are mismatch")
 	ErrUnknownValidator       = errors.New("unknown validator")
 	ErrNoWithdrawalCred       = errors.New("no withdrawal credentials")
-	ErrMismatchPulicKey       = errors.New("validators public key mismatch")
+	ErrMismatchPulicKey       = errors.New("validator public key mismatch")
 	ErrNotActivatedValidator  = errors.New("validator not activated yet")
 	ErrValidatorIsOut         = errors.New("validator is exited")
 	ErrInvalidToAddress       = errors.New("address to must be validators state address")
-	ErrTargetEraNotFound      = errors.New("target era not found")
 	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
 	ErrMismatchTxHashes       = errors.New("validator sync tx already exists")
 	ErrMismatchValSyncOp      = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
@@ -918,4 +917,30 @@ func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) b
 	}
 
 	return true
+}
+
+func ValidatePartialDepositOp(validator *valStore.Validator, op operation.Deposit) error {
+	//should never happen
+	if validator.Address != op.CreatorAddress() {
+		return fmt.Errorf("mismatch validator creator address (expect=%#x)", validator.Address)
+	}
+	if validator.PubKey != op.PubKey() {
+		return fmt.Errorf("mismatch validator public key (expect=%#x)", validator.PubKey)
+	}
+	if validator.WithdrawalAddress != nil && *validator.WithdrawalAddress != op.WithdrawalAddress() {
+		return fmt.Errorf("mismatch validator withdrawal address (expect=%#x)", *validator.WithdrawalAddress)
+	}
+	//check DelegatingStake
+	valBin, err := validator.DelegatingStake.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	opBin, err := op.DelegatingStake().MarshalBinary()
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(valBin, opBin) {
+		return fmt.Errorf("mismatch validator delegating stake rules")
+	}
+	return nil
 }

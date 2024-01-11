@@ -2448,6 +2448,111 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 	}
 }
 
+func TestValidatePartialDepositOp(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+
+	badPubKey := common.BytesToBlsPubKey(testutils.RandomData(48))
+	badWithdrawalAdr := common.BytesToAddress(testutils.RandomData(20))
+
+	dsProfitShare, dsStakeShare, dsExit, dsWithdrawal := operation.TestParamsDelegatingStakeRules()
+	rules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+	trialRules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+	cases := []*testmodels.TestCase{
+		{
+			CaseName: "ValidatePartialDepositOp_OK",
+			TestData: nil,
+			Errs:     []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				var err error
+				//partial deposit operation
+				depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature, nil)
+				testutils.AssertNoError(t, err)
+				//create validator
+				validator := storage.NewValidator(depositOperation.PubKey(), depositOperation.CreatorAddress(), &withdrawalAddress)
+				err = ValidatePartialDepositOp(validator, depositOperation)
+				testutils.AssertNoError(t, err)
+			},
+		},
+		{
+			CaseName: "ValidatePartialDepositOp_mismatch_pubkey",
+			TestData: nil,
+			Errs:     []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				var expErr error = fmt.Errorf("mismatch validator public key (expect=%#x)", pubKey)
+				var err error
+				//partial deposit operation
+				depositOperation, err := operation.NewDepositOperation(badPubKey, testmodels.Addr1, withdrawalAddress, signature, nil)
+				testutils.AssertNoError(t, err)
+				//create validator
+				validator := storage.NewValidator(pubKey, depositOperation.CreatorAddress(), &withdrawalAddress)
+				err = ValidatePartialDepositOp(validator, depositOperation)
+				testutils.AssertEqual(t, expErr.Error(), err.Error())
+			},
+		},
+		{
+			CaseName: "ValidatePartialDepositOp_mismatch_WithdrawalAdr",
+			TestData: nil,
+			Errs:     []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				var err error
+				var expErr error = fmt.Errorf("mismatch validator withdrawal address (expect=%#x)", withdrawalAddress)
+				//partial deposit operation
+				depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, badWithdrawalAdr, signature, nil)
+				testutils.AssertNoError(t, err)
+				//create validator
+				validator := storage.NewValidator(depositOperation.PubKey(), depositOperation.CreatorAddress(), &withdrawalAddress)
+				err = ValidatePartialDepositOp(validator, depositOperation)
+				testutils.AssertEqual(t, expErr.Error(), err.Error())
+			},
+		},
+		{
+			CaseName: "ValidatePartialDepositOp_DelegatingStakeData_OK",
+			TestData: nil,
+			Errs:     []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				var err error
+				//partial deposit operation
+				delegateData, err := operation.NewDelegatingStakeData(rules, 321, trialRules)
+				depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature, delegateData)
+				testutils.AssertNoError(t, err)
+				//create validator
+				validator := storage.NewValidator(depositOperation.PubKey(), depositOperation.CreatorAddress(), &withdrawalAddress)
+				validator.DelegatingStake = depositOperation.DelegatingStake()
+
+				err = ValidatePartialDepositOp(validator, depositOperation)
+				testutils.AssertNoError(t, err)
+			},
+		},
+		{
+			CaseName: "ValidatePartialDepositOp_mismatch_DelegatingStakeData",
+			TestData: nil,
+			Errs:     []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				var err error
+				var expErr error = fmt.Errorf("mismatch validator delegating stake rules")
+				//partial deposit operation
+				badDelegateData, err := operation.NewDelegatingStakeData(rules, 10, trialRules)
+				depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature, badDelegateData)
+				testutils.AssertNoError(t, err)
+				//create validator
+				validator := storage.NewValidator(depositOperation.PubKey(), depositOperation.CreatorAddress(), &withdrawalAddress)
+				delegateData, err := operation.NewDelegatingStakeData(rules, 321, trialRules)
+				validator.DelegatingStake = delegateData
+
+				err = ValidatePartialDepositOp(validator, depositOperation)
+				testutils.AssertEqual(t, expErr.Error(), err.Error())
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(c)
+		})
+	}
+}
+
 func call(t *testing.T, processor *Processor, Caller Ref, addrTo common.Address, value *big.Int, msg message, Errs []error) []byte {
 	res, err := processor.Call(Caller, addrTo, value, msg)
 	if !testutils.CheckError(err, Errs) {
