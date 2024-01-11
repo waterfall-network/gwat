@@ -1394,6 +1394,127 @@ func TestProcessorWithdrawal(t *testing.T) {
 	}
 }
 
+func TestProcessorWithdrawal_DelegatingStake(t *testing.T) {
+	ctrl = gomock.NewController(t)
+	defer ctrl.Finish()
+	msg := NewMockmessage(ctrl)
+
+	bc := NewMockblockchain(ctrl)
+	bc.EXPECT().Config().AnyTimes().Return(testmodels.TestChainConfig)
+
+	processor := NewProcessor(ctx, stateDb, bc)
+	to := processor.GetValidatorsStateAddress()
+
+	dsProfitShare, dsStakeShare, dsExit, dsWithdrawal := operation.TestParamsDelegatingStakeRules()
+	rules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+	trialRules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+
+	withdrawalOperation, err := operation.NewWithdrawalOperation(testmodels.Addr1, value)
+	testutils.AssertNoError(t, err)
+
+	opData, err := operation.EncodeToBytes(withdrawalOperation)
+	testutils.AssertNoError(t, err)
+	msg.EXPECT().Data().AnyTimes().Return(opData)
+	msg.EXPECT().TxHash().AnyTimes().Return(common.Hash{0x11})
+
+	cases := []*testmodels.TestCase{
+		{
+			CaseName: "Withdrawal: reject withdrawalAddr by delegate",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(withdrawalAddress),
+				AddrTo: to,
+			},
+			Errs: []error{ErrSenderRejByDelegate},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				bc := NewMockblockchain(ctrl)
+				bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
+				bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+					GenesisTime:    uint64(time.Now().Unix()),
+					SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
+					SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
+				})
+
+				db := rawdb.NewMemoryDatabase()
+				rawdb.WriteEra(db, eraInfo.Number(), *eraInfo.GetEra())
+				bc.EXPECT().Database().AnyTimes().Return(db)
+
+				processor := NewProcessor(ctx, stateDb, bc)
+
+				//create existed validator
+				delegateData, err := operation.NewDelegatingStakeData(rules, 321, trialRules)
+				testutils.AssertNoError(t, err)
+				depositOp, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature, delegateData)
+				testutils.AssertNoError(t, err)
+
+				validator := storage.NewValidator(depositOp.PubKey(), depositOp.CreatorAddress(), &withdrawalAddress)
+				validator.ActivationEra = eraInfo.GetEra().Number
+				validator.DelegatingStake = depositOp.DelegatingStake()
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
+			},
+		},
+
+		{
+			CaseName: "Withdrawal: OK",
+			TestData: testmodels.TestData{
+				Caller: vm.AccountRef(trialRules.Withdrawal()[0]),
+				AddrTo: to,
+			},
+			Errs: []error{nil},
+			Fn: func(c *testmodels.TestCase) {
+				v := c.TestData.(testmodels.TestData)
+
+				stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				bc := NewMockblockchain(ctrl)
+				bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
+				bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
+					GenesisTime:    uint64(time.Now().Unix()),
+					SecondsPerSlot: testmodels.TestChainConfig.SecondsPerSlot,
+					SlotsPerEpoch:  testmodels.TestChainConfig.SlotsPerEpoch,
+				})
+
+				db := rawdb.NewMemoryDatabase()
+				rawdb.WriteEra(db, eraInfo.Number(), *eraInfo.GetEra())
+				bc.EXPECT().Database().AnyTimes().Return(db)
+
+				processor := NewProcessor(ctx, stateDb, bc)
+				// set after DelegateSlot
+				processor.ctx.Slot = bc.Config().ForkSlotDelegate
+				processor.ctx.Slot = eraInfo.GetEra().From * bc.GetSlotInfo().SlotsPerEpoch
+				processor.ctx.Era = eraInfo.GetEra().Number
+				defer func() {
+					processor.ctx.Slot = 0
+				}()
+
+				//create existed validator
+				delegateData, err := operation.NewDelegatingStakeData(rules, 321, trialRules)
+				testutils.AssertNoError(t, err)
+				depositOp, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature, delegateData)
+				testutils.AssertNoError(t, err)
+
+				validator := storage.NewValidator(depositOp.PubKey(), depositOp.CreatorAddress(), &withdrawalAddress)
+				validator.ActivationEra = eraInfo.GetEra().Number
+				validator.DelegatingStake = depositOp.DelegatingStake()
+				err = processor.Storage().SetValidator(processor.state, validator)
+				testutils.AssertNoError(t, err)
+
+				call(t, processor, v.Caller, v.AddrTo, nil, msg, c.Errs)
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.CaseName, func(t *testing.T) {
+			c.Fn(c)
+		})
+	}
+}
+
 func TestProcessorUpdateBalance(t *testing.T) {
 	updateBalanceOperation, err := operation.NewValidatorSyncOperation(0, types.UpdateBalance, initTxHash, procEpoch, 0, testmodels.Addr6, value, &withdrawalAddress, nil)
 	testutils.AssertNoError(t, err)

@@ -47,6 +47,7 @@ var (
 	ErrInvalidCreator         = errors.New("invalid creator address")
 	ErrInvalidAmount          = errors.New("invalid amount")
 	ErrMismatchDelegateData   = errors.New("validator deposit failed (mismatch delegate stake data)")
+	ErrSenderRejByDelegate    = errors.New("sender addresses rejected by delegating stake rules")
 )
 
 const (
@@ -451,6 +452,28 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		if err != nil {
 			return nil, err
 		}
+	} else if validator.HasDelegatingStake() {
+		//apply delegating rules
+		//retrieve actual rules
+		var actualRules = &validator.DelegatingStake.Rules
+		isTrial, err := p.isValidatorTrialPeriod(validator)
+		if err != nil {
+			return nil, err
+		}
+		if isTrial {
+			actualRules = &validator.DelegatingStake.TrialRules
+		}
+		allowedAddrs := actualRules.Withdrawal()
+		var isAllowed bool
+		for _, adr := range allowedAddrs {
+			if adr == from {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return nil, ErrSenderRejByDelegate
+		}
 	} else {
 		// check withdrawal credentials
 		if from != *validator.GetWithdrawalAddress() {
@@ -647,24 +670,13 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 	}
 
 	//retrieve actual rules
-	var actualRules *operation.DelegatingStakeRules
-	var isTrial bool
-	// if validator is not activated yet - trial period
-	if validator.GetActivationEra() > p.ctx.Era {
+	var actualRules = &validator.DelegatingStake.Rules
+	isTrial, err := p.isValidatorTrialPeriod(validator)
+	if err != nil {
+		return nil, err
+	}
+	if isTrial {
 		actualRules = &validator.DelegatingStake.TrialRules
-		isTrial = true
-	} else {
-		activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
-		activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
-		if err != nil {
-			return nil, err
-		}
-		if activationSlot+validator.DelegatingStake.TrialPeriod >= p.ctx.Slot {
-			actualRules = &validator.DelegatingStake.TrialRules
-			isTrial = true
-		} else {
-			actualRules = &validator.DelegatingStake.Rules
-		}
 	}
 
 	opBalance := new(big.Int).Add(op.Balance(), op.Amount())
@@ -747,6 +759,24 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 	p.eventEmmiter.AddDelegatingStakeLog(p.GetValidatorsStateAddress(), logData, upBalInfo.Topics())
 
 	return op.Creator().Bytes(), nil
+}
+
+func (p *Processor) isValidatorTrialPeriod(validator *valStore.Validator) (bool, error) {
+	// if validator is not activated yet - trial period
+	if validator.GetActivationEra() > p.ctx.Era {
+		return true, nil
+	} else {
+		bc := p.blockchain
+		activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
+		activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
+		if err != nil {
+			return false, err
+		}
+		if activationSlot+validator.DelegatingStake.TrialPeriod >= p.ctx.Slot {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // ValidateValidatorSyncOp validate validator sync op data with context of apply.
