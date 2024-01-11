@@ -29,14 +29,17 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	val "gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valOperation "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
@@ -167,6 +170,8 @@ type blockChain interface {
 	EstimateGas(msg types.Message, header *types.Header) (uint64, error)
 	Config() *params.ChainConfig
 	GetSlotInfo() *types.SlotInfo
+	GetEraInfo() *era.EraInfo
+	Database() ethdb.Database
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -808,6 +813,8 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 		}
 
 		switch v := op.(type) {
+		case valOperation.Exit:
+			return pool.checkExitOperation(v, from)
 		case valOperation.Withdrawal:
 			return pool.checkWithdrawalOperation(v, from)
 		case valOperation.Deposit:
@@ -819,6 +826,65 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 	log.Warn("validator transaction has no txData")
 	return nil
 }
+func (pool *TxPool) isValidatorTrialPeriod(validator *valStore.Validator) (bool, error) {
+	bc := pool.chain
+	// if validator is not activated yet - trial period
+	curEra := bc.GetEraInfo().GetEra().Number
+	if validator.GetActivationEra() > curEra {
+		return true, nil
+	} else {
+		activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
+		activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
+		if err != nil {
+			return false, err
+		}
+		if activationSlot+validator.DelegatingStake.TrialPeriod > bc.GetSlotInfo().CurrentSlot() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func (pool *TxPool) checkExitOperation(op valOperation.Exit, from common.Address) error {
+	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
+	if err != nil {
+		return err
+	}
+	if validator == nil {
+		return val.ErrUnknownValidator
+	}
+	if validator.GetExitEra() != math.MaxUint64 {
+		return val.ErrValidatorIsOut
+	}
+	if validator.HasDelegatingStake() {
+		//check delegating roles
+		//retrieve actual rules
+		var actualRules = &validator.DelegatingStake.Rules
+		isTrial, err := pool.isValidatorTrialPeriod(validator)
+		if err != nil {
+			return err
+		}
+		if isTrial {
+			actualRules = &validator.DelegatingStake.TrialRules
+		}
+		allowedAddrs := actualRules.Exit()
+		var isAllowed bool
+		for _, adr := range allowedAddrs {
+			if adr == from {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return val.ErrSenderRejByDelegate
+		}
+	} else {
+		withdrawalAddress := validator.GetWithdrawalAddress()
+		if from != *withdrawalAddress {
+			return val.ErrInvalidFromAddresses
+		}
+	}
+	return nil
+}
 
 func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from common.Address) error {
 	// check amount can add to log
@@ -828,6 +894,9 @@ func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from co
 	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
 	if err != nil {
 		return err
+	}
+	if validator == nil {
+		return val.ErrUnknownValidator
 	}
 	// if total deposited amount is less than the effective balance
 	// - deposit is insufficient to activate validator.
@@ -842,6 +911,28 @@ func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from co
 		// check amount
 		if stakeByAddr.Cmp(op.Amount()) < 0 {
 			return val.ErrInsufficientFundsForOp
+		}
+	} else if validator.HasDelegatingStake() {
+		//check delegating roles
+		//retrieve actual rules
+		var actualRules = &validator.DelegatingStake.Rules
+		isTrial, err := pool.isValidatorTrialPeriod(validator)
+		if err != nil {
+			return err
+		}
+		if isTrial {
+			actualRules = &validator.DelegatingStake.TrialRules
+		}
+		allowedAddrs := actualRules.Withdrawal()
+		var isAllowed bool
+		for _, adr := range allowedAddrs {
+			if adr == from {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return val.ErrSenderRejByDelegate
 		}
 	} else {
 		withdrawalAddress := validator.GetWithdrawalAddress()
