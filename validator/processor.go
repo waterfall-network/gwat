@@ -377,7 +377,29 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		return nil, ErrValidatorIsOut
 	}
 
-	if from != *validator.GetWithdrawalAddress() {
+	if validator.HasDelegatingStake() {
+		//check delegating roles
+		//retrieve actual rules
+		var actualRules = &validator.DelegatingStake.Rules
+		isTrial, err := p.isValidatorTrialPeriod(validator)
+		if err != nil {
+			return nil, err
+		}
+		if isTrial {
+			actualRules = &validator.DelegatingStake.TrialRules
+		}
+		allowedAddrs := actualRules.Exit()
+		var isAllowed bool
+		for _, adr := range allowedAddrs {
+			if adr == from {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return nil, ErrSenderRejByDelegate
+		}
+	} else if from != *validator.GetWithdrawalAddress() {
 		return nil, ErrInvalidFromAddresses
 	}
 
@@ -453,7 +475,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 			return nil, err
 		}
 	} else if validator.HasDelegatingStake() {
-		//apply delegating rules
+		//check delegating roles
 		//retrieve actual rules
 		var actualRules = &validator.DelegatingStake.Rules
 		isTrial, err := p.isValidatorTrialPeriod(validator)
