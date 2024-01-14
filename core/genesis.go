@@ -22,7 +22,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"os"
 	"strings"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -267,8 +269,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return g.Config
 	case ghash == params.MainnetGenesisHash:
 		return params.MainnetChainConfig
-	case ghash == params.DevNetGenesisHash:
-		return params.DevNetChainConfig
+	case ghash == params.Testnet8GenesisHash:
+		return params.Testnet8ChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -448,50 +450,20 @@ func DefaultGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultDevNetGenesisBlock returns the Ropsten network genesis block.
-func DefaultDevNetGenesisBlock() *Genesis {
-	acc1 := common.HexToAddress("e43bb1b64fc7068d313d24d01d8ccca785b22c72")
-	accBalance1 := new(big.Int)
-	accBalance1.SetString("100000000000000000000000000000000000000000000", 10)
+// DefaultTestNet8GenesisBlock returns the tesnet8 network genesis block.
+func DefaultTestNet8GenesisBlock() *Genesis {
+	genesisJson := "./params/genesis_json/testnet8/genesis.json"
+	depositDataJson := "./params/genesis_json/testnet8/deposit_data.json"
 
-	acc2 := common.HexToAddress("6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d")
-	acc3 := common.HexToAddress("a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
-
-	return &Genesis{
-		Config: params.DevNetChainConfig,
-		ExtraData: hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000" +
-			"e43bb1b64fc7068d313d24d01d8ccca785b22c72" +
-			"6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d" +
-			"00000000000000000000000000000000000000000000000000000000"),
-		GasLimit: 1200000000,
-
-		Alloc: GenesisAlloc{
-			acc1: GenesisAccount{
-				Code:       nil,
-				Storage:    nil,
-				Balance:    accBalance1,
-				Nonce:      0,
-				PrivateKey: nil,
-			},
-			acc2: GenesisAccount{
-				Code:       nil,
-				Storage:    nil,
-				Balance:    accBalance1,
-				Nonce:      0,
-				PrivateKey: nil,
-			},
-			acc3: GenesisAccount{
-				Code:       nil,
-				Storage:    nil,
-				Balance:    accBalance1,
-				Nonce:      0,
-				PrivateKey: nil,
-			},
-		},
+	genesis, err := ReadGenesisDataFiles(genesisJson, depositDataJson)
+	if err != nil {
+		log.Crit("Failed to read predefined testnet8 genesis data")
 	}
+	return genesis
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
+// Deprecated
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
 	config := *params.AllEthashProtocolChanges
@@ -526,4 +498,49 @@ func decodePrealloc(data string) GenesisAlloc {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
 	}
 	return ga
+}
+
+func ReadGenesisDataFiles(genesisJson, depositDataJson string) (*Genesis, error) {
+	file, err := os.Open(genesisJson)
+	if err != nil {
+		log.Error("Failed to open from genesis file", "err", err, "file", genesisJson)
+		return nil, err
+	}
+	defer file.Close()
+
+	genesis := new(Genesis)
+	if err = json.NewDecoder(file).Decode(genesis); err != nil {
+		log.Error("Failed to read from genesis file", "err", err, "file", genesisJson)
+		return nil, err
+	}
+
+	depositDataFile, err := os.Open(depositDataJson)
+	if err != nil {
+		log.Error("Failed to open from depositData file", "err", err, "file", depositDataJson)
+		return nil, err
+	}
+	defer depositDataFile.Close()
+
+	buf, err := io.ReadAll(depositDataFile)
+	if err != nil {
+		log.Error("Failed to read from depositData file", "err", err, "file", depositDataJson)
+		return nil, err
+	}
+	depositData := make(DepositData, 0)
+	err = json.Unmarshal(buf, &depositData)
+	if err != nil {
+		log.Error("Failed to parse from depositData file", "err", err, "file", depositDataJson)
+		return nil, err
+	}
+	if len(depositData) == 0 {
+		err = fmt.Errorf("invalid deposit data file: no validators")
+		log.Error("Bad deposit data", "err", err, "file", depositDataJson)
+		return nil, err
+	}
+	genesis.Validators = depositData
+	if err = genesis.Config.Validate(); err != nil {
+		log.Error("Invalid genesis config", "err", err)
+		return nil, err
+	}
+	return genesis, nil
 }

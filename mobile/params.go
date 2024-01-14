@@ -19,27 +19,9 @@
 package geth
 
 import (
-	"encoding/json"
-
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p/enode"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 )
-
-// MainnetGenesis returns the JSON spec to use for the main Ethereum network. It
-// is actually empty since that defaults to the hard coded binary genesis block.
-func MainnetGenesis() string {
-	return ""
-}
-
-// DevNetGenesis returns the JSON spec to use for the DevNet test network
-func DevNetGenesis() string {
-	enc, err := json.Marshal(core.DefaultDevNetGenesisBlock())
-	if err != nil {
-		panic(err)
-	}
-	return string(enc)
-}
 
 // FoundationBootnodes returns the enode URLs of the P2P bootstrap nodes operated
 // by the foundation running the V5 discovery protocol.

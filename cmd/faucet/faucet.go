@@ -86,7 +86,7 @@ var (
 	twitterTokenFlag   = flag.String("twitter.token", "", "Bearer token to authenticate with the v2 Twitter API")
 	twitterTokenV1Flag = flag.String("twitter.token.v1", "", "Bearer token to authenticate with the v1.1 Twitter API")
 
-	devnetFlag = flag.Bool("devnet", false, "Initializes the faucet with Waterfall test net config")
+	testnet8Flag = flag.Bool("testnet8", false, "Initializes the faucet with Waterfall test net config")
 )
 
 var (
@@ -146,7 +146,7 @@ func main() {
 		log.Crit("Failed to render the faucet template", "err", err)
 	}
 	// Load and parse the genesis block requested by the user
-	genesis, err := getGenesis(genesisFlag, *devnetFlag)
+	genesis, err := getGenesis(genesisFlag, *testnet8Flag)
 	if err != nil {
 		log.Crit("Failed to parse genesis config", "err", err)
 	}
@@ -885,14 +885,14 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 }
 
 // getGenesis returns a genesis based on input args
-func getGenesis(genesisFlag *string, devnetFlag bool) (*core.Genesis, error) {
+func getGenesis(genesisFlag *string, testnet8Flag bool) (*core.Genesis, error) {
 	switch {
 	case genesisFlag != nil:
 		var genesis core.Genesis
 		err := common.LoadJSON(*genesisFlag, &genesis)
 		return &genesis, err
-	case devnetFlag:
-		return core.DefaultDevNetGenesisBlock(), nil
+	case testnet8Flag:
+		return core.DefaultTestNet8GenesisBlock(), nil
 	default:
 		return nil, fmt.Errorf("no genesis flag provided")
 	}
