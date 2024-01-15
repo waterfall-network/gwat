@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"runtime"
 	"strconv"
@@ -66,7 +65,7 @@ It expects the genesis file as argument.`,
 		ArgsUsage: "",
 		Flags: []cli.Flag{
 			utils.MainnetFlag,
-			utils.DevNetFlag,
+			utils.TestNet8Flag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -185,47 +184,13 @@ func initGenesis(ctx *cli.Context) error {
 	if len(genesisPath) == 0 {
 		utils.Fatalf("Must supply path to genesis JSON file")
 	}
-
-	file, err := os.Open(genesisPath)
-	if err != nil {
-		utils.Fatalf("Failed to read genesis file: %v", err)
-	}
-	defer file.Close()
-
-	genesis := new(core.Genesis)
-	if err = json.NewDecoder(file).Decode(genesis); err != nil {
-		utils.Fatalf("invalid genesis file: %v", err)
-	}
-
 	depositDataPath := ctx.Args().Get(1)
 	if len(depositDataPath) == 0 {
 		utils.Fatalf("Must supply path to deposit data JSON file")
 	}
-	depositDataFile, err := os.Open(depositDataPath)
+	genesis, err := core.ReadGenesisDataFiles(genesisPath, depositDataPath)
 	if err != nil {
-		utils.Fatalf("Failed to open genesis file: %v", err)
-	}
-	defer depositDataFile.Close()
-
-	buf, err := io.ReadAll(depositDataFile)
-	if err != nil {
-		utils.Fatalf("Failed to read from depositData file: %v", err)
-	}
-
-	depositData := make(core.DepositData, 0)
-	err = json.Unmarshal(buf, &depositData)
-	if err != nil {
-		utils.Fatalf("Failed to unmarshal depositData file: %v", err)
-	}
-
-	if len(depositData) == 0 {
-		utils.Fatalf("invalid deposit data file: no validators")
-	}
-
-	genesis.Validators = depositData
-
-	if err = genesis.Config.Validate(); err != nil {
-		utils.Fatalf("invalid config: %s", err.Error())
+		utils.Fatalf("Failed to read depositData files: %v", err)
 	}
 
 	// Open and initialise both full and light databases

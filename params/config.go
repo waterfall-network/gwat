@@ -29,23 +29,23 @@ import (
 // Genesis hashes to enforce below configs on.
 var (
 	MainnetGenesisHash = common.HexToHash("0x2d5a825666a4b49059a39c608e5fa1f4949b46ab7793853fc58307a54857743e")
-	// DevNetGenesisHash  waterfall test net
-	DevNetGenesisHash = common.HexToHash("0x733a3d6e8e0800197423933a03593b235d8a7af19049782af792775c378f25f1")
+	// Testnet8GenesisHash  waterfall test net
+	Testnet8GenesisHash = common.HexToHash("0xa7531d17d43684576b864662852e3cbb2dc20df7cdb9fc5405d5a0a253f623eb")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
 var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
-	MainnetGenesisHash: MainnetTrustedCheckpoint,
-	DevNetGenesisHash:  DevNetTrustedCheckpoint,
+	MainnetGenesisHash:  MainnetTrustedCheckpoint,
+	Testnet8GenesisHash: TestNet8TrustedCheckpoint,
 }
 
-// CheckpointOracles associates each known checkpoint oracles with the genesis hash of
-// the chain it belongs to.
-var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
-	MainnetGenesisHash: MainnetCheckpointOracle,
-	DevNetGenesisHash:  DevNetCheckpointOracle,
-}
+//// CheckpointOracles associates each known checkpoint oracles with the genesis hash of
+//// the chain it belongs to.
+//var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
+//	MainnetGenesisHash:  MainnetCheckpointOracle,
+//	Testnet8GenesisHash: Testnet8CheckpointOracle,
+//}
 
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
@@ -83,40 +83,40 @@ var (
 		Threshold: 2,
 	}
 
-	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
-	DevNetChainConfig = &ChainConfig{
-		ChainID:                big.NewInt(333777555),
+	// Testnet8ChainConfig contains the chain parameters to run a node on the Testnet8.
+	Testnet8ChainConfig = &ChainConfig{
+		ChainID:                big.NewInt(8601152),
 		SecondsPerSlot:         4,
 		SlotsPerEpoch:          32,
-		EpochsPerEra:           8,
+		EpochsPerEra:           16,
 		TransitionPeriod:       2,
 		ValidatorsStateAddress: nil,
-		ValidatorsPerSlot:      6,
+		ValidatorsPerSlot:      5,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       math.MaxUint64,
 	}
 
-	// DevNetTrustedCheckpoint contains the light client trusted checkpoint for the DevNet.
-	DevNetTrustedCheckpoint = &TrustedCheckpoint{
+	// TestNet8TrustedCheckpoint contains the light client trusted checkpoint for the Testnet8.
+	TestNet8TrustedCheckpoint = &TrustedCheckpoint{
 		//SectionIndex: 329,
 		//SectionHead:  common.HexToHash("0xe66f7038333a01fb95dc9ea03e5a2bdaf4b833cdcb9e393b9127e013bd64d39b"),
 		//CHTRoot:      common.HexToHash("0x1b0c883338ac0d032122800c155a2e73105fbfebfaa50436893282bc2d9feec5"),
 		//BloomRoot:    common.HexToHash("0x3cc98c88d283bf002378246f22c653007655cbcea6ed89f98d739f73bd341a01"),
 	}
 
-	// DevNetCheckpointOracle contains a set of configs for the DevNet oracle.
-	DevNetCheckpointOracle = &CheckpointOracleConfig{
-		//Address: common.HexToAddress("0xEF79475013f154E6A65b54cB2742867791bf0B84"),
-		//Signers: []common.Address{
-		//	common.HexToAddress("0x32162F3581E88a5f62e8A61892B42C46E2c18f7b"), // Peter
-		//	common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-		//	common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-		//	common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-		//	common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		//},
-		//Threshold: 2,
-	}
+	//// Testnet8CheckpointOracle contains a set of configs for the Testnet8 oracle.
+	//Testnet8CheckpointOracle = &CheckpointOracleConfig{
+	//	//Address: common.HexToAddress("0xEF79475013f154E6A65b54cB2742867791bf0B84"),
+	//	//Signers: []common.Address{
+	//	//	common.HexToAddress("0x32162F3581E88a5f62e8A61892B42C46E2c18f7b"), // Peter
+	//	//	common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
+	//	//	common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
+	//	//	common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
+	//	//	common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
+	//	//},
+	//	//Threshold: 2,
+	//}
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.

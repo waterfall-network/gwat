@@ -24,10 +24,10 @@ var MainnetBootnodes = []string{
 	//"enode://5d6d7cd20d6da4bb83a1d28cadb5d409b64edf314c0335df658c1a54e32c7c4a7ab7823d57c39b6a757556e68ff1df17c748b698544a55cb488b52479a92b60f@104.42.217.25:30303",   // bootnode-azure-westus-001
 }
 
-// DevNetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// DevNet test network.
-var DevNetBootnodes = []string{
-	"enode://7cd46e957aa7c7c2214f316af1e483ed269e6862f9211c35d1126c2f24d004d3a078f2f9f2cdf1453be60820c46797f7350993aa1792918608b1b1636ed42226@boot3.waterfall.network:30301",
+// Testnet8Bootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// testnet8 test network.
+var Testnet8Bootnodes = []string{
+	"enode://716898aedc2337bc1f8c2a936f4b1080e5c4794ba55b31d4cf5898d02dd036150debb742f9929f6f6a7030afaf324604fda57702769ad05bdcce526b3b12cbf1@128.140.45.145:30301",
 }
 
 var V5Bootnodes = []string{
@@ -58,8 +58,8 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 	//switch genesis {
 	//case MainnetGenesisHash:
 	//	net = "mainnet"
-	//case DevNetGenesisHash:
-	//	net = "devnet"
+	//case Testnet8GenesisHash:
+	//	net = "testnet8"
 	//default:
 	//	return ""
 	//}
