@@ -18,13 +18,12 @@ package core
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
-	"os"
 	"strings"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -46,6 +45,13 @@ import (
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 //go:generate gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
+
+var (
+	//go:embed genesis_json/testnet8/genesis.json
+	testnet8GenesisJson []byte
+	//go:embed genesis_json/testnet8/deposit_data.json
+	testnet8DepositDataJson []byte
+)
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
@@ -452,12 +458,22 @@ func DefaultGenesisBlock() *Genesis {
 
 // DefaultTestNet8GenesisBlock returns the tesnet8 network genesis block.
 func DefaultTestNet8GenesisBlock() *Genesis {
-	genesisJson := "./params/genesis_json/testnet8/genesis.json"
-	depositDataJson := "./params/genesis_json/testnet8/deposit_data.json"
-
-	genesis, err := ReadGenesisDataFiles(genesisJson, depositDataJson)
+	genesis := new(Genesis)
+	err := json.Unmarshal(testnet8GenesisJson, &genesis)
 	if err != nil {
-		log.Crit("Failed to read predefined testnet8 genesis data")
+		log.Crit("Failed to unmarshal testnet8 genesis data", "err", err)
+	}
+	depositData := make(DepositData, 0)
+	err = json.Unmarshal(testnet8DepositDataJson, &depositData)
+	if err != nil {
+		log.Crit("Failed to unmarshal testnet8 deposit data", "err", err)
+	}
+	if len(depositData) == 0 {
+		log.Crit("Empty testnet8 genesis data")
+	}
+	genesis.Validators = depositData
+	if err = genesis.Config.Validate(); err != nil {
+		log.Crit("Invalid testnet8 genesis config", "err", err)
 	}
 	return genesis
 }
@@ -498,49 +514,4 @@ func decodePrealloc(data string) GenesisAlloc {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
 	}
 	return ga
-}
-
-func ReadGenesisDataFiles(genesisJson, depositDataJson string) (*Genesis, error) {
-	file, err := os.Open(genesisJson)
-	if err != nil {
-		log.Error("Failed to open from genesis file", "err", err, "file", genesisJson)
-		return nil, err
-	}
-	defer file.Close()
-
-	genesis := new(Genesis)
-	if err = json.NewDecoder(file).Decode(genesis); err != nil {
-		log.Error("Failed to read from genesis file", "err", err, "file", genesisJson)
-		return nil, err
-	}
-
-	depositDataFile, err := os.Open(depositDataJson)
-	if err != nil {
-		log.Error("Failed to open from depositData file", "err", err, "file", depositDataJson)
-		return nil, err
-	}
-	defer depositDataFile.Close()
-
-	buf, err := io.ReadAll(depositDataFile)
-	if err != nil {
-		log.Error("Failed to read from depositData file", "err", err, "file", depositDataJson)
-		return nil, err
-	}
-	depositData := make(DepositData, 0)
-	err = json.Unmarshal(buf, &depositData)
-	if err != nil {
-		log.Error("Failed to parse from depositData file", "err", err, "file", depositDataJson)
-		return nil, err
-	}
-	if len(depositData) == 0 {
-		err = fmt.Errorf("invalid deposit data file: no validators")
-		log.Error("Bad deposit data", "err", err, "file", depositDataJson)
-		return nil, err
-	}
-	genesis.Validators = depositData
-	if err = genesis.Config.Validate(); err != nil {
-		log.Error("Invalid genesis config", "err", err)
-		return nil, err
-	}
-	return genesis, nil
 }
