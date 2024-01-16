@@ -217,9 +217,9 @@ var (
 		Usage: "Megabytes of memory allocated to bloom-filter for pruning",
 		Value: 2048,
 	}
-	OverrideLondonFlag = cli.Uint64Flag{
-		Name:  "override.london",
-		Usage: "Manually specify London fork-block, overriding the bundled setting",
+	OverrideDelegatingStakeFlag = cli.Uint64Flag{
+		Name:  "delegating-stake-fork-slot",
+		Usage: "Manually specify delegating stake fork-slot, overriding the bundled setting",
 	}
 	// Light server and client settings
 	LightServeFlag = cli.IntFlag{
