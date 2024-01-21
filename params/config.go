@@ -273,7 +273,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}
 	var lastFork fork
 	for _, cur := range []fork{
-		//{name: "berlinBlock", block: c.BerlinBlock},
+		{name: "forkSlotDelegate", block: new(big.Int).SetUint64(c.ForkSlotDelegate)},
 		//{name: "londonBlock", block: c.LondonBlock},
 	} {
 		if lastFork.name != "" {

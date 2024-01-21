@@ -74,6 +74,7 @@ func CreateValidatorSyncTx(
 		"Balance", valSyncOp.Balance.String(),
 		"Index", valSyncOp.Index,
 		"InitTxHash", valSyncOp.InitTxHash.Hex(),
+		"from", from.Hex(),
 	)
 
 	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress, opVer)
@@ -204,6 +205,11 @@ func GetPendingValidatorSyncData(bc *core.BlockChain) map[common.Hash]*types.Val
 		}
 		if vs.ProcEpoch == currEpoch {
 			vsPending[k] = vs
+		} else if bc.Config().IsForkSlotDelegate(si.CurrentSlot()) {
+			if vs.ProcEpoch < currEpoch {
+				vs.ProcEpoch = currEpoch
+				vsPending[k] = vs
+			}
 		}
 	}
 	return vsPending
