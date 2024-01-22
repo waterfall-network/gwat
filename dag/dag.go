@@ -111,7 +111,6 @@ type Dag struct {
 
 	exitChan chan struct{}
 	enddChan chan struct{}
-	errChan  chan error
 
 	checkpoint *types.Checkpoint
 }
@@ -127,7 +126,6 @@ func New(eth Backend, mux *event.TypeMux, creatorConfig *creator.Config) *Dag {
 		finalizer:  fin,
 		exitChan:   make(chan struct{}),
 		enddChan:   make(chan struct{}),
-		errChan:    make(chan error),
 	}
 	return d
 }
@@ -593,7 +591,6 @@ func (d *Dag) exitProcedurre() {
 	d.bc.DagMuLock()
 	d.bc.DagMuUnlock()
 	close(d.exitChan)
-	close(d.errChan)
 	d.enddChan <- struct{}{}
 }
 
@@ -607,12 +604,6 @@ func (d *Dag) workLoop() {
 		case <-d.exitChan:
 			slotTicker.Done()
 			d.exitProcedurre()
-			return
-		case err := <-d.errChan:
-			close(d.errChan)
-			close(d.exitChan)
-			slotTicker.Done()
-			log.Error("Dag worker stopped with error", "error", err)
 			return
 		case slot := <-slotTicker.C():
 			if slot == 0 {
@@ -661,7 +652,8 @@ func (d *Dag) workLoop() {
 
 			slotCreators, err = d.bc.ValidatorStorage().GetCreatorsBySlot(d.bc, slot)
 			if err != nil {
-				d.errChan <- err
+				log.Error("Create block: get creators failed", "slot", slot, "error", err)
+				continue
 			}
 
 			go d.work(slot, slotCreators)
