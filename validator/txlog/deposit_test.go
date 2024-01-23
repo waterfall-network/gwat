@@ -38,10 +38,10 @@ func TestPackDepositLogData(t *testing.T) {
 }
 
 func TestUnpackDepositLogData(t *testing.T) {
-	pkey, creator, withdrowalAddr, depositAmount, signature, depositIndex, err := UnpackDepositLogData(testDepositLogData)
+	pkey, creator, withdrawalAddr, depositAmount, signature, depositIndex, err := UnpackDepositLogData(testDepositLogData)
 	testutils.AssertEqual(t, testPubkey, pkey)
 	testutils.AssertEqual(t, testCreatorAddress, creator)
-	testutils.AssertEqual(t, testWithdrawal, withdrowalAddr)
+	testutils.AssertEqual(t, testWithdrawal, withdrawalAddr)
 	testutils.BigIntEquals(testAmount, big.NewInt(int64(depositAmount)))
 	testutils.AssertEqual(t, testSign, signature)
 	testutils.AssertEqual(t, testIndex, depositIndex)
