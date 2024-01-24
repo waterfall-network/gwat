@@ -2,6 +2,7 @@ package txlog
 
 import (
 	"fmt"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
@@ -73,7 +74,7 @@ func getTopicName(topic common.Hash) string {
 	return topic.Hex()
 }
 
-func LogToParsedLog(log *types.Log) (*types.ParsedLog, error) {
+func LogToParsedLog(log *types.Log) *types.ParsedLog {
 	parsed := log.ToParsedLog()
 
 	// set parsed topics
@@ -95,7 +96,7 @@ func LogToParsedLog(log *types.Log) (*types.ParsedLog, error) {
 		pkey, creator, withdrawalAddr, depositAmount, signature, depositIndex, err := UnpackDepositLogData(log.Data)
 		if err != nil {
 			parsed.ParsedData = parsedDataFailed{
-				Error: fmt.Sprintf("log data parcing error='%w' topic=%s", err, getTopicName(topicOp)),
+				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
 		}
 		parsed.ParsedData = parsedDeposit{
@@ -110,7 +111,7 @@ func LogToParsedLog(log *types.Log) (*types.ParsedLog, error) {
 		pKey, creator, valIndex, exitAfter, err := UnpackExitRequestLogData(log.Data)
 		if err != nil {
 			parsed.ParsedData = parsedDataFailed{
-				Error: fmt.Sprintf("log data parcing error='%w' topic=%s", err, getTopicName(topicOp)),
+				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
 		}
 
@@ -124,7 +125,7 @@ func LogToParsedLog(log *types.Log) (*types.ParsedLog, error) {
 		pKey, creator, valIndex, gwAmt, err := UnpackWithdrawalLogData(log.Data)
 		if err != nil {
 			parsed.ParsedData = parsedDataFailed{
-				Error: fmt.Sprintf("log data parcing error='%w' topic=%s", err, getTopicName(topicOp)),
+				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
 		}
 		parsed.ParsedData = parsedWithdrawal{
@@ -137,7 +138,7 @@ func LogToParsedLog(log *types.Log) (*types.ParsedLog, error) {
 		initTx, creator, proc, vix, err := UnpackActivateLogData(log.Data)
 		if err != nil {
 			parsed.ParsedData = parsedDataFailed{
-				Error: fmt.Sprintf("log data parcing error='%w' topic=%s", err, getTopicName(topicOp)),
+				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
 		}
 		parsed.ParsedData = parsedDeActivate{
@@ -150,7 +151,7 @@ func LogToParsedLog(log *types.Log) (*types.ParsedLog, error) {
 		initTx, creator, proc, amt, err := UnpackUpdateBalanceLogData(log.Data)
 		if err != nil {
 			parsed.ParsedData = parsedDataFailed{
-				Error: fmt.Sprintf("log data parcing error='%w' topic=%s", err, getTopicName(topicOp)),
+				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
 		}
 		parsed.ParsedData = parsedUpdateBalance{
@@ -163,11 +164,11 @@ func LogToParsedLog(log *types.Log) (*types.ParsedLog, error) {
 		amtSharing, err := UnpackDelegatingStakeLogData(log.Data)
 		if err != nil {
 			parsed.ParsedData = parsedDataFailed{
-				Error: fmt.Sprintf("log data parcing error='%w' topic=%s", err, getTopicName(topicOp)),
+				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
 		}
 		if amtSharing == nil {
-			return nil, nil
+			return nil
 		}
 		delegatingData := make([]parsedSharing, len(*amtSharing))
 		for i, v := range *amtSharing {
@@ -193,5 +194,5 @@ func LogToParsedLog(log *types.Log) (*types.ParsedLog, error) {
 			Error: fmt.Sprintf("log data parcing error='unknown operation of topick=%#x'", log.Topics[0]),
 		}
 	}
-	return parsed, nil
+	return parsed
 }

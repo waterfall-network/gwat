@@ -298,7 +298,6 @@ func (s *PublicValidatorAPI) Validator_GetInfo(ctx context.Context, address comm
 
 // Validator_GetTransactionReceipt returns the transaction receipt of the validator op with parsed data.
 func (s *PublicValidatorAPI) Validator_GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-
 	tx, blockHash, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
 		return nil, nil
@@ -356,7 +355,7 @@ func (s *PublicValidatorAPI) Validator_GetTransactionReceipt(ctx context.Context
 	} else {
 		parsedLogs := make([]*types.ParsedLog, len(receipt.Logs))
 		for i, log := range receipt.Logs {
-			parsedLogs[i], err = txlog.LogToParsedLog(log)
+			parsedLogs[i] = txlog.LogToParsedLog(log)
 		}
 		fields["logs"] = parsedLogs
 	}
