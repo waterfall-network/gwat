@@ -46,21 +46,20 @@ type parsedWithdrawal struct {
 }
 
 type parsedDeActivate struct {
-	InitTxHash     string `json:"publicKey"`
+	InitTxHash     string `json:"initTxHash"`
 	CreatorAddr    string `json:"creatorAddr"`
 	ProcEpoch      uint64 `json:"procEpoch"`
 	ValidatorIndex uint64 `json:"validatorIndex"`
 }
 
 type parsedUpdateBalance struct {
-	InitTxHash     string `json:"publicKey"`
-	CreatorAddr    string `json:"creatorAddr"`
-	ProcEpoch      uint64 `json:"procEpoch"`
-	ValidatorIndex uint64 `json:"validatorIndex"`
-	Amount         string `json:"amount"`
+	InitTxHash  string `json:"initTxHash"`
+	CreatorAddr string `json:"creatorAddr"`
+	ProcEpoch   uint64 `json:"procEpoch"`
+	Amount      string `json:"amount"`
 }
 
-type parsedSharing struct {
+type parsedDelegatingItm struct {
 	Address  string `json:"address"`
 	RuleType string `json:"ruleType"`
 	IsTrial  bool   `json:"isTrial"`
@@ -98,6 +97,7 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 			parsed.ParsedData = parsedDataFailed{
 				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
+			break
 		}
 		parsed.ParsedData = parsedDeposit{
 			PublicKey:      pkey.Hex(),
@@ -113,8 +113,8 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 			parsed.ParsedData = parsedDataFailed{
 				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
+			break
 		}
-
 		parsed.ParsedData = parsedExit{
 			PublicKey:      pKey.Hex(),
 			CreatorAddr:    creator.Hex(),
@@ -127,6 +127,7 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 			parsed.ParsedData = parsedDataFailed{
 				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
+			break
 		}
 		parsed.ParsedData = parsedWithdrawal{
 			PublicKey:      pKey.Hex(),
@@ -140,6 +141,7 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 			parsed.ParsedData = parsedDataFailed{
 				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
+			break
 		}
 		parsed.ParsedData = parsedDeActivate{
 			InitTxHash:     initTx.Hex(),
@@ -153,6 +155,7 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 			parsed.ParsedData = parsedDataFailed{
 				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
+			break
 		}
 		parsed.ParsedData = parsedUpdateBalance{
 			InitTxHash:  initTx.Hex(),
@@ -166,11 +169,12 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 			parsed.ParsedData = parsedDataFailed{
 				Error: fmt.Sprintf("log data parcing error='%s' topic=%s", err.Error(), getTopicName(topicOp)),
 			}
+			break
 		}
 		if amtSharing == nil {
 			return nil
 		}
-		delegatingData := make([]parsedSharing, len(*amtSharing))
+		delegatingData := make([]parsedDelegatingItm, len(*amtSharing))
 		for i, v := range *amtSharing {
 			var shareType string
 			switch v.RuleType {
@@ -181,7 +185,7 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 			default:
 				shareType = fmt.Sprintf("unknown type (%d)", v.RuleType)
 			}
-			delegatingData[i] = parsedSharing{
+			delegatingData[i] = parsedDelegatingItm{
 				Address:  v.Address.Hex(),
 				RuleType: shareType,
 				IsTrial:  v.IsTrial,
