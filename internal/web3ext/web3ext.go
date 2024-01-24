@@ -1148,6 +1148,12 @@ web3._extend({
 			name: 'validator.depositAddress',
 			call: 'wat_validator_DepositAddress',
 		}),
+		new web3._extend.Method({
+			name: 'validator.getTransactionReceipt',
+			call: 'wat_validator_GetTransactionReceipt',
+			params: 1,
+			outputFormatter: web3._extend.formatters.outputTransactionReceiptFormatter
+		}),
 	]
 });
 `

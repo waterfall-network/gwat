@@ -141,3 +141,35 @@ func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
 	}
 	return err
 }
+
+// ParsedLog represents transaction receipt log with parsed data.
+type ParsedLog struct {
+	Address     common.Address `json:"address"`
+	Topics      []common.Hash  `json:"topics"`
+	Data        hexutil.Bytes  `json:"data"`
+	BlockNumber uint64         `json:"blockNumber"`
+	TxHash      common.Hash    `json:"transactionHash"`
+	TxIndex     uint           `json:"transactionIndex"`
+	BlockHash   common.Hash    `json:"blockHash"`
+	Index       uint           `json:"logIndex"`
+	Removed     bool           `json:"removed"`
+	//fields for parsed data
+	ParsedData   interface{} `json:"parsedData"`
+	ParsedTopics []string    `json:"parsedTopics"`
+}
+
+func (l *Log) ToParsedLog() *ParsedLog {
+	return &ParsedLog{
+		Address:      l.Address,
+		Topics:       l.Topics,
+		Data:         l.Data,
+		BlockNumber:  l.BlockNumber,
+		TxHash:       l.TxHash,
+		TxIndex:      l.TxIndex,
+		BlockHash:    l.BlockHash,
+		Index:        l.Index,
+		Removed:      l.Removed,
+		ParsedData:   nil,
+		ParsedTopics: nil,
+	}
+}
