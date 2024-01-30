@@ -399,8 +399,6 @@ func (c *testChain) State() (*state.StateDB, error) {
 // state reset and tests whether the pending state is in sync with the
 // block head event that initiated the resetState().
 func TestStateChangeDuringTransactionPoolReset(t *testing.T) {
-	t.Parallel()
-
 	var (
 		key, _     = crypto.GenerateKey()
 		address    = crypto.PubkeyToAddress(key.PublicKey)
@@ -458,8 +456,6 @@ func testSetNonce(pool *TxPool, addr common.Address, nonce uint64) {
 }
 
 func TestInvalidTransactions(t *testing.T) {
-	t.Parallel()
-
 	pool, key := setupTxPool()
 	defer pool.Stop()
 
@@ -496,8 +492,6 @@ func TestInvalidTransactions(t *testing.T) {
 }
 
 func TestTransactionQueue(t *testing.T) {
-	t.Parallel()
-
 	pool, key := setupTxPool()
 	defer pool.Stop()
 
@@ -531,7 +525,6 @@ func TestTransactionQueue(t *testing.T) {
 }
 
 func TestTransactionQueue2(t *testing.T) {
-	t.Parallel()
 
 	pool, key := setupTxPool()
 	defer pool.Stop()
@@ -557,7 +550,6 @@ func TestTransactionQueue2(t *testing.T) {
 }
 
 func TestTransactionNegativeValue(t *testing.T) {
-	t.Parallel()
 
 	pool, key := setupTxPool()
 	defer pool.Stop()
@@ -571,7 +563,6 @@ func TestTransactionNegativeValue(t *testing.T) {
 }
 
 func TestTransactionTipAboveFeeCap(t *testing.T) {
-	t.Parallel()
 
 	pool, key := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
@@ -584,7 +575,6 @@ func TestTransactionTipAboveFeeCap(t *testing.T) {
 }
 
 func TestTransactionVeryHighValues(t *testing.T) {
-	t.Parallel()
 
 	pool, key := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
@@ -604,7 +594,6 @@ func TestTransactionVeryHighValues(t *testing.T) {
 }
 
 func TestTransactionChainFork(t *testing.T) {
-	t.Parallel()
 
 	pool, key := setupTxPool()
 	defer pool.Stop()
@@ -634,7 +623,6 @@ func TestTransactionChainFork(t *testing.T) {
 }
 
 func TestTransactionDoubleNonce(t *testing.T) {
-	t.Parallel()
 
 	pool, key := setupTxPool()
 	defer pool.Stop()
@@ -689,7 +677,6 @@ func TestTransactionDoubleNonce(t *testing.T) {
 }
 
 func TestTransactionMissingNonce(t *testing.T) {
-	t.Parallel()
 
 	pool, key := setupTxPool()
 	defer pool.Stop()
@@ -713,7 +700,6 @@ func TestTransactionMissingNonce(t *testing.T) {
 }
 
 func TestTransactionNonceRecovery(t *testing.T) {
-	t.Parallel()
 
 	const n = 2
 	pool, key := setupTxPool()
@@ -740,7 +726,6 @@ func TestTransactionNonceRecovery(t *testing.T) {
 // Tests that if an account runs out of funds, any pending and queued transactions
 // are dropped.
 func TestTransactionDropping(t *testing.T) { // TODO TODO TODO delete???
-	t.Parallel()
 
 	// Create a test account and fund it
 	pool, key := setupTxPool()
@@ -847,7 +832,6 @@ func TestTransactionDropping(t *testing.T) { // TODO TODO TODO delete???
 // of fund), all consecutive (still valid, but not executable) transactions are
 // postponed back into the future queue to prevent broadcasting them.
 func TestTransactionPostponing(t *testing.T) {
-	t.Parallel()
 
 	blockchain := defaultTestBC(common.Address{})
 
@@ -920,7 +904,6 @@ func TestTransactionPostponing(t *testing.T) {
 // transactions from an origin account, filling the nonce gap moves all queued
 // ones into the pending pool.
 func TestTransactionGapFilling(t *testing.T) {
-	t.Parallel()
 
 	// Create a test account and fund it
 	pool, key := setupTxPool()
@@ -975,7 +958,6 @@ func TestTransactionGapFilling(t *testing.T) {
 // Tests that if the transaction count belonging to a single account goes above
 // some threshold, the higher transactions are dropped to prevent DOS attacks.
 func TestTransactionQueueAccountLimiting(t *testing.T) {
-	t.Parallel()
 
 	// Create a test account and fund it
 	pool, key := setupTxPool()
@@ -1026,7 +1008,6 @@ func TestTransactionQueueGlobalLimitingNoLocals(t *testing.T) {
 }
 
 func testTransactionQueueGlobalLimiting(t *testing.T, nolocals bool) {
-	t.Parallel()
 
 	// Create the pool to test the limit enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -1262,7 +1243,6 @@ func testTransactionQueueTimeLimiting(t *testing.T, nolocals bool) {
 // above some threshold, as long as the transactions are executable, they are
 // accepted.
 func TestTransactionPendingLimiting(t *testing.T) {
-	t.Parallel()
 
 	// Create a test account and fund it
 	pool, key := setupTxPool()
@@ -1303,7 +1283,6 @@ func TestTransactionPendingLimiting(t *testing.T) {
 // some hard threshold, the higher transactions are dropped to prevent DOS
 // attacks.
 func TestTransactionPendingGlobalLimiting(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the limit enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -1348,7 +1327,6 @@ func TestTransactionPendingGlobalLimiting(t *testing.T) {
 
 // Tests that if transactions start being capped, transactions are also removed from 'all'
 func TestTransactionCapClearsFromAll(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the limit enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -1381,7 +1359,6 @@ func TestTransactionCapClearsFromAll(t *testing.T) {
 // some hard threshold, if they are under the minimum guaranteed slot count then
 // the transactions are still kept.
 func TestTransactionPendingMinimumAllowance(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the limit enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -1428,7 +1405,6 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 //
 // Note, local transactions are never allowed to be dropped.
 func TestTransactionPoolRepricing(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
@@ -1565,7 +1541,6 @@ func TestTransactionPoolRepricing(t *testing.T) {
 //
 // Note, local transactions are never allowed to be dropped.
 func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
 	pool, _ := setupTxPoolWithConfig(params.TestChainConfig)
@@ -1694,7 +1669,6 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 // Tests that setting the transaction pool gas price to a higher value does not
 // remove local transactions (legacy & dynamic fee).
 func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -1767,7 +1741,6 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 //
 // Note, local transactions are never allowed to be dropped.
 func TestTransactionPoolUnderpricing(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -1873,7 +1846,6 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 // without producing instability by creating gaps that start jumping transactions
 // back and forth between queued/pending.
 func TestTransactionPoolStableUnderpricing(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -1942,7 +1914,6 @@ func TestTransactionPoolStableUnderpricing(t *testing.T) {
 //
 // Note, local transactions are never allowed to be dropped.
 func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
-	t.Parallel()
 
 	pool, _ := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
@@ -2050,7 +2021,6 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 // Tests whether highest fee cap transaction is retained after a batch of high effective
 // tip transactions are added and vice versa
 func TestDualHeapEviction(t *testing.T) {
-	t.Parallel()
 
 	pool, _ := setupTxPoolWithConfig(eip1559Config)
 	defer pool.Stop()
@@ -2107,7 +2077,6 @@ func TestDualHeapEviction(t *testing.T) {
 
 // Tests that the pool rejects duplicate transactions.
 func TestTransactionDeduplication(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -2173,7 +2142,6 @@ func TestTransactionDeduplication(t *testing.T) {
 // Tests that the pool rejects replacement transactions that don't meet the minimum
 // price bump required.
 func TestTransactionReplacement(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
 	blockchain := defaultTestBC(common.Address{})
@@ -2252,7 +2220,6 @@ func TestTransactionReplacement(t *testing.T) {
 // Tests that the pool rejects replacement dynamic fee transactions that don't
 // meet the minimum price bump required.
 func TestTransactionReplacementDynamicFee(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
 	pool, key := setupTxPoolWithConfig(eip1559Config)
@@ -2365,7 +2332,6 @@ func TestTransactionJournaling(t *testing.T)         { testTransactionJournaling
 func TestTransactionJournalingNoLocals(t *testing.T) { testTransactionJournaling(t, true) }
 
 func testTransactionJournaling(t *testing.T, nolocals bool) {
-	t.Parallel()
 
 	// Create a temporary file for the journal
 	file, err := os.CreateTemp("", "")
@@ -2476,7 +2442,6 @@ func testTransactionJournaling(t *testing.T, nolocals bool) {
 // TestTransactionStatusCheck tests that the pool can correctly retrieve the
 // pending status of individual transactions.
 func TestTransactionStatusCheck(t *testing.T) {
-	t.Parallel()
 
 	// Create the pool to test the status retrievals with
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
@@ -2532,7 +2497,6 @@ func TestTransactionStatusCheck(t *testing.T) {
 
 // Test the transaction slots consumption is computed correctly
 func TestTransactionSlotCount(t *testing.T) {
-	t.Parallel()
 
 	key, _ := crypto.GenerateKey()
 
@@ -2549,7 +2513,7 @@ func TestTransactionSlotCount(t *testing.T) {
 }
 
 func TestAddToProcessing(t *testing.T) {
-	t.Parallel()
+
 	key, _ := crypto.GenerateKey()
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	bc := defaultTestBC1(statedb)
@@ -2569,7 +2533,7 @@ func TestAddToProcessing(t *testing.T) {
 }
 
 func TestMoveToProcessing(t *testing.T) {
-	t.Parallel()
+
 	key, _ := crypto.GenerateKey()
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	bc := defaultTestBC1(statedb)
@@ -2607,7 +2571,7 @@ func TestMoveToProcessing(t *testing.T) {
 }
 
 func TestMoveToProcessingFromQueue(t *testing.T) {
-	t.Parallel()
+
 	key, _ := crypto.GenerateKey()
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	bc := defaultTestBC1(statedb)
@@ -2670,7 +2634,7 @@ func TestMoveToProcessingFromQueue(t *testing.T) {
 }
 
 func TestAddGapTx(t *testing.T) {
-	t.Parallel()
+
 	key, _ := crypto.GenerateKey()
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	bc := defaultTestBC1(statedb)
@@ -2735,14 +2699,13 @@ func TestAddGapTx(t *testing.T) {
 
 }
 func TestRemoveHighNonceTx(t *testing.T) {
-	t.Parallel()
 	key, _ := crypto.GenerateKey()
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	bc := defaultTestBC1(statedb)
 
 	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, bc)
 	defer pool.Stop()
-	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
+	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000000))
 
 	txs := types.Transactions{
 		transaction(0, 21000, key),
@@ -2765,7 +2728,7 @@ func TestRemoveHighNonceTx(t *testing.T) {
 	pool.mu.RUnlock()
 
 	pool.mu.Lock()
-	//pool.removeProcessedTx(txs[4])
+	pool.removeProcessedTx(txs[4])
 	pool.mu.Unlock()
 
 	pool.mu.RLock()
@@ -2778,7 +2741,6 @@ func TestRemoveHighNonceTx(t *testing.T) {
 }
 
 func TestRemoveTxFromQueue(t *testing.T) {
-	t.Parallel()
 	key, _ := crypto.GenerateKey()
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	bc := defaultTestBC1(statedb)
@@ -2849,7 +2811,6 @@ func TestRemoveTxFromQueue(t *testing.T) {
 
 }
 func TestRemoveTxFromProcessing(t *testing.T) {
-	t.Parallel()
 	key, _ := crypto.GenerateKey()
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	bc := defaultTestBC1(statedb)

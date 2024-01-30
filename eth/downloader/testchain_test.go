@@ -19,7 +19,6 @@ package downloader
 import (
 	"fmt"
 	"math/big"
-	"sync"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
@@ -34,24 +33,35 @@ var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 	testDB      = rawdb.NewMemoryDatabase()
-	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000000000))
 )
 
 // The common prefix of all test chains:
-var testChainBase = newTestChain(blockCacheMaxItems+200, testGenesis)
 
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
 
-func init() {
-	var forkLen = int(fullMaxForkAncestry + 50)
-	var wg sync.WaitGroup
-	wg.Add(3)
-	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
-	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
-	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
-	wg.Wait()
-}
+//func init() {
+//	depositData := make(core.DepositData, 0)
+//	for i := 0; i < 64; i++ {
+//		valData := &core.ValidatorData{
+//			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+//			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+//			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+//			Amount:            3200,
+//		}
+//
+//		depositData = append(depositData, valData)
+//	}
+//	testGenesis := core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000000000), depositData)
+//	var testChainBase = newTestChain(blockCacheMaxItems+200, testGenesis)
+//	var forkLen = int(10 + 50)
+//	var wg sync.WaitGroup
+//	wg.Add(3)
+//	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
+//	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
+//	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
+//	wg.Wait()
+//}
 
 type testChain struct {
 	genesis  *types.Block

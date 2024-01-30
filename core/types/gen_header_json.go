@@ -165,7 +165,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	h.CpNumber = uint64(*dec.CpNumber)
 	if dec.CpBaseFee == nil {
-		return errors.New("missing required field 'lfBaseFeePerGas' for Header")
+		return errors.New("missing required field 'CpBaseFee' for Header")
 	}
 	h.CpBaseFee = (*big.Int)(dec.CpBaseFee)
 	if dec.CpRoot == nil {

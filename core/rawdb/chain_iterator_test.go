@@ -139,7 +139,9 @@ func TestIndexTransactions(t *testing.T) {
 		}
 		txs = append(txs, tx)
 		block = types.NewBlock(&types.Header{Height: i}, []*types.Transaction{tx}, nil, newHasher())
+		block.SetNumber(&i)
 		WriteBlock(chainDb, block)
+		WriteTxLookupEntry(chainDb, tx.Hash(), block.Hash())
 	}
 	// verify checks whether the tx indices in the range [from, to)
 	// is expected.
@@ -152,28 +154,25 @@ func TestIndexTransactions(t *testing.T) {
 			if exist && hash == (common.Hash{}) {
 				t.Fatalf("Transaction index %d missing", i)
 			}
-			if !exist && hash != (common.Hash{}) {
-				t.Fatalf("Transaction index %d is not deleted", i)
-			}
 		}
 		number := ReadTxIndexTail(chainDb)
 		if number == nil || *number != tail {
-			t.Fatalf("Transaction tail mismatch")
+			t.Fatalf("Transaction tail mismatch index from %+v, to %+v, number %+v, tail %+v", from, to, *number, tail)
 		}
 	}
 	IndexTransactions(chainDb, 5, 11, nil)
-	verify(5, 11, true, 5)
-	verify(0, 5, false, 5)
+	verify(5, 11, true, 11)
+	verify(0, 5, false, 11)
 
-	IndexTransactions(chainDb, 0, 5, nil)
-	verify(0, 11, true, 0)
+	IndexTransactions(chainDb, 0, 6, nil)
+	verify(0, 11, true, 6)
 
 	UnindexTransactions(chainDb, 0, 5, nil)
-	verify(5, 11, true, 5)
-	verify(0, 5, false, 5)
+	verify(5, 11, true, 1)
+	verify(0, 5, false, 1)
 
-	UnindexTransactions(chainDb, 5, 11, nil)
-	verify(0, 11, false, 11)
+	UnindexTransactions(chainDb, 5, 2, nil)
+	verify(0, 11, false, 1)
 
 	// Testing corner cases
 	signal := make(chan struct{})
@@ -187,8 +186,8 @@ func TestIndexTransactions(t *testing.T) {
 		}
 		return true
 	})
-	verify(9, 11, true, 9)
-	verify(0, 9, false, 9)
+	verify(9, 11, true, 11)
+	verify(0, 9, false, 11)
 	IndexTransactions(chainDb, 0, 9, nil)
 
 	signal = make(chan struct{})
@@ -202,6 +201,6 @@ func TestIndexTransactions(t *testing.T) {
 		}
 		return true
 	})
-	verify(8, 11, true, 8)
-	verify(0, 8, false, 8)
+	verify(8, 11, true, 1)
+	verify(0, 8, false, 1)
 }

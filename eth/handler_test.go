@@ -31,6 +31,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 var (
@@ -131,9 +132,21 @@ func newTestHandler() *testHandler {
 func newTestHandlerWithBlocks(blocks int) *testHandler {
 	// Create a database pre-initialize with a genesis block
 	db := rawdb.NewMemoryDatabase()
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
 	(&core.Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
+		Config:     params.TestChainConfig,
+		Alloc:      core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
+		Validators: depositData,
 	}).MustCommit(db)
 
 	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, vm.Config{}, nil)

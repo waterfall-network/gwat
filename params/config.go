@@ -28,9 +28,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0x2d5a825666a4b49059a39c608e5fa1f4949b46ab7793853fc58307a54857743e")
+	MainnetGenesisHash = common.HexToHash("0xb360cce2d47800fb923619ed007ad786365ab59abc167e9f90744f9dea5db79f")
 	// DevNetGenesisHash  waterfall test net
-	DevNetGenesisHash = common.HexToHash("0x733a3d6e8e0800197423933a03593b235d8a7af19049782af792775c378f25f1")
+	DevNetGenesisHash = common.HexToHash("0xe334848a02d7eb7b14753df833e312976e3a819e5078ea1e1cafef5ea9a99326")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -126,7 +126,7 @@ var (
 	// adding flags to the config to also have to set these fields.
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
+	TestChainConfig = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
 	TestRules       = TestChainConfig.Rules()
 )
 

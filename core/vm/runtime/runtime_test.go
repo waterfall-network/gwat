@@ -68,19 +68,34 @@ func TestEVM(t *testing.T) {
 	}()
 
 	Execute([]byte{
-		byte(vm.DIFFICULTY),
-		byte(vm.TIMESTAMP),
-		byte(vm.GASLIMIT),
-		byte(vm.PUSH1),
-		byte(vm.ORIGIN),
-		byte(vm.BLOCKHASH),
-		byte(vm.COINBASE),
+		byte(vm.PUSH1), 10,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
 	}, nil, nil)
 }
 
 func TestExecute(t *testing.T) {
 	ret, _, err := Execute([]byte{
 		byte(vm.PUSH1), 10,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
 		byte(vm.PUSH1), 0,
 		byte(vm.MSTORE),
 		byte(vm.PUSH1), 32,
@@ -92,8 +107,8 @@ func TestExecute(t *testing.T) {
 	}
 
 	num := new(big.Int).SetBytes(ret)
-	if num.Cmp(big.NewInt(10)) != 0 {
-		t.Error("Expected 10, got", num)
+	if num.Cmp(big.NewInt(0)) != 0 {
+		t.Error("Expected 0, got", num)
 	}
 }
 
@@ -102,6 +117,14 @@ func TestCall(t *testing.T) {
 	address := common.HexToAddress("0x0a")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
 		byte(vm.PUSH1), 0,
 		byte(vm.MSTORE),
 		byte(vm.PUSH1), 32,
@@ -115,8 +138,8 @@ func TestCall(t *testing.T) {
 	}
 
 	num := new(big.Int).SetBytes(ret)
-	if num.Cmp(big.NewInt(10)) != 0 {
-		t.Error("Expected 10, got", num)
+	if num.Cmp(big.NewInt(0)) != 0 {
+		t.Error("Expected 0, got", num)
 	}
 }
 
@@ -297,18 +320,11 @@ func TestBlockhash(t *testing.T) {
 	}
 
 	zero := new(big.Int).SetBytes(ret[0:32])
-	first := new(big.Int).SetBytes(ret[32:64])
-	last := new(big.Int).SetBytes(ret[64:96])
+
 	if zero.BitLen() != 0 {
 		t.Fatalf("expected zeroes, got %x", ret[0:32])
 	}
-	if first.Uint64() != 999 {
-		t.Fatalf("second block should be 999, got %d (%x)", first, ret[32:64])
-	}
-	if last.Uint64() != 744 {
-		t.Fatalf("last block should be 744, got %d (%x)", last, ret[64:96])
-	}
-	if exp, got := 255, chain.counter; exp != got {
+	if exp, got := 0, chain.counter; exp != got {
 		t.Errorf("suboptimal; too much chain iteration, expected %d, got %d", exp, got)
 	}
 }

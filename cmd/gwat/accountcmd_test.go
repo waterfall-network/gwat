@@ -104,7 +104,7 @@ func TestAccountImport(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
+
 			importAccountWithExpect(t, test.key, test.output)
 		})
 	}
@@ -179,18 +179,13 @@ Fatal: could not decrypt key with given password
 }
 
 func TestUnlockFlag(t *testing.T) {
-	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "js", "testdata/empty.js")
-	geth.Expect(`
-Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
-!! Unsupported terminal, password will be echoed.
-Password: {{.InputLine "foobar"}}
-`)
+	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", "testdata/beacon", "--password", "testdata/beacon/password.txt",
+		"--unlock", "6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d")
 	geth.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
-		"=0xf466859eAD1932D743d622CB74FC058882E8648A",
+		"address=0x6E9e76Fa278190CfB2404e5923d3CcD7e8f6C51D",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.StderrText(), m) {
@@ -200,40 +195,34 @@ Password: {{.InputLine "foobar"}}
 }
 
 func TestUnlockFlagWrongPassword(t *testing.T) {
-	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "js", "testdata/empty.js")
+	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", "testdata/beacon", "--password", "testdata/wrong-passwords.txt",
+		"--unlock", "6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d")
 
-	defer geth.ExpectExit()
-	geth.Expect(`
-Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
-!! Unsupported terminal, password will be echoed.
-Password: {{.InputLine "wrong1"}}
-Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 2/3
-Password: {{.InputLine "wrong2"}}
-Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 3/3
-Password: {{.InputLine "wrong3"}}
-Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could not decrypt key with given password)
-`)
+	geth.ExpectExit()
+
+	wantMessages := []string{
+		"Failed to unlock account",
+		"address=6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d error=\"could not decrypt key with given password\"",
+	}
+	for _, m := range wantMessages {
+		if !strings.Contains(geth.StderrText(), m) {
+			t.Errorf("stderr text does not contain %q", m)
+		}
+	}
 }
 
 // https://github.com/ethereum/go-ethereum/issues/1785
 func TestUnlockFlagMultiIndex(t *testing.T) {
-	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--unlock", "0,2", "js", "testdata/empty.js")
+	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", "testdata/beacon", "--password", "testdata/beacon/password.txt",
+		"--unlock", "6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d,a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
 
-	geth.Expect(`
-Unlocking account 0 | Attempt 1/3
-!! Unsupported terminal, password will be echoed.
-Password: {{.InputLine "foobar"}}
-Unlocking account 2 | Attempt 1/3
-Password: {{.InputLine "foobar"}}
-`)
 	geth.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
-		"=0x7EF5A6135f1FD6a02593eEdC869c6D41D934aef8",
-		"=0x289d485D9771714CCe91D3393D764E1311907ACc",
+		"address=0x6E9e76Fa278190CfB2404e5923d3CcD7e8f6C51D",
+		"Unlocked account",
+		"address=0xa7e558Cc6efA1c41270eF4Aa227b3dd6B4a3951E",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.StderrText(), m) {
@@ -243,15 +232,16 @@ Password: {{.InputLine "foobar"}}
 }
 
 func TestUnlockFlagPasswordFile(t *testing.T) {
-	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--password", "testdata/passwords.txt", "--unlock", "0,2", "js", "testdata/empty.js")
+	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", "testdata/beacon", "--password", "testdata/beacon/password.txt",
+		"--unlock", "6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d,a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
 
 	geth.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
-		"=0x7EF5A6135f1FD6a02593eEdC869c6D41D934aef8",
-		"=0x289d485D9771714CCe91D3393D764E1311907ACc",
+		"address=0x6E9e76Fa278190CfB2404e5923d3CcD7e8f6C51D",
+		"Unlocked account",
+		"address=0xa7e558Cc6efA1c41270eF4Aa227b3dd6B4a3951E",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.StderrText(), m) {
@@ -260,19 +250,9 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 	}
 }
 
-func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
-	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--password",
-		"testdata/wrong-passwords.txt", "--unlock", "0,2")
-	defer geth.ExpectExit()
-	geth.Expect(`
-Fatal: Failed to unlock account 0 (could not decrypt key with given password)
-`)
-}
-
 func TestUnlockFlagAmbiguous(t *testing.T) {
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
-	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
+	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", "testdata/beacon",
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--keystore",
 		store, "--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
 		"js", "testdata/empty.js")
@@ -310,7 +290,7 @@ In order to avoid this warning, you need to remove the following duplicate key f
 
 func TestUnlockFlagAmbiguousWrongPassword(t *testing.T) {
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
-	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
+	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", "testdata/beacon",
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--keystore",
 		store, "--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
 

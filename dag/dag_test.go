@@ -1,6 +1,7 @@
 package dag
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestHandleGetOptimisticSpines(t *testing.T) {
 
 	bc := NewMockblockChain(ctrl)
 	bc.EXPECT().Database().AnyTimes().Return(db)
-	bc.EXPECT().GetBlock(spineBlockTest.Hash()).Return(spineBlockTest)
+	bc.EXPECT().GetBlock(context.Background(), spineBlockTest.Hash()).Return(spineBlockTest)
 	bc.EXPECT().GetSlotInfo().Return(&types.SlotInfo{
 		GenesisTime:    uint64(time.Now().Unix() - 60),
 		SecondsPerSlot: 4,
@@ -36,7 +37,7 @@ func TestHandleGetOptimisticSpines(t *testing.T) {
 	bc.EXPECT().GetHeaderByHash(spineBlockTest.Hash()).AnyTimes().Return(spineBlockTest.Header())
 	bc.EXPECT().GetOptimisticSpines(spineBlockTest.Slot()).Return([]common.HashArray{{block.Hash()}, {block3.Hash()}, {block5.Hash(), block6.Hash()}, {block7.Hash()}}, nil)
 	for _, testBlock := range testBlocks {
-		bc.EXPECT().GetBlock(testBlock.Hash()).Return(testBlock)
+		bc.EXPECT().GetBlock(context.Background(), testBlock.Hash()).Return(testBlock)
 	}
 
 	dag := Dag{eth: backend, bc: bc, downloader: down}
@@ -49,7 +50,7 @@ func TestHandleGetOptimisticSpines(t *testing.T) {
 	testutils.AssertEqual(t, expectedResult, *result)
 
 	//	Check if downloader is synchronising
-	bc.EXPECT().GetBlock(spineBlockTest.Hash()).Return(spineBlockTest)
+	bc.EXPECT().GetBlock(context.Background(), spineBlockTest.Hash()).Return(spineBlockTest)
 	down.EXPECT().Synchronising().Return(true)
 	result = dag.HandleGetOptimisticSpines(spineBlockTest.Hash())
 	expectedErr := errSynchronization.Error()

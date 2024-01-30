@@ -5,6 +5,7 @@
 package finalizer
 
 import (
+	"context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -133,7 +134,7 @@ func (mr *MockBlockChainMockRecorder) FinalizeTips(finHashes, lastFinHash, lastF
 }
 
 // GetBlock mocks base method.
-func (m *MockBlockChain) GetBlock(hash common.Hash) *types.Block {
+func (m *MockBlockChain) GetBlock(ctx context.Context, hash common.Hash) *types.Block {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBlock", hash)
 	ret0, _ := ret[0].(*types.Block)

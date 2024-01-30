@@ -167,7 +167,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
 				Gas:       21000,
-				GasFeeCap: big.NewInt(9000000000000000),
+				GasFeeCap: big.NewInt(9000000000000),
 				GasTipCap: big.NewInt(int64(i + 1)),
 				Data:      []byte{},
 			}
@@ -176,7 +176,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 				Nonce:    b.TxNonce(addr),
 				To:       &common.Address{},
 				Gas:      21000,
-				GasPrice: big.NewInt(int64(5352631158)),
+				GasPrice: big.NewInt(int64(53518000000)),
 				Value:    big.NewInt(10),
 				Data:     []byte{},
 			}
@@ -184,6 +184,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		b.AddTxWithChain(bc, types.MustSignNewTx(key, signer, txdata))
 		//b.AddTx(types.MustSignNewTx(key, signer, txdata))
 	})
+
 	// Construct testing chain
 	//diskdb := rawdb.NewMemoryDatabase()
 	//gspec.Commit(diskdb)
@@ -195,6 +196,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		nr := big.NewInt(int64(i)).Uint64()
 		bl.SetNumber(&nr)
 		fmt.Println("Nr", bl.Header().Nr())
+		bc.SetLastFinalisedHeader(bl.Header(), bl.Header().Nr())
 	}
 
 	bc.InsertChain(blocks)
@@ -219,11 +221,11 @@ func TestSuggestTipCap(t *testing.T) {
 		fork   *big.Int // London fork number
 		expect *big.Int // Expected gasprice suggestion
 	}{
-		{nil, big.NewInt(params.GWei * int64(30))},
-		{big.NewInt(0), big.NewInt(params.GWei * int64(30))},  // Fork point in genesis
-		{big.NewInt(1), big.NewInt(params.GWei * int64(30))},  // Fork point in first block
-		{big.NewInt(32), big.NewInt(params.GWei * int64(30))}, // Fork point in last block
-		{big.NewInt(33), big.NewInt(params.GWei * int64(30))}, // Fork point in the future
+		{nil, big.NewInt(int64(1000000000))},
+		{big.NewInt(0), big.NewInt(int64(1000000000))},  // Fork point in genesis
+		{big.NewInt(1), big.NewInt(int64(1000000000))},  // Fork point in first block
+		{big.NewInt(32), big.NewInt(int64(1000000000))}, // Fork point in last block
+		{big.NewInt(33), big.NewInt(int64(1000000000))}, // Fork point in the future
 	}
 	for _, c := range cases {
 		backend := newTestBackend(t, c.fork, false)
@@ -238,4 +240,6 @@ func TestSuggestTipCap(t *testing.T) {
 			t.Fatalf("Gas price mismatch, want %d, got %d", c.expect, got)
 		}
 	}
+	//30000000000
+	//1000000000
 }

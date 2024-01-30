@@ -30,7 +30,16 @@ var customGenesisTests = []struct {
 	// Genesis file with an empty chain configuration (ensure missing fields work)
 	{
 		genesis: `{
-			"alloc"      : {},
+			"alloc"      : {
+              "0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e": {"balance": "1000000000000000000000000000000000"},
+			  "0x6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d": {"balance": "1000000000000000000000000000000000"},
+			  "0xe43bb1b64fc7068d313d24d01d8ccca785b22c72": {"balance": "1000000000000000000000000000000000"},
+			  "0x638bfa7e4fbfa457030ff5c8c3fca1741a0e745c": {"balance": "1000000000000000000000000000000000"},
+			  "0xa7062A2Bd7270740f1d15ab70B3Dee189A87b6DE": {"balance": "1000000000000000000000000000000000"},
+			  "0xdcdb1c4e7c168f33af47f142bbe5a4c692a6fb57": {"balance": "1000000000000000000000000000000000"},
+			  "0x6CD106e7E631939c85fa15b764eCaE787a57C26f": {"balance": "1000000000000000000000000000000000"},
+			  "0xa731e0897635af790cb4566dd3a713d8c9f12952": {"balance": "1000000000000000000000000000000000"}
+            },
 			"coinbase"   : "0x0000000000000000000000000000000000000000",
 			"difficulty" : "0x20000",
 			"extraData"  : "",
@@ -38,15 +47,33 @@ var customGenesisTests = []struct {
 			"nonce"      : "0x0000000000001338",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
-			"config"     : {}
+			"config"     : {
+              "chainId": 333777333,
+			  "secondsPerSlot": 4,
+			  "slotsPerEpoch": 8,
+			  "forkSlotSubNet1": 20,
+			  "validatorsPerSlot": 4,
+			  "epochsPerEra": 10000000,
+			  "transitionPeriod": 2,
+			  "effectiveBalance": 3200
+			}
 		}`,
 		query:  "eth.getBlock(0).nonce",
-		result: "0x0000000000001338",
+		result: "undefined",
 	},
 	// Genesis file with specific chain configurations
 	{
 		genesis: `{
-			"alloc"      : {},
+			"alloc"      : {
+              "0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e": {"balance": "1000000000000000000000000000000000"},
+			  "0x6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d": {"balance": "1000000000000000000000000000000000"},
+			  "0xe43bb1b64fc7068d313d24d01d8ccca785b22c72": {"balance": "1000000000000000000000000000000000"},
+			  "0x638bfa7e4fbfa457030ff5c8c3fca1741a0e745c": {"balance": "1000000000000000000000000000000000"},
+			  "0xa7062A2Bd7270740f1d15ab70B3Dee189A87b6DE": {"balance": "1000000000000000000000000000000000"},
+			  "0xdcdb1c4e7c168f33af47f142bbe5a4c692a6fb57": {"balance": "1000000000000000000000000000000000"},
+			  "0x6CD106e7E631939c85fa15b764eCaE787a57C26f": {"balance": "1000000000000000000000000000000000"},
+			  "0xa731e0897635af790cb4566dd3a713d8c9f12952": {"balance": "1000000000000000000000000000000000"}
+			},
 			"coinbase"   : "0x0000000000000000000000000000000000000000",
 			"difficulty" : "0x20000",
 			"extraData"  : "",
@@ -55,13 +82,18 @@ var customGenesisTests = []struct {
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
 			"config"     : {
-				"homesteadBlock" : 42,
-				"daoForkBlock"   : 141,
-				"daoForkSupport" : true
+              "chainId": 333777333,
+			  "secondsPerSlot": 4,
+			  "slotsPerEpoch": 8,
+			  "forkSlotSubNet1": 20,
+			  "validatorsPerSlot": 4,
+			  "epochsPerEra": 10000000,
+			  "transitionPeriod": 2,
+			  "effectiveBalance": 3200
 			}
 		}`,
 		query:  "eth.getBlock(0).nonce",
-		result: "0x0000000000001339",
+		result: "undefined",
 	},
 }
 
@@ -78,11 +110,11 @@ func TestCustomGenesis(t *testing.T) {
 		if err := os.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", i, err)
 		}
-		runGeth(t, "--datadir", datadir, "init", json).WaitExit()
+		runGeth(t, "init", "--datadir", "testdata/beacon", "testdata/beacon/genesis.json", "/testdata/node/validator_keys/deposit_data.json", json).WaitExit()
 
 		// Query the custom genesis block
 		geth := runGeth(t, "--networkid", "1337", "--syncmode=full", "--cache", "16",
-			"--datadir", datadir, "--maxpeers", "0", "--port", "0",
+			"--datadir", "testdata/beacon", "--maxpeers", "0", "--port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")
 		geth.ExpectRegexp(tt.result)

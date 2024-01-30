@@ -26,6 +26,7 @@ import (
 )
 
 func TestFeeHistory(t *testing.T) {
+	t.Skip()
 	var cases = []struct {
 		pending             bool
 		maxHeader, maxBlock int

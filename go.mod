@@ -40,7 +40,7 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/julienschmidt/httprouter v1.2.0
-	github.com/karalabe/usb v0.0.2
+	github.com/karalabe/usb v0.0.3-0.20231219215548-8627268f6b0a
 	github.com/mattn/go-colorable v0.1.8
 	github.com/mattn/go-isatty v0.0.12
 	github.com/minio/sha256-simd v1.0.0
@@ -74,6 +74,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.1.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.1.1 // indirect
 	github.com/aws/smithy-go v1.1.0 // indirect
+	github.com/c1pca/go-duktape v0.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
