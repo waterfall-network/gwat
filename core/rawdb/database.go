@@ -313,6 +313,15 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		preimages       stat
 		bloomBits       stat
 		cliqueSnaps     stat
+		numberByHash    stat
+		hashByNumber    stat
+		epochCp         stat
+		coordCp         stat
+		children        stat
+		blockDag        stat
+		slotBlock       stat
+		valSyncOp       stat
+		era             stat
 
 		// Ancient store statistics
 		ancientHeadersSize  common.StorageSize
@@ -340,20 +349,20 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		)
 		total += size
 		switch {
-		case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
+		case bytes.HasPrefix(key, headerPrefix): //&& len(key) == (len(headerPrefix)+8+common.HashLength):
 			headers.Add(size)
-		case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
+		case bytes.HasPrefix(key, blockBodyPrefix): //&& len(key) == (len(blockBodyPrefix)+8+common.HashLength):
 			bodies.Add(size)
-		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
+		case bytes.HasPrefix(key, blockReceiptsPrefix): //&& len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 			receipts.Add(size)
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
 			numHashPairings.Add(size)
-		case bytes.HasPrefix(key, lastFinalizedHashKey) && len(key) == (len(lastFinalizedHashKey)+common.HashLength):
-			hashNumPairings.Add(size)
-		case bytes.HasPrefix(key, lastCanonicalHashKey) && len(key) == (len(lastCanonicalHashKey)+common.HashLength):
-			hashNumPairings.Add(size)
-		case bytes.HasPrefix(key, lastCoordCpKey) && len(key) == len(lastCoordCpKey):
-			hashNumPairings.Add(size)
+		//case bytes.HasPrefix(key, lastFinalizedHashKey) && len(key) == (len(lastFinalizedHashKey)+common.HashLength):
+		//	hashNumPairings.Add(size)
+		//case bytes.HasPrefix(key, lastCanonicalHashKey) && len(key) == (len(lastCanonicalHashKey)+common.HashLength):
+		//	hashNumPairings.Add(size)
+		//case bytes.HasPrefix(key, lastCoordCpKey) && len(key) == len(lastCoordCpKey):
+		//	hashNumPairings.Add(size)
 		case len(key) == common.HashLength:
 			tries.Add(size)
 		case bytes.HasPrefix(key, CodePrefix) && len(key) == len(CodePrefix)+common.HashLength:
@@ -382,11 +391,31 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bytes.HasPrefix(key, []byte("bltIndex-")) ||
 			bytes.HasPrefix(key, []byte("bltRoot-")): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
+		case bytes.HasPrefix(key, finalizedNumberByHashPrefix):
+			numberByHash.Add(size)
+		case bytes.HasPrefix(key, finalizedHashByNumberPrefix):
+			hashByNumber.Add(size)
+		case bytes.HasPrefix(key, epochCpPrefix):
+			epochCp.Add(size)
+		case bytes.HasPrefix(key, coordCpPrefix):
+			coordCp.Add(size)
+		case bytes.HasPrefix(key, childrenPrefix):
+			children.Add(size)
+		case bytes.HasPrefix(key, blockDagPrefix):
+			blockDag.Add(size)
+		case bytes.HasPrefix(key, slotBlockKey):
+			slotBlock.Add(size)
+		case bytes.HasPrefix(key, valSyncOpPrefix):
+			valSyncOp.Add(size)
+		case bytes.HasPrefix(key, eraPrefix):
+			era.Add(size)
+
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
+				currentEraPrefix, headFastBlockKey,
 				lastFinalizedHashKey, lastCanonicalHashKey, lastCoordCpKey,
-				databaseVersionKey, tipsHashesKey, lastPivotKey,
+				databaseVersionKey, tipsHashesKey, lastPivotKey, valSyncNotProcKey,
 				fastTrieProgressKey, snapshotDisabledKey, snapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey,
 				fastTxLookupLimitKey, uncleanShutdownKey, badBlockKey,
@@ -398,6 +427,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				}
 			}
 			if !accounted {
+				log.Debug("UNHANDLED KEY", "key", fmt.Sprintf("%s", key), "size", size)
 				unaccounted.Add(size)
 			}
 		}
@@ -436,7 +466,19 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
-		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
+		{"Key-Value store", "Single keys", metadata.Size(), metadata.Count()},
+
+		{"Key-Value store", "NumberByHash", numberByHash.Size(), numberByHash.Count()},
+		{"Key-Value store", "HashByNumber", hashByNumber.Size(), hashByNumber.Count()},
+		{"Key-Value store", "EpochCp", epochCp.Size(), epochCp.Count()},
+		{"Key-Value store", "coordCp", coordCp.Size(), coordCp.Count()},
+
+		{"Key-Value store", "children", children.Size(), children.Count()},
+		{"Key-Value store", "blockDag", blockDag.Size(), blockDag.Count()},
+		{"Key-Value store", "slotBlock", slotBlock.Size(), slotBlock.Count()},
+		{"Key-Value store", "valSyncOp", valSyncOp.Size(), valSyncOp.Count()},
+		{"Key-Value store", "era", era.Size(), era.Count()},
+
 		{"Ancient store", "Headers", ancientHeadersSize.String(), ancients.String()},
 		{"Ancient store", "Bodies", ancientBodiesSize.String(), ancients.String()},
 		{"Ancient store", "Receipt lists", ancientReceiptsSize.String(), ancients.String()},
