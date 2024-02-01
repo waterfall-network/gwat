@@ -262,6 +262,15 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
 	if genesis == nil && stored != params.MainnetGenesisHash {
+		if storedcfg.ForkSlotDelegate == 0 {
+			storedcfg.ForkSlotDelegate = newcfg.ForkSlotDelegate
+		}
+		if delegatingStakeSlot != nil {
+			storedcfg.ForkSlotDelegate = *delegatingStakeSlot
+		}
+		if storedcfg.ForkSlotSubNet1 == 0 {
+			storedcfg.ForkSlotSubNet1 = newcfg.ForkSlotSubNet1
+		}
 		return storedcfg, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
