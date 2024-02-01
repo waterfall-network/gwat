@@ -954,7 +954,7 @@ func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.A
 	}
 	//check delegating stake activation fork
 	var curSlot uint64
-	if pool.chain.GetSlotInfo() == nil {
+	if pool.chain.GetSlotInfo() != nil {
 		curSlot = pool.chain.GetSlotInfo().CurrentSlot()
 	}
 	if op.DelegatingStake() != nil {
