@@ -3482,15 +3482,33 @@ func (bc *BlockChain) CommitBlockTransactions(block *types.Block, statedb *state
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Error("Gas limit exceeded for current block while recommit", "sender", from, "hash", tx.Hash().Hex())
-
+			errRestore := bc.RestoreValidatorSyncOp(tx, block.Header())
+			if errRestore != nil {
+				log.Error("Validator sync tx: restore op failed",
+					"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+					"err", errRestore,
+				)
+			}
 		case errors.Is(err, ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
 			log.Error("Skipping transaction with low nonce while commit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
-
+			errRestore := bc.RestoreValidatorSyncOp(tx, block.Header())
+			if errRestore != nil {
+				log.Error("Validator sync tx: restore op failed",
+					"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+					"err", errRestore,
+				)
+			}
 		case errors.Is(err, ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Error("Skipping account with hight nonce while commit", "bl.height", block.Height(), "bl.hash", block.Hash().Hex(), "sender", from, "nonce", tx.Nonce(), "hash", tx.Hash().Hex())
-
+			errRestore := bc.RestoreValidatorSyncOp(tx, block.Header())
+			if errRestore != nil {
+				log.Error("Validator sync tx: restore op failed",
+					"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+					"err", errRestore,
+				)
+			}
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, receipt.Logs...)
@@ -4502,6 +4520,86 @@ func (bc *BlockChain) handleBlockValidatorSyncTxs(block *types.Block) {
 			bc.SetValidatorSyncData(txValSyncOp)
 		}
 	}
+}
+
+func (bc *BlockChain) RestoreValidatorSyncOp(tx *types.Transaction, header *types.Header) error {
+	if !bc.Config().IsForkSlotDelegate(header.Slot) {
+		return nil
+	}
+	// check is validator tx
+	if !bc.IsTxValidatorSync(tx) {
+		return nil
+	}
+
+	if tx.To() == nil || bc.Config().ValidatorsStateAddress == nil {
+		return nil
+	}
+	op, err := validatorOp.DecodeBytes(tx.Data())
+	if err != nil {
+		log.Error("Validator sync tx: restore op fail: unmarshal", "err", err)
+		return err
+	}
+	switch v := op.(type) {
+	case validatorOp.ValidatorSync:
+		savedValSync := bc.GetValidatorSyncData(v.InitTxHash())
+		if savedValSync == nil {
+			log.Error("Validator sync tx: restore op fail 222",
+				"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+				"OpType", v.OpType(),
+				"ProcEpoch", v.ProcEpoch(),
+				"Index", v.Index(),
+				"Creator", fmt.Sprintf("%#x", v.Creator()),
+				"amount", v.Amount().String(),
+				"InitTxHash", fmt.Sprintf("%#x", v.InitTxHash()),
+			)
+			return validator.ErrNoSavedValSyncOp
+		}
+		//has another tx
+		if savedValSync.TxHash != nil && *savedValSync.TxHash != tx.Hash() {
+			log.Error("Validator sync tx: restore op fail: has other tx",
+				"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+				"existTx", fmt.Sprintf("%#x", *savedValSync.TxHash),
+				"OpType", v.OpType(),
+				"ProcEpoch", v.ProcEpoch(),
+				"Index", v.Index(),
+				"Creator", fmt.Sprintf("%#x", v.Creator()),
+				"amount", v.Amount().String(),
+				"InitTxHash", fmt.Sprintf("%#x", v.InitTxHash()),
+			)
+			return nil
+		}
+		//reset tx hash
+		savedValSync.TxHash = nil
+		if bc.notProcValSyncOps[savedValSync.Key()] != nil &&
+			bc.notProcValSyncOps[savedValSync.Key()].TxHash != nil &&
+			*bc.notProcValSyncOps[savedValSync.Key()].TxHash == tx.Hash() {
+			bc.notProcValSyncOps[savedValSync.Key()].TxHash = nil
+		}
+
+		//restore as not processed
+		bc.AppendNotProcessedValidatorSyncData([]*types.ValidatorSync{savedValSync})
+
+		updop := bc.notProcValSyncOps[savedValSync.Key()]
+		log.Info("Validator sync tx: restore op",
+			"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+			"OpType", v.OpType(),
+			"ProcEpoch", v.ProcEpoch(),
+			"Index", v.Index(),
+			"Creator", fmt.Sprintf("%#x", v.Creator()),
+			"amount", v.Amount().String(),
+			"InitTxHash", fmt.Sprintf("%#x", v.InitTxHash()),
+			"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+			"updOp", updop,
+		)
+	default:
+		log.Error("Validator sync tx: restore op fail 333 default",
+			"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+			"OpType", v.OpCode(),
+			"failedTx", fmt.Sprintf("%#x", tx.Hash()),
+		)
+	}
+
+	return nil
 }
 
 func (bc *BlockChain) handleBlockValidatorSyncReceipts(block *types.Block, receipts types.Receipts) {

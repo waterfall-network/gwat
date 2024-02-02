@@ -268,29 +268,29 @@ func (c *ChainConfig) IsForkSlotDelegate(slot uint64) bool {
 func (c *ChainConfig) CheckConfigForkOrder() error {
 	type fork struct {
 		name     string
-		block    *big.Int
+		slot     *big.Int
 		optional bool // if true, the fork may be nil and next fork is still allowed
 	}
 	var lastFork fork
 	for _, cur := range []fork{
-		//{name: "berlinBlock", block: c.BerlinBlock},
+		{name: "forkSlotDelegate", slot: new(big.Int).SetUint64(c.ForkSlotDelegate)},
 		//{name: "londonBlock", block: c.LondonBlock},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
-			if lastFork.block == nil && cur.block != nil {
+			if lastFork.slot == nil && cur.slot != nil {
 				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %v",
-					lastFork.name, cur.name, cur.block)
+					lastFork.name, cur.name, cur.slot)
 			}
-			if lastFork.block != nil && cur.block != nil {
-				if lastFork.block.Cmp(cur.block) > 0 {
+			if lastFork.slot != nil && cur.slot != nil {
+				if lastFork.slot.Cmp(cur.slot) > 0 {
 					return fmt.Errorf("unsupported fork ordering: %v enabled at %v, but %v enabled at %v",
-						lastFork.name, lastFork.block, cur.name, cur.block)
+						lastFork.name, lastFork.slot, cur.name, cur.slot)
 				}
 			}
 		}
 		// If it was optional and not set, then ignore it
-		if !cur.optional || cur.block != nil {
+		if !cur.optional || cur.slot != nil {
 			lastFork = cur
 		}
 	}

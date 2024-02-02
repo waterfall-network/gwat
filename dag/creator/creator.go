@@ -504,8 +504,10 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 			"ProcEpoch", sd.ProcEpoch,
 			"Index", sd.Index,
 			"Creator", fmt.Sprintf("%#x", sd.Creator),
-			"amount", amt.String(),
+			"amount", sd.Amount.String(),
 			"TxHash", fmt.Sprintf("%#x", sd.TxHash),
+			"curCoinbase", fmt.Sprintf("%#x", coinbase),
+			"creators", creators,
 		)
 	}
 
