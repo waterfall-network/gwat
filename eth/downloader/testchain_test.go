@@ -39,6 +39,8 @@ var (
 
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
+var testGenesis *types.Block
+var testChainBase *testChain
 
 //func init() {
 //	depositData := make(core.DepositData, 0)
