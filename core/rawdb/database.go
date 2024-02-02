@@ -427,7 +427,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				}
 			}
 			if !accounted {
-				log.Debug("UNHANDLED KEY", "key", fmt.Sprintf("%s", key), "size", size)
+				log.Debug("UNHANDLED KEY", "key", string(key), "size", size)
 				unaccounted.Add(size)
 			}
 		}
