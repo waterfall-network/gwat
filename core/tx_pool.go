@@ -775,22 +775,23 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			if err != nil {
 				return err
 			}
+			return nil
 		}
 	}
 
+	// check gas estimation
 	head := pool.chain.GetLastFinalizedHeader()
 	signer := types.MakeSigner(pool.chain.Config())
 	msg, err := tx.AsMessage(signer, head.BaseFee)
 	if err != nil {
 		return err
 	}
-
 	estimateGas, err := pool.chain.EstimateGas(msg, head)
 	if err != nil {
 		return err
 	}
-
-	if tx.Gas() < estimateGas && !isValidatorOp {
+	egh := estimateGas / 2
+	if tx.Gas() < estimateGas-egh || tx.Gas() > estimateGas+egh {
 		return ErrIntrinsicGas
 	}
 

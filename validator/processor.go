@@ -714,7 +714,7 @@ func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) b
 		return false
 	}
 
-	if saved.ProcEpoch != input.ProcEpoch() {
+	if saved.ProcEpoch > input.ProcEpoch() {
 		log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
 		return false
 	}

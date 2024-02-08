@@ -48,11 +48,11 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethclient"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethstats"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/les"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/p2p"
@@ -252,14 +252,14 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	cfg.Genesis = genesis
 	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
 
-	lesBackend, err := les.New(stack, &cfg)
+	backend, err := eth.New(stack, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
 	}
 
 	// Assemble the ethstats monitoring and reporting service'
 	if stats != "" {
-		if err := ethstats.New(stack, lesBackend.ApiBackend, stats); err != nil {
+		if err := ethstats.New(stack, backend.APIBackend, stats); err != nil {
 			return nil, err
 		}
 	}

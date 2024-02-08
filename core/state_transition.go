@@ -85,6 +85,7 @@ type Message interface {
 
 	Nonce() uint64
 	IsFake() bool
+	SetFake(IsFake bool) types.Message
 	Data() []byte
 	AccessList() types.AccessList
 	TxHash() common.Hash
@@ -243,15 +244,19 @@ func (st *StateTransition) buyGas() error {
 	return nil
 }
 
-// PreCheck make sure this transaction's data is correct.
-func (st *StateTransition) PreCheck() error {
-	return st.preCheck()
-}
+//// PreCheck make sure this transaction's data is correct.
+//func (st *StateTransition) PreCheck() error {
+//	return st.preCheck()
+//}
 
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	var isValOp bool
-
+	if st.msg.To() != nil &&
+		bytes.Equal(st.evm.ChainConfig().ValidatorsStateAddress.Bytes(), st.msg.To().Bytes()) &&
+		st.state.IsValidatorAddress(st.msg.From()) {
+		isValOp = true
+	}
 	if !st.msg.IsFake() {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(st.msg.From())
@@ -263,9 +268,7 @@ func (st *StateTransition) preCheck() error {
 				st.msg.From().Hex(), msgNonce, stNonce)
 		}
 
-		if st.msg.To() != nil && bytes.Equal(st.evm.ChainConfig().ValidatorsStateAddress.Bytes(), st.msg.To().Bytes()) && st.state.IsValidatorAddress(st.msg.From()) {
-			isValOp = true
-		} else {
+		if !isValOp {
 			if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) && !st.state.IsValidatorAddress(st.msg.From()) {
 				return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 					st.msg.From().Hex(), codeHash)
