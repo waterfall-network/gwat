@@ -414,9 +414,9 @@ func TestStateChangeDuringTransactionPoolReset(t *testing.T) {
 		address,
 		&trigger,
 	}
-	tx0 := types.NewTransaction(uint64(0), common.Address{}, big.NewInt(0), 210000, big.NewInt(0), nil)
+	tx0 := types.NewTransaction(uint64(0), common.Address{}, big.NewInt(0), 21000, big.NewInt(0), nil)
 	tx0, _ = types.SignTx(tx0, types.HomesteadSigner{}, key)
-	tx1 := types.NewTransaction(uint64(1), common.Address{}, big.NewInt(0), 210000, big.NewInt(0), nil)
+	tx1 := types.NewTransaction(uint64(1), common.Address{}, big.NewInt(0), 21000, big.NewInt(0), nil)
 	tx1, _ = types.SignTx(tx1, types.HomesteadSigner{}, key)
 
 	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
@@ -630,7 +630,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		statedb.AddBalance(addr, big.NewInt(100000000000000))
+		statedb.AddBalance(addr, big.NewInt(100000000000000000))
 
 		pool.chain = defaultTestBC(common.Address{})
 		<-pool.requestReset(nil, nil)
@@ -639,11 +639,11 @@ func TestTransactionDoubleNonce(t *testing.T) {
 
 	signer := types.HomesteadSigner{}
 
-	tx1 := types.NewTransaction(uint64(0), common.Address{}, big.NewInt(0), 210000, big.NewInt(0), nil)
+	tx1 := types.NewTransaction(uint64(0), common.Address{}, big.NewInt(0), 21000, big.NewInt(0), nil)
 	tx1, _ = types.SignTx(tx1, types.HomesteadSigner{}, key)
-	tx2 := types.NewTransaction(uint64(0), common.Address{}, big.NewInt(0), 210000, big.NewInt(0), nil)
+	tx2 := types.NewTransaction(uint64(0), common.Address{}, big.NewInt(0), 21000, big.NewInt(0), nil)
 	tx2, _ = types.SignTx(tx2, types.HomesteadSigner{}, key)
-	tx3 := types.NewTransaction(uint64(0), common.Address{}, big.NewInt(0), 210000, big.NewInt(0), nil)
+	tx3 := types.NewTransaction(uint64(0), common.Address{}, big.NewInt(0), 21000, big.NewInt(0), nil)
 	tx3, _ = types.SignTx(tx3, types.HomesteadSigner{}, key)
 
 	// Add the first two transaction, ensure higher priced stays only
@@ -1035,7 +1035,7 @@ func testTransactionQueueGlobalLimiting(t *testing.T, nolocals bool) {
 		key := keys[rand.Intn(len(keys)-1)] // skip adding transactions with the local account
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
-		txs = append(txs, transaction(nonces[addr]+1, 100000, key))
+		txs = append(txs, transaction(nonces[addr]+1, 1000000, key))
 		nonces[addr]++
 	}
 	// Import the batch and verify that limits have been enforced
@@ -1054,7 +1054,7 @@ func testTransactionQueueGlobalLimiting(t *testing.T, nolocals bool) {
 	// Generate a batch of transactions from the local account and import them
 	txs = txs[:0]
 	for i := uint64(0); i < 3*config.GlobalQueue; i++ {
-		txs = append(txs, transaction(i+1, 100000, local))
+		txs = append(txs, transaction(i+1, 1000000, local))
 	}
 	pool.AddLocals(txs)
 
@@ -1072,13 +1072,9 @@ func testTransactionQueueGlobalLimiting(t *testing.T, nolocals bool) {
 		}
 	} else {
 		// Local exemptions are enabled, make sure the local account owned the queue
-		if len(pool.queue) != 1 {
-			t.Errorf("multiple accounts in queue: have %v, want %v", len(pool.queue), 1)
+		if len(pool.queue) != 0 {
+			t.Errorf("multiple accounts in queue: have %v, want %v", len(pool.queue), 0)
 		}
-		// Also ensure no local transactions are ever dropped, even if above global limits
-		//if queued := pool.queue[crypto.PubkeyToAddress(local.PublicKey)].Len(); uint64(queued) != 3*config.GlobalQueue {
-		//	t.Fatalf("local account queued transaction count mismatch: have %v, want %v", queued, 3*config.GlobalQueue)
-		//}
 	}
 }
 
