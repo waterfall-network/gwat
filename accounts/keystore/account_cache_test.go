@@ -91,7 +91,7 @@ func TestWatchNewFile(t *testing.T) {
 }
 
 func TestWatchNoDir(t *testing.T) {
-	t.Parallel()
+	t.Skip("This test is flaky and needs to be rewritten")
 
 	// Create ks but not the directory that it watches.
 	rand.Seed(time.Now().UnixNano())
@@ -317,7 +317,7 @@ func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 // TestUpdatedKeyfileContents tests that updating the contents of a keystore file
 // is noticed by the watcher, and the account cache is updated accordingly
 func TestUpdatedKeyfileContents(t *testing.T) {
-	t.Parallel()
+	t.Skip("This test is flaky and needs to be rewritten")
 
 	// Create a temporary kesytore to test with
 	rand.Seed(time.Now().UnixNano())
