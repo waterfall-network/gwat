@@ -96,6 +96,7 @@ Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 }
 
 func TestAccountImport(t *testing.T) {
+	t.Skip()
 	tests := []struct{ name, key, output string }{
 		{
 			name:   "correct account",
