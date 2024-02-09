@@ -101,20 +101,20 @@ var customGenesisTests = []struct {
 // work properly.
 func TestCustomGenesis(t *testing.T) {
 	for i, tt := range customGenesisTests {
+		tmpPath := initTmpDbWithGenesis(t)
 		// Create a temporary data directory to use and inspect later
-		datadir := tmpdir(t)
-		defer os.RemoveAll(datadir)
+		defer os.RemoveAll(tmpPath)
 
 		// Initialize the data directory with the custom genesis block
-		json := filepath.Join(datadir, "genesis.json")
+		json := filepath.Join(tmpPath, "genesis.json")
 		if err := os.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", i, err)
 		}
-		runGeth(t, "init", "--datadir", "testdata/beacon", "testdata/beacon/genesis.json", "/testdata/node/validator_keys/deposit_data.json", json).WaitExit()
+		runGeth(t, "--datadir", tmpPath, "init", json).WaitExit()
 
 		// Query the custom genesis block
 		geth := runGeth(t, "--networkid", "1337", "--syncmode=full", "--cache", "16",
-			"--datadir", "testdata/beacon", "--maxpeers", "0", "--port", "0",
+			"--datadir", tmpPath, "--maxpeers", "0", "--port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")
 		geth.ExpectRegexp(tt.result)

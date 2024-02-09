@@ -85,6 +85,8 @@ To exit, press ctrl-d or type exit
 // Tests that a console can be attached to a running node via various means.
 func TestAttachWelcome(t *testing.T) {
 	t.Skip()
+	tmpPath := initTmpDbWithGenesis(t)
+
 	var (
 		ipc      string
 		httpPort string
@@ -105,7 +107,8 @@ func TestAttachWelcome(t *testing.T) {
 	geth := runMinimalGeth(t, "--miner.etherbase", "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182",
 		"--ipcpath", ipc,
 		"--http", "--http.port", httpPort,
-		"--ws", "--ws.port", wsPort)
+		"--ws", "--ws.port", wsPort,
+		"--datadir", tmpPath)
 	t.Run("ipc", func(t *testing.T) {
 		waitForEndpoint(t, ipc, 3*time.Second)
 		testAttachWelcome(t, geth, "ipc:"+ipc, ipcAPIs)
