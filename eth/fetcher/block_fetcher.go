@@ -24,6 +24,7 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
@@ -825,17 +826,16 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 	go func() {
 		defer func() { f.done <- hash }()
 
-		// If the no parents, abort insertion
-		if len(block.ParentHashes()) == 0 {
-			log.Error("Propagate block: no parents", "peer", peer, "hash", hash, "parent", block.ParentHashes())
-			return
-		}
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
+
+		case core.ErrInsertUncompletedDag:
+			//if has unknown parents - skip propagate
+			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 
 		default:
 			// Something went very wrong, drop the peer

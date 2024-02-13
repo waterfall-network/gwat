@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -186,7 +187,24 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.chain, nil, h.removePeer)
 
 	// Construct the fetcher (short sync)
-	validator := func(header *types.Header) error {
+	validateFn := func(header *types.Header) error {
+		bc := h.chain
+		if len(header.ParentHashes) == 0 {
+			err := fmt.Errorf("no parents in propagate block")
+			log.Warn("Header verification: no parents", "err", err, "hash", header.Hash().Hex())
+			return err
+		}
+		parentsHeaders := bc.GetHeadersByHashes(header.ParentHashes)
+		for _, parentHash := range header.ParentHashes {
+			parent := parentsHeaders[parentHash]
+			if parent == nil {
+				log.Warn("Header verification: parent not found",
+					"hash", header.Hash().Hex(),
+					"parent", parentHash.Hex(),
+				)
+				return core.ErrInsertUncompletedDag
+			}
+		}
 		return nil
 	}
 	heighter := func() uint64 {
@@ -231,7 +249,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return err
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
+	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validateFn, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
