@@ -94,7 +94,7 @@ var (
 		ValidatorsPerSlot:      5,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       math.MaxUint64,
+		ForkSlotDelegate:       2_341_120,
 	}
 
 	// TestNet8TrustedCheckpoint contains the light client trusted checkpoint for the Testnet8.
