@@ -786,14 +786,25 @@ func (p *Processor) isValidatorTrialPeriod(validator *valStore.Validator) (bool,
 	// if validator is not activated yet - trial period
 	if validator.GetActivationEra() > p.ctx.Era {
 		return true, nil
-	} else {
-		bc := p.blockchain
-		activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
-		activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
+	}
+	bc := p.blockchain
+	activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
+	activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
+	if err != nil {
+		return false, err
+	}
+	endTrialSlot := activationSlot + validator.DelegatingStake.TrialPeriod
+	if endTrialSlot >= p.ctx.Slot {
+		return true, nil
+	}
+	// if validator deactivated while trial period - trial period
+	if validator.GetExitEra() <= p.ctx.Era {
+		exitEra := rawdb.ReadEra(bc.Database(), validator.GetExitEra())
+		exitSlot, err := bc.GetSlotInfo().SlotOfEpochStart(exitEra.From)
 		if err != nil {
 			return false, err
 		}
-		if activationSlot+validator.DelegatingStake.TrialPeriod >= p.ctx.Slot {
+		if exitSlot <= endTrialSlot {
 			return true, nil
 		}
 	}
