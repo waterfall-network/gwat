@@ -143,7 +143,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
 	if ctx.GlobalIsSet(utils.MainnetFlag.Name) {
-		log.Crit("--mainnet: require implementation")
+		//log.Crit("--mainnet: require implementation")
+		log.Warn("--mainnet: == TEST MODE ==")
 	}
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)

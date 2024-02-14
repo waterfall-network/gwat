@@ -123,8 +123,8 @@ var (
 		utils.NodeKeyHexFlag,
 		utils.DNSDiscoveryFlag,
 		utils.MainnetFlag,
-		utils.DeveloperFlag,
 		utils.TestNet8Flag,
+		utils.DeveloperFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
@@ -251,6 +251,9 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
+	case ctx.GlobalIsSet(utils.MainnetFlag.Name):
+		log.Info("Starting GWAT on Waterfall mainnet...")
+
 	case ctx.GlobalIsSet(utils.TestNet8Flag.Name):
 		log.Info("Starting GWAT on testnet8 testnet...")
 
@@ -258,7 +261,7 @@ func prepare(ctx *cli.Context) {
 		log.Info("Starting GWAT in dev mode...")
 
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting GWAT on Waterfall mainnet...")
+		log.Info("Starting GWAT on Waterfall devnet...")
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {

@@ -47,6 +47,10 @@ import (
 //go:generate gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
 
 var (
+	//go:embed genesis_json/mainnet/genesis.json
+	mainnetGenesisJson []byte
+	//go:embed genesis_json/mainnet/deposit_data.json
+	mainnetDepositDataJson []byte
 	//go:embed genesis_json/testnet8/genesis.json
 	testnet8GenesisJson []byte
 	//go:embed genesis_json/testnet8/deposit_data.json
@@ -463,12 +467,24 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:    params.MainnetChainConfig,
-		ExtraData: hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:  5000,
-		Alloc:     decodePrealloc(mainnetAllocData),
+	genesis := new(Genesis)
+	err := json.Unmarshal(mainnetGenesisJson, &genesis)
+	if err != nil {
+		log.Crit("Failed to unmarshal mainnet genesis data", "err", err)
 	}
+	depositData := make(DepositData, 0)
+	err = json.Unmarshal(mainnetDepositDataJson, &depositData)
+	if err != nil {
+		log.Crit("Failed to unmarshal mainnet deposit data", "err", err)
+	}
+	if len(depositData) == 0 {
+		log.Crit("Empty mainnet genesis data")
+	}
+	genesis.Validators = depositData
+	if err = genesis.Config.Validate(); err != nil {
+		log.Crit("Invalid mainnet genesis config", "err", err)
+	}
+	return genesis
 }
 
 // DefaultTestNet8GenesisBlock returns the tesnet8 network genesis block.
