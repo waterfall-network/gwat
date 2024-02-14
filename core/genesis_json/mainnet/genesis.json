@@ -6,7 +6,9 @@
     "validatorsPerSlot": 5,
     "epochsPerEra": 4,
     "transitionPeriod": 2,
-    "effectiveBalance": 3200
+    "effectiveBalance": 3200,
+    "forkSlotSubNet1": 18446744073709551615,
+    "forkSlotDelegate": 1600
   },
   "timestamp": "1707916380",
   "gasLimit":  "210000000",
