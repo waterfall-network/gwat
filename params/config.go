@@ -59,7 +59,7 @@ var (
 		ValidatorsPerSlot:      5,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       math.MaxUint64,
+		ForkSlotDelegate:       5120,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
