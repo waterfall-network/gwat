@@ -272,7 +272,10 @@ func (op *validatorSyncOperation) Amount() *big.Int {
 	if op.amount == nil {
 		return nil
 	}
-	return new(big.Int).Set(op.amount)
+	if op.OpCode() == UpdateBalanceCode {
+		return new(big.Int).Set(op.amount)
+	}
+	return nil
 }
 
 func (op *validatorSyncOperation) WithdrawalAddress() *common.Address {
