@@ -906,6 +906,12 @@ func parseValidatorSyncKey(validatorSyncKey []byte) (initTxHash common.Hash) {
 }
 
 func decodeValidatorSync(initTxHash common.Hash, data []byte) *types.ValidatorSync {
+	unm := &types.ValidatorSync{}
+	err := unm.UnmarshalJSON(data)
+	if err == nil {
+		return unm
+	}
+	// Depracated
 	//InitTxHash common.Hash - parse from key
 	// <OpType><Creator><index><procEpoch><txHash><amountBigInt>`
 	minSize := 76
@@ -931,23 +937,8 @@ func decodeValidatorSync(initTxHash common.Hash, data []byte) *types.ValidatorSy
 	return res
 }
 
-func encodeValidatorSync(vs types.ValidatorSync) []byte {
-	//InitTxHash common.Hash - put in key
-	// <OpType><Creator><index><procEpoch><txHash><amountBigInt>`
-	var data []byte
-	data = append(data, encodeBlockNumber(uint64(vs.OpType))...)
-	data = append(data, vs.Creator.Bytes()...)
-	data = append(data, encodeBlockNumber(vs.Index)...)
-	data = append(data, encodeBlockNumber(vs.ProcEpoch)...)
-	txh := vs.TxHash
-	if txh == nil {
-		txh = &common.Hash{}
-	}
-	data = append(data, txh.Bytes()...)
-	if vs.Amount != nil {
-		data = append(data, vs.Amount.Bytes()...)
-	}
-	return data
+func encodeValidatorSync(vs types.ValidatorSync) ([]byte, error) {
+	return vs.MarshalJSON()
 }
 
 // ReadValidatorSync retrieves the ValidatorSync data.
@@ -962,8 +953,11 @@ func WriteValidatorSync(db ethdb.KeyValueWriter, vs *types.ValidatorSync) {
 		return
 	}
 	key := validatorSyncKey(vs.InitTxHash)
-	enc := encodeValidatorSync(*vs)
-	if err := db.Put(key, enc); err != nil {
+	enc, err := encodeValidatorSync(*vs)
+	if err != nil {
+		log.Crit("Failed to store ValidatorSync data", "err", err)
+	}
+	if err = db.Put(key, enc); err != nil {
 		log.Crit("Failed to store ValidatorSync data", "err", err)
 	}
 }
