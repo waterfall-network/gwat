@@ -832,13 +832,25 @@ func (pool *TxPool) isValidatorTrialPeriod(validator *valStore.Validator) (bool,
 	curEra := bc.GetEraInfo().GetEra().Number
 	if validator.GetActivationEra() > curEra {
 		return true, nil
-	} else {
-		activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
-		activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
+	}
+
+	activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
+	activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
+	if err != nil {
+		return false, err
+	}
+	endTrialSlot := activationSlot + validator.DelegatingStake.TrialPeriod
+	if endTrialSlot > bc.GetSlotInfo().CurrentSlot() {
+		return true, nil
+	}
+	// if validator deactivated while trial period - trial period
+	if validator.GetExitEra() <= curEra {
+		exitEra := rawdb.ReadEra(bc.Database(), validator.GetExitEra())
+		exitSlot, err := bc.GetSlotInfo().SlotOfEpochStart(exitEra.From)
 		if err != nil {
 			return false, err
 		}
-		if activationSlot+validator.DelegatingStake.TrialPeriod > bc.GetSlotInfo().CurrentSlot() {
+		if exitSlot <= endTrialSlot {
 			return true, nil
 		}
 	}
