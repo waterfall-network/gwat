@@ -196,19 +196,63 @@ func GetPendingValidatorSyncData(bc *core.BlockChain) map[common.Hash]*types.Val
 	valSyncOps := bc.GetNotProcessedValidatorSyncData()
 	vsPending := make(map[common.Hash]*types.ValidatorSync, len(valSyncOps))
 	for k, vs := range valSyncOps {
+		log.Info("=== ValidatorSync: GetPendingValidatorSyncData ===",
+			"slot", si.CurrentSlot(),
+			"Index", vs.Index,
+			"ProcEpoch", vs.ProcEpoch,
+			"OpType", vs.OpType,
+			"Amount", vs.Amount.String(),
+			"Balance", vs.Balance.String(),
+			"TxHash", fmt.Sprintf("%#x", vs.TxHash),
+			"InitTxHash", vs.InitTxHash.Hex(),
+			"Creator", vs.Creator.Hex(),
+		)
+
 		if vs.TxHash != nil {
 			continue
 		}
 		saved := bc.GetValidatorSyncData(vs.InitTxHash)
-		if saved.TxHash != nil {
+		if saved != nil {
+			log.Info("=== ValidatorSync: GetPendingValidatorSyncData === saved",
+				"slot", si.CurrentSlot(),
+				"Index", saved.Index,
+				"ProcEpoch", saved.ProcEpoch,
+				"OpType", saved.OpType,
+				"Amount", saved.Amount.String(),
+				"Balance", saved.Balance.String(),
+				"TxHash", fmt.Sprintf("%#x", saved.TxHash),
+				"InitTxHash", saved.InitTxHash.Hex(),
+				"Creator", saved.Creator.Hex(),
+			)
+		} else {
+			log.Info("=== ValidatorSync: GetPendingValidatorSyncData === saved nill",
+				"slot", si.CurrentSlot(),
+				"InitTxHash", vs.InitTxHash.Hex(),
+			)
+		}
+
+		if saved != nil && saved.TxHash != nil {
 			continue
 		}
 		if vs.ProcEpoch == currEpoch {
 			vsPending[k] = vs
 		} else if bc.Config().IsForkSlotDelegate(si.CurrentSlot()) {
 			if vs.ProcEpoch < currEpoch {
-				vs.ProcEpoch = currEpoch
+				//vs.ProcEpoch = currEpoch
 				vsPending[k] = vs
+
+				log.Info("=== ValidatorSync: GetPendingValidatorSyncData === 11111",
+					"slot", si.CurrentSlot(),
+					"Index", vs.Index,
+					"ProcEpoch", vs.ProcEpoch,
+					"OpType", vs.OpType,
+					"Amount", vs.Amount.String(),
+					"Balance", vs.Balance.String(),
+					"TxHash", fmt.Sprintf("%#x", vs.TxHash),
+					"InitTxHash", vs.InitTxHash.Hex(),
+					"Creator", vs.Creator.Hex(),
+				)
+
 			}
 		}
 	}
