@@ -252,7 +252,6 @@ func GetPendingValidatorSyncData(bc *core.BlockChain) map[common.Hash]*types.Val
 					"InitTxHash", vs.InitTxHash.Hex(),
 					"Creator", vs.Creator.Hex(),
 				)
-
 			}
 		}
 	}
