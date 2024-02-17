@@ -28,7 +28,7 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0x421ff71b514da97d5e77cc328e75ff2be348ab8ae1a4d9f0dc735a291afa9b5a")
+	MainnetGenesisHash = common.HexToHash("0x3c23a571ff52c4f8aac98ecc3b1c9c0416a7e322ff8b739f1c9d68f1807e7461")
 	// Testnet8GenesisHash  waterfall test net
 	Testnet8GenesisHash = common.HexToHash("0xa7531d17d43684576b864662852e3cbb2dc20df7cdb9fc5405d5a0a253f623eb")
 )
@@ -59,7 +59,7 @@ var (
 		ValidatorsPerSlot:      5,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       2048,
+		ForkSlotDelegate:       6400,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
