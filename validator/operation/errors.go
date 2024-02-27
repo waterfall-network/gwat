@@ -26,4 +26,6 @@ var (
 	ErrBadProfitShare      = errors.New("profit share totally must be 100%")
 	ErrBadStakeShare       = errors.New("stake share totally must be 100%")
 	ErrDelegateForkRequire = errors.New("can not process transaction before fork of delegating stake")
+
+	ErrInvalidDepositSig = errors.New("invalid deposit signature")
 )
