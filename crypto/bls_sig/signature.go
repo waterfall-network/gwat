@@ -6,18 +6,12 @@ package bls_sig
 
 import (
 	"fmt"
+
 	"github.com/pkg/errors"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	//"gitlab.waterfall.network/waterfall/protocol/coordinator/config/features"
-	//fieldparams "gitlab.waterfall.network/waterfall/protocol/coordinator/config/fieldparams"
-	//"gitlab.waterfall.network/waterfall/protocol/coordinator/crypto/bls/common"
-	//"gitlab.waterfall.network/waterfall/protocol/coordinator/crypto/rand"
 )
 
 var dst = []byte("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_")
-
-const scalarBytes = 32
-const randBitsEntropy = 64
 
 // Signature used in the BLS signature scheme.
 type Signature struct {

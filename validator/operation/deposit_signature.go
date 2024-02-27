@@ -121,7 +121,9 @@ func VerifyDepositSig(
 		return err
 	}
 	root, err := (&SigningData{ObjectRoot: sigDataRoot[:], Domain: depositDomain()}).HashTreeRoot()
-
+	if err != nil {
+		return err
+	}
 	isValid := bls_sig.VerifyCompressed(sig[:], pk[:], root[:])
 	if !isValid {
 		return ErrInvalidDepositSig
