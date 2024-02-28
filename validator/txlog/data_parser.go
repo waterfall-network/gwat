@@ -195,7 +195,7 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 		parsed.ParsedData = delegatingData
 	case types.EvtErrorLogSignature:
 		parsed.ParsedData = parsedDataFailed{
-			Error: fmt.Sprintf("%s", log.Data),
+			Error: string(log.Data),
 		}
 	default:
 		parsed.ParsedData = parsedDataFailed{
