@@ -1626,6 +1626,7 @@ func (bc *BlockChain) rollbackBlockFinalization(finNr uint64) error {
 
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, hash, finNr)
+	rawdb.DeleteReceipts(batch, hash)
 
 	// update finalized number cache
 	bc.hc.numberCache.Remove(hash)
@@ -4475,7 +4476,7 @@ func (bc *BlockChain) verifyBlockValidatorSyncTx(block *types.Block, tx *types.T
 
 	switch v := op.(type) {
 	case validatorOp.ValidatorSync:
-		validator.ValidateValidatorSyncOp(bc, v, block.Slot(), tx.Hash())
+		return validator.ValidateValidatorSyncOp(bc, v, block.Slot(), tx.Hash())
 	}
 	return nil
 }

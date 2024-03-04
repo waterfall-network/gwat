@@ -2301,6 +2301,13 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
+
+	defForkSlotDelegate := testmodels.TestChainConfig.ForkSlotDelegate
+	testmodels.TestChainConfig.ForkSlotDelegate = math.MaxUint64
+	defer func() {
+		testmodels.TestChainConfig.ForkSlotDelegate = defForkSlotDelegate
+	}()
+
 	bc.EXPECT().Config().AnyTimes().Return(testmodels.TestChainConfig)
 	bc.EXPECT().GetSlotInfo().AnyTimes().Return(&types.SlotInfo{
 		GenesisTime:    168752223,
@@ -2330,7 +2337,7 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 				v := c.TestData.(testmodels.TestData)
 				valSyncData.Amount = nil
 				bc.EXPECT().GetValidatorSyncData(initTxHash).Return(&valSyncData)
-				processor.ctx.Slot = math.MaxUint64
+				processor.ctx.Slot = math.MaxUint64 - 1
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 				processor.ctx.Slot = 0
 			},
@@ -2349,12 +2356,12 @@ func TestProcessorValidatorSyncProcessing(t *testing.T) {
 			},
 		},
 		{
-			CaseName: "ErrMismatchTxHashes",
+			CaseName: "ErrValSyncTxExists",
 			TestData: testmodels.TestData{
 				Caller: vm.AccountRef(from),
 				AddrTo: processor.GetValidatorsStateAddress(),
 			},
-			Errs: []error{ErrMismatchTxHashes},
+			Errs: []error{ErrValSyncTxExists},
 			Fn: func(c *testmodels.TestCase) {
 				v := c.TestData.(testmodels.TestData)
 				hash := common.BytesToHash(testutils.RandomStringInBytes(32))
