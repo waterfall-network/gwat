@@ -2541,6 +2541,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 			"block slot", block.Slot(),
 			"coinbase", block.Coinbase().Hex(),
 		)
+		return errors.New("block verification: empty block has invalid coinbase")
 	}
 
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
@@ -2564,7 +2565,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 			"coinbase", block.Coinbase().Hex(),
 		)
 
-		return err
+		return errors.New("block verification: empty block has invalid slot")
 	}
 
 	haveBlocks, err := bc.HaveEpochBlocks(blockEpoch - 1)
