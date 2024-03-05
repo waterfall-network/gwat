@@ -36,7 +36,7 @@ var (
 	ErrValidatorIsOut         = errors.New("validator is exited")
 	ErrInvalidToAddress       = errors.New("address to must be validators state address")
 	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
-	ErrMismatchTxHashes       = errors.New("validator sync tx already exists")
+	ErrValSyncTxExists        = errors.New("validator sync tx already exists")
 	ErrMismatchValSyncOp      = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
 	ErrInvalidOpEpoch         = errors.New("epoch to apply tx is not acceptable")
 	ErrTxNF                   = errors.New("tx not found")
@@ -823,15 +823,25 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 		return ErrNoSavedValSyncOp
 	}
 
-	blockEpoch := bc.GetSlotInfo().SlotToEpoch(applySlot)
-	if blockEpoch > valSyncOp.ProcEpoch() {
-		return ErrInvalidOpEpoch
+	isForkDelegate := bc.Config().IsForkSlotDelegate(applySlot)
+	if !isForkDelegate {
+		blockEpoch := bc.GetSlotInfo().SlotToEpoch(applySlot)
+		if blockEpoch > valSyncOp.ProcEpoch() {
+			return ErrInvalidOpEpoch
+		}
 	}
-	if !CompareValSync(savedValSync, valSyncOp) {
+	if !CompareValSync(savedValSync, valSyncOp, isForkDelegate) {
 		return ErrMismatchValSyncOp
 	}
 	if savedValSync.TxHash != nil && *savedValSync.TxHash != txHash {
-		return ErrMismatchTxHashes
+		if !isForkDelegate {
+			return ErrValSyncTxExists
+		}
+		// check tx status
+		rc, _, _ := bc.GetTransactionReceipt(*savedValSync.TxHash)
+		if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+			return ErrValSyncTxExists
+		}
 	}
 
 	// check is op initialised by slashing
@@ -865,7 +875,7 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 		if initTxData.CreatorAddress() != valSyncOp.Creator() {
 			return ErrInvalidCreator
 		}
-		if initTxData.ExitAfterEpoch() != nil && *initTxData.ExitAfterEpoch() < valSyncOp.ProcEpoch() {
+		if initTxData.ExitAfterEpoch() != nil && *initTxData.ExitAfterEpoch() > valSyncOp.ProcEpoch() {
 			return ErrInvalidOpEpoch
 		}
 	case operation.Withdrawal:
@@ -894,7 +904,7 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 	return nil
 }
 
-func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
+func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync, isForkDelegate bool) bool {
 	if saved.InitTxHash != input.InitTxHash() {
 		log.Warn("check validator sync failed: InitTxHash", "s.InitTxHash", saved.InitTxHash.Hex(), "i.InitTxHash", input.InitTxHash().Hex())
 		return false
@@ -917,9 +927,11 @@ func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) b
 		return false
 	}
 
-	if saved.ProcEpoch > input.ProcEpoch() {
-		log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
-		return false
+	if !isForkDelegate {
+		if saved.ProcEpoch > input.ProcEpoch() {
+			log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
+			return false
+		}
 	}
 
 	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {

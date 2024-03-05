@@ -34,7 +34,7 @@ func CreateValidatorSyncTx(
 	ks *keystore.KeyStore,
 ) (*types.Transaction, error) {
 	bc := backend.BlockChain()
-	_, err := ValidateValidatorSyncOp(bc, stateBlockHash, valSyncOp)
+	_, err := ValidateCreateTxValidatorSyncOp(bc, stateBlockHash, slot, valSyncOp)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func CreateValidatorSyncTx(
 	return signed, nil
 }
 
-func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, valSyncOp *types.ValidatorSync) (bool, error) {
+func ValidateCreateTxValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, slot uint64, valSyncOp *types.ValidatorSync) (bool, error) {
 	if valSyncOp == nil {
 		return false, fmt.Errorf("validator sync operation failed: nil data")
 	}
@@ -110,9 +110,11 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 	if stateHead == nil {
 		return false, fmt.Errorf("validator sync operation failed: state block not found heash=%s", stateBlockHash.Hex())
 	}
-	stateEpoch := bc.GetSlotInfo().SlotToEpoch(stateHead.Slot)
-	if valSyncOp.ProcEpoch < stateEpoch {
-		return false, fmt.Errorf("validator sync operation failed: outdated epoch ProcEpoch=%d stateEpoch=%d", valSyncOp.ProcEpoch, stateEpoch)
+	if !bc.Config().IsForkSlotDelegate(slot) {
+		stateEpoch := bc.GetSlotInfo().SlotToEpoch(stateHead.Slot)
+		if valSyncOp.ProcEpoch < stateEpoch {
+			return false, fmt.Errorf("validator sync operation failed: outdated epoch ProcEpoch=%d stateEpoch=%d", valSyncOp.ProcEpoch, stateEpoch)
+		}
 	}
 
 	stateDb, err := bc.StateAt(stateHead.Root)
@@ -238,13 +240,35 @@ func GetPendingValidatorSyncData(bc *core.BlockChain) map[common.Hash]*types.Val
 			vsPending[k] = vs
 		} else if bc.Config().IsForkSlotDelegate(si.CurrentSlot()) {
 			if vs.ProcEpoch < currEpoch {
+				//remove stale validator sync operation from the pool
+				if vs.ProcEpoch < bc.Config().ForkSlotDelegate {
+					if vs.TxHash == nil {
+						//set dummy txHash
+						vs.TxHash = &vs.InitTxHash
+					}
+					bc.SetValidatorSyncData(vs)
+					log.Warn("=== ValidatorSync: GetPendingValidatorSyncData: stale op removed",
+						"OpType", vs.OpType,
+						"currEpoch", currEpoch,
+						"ProcEpoch", vs.ProcEpoch,
+						"Index", vs.Index,
+						"OpType", vs.OpType,
+						"Amount", vs.Amount.String(),
+						"Balance", vs.Balance.String(),
+						"TxHash", fmt.Sprintf("%#x", vs.TxHash),
+						"InitTxHash", vs.InitTxHash.Hex(),
+						"Creator", vs.Creator.Hex(),
+					)
+					continue
+				}
+
+				//add to pending
 				//vs.ProcEpoch = currEpoch
 				vsPending[k] = vs
-
 				log.Info("=== ValidatorSync: GetPendingValidatorSyncData === 11111",
 					"slot", si.CurrentSlot(),
-					"Index", vs.Index,
 					"ProcEpoch", vs.ProcEpoch,
+					"Index", vs.Index,
 					"OpType", vs.OpType,
 					"Amount", vs.Amount.String(),
 					"Balance", vs.Balance.String(),

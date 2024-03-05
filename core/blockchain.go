@@ -1626,6 +1626,7 @@ func (bc *BlockChain) rollbackBlockFinalization(finNr uint64) error {
 
 	batch := bc.db.NewBatch()
 	rawdb.DeleteFinalizedHashNumber(batch, hash, finNr)
+	rawdb.DeleteReceipts(batch, hash)
 
 	// update finalized number cache
 	bc.hc.numberCache.Remove(hash)
@@ -2541,6 +2542,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 			"block slot", block.Slot(),
 			"coinbase", block.Coinbase().Hex(),
 		)
+		return errors.New("block verification: empty block has invalid coinbase")
 	}
 
 	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
@@ -2564,7 +2566,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 			"coinbase", block.Coinbase().Hex(),
 		)
 
-		return err
+		return errors.New("block verification: empty block has invalid slot")
 	}
 
 	haveBlocks, err := bc.HaveEpochBlocks(blockEpoch - 1)
@@ -4474,7 +4476,7 @@ func (bc *BlockChain) verifyBlockValidatorSyncTx(block *types.Block, tx *types.T
 
 	switch v := op.(type) {
 	case validatorOp.ValidatorSync:
-		validator.ValidateValidatorSyncOp(bc, v, block.Slot(), tx.Hash())
+		return validator.ValidateValidatorSyncOp(bc, v, block.Slot(), tx.Hash())
 	}
 	return nil
 }
@@ -4570,7 +4572,16 @@ func (bc *BlockChain) RestoreValidatorSyncOp(tx *types.Transaction, header *type
 				"amount", v.Amount().String(),
 				"InitTxHash", fmt.Sprintf("%#x", v.InitTxHash()),
 			)
-			return nil
+			if !bc.Config().IsForkSlotDelegate(header.Slot) {
+				return nil
+			}
+			// check tx status
+			rc, _, _ := bc.GetTransactionReceipt(*savedValSync.TxHash)
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				return nil
+			} else {
+				bc.notProcValSyncOps[savedValSync.Key()].TxHash = nil
+			}
 		}
 		//reset tx hash
 		savedValSync.TxHash = nil
