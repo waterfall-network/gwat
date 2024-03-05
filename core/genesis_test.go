@@ -37,14 +37,14 @@ func TestDefaultGenesisBlock(t *testing.T) {
 		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
 	}
 
-	block = DefaultDevNetGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.DevNetGenesisHash {
-		t.Errorf("wrong wf test net genesis hash, got %v, want %v", block.Hash(), params.DevNetGenesisHash)
+	block = DefaultTestNet8GenesisBlock().ToBlock(nil)
+	if block.Hash() != params.Testnet8GenesisHash {
+		t.Errorf("wrong wf testnet8 genesis hash, got %v, want %v", block.Hash(), params.Testnet8GenesisHash)
 	}
 }
 
 func TestInvalidCliqueConfig(t *testing.T) {
-	block := DefaultDevNetGenesisBlock()
+	block := DefaultTestNet8GenesisBlock()
 	block.ExtraData = []byte{}
 	if _, err := block.Commit(nil); err == nil {
 		t.Fatal("Expected error on invalid clique config")
@@ -105,14 +105,14 @@ func TestSetupGenesis(t *testing.T) {
 			wantConfig: customg.Config,
 		},
 		{
-			name: "custom block in DB, genesis == devnet",
+			name: "custom block in DB, genesis == testnet8",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				customg.MustCommit(db)
-				return SetupGenesisBlock(db, DefaultDevNetGenesisBlock())
+				return SetupGenesisBlock(db, DefaultTestNet8GenesisBlock())
 			},
-			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.DevNetGenesisHash},
-			wantHash:   params.DevNetGenesisHash,
-			wantConfig: params.DevNetChainConfig,
+			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.Testnet8GenesisHash},
+			wantHash:   params.Testnet8GenesisHash,
+			wantConfig: params.Testnet8ChainConfig,
 		},
 	}
 
@@ -150,8 +150,8 @@ func TestGenesisHashes(t *testing.T) {
 			hash:    params.MainnetGenesisHash,
 		},
 		{
-			genesis: DefaultDevNetGenesisBlock(),
-			hash:    params.DevNetGenesisHash,
+			genesis: DefaultTestNet8GenesisBlock(),
+			hash:    params.Testnet8GenesisHash,
 		},
 	}
 	for i, c := range cases {
@@ -177,6 +177,7 @@ func TestSetupGenesisWithValidators(t *testing.T) {
 			SecondsPerSlot:         4,
 			SlotsPerEpoch:          32,
 			ForkSlotSubNet1:        1000,
+			ForkSlotDelegate:       1000,
 			ValidatorsStateAddress: nil,
 			EffectiveBalance:       big.NewInt(3200),
 		},

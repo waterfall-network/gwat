@@ -18,6 +18,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/txlog"
 )
 
 type Backend interface {
@@ -26,6 +27,10 @@ type Backend interface {
 	GetVP(ctx context.Context, state *state.StateDB, header *types.Header) (*Processor, func() error, error)
 	GetLastFinalizedBlock() *types.Block
 	ChainConfig() *params.ChainConfig
+	GetBlockFinalizedNumber(hash common.Hash) *uint64
+	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
+	GetTransaction(context.Context, common.Hash) (*types.Transaction, common.Hash, uint64, error)
+	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
 }
 type Blockchain interface {
 	ValidatorStorage() valStore.Storage
@@ -50,13 +55,6 @@ func NewPublicValidatorAPI(b Backend, chain Blockchain) *PublicValidatorAPI {
 	return &PublicValidatorAPI{b, chain}
 }
 
-type DepositArgs struct {
-	PubKey            *common.BlsPubKey    `json:"pubkey"`             // validator public key
-	CreatorAddress    *common.Address      `json:"creator_address"`    // attached creator account
-	WithdrawalAddress *common.Address      `json:"withdrawal_address"` // attached withdrawal credentials
-	Signature         *common.BlsSignature `json:"signature"`
-}
-
 // GetAPIs provides api access
 func GetAPIs(apiBackend Backend, chain Blockchain) []rpc.API {
 	return []rpc.API{
@@ -69,7 +67,28 @@ func GetAPIs(apiBackend Backend, chain Blockchain) []rpc.API {
 	}
 }
 
-// DepositData creates a validators deposit data for deposit tx.
+type DepositArgs struct {
+	PubKey            *common.BlsPubKey    `json:"pubkey"`             // validator public key
+	CreatorAddress    *common.Address      `json:"creator_address"`    // attached creator account
+	WithdrawalAddress *common.Address      `json:"withdrawal_address"` // attached withdrawal credentials
+	Signature         *common.BlsSignature `json:"signature"`
+	DelegatingStake   *DelegatingStakeArgs `json:"delegating_stake"`
+}
+
+type DelegatingStakeArgs struct {
+	Rules       *DelegatingRulesArgs `json:"rules"`        // rules after trial period
+	TrialPeriod *uint64              `json:"trial_period"` // period while trial_rules are active (in slots, starts from activation slot)
+	TrialRules  *DelegatingRulesArgs `json:"trial_rules"`  // rules for trial period
+}
+
+type DelegatingRulesArgs struct {
+	ProfitShare *map[common.Address]uint8 `json:"profit_share"` // map of participants profit share in %
+	StakeShare  *map[common.Address]uint8 `json:"stake_share"`  // map of participants stake share in % (after exit)
+	Exit        *[]common.Address         `json:"exit"`         // addresses of role  to init exit
+	Withdrawal  *[]common.Address         `json:"withdrawal"`   // addresses of role  to init exit
+}
+
+// Validator_DepositData creates a validators deposit data for deposit tx.
 func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args DepositArgs) (hexutil.Bytes, error) {
 	if args.PubKey == nil {
 		return nil, operation.ErrNoPubKey
@@ -85,11 +104,40 @@ func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args Depos
 	}
 
 	var (
-		op  operation.Operation
-		err error
+		op                operation.Operation
+		err               error
+		delegatingStake   *operation.DelegatingStakeData
+		rules, trialRules *operation.DelegatingStakeRules
 	)
+	if args.DelegatingStake != nil {
+		dlgStakeArg := args.DelegatingStake
+		if dlgStakeArg.Rules == nil {
+			return nil, operation.ErrNoRules
+		}
+		if dlgStakeArg.TrialPeriod == nil {
+			def := uint64(0)
+			dlgStakeArg.TrialPeriod = &def
+		}
+		if dlgStakeArg.TrialRules == nil {
+			dlgStakeArg.TrialRules = &DelegatingRulesArgs{}
+		}
+		ar := dlgStakeArg.Rules
+		rules, err = operation.NewDelegatingStakeRules(*ar.ProfitShare, *ar.StakeShare, *ar.Exit, *ar.Withdrawal)
+		if err != nil {
+			return nil, err
+		}
+		atr := dlgStakeArg.TrialRules
+		trialRules, err = operation.NewDelegatingStakeRules(*atr.ProfitShare, *atr.StakeShare, *atr.Exit, *atr.Withdrawal)
+		if err != nil {
+			return nil, err
+		}
 
-	if op, err = operation.NewDepositOperation(*args.PubKey, *args.CreatorAddress, *args.WithdrawalAddress, *args.Signature); err != nil {
+		if delegatingStake, err = operation.NewDelegatingStakeData(rules, *dlgStakeArg.TrialPeriod, trialRules); err != nil {
+			return nil, err
+		}
+	}
+
+	if op, err = operation.NewDepositOperation(*args.PubKey, *args.CreatorAddress, *args.WithdrawalAddress, *args.Signature, delegatingStake); err != nil {
 		return nil, err
 	}
 
@@ -101,7 +149,7 @@ func (s *PublicValidatorAPI) Validator_DepositData(_ context.Context, args Depos
 	return b, nil
 }
 
-// DepositCount returns a validators deposit count.
+// Validator_DepositCount returns a validators deposit count.
 func (s *PublicValidatorAPI) Validator_DepositCount(ctx context.Context, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
 	bNrOrHash := rpc.BlockNumberOrHashWithHash(s.b.GetLastFinalizedBlock().Hash(), false)
 	if blockNrOrHash != nil {
@@ -246,4 +294,70 @@ func (s *PublicValidatorAPI) Validator_GetInfo(ctx context.Context, address comm
 	stateDb, _ := s.chain.StateAt(s.chain.GetEraInfo().GetEra().Root)
 
 	return s.chain.ValidatorStorage().GetValidator(stateDb, address)
+}
+
+// Validator_GetTransactionReceipt returns the transaction receipt of the validator op with parsed data.
+func (s *PublicValidatorAPI) Validator_GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	tx, blockHash, index, err := s.b.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, nil
+	}
+	blockNumber := s.b.GetBlockFinalizedNumber(blockHash)
+	if blockNumber == nil || *blockNumber == 0 {
+		return nil, nil
+	}
+	receipts, err := s.b.GetReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	if len(receipts) <= int(index) {
+		return nil, nil
+	}
+	receipt := receipts[index]
+
+	// Derive the sender.
+	signer := types.MakeSigner(s.b.ChainConfig())
+	from, _ := types.Sender(signer, tx)
+
+	fields := map[string]interface{}{
+		"blockHash":         blockHash,
+		"blockNumber":       hexutil.Uint64(*blockNumber),
+		"transactionHash":   hash,
+		"transactionIndex":  hexutil.Uint64(index),
+		"from":              from,
+		"to":                tx.To(),
+		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+		"contractAddress":   nil,
+		"logsBloom":         receipt.Bloom,
+		"type":              hexutil.Uint(tx.Type()),
+	}
+	header, err := s.b.HeaderByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	gasPrice := new(big.Int).Add(header.BaseFee, tx.EffectiveGasTipValue(header.BaseFee))
+	fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+
+	// Assign receipt status or post state.
+	if len(receipt.PostState) > 0 {
+		fields["root"] = hexutil.Bytes(receipt.PostState)
+	} else {
+		fields["status"] = hexutil.Uint(receipt.Status)
+	}
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if receipt.ContractAddress != (common.Address{}) {
+		fields["contractAddress"] = receipt.ContractAddress
+	}
+	// add parsed logs
+	if receipt.Logs == nil {
+		fields["logs"] = [][]*types.Log{}
+	} else {
+		parsedLogs := make([]*types.ParsedLog, len(receipt.Logs))
+		for i, log := range receipt.Logs {
+			parsedLogs[i] = txlog.LogToParsedLog(log)
+		}
+		fields["logs"] = parsedLogs
+	}
+	return fields, nil
 }

@@ -84,17 +84,21 @@ func TestValidatorSync_MarshalJSON(t *testing.T) {
 		Index:      45645,
 		Creator:    common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 		Amount:     new(big.Int),
+		Balance:    new(big.Int),
 		TxHash:     nil,
 		InitTxHash: common.Hash{1, 2, 3},
 	}
 	src_1.Amount.SetString("32789456000000", 10)
+	src_1.Balance.SetString("32789456000000", 10)
 
 	//fmt.Println()
-	exp := "{\"opType\":\"0x2\"," +
+	exp := []byte("{\"opType\":\"0x2\"," +
 		"\"procEpoch\":\"0xb24d\"," +
 		"\"index\":\"0xb24d\"," +
 		"\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\"," +
-		"\"amount\":\"0x1dd263e09400\",\"txHash\":null,\"InitTxHash\":\"0x0102030000000000000000000000000000000000000000000000000000000000\"}"
+		"\"amount\":\"0x1dd263e09400\"," +
+		"\"balance\":\"0x1dd263e09400\"," +
+		"\"txHash\":null,\"InitTxHash\":\"0x0102030000000000000000000000000000000000000000000000000000000000\"}")
 	tests := []struct {
 		name string
 		src  *ValidatorSync
@@ -109,8 +113,11 @@ func TestValidatorSync_MarshalJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, _ := tt.src.MarshalJSON()
-			got := res
-			if !reflect.DeepEqual(got, tt.want) {
+			got := &ValidatorSync{}
+			got.UnmarshalJSON(res)
+			expected := &ValidatorSync{}
+			expected.UnmarshalJSON(tt.want.([]byte))
+			if !reflect.DeepEqual(got, expected) {
 				t.Errorf("got:  %v\nwant: %v", got, tt.want)
 			}
 		})
@@ -124,9 +131,11 @@ func TestValidatorSync_UnMarshalJSON(t *testing.T) {
 		Index:      45645,
 		Creator:    common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 		Amount:     new(big.Int),
+		Balance:    new(big.Int),
 		InitTxHash: common.Hash{1, 2, 3},
 	}
 	src_1.Amount.SetString("32789456000000", 10)
+	src_1.Balance.SetString("1032789456000000", 10)
 
 	input, _ := src_1.MarshalJSON()
 	tests := []struct {
@@ -262,7 +271,7 @@ func TestCheckpoint_MarshalJSON(t *testing.T) {
 		Spine:    common.Hash{0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22},
 	}
 	//fmt.Println()
-	exp := "{\"epoch\":\"0xb24d\"," +
+	exp := "{\"epoch\":\"0xb24d\",\"finEpoch\":\"0xb24f\"," +
 		"\"root\":\"0x1111111111111111110000000000000000000000000000000000000000000000\"," +
 		"\"spine\":\"0x2222222222222222220000000000000000000000000000000000000000000000\"}"
 	tests := []struct {
@@ -390,7 +399,7 @@ func TestFinalizationParams_MarshalJSON(t *testing.T) {
 	src_1.ValSyncData[0].Amount.SetString("32789456000000", 10)
 
 	//fmt.Println()
-	exp := "{\"spines\":[\"0x2222000000000000000000000000000000000000000000000000000000000000\",\"0x3333000000000000000000000000000000000000000000000000000000000000\"],\"baseSpine\":\"0x1111000000000000000000000000000000000000000000000000000000000000\",\"checkpoint\":{\"epoch\":\"0xb24d\",\"finEpoch\":\"0xb24f\",\"root\":\"0x1111111111111111110000000000000000000000000000000000000000000000\",\"spine\":\"0x2222222222222222220000000000000000000000000000000000000000000000\"},\"valSyncData\":[{\"opType\":\"0x2\",\"procEpoch\":\"0xb24d\",\"index\":\"0xb24d\",\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"amount\":\"0x1dd263e09400\",\"txHash\":null,\"InitTxHash\":\"0x0102030000000000000000000000000000000000000000000000000000000000\"}],\"syncMode\":\"0x2\"}"
+	exp := []byte("{\"spines\":[\"0x2222000000000000000000000000000000000000000000000000000000000000\",\"0x3333000000000000000000000000000000000000000000000000000000000000\"],\"baseSpine\":\"0x1111000000000000000000000000000000000000000000000000000000000000\",\"checkpoint\":{\"epoch\":\"0xb24d\",\"finEpoch\":\"0xb24f\",\"root\":\"0x1111111111111111110000000000000000000000000000000000000000000000\",\"spine\":\"0x2222222222222222220000000000000000000000000000000000000000000000\"},\"valSyncData\":[{\"initTxHash\":\"0x0102030000000000000000000000000000000000000000000000000000000000\",\"opType\":\"0x2\",\"procEpoch\":\"0xb24d\",\"index\":\"0xb24d\",\"creator\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"amount\":\"0x1dd263e09400\",\"txHash\":null,\"balance\":null}],\"syncMode\":\"0x2\"}")
 
 	tests := []struct {
 		name string
@@ -406,8 +415,11 @@ func TestFinalizationParams_MarshalJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, _ := tt.src.MarshalJSON()
-			got := res
-			if !reflect.DeepEqual(got, tt.want) {
+			got := &FinalizationParams{}
+			got.UnmarshalJSON(res)
+			expected := &FinalizationParams{}
+			expected.UnmarshalJSON(tt.want.([]byte))
+			if !reflect.DeepEqual(got, expected) {
 				t.Errorf("got:  %v\nwant: %v", got, tt.want)
 			}
 		})

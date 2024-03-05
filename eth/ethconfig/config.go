@@ -172,8 +172,8 @@ type Config struct {
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
-	// Berlin block override (TODO: remove after the fork)
-	OverrideLondon *big.Int `toml:",omitempty"`
+	// OverrideDelegatingStake slot override (TODO: remove after the fork)
+	OverrideDelegatingStake *uint64 `toml:",omitempty"`
 
 	// is dev mode running
 	IsDevMode bool

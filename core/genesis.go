@@ -18,12 +18,12 @@ package core
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/hexutil"
@@ -36,7 +36,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
@@ -44,6 +43,17 @@ import (
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 //go:generate gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
+
+var (
+	//go:embed genesis_json/mainnet/genesis.json
+	mainnetGenesisJson []byte
+	//go:embed genesis_json/mainnet/deposit_data.json
+	mainnetDepositDataJson []byte
+	//go:embed genesis_json/testnet8/genesis.json
+	testnet8GenesisJson []byte
+	//go:embed genesis_json/testnet8/deposit_data.json
+	testnet8DepositDataJson []byte
+)
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
@@ -184,7 +194,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	return SetupGenesisBlockWithOverride(db, genesis, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideLondon *big.Int) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegatingStakeSlot *uint64) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -197,8 +207,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		} else {
 			log.Info("Writing custom genesis block")
 		}
+		if delegatingStakeSlot != nil {
+			genesis.Config.ForkSlotDelegate = *delegatingStakeSlot
+		}
 		block, err := genesis.Commit(db)
-		log.Info("Writing custom genesis block", "hash", block.Hash().Hex())
+		log.Info("Writing custom genesis block", "hash", block.Hash().Hex(), "root", block.Root().Hex())
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -235,9 +248,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	}
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
-	//if overrideLondon != nil {
-	//	newcfg.LondonBlock = overrideLondon
-	//}
+	if delegatingStakeSlot != nil {
+		newcfg.ForkSlotDelegate = *delegatingStakeSlot
+	}
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
@@ -251,6 +264,15 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
 	if genesis == nil && stored != params.MainnetGenesisHash {
+		if storedcfg.ForkSlotDelegate == 0 {
+			storedcfg.ForkSlotDelegate = newcfg.ForkSlotDelegate
+		}
+		if delegatingStakeSlot != nil {
+			storedcfg.ForkSlotDelegate = *delegatingStakeSlot
+		}
+		if storedcfg.ForkSlotSubNet1 == 0 {
+			storedcfg.ForkSlotSubNet1 = newcfg.ForkSlotSubNet1
+		}
 		return storedcfg, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
@@ -270,8 +292,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return g.Config
 	case ghash == params.MainnetGenesisHash:
 		return params.MainnetChainConfig
-	case ghash == params.DevNetGenesisHash:
-		return params.DevNetChainConfig
+	case ghash == params.Testnet8GenesisHash:
+		return params.Testnet8ChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -365,7 +387,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(db, genesisEra.Number)
 
-	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root)
+	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root.Hex())
 
 	return genesisBlock
 }
@@ -443,61 +465,53 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:    params.MainnetChainConfig,
-		ExtraData: hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:  5000,
-		Alloc:     decodePrealloc(mainnetAllocData),
+	genesis := new(Genesis)
+	err := json.Unmarshal(mainnetGenesisJson, &genesis)
+	if err != nil {
+		log.Crit("Failed to unmarshal mainnet genesis data", "err", err)
 	}
+	depositData := make(DepositData, 0)
+	err = json.Unmarshal(mainnetDepositDataJson, &depositData)
+	if err != nil {
+		log.Crit("Failed to unmarshal mainnet deposit data", "err", err)
+	}
+	if len(depositData) == 0 {
+		log.Crit("Empty mainnet genesis data")
+	}
+	genesis.Validators = depositData
+	if err = genesis.Config.Validate(); err != nil {
+		log.Crit("Invalid mainnet genesis config", "err", err)
+	}
+	return genesis
 }
 
-// DefaultDevNetGenesisBlock returns the Ropsten network genesis block.
-func DefaultDevNetGenesisBlock() *Genesis {
-	acc1 := common.HexToAddress("e43bb1b64fc7068d313d24d01d8ccca785b22c72")
-	accBalance1 := new(big.Int)
-	accBalance1.SetString("100000000000000000000000000000000000000000000", 10)
-
-	acc2 := common.HexToAddress("6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d")
-	acc3 := common.HexToAddress("a7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
-
-	return &Genesis{
-		Config: params.DevNetChainConfig,
-		ExtraData: hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000" +
-			"e43bb1b64fc7068d313d24d01d8ccca785b22c72" +
-			"6e9e76fa278190cfb2404e5923d3ccd7e8f6c51d" +
-			"00000000000000000000000000000000000000000000000000000000"),
-		GasLimit: 1200000000,
-
-		Alloc: GenesisAlloc{
-			acc1: GenesisAccount{
-				Code:       nil,
-				Storage:    nil,
-				Balance:    accBalance1,
-				Nonce:      0,
-				PrivateKey: nil,
-			},
-			acc2: GenesisAccount{
-				Code:       nil,
-				Storage:    nil,
-				Balance:    accBalance1,
-				Nonce:      0,
-				PrivateKey: nil,
-			},
-			acc3: GenesisAccount{
-				Code:       nil,
-				Storage:    nil,
-				Balance:    accBalance1,
-				Nonce:      0,
-				PrivateKey: nil,
-			},
-		},
+// DefaultTestNet8GenesisBlock returns the tesnet8 network genesis block.
+func DefaultTestNet8GenesisBlock() *Genesis {
+	genesis := new(Genesis)
+	err := json.Unmarshal(testnet8GenesisJson, &genesis)
+	if err != nil {
+		log.Crit("Failed to unmarshal testnet8 genesis data", "err", err)
 	}
+	depositData := make(DepositData, 0)
+	err = json.Unmarshal(testnet8DepositDataJson, &depositData)
+	if err != nil {
+		log.Crit("Failed to unmarshal testnet8 deposit data", "err", err)
+	}
+	if len(depositData) == 0 {
+		log.Crit("Empty testnet8 genesis data")
+	}
+	genesis.Validators = depositData
+	if err = genesis.Config.Validate(); err != nil {
+		log.Crit("Invalid testnet8 genesis config", "err", err)
+	}
+	return genesis
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
+// Deprecated
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
-	config := *params.AllCliqueProtocolChanges
+	config := *params.AllEthashProtocolChanges
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	return &Genesis{
 		Config:    &config,
@@ -517,16 +531,4 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 			faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
 		},
 	}
-}
-
-func decodePrealloc(data string) GenesisAlloc {
-	var p []struct{ Addr, Balance *big.Int }
-	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
-		panic(err)
-	}
-	ga := make(GenesisAlloc, len(p))
-	for _, account := range p {
-		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
-	}
-	return ga
 }

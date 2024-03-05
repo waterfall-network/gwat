@@ -9,16 +9,17 @@ import (
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/txlog"
 )
 
 var (
@@ -30,14 +31,12 @@ var (
 	ErrInvalidFromAddresses   = errors.New("withdrawal and sender addresses are mismatch")
 	ErrUnknownValidator       = errors.New("unknown validator")
 	ErrNoWithdrawalCred       = errors.New("no withdrawal credentials")
-	ErrMismatchPulicKey       = errors.New("validators public key mismatch")
+	ErrMismatchPulicKey       = errors.New("validator public key mismatch")
 	ErrNotActivatedValidator  = errors.New("validator not activated yet")
 	ErrValidatorIsOut         = errors.New("validator is exited")
 	ErrInvalidToAddress       = errors.New("address to must be validators state address")
-	ErrNoExitRequest          = errors.New("exit request is require before withdrawal operation")
-	ErrTargetEraNotFound      = errors.New("target era not found")
 	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
-	ErrMismatchTxHashes       = errors.New("validator sync tx already exists")
+	ErrValSyncTxExists        = errors.New("validator sync tx already exists")
 	ErrMismatchValSyncOp      = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
 	ErrInvalidOpEpoch         = errors.New("epoch to apply tx is not acceptable")
 	ErrTxNF                   = errors.New("tx not found")
@@ -46,29 +45,26 @@ var (
 	ErrInvalidOpCode          = errors.New("invalid operation code")
 	ErrInvalidCreator         = errors.New("invalid creator address")
 	ErrInvalidAmount          = errors.New("invalid amount")
+	ErrMismatchDelegateData   = errors.New("validator deposit failed (mismatch delegate stake data)")
+	ErrSenderRejByDelegate    = errors.New("sender addresses rejected by delegating stake rules")
 )
 
 const (
-	// 1024 bytes
-	MetadataMaxSize = 1 << 10
-
-	// Common fields
-	pubkeyLogType    = "pubkey"
-	signatureLogType = "signature"
-	addressLogType   = "address"
-	uint256LogType   = "uint256"
-	boolLogType      = "bool"
-	postpone         = 2
+	//	// 1024 bytes
+	//	MetadataMaxSize = 1 << 10
+	//
+	//	// Common fields
+	//	pubkeyLogType    = "pubkey"
+	//	signatureLogType = "signature"
+	//	addressLogType   = "address"
+	//	uint256LogType   = "uint256"
+	//	boolLogType      = "bool"
+	postpone = 2
 )
 
 var (
 	// minimal value - 10 wat
 	MinDepositVal, _ = new(big.Int).SetString("10000000000000000000", 10)
-
-	//Events signatures.
-	EvtDepositLogSignature    = crypto.Keccak256Hash([]byte("DepositLog"))
-	EvtExitReqLogSignature    = crypto.Keccak256Hash([]byte("ExitRequestLog"))
-	EvtWithdrawalLogSignature = crypto.Keccak256Hash([]byte("WithdrawaRequestLog"))
 )
 
 // Ref represents caller of the validator processor
@@ -104,7 +100,7 @@ type message interface {
 type Processor struct {
 	state        vm.StateDB
 	ctx          vm.BlockContext
-	eventEmmiter *EventEmmiter
+	eventEmmiter *txlog.EventEmmiter
 	storage      valStore.Storage
 	blockchain   blockchain
 }
@@ -114,7 +110,7 @@ func NewProcessor(blockCtx vm.BlockContext, stateDb vm.StateDB, bc blockchain) *
 	return &Processor{
 		ctx:          blockCtx,
 		state:        stateDb,
-		eventEmmiter: NewEventEmmiter(stateDb),
+		eventEmmiter: txlog.NewEventEmmiter(stateDb),
 		storage:      valStore.NewStorage(bc.Config()),
 		blockchain:   bc,
 	}
@@ -183,6 +179,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"creator", v.CreatorAddress().Hex(),
 				"withdrawalAddress", v.WithdrawalAddress().Hex(),
 				"pubKey", v.PubKey().Hex(),
+				"delegatingStake", v.DelegatingStake() != nil,
 				"err", err,
 			)
 		} else {
@@ -194,6 +191,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"creator", v.CreatorAddress().Hex(),
 				"withdrawalAddress", v.WithdrawalAddress().Hex(),
 				"pubKey", v.PubKey().Hex(),
+				"delegatingStake", v.DelegatingStake() != nil,
 			)
 		}
 	case operation.ValidatorSync:
@@ -264,6 +262,15 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		return nil, ErrInvalidToAddress
 	}
 
+	// validate deposit signature
+	if err = operation.VerifyDepositSig(op.Signature(), op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress()); err != nil {
+		return nil, err
+	}
+
+	if value == nil || value.Cmp(MinDepositVal) < 0 {
+		return nil, ErrTooLowDepositValue
+	}
+
 	// check amount can add to log
 	if !common.BnCanCastToUint64(new(big.Int).Div(value, common.BigGwei)) {
 		return nil, ErrInvalidAmount
@@ -271,9 +278,6 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	from := caller.Address()
 
-	if value == nil || value.Cmp(MinDepositVal) < 0 {
-		return nil, ErrTooLowDepositValue
-	}
 	balanceFrom := p.state.GetBalance(from)
 	if balanceFrom.Cmp(value) < 0 {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForOp, from.Hex())
@@ -283,7 +287,21 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 
 	validator := valStore.NewValidator(op.PubKey(), op.CreatorAddress(), &withdrawalAddress)
 
-	// if validator already exist
+	if op.DelegatingStake() != nil {
+		//check activation fork
+		if !p.blockchain.Config().IsForkSlotDelegate(p.ctx.Slot) {
+			return nil, operation.ErrDelegateForkRequire
+		}
+		if err = op.DelegatingStake().Rules.Validate(); err != nil {
+			return nil, err
+		}
+		validator.DelegatingStake, err = operation.NewDelegatingStakeData(&op.DelegatingStake().Rules, op.DelegatingStake().TrialPeriod, &op.DelegatingStake().TrialRules)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// if validator already exist - check data compliance
 	currValidator, _ := p.Storage().GetValidator(p.state, op.CreatorAddress())
 
 	if currValidator != nil {
@@ -294,6 +312,24 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		if currValidator.PubKey != op.PubKey() {
 			return nil, errors.New("validator deposit failed (mismatch public key)")
 		}
+
+		if *currValidator.WithdrawalAddress != op.WithdrawalAddress() {
+			return nil, errors.New("validator deposit failed (mismatch withdrawal address)")
+		}
+
+		//check delegating stake data are equal
+		curDlg, err := currValidator.DelegatingStake.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		opDlg, err := op.DelegatingStake().MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(curDlg, opDlg) {
+			return nil, ErrMismatchDelegateData
+		}
+
 		validator = currValidator
 	}
 
@@ -304,7 +340,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		return nil, err
 	}
 
-	logData := PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
+	logData := txlog.PackDepositLogData(op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress(), value, op.Signature(), p.getDepositCount())
 	p.eventEmmiter.Deposit(toAddr, logData)
 	p.incrDepositCount()
 	// burn value from sender balance
@@ -345,11 +381,33 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		return nil, ErrValidatorIsOut
 	}
 
-	if from != *validator.GetWithdrawalAddress() {
+	if validator.HasDelegatingStake() {
+		//check delegating roles
+		//retrieve actual rules
+		var actualRules = &validator.DelegatingStake.Rules
+		isTrial, err := p.isValidatorTrialPeriod(validator)
+		if err != nil {
+			return nil, err
+		}
+		if isTrial {
+			actualRules = &validator.DelegatingStake.TrialRules
+		}
+		allowedAddrs := actualRules.Exit()
+		var isAllowed bool
+		for _, adr := range allowedAddrs {
+			if adr == from {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return nil, ErrSenderRejByDelegate
+		}
+	} else if from != *validator.GetWithdrawalAddress() {
 		return nil, ErrInvalidFromAddresses
 	}
 
-	logData := PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
+	logData := txlog.PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
 	p.eventEmmiter.ExitRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
@@ -389,7 +447,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		)
 		stakeByAddr := validator.StakeByAddress(from)
 		//withdrawal address must be one of the depositors
-		if stakeByAddr == nil {
+		if stakeByAddr == nil || stakeByAddr.Cmp(new(big.Int)) == 0 {
 			return nil, ErrInvalidFromAddresses
 		}
 		// check amount
@@ -420,6 +478,28 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		if err != nil {
 			return nil, err
 		}
+	} else if validator.HasDelegatingStake() {
+		//check delegating roles
+		//retrieve actual rules
+		var actualRules = &validator.DelegatingStake.Rules
+		isTrial, err := p.isValidatorTrialPeriod(validator)
+		if err != nil {
+			return nil, err
+		}
+		if isTrial {
+			actualRules = &validator.DelegatingStake.TrialRules
+		}
+		allowedAddrs := actualRules.Withdrawal()
+		var isAllowed bool
+		for _, adr := range allowedAddrs {
+			if adr == from {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return nil, ErrSenderRejByDelegate
+		}
 	} else {
 		// check withdrawal credentials
 		if from != *validator.GetWithdrawalAddress() {
@@ -429,9 +509,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 
 	// create tx log
 	amtGwei := new(big.Int).Div(opAmount, common.BigGwei).Uint64()
-
-	logData := PackWithdrawalLogData(validator.GetPubKey(), op.CreatorAddress(), validator.GetIndex(), amtGwei)
-
+	logData := txlog.PackWithdrawalLogData(validator.GetPubKey(), op.CreatorAddress(), validator.GetIndex(), amtGwei)
 	p.eventEmmiter.WithdrawalRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
@@ -482,6 +560,15 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 
 	p.Storage().AddValidatorToList(p.state, op.Index(), op.Creator())
 
+	//check delegating activation fork
+	if p.blockchain.Config().IsForkSlotDelegate(p.ctx.Slot) {
+		//add tx log
+		logData, err := txlog.PackActivateLogData(op.InitTxHash(), op.Creator(), op.ProcEpoch(), op.Index())
+		if err != nil {
+			return nil, err
+		}
+		p.eventEmmiter.AddActivateLog(p.GetValidatorsStateAddress(), logData, op.Creator(), op.InitTxHash())
+	}
 	return op.Creator().Bytes(), nil
 }
 
@@ -508,6 +595,17 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
+
+	//check delegating activation fork
+	if p.blockchain.Config().IsForkSlotDelegate(p.ctx.Slot) {
+		//add tx log
+		logData, err := txlog.PackDeactivateLogData(op.InitTxHash(), op.Creator(), op.ProcEpoch(), op.Index())
+		if err != nil {
+			return nil, err
+		}
+		p.eventEmmiter.AddDeactivateLog(p.GetValidatorsStateAddress(), logData, op.Creator(), op.InitTxHash())
+	}
+
 	return op.Creator().Bytes(), nil
 }
 
@@ -526,7 +624,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
 	if stake := validator.TotalStake(); validator.GetActivationEra() == math.MaxUint64 &&
 		stake != nil && stake.Cmp(effectiveBalanceWei) < 0 {
-		// withdrawal of insufficient deposit to activate validator
+		// Handle of refund of deposited amount in case of insufficient amount to activate validator
 		log.Info("Validator update balance: refunds of insufficient deposit",
 			"opCode", op.OpCode(),
 			"InitTxHash", op.InitTxHash().Hex(),
@@ -553,7 +651,11 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		signer := types.LatestSigner(p.blockchain.Config())
 		iTxFrom, _ := types.Sender(signer, initTx)
 		withdrawalTo = &iTxFrom
+	} else if validator.HasDelegatingStake() {
+		// Handle delegate rules
+		return p.applyDelegatingStakeRules(op, validator)
 	} else {
+		// Handle default withdrawal op
 		// set withdrawal credentials
 		withdrawalTo = validator.GetWithdrawalAddress()
 		if withdrawalTo == nil {
@@ -563,57 +665,155 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	// transfer amount to withdrawal address
 	p.state.AddBalance(*withdrawalTo, op.Amount())
 
+	//check delegating activation fork
+	if p.blockchain.Config().IsForkSlotDelegate(p.ctx.Slot) {
+		//add tx log
+		logData, err := txlog.PackUpdateBalanceLogData(op.InitTxHash(), op.Creator(), op.ProcEpoch(), op.Amount())
+		if err != nil {
+			return nil, err
+		}
+		p.eventEmmiter.AddUpdateBalanceLog(p.GetValidatorsStateAddress(), logData, op.Creator(), op.InitTxHash(), withdrawalTo)
+	}
+
 	return op.Creator().Bytes(), nil
 }
 
-type logEntry struct {
-	// name string
-	//entryType string
-	indexed bool
-	data    []byte
-}
-
-type EventEmmiter struct {
-	state vm.StateDB
-}
-
-func NewEventEmmiter(state vm.StateDB) *EventEmmiter {
-	return &EventEmmiter{state: state}
-}
-
-func (e *EventEmmiter) Deposit(evtAddr common.Address, data []byte) {
-	e.addLog(
-		evtAddr,
-		EvtDepositLogSignature,
-		data,
+func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, validator *valStore.Validator) ([]byte, error) {
+	log.Info("Validator update balance: apply delegate rules: start",
+		"opCode", op.OpCode(),
+		"InitTxHash", op.InitTxHash().Hex(),
+		"amount", op.Amount().String(),
+		"balance", op.Balance().String(),
+		"procEpoch", op.ProcEpoch(),
+		"vIndex", op.Index(),
+		"creator", op.Creator().Hex(),
 	)
-}
 
-func (e *EventEmmiter) ExitRequest(evtAddr common.Address, data []byte) {
-	e.addLog(evtAddr, EvtExitReqLogSignature, data)
-}
+	bc := p.blockchain
+	//check delegating activation fork
+	if !bc.Config().IsForkSlotDelegate(p.ctx.Slot) {
+		return nil, operation.ErrDelegateForkRequire
+	}
 
-func (e *EventEmmiter) WithdrawalRequest(evtAddr common.Address, data []byte) {
-	e.addLog(evtAddr, EvtWithdrawalLogSignature, data)
-}
+	//retrieve actual rules
+	var actualRules = &validator.DelegatingStake.Rules
+	isTrial, err := p.isValidatorTrialPeriod(validator)
+	if err != nil {
+		return nil, err
+	}
+	if isTrial {
+		actualRules = &validator.DelegatingStake.TrialRules
+	}
 
-func (e *EventEmmiter) addLog(targetAddr common.Address, signature common.Hash, data []byte, logsEntries ...logEntry) {
-	//var data []byte
-	topics := []common.Hash{signature}
+	opBalance := new(big.Int).Add(op.Balance(), op.Amount())
 
-	for _, entry := range logsEntries {
-		if entry.indexed {
-			topics = append(topics, common.BytesToHash(entry.data))
-		} else {
-			data = append(data, entry.data...)
+	//Define withdrawals amounts of profit and stake
+	effectiveBalanceWei := new(big.Int).Mul(p.blockchain.Config().EffectiveBalance, common.BigWat)
+	profitBalance := new(big.Int).Sub(opBalance, effectiveBalanceWei)
+	if profitBalance.Sign() < 0 {
+		profitBalance = new(big.Int)
+	}
+
+	stakeOpAmt := new(big.Int)
+	profitOpAmt := new(big.Int).Sub(profitBalance, op.Amount())
+	if profitOpAmt.Sign() <= 0 {
+		profitOpAmt = new(big.Int).Set(profitBalance)
+		stakeOpAmt = new(big.Int).Sub(op.Amount(), profitOpAmt)
+	}
+
+	// calculate share
+	upBalInfo := make(txlog.DelegatingStakeLogData, 0, len(actualRules.StakeShare())+len(actualRules.ProfitShare()))
+	var percent *big.Int
+	if profitOpAmt.Sign() > 0 {
+		percent := new(big.Int).Div(profitOpAmt, big.NewInt(100))
+		for adr, share := range actualRules.ProfitShare() {
+			amt := new(big.Int).Mul(percent, big.NewInt(int64(share)))
+			upBalInfo = append(upBalInfo, &txlog.ShareRuleApplying{
+				Address:  adr,
+				RuleType: txlog.ProfitShare,
+				IsTrial:  isTrial,
+				Amount:   amt,
+			})
+
+			log.Info("Validator update balance: apply delegate rules: up balance: ProfitShare",
+				"adr", adr.Hex(),
+				"isTrial", isTrial,
+				"Amount", amt.String(),
+				"InitTxHash", op.InitTxHash().Hex(),
+				"creator", op.Creator().Hex(),
+			)
+
+			// transfer amount to withdrawal address
+			p.state.AddBalance(adr, amt)
+		}
+	}
+	if stakeOpAmt.Sign() > 0 {
+		percent = new(big.Int).Div(stakeOpAmt, big.NewInt(100))
+		for adr, share := range actualRules.StakeShare() {
+			amt := new(big.Int).Mul(percent, big.NewInt(int64(share)))
+			upBalInfo = append(upBalInfo, &txlog.ShareRuleApplying{
+				Address:  adr,
+				RuleType: txlog.StakeShare,
+				IsTrial:  isTrial,
+				Amount:   amt,
+			})
+
+			log.Info("Validator update balance: apply delegate rules: up balance: StakeShare",
+				"adr", adr.Hex(),
+				"isTrial", isTrial,
+				"Amount", amt.String(),
+				"InitTxHash", op.InitTxHash().Hex(),
+				"creator", op.Creator().Hex(),
+			)
+
+			// transfer amount to withdrawal address
+			p.state.AddBalance(adr, amt)
 		}
 	}
 
-	e.state.AddLog(&types.Log{
-		Address: targetAddr,
-		Topics:  topics,
-		Data:    data,
-	})
+	//add update balance tx log
+	logData, err := txlog.PackUpdateBalanceLogData(op.InitTxHash(), op.Creator(), op.ProcEpoch(), op.Amount())
+	if err != nil {
+		return nil, err
+	}
+	p.eventEmmiter.AddUpdateBalanceLog(p.GetValidatorsStateAddress(), logData, op.Creator(), op.InitTxHash(), nil)
+	//add delegate stake tx log
+	logData, err = txlog.PackDelegatingStakeLogData(upBalInfo)
+	if err != nil {
+		return nil, err
+	}
+	p.eventEmmiter.AddDelegatingStakeLog(p.GetValidatorsStateAddress(), logData, upBalInfo.Topics())
+
+	return op.Creator().Bytes(), nil
+}
+
+func (p *Processor) isValidatorTrialPeriod(validator *valStore.Validator) (bool, error) {
+	// if validator is not activated yet - trial period
+	if validator.GetActivationEra() > p.ctx.Era {
+		return true, nil
+	}
+	bc := p.blockchain
+	activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
+	activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
+	if err != nil {
+		return false, err
+	}
+	endTrialSlot := activationSlot + validator.DelegatingStake.TrialPeriod
+	if endTrialSlot >= p.ctx.Slot {
+		return true, nil
+	}
+	// if validator deactivated while trial period - trial period
+	if validator.GetExitEra() <= p.ctx.Era {
+		exitEra := rawdb.ReadEra(bc.Database(), validator.GetExitEra())
+		exitSlot, err := bc.GetSlotInfo().SlotOfEpochStart(exitEra.From)
+		if err != nil {
+			return false, err
+		}
+		if exitSlot <= endTrialSlot {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // ValidateValidatorSyncOp validate validator sync op data with context of apply.
@@ -623,15 +823,25 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 		return ErrNoSavedValSyncOp
 	}
 
-	blockEpoch := bc.GetSlotInfo().SlotToEpoch(applySlot)
-	if blockEpoch > valSyncOp.ProcEpoch() {
-		return ErrInvalidOpEpoch
+	isForkDelegate := bc.Config().IsForkSlotDelegate(applySlot)
+	if !isForkDelegate {
+		blockEpoch := bc.GetSlotInfo().SlotToEpoch(applySlot)
+		if blockEpoch > valSyncOp.ProcEpoch() {
+			return ErrInvalidOpEpoch
+		}
 	}
-	if !CompareValSync(savedValSync, valSyncOp) {
+	if !CompareValSync(savedValSync, valSyncOp, isForkDelegate) {
 		return ErrMismatchValSyncOp
 	}
 	if savedValSync.TxHash != nil && *savedValSync.TxHash != txHash {
-		return ErrMismatchTxHashes
+		if !isForkDelegate {
+			return ErrValSyncTxExists
+		}
+		// check tx status
+		rc, _, _ := bc.GetTransactionReceipt(*savedValSync.TxHash)
+		if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+			return ErrValSyncTxExists
+		}
 	}
 
 	// check is op initialised by slashing
@@ -665,7 +875,7 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 		if initTxData.CreatorAddress() != valSyncOp.Creator() {
 			return ErrInvalidCreator
 		}
-		if initTxData.ExitAfterEpoch() != nil && *initTxData.ExitAfterEpoch() < valSyncOp.ProcEpoch() {
+		if initTxData.ExitAfterEpoch() != nil && *initTxData.ExitAfterEpoch() > valSyncOp.ProcEpoch() {
 			return ErrInvalidOpEpoch
 		}
 	case operation.Withdrawal:
@@ -674,6 +884,9 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 		}
 		if initTxData.CreatorAddress() != valSyncOp.Creator() {
 			return ErrInvalidCreator
+		}
+		if valSyncOp.Version() == operation.Ver1 && valSyncOp.Balance() == nil {
+			return operation.ErrNoBalance
 		}
 	default:
 		return ErrInvalidOpCode
@@ -691,7 +904,7 @@ func ValidateValidatorSyncOp(bc blockchain, valSyncOp operation.ValidatorSync, a
 	return nil
 }
 
-func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) bool {
+func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync, isForkDelegate bool) bool {
 	if saved.InitTxHash != input.InitTxHash() {
 		log.Warn("check validator sync failed: InitTxHash", "s.InitTxHash", saved.InitTxHash.Hex(), "i.InitTxHash", input.InitTxHash().Hex())
 		return false
@@ -714,9 +927,11 @@ func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) b
 		return false
 	}
 
-	if saved.ProcEpoch > input.ProcEpoch() {
-		log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
-		return false
+	if !isForkDelegate {
+		if saved.ProcEpoch > input.ProcEpoch() {
+			log.Warn("check validator sync failed: ProcEpoch", "s.ProcEpoch", saved.ProcEpoch, "i.ProcEpoch", input.ProcEpoch())
+			return false
+		}
 	}
 
 	if saved.Amount != nil && input.Amount() != nil && saved.Amount.Cmp(input.Amount()) != 0 {
@@ -730,4 +945,30 @@ func CompareValSync(saved *types.ValidatorSync, input operation.ValidatorSync) b
 	}
 
 	return true
+}
+
+func ValidatePartialDepositOp(validator *valStore.Validator, op operation.Deposit) error {
+	//should never happen
+	if validator.Address != op.CreatorAddress() {
+		return fmt.Errorf("mismatch validator creator address (expect=%#x)", validator.Address)
+	}
+	if validator.PubKey != op.PubKey() {
+		return fmt.Errorf("mismatch validator public key (expect=%#x)", validator.PubKey)
+	}
+	if validator.WithdrawalAddress != nil && *validator.WithdrawalAddress != op.WithdrawalAddress() {
+		return fmt.Errorf("mismatch validator withdrawal address (expect=%#x)", *validator.WithdrawalAddress)
+	}
+	//check DelegatingStake
+	valBin, err := validator.DelegatingStake.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	opBin, err := op.DelegatingStake().MarshalBinary()
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(valBin, opBin) {
+		return fmt.Errorf("mismatch validator delegating stake rules")
+	}
+	return nil
 }

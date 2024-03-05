@@ -2,32 +2,57 @@ package operation
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 )
 
-const valSyncOpDataMinLen = 8 + 8 + 8 + common.AddressLength + common.HashLength
+const valSyncOpDataMinLen = 8 + 8 + common.AddressLength + common.HashLength
+
+type VersionValSyncOp uint16
+
+const (
+	NoVer VersionValSyncOp = iota
+	Ver1
+)
 
 type validatorSyncOperation struct {
-	initTxHash        common.Hash
+	version           VersionValSyncOp
 	opType            types.ValidatorSyncOp
+	initTxHash        common.Hash
 	procEpoch         uint64
 	index             uint64
 	creator           common.Address
 	amount            *big.Int
 	withdrawalAddress *common.Address
+	balance           *big.Int
+}
+
+// rlpValSyncOpVer1 rlp representation of ValidatorSyncOperation op ver 1.
+type rlpValSyncOpVer1 struct {
+	OpType            types.ValidatorSyncOp
+	InitTxHash        common.Hash
+	ProcEpoch         uint64
+	Index             uint64
+	Creator           common.Address
+	WithdrawalAddress common.Address
+	Amount            big.Int
+	Balance           big.Int
 }
 
 func (op *validatorSyncOperation) init(
-	initTxHash common.Hash,
+	version VersionValSyncOp,
 	opType types.ValidatorSyncOp,
+	initTxHash common.Hash,
 	procEpoch uint64,
 	index uint64,
 	creator common.Address,
 	amount *big.Int,
 	withdrawalAddress *common.Address,
+	balance *big.Int,
 ) error {
 	if initTxHash == (common.Hash{}) {
 		return ErrNoInitTxHash
@@ -42,6 +67,9 @@ func (op *validatorSyncOperation) init(
 		if withdrawalAddress == nil {
 			return ErrNoWithdrawalAddress
 		}
+		if version > NoVer && balance == nil {
+			return ErrNoBalance
+		}
 	}
 	op.initTxHash = initTxHash
 	op.opType = opType
@@ -49,22 +77,28 @@ func (op *validatorSyncOperation) init(
 	op.index = index
 	op.creator = creator
 	op.amount = amount
-	op.withdrawalAddress = withdrawalAddress
+	if opType == types.UpdateBalance {
+		op.withdrawalAddress = withdrawalAddress
+		op.balance = balance
+	}
+	op.version = version
 	return nil
 }
 
 // NewValidatorSyncOperation creates an operation for creating validator sync operation.
 func NewValidatorSyncOperation(
-	initTxHash common.Hash,
+	version VersionValSyncOp,
 	opType types.ValidatorSyncOp,
+	initTxHash common.Hash,
 	procEpoch uint64,
 	index uint64,
 	creator common.Address,
 	amount *big.Int,
 	withdrawalAddress *common.Address,
+	balance *big.Int,
 ) (ValidatorSync, error) {
 	op := validatorSyncOperation{}
-	if err := op.init(initTxHash, opType, procEpoch, index, creator, amount, withdrawalAddress); err != nil {
+	if err := op.init(version, opType, initTxHash, procEpoch, index, creator, amount, withdrawalAddress, balance); err != nil {
 		return nil, err
 	}
 	return &op, nil
@@ -72,6 +106,62 @@ func NewValidatorSyncOperation(
 
 // UnmarshalBinary unmarshals a create operation from byte encoding
 func (op *validatorSyncOperation) UnmarshalBinary(b []byte) error {
+	version, binData, err := unwrapVersionedData(b)
+	if err != nil {
+		return op.unmarshalBinaryLegacy(b)
+	}
+	switch version {
+	case Ver1:
+		dec := &rlpValSyncOpVer1{}
+		err = rlp.DecodeBytes(binData, dec)
+		if err != nil {
+			return err
+		}
+		return op.init(version, dec.OpType, dec.InitTxHash, dec.ProcEpoch, dec.Index, dec.Creator, &dec.Amount, &dec.WithdrawalAddress, &dec.Balance)
+	default:
+		return ErrOpBadVersion
+	}
+}
+
+// MarshalBinary marshals a create operation to byte encoding
+func (op *validatorSyncOperation) MarshalBinary() ([]byte, error) {
+	var (
+		binData           []byte
+		err               error
+		withdrawalAddress = &common.Address{}
+		amount            = new(big.Int)
+		balance           = new(big.Int)
+	)
+	if op.opType == types.UpdateBalance {
+		withdrawalAddress = op.withdrawalAddress
+		amount = op.amount
+		balance = op.balance
+	}
+	switch op.version {
+	case NoVer:
+		return op.marshalBinaryLegacy()
+	case Ver1:
+		binData, err = rlp.EncodeToBytes(&rlpValSyncOpVer1{
+			OpType:            op.opType,
+			InitTxHash:        op.initTxHash,
+			ProcEpoch:         op.procEpoch,
+			Index:             op.index,
+			Creator:           op.creator,
+			WithdrawalAddress: *withdrawalAddress,
+			Amount:            *amount,
+			Balance:           *balance,
+		})
+	default:
+		return nil, ErrOpBadVersion
+	}
+	if err != nil {
+		return nil, err
+	}
+	return wrapVersionedData(op.version, binData)
+}
+
+// UnmarshalBinary unmarshals deprecated validator sync operation from byte encoding.
+func (op *validatorSyncOperation) unmarshalBinaryLegacy(b []byte) error {
 	if len(b) < valSyncOpDataMinLen {
 		return ErrBadDataLen
 	}
@@ -106,11 +196,11 @@ func (op *validatorSyncOperation) UnmarshalBinary(b []byte) error {
 		startOffset = endOffset
 		amount = new(big.Int).SetBytes(b[startOffset:])
 	}
-	return op.init(initTxHash, opType, procEpoch, index, creator, amount, &withdrawal)
+	return op.init(NoVer, opType, initTxHash, procEpoch, index, creator, amount, &withdrawal, nil)
 }
 
-// MarshalBinary marshals a create operation to byte encoding
-func (op *validatorSyncOperation) MarshalBinary() ([]byte, error) {
+// marshalBinaryLegacy marshals deprecated validator sync operation to byte encoding.
+func (op *validatorSyncOperation) marshalBinaryLegacy() ([]byte, error) {
 	bin := make([]byte, 0, valSyncOpDataMinLen)
 
 	enc := make([]byte, 8)
@@ -182,7 +272,10 @@ func (op *validatorSyncOperation) Amount() *big.Int {
 	if op.amount == nil {
 		return nil
 	}
-	return new(big.Int).Set(op.amount)
+	if op.OpCode() == UpdateBalanceCode {
+		return new(big.Int).Set(op.amount)
+	}
+	return nil
 }
 
 func (op *validatorSyncOperation) WithdrawalAddress() *common.Address {
@@ -191,4 +284,56 @@ func (op *validatorSyncOperation) WithdrawalAddress() *common.Address {
 	}
 	cpy := common.BytesToAddress(op.withdrawalAddress.Bytes())
 	return &cpy
+}
+
+func (op *validatorSyncOperation) Balance() *big.Int {
+	if op.balance == nil {
+		return nil
+	}
+	return new(big.Int).Set(op.balance)
+}
+
+func (op *validatorSyncOperation) Version() VersionValSyncOp {
+	return op.version
+}
+func (op *validatorSyncOperation) SetVersion(ver VersionValSyncOp) {
+	op.version = ver
+}
+
+func (op *validatorSyncOperation) Print() string {
+	if op == nil {
+		return "{nil}"
+	}
+	return fmt.Sprintf("{InitTxHash: %#x, OpType: %d, ProcEpoch: %d, Index: %d, Creator: %#x, Amount: %s, Balance: %s, WithdrawalAddress: %#x, ver: %d}",
+		op.initTxHash,
+		op.opType,
+		op.procEpoch,
+		op.index,
+		op.creator,
+		op.amount.String(),
+		op.balance.String(),
+		op.withdrawalAddress.Hex(),
+		op.version,
+	)
+}
+
+type rlpVerWrapper struct {
+	Version VersionValSyncOp
+	Data    []byte
+}
+
+func wrapVersionedData(ver VersionValSyncOp, bin []byte) ([]byte, error) {
+	return rlp.EncodeToBytes(rlpVerWrapper{
+		Version: ver,
+		Data:    bin,
+	})
+}
+
+func unwrapVersionedData(bin []byte) (ver VersionValSyncOp, data []byte, err error) {
+	verWrap := &rlpVerWrapper{}
+	err = rlp.DecodeBytes(bin, verWrap)
+	if err != nil {
+		return
+	}
+	return verWrap.Version, verWrap.Data, nil
 }

@@ -832,6 +832,25 @@ web3._extend({
 `
 
 const WatJs = `
+var BlsPubKeyLength = 48 * 2
+var BlsSigLength = 96 * 2
+var AddressLength = 20 * 2
+
+function isHex (str) {
+	return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
+}
+function handleHexField (options, key, valLen) {
+	val = options[key]
+	if (val) {
+		val = val.replace('0x', '')
+		if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
+		if (!isHex(val)) throw new Error(key +': invalid hex.');
+		options[key] = '0x' + val;
+	} else {
+		throw new Error(key +': field is required.');
+	}
+}
+
 web3._extend({
 	property: 'wat',
 	methods:
@@ -1028,28 +1047,70 @@ web3._extend({
 			call: 'wat_validator_DepositData',
 			params: 1,
 			inputFormatter: [function(options) {
-				function isHex (str) {
-					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
+				function handleDelegatingRules(rules) {
+					function mapHandler(rules, key) {
+						var upData = {}
+						for (var k in rules[key]) {
+							var addr = k.replace('0x', '');
+							if (addr.length != AddressLength) throw new Error(key + ': invalid length of address=0x' + addr + '.');
+							if (!isHex(addr)) throw new Error(key + ': invalid hex of address=0x' + addr + '.');
+							var val = rules[key][k];
+							val = web3._extend.utils.toDecimal(val);
+							if (!Number.isInteger(val) || val < 0) throw new Error(key + ': invalid value=' + val + ' address=0x' + addr + '.\nRequire positive integer.');
+							upData['0x' + addr] = val;
+						}
+						rules[key] = upData
+					}
+		
+					function arrHandler(rules, key) {
+						var upData = []
+						for (var k in rules[key]) {
+							var addr = (rules[key][k]).replace('0x', '');
+							if (addr.length != AddressLength) throw new Error(key + ': invalid length of address=0x' + addr + '.');
+							if (!isHex(addr)) throw new Error(key + ': invalid hex of address=0x' + addr + '.');
+							upData.push('0x' + addr);
+						}
+						rules[key] = upData
+					}
+		
+					if (rules.profit_share) {
+						var key = 'profit_share';
+						mapHandler(rules, key)
+					}
+					if (rules.stake_share) {
+						var key = 'stake_share';
+						mapHandler(rules, key)
+					}
+					if (Array.isArray(rules.exit)) {
+						var key = 'exit';
+						arrHandler(rules, key)
+					}
+					if (Array.isArray(rules.withdrawal)) {
+						var key = 'withdrawal';
+						arrHandler(rules, key)
+					}
+					return rules
 				}
-				function handleHexField (key, valLen) {
-					val = options[key]
-					if (val) {
-						val = val.replace('0x', '')
-						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
-						if (!isHex(val)) throw new Error(key +': invalid hex.');
-						options[key] = '0x' + val;
-					} else {
-						throw new Error(key +': field is required.');
+		
+				// handle base deposit data
+				handleHexField(options, 'pubkey', BlsPubKeyLength)
+				handleHexField(options, 'creator_address', AddressLength)
+				handleHexField(options, 'withdrawal_address', AddressLength)
+				handleHexField(options, 'signature', BlsSigLength)
+
+				// handle delegating stake data
+				if (options.delegating_stake) {
+					var dlgData = options.delegating_stake
+					if (dlgData.trial_period) {
+						dlgData.trial_period = web3._extend.utils.toDecimal(dlgData.trial_period);
+					}
+					if (dlgData.trial_rules) {
+						dlgData.trial_rules = handleDelegatingRules(dlgData.trial_rules)
+					}
+					if (dlgData.rules) {
+						dlgData.rules = handleDelegatingRules(dlgData.rules)
 					}
 				}
-				var BlsPubKeyLength = 48 * 2
-				var BlsSigLength = 96 * 2
-				var AddressLength = 20 * 2
-
-				handleHexField('pubkey', BlsPubKeyLength)
-				handleHexField('creator_address', AddressLength)
-				handleHexField('withdrawal_address', AddressLength)
-				handleHexField('signature', BlsSigLength)
 				return options;
 			}]
 		}),
@@ -1058,24 +1119,8 @@ web3._extend({
 			call: 'wat_validator_ExitData',
 			params: 1,
 			inputFormatter: [function(options) {
-				function isHex (str) {
-					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
-				}
-				function handleHexField (key, valLen) {
-					val = options[key]
-					if (val) {
-						val = val.replace('0x', '')
-						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
-						if (!isHex(val)) throw new Error(key +': invalid hex.');
-						options[key] = '0x' + val;
-					} else {
-						throw new Error(key +': field is required.');
-					}
-				}
-				var BlsPubKeyLength = 48 * 2
-				var AddressLength = 20 * 2
-				handleHexField('pubkey', BlsPubKeyLength)
-				handleHexField('creator_address', AddressLength)
+				handleHexField(options, 'pubkey', BlsPubKeyLength)
+				handleHexField(options, 'creator_address', AddressLength)
 				if (options.exit_epoch) {
 					options.exit_epoch = web3._extend.utils.toDecimal(options.exit_epoch);
 				}
@@ -1087,22 +1132,7 @@ web3._extend({
 			call: 'wat_validator_WithdrawalData',
 			params: 1,
 			inputFormatter: [function(options) {
-				function isHex (str) {
-					return (/^(0x)?(([0-9A-Fa-f]){2,2})+$/).test(str)
-				}
-				function handleHexField (key, valLen) {
-					val = options[key]
-					if (val) {
-						val = val.replace('0x', '')
-						if (val.length != valLen) throw new Error(key +': invalid length. (required: ' + valLen + ')');
-						if (!isHex(val)) throw new Error(key +': invalid hex.');
-						options[key] = '0x' + val;
-					} else {
-						throw new Error(key +': field is required.');
-					}
-				}
-				var AddressLength = 20 * 2
-				handleHexField('creator_address', AddressLength)
+				handleHexField(options, 'creator_address', AddressLength)
 				options.amount = web3._extend.utils.toHex(options.amount);
 				return options;
 			}]
@@ -1117,6 +1147,12 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'validator.depositAddress',
 			call: 'wat_validator_DepositAddress',
+		}),
+		new web3._extend.Method({
+			name: 'validator.getTransactionReceipt',
+			call: 'wat_validator_GetTransactionReceipt',
+			params: 1,
+			outputFormatter: web3._extend.formatters.outputTransactionReceiptFormatter
 		}),
 	]
 });

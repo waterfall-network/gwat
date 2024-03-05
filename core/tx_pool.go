@@ -29,14 +29,17 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/prque"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/metrics"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token/operation"
 	val "gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	valOperation "gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
@@ -166,6 +169,9 @@ type blockChain interface {
 	IsSynced() bool
 	EstimateGas(msg types.Message, header *types.Header) (uint64, error)
 	Config() *params.ChainConfig
+	GetSlotInfo() *types.SlotInfo
+	GetEraInfo() *era.EraInfo
+	Database() ethdb.Database
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -807,16 +813,88 @@ func (pool *TxPool) handleValidatorTransaction(txData []byte, from common.Addres
 		}
 
 		switch v := op.(type) {
+		case valOperation.Exit:
+			return pool.checkExitOperation(v, from)
 		case valOperation.Withdrawal:
 			return pool.checkWithdrawalOperation(v, from)
 		case valOperation.Deposit:
 			return pool.checkDepositOperation(v, from, value)
 		}
-
 		return nil
 	}
 
 	log.Warn("validator transaction has no txData")
+	return nil
+}
+func (pool *TxPool) isValidatorTrialPeriod(validator *valStore.Validator) (bool, error) {
+	bc := pool.chain
+	// if validator is not activated yet - trial period
+	curEra := bc.GetEraInfo().GetEra().Number
+	if validator.GetActivationEra() > curEra {
+		return true, nil
+	}
+
+	activationEra := rawdb.ReadEra(bc.Database(), validator.GetActivationEra())
+	activationSlot, err := bc.GetSlotInfo().SlotOfEpochStart(activationEra.From)
+	if err != nil {
+		return false, err
+	}
+	endTrialSlot := activationSlot + validator.DelegatingStake.TrialPeriod
+	if endTrialSlot > bc.GetSlotInfo().CurrentSlot() {
+		return true, nil
+	}
+	// if validator deactivated while trial period - trial period
+	if validator.GetExitEra() <= curEra {
+		exitEra := rawdb.ReadEra(bc.Database(), validator.GetExitEra())
+		exitSlot, err := bc.GetSlotInfo().SlotOfEpochStart(exitEra.From)
+		if err != nil {
+			return false, err
+		}
+		if exitSlot <= endTrialSlot {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func (pool *TxPool) checkExitOperation(op valOperation.Exit, from common.Address) error {
+	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
+	if err != nil {
+		return err
+	}
+	if validator == nil {
+		return val.ErrUnknownValidator
+	}
+	if validator.GetExitEra() != math.MaxUint64 {
+		return val.ErrValidatorIsOut
+	}
+	if validator.HasDelegatingStake() {
+		//check delegating roles
+		//retrieve actual rules
+		var actualRules = &validator.DelegatingStake.Rules
+		isTrial, err := pool.isValidatorTrialPeriod(validator)
+		if err != nil {
+			return err
+		}
+		if isTrial {
+			actualRules = &validator.DelegatingStake.TrialRules
+		}
+		allowedAddrs := actualRules.Exit()
+		var isAllowed bool
+		for _, adr := range allowedAddrs {
+			if adr == from {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return val.ErrSenderRejByDelegate
+		}
+	} else {
+		withdrawalAddress := validator.GetWithdrawalAddress()
+		if from != *withdrawalAddress {
+			return val.ErrInvalidFromAddresses
+		}
+	}
 	return nil
 }
 
@@ -828,6 +906,9 @@ func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from co
 	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
 	if err != nil {
 		return err
+	}
+	if validator == nil {
+		return val.ErrUnknownValidator
 	}
 	// if total deposited amount is less than the effective balance
 	// - deposit is insufficient to activate validator.
@@ -843,6 +924,28 @@ func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from co
 		if stakeByAddr.Cmp(op.Amount()) < 0 {
 			return val.ErrInsufficientFundsForOp
 		}
+	} else if validator.HasDelegatingStake() {
+		//check delegating roles
+		//retrieve actual rules
+		var actualRules = &validator.DelegatingStake.Rules
+		isTrial, err := pool.isValidatorTrialPeriod(validator)
+		if err != nil {
+			return err
+		}
+		if isTrial {
+			actualRules = &validator.DelegatingStake.TrialRules
+		}
+		allowedAddrs := actualRules.Withdrawal()
+		var isAllowed bool
+		for _, adr := range allowedAddrs {
+			if adr == from {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return val.ErrSenderRejByDelegate
+		}
 	} else {
 		withdrawalAddress := validator.GetWithdrawalAddress()
 		if from != *withdrawalAddress {
@@ -853,6 +956,11 @@ func (pool *TxPool) checkWithdrawalOperation(op valOperation.Withdrawal, from co
 }
 
 func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.Address, amount *big.Int) error {
+	// validate deposit signature
+	if err := valOperation.VerifyDepositSig(op.Signature(), op.PubKey(), op.CreatorAddress(), op.WithdrawalAddress()); err != nil {
+		return err
+	}
+
 	// check amount can add to log
 	if !common.BnCanCastToUint64(new(big.Int).Div(amount, common.BigGwei)) {
 		return val.ErrInvalidAmount
@@ -860,6 +968,16 @@ func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.A
 	// check minimal acceptable amount
 	if amount.Cmp(val.MinDepositVal) < 0 {
 		return fmt.Errorf("too low value (min deposit = %s wei)", val.MinDepositVal.String())
+	}
+	//check delegating stake activation fork
+	var curSlot uint64
+	if pool.chain.GetSlotInfo() != nil {
+		curSlot = pool.chain.GetSlotInfo().CurrentSlot()
+	}
+	if op.DelegatingStake() != nil {
+		if !pool.chainconfig.IsForkSlotDelegate(curSlot) {
+			return valOperation.ErrDelegateForkRequire
+		}
 	}
 
 	validator, err := pool.chain.ValidatorStorage().GetValidator(pool.currentState, op.CreatorAddress())
@@ -877,6 +995,10 @@ func (pool *TxPool) checkDepositOperation(op valOperation.Deposit, from common.A
 	effectiveBalanceWei := new(big.Int).Mul(pool.chainconfig.EffectiveBalance, common.BigWat)
 	if stake := validator.TotalStake(); stake != nil && stake.Cmp(effectiveBalanceWei) >= 0 {
 		return fmt.Errorf("required amount of stake reached (req=%s deposited=%s wei)", effectiveBalanceWei.String(), stake.String())
+	}
+	// check op data conforms to validator data
+	if err := val.ValidatePartialDepositOp(validator, op); err != nil {
+		return err
 	}
 	return nil
 }

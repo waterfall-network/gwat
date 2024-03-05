@@ -22,6 +22,13 @@ import (
 	"encoding/hex"
 )
 
+const (
+	Uint64Size = 8
+	Uint32Size = 4
+	Uint16Size = 2
+	Uint8Size  = 1
+)
+
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".
 func FromHex(s string) []byte {

@@ -93,7 +93,7 @@ func getTestBlockchainAndBlocks() (*BlockChain, []*types.Block) {
 	genspec.MustCommit(db)
 
 	bc, _ := NewBlockChain(db, nil, params.TestChainConfig, vm.Config{}, nil)
-	blocks, _ := GenerateChain(params.AllCliqueProtocolChanges, bc.genesisBlock, bc.db, 3, nil)
+	blocks, _ := GenerateChain(params.AllEthashProtocolChanges, bc.genesisBlock, bc.db, 3, nil)
 
 	return bc, blocks
 }

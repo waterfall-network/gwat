@@ -28,43 +28,46 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0x2d5a825666a4b49059a39c608e5fa1f4949b46ab7793853fc58307a54857743e")
-	// DevNetGenesisHash  waterfall test net
-	DevNetGenesisHash = common.HexToHash("0x733a3d6e8e0800197423933a03593b235d8a7af19049782af792775c378f25f1")
+	MainnetGenesisHash = common.HexToHash("0xdcafaade5ac90c72bcd8603f3c94764fab5d3218b1afc4923bb3c34f2cd4fe74")
+	// Testnet8GenesisHash  waterfall test net
+	Testnet8GenesisHash = common.HexToHash("0xa7531d17d43684576b864662852e3cbb2dc20df7cdb9fc5405d5a0a253f623eb")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
 var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
-	MainnetGenesisHash: MainnetTrustedCheckpoint,
-	DevNetGenesisHash:  DevNetTrustedCheckpoint,
+	MainnetGenesisHash:  MainnetTrustedCheckpoint,
+	Testnet8GenesisHash: TestNet8TrustedCheckpoint,
 }
 
-// CheckpointOracles associates each known checkpoint oracles with the genesis hash of
-// the chain it belongs to.
-var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
-	MainnetGenesisHash: MainnetCheckpointOracle,
-	DevNetGenesisHash:  DevNetCheckpointOracle,
-}
+//// CheckpointOracles associates each known checkpoint oracles with the genesis hash of
+//// the chain it belongs to.
+//var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
+//	MainnetGenesisHash:  MainnetCheckpointOracle,
+//	Testnet8GenesisHash: Testnet8CheckpointOracle,
+//}
 
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:          big.NewInt(111000111),
-		SecondsPerSlot:   4,
-		SlotsPerEpoch:    32,
-		EpochsPerEra:     8,
-		TransitionPeriod: 2,
-		ForkSlotSubNet1:  math.MaxUint64,
-		EffectiveBalance: big.NewInt(3200),
+		ChainID:                big.NewInt(1501865),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		EpochsPerEra:           4,
+		TransitionPeriod:       2,
+		ValidatorsStateAddress: nil,
+		ValidatorsPerSlot:      5,
+		EffectiveBalance:       big.NewInt(3200),
+		ForkSlotSubNet1:        math.MaxUint64,
+		ForkSlotDelegate:       2048,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 395,
-		SectionHead:  common.HexToHash("0xbfca95b8c1de014e252288e9c32029825fadbff58285f5b54556525e480dbb5b"),
-		CHTRoot:      common.HexToHash("0x2ccf3dbb58eb6375e037fdd981ca5778359e4b8fa0270c2878b14361e64161e7"),
-		BloomRoot:    common.HexToHash("0x2d46ec65a6941a2dc1e682f8f81f3d24192021f492fdf6ef0fdd51acb0f4ba0f"),
+		//SectionIndex: 395,
+		//SectionHead:  common.HexToHash("0xbfca95b8c1de014e252288e9c32029825fadbff58285f5b54556525e480dbb5b"),
+		//CHTRoot:      common.HexToHash("0x2ccf3dbb58eb6375e037fdd981ca5778359e4b8fa0270c2878b14361e64161e7"),
+		//BloomRoot:    common.HexToHash("0x2d46ec65a6941a2dc1e682f8f81f3d24192021f492fdf6ef0fdd51acb0f4ba0f"),
 	}
 
 	// MainnetCheckpointOracle contains a set of configs for the main network oracle.
@@ -80,54 +83,71 @@ var (
 		Threshold: 2,
 	}
 
-	// DevNetChainConfig contains the chain parameters to run a node on the DevNet.
-	DevNetChainConfig = &ChainConfig{
-		ChainID:          big.NewInt(333777555),
-		SecondsPerSlot:   4,
-		SlotsPerEpoch:    32,
-		EpochsPerEra:     8,
-		TransitionPeriod: 2,
-		ForkSlotSubNet1:  math.MaxUint64,
-		EffectiveBalance: big.NewInt(3200),
+	// Testnet8ChainConfig contains the chain parameters to run a node on the Testnet8.
+	Testnet8ChainConfig = &ChainConfig{
+		ChainID:                big.NewInt(8601152),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		EpochsPerEra:           16,
+		TransitionPeriod:       2,
+		ValidatorsStateAddress: nil,
+		ValidatorsPerSlot:      5,
+		EffectiveBalance:       big.NewInt(3200),
+		ForkSlotSubNet1:        math.MaxUint64,
+		ForkSlotDelegate:       2600320,
 	}
 
-	// DevNetTrustedCheckpoint contains the light client trusted checkpoint for the DevNet.
-	DevNetTrustedCheckpoint = &TrustedCheckpoint{
+	// TestNet8TrustedCheckpoint contains the light client trusted checkpoint for the Testnet8.
+	TestNet8TrustedCheckpoint = &TrustedCheckpoint{
 		//SectionIndex: 329,
 		//SectionHead:  common.HexToHash("0xe66f7038333a01fb95dc9ea03e5a2bdaf4b833cdcb9e393b9127e013bd64d39b"),
 		//CHTRoot:      common.HexToHash("0x1b0c883338ac0d032122800c155a2e73105fbfebfaa50436893282bc2d9feec5"),
 		//BloomRoot:    common.HexToHash("0x3cc98c88d283bf002378246f22c653007655cbcea6ed89f98d739f73bd341a01"),
 	}
 
-	// DevNetCheckpointOracle contains a set of configs for the DevNet oracle.
-	DevNetCheckpointOracle = &CheckpointOracleConfig{
-		//Address: common.HexToAddress("0xEF79475013f154E6A65b54cB2742867791bf0B84"),
-		//Signers: []common.Address{
-		//	common.HexToAddress("0x32162F3581E88a5f62e8A61892B42C46E2c18f7b"), // Peter
-		//	common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-		//	common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-		//	common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-		//	common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		//},
-		//Threshold: 2,
-	}
+	//// Testnet8CheckpointOracle contains a set of configs for the Testnet8 oracle.
+	//Testnet8CheckpointOracle = &CheckpointOracleConfig{
+	//	//Address: common.HexToAddress("0xEF79475013f154E6A65b54cB2742867791bf0B84"),
+	//	//Signers: []common.Address{
+	//	//	common.HexToAddress("0x32162F3581E88a5f62e8A61892B42C46E2c18f7b"), // Peter
+	//	//	common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
+	//	//	common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
+	//	//	common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
+	//	//	common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
+	//	//},
+	//	//Threshold: 2,
+	//}
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
+	AllEthashProtocolChanges = &ChainConfig{
+		ChainID:                big.NewInt(1337),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		EpochsPerEra:           8,
+		TransitionPeriod:       2,
+		ValidatorsStateAddress: nil,
+		ValidatorsPerSlot:      6,
+		EffectiveBalance:       big.NewInt(3200),
+		ForkSlotSubNet1:        math.MaxUint64,
+		ForkSlotDelegate:       math.MaxUint64,
+	}
 
-	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
-	// and accepted by the Ethereum core developers into the Clique consensus.
-	//
-	// This configuration is intentionally not using keyed fields to force anyone
-	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
-
-	TestChainConfig = &ChainConfig{big.NewInt(1), 4, 32, 8, 2, math.MaxUint64, nil, 6, big.NewInt(3200)}
-	TestRules       = TestChainConfig.Rules()
+	TestChainConfig = &ChainConfig{
+		ChainID:                big.NewInt(1337),
+		SecondsPerSlot:         4,
+		SlotsPerEpoch:          32,
+		EpochsPerEra:           8,
+		TransitionPeriod:       2,
+		ValidatorsStateAddress: nil,
+		ValidatorsPerSlot:      6,
+		EffectiveBalance:       big.NewInt(3200),
+		ForkSlotSubNet1:        math.MaxUint64,
+		ForkSlotDelegate:       math.MaxUint64,
+	}
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -186,18 +206,16 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// coordinator slot settings
-	SecondsPerSlot   uint64 `json:"secondsPerSlot"`
-	SlotsPerEpoch    uint64 `json:"slotsPerEpoch"`
-	EpochsPerEra     uint64 `json:"epochsPerEra"`
-	TransitionPeriod uint64 `json:"transitionPeriod"` // The number of epochs before new era starts
-
-	// Fork slots
-	ForkSlotSubNet1 uint64 `json:"forkSlotSubNet1,omitempty"`
-
+	SecondsPerSlot         uint64 `json:"secondsPerSlot"`
+	SlotsPerEpoch          uint64 `json:"slotsPerEpoch"`
+	EpochsPerEra           uint64 `json:"epochsPerEra"`
+	TransitionPeriod       uint64 `json:"transitionPeriod"` // The number of epochs before new era starts
 	ValidatorsStateAddress *common.Address
-	ValidatorsPerSlot      uint64 `json:"validatorsPerSlot"`
-
-	EffectiveBalance *big.Int `json:"effectiveBalance"`
+	ValidatorsPerSlot      uint64   `json:"validatorsPerSlot"`
+	EffectiveBalance       *big.Int `json:"effectiveBalance"`
+	// Fork slots
+	ForkSlotSubNet1  uint64 `json:"forkSlotSubNet1,omitempty"`
+	ForkSlotDelegate uint64 `json:"forkSlotDelegate,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -220,17 +238,18 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, ForkSlotSubNet1: %v, "+
-		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v}",
+	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
 		c.EpochsPerEra,
 		c.TransitionPeriod,
-		c.ForkSlotSubNet1,
 		c.ValidatorsPerSlot,
 		c.ValidatorsStateAddress,
 		c.EffectiveBalance,
+		c.ForkSlotSubNet1,
+		c.ForkSlotDelegate,
 	)
 }
 
@@ -239,44 +258,39 @@ func (c *ChainConfig) IsForkSlotSubNet1(slot uint64) bool {
 	return slot >= c.ForkSlotSubNet1
 }
 
+// IsForkSlotDelegate returns true if provided slot greater or equal of the fork slot ForkSlotDelegate.
+func (c *ChainConfig) IsForkSlotDelegate(slot uint64) bool {
+	return slot >= c.ForkSlotDelegate
+}
+
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
 // to guarantee that forks can be implemented in a different order than on official networks
 func (c *ChainConfig) CheckConfigForkOrder() error {
 	type fork struct {
 		name     string
-		block    *big.Int
+		slot     *big.Int
 		optional bool // if true, the fork may be nil and next fork is still allowed
 	}
 	var lastFork fork
 	for _, cur := range []fork{
-		//{name: "homesteadBlock", block: c.HomesteadBlock},
-		//{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
-		//{name: "eip150Block", block: c.EIP150Block},
-		//{name: "eip155Block", block: c.EIP155Block},
-		//{name: "eip158Block", block: c.EIP158Block},
-		//{name: "byzantiumBlock", block: c.ByzantiumBlock},
-		//{name: "constantinopleBlock", block: c.ConstantinopleBlock},
-		//{name: "petersburgBlock", block: c.PetersburgBlock},
-		//{name: "istanbulBlock", block: c.IstanbulBlock},
-		//{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
-		//{name: "berlinBlock", block: c.BerlinBlock},
+		{name: "forkSlotDelegate", slot: new(big.Int).SetUint64(c.ForkSlotDelegate)},
 		//{name: "londonBlock", block: c.LondonBlock},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
-			if lastFork.block == nil && cur.block != nil {
+			if lastFork.slot == nil && cur.slot != nil {
 				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %v",
-					lastFork.name, cur.name, cur.block)
+					lastFork.name, cur.name, cur.slot)
 			}
-			if lastFork.block != nil && cur.block != nil {
-				if lastFork.block.Cmp(cur.block) > 0 {
+			if lastFork.slot != nil && cur.slot != nil {
+				if lastFork.slot.Cmp(cur.slot) > 0 {
 					return fmt.Errorf("unsupported fork ordering: %v enabled at %v, but %v enabled at %v",
-						lastFork.name, lastFork.block, cur.name, cur.block)
+						lastFork.name, lastFork.slot, cur.name, cur.slot)
 				}
 			}
 		}
 		// If it was optional and not set, then ignore it
-		if !cur.optional || cur.block != nil {
+		if !cur.optional || cur.slot != nil {
 			lastFork = cur
 		}
 	}
