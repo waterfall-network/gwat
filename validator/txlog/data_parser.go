@@ -193,6 +193,10 @@ func LogToParsedLog(log *types.Log) *types.ParsedLog {
 			}
 		}
 		parsed.ParsedData = delegatingData
+	case types.EvtErrorLogSignature:
+		parsed.ParsedData = parsedDataFailed{
+			Error: string(log.Data),
+		}
 	default:
 		parsed.ParsedData = parsedDataFailed{
 			Error: fmt.Sprintf("log data parcing error='unknown operation of topick=%#x'", log.Topics[0]),
