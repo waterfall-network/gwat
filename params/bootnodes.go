@@ -22,7 +22,7 @@ import "gitlab.waterfall.network/waterfall/protocol/gwat/common"
 // the main Ethereum network.
 var MainnetBootnodes = []string{
 	//todo tn5 data
-	"enode://991a8c007ad582c5d33ca90549eb9e66c695511308d1e390c841232e83c9c752670045e681e7bc624eaa58e5e758fe961fb0455cfe9be7ffe6b87774402ce344@5.75.135.44:30301",
+	"enode://d1de1e39286eb6f6783a63e7bff81a5264569bc1f0bea0fe923454a8ff2dcdebf2d02ed0cacfca6f3ac1504062a696e0ecb26526161a5d886bd238d2b2f985fa@5.75.135.44:30301",
 }
 
 // Testnet8Bootnodes are the enode URLs of the P2P bootstrap nodes running on the
