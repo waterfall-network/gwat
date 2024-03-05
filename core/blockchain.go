@@ -4572,7 +4572,16 @@ func (bc *BlockChain) RestoreValidatorSyncOp(tx *types.Transaction, header *type
 				"amount", v.Amount().String(),
 				"InitTxHash", fmt.Sprintf("%#x", v.InitTxHash()),
 			)
-			return nil
+			if !bc.Config().IsForkSlotDelegate(header.Slot) {
+				return nil
+			}
+			// check tx status
+			rc, _, _ := bc.GetTransactionReceipt(*savedValSync.TxHash)
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				return nil
+			} else {
+				bc.notProcValSyncOps[savedValSync.Key()].TxHash = nil
+			}
 		}
 		//reset tx hash
 		savedValSync.TxHash = nil
