@@ -1121,8 +1121,8 @@ web3._extend({
 			inputFormatter: [function(options) {
 				handleHexField(options, 'pubkey', BlsPubKeyLength)
 				handleHexField(options, 'creator_address', AddressLength)
-				if (options.exit_epoch) {
-					options.exit_epoch = web3._extend.utils.toDecimal(options.exit_epoch);
+				if (options.exit_epoch !== undefined) {
+					throw new Error('exit_epoch: remove deprecated field.');
 				}
 				return options;
 			}]
