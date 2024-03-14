@@ -532,7 +532,6 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
 				processor.state.AddBalance(from, bal)
-				//balanceFromBfr := processor.state.GetBalance(from)
 
 				msg := NewMockmessage(ctrl)
 				msg.EXPECT().Data().AnyTimes().Return(opData)
@@ -592,6 +591,9 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 				testutils.AssertNoError(t, err)
 
 				v := c.TestData.(testmodels.TestData)
+
+				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
+				processor.state.AddBalance(v.Caller.Address(), bal)
 
 				msg := NewMockmessage(ctrl)
 				msg.EXPECT().Data().AnyTimes().Return(opData)
