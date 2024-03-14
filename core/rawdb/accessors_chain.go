@@ -1149,8 +1149,7 @@ func ReadCurrentEra(db ethdb.KeyValueReader) uint64 {
 	key := currentEraPrefix
 	valueBytes, err := db.Get(key)
 	if err != nil {
-		log.Warn("Failed to read current era", "err", err)
-		return 0
+		log.Crit("Failed to read current era", "err", err)
 	}
 	return binary.BigEndian.Uint64(valueBytes)
 }

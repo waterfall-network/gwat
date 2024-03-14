@@ -46,11 +46,11 @@ func TestDefaultGenesisBlock(t *testing.T) {
 		t.Errorf("wrong mainnet genesis hash, got %v, want %v", genBlock.Hash(), params.MainnetGenesisHash)
 	}
 
-	gen = DefaultDevNetGenesisBlock()
+	gen = DefaultTestNet8GenesisBlock()
 	gen.Validators = depositData
 	genBlock = gen.ToBlock(nil)
-	if genBlock.Hash() != params.DevNetGenesisHash {
-		t.Errorf("wrong wf test net genesis hash, got %v, want %v", genBlock.Hash(), params.DevNetGenesisHash)
+	if genBlock.Hash() != params.Testnet8GenesisHash {
+		t.Errorf("wrong wf test net genesis hash, got %v, want %v", genBlock.Hash(), params.Testnet8GenesisHash)
 	}
 }
 

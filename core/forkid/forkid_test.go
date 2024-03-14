@@ -43,7 +43,7 @@ func TestCreation(t *testing.T) {
 			params.MainnetChainConfig,
 			params.MainnetGenesisHash,
 			[]testcase{
-				{0, ID{Hash: checksumToBytes(0x7ca19fd5), Next: 0}}, // not synced
+				{0, ID{Hash: checksumToBytes(0xf025499c), Next: 0}}, // not synced
 			},
 		},
 		// Testnet8 test cases
@@ -51,7 +51,7 @@ func TestCreation(t *testing.T) {
 			params.Testnet8ChainConfig,
 			params.Testnet8GenesisHash,
 			[]testcase{
-				{0, ID{Hash: checksumToBytes(0x8934bd48), Next: 0}}, // not synced
+				{0, ID{Hash: checksumToBytes(0x9d0df7cb), Next: 0}}, // not synced
 			},
 		},
 	}

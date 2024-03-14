@@ -152,6 +152,21 @@ type testBlockChain struct {
 	genesisBlock       *types.Block
 }
 
+func (bc *testBlockChain) GetSlotInfo() *types.SlotInfo {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) GetEraInfo() *era.EraInfo {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) Database() ethdb.Database {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (bc *testBlockChain) IsSynced() bool {
 	//TODO implement me
 	panic("implement me")
