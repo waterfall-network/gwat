@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
@@ -60,4 +61,22 @@ func startSubTests(t *testing.T, cases []operationTestCase, operationEncode, ope
 			}
 		})
 	}
+}
+
+func TestParamsDelegatingStakeRules() (
+	profitShare, stakeShare map[common.Address]uint8,
+	exit, withdrawal []common.Address,
+) {
+	profitShare = map[common.Address]uint8{
+		common.HexToAddress("0x1111111111111111111111111111111111111111"): 10,
+		common.HexToAddress("0x2222222222222222222222222222222222222222"): 30,
+		common.HexToAddress("0x3333333333333333333333333333333333333333"): 60,
+	}
+	stakeShare = map[common.Address]uint8{
+		common.HexToAddress("0x4444444444444444444444444444444444444444"): 70,
+		common.HexToAddress("0x5555555555555555555555555555555555555555"): 30,
+	}
+	exit = []common.Address{common.HexToAddress("0x6666666666666666666666666666666666666666")}
+	withdrawal = []common.Address{common.HexToAddress("0x7777777777777777777777777777777777777777")}
+	return
 }

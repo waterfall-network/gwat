@@ -504,8 +504,10 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 			"ProcEpoch", sd.ProcEpoch,
 			"Index", sd.Index,
 			"Creator", fmt.Sprintf("%#x", sd.Creator),
-			"amount", amt.String(),
+			"amount", sd.Amount.String(),
 			"TxHash", fmt.Sprintf("%#x", sd.TxHash),
+			"curCoinbase", fmt.Sprintf("%#x", coinbase),
+			"creators", creators,
 		)
 	}
 
@@ -847,7 +849,7 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 	nonce := c.backend.TxPool().Nonce(header.Coinbase)
 	for _, validatorSync := range syncData {
 		if validatorSync.ProcEpoch <= c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) {
-			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.backend, header.CpHash, header.Coinbase, validatorSync, nonce, c.current.keystore)
+			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.backend, header.CpHash, header.Coinbase, header.Slot, validatorSync, nonce, c.current.keystore)
 			if err != nil {
 				log.Error("failed to create validator sync tx", "error", err)
 				continue

@@ -90,7 +90,6 @@ func TestSetupGenesis(t *testing.T) {
 	if stored.Hash() != wantHash {
 		t.Errorf("block in DB has hash %s, want %s", stored.Hash(), wantHash)
 	}
-
 }
 
 // TestGenesisHashes checks the congruity of default genesis data to corresponding hardcoded genesis hash values.
@@ -104,8 +103,8 @@ func TestGenesisHashes(t *testing.T) {
 			hash:    params.MainnetGenesisHash,
 		},
 		{
-			genesis: DefaultDevNetGenesisBlock(),
-			hash:    params.DevNetGenesisHash,
+			genesis: DefaultTestNet8GenesisBlock(),
+			hash:    params.Testnet8GenesisHash,
 		},
 	}
 	for i, c := range cases {
@@ -155,6 +154,7 @@ func TestSetupGenesisWithValidators(t *testing.T) {
 			SecondsPerSlot:         4,
 			SlotsPerEpoch:          32,
 			ForkSlotSubNet1:        1000,
+			ForkSlotDelegate:       1000,
 			ValidatorsStateAddress: nil,
 			EffectiveBalance:       big.NewInt(3200),
 		},

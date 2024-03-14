@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"reflect"
 	"unicode"
@@ -143,6 +142,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
+	if ctx.GlobalIsSet(utils.MainnetFlag.Name) {
+		//log.Crit("--mainnet: require implementation")
+		log.Warn("--mainnet: == TEST MODE ==")
+	}
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
@@ -154,8 +157,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.GlobalIsSet(utils.OverrideLondonFlag.Name) {
-		cfg.Eth.OverrideLondon = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideLondonFlag.Name))
+	if ctx.GlobalIsSet(utils.OverrideDelegatingStakeFlag.Name) {
+		val := ctx.GlobalUint64(utils.OverrideDelegatingStakeFlag.Name)
+		cfg.Eth.OverrideDelegatingStake = &val
 	}
 	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
 

@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"bytes"
+	"errors"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -45,7 +46,7 @@ func CheckError(e error, arr []error) bool {
 	}
 
 	for _, err := range arr {
-		if e == err {
+		if errors.Is(e, err) {
 			return true
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
@@ -23,9 +24,17 @@ type Backend interface {
 }
 
 // GetPendingValidatorSyncData retrieves currently processable validators sync operations.
-func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from common.Address, valSyncOp *types.ValidatorSync, nonce uint64, ks *keystore.KeyStore) (*types.Transaction, error) {
+func CreateValidatorSyncTx(
+	backend Backend,
+	stateBlockHash common.Hash,
+	from common.Address,
+	slot uint64,
+	valSyncOp *types.ValidatorSync,
+	nonce uint64,
+	ks *keystore.KeyStore,
+) (*types.Transaction, error) {
 	bc := backend.BlockChain()
-	_, err := ValidateValidatorSyncOp(bc, stateBlockHash, valSyncOp)
+	_, err := ValidateCreateTxValidatorSyncOp(bc, stateBlockHash, slot, valSyncOp)
 	if err != nil {
 		return nil, err
 	}
@@ -53,17 +62,22 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 		wa := validator.GetWithdrawalAddress()
 		withdrawalAddress = wa
 	}
+	opVer := getValSyncVersionBySlot(bc.Config(), slot)
 
 	log.Info("Validator sync tx data",
+		"slot", slot,
+		"ver", opVer,
 		"Creator", valSyncOp.Creator.Hex(),
 		"ProcEpoch", valSyncOp.ProcEpoch,
 		"OpType", valSyncOp.OpType,
 		"Amount", valSyncOp.Amount.String(),
+		"Balance", valSyncOp.Balance.String(),
 		"Index", valSyncOp.Index,
 		"InitTxHash", valSyncOp.InitTxHash.Hex(),
+		"from", from.Hex(),
 	)
 
-	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress)
+	valSyncTxData, err := getValSyncTxData(*valSyncOp, withdrawalAddress, opVer)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +102,7 @@ func CreateValidatorSyncTx(backend Backend, stateBlockHash common.Hash, from com
 	return signed, nil
 }
 
-func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, valSyncOp *types.ValidatorSync) (bool, error) {
+func ValidateCreateTxValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, slot uint64, valSyncOp *types.ValidatorSync) (bool, error) {
 	if valSyncOp == nil {
 		return false, fmt.Errorf("validator sync operation failed: nil data")
 	}
@@ -96,9 +110,11 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 	if stateHead == nil {
 		return false, fmt.Errorf("validator sync operation failed: state block not found heash=%s", stateBlockHash.Hex())
 	}
-	stateEpoch := bc.GetSlotInfo().SlotToEpoch(stateHead.Slot)
-	if valSyncOp.ProcEpoch < stateEpoch {
-		return false, fmt.Errorf("validator sync operation failed: outdated epoch ProcEpoch=%d stateEpoch=%d", valSyncOp.ProcEpoch, stateEpoch)
+	if !bc.Config().IsForkSlotDelegate(slot) {
+		stateEpoch := bc.GetSlotInfo().SlotToEpoch(stateHead.Slot)
+		if valSyncOp.ProcEpoch < stateEpoch {
+			return false, fmt.Errorf("validator sync operation failed: outdated epoch ProcEpoch=%d stateEpoch=%d", valSyncOp.ProcEpoch, stateEpoch)
+		}
 	}
 
 	stateDb, err := bc.StateAt(stateHead.Root)
@@ -140,12 +156,22 @@ func ValidateValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.Hash, va
 	return true, nil
 }
 
-func getValSyncTxData(valSyncOp types.ValidatorSync, withdrawal *common.Address) ([]byte, error) {
+func getValSyncTxData(valSyncOp types.ValidatorSync, withdrawal *common.Address, version operation.VersionValSyncOp) ([]byte, error) {
 	var (
 		op  operation.Operation
 		err error
 	)
-	if op, err = operation.NewValidatorSyncOperation(valSyncOp.InitTxHash, valSyncOp.OpType, valSyncOp.ProcEpoch, valSyncOp.Index, valSyncOp.Creator, valSyncOp.Amount, withdrawal); err != nil {
+	if op, err = operation.NewValidatorSyncOperation(
+		version,
+		valSyncOp.OpType,
+		valSyncOp.InitTxHash,
+		valSyncOp.ProcEpoch,
+		valSyncOp.Index,
+		valSyncOp.Creator,
+		valSyncOp.Amount,
+		withdrawal,
+		valSyncOp.Balance,
+	); err != nil {
 		return nil, err
 	}
 	b, err := operation.EncodeToBytes(op)
@@ -172,16 +198,94 @@ func GetPendingValidatorSyncData(bc *core.BlockChain) map[common.Hash]*types.Val
 	valSyncOps := bc.GetNotProcessedValidatorSyncData()
 	vsPending := make(map[common.Hash]*types.ValidatorSync, len(valSyncOps))
 	for k, vs := range valSyncOps {
+		log.Info("=== ValidatorSync: GetPendingValidatorSyncData ===",
+			"slot", si.CurrentSlot(),
+			"Index", vs.Index,
+			"ProcEpoch", vs.ProcEpoch,
+			"OpType", vs.OpType,
+			"Amount", vs.Amount.String(),
+			"Balance", vs.Balance.String(),
+			"TxHash", fmt.Sprintf("%#x", vs.TxHash),
+			"InitTxHash", vs.InitTxHash.Hex(),
+			"Creator", vs.Creator.Hex(),
+		)
+
 		if vs.TxHash != nil {
 			continue
 		}
 		saved := bc.GetValidatorSyncData(vs.InitTxHash)
-		if saved.TxHash != nil {
+		if saved != nil {
+			log.Info("=== ValidatorSync: GetPendingValidatorSyncData === saved",
+				"slot", si.CurrentSlot(),
+				"Index", saved.Index,
+				"ProcEpoch", saved.ProcEpoch,
+				"OpType", saved.OpType,
+				"Amount", saved.Amount.String(),
+				"Balance", saved.Balance.String(),
+				"TxHash", fmt.Sprintf("%#x", saved.TxHash),
+				"InitTxHash", saved.InitTxHash.Hex(),
+				"Creator", saved.Creator.Hex(),
+			)
+		} else {
+			log.Info("=== ValidatorSync: GetPendingValidatorSyncData === saved nill",
+				"slot", si.CurrentSlot(),
+				"InitTxHash", vs.InitTxHash.Hex(),
+			)
+		}
+
+		if saved != nil && saved.TxHash != nil {
 			continue
 		}
 		if vs.ProcEpoch == currEpoch {
 			vsPending[k] = vs
+		} else if bc.Config().IsForkSlotDelegate(si.CurrentSlot()) {
+			if vs.ProcEpoch < currEpoch {
+				//remove stale validator sync operation from the pool
+				if vs.ProcEpoch < bc.Config().ForkSlotDelegate {
+					if vs.TxHash == nil {
+						//set dummy txHash
+						vs.TxHash = &vs.InitTxHash
+					}
+					bc.SetValidatorSyncData(vs)
+					log.Warn("=== ValidatorSync: GetPendingValidatorSyncData: stale op removed",
+						"OpType", vs.OpType,
+						"currEpoch", currEpoch,
+						"ProcEpoch", vs.ProcEpoch,
+						"Index", vs.Index,
+						"OpType", vs.OpType,
+						"Amount", vs.Amount.String(),
+						"Balance", vs.Balance.String(),
+						"TxHash", fmt.Sprintf("%#x", vs.TxHash),
+						"InitTxHash", vs.InitTxHash.Hex(),
+						"Creator", vs.Creator.Hex(),
+					)
+					continue
+				}
+
+				//add to pending
+				//vs.ProcEpoch = currEpoch
+				vsPending[k] = vs
+				log.Info("=== ValidatorSync: GetPendingValidatorSyncData === 11111",
+					"slot", si.CurrentSlot(),
+					"ProcEpoch", vs.ProcEpoch,
+					"Index", vs.Index,
+					"OpType", vs.OpType,
+					"Amount", vs.Amount.String(),
+					"Balance", vs.Balance.String(),
+					"TxHash", fmt.Sprintf("%#x", vs.TxHash),
+					"InitTxHash", vs.InitTxHash.Hex(),
+					"Creator", vs.Creator.Hex(),
+				)
+			}
 		}
 	}
 	return vsPending
+}
+
+func getValSyncVersionBySlot(conf *params.ChainConfig, slot uint64) operation.VersionValSyncOp {
+	var ver operation.VersionValSyncOp
+	if conf.IsForkSlotDelegate(slot) {
+		ver = operation.Ver1
+	}
+	return ver
 }

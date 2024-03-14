@@ -17,11 +17,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/shuffle"
 )
 
-const (
-	uint64Size = 8
-	uint32Size = 4
-)
-
 type blockchain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 	GetBlock(ctx context.Context, hash common.Hash) *types.Block
@@ -82,16 +77,16 @@ func (s *storage) GetValidator(stateDb vm.StateDB, address common.Address) (*Val
 }
 
 func (s *storage) SetValidatorsList(stateDb vm.StateDB, list []common.Address) {
-	newList := make([]byte, len(list)*common.AddressLength+uint64Size)
+	newList := make([]byte, len(list)*common.AddressLength+common.Uint64Size)
 
 	currentList := stateDb.GetCode(*s.ValidatorsStateAddress())
 	if len(currentList) > 0 {
-		depositCount := binary.BigEndian.Uint64(currentList[:uint64Size])
-		binary.BigEndian.PutUint64(newList[:uint64Size], depositCount)
+		depositCount := binary.BigEndian.Uint64(currentList[:common.Uint64Size])
+		binary.BigEndian.PutUint64(newList[:common.Uint64Size], depositCount)
 	}
 
 	for i, validator := range list {
-		beginning := i*common.AddressLength + uint64Size
+		beginning := i*common.AddressLength + common.Uint64Size
 		end := beginning + common.AddressLength
 		copy(newList[beginning:end], validator[:])
 	}
@@ -103,7 +98,7 @@ func (s *storage) GetValidatorsList(stateDb vm.StateDB) []common.Address {
 	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
 
 	validators := make([]common.Address, 0)
-	for i := uint64Size; i+common.AddressLength <= len(buf); i += common.AddressLength {
+	for i := common.Uint64Size; i+common.AddressLength <= len(buf); i += common.AddressLength {
 		if (common.BytesToAddress(buf[i:i+common.AddressLength]) != common.Address{}) {
 			validators = append(validators, common.BytesToAddress(buf[i:i+common.AddressLength]))
 		}
@@ -118,19 +113,19 @@ func (s *storage) GetDepositCount(stateDb vm.StateDB) uint64 {
 		return 0
 	}
 
-	return binary.BigEndian.Uint64(buf[:uint64Size])
+	return binary.BigEndian.Uint64(buf[:common.Uint64Size])
 }
 
 func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
 	buf := stateDb.GetCode(*s.ValidatorsStateAddress())
 
 	if buf == nil {
-		buf = make([]byte, uint64Size)
+		buf = make([]byte, common.Uint64Size)
 	}
-	currentCount := binary.BigEndian.Uint64(buf[:uint64Size])
+	currentCount := binary.BigEndian.Uint64(buf[:common.Uint64Size])
 	currentCount++
 
-	binary.BigEndian.PutUint64(buf[:uint64Size], currentCount)
+	binary.BigEndian.PutUint64(buf[:common.Uint64Size], currentCount)
 	stateDb.SetCode(*s.ValidatorsStateAddress(), buf)
 }
 

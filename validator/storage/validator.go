@@ -8,17 +8,19 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/operation"
 )
 
 type Validator struct {
 	// the Address property must be the first for IsValidatorAddress
-	Address           common.Address    `json:"address"`
-	PubKey            common.BlsPubKey  `json:"pubKey"`
-	WithdrawalAddress *common.Address   `json:"withdrawalAddress"`
-	Index             uint64            `json:"index"`
-	ActivationEra     uint64            `json:"activationEra"`
-	ExitEra           uint64            `json:"exitEra"`
-	Stake             []*StakeByAddress `json:"stake"`
+	Address           common.Address                 `json:"address"`
+	PubKey            common.BlsPubKey               `json:"pubKey"`
+	WithdrawalAddress *common.Address                `json:"withdrawalAddress"`
+	Index             uint64                         `json:"index"`
+	ActivationEra     uint64                         `json:"activationEra"`
+	ExitEra           uint64                         `json:"exitEra"`
+	Stake             []*StakeByAddress              `json:"stake"`
+	DelegatingStake   *operation.DelegatingStakeData `json:"delegatingStake"`
 }
 
 func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {
@@ -30,6 +32,7 @@ func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *c
 		ActivationEra:     math.MaxUint64,
 		ExitEra:           math.MaxUint64,
 		Stake:             []*StakeByAddress{},
+		DelegatingStake:   nil,
 	}
 }
 
@@ -53,6 +56,10 @@ func (v *Validator) Copy() *Validator {
 		cpy.Stake[i] = stake.Copy()
 	}
 	return cpy
+}
+
+func (v *Validator) hasExtendedData() bool {
+	return v.DelegatingStake != nil
 }
 
 type rlpBaseValidator struct {
@@ -85,8 +92,21 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
+	// marshal binary extended data
+	var delegateBin []byte
+	var extenedDataLen int
+	//prevent modify state before any forks
+	if v.hasExtendedData() {
+		// delegate stake data
+		delegateBin, err = v.DelegatingStake.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		extenedDataLen = len(delegateBin) + common.Uint32Size
+	}
+
 	//create bin data
-	binDataLen := common.AddressLength + uint32Size + len(baseData)
+	binDataLen := common.AddressLength + common.Uint32Size + len(baseData) + extenedDataLen
 	binData := make([]byte, binDataLen)
 
 	var startOffset, endOfset int
@@ -98,13 +118,28 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 
 	// set len of base validator data
 	startOffset = endOfset
-	endOfset = startOffset + uint32Size
+	endOfset = startOffset + common.Uint32Size
 	binary.BigEndian.PutUint32(binData[startOffset:endOfset], uint32(len(baseData)))
 
 	// set base validator data
 	startOffset = endOfset
 	endOfset = startOffset + len(baseData)
 	copy(binData[startOffset:endOfset], baseData)
+
+	//prevent modify state before any forks
+	if !v.hasExtendedData() {
+		return binData, nil
+	}
+
+	// set extended data
+	//set len of delegate stake data
+	startOffset = endOfset
+	endOfset = startOffset + common.Uint32Size
+	binary.BigEndian.PutUint32(binData[startOffset:endOfset], uint32(len(delegateBin)))
+	// delegate stake data
+	startOffset = endOfset
+	endOfset = startOffset + len(delegateBin)
+	copy(binData[startOffset:endOfset], delegateBin)
 
 	return binData, nil
 }
@@ -120,12 +155,14 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 
 	// get len of base validator data
 	startOffset = endOfset
-	endOfset = startOffset + uint32Size
-	baseDataLen := binary.BigEndian.Uint32(data[startOffset:endOfset])
-
+	endOfset = startOffset + common.Uint32Size
+	baseDataLen := int(binary.BigEndian.Uint32(data[startOffset:endOfset]))
+	if baseDataLen > len(data[endOfset:]) {
+		return errBadBinaryData
+	}
 	// get base validator data
 	startOffset = endOfset
-	endOfset = startOffset + int(baseDataLen)
+	endOfset = startOffset + baseDataLen
 	baseValData := &rlpBaseValidator{}
 	if err := rlp.DecodeBytes(data[startOffset:endOfset], baseValData); err != nil {
 		return err
@@ -140,6 +177,27 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 
 	if *v.WithdrawalAddress == (common.Address{}) {
 		v.WithdrawalAddress = nil
+	}
+
+	// retrieve extended data
+	extendedData := data[endOfset:]
+	if len(extendedData) > 0 {
+		// delegate stake data
+		// retrieve data len
+		startOffset = 0
+		endOfset = startOffset + common.Uint32Size
+		delegateDataLen := int(binary.BigEndian.Uint32(extendedData[startOffset:endOfset]))
+		if delegateDataLen > len(extendedData[endOfset:]) {
+			return errBadBinaryData
+		}
+		// get delegate data
+		startOffset = endOfset
+		endOfset = startOffset + delegateDataLen
+		delegatingStake, err := operation.NewDelegatingStakeDataFromBinary(extendedData[startOffset:endOfset])
+		if err != nil {
+			return err
+		}
+		v.DelegatingStake = delegatingStake
 	}
 
 	return nil
@@ -251,6 +309,11 @@ func (v *Validator) RmStakeByAddress(address common.Address) {
 
 func (v *Validator) UnsetStake() {
 	v.Stake = []*StakeByAddress{}
+}
+
+// HasDelegatingStake returns true if validator has delegating rules to apply.
+func (v *Validator) HasDelegatingStake() bool {
+	return !v.DelegatingStake.IsEmpty()
 }
 
 // ValidatorBinary is a Validator represented as an array of bytes.

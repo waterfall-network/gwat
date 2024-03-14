@@ -7,18 +7,17 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 )
 
-// Deposit contains all attributes for validator deposit
-// Methods for getting optional attributes also return boolean values which indicates if the attribute was set
+// Deposit contains all attributes for validator deposit.
 type Deposit interface {
 	Operation
 	PubKey() common.BlsPubKey
 	CreatorAddress() common.Address
 	WithdrawalAddress() common.Address
 	Signature() common.BlsSignature
+	DelegatingStake() *DelegatingStakeData
 }
 
-// Deposit contains all attributes for validator deposit
-// Methods for getting optional attributes also return boolean values which indicates if the attribute was set
+// ValidatorSync contains all attributes for validator sync op.
 type ValidatorSync interface {
 	Operation
 	OpType() types.ValidatorSyncOp
@@ -28,6 +27,8 @@ type ValidatorSync interface {
 	InitTxHash() common.Hash
 	Amount() *big.Int
 	WithdrawalAddress() *common.Address
+	Balance() *big.Int
+	Version() VersionValSyncOp
 }
 
 type Exit interface {

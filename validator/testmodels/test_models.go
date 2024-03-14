@@ -42,11 +42,13 @@ func init() {
 		ChainID:                big.NewInt(111111),
 		SecondsPerSlot:         4,
 		SlotsPerEpoch:          32,
-		ForkSlotSubNet1:        9999999,
 		ValidatorsStateAddress: &validatorsStateAddress,
 		ValidatorsPerSlot:      2,
 		EpochsPerEra:           22,
 		TransitionPeriod:       2,
+		ForkSlotSubNet1:        9999999,
+		ForkSlotDelegate:       10,
+		EffectiveBalance:       big.NewInt(3200),
 	}
 
 	TestEra = era.Era{
