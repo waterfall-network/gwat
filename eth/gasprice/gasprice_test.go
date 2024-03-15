@@ -19,7 +19,6 @@ package gasprice
 import (
 	"context"
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"math"
 	"math/big"
 	"testing"
@@ -33,6 +32,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
