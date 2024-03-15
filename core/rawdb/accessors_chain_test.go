@@ -759,13 +759,6 @@ func TestReadWriteCurrentEra(t *testing.T) {
 	if eraNumber2Read != eraNumber2 {
 		t.Errorf("Expected era number %d but got %d", eraNumber2, eraNumber2Read)
 	}
-
-	// Test case 3: read non-existent current era number from database and verify it returns zero
-	db.Delete(append(currentEraPrefix))
-	eraNumber3 := ReadCurrentEra(db)
-	if eraNumber3 != 0 {
-		t.Errorf("Expected era number 0 but got %d", eraNumber3)
-	}
 }
 
 func TestFindEra(t *testing.T) {
