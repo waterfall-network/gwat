@@ -4973,7 +4973,6 @@ func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error)
 		err := fmt.Errorf("bad last coordinated checkpoint: CpHash=%#x not found", block.CpHash)
 		log.Warn("Hibernate block verification failed: cp block not found",
 			"blockSlot", block.Slot(),
-			//"cpSlot", block.CpHash(),
 			"blockHash", block.Hash().Hex(),
 			"cpHash", block.CpHash().Hex(),
 			"err", err.Error(),
@@ -4984,12 +4983,24 @@ func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error)
 	if err != nil {
 		log.Warn("Hibernate block verification failed: check hibernate mode",
 			"blockSlot", block.Slot(),
-			"cpSlot", block.CpHash(),
+			"cpSlot", cpBlock.Slot,
 			"blockHash", block.Hash().Hex(),
 			"cpHash", block.CpHash().Hex(),
 			"err", err.Error(),
 		)
 		return false, err
 	}
+
+	if isHibernate {
+		log.Info("Hibernate block verification failed:",
+			"isHibernate", isHibernate,
+			"blockSlot", block.Slot(),
+			"cpSlot", cpBlock.Slot,
+			"blockHash", block.Hash().Hex(),
+			"cpHash", block.CpHash().Hex(),
+			"txs", len(block.Transactions()),
+		)
+	}
+
 	return !isHibernate, nil
 }

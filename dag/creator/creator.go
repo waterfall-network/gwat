@@ -238,6 +238,20 @@ func (c *Creator) RunBlockCreation(slot uint64,
 		return err
 	}
 
+	//check hibernate mode
+	cpHeader := c.bc.GetHeader(header.CpHash)
+	isHibernateMode, err := c.bc.IsHibernateSlot(cpHeader.Slot, header.Slot)
+	if err != nil {
+		log.Error("Creator failed to check is hibernate mode", "err", err)
+		return err
+	}
+	if isHibernateMode {
+		log.Info("Creator: run in hibernate mode",
+			"isHibernateMode", isHibernateMode,
+			"slot", header.Slot,
+		)
+	}
+
 	wg := new(sync.WaitGroup)
 	for _, account := range assigned.Creators {
 		var needEmptyBlock bool
@@ -252,7 +266,7 @@ func (c *Creator) RunBlockCreation(slot uint64,
 			c.current.txsMu.Lock()
 			c.current.txs[account] = &txsWithCumulativeGas{}
 			c.current.txsMu.Unlock()
-			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, needEmptyBlock)
+			go c.createNewBlock(account, assigned.Creators, types.CopyHeader(header), wg, needEmptyBlock, isHibernateMode)
 		}
 	}
 	wg.Wait()
@@ -435,7 +449,7 @@ func (c *Creator) reorgTips(slot uint64, tips types.Tips) (types.BlockMap, error
 	return tipsBlocks, nil
 }
 
-func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Address, header *types.Header, wg *sync.WaitGroup, needEmptyBlock bool) {
+func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Address, header *types.Header, wg *sync.WaitGroup, needEmptyBlock, isHibernateMode bool) {
 	start := time.Now()
 
 	log.Info("Try to create new block", "slot", header.Slot, "coinbase", coinbase.Hex())
@@ -448,7 +462,11 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 	header.Coinbase = coinbase
 
 	// Fill the block with all available pending transactions.
-	pendingTxs := c.getPending(coinbase, creators)
+	pendingTxs := make(map[common.Address]types.Transactions)
+	// Skip while hibernate mode.
+	if !isHibernateMode {
+		pendingTxs = c.getPending(coinbase, creators)
+	}
 
 	syncData := validatorsync.GetPendingValidatorSyncData(c.bc)
 	if len(syncData) > 0 || len(pendingTxs) > 0 || needEmptyBlock {
