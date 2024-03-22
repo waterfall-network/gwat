@@ -4970,7 +4970,7 @@ func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error)
 	}
 	cpBlock := bc.GetHeader(block.CpHash())
 	if cpBlock == nil {
-		err := fmt.Errorf("bad last coordinated checkpoint: CpHash=%#x not found", block.CpHash)
+		err := fmt.Errorf("bad last coordinated checkpoint: CpHash=%#x not found", block.CpHash())
 		log.Warn("Hibernate block verification failed: cp block not found",
 			"blockSlot", block.Slot(),
 			"blockHash", block.Hash().Hex(),
