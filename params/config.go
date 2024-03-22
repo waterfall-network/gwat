@@ -369,3 +369,7 @@ func (c *ChainConfig) Rules() Rules {
 		IsLondon:         true,
 	}
 }
+
+func (c *ChainConfig) HibernationSpinesThreshold() uint64 {
+	return 128
+}

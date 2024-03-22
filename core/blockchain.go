@@ -2264,6 +2264,20 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"hash", block.Hash(),
 	)
 
+	isValid, err := bc.verifyHibernateModeBlock(block)
+	if err != nil {
+		return false, err
+	}
+	if !isValid {
+		return false, nil
+	}
+	log.Info("VALIDATION TIME",
+		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
+		"fn:", "verifyHibernateModeBlock",
+		"txs", len(block.Transactions()),
+		"hash", block.Hash(),
+	)
+
 	// Verify baseFee
 	if !bc.verifyBlockBaseFee(block) {
 		return false, nil
@@ -2539,7 +2553,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	if block.Coinbase() != creators[0] {
 		log.Warn("Empty block verification failed: invalid coinbase",
 			"blockHash", block.Hash().Hex(),
-			"block slot", block.Slot(),
+			"blockSlot", block.Slot(),
 			"coinbase", block.Coinbase().Hex(),
 		)
 		return errors.New("block verification: empty block has invalid coinbase")
@@ -2550,7 +2564,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	if err != nil {
 		log.Warn("Empty block verification failed: can`t calculate block`s epoch start slot",
 			"blockHash", block.Hash().Hex(),
-			"block slot", block.Slot(),
+			"blockSlot", block.Slot(),
 			"blockEpoch", blockEpoch,
 			"coinbase", block.Coinbase().Hex(),
 		)
@@ -2561,7 +2575,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	if block.Slot() != blockEpochStartSlot {
 		log.Warn("Empty block verification failed: do not expect an empty block in this slot",
 			"blockHash", block.Hash().Hex(),
-			"block slot", block.Slot(),
+			"blockSlot", block.Slot(),
 			"blockEpoch", blockEpoch,
 			"coinbase", block.Coinbase().Hex(),
 		)
@@ -2573,7 +2587,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	if err != nil {
 		log.Error("Block verification error: Failed to determine if the previous epoch contains blocks.",
 			"blockHash", block.Hash().Hex(),
-			"block slot", block.Slot(),
+			"blockSlot", block.Slot(),
 			"blockEpoch", blockEpoch,
 			"coinbase", block.Coinbase().Hex(),
 		)
@@ -2581,7 +2595,7 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	if haveBlocks {
 		log.Warn("Empty block verification failed: previous epoch has blocks",
 			"blockHash", block.Hash().Hex(),
-			"block slot", block.Slot(),
+			"blockSlot", block.Slot(),
 			"blockEpoch", blockEpoch,
 			"coinbase", block.Coinbase().Hex(),
 		)
@@ -4923,4 +4937,59 @@ func (bc *BlockChain) searchBlockFinalizationCp(hdr *types.Header) *types.Checkp
 		return cp
 	}
 	return nil
+}
+
+// IsHibernateSlot check is spines length reached the HibernationSpinesThreshold
+// to start hibernate mode.
+func (bc *BlockChain) IsHibernateSlot(cpSlot, slot uint64) (bool, error) {
+	// collect optimistic spines
+	spines, err := bc.GetOptimisticSpines(cpSlot)
+	if err != nil {
+		return false, err
+	}
+	// count actual spines
+	spinesCount := uint64(0)
+	isHibernate := false
+	for _, s := range spines {
+		if len(s) > 0 {
+			spinesCount++
+			if spinesCount >= bc.Config().HibernationSpinesThreshold() {
+				topSpine := s[0]
+				header := bc.GetHeader(topSpine)
+				isHibernate = slot >= header.Slot
+				break
+			}
+		}
+	}
+	return isHibernate, nil
+}
+
+func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error) {
+	if len(block.Transactions()) == 0 {
+		return true, nil
+	}
+	cpBlock := bc.GetHeader(block.CpHash())
+	if cpBlock == nil {
+		err := fmt.Errorf("bad last coordinated checkpoint: CpHash=%#x not found", block.CpHash)
+		log.Warn("Hibernate block verification failed: cp block not found",
+			"blockSlot", block.Slot(),
+			//"cpSlot", block.CpHash(),
+			"blockHash", block.Hash().Hex(),
+			"cpHash", block.CpHash().Hex(),
+			"err", err.Error(),
+		)
+		return false, err
+	}
+	isHibernate, err := bc.IsHibernateSlot(cpBlock.Slot, block.Slot())
+	if err != nil {
+		log.Warn("Hibernate block verification failed: check hibernate mode",
+			"blockSlot", block.Slot(),
+			"cpSlot", block.CpHash(),
+			"blockHash", block.Hash().Hex(),
+			"cpHash", block.CpHash().Hex(),
+			"err", err.Error(),
+		)
+		return false, err
+	}
+	return !isHibernate, nil
 }
