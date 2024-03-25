@@ -1154,6 +1154,10 @@ web3._extend({
 			params: 1,
 			outputFormatter: web3._extend.formatters.outputTransactionReceiptFormatter
 		}),
+		new web3._extend.Property({
+		  name: 'info',
+		  getter: 'wat_info'
+		}),
 	]
 });
 `
