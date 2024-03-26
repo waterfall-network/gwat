@@ -239,8 +239,7 @@ func (c *Creator) RunBlockCreation(slot uint64,
 	}
 
 	//check hibernate mode
-	cpHeader := c.bc.GetHeader(header.CpHash)
-	isHibernateMode, err := c.bc.IsHibernateSlot(cpHeader.Slot, header.Slot)
+	isHibernateMode, err := c.bc.IsHibernateSlot(header)
 	if err != nil {
 		log.Error("Creator failed to check is hibernate mode", "err", err)
 		return err

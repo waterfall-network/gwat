@@ -4941,26 +4941,105 @@ func (bc *BlockChain) searchBlockFinalizationCp(hdr *types.Header) *types.Checkp
 
 // IsHibernateSlot check is spines length reached the HibernationSpinesThreshold
 // to start hibernate mode.
-func (bc *BlockChain) IsHibernateSlot(cpSlot, slot uint64) (bool, error) {
-	// collect optimistic spines
-	spines, err := bc.GetOptimisticSpines(cpSlot)
+func (bc *BlockChain) IsHibernateSlot(header *types.Header) (bool, error) {
+	slot := header.Slot
+	cpHdr := bc.GetHeader(header.CpHash)
+	if cpHdr == nil {
+		log.Error("IsHibernateSlot: cp block not found",
+			"slot", header.Slot,
+			"hash", header.Hash().Hex(),
+			"cpHash", header.CpHash.Hex(),
+			"err", ErrInsertUncompletedDag,
+		)
+		return false, ErrInsertUncompletedDag
+	}
+	cpSlot := cpHdr.Slot
+	// quick check by slots diff
+	if slot >= cpSlot && slot-cpSlot < bc.Config().HibernationSpinesThreshold() {
+		return false, nil
+	}
+	// check by ancestors
+	tmpTips := types.Tips{}
+	for _, h := range header.ParentHashes {
+		bdag := bc.GetBlockDag(h)
+		if bdag == nil {
+			// create parent blockDag
+			parentBlock := bc.GetHeader(h)
+			if parentBlock == nil {
+				log.Error("IsHibernateSlot: create parent blockDag: parent not found",
+					"slot", header.Slot,
+					"hash", header.Hash().Hex(),
+					"parent", h.Hex(),
+					"err", ErrInsertUncompletedDag,
+				)
+				return false, ErrInsertUncompletedDag
+			}
+			cpHeader := bc.GetHeader(parentBlock.CpHash)
+			if cpHeader == nil {
+				log.Error("IsHibernateSlot: create parent blockDag: parent cp not found",
+					"slot", header.Slot,
+					"hash", header.Hash().Hex(),
+					"parent", h.Hex(),
+					"parentCP", parentBlock.CpHash.Hex(),
+					"err", ErrInsertUncompletedDag,
+				)
+				return false, ErrInsertUncompletedDag
+			}
+
+			log.Warn("IsHibernateSlot: create parent blockDag",
+				"parent.slot", parentBlock.Slot,
+				"parent", h.Hex(),
+				"slot", header.Slot,
+				"height", header.Height,
+				"hash", header.Hash().Hex(),
+			)
+			_, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
+			if err != nil {
+				return false, err
+			}
+			if len(unl) > 0 {
+				log.Error("IsHibernateSlot: create parent blockDag: incomplete dag",
+					"err", ErrInsertUncompletedDag,
+					"parent", h.Hex(),
+					"parent.slot", parentBlock.Slot,
+					"slot", header.Slot,
+					"hash", header.Hash().Hex(),
+				)
+				return false, ErrInsertUncompletedDag
+			}
+			delete(ancestors, cpHeader.Hash())
+			bdag = &types.BlockDAG{
+				Hash:                   h,
+				Height:                 parentBlock.Height,
+				Slot:                   parentBlock.Slot,
+				CpHash:                 parentBlock.CpHash,
+				CpHeight:               cpHeader.Height,
+				OrderedAncestorsHashes: ancestors.Hashes(),
+			}
+		}
+		bdag.OrderedAncestorsHashes = bdag.OrderedAncestorsHashes.Difference(common.HashArray{bc.Genesis().Hash()})
+		tmpTips.Add(bdag)
+	}
+	dagChainHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, header.CpHash)
 	if err != nil {
 		return false, err
 	}
-	// count actual spines
-	spinesCount := uint64(0)
-	isHibernate := false
-	for _, s := range spines {
-		if len(s) > 0 {
-			spinesCount++
-			if spinesCount >= bc.Config().HibernationSpinesThreshold() {
-				topSpine := s[0]
-				header := bc.GetHeader(topSpine)
-				isHibernate = slot >= header.Slot
-				break
-			}
+	ancMap := bc.GetHeadersByHashes(dagChainHashes)
+	slotsMap := make(map[uint64]bool)
+	for _, hdr := range ancMap {
+		if hdr == nil {
+			return false, ErrInsertUncompletedDag
 		}
+		slotsMap[hdr.Slot] = true
 	}
+	isHibernate := uint64(len(slotsMap)) >= bc.Config().HibernationSpinesThreshold()
+	log.Info("IsHibernateSlot:",
+		"isHibernate", isHibernate,
+		"spines", len(slotsMap),
+		"slot", header.Slot,
+		"hash", header.Hash().Hex(),
+		"cpSlot",
+	)
 	return isHibernate, nil
 }
 
@@ -4968,22 +5047,10 @@ func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error)
 	if len(block.Transactions()) == 0 {
 		return true, nil
 	}
-	cpBlock := bc.GetHeader(block.CpHash())
-	if cpBlock == nil {
-		err := fmt.Errorf("bad last coordinated checkpoint: CpHash=%#x not found", block.CpHash())
-		log.Warn("Hibernate block verification failed: cp block not found",
-			"blockSlot", block.Slot(),
-			"blockHash", block.Hash().Hex(),
-			"cpHash", block.CpHash().Hex(),
-			"err", err.Error(),
-		)
-		return false, err
-	}
-	isHibernate, err := bc.IsHibernateSlot(cpBlock.Slot, block.Slot())
+	isHibernate, err := bc.IsHibernateSlot(block.Header())
 	if err != nil {
 		log.Warn("Hibernate block verification failed: check hibernate mode",
 			"blockSlot", block.Slot(),
-			"cpSlot", cpBlock.Slot,
 			"blockHash", block.Hash().Hex(),
 			"cpHash", block.CpHash().Hex(),
 			"err", err.Error(),
@@ -4995,7 +5062,6 @@ func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error)
 		log.Info("Hibernate block verification failed:",
 			"isHibernate", isHibernate,
 			"blockSlot", block.Slot(),
-			"cpSlot", cpBlock.Slot,
 			"blockHash", block.Hash().Hex(),
 			"cpHash", block.CpHash().Hex(),
 			"txs", len(block.Transactions()),
