@@ -14,6 +14,7 @@ stages:
     export CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__"
     cp -r params/version.go /tmp/version.go
     sed -i "s/\\\u2692/${CI_COMMIT_SHORT_SHA}/g" params/version.go
+    go version
     go run build/ci.go install ./cmd/gwat ./cmd/bootnode
     mkdir -p ./dist
     cp ./build/bin/bootnode ./dist/gwat-bootnode
