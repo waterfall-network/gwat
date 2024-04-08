@@ -2372,3 +2372,15 @@ func (api *PublicWatAPI) GetEra(ctx context.Context, era *uint64) (*era.Era, err
 func (s *PublicWatAPI) GetSlotHashes(ctx context.Context, slot uint64) common.HashArray {
 	return s.b.BlockHashesBySlot(ctx, slot)
 }
+
+// Info gathers and returns current common node info.
+func (s *PublicWatAPI) Info() interface{} {
+	bc := s.b.BlockChain()
+	cpHeader := bc.GetHeader(bc.GetLastCoordinatedCheckpoint().Spine)
+
+	return map[string]interface{}{
+		"currSlot":   bc.GetSlotInfo().CurrentSlot(),
+		"maxDagSlot": bc.GetTips().GetMaxSlot(),
+		"cpSlot":     cpHeader.Slot,
+	}
+}
