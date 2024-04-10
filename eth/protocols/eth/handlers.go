@@ -599,7 +599,7 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 		"isBaseFinalized", isBaseFinalized,
 		"isTerminalFinalized", isTerminalFinalized,
 		"limitReached", limitReached,
-		"dag", dag,
+		"dag", len(dag),
 	)
 	// if requested all not-finalized blocks and limit not reached
 	// - add zero hash
@@ -616,7 +616,7 @@ func answerGetDagQuery(backend Backend, query GetDagPacket) (common.HashArray, e
 		"isBaseFinalized", isBaseFinalized,
 		"isTerminalFinalized", isTerminalFinalized,
 		"limitReached", limitReached,
-		"dag", dag,
+		"dag", len(dag),
 	)
 	return dag, nil
 }
