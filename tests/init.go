@@ -26,61 +26,7 @@ import (
 
 // Forks table defines supported forks and their chain config.
 var Forks = map[string]*params.ChainConfig{
-	"Frontier": {
-		ChainID: big.NewInt(1),
-	},
-	"Homestead": {
-		ChainID: big.NewInt(1),
-	},
-	"EIP150": {
-		ChainID: big.NewInt(1),
-	},
-	"EIP158": {
-		ChainID: big.NewInt(1),
-	},
-	"Byzantium": {
-		ChainID: big.NewInt(1),
-	},
-	"Constantinople": {
-		ChainID: big.NewInt(1),
-	},
-	"ConstantinopleFix": {
-		ChainID: big.NewInt(1),
-	},
-	"Istanbul": {
-		ChainID: big.NewInt(1),
-	},
-	"FrontierToHomesteadAt5": {
-		ChainID: big.NewInt(1),
-	},
-	"HomesteadToEIP150At5": {
-		ChainID: big.NewInt(1),
-	},
-	"HomesteadToDaoAt5": {
-		ChainID: big.NewInt(1),
-	},
-	"EIP158ToByzantiumAt5": {
-		ChainID: big.NewInt(1),
-	},
-	"ByzantiumToConstantinopleAt5": {
-		ChainID: big.NewInt(1),
-	},
-	"ByzantiumToConstantinopleFixAt5": {
-		ChainID: big.NewInt(1),
-	},
-	"ConstantinopleFixToIstanbulAt5": {
-		ChainID: big.NewInt(1),
-	},
-	"Berlin": {
-		ChainID: big.NewInt(1),
-	},
-	"BerlinToLondonAt5": {
-		ChainID: big.NewInt(1),
-	},
-	"London": {
-		ChainID: big.NewInt(1),
-	},
-	"Aleut": {
+	"Fork": {
 		ChainID: big.NewInt(1),
 	},
 }

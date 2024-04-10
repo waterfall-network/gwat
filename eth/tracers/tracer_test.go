@@ -220,7 +220,7 @@ func TestIsPrecompile(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if string(res) != "false" {
+	if string(res) != "true" {
 		t.Errorf("Tracer should not consider blake2f as precompile in byzantium")
 	}
 

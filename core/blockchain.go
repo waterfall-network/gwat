@@ -4924,3 +4924,7 @@ func (bc *BlockChain) searchBlockFinalizationCp(hdr *types.Header) *types.Checkp
 	}
 	return nil
 }
+
+func (bc *BlockChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint64) {
+	bc.hc.SetLastFinalisedHeader(head, lastFinNr)
+}

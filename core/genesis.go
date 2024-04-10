@@ -455,10 +455,13 @@ func (g *Genesis) GenerateValidatorStateAddress() *common.Address {
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int, depositData DepositData) *types.Block {
 	g := Genesis{
-		Alloc:   GenesisAlloc{addr: {Balance: balance}},
-		BaseFee: big.NewInt(params.InitialBaseFee),
+		Config:     params.AllEthashProtocolChanges,
+		Alloc:      GenesisAlloc{addr: {Balance: balance}},
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+		Validators: depositData,
+		GasLimit:   1000000000000000000,
 	}
 	return g.MustCommit(db)
 }

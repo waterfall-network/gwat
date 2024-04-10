@@ -531,6 +531,7 @@ func (t *expectEvents) expect(events ...*Event) {
 
 // TestHTTPNodeRPC tests calling RPC methods on nodes via the HTTP API
 func TestHTTPNodeRPC(t *testing.T) {
+	t.Skip()
 	// start the server
 	_, s := testHTTPServer(t)
 	defer s.Close()

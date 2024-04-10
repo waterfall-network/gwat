@@ -1051,7 +1051,7 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 func (s *StateDB) IsValidatorAddress(address common.Address) bool {
 	code := s.GetCode(address)
-	if len(code) == 0 {
+	if len(code) < 20 {
 		return false
 	}
 	// validator address at the first position

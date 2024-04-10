@@ -114,14 +114,14 @@ var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 func simTestBackend(testAddr common.Address) *SimulatedBackend {
 	return NewSimulatedBackend(
 		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000000000)},
+			testAddr: {Balance: big.NewInt(1000000000000000000)},
 		}, 10000000,
 	)
 }
 
 func TestNewSimulatedBackend(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	expectedBal := big.NewInt(10000000000000000)
+	expectedBal := big.NewInt(1000000000000000000)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
@@ -201,7 +201,7 @@ func TestNewAdjustTimeFail(t *testing.T) {
 
 func TestBalanceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	expectedBal := big.NewInt(10000000000000000)
+	expectedBal := big.NewInt(1000000000000000000)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()

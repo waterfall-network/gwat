@@ -227,7 +227,7 @@ func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []str
 		}
 	}
 	// All trials expended to unlock account, bail out
-	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
+	log.Warn("Failed to unlock account", "address", address, "error", err)
 
 	return accounts.Account{}, ""
 }

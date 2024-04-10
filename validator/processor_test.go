@@ -73,7 +73,12 @@ func TestProcessorDeposit(t *testing.T) {
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
 
-	depositOperation, err := operation.NewDepositOperation(pubKey, testmodels.Addr1, withdrawalAddress, signature, nil)
+	pubKey := common.HexToBlsPubKey("931f74533c800ebb6d4b4330a9f7ad609314303c01ca7cd235635fe30fcaa33cdcc2c09e9a07d22d7126e0a078657cbe")
+	creator_address := common.HexToAddress("0x6e9e76fa278190cfb2404e5923d3ccd7e8f6c777")
+	withdrawalAddress := common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
+	signature = common.HexToBlsSig("0xa4798654cec11445dcb58eac0fc21a5f668ad7709c0bfdd0265793710f781d7bdab9469936cc528f77eab5ee78eb9b1807ec450a146eceeedb0687deea17d56972800abc1f4c65b6026d23a264443b71efc1f040495e6a7499cac2f944a7cf28")
+
+	depositOperation, err := operation.NewDepositOperation(pubKey, creator_address, withdrawalAddress, signature, nil)
 	testutils.AssertNoError(t, err)
 
 	opData, err := operation.EncodeToBytes(depositOperation)
@@ -164,6 +169,12 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 	rules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
 	trialRules, _ := operation.NewDelegatingStakeRules(dsProfitShare, dsStakeShare, dsExit, dsWithdrawal)
+
+	pubKey := common.HexToBlsPubKey("931f74533c800ebb6d4b4330a9f7ad609314303c01ca7cd235635fe30fcaa33cdcc2c09e9a07d22d7126e0a078657cbe")
+	creator_address := common.HexToAddress("0x6e9e76fa278190cfb2404e5923d3ccd7e8f6c777")
+	withdrawalAddress := common.HexToAddress("0xa7e558cc6efa1c41270ef4aa227b3dd6b4a3951e")
+	signature = common.HexToBlsSig("0xa4798654cec11445dcb58eac0fc21a5f668ad7709c0bfdd0265793710f781d7bdab9469936cc528f77eab5ee78eb9b1807ec450a146eceeedb0687deea17d56972800abc1f4c65b6026d23a264443b71efc1f040495e6a7499cac2f944a7cf28")
+
 	cases := []*testmodels.TestCase{
 		{
 			CaseName: "Deposit_DelegatingStake_OK",
@@ -192,7 +203,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				wdrAddr := withdrawalAddress
 				pk := pubKey
-				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData.Copy())
+				depositOperation, err := operation.NewDepositOperation(pk, creator_address, wdrAddr, signature, delegateData.Copy())
 				testutils.AssertNoError(t, err)
 
 				//set empty rules
@@ -219,9 +230,9 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
 				}
 
-				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				val, err := processor.Storage().GetValidator(processor.state, creator_address)
 				testutils.AssertNoError(t, err)
-				testutils.AssertEqual(t, testmodels.Addr1.Bytes(), val.Address.Bytes())
+				testutils.AssertEqual(t, creator_address.Bytes(), val.Address.Bytes())
 				testutils.AssertEqual(t, pk.Bytes(), val.PubKey.Bytes())
 				testutils.AssertEqual(t, wdrAddr.Bytes(), val.WithdrawalAddress.Bytes())
 
@@ -265,7 +276,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				wdrAddr := withdrawalAddress
 				pk := pubKey
-				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData)
+				depositOperation, err := operation.NewDepositOperation(pk, creator_address, wdrAddr, signature, delegateData)
 				testutils.AssertNoError(t, err)
 
 				opData, err := operation.EncodeToBytes(depositOperation)
@@ -289,9 +300,9 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
 				}
 
-				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				val, err := processor.Storage().GetValidator(processor.state, creator_address)
 				testutils.AssertNoError(t, err)
-				testutils.AssertEqual(t, testmodels.Addr1.Bytes(), val.Address.Bytes())
+				testutils.AssertEqual(t, creator_address.Bytes(), val.Address.Bytes())
 				testutils.AssertEqual(t, pk.Bytes(), val.PubKey.Bytes())
 				testutils.AssertEqual(t, wdrAddr.Bytes(), val.WithdrawalAddress.Bytes())
 
@@ -335,7 +346,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				wdrAddr := withdrawalAddress
 				pk := pubKey
-				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData)
+				depositOperation, err := operation.NewDepositOperation(pk, creator_address, wdrAddr, signature, delegateData)
 				testutils.AssertNoError(t, err)
 
 				//create existed validator
@@ -365,9 +376,9 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
 				}
 
-				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				val, err := processor.Storage().GetValidator(processor.state, creator_address)
 				testutils.AssertNoError(t, err)
-				testutils.AssertEqual(t, testmodels.Addr1.Bytes(), val.Address.Bytes())
+				testutils.AssertEqual(t, creator_address.Bytes(), val.Address.Bytes())
 				testutils.AssertEqual(t, pk.Bytes(), val.PubKey.Bytes())
 				testutils.AssertEqual(t, wdrAddr.Bytes(), val.WithdrawalAddress.Bytes())
 
@@ -412,7 +423,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				wdrAddr := withdrawalAddress
 				pk := pubKey
-				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData)
+				depositOperation, err := operation.NewDepositOperation(pk, creator_address, wdrAddr, signature, delegateData)
 				testutils.AssertNoError(t, err)
 				opData, err := operation.EncodeToBytes(depositOperation)
 				testutils.AssertNoError(t, err)
@@ -443,9 +454,9 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 					t.Errorf("Expected balance From ios bad : %d\nactual: %s", 1, balanceFromAft)
 				}
 
-				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				val, err := processor.Storage().GetValidator(processor.state, creator_address)
 				testutils.AssertNoError(t, err)
-				testutils.AssertEqual(t, testmodels.Addr1.Bytes(), val.Address.Bytes())
+				testutils.AssertEqual(t, creator_address.Bytes(), val.Address.Bytes())
 				testutils.AssertEqual(t, pk.Bytes(), val.PubKey.Bytes())
 				testutils.AssertEqual(t, wdrAddr.Bytes(), val.WithdrawalAddress.Bytes())
 
@@ -498,7 +509,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				wdrAddr := withdrawalAddress
 				pk := pubKey
-				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData)
+				depositOperation, err := operation.NewDepositOperation(pk, creator_address, wdrAddr, signature, delegateData)
 				testutils.AssertNoError(t, err)
 				opData, err := operation.EncodeToBytes(depositOperation)
 				testutils.AssertNoError(t, err)
@@ -521,7 +532,6 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
 				processor.state.AddBalance(from, bal)
-				//balanceFromBfr := processor.state.GetBalance(from)
 
 				msg := NewMockmessage(ctrl)
 				msg.EXPECT().Data().AnyTimes().Return(opData)
@@ -529,7 +539,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				call(t, processor, v.Caller, v.AddrTo, value, msg, c.Errs)
 
-				val, err := processor.Storage().GetValidator(processor.state, testmodels.Addr1)
+				val, err := processor.Storage().GetValidator(processor.state, creator_address)
 				testutils.AssertNoError(t, err)
 				//check delegate data
 				testutils.AssertEqual(t, valDelegateData.Rules.ProfitShare(), val.DelegatingStake.Rules.ProfitShare())
@@ -571,7 +581,7 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 
 				wdrAddr := withdrawalAddress
 				pk := pubKey
-				depositOperation, err := operation.NewDepositOperation(pk, testmodels.Addr1, wdrAddr, signature, delegateData.Copy())
+				depositOperation, err := operation.NewDepositOperation(pk, creator_address, wdrAddr, signature, delegateData.Copy())
 				testutils.AssertNoError(t, err)
 
 				//set empty rules
@@ -581,6 +591,9 @@ func TestTestProcessorDeposit_DelegatingStake(t *testing.T) {
 				testutils.AssertNoError(t, err)
 
 				v := c.TestData.(testmodels.TestData)
+
+				bal, _ := new(big.Int).SetString("32000000000000000000000", 10)
+				processor.state.AddBalance(v.Caller.Address(), bal)
 
 				msg := NewMockmessage(ctrl)
 				msg.EXPECT().Data().AnyTimes().Return(opData)

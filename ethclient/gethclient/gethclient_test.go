@@ -34,6 +34,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 var (
@@ -42,7 +43,7 @@ var (
 	testBalance = big.NewInt(2e15)
 )
 
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
+func newTestBackend(t *testing.T) (*node.Node, []*types.Block, *eth.Ethereum) {
 	// Generate test chain.
 	genesis, blocks := generateTestChain()
 	// Create node
@@ -60,26 +61,39 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
+	ethservice.BlockChain().SetIsSynced(true)
 	if _, err := ethservice.BlockChain().SyncInsertChain(blocks[1:]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
-	return n, blocks
+	return n, blocks, ethservice
 }
 
 func generateTestChain() (*core.Genesis, []*types.Block) {
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
 	db := rawdb.NewMemoryDatabase()
 	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
-		Config:    config,
-		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
-		ExtraData: []byte("test genesis"),
-		Timestamp: 9000,
+		Config:     config,
+		Alloc:      core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000000000000000)}},
+		ExtraData:  []byte("test genesis"),
+		Timestamp:  9000,
+		Validators: depositData,
 	}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
 	}
-	gblock := genesis.ToBlock(db)
+	gblock := genesis.MustCommit(db)
 	blocks, _ := core.GenerateChain(config, gblock, db, 1, generate)
 	for _, bl := range blocks {
 		nr := bl.Height()
@@ -90,7 +104,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 }
 
 func TestGethClient(t *testing.T) {
-	backend, _ := newTestBackend(t)
+	backend, _, eth := newTestBackend(t)
 	client, err := backend.Attach()
 	if err != nil {
 		t.Fatal(err)
@@ -123,7 +137,10 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testSetHead(t, client) },
 		}, {
 			"TestSubscribePendingTxs",
-			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
+			func(t *testing.T) {
+				eth.BlockChain().SetIsSynced(true)
+				testSubscribePendingTransactions(t, client)
+			},
 		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
@@ -142,7 +159,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		From:     testAddr,
 		To:       &common.Address{},
 		Gas:      21000,
-		GasPrice: big.NewInt(765625000),
+		GasPrice: big.NewInt(76562500000),
 		Value:    big.NewInt(1),
 	}
 	al, gas, vmErr, err := ec.CreateAccessList(context.Background(), msg)
@@ -163,7 +180,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		From:     testAddr,
 		To:       nil,
 		Gas:      100000,
-		GasPrice: big.NewInt(1000000000),
+		GasPrice: big.NewInt(10000000000),
 		Value:    big.NewInt(1),
 		Data:     common.FromHex("0x608060806080608155fd"),
 	}
@@ -244,7 +261,7 @@ func testGetNodeInfo(t *testing.T, client *rpc.Client) {
 
 func testSetHead(t *testing.T, client *rpc.Client) {
 	ec := New(client)
-	err := ec.SetHead(context.Background(), big.NewInt(0))
+	err := ec.SetHead(context.Background(), &common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}

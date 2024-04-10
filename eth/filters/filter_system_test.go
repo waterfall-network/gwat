@@ -32,10 +32,12 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/bloombits"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 var (
@@ -161,13 +163,31 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 // - one that is created after a cutoff moment and uninstalled after a second cutoff moment (blockHashes[cutoff1:cutoff2])
 // - one that is created after the second cutoff moment (blockHashes[cutoff2:])
 func TestBlockSubscription(t *testing.T) {
-	t.Parallel()
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	var (
-		db          = rawdb.NewMemoryDatabase()
-		backend     = &testBackend{db: db}
-		api         = NewPublicFilterAPI(backend, false, deadline)
-		genesis     = (&core.Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		db      = rawdb.NewMemoryDatabase()
+		backend = &testBackend{db: db}
+		api     = NewPublicFilterAPI(backend, false, deadline)
+		genesis = (&core.Genesis{
+			Config:     params.AllEthashProtocolChanges,
+			GasLimit:   1000000000000000000,
+			Alloc:      map[common.Address]core.GenesisAccount{addr: {Balance: big.NewInt(1000000000000000000)}},
+			Validators: depositData,
+		}).MustCommit(db)
 		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
 	)
@@ -213,7 +233,6 @@ func TestBlockSubscription(t *testing.T) {
 
 // TestPendingTxFilter tests whether pending tx filters retrieve all pending transactions that are posted to the event mux.
 func TestPendingTxFilter(t *testing.T) {
-	t.Parallel()
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
@@ -312,7 +331,6 @@ func TestLogFilterCreation(t *testing.T) {
 // TestInvalidLogFilterCreation tests whether invalid filter log criteria results in an error
 // when the filter is created.
 func TestInvalidLogFilterCreation(t *testing.T) {
-	t.Parallel()
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
@@ -359,7 +377,6 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 
 // TestLogFilter tests whether log filters match the correct logs that are posted to the event feed.
 func TestLogFilter(t *testing.T) {
-	t.Parallel()
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
@@ -473,7 +490,6 @@ func TestLogFilter(t *testing.T) {
 
 // TestPendingLogsSubscription tests if a subscription receives the correct pending logs that are posted to the event feed.
 func TestPendingLogsSubscription(t *testing.T) {
-	t.Parallel()
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
@@ -656,7 +672,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 // txes arrive at the same time that one of multiple filters is timing out.
 // Please refer to #22131 for more details.
 func TestPendingTxFilterDeadlock(t *testing.T) {
-	t.Parallel()
+
 	timeout := 100 * time.Millisecond
 
 	var (

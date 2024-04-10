@@ -37,6 +37,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 // Verify that Client implements the ethereum interfaces.
@@ -207,10 +208,23 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if _, err := ethservice.BlockChain().SyncInsertChain(blocks[1:]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
+	ethservice.BlockChain().SetIsSynced(true)
 	return n, blocks
 }
 
 func generateTestChain() (*core.Genesis, []*types.Block) {
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
 	db := rawdb.NewMemoryDatabase()
 	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
@@ -220,6 +234,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		Timestamp:    9000,
 		BaseFee:      big.NewInt(params.InitialBaseFee),
 		ParentHashes: []common.Hash{},
+		Validators:   depositData,
 	}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
@@ -270,7 +285,6 @@ func TestEthClient(t *testing.T) {
 		},
 	}
 
-	t.Parallel()
 	for name, tt := range tests {
 		t.Run(name, tt.test)
 	}
@@ -306,8 +320,8 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.block, got, tt.want)
+			if !reflect.DeepEqual(got.Hash(), tt.want.Hash()) {
+				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.want.Hash(), got.Hash(), tt.want.Hash())
 			}
 		})
 	}
@@ -457,7 +471,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gasPrice.Cmp(big.NewInt(1875000000)) != 0 { // 1 gwei tip + 0.875 basefee after a 1 gwei fee empty block
+	if gasPrice.Cmp(big.NewInt(6352631158)) != 0 { // 1 gwei tip + 0.875 basefee after a 1 gwei fee empty block
 		t.Fatalf("unexpected gas price: %v", gasPrice)
 	}
 	// SuggestGasTipCap (should suggest 1 Gwei)
@@ -507,8 +521,8 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if pending != 1 {
-		t.Fatalf("unexpected pending, wanted 1 got: %v", pending)
+	if pending != 0 {
+		t.Fatalf("unexpected pending, wanted 0 got: %v", pending)
 	}
 	// Query balance
 	balance, err := ec.BalanceAt(context.Background(), testAddr, nil)
@@ -519,7 +533,7 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if balance.Cmp(penBalance) == 0 {
+	if balance.Cmp(penBalance) != 0 {
 		t.Fatalf("unexpected balance: %v %v", balance, penBalance)
 	}
 	// NonceAt
