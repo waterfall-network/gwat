@@ -33,6 +33,13 @@ var (
 	Testnet8GenesisHash = common.HexToHash("0xa7531d17d43684576b864662852e3cbb2dc20df7cdb9fc5405d5a0a253f623eb")
 )
 
+var (
+	// testnet8AcceptCpRootOnFinEpoch fix sync finalization by hard define cp.finEpoch/cpRoot combo
+	testnet8AcceptCpRootOnFinEpoch = map[common.Hash][]uint64{
+		common.HexToHash("0xd76dd012c08baefd84750cf9752a6987dbc8ff4451069056cfd110e32250ed4a"): {96176},
+	}
+)
+
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
 var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
@@ -95,6 +102,7 @@ var (
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       2729920,
+		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
 	}
 
 	// TestNet8TrustedCheckpoint contains the light client trusted checkpoint for the Testnet8.
@@ -216,6 +224,9 @@ type ChainConfig struct {
 	// Fork slots
 	ForkSlotSubNet1  uint64 `json:"forkSlotSubNet1,omitempty"`
 	ForkSlotDelegate uint64 `json:"forkSlotDelegate,omitempty"`
+
+	// fix sync finalization by hard define cp.finEpoch/cpRoot combo
+	AcceptCpRootOnFinEpoch map[common.Hash][]uint64 `json:"acceptCpRootOnFinEpoch"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -239,7 +250,7 @@ func (c *CliqueConfig) String() string {
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
-		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v}",
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, AcceptCpRootOnFinEpoch: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
@@ -250,6 +261,7 @@ func (c *ChainConfig) String() string {
 		c.EffectiveBalance,
 		c.ForkSlotSubNet1,
 		c.ForkSlotDelegate,
+		c.AcceptCpRootOnFinEpoch,
 	)
 }
 

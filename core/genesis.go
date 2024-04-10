@@ -273,6 +273,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 		if storedcfg.ForkSlotSubNet1 == 0 {
 			storedcfg.ForkSlotSubNet1 = newcfg.ForkSlotSubNet1
 		}
+		storedcfg.AcceptCpRootOnFinEpoch = newcfg.AcceptCpRootOnFinEpoch
 		return storedcfg, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
