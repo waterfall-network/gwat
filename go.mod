@@ -51,7 +51,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/tsdb v0.7.1
 	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7
-	github.com/randomshinichi/ssz v0.0.0-20181109163731-45450ff352dd
 	github.com/rjeczalik/notify v0.9.3
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
@@ -60,6 +59,7 @@ require (
 	github.com/supranational/blst v0.3.11
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef
+	github.com/waterfall-network/fastssz v0.1.4
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.15.0
@@ -103,5 +103,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/randomshinichi/ssz => github.com/ferranbt/fastssz v0.1.3

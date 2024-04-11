@@ -1,7 +1,7 @@
 package operation
 
 import (
-	ssz "github.com/randomshinichi/ssz"
+	ssz "github.com/waterfall-network/fastssz"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto/bls_sig"
 )
