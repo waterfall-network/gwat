@@ -11,6 +11,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
@@ -67,4 +68,73 @@ func prepareTestBlocks(t *testing.T, db ethdb.Database) {
 	for slot, blocks := range blocksBySlots {
 		rawdb.WriteSlotBlocksHashes(db, slot, *blocks.GetHashes())
 	}
+}
+
+func TestIsCpUnacceptable(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	down := NewMockethDownloader(ctrl)
+
+	backend := NewMockBackend(ctrl)
+
+	bc := NewMockblockChain(ctrl)
+	bc.EXPECT().Config().AnyTimes().Return(&params.ChainConfig{
+		AcceptCpRootOnFinEpoch: map[common.Hash][]uint64{common.Hash{0x11}: {456, 457}},
+	})
+	dag := Dag{eth: backend, bc: bc, downloader: down}
+
+	var cp *types.Checkpoint
+
+	// case: cp == nil (true)
+	result := dag.isCpUnacceptable(cp)
+	testutils.AssertEqual(t, true, result)
+
+	// case: accepted cp (false)
+	cp = &types.Checkpoint{
+		FinEpoch: 456,
+		Root:     common.Hash{0x11},
+	}
+	result = dag.isCpUnacceptable(cp)
+	testutils.AssertEqual(t, false, result)
+
+	// case: accepted cp (false)
+	cp.FinEpoch = 457
+	result = dag.isCpUnacceptable(cp)
+	testutils.AssertEqual(t, false, result)
+
+	// case: unaccepted cp (true)
+	cp.FinEpoch = 458
+	result = dag.isCpUnacceptable(cp)
+	testutils.AssertEqual(t, true, result)
+
+	// case: not defined root (false)
+	cp.Root = common.Hash{0x22}
+	result = dag.isCpUnacceptable(cp)
+	testutils.AssertEqual(t, false, result)
+}
+
+func TestIsCpUnacceptable_NoConfParam(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	down := NewMockethDownloader(ctrl)
+
+	backend := NewMockBackend(ctrl)
+
+	bc := NewMockblockChain(ctrl)
+	bc.EXPECT().Config().AnyTimes().Return(&params.ChainConfig{})
+	dag := Dag{eth: backend, bc: bc, downloader: down}
+
+	var cp *types.Checkpoint
+
+	// case: cp == nil (true)
+	result := dag.isCpUnacceptable(cp)
+	testutils.AssertEqual(t, true, result)
+
+	// case: accepted cp (false)
+	cp = &types.Checkpoint{
+		FinEpoch: 456,
+		Root:     common.Hash{0x11},
+	}
+	result = dag.isCpUnacceptable(cp)
+	testutils.AssertEqual(t, false, result)
 }

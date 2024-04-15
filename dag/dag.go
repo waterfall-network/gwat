@@ -150,6 +150,23 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 	}
 	d.setLastFinalizeApiSlot()
 
+	if d.isCpUnacceptable(data.Checkpoint) {
+		lfHeader := d.bc.GetLastFinalizedHeader()
+		lfHash := lfHeader.Hash()
+		res.LFSpine = &lfHash
+		if cp := d.bc.GetLastCoordinatedCheckpoint(); cp != nil {
+			res.CpEpoch = &cp.FinEpoch
+			res.CpRoot = &cp.Root
+		}
+		log.Warn("Handle Finalize: ignore bad finalization",
+			"result", res,
+			"resEpoch", *res.CpEpoch,
+			"resSpine", res.LFSpine.Hex(),
+			"resRoot", res.CpRoot.Hex(),
+		)
+		return res
+	}
+
 	//skip if synchronising
 	if d.downloader.Synchronising() {
 		errStr := errSynchronization.Error()
@@ -770,4 +787,25 @@ func (d *Dag) resetCheckpoint() {
 // isSlotLocked compare incoming epoch/slot with the latest epoch/slot of chain.
 func (d *Dag) isSlotLocked(slot uint64) bool {
 	return slot <= d.bc.GetLastFinalizedHeader().Slot
+}
+
+// isCpUnacceptable returns true if provided cp is unacceptable.
+// Fixes sync by skipping of fault finalization.
+func (d *Dag) isCpUnacceptable(cp *types.Checkpoint) bool {
+	if cp == nil {
+		return true
+	}
+	conf := d.bc.Config()
+	if len(conf.AcceptCpRootOnFinEpoch) == 0 {
+		return false
+	}
+	if fEpochs, ok := conf.AcceptCpRootOnFinEpoch[cp.Root]; ok {
+		for _, ep := range fEpochs {
+			if cp.FinEpoch == ep {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
