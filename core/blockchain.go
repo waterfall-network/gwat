@@ -338,21 +338,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		if err == nil {
 			err = bc.loadLastState()
 		}
-		// validation of blocks of dag
-		if err == nil {
-			dagHashes := bc.GetDagHashes()
-			blocks := bc.GetBlocksByHashes(*dagHashes)
-			for _, block := range blocks {
-				if block == nil {
-					err = errBlockNotFound
-					break
-				}
-				if !bc.verifyBlockHashes(block) {
-					err = errInvalidBlock
-					break
-				}
-			}
-		}
 	}
 	if lfNr == nil || err != nil {
 		log.Error("Node initializing: rollback finalization failed: try hard reset", "lfNr", lfNr, "err", err)
@@ -1677,15 +1662,16 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 	}
 	blocks = blocks.Deduplicate(true)
 
-	// rm existed blocks
-	notExisted := make(types.Blocks, 0, len(blocks))
-	for _, bl := range blocks {
-		if hdr := bc.GetHeader(bl.Hash()); hdr != nil {
-			log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
-			continue
-		}
-		notExisted = append(notExisted, bl)
-	}
+	notExisted := blocks
+	//// rm existed blocks
+	//notExisted := make(types.Blocks, 0, len(blocks))
+	//for _, bl := range blocks {
+	//	if hdr := bc.GetHeader(bl.Hash()); hdr != nil {
+	//		log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
+	//		continue
+	//	}
+	//	notExisted = append(notExisted, bl)
+	//}
 
 	// ordering by slot sequence to insert
 	blocksBySlot, err := notExisted.GroupBySlot()
