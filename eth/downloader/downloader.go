@@ -381,7 +381,8 @@ func (d *Downloader) SynchroniseDagOnly(id string) error {
 	}
 	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
 		errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
-		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
+		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
+		errors.Is(err, errInvalidBody) {
 		log.Warn("Sync failed, dropping peer", "peer", id, "err", err)
 		if d.dropPeer == nil {
 			// The dropPeer method is nil when `--copydb` is used for a local copy.
@@ -1656,7 +1657,8 @@ Loop:
 					}
 					if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || //errors.Is(err, errTimeout) ||
 						errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
-						errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
+						errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
+						errors.Is(err, errInvalidBody) {
 						log.Warn("Sync head failed, dropping peer", "i", i, "peer", con.id, "err", err)
 						if d.dropPeer == nil {
 							// The dropPeer method is nil when `--copydb` is used for a local copy.
