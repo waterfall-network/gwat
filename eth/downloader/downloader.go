@@ -381,7 +381,8 @@ func (d *Downloader) SynchroniseDagOnly(id string) error {
 	}
 	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
 		errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
-		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
+		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
+		errors.Is(err, errInvalidBody) {
 		log.Warn("Sync failed, dropping peer", "peer", id, "err", err)
 		if d.dropPeer == nil {
 			// The dropPeer method is nil when `--copydb` is used for a local copy.
@@ -455,7 +456,7 @@ func (d *Downloader) synchroniseDagOnly(id string) error {
 	//Synchronization of dag chain
 	baseSpine := d.blockchain.GetLastCoordinatedCheckpoint().Spine
 
-	if err := d.peerSyncBySpinesByChunk(p, baseSpine, common.HashArray{common.Hash{}}); err != nil {
+	if err := d.peerSyncBySpinesByChunk(p, baseSpine, common.HashArray{common.Hash{}}, false); err != nil {
 		log.Error("Sync of dag chain failed", "err", err)
 		return err
 	}
@@ -581,6 +582,10 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	for _, header := range headers {
 		txs := txsMap[header.Hash()]
 		block := types.NewBlockWithHeader(header).WithBody(txs)
+		// quick body validation
+		if block.BodyHash() != block.Body().CalculateHash() {
+			return errInvalidBody
+		}
 		blocks = append(blocks, block)
 	}
 
@@ -992,10 +997,6 @@ func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) er
 		return errNoPeers
 	}
 
-	// check it
-	//d.blockchain.RemoveTips(d.blockchain.GetTips().GetHashes())
-	//d.ClearBlockDag()
-
 	//select peer
 	for _, con := range d.peers.AllPeers() {
 		err := d.peerSyncBySpines(con, baseSpine, spines)
@@ -1013,7 +1014,8 @@ func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) er
 		}
 		if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
 			errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
-			errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
+			errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
+			errors.Is(err, errInvalidBody) {
 			log.Warn("Sync failed, dropping peer", "peer", con.id, "err", err)
 			if d.dropPeer == nil {
 				// The dropPeer method is nil when `--copydb` is used for a local copy.
@@ -1121,7 +1123,7 @@ func (d *Downloader) peerSyncBySpines(p *peerConnection, baseSpine common.Hash, 
 	log.Info("Synchronising with the network", "peer", p.id, "eth", p.version, "mode", mode, "baseSpine", baseSpine.Hex(), "spines", spines)
 
 	//Synchronization of dag chain
-	if err = d.peerSyncBySpinesByChunk(p, baseSpine, spines); err != nil {
+	if err = d.peerSyncBySpinesByChunk(p, baseSpine, spines, true); err != nil {
 		log.Error("Sync of dag chain failed", "err", err)
 		return err
 	}
@@ -1285,7 +1287,7 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 }
 
 // peerSyncBySpinesByChunk downloads and set on current node unfinalized chain from remote peer.
-func (d *Downloader) peerSyncBySpinesByChunk(p *peerConnection, baseSpine common.Hash, spines common.HashArray) error {
+func (d *Downloader) peerSyncBySpinesByChunk(p *peerConnection, baseSpine common.Hash, spines common.HashArray, forceDownload bool) error {
 	defer func(ts time.Time) {
 		log.Info("^^^^^^^^^^^^ TIME",
 			"elapsed", common.PrettyDuration(time.Since(ts)),
@@ -1315,7 +1317,7 @@ func (d *Downloader) peerSyncBySpinesByChunk(p *peerConnection, baseSpine common
 	fromHash := baseSpine
 	const iterLimit = 10 //xeth.LimitDagHashes = 10240 hashes
 	for i := 0; ; i++ {
-		lastHash, err := d.syncBySpines(p, fromHash, terminalSpine)
+		lastHash, err := d.syncBySpines(p, fromHash, terminalSpine, forceDownload)
 		if err != nil {
 			p.log.Error("Sync by spines: error",
 				"err", err,
@@ -1360,7 +1362,7 @@ func (d *Downloader) peerSyncBySpinesByChunk(p *peerConnection, baseSpine common
 	return nil
 }
 
-func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine common.Hash) (common.Hash, error) {
+func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine common.Hash, forceDownload bool) (common.Hash, error) {
 	var (
 		remoteHashes common.HashArray
 		err          error
@@ -1391,12 +1393,17 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 		lastHash = remoteHashes[len(remoteHashes)-1]
 	}
 
-	// filter existed blocks
-	dag := make(common.HashArray, 0, len(remoteHashes))
-	dagBlocks := d.blockchain.GetBlocksByHashes(remoteHashes)
-	for h, b := range dagBlocks {
-		if b == nil && h != (common.Hash{}) {
-			dag = append(dag, h)
+	var dag common.HashArray
+	if forceDownload {
+		dag = remoteHashes.Copy()
+	} else {
+		// filter existed blocks
+		dag = make(common.HashArray, 0, len(remoteHashes))
+		dagBlocks := d.blockchain.GetBlocksByHashes(remoteHashes)
+		for h, b := range dagBlocks {
+			if b == nil && h != (common.Hash{}) {
+				dag = append(dag, h)
+			}
 		}
 	}
 
@@ -1429,10 +1436,14 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 		return lastHash, err
 	}
 
-	blocks := make(types.Blocks, len(headers), len(dagBlocks))
+	blocks := make(types.Blocks, len(headers))
 	for i, header := range headers {
 		txs := txsMap[header.Hash()]
 		block := types.NewBlockWithHeader(header).WithBody(txs)
+		// quick body validation
+		if block.BodyHash() != block.Body().CalculateHash() {
+			return lastHash, errInvalidBody
+		}
 		blocks[i] = block
 	}
 
@@ -1509,6 +1520,10 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 	for i, header := range headers {
 		txs := txsMap[header.Hash()]
 		block := types.NewBlockWithHeader(header).WithBody(txs)
+		// quick body validation
+		if block.BodyHash() != block.Body().CalculateHash() {
+			return errInvalidBody
+		}
 		blocks[i] = block
 	}
 
@@ -1642,7 +1657,8 @@ Loop:
 					}
 					if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || //errors.Is(err, errTimeout) ||
 						errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
-						errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
+						errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
+						errors.Is(err, errInvalidBody) {
 						log.Warn("Sync head failed, dropping peer", "i", i, "peer", con.id, "err", err)
 						if d.dropPeer == nil {
 							// The dropPeer method is nil when `--copydb` is used for a local copy.
