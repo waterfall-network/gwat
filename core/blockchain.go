@@ -338,6 +338,21 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		if err == nil {
 			err = bc.loadLastState()
 		}
+		// validation of blocks of dag
+		if err == nil {
+			dagHashes := bc.GetDagHashes()
+			blocks := bc.GetBlocksByHashes(*dagHashes)
+			for _, block := range blocks {
+				if block == nil {
+					err = errBlockNotFound
+					break
+				}
+				if !bc.verifyBlockHashes(block) {
+					err = errInvalidBlock
+					break
+				}
+			}
+		}
 	}
 	if lfNr == nil || err != nil {
 		log.Error("Node initializing: rollback finalization failed: try hard reset", "lfNr", lfNr, "err", err)
@@ -1086,7 +1101,6 @@ func (bc *BlockChain) RollbackFinalization(spineHash common.Hash, lfNr uint64) e
 	if lastCp := bc.GetLastCoordinatedCheckpoint(); lastCp == nil || lastCp.FinEpoch != cp.FinEpoch {
 		bc.SetLastCoordinatedCheckpoint(cp)
 	}
-
 	return nil
 }
 
