@@ -5038,7 +5038,6 @@ func (bc *BlockChain) IsHibernateSlot(header *types.Header) (bool, error) {
 		"spines", len(slotsMap),
 		"slot", header.Slot,
 		"hash", header.Hash().Hex(),
-		"cpSlot",
 	)
 	return isHibernate, nil
 }
