@@ -18,6 +18,7 @@ package gasprice
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -31,10 +32,11 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/event"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	valStore "gitlab.waterfall.network/waterfall/protocol/gwat/validator/storage"
 )
 
-const testHead = 32
+const testHead = 0
 
 type testBackend struct {
 	chain   *core.BlockChain
@@ -111,13 +113,28 @@ func (b *testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) eve
 }
 
 func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBackend {
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
 		config = *params.TestChainConfig // needs copy because it is modified below
 		gspec  = &core.Genesis{
-			Config: &config,
-			Alloc:  core.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
+			Config:     &config,
+			Alloc:      core.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
+			Validators: depositData,
+			GasLimit:   30000,
+			BaseFee:    big.NewInt(2),
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
@@ -125,7 +142,21 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	db := rawdb.NewMemoryDatabase()
 	genesis, _ := gspec.Commit(db)
 
-	// Generate testing blocks
+	genesisCp := &types.Checkpoint{
+		Epoch:    0,
+		FinEpoch: 0,
+		Root:     common.Hash{},
+		Spine:    genesis.Hash(),
+	}
+	rawdb.WriteLastCoordinatedCheckpoint(db, genesisCp)
+	rawdb.WriteCoordinatedCheckpoint(db, genesisCp)
+	rawdb.WriteEpoch(db, 0, genesisCp.Spine)
+
+	bc, err := core.NewBlockChain(db, &core.CacheConfig{TrieCleanNoPrefetch: true}, &config, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("Failed to create local chain, %v", err)
+	}
+
 	blocks, _ := core.GenerateChain(gspec.Config, genesis, db, testHead+1, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
@@ -135,9 +166,9 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 				ChainID:   gspec.Config.ChainID,
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
-				Gas:       30000,
-				GasFeeCap: big.NewInt(100 * params.GWei),
-				GasTipCap: big.NewInt(int64(i+1) * params.GWei),
+				Gas:       21000,
+				GasFeeCap: big.NewInt(9000000000000),
+				GasTipCap: big.NewInt(int64(i + 1)),
 				Data:      []byte{},
 			}
 		} else {
@@ -145,22 +176,31 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 				Nonce:    b.TxNonce(addr),
 				To:       &common.Address{},
 				Gas:      21000,
-				GasPrice: big.NewInt(int64(i+1) * params.GWei),
-				Value:    big.NewInt(100),
+				GasPrice: big.NewInt(int64(53518000000)),
+				Value:    big.NewInt(10),
 				Data:     []byte{},
 			}
 		}
-		b.AddTx(types.MustSignNewTx(key, signer, txdata))
+		b.AddTxWithChain(bc, types.MustSignNewTx(key, signer, txdata))
+		//b.AddTx(types.MustSignNewTx(key, signer, txdata))
 	})
+
 	// Construct testing chain
-	diskdb := rawdb.NewMemoryDatabase()
-	gspec.Commit(diskdb)
-	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, &config, vm.Config{}, nil)
-	if err != nil {
-		t.Fatalf("Failed to create local chain, %v", err)
+	//diskdb := rawdb.NewMemoryDatabase()
+	//gspec.Commit(diskdb)
+	//chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, &config, vm.Config{}, nil)
+	//if err != nil {
+	//	t.Fatalf("Failed to create local chain, %v", err)
+	//}
+	for i, bl := range blocks {
+		nr := big.NewInt(int64(i)).Uint64()
+		bl.SetNumber(&nr)
+		fmt.Println("Nr", bl.Header().Nr())
+		bc.SetLastFinalisedHeader(bl.Header(), bl.Header().Nr())
 	}
-	chain.InsertChain(blocks)
-	return &testBackend{chain: chain, pending: pending}
+
+	bc.InsertChain(blocks)
+	return &testBackend{chain: bc, pending: pending}
 }
 
 func (b *testBackend) CurrentHeader() *types.Header {
@@ -181,11 +221,11 @@ func TestSuggestTipCap(t *testing.T) {
 		fork   *big.Int // London fork number
 		expect *big.Int // Expected gasprice suggestion
 	}{
-		{nil, big.NewInt(params.GWei * int64(30))},
-		{big.NewInt(0), big.NewInt(params.GWei * int64(30))},  // Fork point in genesis
-		{big.NewInt(1), big.NewInt(params.GWei * int64(30))},  // Fork point in first block
-		{big.NewInt(32), big.NewInt(params.GWei * int64(30))}, // Fork point in last block
-		{big.NewInt(33), big.NewInt(params.GWei * int64(30))}, // Fork point in the future
+		{nil, big.NewInt(int64(1000000000))},
+		{big.NewInt(0), big.NewInt(int64(1000000000))},  // Fork point in genesis
+		{big.NewInt(1), big.NewInt(int64(1000000000))},  // Fork point in first block
+		{big.NewInt(32), big.NewInt(int64(1000000000))}, // Fork point in last block
+		{big.NewInt(33), big.NewInt(int64(1000000000))}, // Fork point in the future
 	}
 	for _, c := range cases {
 		backend := newTestBackend(t, c.fork, false)
@@ -200,4 +240,6 @@ func TestSuggestTipCap(t *testing.T) {
 			t.Fatalf("Gas price mismatch, want %d, got %d", c.expect, got)
 		}
 	}
+	//30000000000
+	//1000000000
 }

@@ -71,7 +71,11 @@ func (msg *jsonrpcMessage) isDagApi() bool {
 		msg.Method == "dag_syncSlotInfo" ||
 		msg.Method == "dag_headSyncReady" ||
 		// does not intersect with above
-		msg.Method == "dag_headSync"
+		msg.Method == "dag_headSync" ||
+		msg.Method == "dag_getOptimisticSpines" ||
+		msg.Method == "dag_validateFinalization" ||
+		msg.Method == "dag_coordinatedState" ||
+		msg.Method == "dag_getDagHashes"
 }
 
 func (msg *jsonrpcMessage) isCall() bool {

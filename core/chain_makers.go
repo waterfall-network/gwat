@@ -239,6 +239,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config}
 		b.header = makeHeader(config, parent, statedb)
+		b.header.CpBaseFee = big.NewInt(1000)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -315,11 +316,12 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 		GasLimit:     parent.GasLimit(),
 		Height:       parent.Height() + 1,
 		Slot:         parent.Slot() + 1,
-		//Number:   parent.Height() + 1,
-		Time: time,
+		CpHash:       parent.Hash(),
+		Time:         time,
+		CpBaseFee:    parent.CpBaseFee(),
 	}
 	// This base fee calculation is for testing
-	header.BaseFee = misc.CalcSlotBaseFee(config, config.ValidatorsPerSlot, 2048, 105000000)
+	header.BaseFee = misc.CalcSlotBaseFee(config, config.ValidatorsPerSlot, 64, 105000000)
 
 	return header
 }

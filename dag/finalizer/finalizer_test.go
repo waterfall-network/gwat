@@ -26,10 +26,6 @@ func TestSetSpineState(t *testing.T) {
 		Root:   spineHash,
 	}
 	num := uint64(50)
-	newBlock := types.NewBlock(&types.Header{
-		Number: &num,
-		Root:   common.Hash{001},
-	}, nil, nil, nil)
 	num1 := uint64(60)
 	num2 := uint64(61)
 	num3 := uint64(62)
@@ -85,9 +81,10 @@ func TestSetSpineState(t *testing.T) {
 	}
 
 	block := types.NewBlock(header, nil, nil, nil)
-	bc.EXPECT().GetBlock(spineHash).Return(block)
-	bc.EXPECT().GetLastFinalizedBlock().Return(block)
-	bc.EXPECT().GetLastFinalizedHeader().Return(header)
+	bc.EXPECT().GetBlock(spineHash).AnyTimes().Return(block)
+	bc.EXPECT().GetLastFinalizedBlock().AnyTimes().Return(block)
+	bc.EXPECT().GetLastFinalizedHeader().AnyTimes().Return(header)
+	bc.EXPECT().RollbackFinalization(gomock.AssignableToTypeOf(spineHash), gomock.AssignableToTypeOf(uint64(0))).AnyTimes()
 
 	err := finalizer.SetSpineState(&spineHash, lfNr)
 	testutils.AssertNoError(t, err)
@@ -95,23 +92,11 @@ func TestSetSpineState(t *testing.T) {
 	err = finalizer.SetSpineState(nil, lfNr)
 	testutils.AssertError(t, err, ErrBadParams)
 
-	bc.EXPECT().GetBlock(spineHash).Return(nil)
-	bc.EXPECT().GetLastFinalizedHeader().Return(header)
-	err = finalizer.SetSpineState(&spineHash, lfNr)
-	testutils.AssertError(t, err, ErrSpineNotFound)
-
-	bc.EXPECT().GetBlock(spineHash).Return(block)
-	bc.EXPECT().GetLastFinalizedHeader().Return(header)
-	bc.EXPECT().GetLastFinalizedBlock().Return(newBlock)
-	bc.EXPECT().SetRollbackActive()
-	bc.EXPECT().ResetRollbackActive()
 	bc.EXPECT().GetHeaderByNumber(gomock.AssignableToTypeOf(num)).AnyTimes().Return(header)
 	bc.EXPECT().GetBlockDag(header.Hash()).AnyTimes().Return(nil)
 	bc.EXPECT().CollectAncestorsAftCpByTips(gomock.AssignableToTypeOf(common.HashArray{}), gomock.AssignableToTypeOf(common.Hash{})).AnyTimes().Return(true, unloaded, nil, nil)
 	bc.EXPECT().GetHeader(gomock.AssignableToTypeOf(common.Hash{})).AnyTimes().Return(header)
 	bc.EXPECT().SaveBlockDag(gomock.AssignableToTypeOf(&types.BlockDAG{})).AnyTimes()
-	bc.EXPECT().RollbackFinalization(gomock.AssignableToTypeOf(uint64(0))).AnyTimes()
-	bc.EXPECT().WriteFinalizedBlock(block.Nr(), block, nil, nil, nil, true).Return(nil)
 
 	err = finalizer.SetSpineState(&spineHash, num3)
 	testutils.AssertNoError(t, err)

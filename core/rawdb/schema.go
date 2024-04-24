@@ -100,10 +100,10 @@ var (
 	slotBlockKey                = []byte("slotBlocks")
 
 	// validator sync data
-	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + opType + creatorAddr -> procEpoch + index + txHash + amountBigInt
+	valSyncOpPrefix   = []byte("vsop")        // valSyncOpPrefix + initTxHash -> procEpoch + index + txHash + amountBigInt
 	valSyncNotProcKey = []byte("vsnprockeys") // tracks the not processed validators' sync operation.
 
-	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
+	blockBodyPrefix     = []byte("b") // blockBodyPrefix + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
@@ -170,7 +170,7 @@ func headerKey(hash common.Hash) []byte {
 	return append(headerPrefix, hash.Bytes()...)
 }
 
-// blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
+// blockBodyKey = blockBodyPrefix + hash
 func blockBodyKey(hash common.Hash) []byte {
 	return append(blockBodyPrefix, hash.Bytes()...)
 }

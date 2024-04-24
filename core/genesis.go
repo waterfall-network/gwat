@@ -273,6 +273,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 		if storedcfg.ForkSlotSubNet1 == 0 {
 			storedcfg.ForkSlotSubNet1 = newcfg.ForkSlotSubNet1
 		}
+		storedcfg.AcceptCpRootOnFinEpoch = newcfg.AcceptCpRootOnFinEpoch
 		return storedcfg, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
@@ -387,7 +388,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(db, genesisEra.Number)
 
-	log.Info("Era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root.Hex())
+	log.Info("Genesis era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root.Hex())
 
 	return genesisBlock
 }
@@ -455,10 +456,13 @@ func (g *Genesis) GenerateValidatorStateAddress() *common.Address {
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int, depositData DepositData) *types.Block {
 	g := Genesis{
-		Alloc:   GenesisAlloc{addr: {Balance: balance}},
-		BaseFee: big.NewInt(params.InitialBaseFee),
+		Config:     params.AllEthashProtocolChanges,
+		Alloc:      GenesisAlloc{addr: {Balance: balance}},
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+		Validators: depositData,
+		GasLimit:   1000000000000000000,
 	}
 	return g.MustCommit(db)
 }

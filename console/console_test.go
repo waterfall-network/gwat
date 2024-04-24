@@ -28,10 +28,12 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/console/prompt"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/dag/creator"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/jsre"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 const (
@@ -95,8 +97,26 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
+
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
+	genesis := core.DeveloperGenesisBlock(15, common.Address{})
+	genesis.Validators = depositData
+	genesis.Coinbase = common.HexToAddress(testAddress)
+
 	ethConf := &ethconfig.Config{
-		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
+		Genesis: genesis,
+		Creator: creator.Config{Etherbase: common.HexToAddress(testAddress)},
 	}
 	if confOverride != nil {
 		confOverride(ethConf)

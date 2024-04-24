@@ -1086,7 +1086,6 @@ func (bc *BlockChain) RollbackFinalization(spineHash common.Hash, lfNr uint64) e
 	if lastCp := bc.GetLastCoordinatedCheckpoint(); lastCp == nil || lastCp.FinEpoch != cp.FinEpoch {
 		bc.SetLastCoordinatedCheckpoint(cp)
 	}
-
 	return nil
 }
 
@@ -1663,15 +1662,16 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 	}
 	blocks = blocks.Deduplicate(true)
 
-	// rm existed blocks
-	notExisted := make(types.Blocks, 0, len(blocks))
-	for _, bl := range blocks {
-		if hdr := bc.GetHeader(bl.Hash()); hdr != nil {
-			log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
-			continue
-		}
-		notExisted = append(notExisted, bl)
-	}
+	notExisted := blocks
+	//// rm existed blocks
+	//notExisted := make(types.Blocks, 0, len(blocks))
+	//for _, bl := range blocks {
+	//	if hdr := bc.GetHeader(bl.Hash()); hdr != nil {
+	//		log.Info("Insert delayed blocks: skip inserted", "slot", bl.Slot(), "hash", bl.Hash().Hex())
+	//		continue
+	//	}
+	//	notExisted = append(notExisted, bl)
+	//}
 
 	// ordering by slot sequence to insert
 	blocksBySlot, err := notExisted.GroupBySlot()
@@ -5068,4 +5068,8 @@ func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error)
 	}
 
 	return !isHibernate, nil
+}
+
+func (bc *BlockChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint64) {
+	bc.hc.SetLastFinalisedHeader(head, lastFinNr)
 }

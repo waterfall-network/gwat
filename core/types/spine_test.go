@@ -530,9 +530,9 @@ func TestSortBlocks(t *testing.T) {
 	//fmt.Println(bl_2_3_52.Hash().Hex())
 
 	corectOrder := []*Block{
-		bl_2_3_52,
-		bl_2_3_6f,
 		bl_2_3_b7,
+		bl_2_3_6f,
+		bl_2_3_52,
 
 		bl_2_2_0d,
 		bl_2_2_4c,
@@ -546,13 +546,13 @@ func TestSortBlocks(t *testing.T) {
 		bl_1_3_5c,
 		bl_1_3_da,
 
+		bl_1_2_e1,
 		bl_1_2_94,
 		bl_1_2_c3,
-		bl_1_2_e1,
 
-		bl_1_1_46,
 		bl_1_1_6f,
 		bl_1_1_72,
+		bl_1_1_46,
 	}
 
 	tests := []struct {
@@ -589,7 +589,7 @@ func TestSortBlocks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := fmt.Sprintf("%#v", getBlocksHashes(SpineSortBlocks(tt.seq)))
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("got:  %v\nwant: %v", got, tt.want)
+				t.Errorf("\ngot:  %v\nwant: %v", got, tt.want)
 			}
 		})
 	}

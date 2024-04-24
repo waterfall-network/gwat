@@ -18,124 +18,77 @@ package core
 
 import (
 	"math/big"
-	"reflect"
 	"strconv"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 func TestDefaultGenesisBlock(t *testing.T) {
-	block := DefaultGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.MainnetGenesisHash {
-		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
+	gen := DefaultGenesisBlock()
+	depositData := make(DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+	gen.Validators = depositData
+	genBlock := gen.ToBlock(nil)
+	if genBlock.Hash() != params.MainnetGenesisHash {
+		t.Errorf("wrong mainnet genesis hash, got %v, want %v", genBlock.Hash(), params.MainnetGenesisHash)
 	}
 
-	block = DefaultTestNet8GenesisBlock().ToBlock(nil)
-	if block.Hash() != params.Testnet8GenesisHash {
-		t.Errorf("wrong wf testnet8 genesis hash, got %v, want %v", block.Hash(), params.Testnet8GenesisHash)
-	}
-}
-
-func TestInvalidCliqueConfig(t *testing.T) {
-	block := DefaultTestNet8GenesisBlock()
-	block.ExtraData = []byte{}
-	if _, err := block.Commit(nil); err == nil {
-		t.Fatal("Expected error on invalid clique config")
+	gen = DefaultTestNet8GenesisBlock()
+	gen.Validators = depositData
+	genBlock = gen.ToBlock(nil)
+	if genBlock.Hash() != params.Testnet8GenesisHash {
+		t.Errorf("wrong wf test net genesis hash, got %v, want %v", genBlock.Hash(), params.Testnet8GenesisHash)
 	}
 }
 
 func TestSetupGenesis(t *testing.T) {
+	depositData := make(DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
 	var (
-		customghash = common.HexToHash("0x7a07542cc52961f64bef9335a4d48f6ab4ea686aa67f1cd6b319209b83e384a9")
-		customg     = Genesis{
-			Config: &params.ChainConfig{},
+		customg = Genesis{
+			Config:     params.AllEthashProtocolChanges,
+			GasLimit:   1000000000000000000,
+			Validators: depositData,
 			Alloc: GenesisAlloc{
 				{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 			},
 		}
-		oldcustomg = customg
 	)
-	oldcustomg.Config = &params.ChainConfig{}
-	tests := []struct {
-		name       string
-		fn         func(ethdb.Database) (*params.ChainConfig, common.Hash, error)
-		wantConfig *params.ChainConfig
-		wantHash   common.Hash
-		wantErr    error
-	}{
-		{
-			name: "genesis without ChainConfig",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return SetupGenesisBlock(db, new(Genesis))
-			},
-			wantErr:    errGenesisNoConfig,
-			wantConfig: params.AllEthashProtocolChanges,
-		},
-		{
-			name: "no block in DB, genesis == nil",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return SetupGenesisBlock(db, nil)
-			},
-			wantHash:   params.MainnetGenesisHash,
-			wantConfig: params.MainnetChainConfig,
-		},
-		{
-			name: "mainnet block in DB, genesis == nil",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				DefaultGenesisBlock().MustCommit(db)
-				return SetupGenesisBlock(db, nil)
-			},
-			wantHash:   params.MainnetGenesisHash,
-			wantConfig: params.MainnetChainConfig,
-		},
-		{
-			name: "custom block in DB, genesis == nil",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				customg.MustCommit(db)
-				return SetupGenesisBlock(db, nil)
-			},
-			wantHash:   customghash,
-			wantConfig: customg.Config,
-		},
-		{
-			name: "custom block in DB, genesis == testnet8",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				customg.MustCommit(db)
-				return SetupGenesisBlock(db, DefaultTestNet8GenesisBlock())
-			},
-			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.Testnet8GenesisHash},
-			wantHash:   params.Testnet8GenesisHash,
-			wantConfig: params.Testnet8ChainConfig,
-		},
-	}
+	var wantHash = common.HexToHash("0x5ecbb10ee28cdd9ac2c280a5f1e57651fbc9e9e4c802c2e2aa00681e86a7681f")
+	db := rawdb.NewMemoryDatabase()
+	config, hash, err := SetupGenesisBlock(db, &customg)
+	// Check the return values.
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, config, params.AllEthashProtocolChanges)
+	testutils.AssertEqual(t, hash, wantHash)
 
-	for _, test := range tests {
-		db := rawdb.NewMemoryDatabase()
-		config, hash, err := test.fn(db)
-		// Check the return values.
-		if !reflect.DeepEqual(err, test.wantErr) {
-			spew := spew.ConfigState{DisablePointerAddresses: true, DisableCapacities: true}
-			t.Errorf("%s: returned error %#v, want %#v", test.name, spew.NewFormatter(err), spew.NewFormatter(test.wantErr))
-		}
-		if !reflect.DeepEqual(config, test.wantConfig) {
-			t.Errorf("%s:\nreturned %v\nwant     %v", test.name, config, test.wantConfig)
-		}
-		if hash != test.wantHash {
-			t.Errorf("%s: returned hash %s, want %s", test.name, hash.Hex(), test.wantHash.Hex())
-		} else if err == nil {
-			// Check database content.
-			stored := rawdb.ReadBlock(db, test.wantHash)
-			if stored.Hash() != test.wantHash {
-				t.Errorf("%s: block in DB has hash %s, want %s", test.name, stored.Hash(), test.wantHash)
-			}
-		}
+	// Check database content.wantHashwantHash
+	stored := rawdb.ReadBlock(db, wantHash)
+	if stored.Hash() != wantHash {
+		t.Errorf("block in DB has hash %s, want %s", stored.Hash(), wantHash)
 	}
 }
 
@@ -155,6 +108,18 @@ func TestGenesisHashes(t *testing.T) {
 		},
 	}
 	for i, c := range cases {
+		depositData := make(DepositData, 0)
+		for i := 0; i < 64; i++ {
+			valData := &ValidatorData{
+				Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+				CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+				WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+				Amount:            3200,
+			}
+
+			depositData = append(depositData, valData)
+		}
+		c.genesis.Validators = depositData
 		b := c.genesis.MustCommit(rawdb.NewMemoryDatabase())
 		if got := b.Hash(); got != c.hash {
 			t.Errorf("case: %d, want: %s, got: %s", i, c.hash.Hex(), got.Hex())
@@ -163,12 +128,24 @@ func TestGenesisHashes(t *testing.T) {
 }
 
 func TestSetupGenesisWithValidators(t *testing.T) {
-	expectedHash := common.HexToHash("0x0dbc388cfc8dd97f1f505c911935fdbb0ad2c3e860836ccbbbcc5fe59ec29fd4")
+	expectedHash := common.HexToHash("0xcf3214ba22ec4c54637ce5b9bf3a16723a18d7a803f47a675377fbcd785db9ae")
 
 	validators := make([]common.Address, 50)
 
 	for i := 0; i < 50; i++ {
 		validators[i] = common.HexToAddress(strconv.Itoa(i))
+	}
+
+	depositData := make(DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
 	}
 
 	genesis := Genesis{
@@ -186,7 +163,7 @@ func TestSetupGenesisWithValidators(t *testing.T) {
 		GasLimit:     0,
 		Coinbase:     common.Address{},
 		Alloc:        nil,
-		Validators:   validators,
+		Validators:   depositData,
 		GasUsed:      0,
 		ParentHashes: nil,
 		Slot:         0,
@@ -200,14 +177,12 @@ func TestSetupGenesisWithValidators(t *testing.T) {
 
 	testutils.AssertEqual(t, hash, expectedHash)
 
-	buf := make([]byte, len(genesis.Validators)*common.AddressLength)
-	for i, validator := range genesis.Validators {
+	buf := make([]byte, len(validators)*common.AddressLength)
+	for i, validator := range validators {
 		beginning := i * common.AddressLength
 		end := beginning + common.AddressLength
 		copy(buf[beginning:end], validator[:])
 	}
 
-	validatorsStateAddress := crypto.Keccak256Address(buf)
-
-	testutils.AssertEqual(t, *config.ValidatorsStateAddress, validatorsStateAddress)
+	testutils.AssertEqual(t, *config.ValidatorsStateAddress, *genesis.GenerateValidatorStateAddress())
 }

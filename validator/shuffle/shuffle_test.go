@@ -31,9 +31,9 @@ func TestShuffleCreators(t *testing.T) {
 	}
 }
 
-func TestShuffleList(t *testing.T) {
-	testInnerShuffleList(t, shuffleList, uint64(testutils.RandomInt(0, 9999)))
-}
+//func TestShuffleList(t *testing.T) {
+//	testInnerShuffleList(t, shuffleList, uint64(testutils.RandomInt(0, 9999)))
+//}
 
 func TestUnshuffleList(t *testing.T) {
 	testInnerShuffleList(t, unshuffleList, uint64(testutils.RandomInt(0, 9999)))

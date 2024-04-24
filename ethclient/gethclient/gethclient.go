@@ -162,8 +162,8 @@ func (ec *Client) MemStats(ctx context.Context) (*runtime.MemStats, error) {
 // SetHead sets the current head of the local chain by block number.
 // Note, this is a destructive action and may severely damage your chain.
 // Use with extreme caution.
-func (ec *Client) SetHead(ctx context.Context, number *big.Int) error {
-	return ec.c.CallContext(ctx, nil, "debug_setHead", toBlockNumArg(number))
+func (ec *Client) SetHead(ctx context.Context, hash *common.Hash) error {
+	return ec.c.CallContext(ctx, nil, "debug_setHead", hash)
 }
 
 // GetNodeInfo retrieves the node info of a geth node.

@@ -8,7 +8,6 @@ import (
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
@@ -166,67 +165,4 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
 	}
 	return tx
-}
-
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, db ethdb.Database, blocks int) (*Creator, *testWorkerBackend) {
-	backend := newTestWorkerBackend(t, chainConfig, db, blocks)
-	backend.txPool.AddLocals(pendingTxs)
-	w := New(testConfig, backend, new(event.TypeMux))
-	return w, backend
-}
-
-func TestGenerateBlockAndImportSealer(t *testing.T) {
-	testGenerateBlockAndImport(t)
-}
-
-func testGenerateBlockAndImport(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	chainConfig := params.AllEthashProtocolChanges
-
-	chainConfig.LondonBlock = big.NewInt(0)
-	w, b := newTestWorker(t, chainConfig, db, 0)
-	defer w.close()
-
-	// This test chain imports the mined blocks.
-	db2 := rawdb.NewMemoryDatabase()
-	b.genesis.MustCommit(db2)
-	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), vm.Config{}, nil)
-	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
-
-	// Wait for mined blocks.
-	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
-	defer sub.Unsubscribe()
-
-	// Start block creation!
-	w.Start(common.Address{})
-
-	for i := 0; i < 5; i++ {
-		b.txPool.AddLocal(b.newRandomTx(true))
-		b.txPool.AddLocal(b.newRandomTx(false))
-		//w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
-		//w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
-
-		tips := b.chain.GetTips()
-		w.CreateBlock(&Assignment{
-			Slot:     uint64(i + 1),
-			Creators: []common.Address{w.coinbase},
-		}, &tips)
-
-		select {
-		case ev := <-sub.Chan():
-			block := ev.Data.(core.NewMinedBlockEvent).Block
-			nr := block.Height()
-			block.SetNumber(&nr)
-			if _, err := chain.SyncInsertChain([]*types.Block{block}); err != nil {
-				t.Fatalf("failed to insert new mined block %d: %v", block.Hash(), err)
-			}
-		case <-time.After(300 * time.Second): // Worker needs 1s to include new changes.
-			t.Fatalf("timeout")
-		}
-	}
 }

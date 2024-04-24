@@ -51,36 +51,35 @@ func config() *params.ChainConfig {
 // TestBlockGasLimits tests the gasLimit checks for blocks both across
 // the EIP-1559 boundary and post-1559 blocks
 func TestBlockGasLimits(t *testing.T) {
-	initial := new(big.Int).SetUint64(params.InitialBaseFee)
-
 	for i, tc := range []struct {
+		baseFee   uint64
 		pGasLimit uint64
 		pNum      int64
 		gasLimit  uint64
 		ok        bool
 	}{
 		// Transitions from non-london to london
-		{10000000, 4, 20000000, true},  // No change
-		{10000000, 4, 20019530, true},  // Upper limit
-		{10000000, 4, 20019531, false}, // Upper +1
-		{10000000, 4, 19980470, true},  // Lower limit
-		{10000000, 4, 19980469, false}, // Lower limit -1
+		{47689510544, 10000000, 4, 10000000, true}, // No change
+		{47689510544, 10000000, 4, 10000000, true}, // Upper limit
+		{1000000000, 10000000, 4, 20019531, false}, // Upper +1
+		{47689510544, 10000000, 4, 10000000, true}, // Lower limit
+		{1000000000, 10000000, 4, 19980469, false}, // Lower limit -1
 		// London to London
-		{20000000, 5, 20000000, true},
-		{20000000, 5, 20019530, true},  // Upper limit
-		{20000000, 5, 20019531, false}, // Upper limit +1
-		{20000000, 5, 19980470, true},  // Lower limit
-		{20000000, 5, 19980469, false}, // Lower limit -1
-		{40000000, 5, 40039061, true},  // Upper limit
-		{40000000, 5, 40039062, false}, // Upper limit +1
-		{40000000, 5, 39960939, true},  // lower limit
-		{40000000, 5, 39960938, false}, // Lower limit -1
+		{47689510544, 20000000, 5, 20000000, true},
+		{47689510544, 20000000, 5, 20019530, true}, // Upper limit
+		{1000000000, 20000000, 5, 20019531, false}, // Upper limit +1
+		{47689510544, 20000000, 5, 19980470, true}, // Lower limit
+		{1000000000, 20000000, 5, 19980469, false}, // Lower limit -1
+		{47689510544, 40000000, 5, 40039061, true}, // Upper limit
+		{1000000000, 40000000, 5, 40039062, false}, // Upper limit +1
+		{47689510544, 40000000, 5, 39960939, true}, // lower limit
+		{1000000000, 40000000, 5, 39960938, false}, // Lower limit -1
 	} {
 		nrPt := uint64(tc.pNum)
 		parent := &types.Header{
 			GasUsed:  tc.pGasLimit / 2,
 			GasLimit: tc.pGasLimit,
-			BaseFee:  initial,
+			BaseFee:  new(big.Int).SetUint64(tc.baseFee),
 			Number:   &nrPt,
 		}
 
@@ -88,7 +87,7 @@ func TestBlockGasLimits(t *testing.T) {
 		header := &types.Header{
 			GasUsed:  tc.gasLimit / 2,
 			GasLimit: tc.gasLimit,
-			BaseFee:  initial,
+			BaseFee:  new(big.Int).SetUint64(tc.baseFee),
 			Number:   &nrHd,
 		}
 		err := VerifyEip1559Header(config(), parent, header, 2048, 100000000, 4)

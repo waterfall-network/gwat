@@ -30,8 +30,6 @@ import (
 func TestHandshake66(t *testing.T) { testHandshake(t, ETH66) }
 
 func testHandshake(t *testing.T, protocol uint) {
-	t.Parallel()
-
 	// Create a test backend only to have some valid genesis chain
 	backend := newTestBackend(3)
 	defer backend.close()

@@ -28,6 +28,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {
@@ -46,6 +47,18 @@ func BenchmarkFilters(b *testing.B) {
 	}
 	defer os.RemoveAll(dir)
 
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
 	var (
 		db, _   = rawdb.NewLevelDBDatabase(dir, 0, 0, "", false)
 		backend = &testBackend{db: db}
@@ -57,7 +70,7 @@ func BenchmarkFilters(b *testing.B) {
 	)
 	defer db.Close()
 
-	genesis := core.GenesisBlockForTesting(db, addr1, big.NewInt(1000000))
+	genesis := core.GenesisBlockForTesting(db, addr1, big.NewInt(1000000), depositData)
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 100010, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
@@ -100,6 +113,18 @@ func TestFilters(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
+	depositData := make(core.DepositData, 0)
+	for i := 0; i < 64; i++ {
+		valData := &core.ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+
+		depositData = append(depositData, valData)
+	}
+
 	var (
 		db, _   = rawdb.NewLevelDBDatabase(dir, 0, 0, "", false)
 		backend = &testBackend{db: db}
@@ -113,7 +138,7 @@ func TestFilters(t *testing.T) {
 	)
 	defer db.Close()
 
-	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
+	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000), depositData)
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
@@ -169,14 +194,14 @@ func TestFilters(t *testing.T) {
 	filter := NewRangeFilter(backend, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 
 	logs, _ := filter.Logs(context.Background())
-	if len(logs) != 4 {
-		t.Error("expected 4 log, got", len(logs))
+	if len(logs) != 1 {
+		t.Error("expected 1 log, got", len(logs))
 	}
 
 	filter = NewRangeFilter(backend, 900, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 1 {
-		t.Error("expected 1 log, got", len(logs))
+	if len(logs) != 0 {
+		t.Error("expected 0 log, got", len(logs))
 	}
 	if len(logs) > 0 && logs[0].Topics[0] != hash3 {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
@@ -184,8 +209,8 @@ func TestFilters(t *testing.T) {
 
 	filter = NewRangeFilter(backend, 990, -1, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 1 {
-		t.Error("expected 1 log, got", len(logs))
+	if len(logs) != 0 {
+		t.Error("expected 0 log, got", len(logs))
 	}
 	if len(logs) > 0 && logs[0].Topics[0] != hash3 {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
@@ -194,8 +219,8 @@ func TestFilters(t *testing.T) {
 	filter = NewRangeFilter(backend, 1, 10, nil, [][]common.Hash{{hash1, hash2}})
 
 	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 2 {
-		t.Error("expected 2 log, got", len(logs))
+	if len(logs) != 0 {
+		t.Error("expected 0 log, got", len(logs))
 	}
 
 	failHash := common.BytesToHash([]byte("fail"))
