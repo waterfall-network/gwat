@@ -300,26 +300,70 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 	// if max slot of parents is less or equal to last finalized block slot
 	// - add last finalized block to parents
 	lastFinBlock := c.bc.GetLastFinalizedBlock()
-	maxParentSlot := uint64(0)
-	for _, blk := range tipsBlocks {
-		if blk.Slot() > maxParentSlot {
-			maxParentSlot = blk.Slot()
+
+	//maxParentSlot := uint64(0)
+	//for _, blk := range tipsBlocks {
+	//	if blk.Slot() > maxParentSlot {
+	//		maxParentSlot = blk.Slot()
+	//	}
+	//}
+	//if maxParentSlot <= lastFinBlock.Slot() {
+	//	tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
+	//}
+	//parentHashes := tipsBlocks.Hashes().Sort()
+	//cpHeader := c.bc.GetHeader(checkpoint.Spine)
+	//newHeight, err := c.bc.CalcBlockHeightByTips(tips, cpHeader.Hash())
+	//if err != nil {
+	//	log.Error("Creator calculate block height failed", "err", err)
+	//	return nil, err
+	//}
+
+	parentTips := tips.Copy()
+	lfHash := lastFinBlock.Hash()
+	isNotLfInPast := true
+	for _, t := range parentTips {
+		if t.OrderedAncestorsHashes.Has(lfHash) || t.CpHash == lfHash {
+			isNotLfInPast = false
+			break
 		}
 	}
-	if maxParentSlot <= lastFinBlock.Slot() {
-		tipsBlocks[lastFinBlock.Hash()] = lastFinBlock
+	if isNotLfInPast {
+		//add last finalized to parents
+		tipsBlocks[lfHash] = lastFinBlock
+		// check last finalized blockDag exists
+		lfBlDag := c.bc.GetBlockDag(lfHash)
+		if lfBlDag == nil {
+			_, anc, _, err := c.bc.CollectAncestorsAftCpByParents(lastFinBlock.ParentHashes(), lastFinBlock.CpHash())
+			if err != nil {
+				return nil, err
+			}
+			lfBlDag = &types.BlockDAG{
+				Hash:                   lastFinBlock.Hash(),
+				Height:                 lastFinBlock.Height(),
+				Slot:                   lastFinBlock.Slot(),
+				CpHash:                 lastFinBlock.CpHash(),
+				CpHeight:               c.bc.GetHeader(lastFinBlock.CpHash()).Height,
+				OrderedAncestorsHashes: anc.Hashes(),
+			}
+			c.bc.SaveBlockDag(lfBlDag)
+		}
+		parentTips.Add(lfBlDag)
 	}
 
 	parentHashes := tipsBlocks.Hashes().Sort()
 
 	cpHeader := c.bc.GetHeader(checkpoint.Spine)
-	newHeight, err := c.bc.CalcBlockHeightByTips(tips, cpHeader.Hash())
+	newHeight, err := c.bc.CalcBlockHeightByTips(parentTips, cpHeader.Hash())
 	if err != nil {
 		log.Error("Creator calculate block height failed", "err", err)
 		return nil, err
 	}
 
-	log.Info("Creator calculate block height", "newHeight", newHeight, "cpHash", checkpoint.Spine.Hex())
+	log.Info("Creator calculate block height",
+		"newHeight", newHeight,
+		"cpHash", checkpoint.Spine.Hex(),
+		"parentHashes", parentHashes,
+	)
 
 	era := c.bc.GetEraInfo().Number()
 	if c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) >= c.bc.GetEraInfo().NextEraFirstEpoch() {
