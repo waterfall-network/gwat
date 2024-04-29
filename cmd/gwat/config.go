@@ -161,6 +161,10 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		val := ctx.GlobalUint64(utils.OverrideDelegatingStakeFlag.Name)
 		cfg.Eth.OverrideDelegatingStake = &val
 	}
+	if ctx.GlobalIsSet(utils.OverridePrefixFinFlag.Name) {
+		val := ctx.GlobalUint64(utils.OverridePrefixFinFlag.Name)
+		cfg.Eth.OverridePrefixFin = &val
+	}
 	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Configure GraphQL if requested

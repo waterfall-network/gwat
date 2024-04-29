@@ -175,6 +175,9 @@ type Config struct {
 	// OverrideDelegatingStake slot override (TODO: remove after the fork)
 	OverrideDelegatingStake *uint64 `toml:",omitempty"`
 
+	// OverridePrefixFin slot override (TODO: remove after the fork)
+	OverridePrefixFin *uint64 `toml:",omitempty"`
+
 	// is dev mode running
 	IsDevMode bool
 }

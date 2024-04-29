@@ -221,6 +221,10 @@ var (
 		Name:  "delegating-stake-fork-slot",
 		Usage: "Manually specify delegating stake fork-slot, overriding the bundled setting",
 	}
+	OverridePrefixFinFlag = cli.Uint64Flag{
+		Name:  "prefix-fin-fork-slot",
+		Usage: "Manually specify prefix finalization fix fork-slot, overriding the bundled setting",
+	}
 	// Light server and client settings
 	LightServeFlag = cli.IntFlag{
 		Name:  "light.serve",
