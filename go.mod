@@ -1,6 +1,6 @@
 module gitlab.waterfall.network/waterfall/protocol/gwat
 
-go 1.21.9
+go 1.21
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.7.0
