@@ -106,16 +106,16 @@ func unlockAccount(ks *keystore.KeyStore, address string, pos int, passwords []s
 }
 
 // MakePasswordList reads password lines from the file specified by the global --password flag.
-func makePasswordList(path string) []string {
+func makePasswordList(path string) ([]string, error) {
 	text, err := os.ReadFile(path)
 	if err != nil {
 		log.Error("Failed to read password file", "error", err)
-		return nil
+		return nil, err
 	}
 	lines := strings.Split(string(text), "\n")
 	// Sanitise DOS line endings.
 	for i := range lines {
 		lines[i] = strings.TrimRight(lines[i], "\r")
 	}
-	return lines
+	return lines, err
 }
