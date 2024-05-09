@@ -137,7 +137,7 @@ func (b *testBackend) ChainDb() ethdb.Database {
 	return b.chaindb
 }
 
-func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
+func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (*state.StateDB, error) {
 	statedb, err := b.chain.StateAt(block.Root())
 	if err != nil {
 		return nil, errStateNotFound
@@ -185,7 +185,9 @@ func TestOverriddenTraceCall(t *testing.T) {
 		accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 		accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 		accounts[2].addr: {Balance: big.NewInt(params.Ether)},
-	}}
+	},
+		Validators: core.GenDepositData(64),
+	}
 	genBlocks := 10
 	signer := types.HomesteadSigner{}
 	api := NewAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
@@ -324,7 +326,9 @@ func TestTraceTransaction(t *testing.T) {
 	genesis := &core.Genesis{Alloc: core.GenesisAlloc{
 		accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 		accounts[1].addr: {Balance: big.NewInt(params.Ether)},
-	}}
+	},
+		Validators: core.GenDepositData(64),
+	}
 	target := common.Hash{}
 	signer := types.HomesteadSigner{}
 	api := NewAPI(newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
@@ -357,7 +361,9 @@ func TestTraceBlock(t *testing.T) {
 		accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 		accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 		accounts[2].addr: {Balance: big.NewInt(params.Ether)},
-	}}
+	},
+		Validators: core.GenDepositData(64),
+	}
 	genBlocks := 10
 	signer := types.HomesteadSigner{}
 	api := NewAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {

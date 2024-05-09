@@ -19,6 +19,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -324,4 +325,18 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 	header.BaseFee = misc.CalcSlotBaseFee(config, config.ValidatorsPerSlot, 64, 105000000)
 
 	return header
+}
+
+func GenDepositData(dataLen int) DepositData {
+	depositData := make(DepositData, 0)
+	for i := 0; i < dataLen; i++ {
+		valData := &ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+		depositData = append(depositData, valData)
+	}
+	return depositData
 }
