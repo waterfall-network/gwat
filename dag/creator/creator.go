@@ -883,7 +883,10 @@ func (c *Creator) SetNodeCreators(accounts []common.Address) {
 
 // unlockAccount unlocks a specified account.
 func (c *Creator) unlockAccount(ks *keystore.KeyStore, targetAddress string) error {
-	passwords := c.getPasswords()
+	passwords, err := c.getPasswords()
+	if err != nil {
+		return err
+	}
 	keystoreAccounts := ks.Accounts()
 
 	// Find the position of the target account.
@@ -894,7 +897,7 @@ func (c *Creator) unlockAccount(ks *keystore.KeyStore, targetAddress string) err
 }
 
 // getPasswords returns a list of passwords from the password directory.
-func (c *Creator) getPasswords() []string {
+func (c *Creator) getPasswords() ([]string, error) {
 	return makePasswordList(c.config.PasswordDir)
 }
 
