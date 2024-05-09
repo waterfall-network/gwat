@@ -19,7 +19,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"math/big"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -31,6 +30,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
