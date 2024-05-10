@@ -90,7 +90,7 @@ func (b *BlockGen) initTmpBlockchain() {
 	type testBackend struct {
 		chainConfig *params.ChainConfig
 		chaindb     ethdb.Database
-		chain       *BlockChain
+		//chain       *BlockChain
 	}
 	backend := &testBackend{
 		chainConfig: params.TestChainConfig,
