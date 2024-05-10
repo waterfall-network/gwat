@@ -37,7 +37,6 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/node"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 )
 
 // Verify that Client implements the ethereum interfaces.
@@ -213,18 +212,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 }
 
 func generateTestChain() (*core.Genesis, []*types.Block) {
-	depositData := make(core.DepositData, 0)
-	for i := 0; i < 64; i++ {
-		valData := &core.ValidatorData{
-			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
-			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
-			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
-			Amount:            3200,
-		}
-
-		depositData = append(depositData, valData)
-	}
-
 	db := rawdb.NewMemoryDatabase()
 	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
@@ -234,7 +221,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		Timestamp:    9000,
 		BaseFee:      big.NewInt(params.InitialBaseFee),
 		ParentHashes: []common.Hash{},
-		Validators:   depositData,
+		Validators:   core.GenDepositData(64),
 	}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
@@ -334,6 +321,11 @@ func testBalanceAt(t *testing.T, client *rpc.Client) {
 		want    *big.Int
 		wantErr error
 	}{
+		"valid_account_genesis": {
+			account: testAddr,
+			block:   big.NewInt(0),
+			want:    testBalance,
+		},
 		"valid_account": {
 			account: testAddr,
 			block:   big.NewInt(1),
