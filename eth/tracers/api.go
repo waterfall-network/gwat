@@ -542,7 +542,8 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if block.Height() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.Nr()-1), block.Hash())
+	//parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.Nr()-1), block.Hash())
+	parent, err := api.blockByNumber(ctx, rpc.BlockNumber(block.Nr()-1))
 	if err != nil {
 		return nil, err
 	}

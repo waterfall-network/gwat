@@ -87,8 +87,15 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
+	//insert and finalize blocks
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	for i, block := range blocks {
+		err := chain.WriteFinalizedBlock(uint64(i+1), block, true)
+		if err != nil {
+			t.Fatal("Finalization failed (state transition)", "i", i, "err", err)
+		}
 	}
 	backend.chain = chain
 	backend.chainConfig = params.TestChainConfig
@@ -178,7 +185,6 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 }
 
 func TestOverriddenTraceCall(t *testing.T) {
-	t.Skip()
 	// Initialize test accounts
 	accounts := newAccounts(3)
 	genesis := &core.Genesis{Alloc: core.GenesisAlloc{
@@ -320,7 +326,6 @@ func TestOverriddenTraceCall(t *testing.T) {
 }
 
 func TestTraceTransaction(t *testing.T) {
-	t.Skip()
 	// Initialize test accounts
 	accounts := newAccounts(2)
 	genesis := &core.Genesis{Alloc: core.GenesisAlloc{
@@ -354,7 +359,6 @@ func TestTraceTransaction(t *testing.T) {
 }
 
 func TestTraceBlock(t *testing.T) {
-	t.Skip()
 	// Initialize test accounts
 	accounts := newAccounts(3)
 	genesis := &core.Genesis{Alloc: core.GenesisAlloc{

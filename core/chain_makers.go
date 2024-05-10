@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
@@ -48,6 +49,8 @@ type BlockGen struct {
 	receipts []*types.Receipt
 
 	config *params.ChainConfig
+
+	bc *BlockChain
 }
 
 // SetCoinbase sets the coinbase of the generated block.
@@ -77,7 +80,34 @@ func (b *BlockGen) SetExtra(data []byte) {
 // added. Notably, contract code relying on the BLOCKHASH instruction
 // will panic during execution.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
-	b.AddTxWithChain(nil, tx)
+	if b.bc == nil {
+		b.initTmpBlockchain()
+	}
+	b.AddTxWithChain(b.bc, tx)
+}
+
+func (b *BlockGen) initTmpBlockchain() {
+	type testBackend struct {
+		chainConfig *params.ChainConfig
+		chaindb     ethdb.Database
+		chain       *BlockChain
+	}
+	backend := &testBackend{
+		chainConfig: params.TestChainConfig,
+		chaindb:     rawdb.NewMemoryDatabase(),
+	}
+	cacheConfig := &CacheConfig{
+		TrieCleanLimit:    256,
+		TrieDirtyLimit:    256,
+		TrieTimeLimit:     5 * time.Minute,
+		SnapshotLimit:     0,
+		TrieDirtyDisabled: true, // Archive mode
+	}
+	chain, err := NewBlockChain(backend.chaindb, cacheConfig, params.TestChainConfig, vm.Config{}, nil)
+	if err != nil {
+		log.Crit("Failed to create blockchain", "err", err)
+	}
+	b.bc = chain
 }
 
 // AddTxWithChain adds a transaction to the generated block. If no coinbase has
@@ -236,9 +266,23 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 	if config == nil {
 		config = params.TestChainConfig
 	}
+
+	// crate tmp blockchain
+	cacheConfig := &CacheConfig{
+		TrieCleanLimit:    256,
+		TrieDirtyLimit:    256,
+		TrieTimeLimit:     5 * time.Minute,
+		SnapshotLimit:     0,
+		TrieDirtyDisabled: true, // Archive mode
+	}
+	bc, err := NewBlockChain(db, cacheConfig, config, vm.Config{}, nil)
+	if err != nil {
+		log.Crit("failed to create tester chain: %v", err)
+	}
+
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config}
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, bc: bc}
 		b.header = makeHeader(config, parent, statedb)
 		b.header.CpBaseFee = big.NewInt(1000)
 
