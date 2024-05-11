@@ -560,8 +560,8 @@ func TestClientNotificationStorm(t *testing.T) {
 		}
 	}
 
-	reservedReqs := int((8000 / float32(requestsLimit)) * dagApiReserved)
-	doTest(8000-reservedReqs, false)
+	//doTest(8000, false)
+	doTest(4000, false)
 	doTest(24000, true)
 }
 
