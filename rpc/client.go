@@ -45,7 +45,8 @@ const (
 	defaultDialTimeout = 10 * time.Second // used if context has no deadline
 	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
 	// limit of incoming requests
-	requestsLimit = 256
+	requestsLimit  = 256
+	dagApiReserved = 4 * 2 // 4 - max intersected req (dag_sync, dag_finalize, dag_getCandidates, dag_validateSpines)
 )
 
 const (
@@ -661,7 +662,6 @@ func (c *Client) read(codec ServerCodec) {
 			return
 		}
 		// requestsLimit-dagApiReserved - reserving channel capacity for requests and responses of dag api
-		dagApiReserved := 4 * 2 // 4 - max intersected req (dag_sync, dag_finalize, dag_getCandidates, dag_validateSpines)
 		if len(c.readOp) < requestsLimit-dagApiReserved || (!batch && msgs[0].isDagApi()) {
 			c.readOp <- readOp{msgs, batch}
 		} else {
