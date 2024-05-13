@@ -351,13 +351,13 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:    minStack(2, 1),
 			maxStack:    maxStack(2, 1),
 		},
-		SHA3: {
-			execute:     opSha3,
-			constantGas: params.Sha3Gas,
-			dynamicGas:  gasSha3,
+		KECCAK256: {
+			execute:     opKeccak256,
+			constantGas: params.Keccak256Gas,
+			dynamicGas:  gasKeccak256,
 			minStack:    minStack(2, 1),
 			maxStack:    maxStack(2, 1),
-			memorySize:  memorySha3,
+			memorySize:  memoryKeccak256,
 		},
 		ADDRESS: {
 			execute:     opAddress,
@@ -1021,7 +1021,7 @@ func newFrontierInstructionSet() JumpTable {
 			halts:      true,
 		},
 		SELFDESTRUCT: {
-			execute:    opSuicide,
+			execute:    opSelfdestruct,
 			dynamicGas: gasSelfdestruct,
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),
