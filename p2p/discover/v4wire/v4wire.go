@@ -19,6 +19,7 @@ package v4wire
 
 import (
 	"bytes"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"errors"
@@ -289,8 +290,21 @@ func DecodePubkey(curve elliptic.Curve, e Pubkey) (*ecdsa.PublicKey, error) {
 	half := len(e) / 2
 	p.X.SetBytes(e[:half])
 	p.Y.SetBytes(e[half:])
-	if !p.Curve.IsOnCurve(p.X, p.Y) {
+
+	var ecdhCurve ecdh.Curve
+	switch curve {
+	case elliptic.P256():
+		ecdhCurve = ecdh.P256()
+	default:
+		return nil, errors.New("unsupported elliptic curve")
+	}
+
+	uncompressedPubKey := append([]byte{4}, append(p.X.Bytes(), p.Y.Bytes()...)...)
+
+	// Check if the point is valid
+	if _, err := ecdhCurve.NewPublicKey(uncompressedPubKey); err != nil {
 		return nil, ErrBadPoint
 	}
+
 	return p, nil
 }
