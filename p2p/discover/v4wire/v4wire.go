@@ -19,7 +19,6 @@ package v4wire
 
 import (
 	"bytes"
-	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"errors"
@@ -284,27 +283,38 @@ func EncodePubkey(key *ecdsa.PublicKey) Pubkey {
 	return e
 }
 
-// DecodePubkey reads an encoded secp256k1 public key.
+// DecodePubkey reads an encoded uncompressed secp256k1 public key.
 func DecodePubkey(curve elliptic.Curve, e Pubkey) (*ecdsa.PublicKey, error) {
-	p := &ecdsa.PublicKey{Curve: curve, X: new(big.Int), Y: new(big.Int)}
-	half := len(e) / 2
-	p.X.SetBytes(e[:half])
-	p.Y.SetBytes(e[half:])
-
-	var ecdhCurve ecdh.Curve
-	switch curve {
-	case elliptic.P256():
-		ecdhCurve = ecdh.P256()
-	default:
-		return nil, errors.New("unsupported elliptic curve")
+	if len(e) != 64 {
+		return nil, errors.New("wrong size public key data")
 	}
 
-	uncompressedPubKey := append([]byte{4}, append(p.X.Bytes(), p.Y.Bytes()...)...)
+	x := new(big.Int).SetBytes(e[:32])
+	y := new(big.Int).SetBytes(e[32:])
 
-	// Check if the point is valid
-	if _, err := ecdhCurve.NewPublicKey(uncompressedPubKey); err != nil {
+	if !isValidPoint(curve, x, y) {
 		return nil, ErrBadPoint
 	}
 
-	return p, nil
+	// Return the public key
+	return &ecdsa.PublicKey{Curve: curve, X: x, Y: y}, nil
+}
+
+// isValidPoint checks if the point (x, y) lies on the given elliptic curve.
+func isValidPoint(curve elliptic.Curve, x, y *big.Int) bool {
+	params := curve.Params()
+
+	if x.Sign() == 0 || y.Sign() == 0 || x.Cmp(params.P) >= 0 || y.Cmp(params.P) >= 0 {
+		return false
+	}
+
+	ySquared := new(big.Int).Mul(y, y)
+	ySquared.Mod(ySquared, params.P)
+
+	xCubed := new(big.Int).Mul(x, x)
+	xCubed.Mul(xCubed, x)
+	xCubed.Add(xCubed, params.B)
+	xCubed.Mod(xCubed, params.P)
+
+	return ySquared.Cmp(xCubed) == 0
 }
