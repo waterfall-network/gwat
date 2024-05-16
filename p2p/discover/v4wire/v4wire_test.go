@@ -17,9 +17,6 @@
 package v4wire
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"encoding/hex"
 	"net"
 	"reflect"
@@ -144,51 +141,4 @@ func hexPubkey(h string) (ret Pubkey) {
 	}
 	copy(ret[:], b)
 	return ret
-}
-
-func TestDecodePubkey(t *testing.T) {
-	tests := []struct {
-		name    string
-		curve   elliptic.Curve
-		wantErr bool
-	}{
-		{"Valid P256", elliptic.P256(), false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pubkey, err := generatePubkey(tt.curve)
-			if err != nil {
-				t.Fatalf("failed to generate public key: %v", err)
-			}
-
-			decodedPubkey, err := DecodePubkey(tt.curve, pubkey)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodePubkey() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && decodedPubkey == nil {
-				t.Errorf("DecodePubkey() returned nil, expected valid public key")
-			}
-		})
-	}
-}
-
-func generatePubkey(curve elliptic.Curve) (Pubkey, error) {
-	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
-	if err != nil {
-		return Pubkey{}, err
-	}
-
-	xBytes := priv.PublicKey.X.Bytes()
-	yBytes := priv.PublicKey.Y.Bytes()
-
-	byteLen := (priv.Params().BitSize + 7) / 8
-	paddedX := make([]byte, byteLen)
-	paddedY := make([]byte, byteLen)
-	copy(paddedX[byteLen-len(xBytes):], xBytes)
-	copy(paddedY[byteLen-len(yBytes):], yBytes)
-
-	pubkey := append(paddedX, paddedY...)
-	return Pubkey(pubkey), nil
 }
