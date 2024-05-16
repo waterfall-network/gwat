@@ -26,6 +26,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/tracers/logger"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
@@ -615,7 +616,7 @@ func initStateTransition(m func(token common.Address) Message, init func(tp *tok
 	}
 
 	var (
-		tracer = vm.NewStructLogger(&vm.LogConfig{})
+		tracer = logger.NewStructLogger(&logger.Config{})
 		evm    = vm.NewEVM(vm.BlockContext{
 			CanTransfer: func(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 				return db.GetBalance(addr).Cmp(amount) >= 0

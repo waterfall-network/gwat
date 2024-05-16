@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"hash"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
@@ -241,7 +242,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pc++
 	}
 
-	if err == errStopToken {
+	if errors.Is(err, errStopToken) {
 		err = nil // clear stop token error
 	}
 

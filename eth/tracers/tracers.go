@@ -20,10 +20,15 @@ package tracers
 import (
 	"encoding/json"
 	"errors"
+	"strings"
+	"unicode"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/tracers/internal/tracers"
 )
+
+var all = make(map[string]string)
 
 // Context contains some contextual infos for a transaction execution that is not
 // available from within the EVM object.
@@ -48,15 +53,19 @@ var (
 	lookups []lookupFunc
 )
 
-// RegisterLookup registers a method as a lookup for tracers, meaning that
-// users can invoke a named tracer through that lookup. If 'wildcard' is true,
-// then the lookup will be placed last. This is typically meant for interpreted
-// engines (js) which can evaluate dynamic user-supplied code.
-func RegisterLookup(wildcard bool, lookup lookupFunc) {
-	if wildcard {
-		lookups = append(lookups, lookup)
-	} else {
-		lookups = append([]lookupFunc{lookup}, lookups...)
+func camel(str string) string {
+	pieces := strings.Split(str, "_")
+	for i := 1; i < len(pieces); i++ {
+		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
+	}
+	return strings.Join(pieces, "")
+}
+
+// init retrieves the JavaScript transaction tracers included in go-ethereum.
+func init() {
+	for _, file := range tracers.AssetNames() {
+		name := camel(strings.TrimSuffix(file, ".js"))
+		all[name] = string(tracers.MustAsset(file))
 	}
 }
 
