@@ -2778,8 +2778,9 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 			)
 			return false
 		}
-		// otherwise block cp must be in past of parent and grater parent cp
-		if !parBdag.OrderedAncestorsHashes.Has(block.CpHash()) {
+		// otherwise block cp must be in past of parent and greater parent cp
+		// or be same.
+		if !parBdag.OrderedAncestorsHashes.Has(block.CpHash()) && ph != block.CpHash() {
 			log.Warn("Block verification: cp not found in range from parent cp",
 				"parent.Hash", ph.Hex(),
 				"range", parBdag.OrderedAncestorsHashes,
