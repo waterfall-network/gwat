@@ -104,7 +104,7 @@ var (
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       2729920,
-		ForkSlotPrefixFin:      math.MaxUint64,
+		ForkSlotPrefixFin:      4058240,
 		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
 	}
 
