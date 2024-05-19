@@ -37,7 +37,7 @@ var (
 	// testnet8AcceptCpRootOnFinEpoch fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	testnet8AcceptCpRootOnFinEpoch = map[common.Hash][]uint64{
 		common.HexToHash("0xd76dd012c08baefd84750cf9752a6987dbc8ff4451069056cfd110e32250ed4a"): {96176},
-		common.HexToHash("0xb6269fa641f2b4621af67f1d619eb405521c0ae59e3297459708d50059ddc9e7"): {126284},
+		common.HexToHash("0x771d385d42fa93c0303ea34086f09d8adf99f97813f761aa6a437451959a0841"): {126283},
 	}
 )
 
