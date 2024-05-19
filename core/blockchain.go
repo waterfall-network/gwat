@@ -1650,10 +1650,15 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
+	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: 000", "blocks", len(blocks), "err", err, "validate", validate)
+
 	// Pre-checks passed, start the full block imports
 	if !bc.chainmu.TryLock() {
+		log.Info("Sync of unknown dag blocks: WriteSyncBlocks: bc.chainmu.TryLock FAILED 111", "blocks", len(blocks), "err", errInsertionInterrupted, "validate", validate)
 		return nil, errInsertionInterrupted
 	}
+
+	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: bc.chainmu.TryLock 111", "blocks", len(blocks), "err", err, "validate", validate)
 
 	// include delayed blocks
 	if len(bc.insBlockCache) > 0 {
@@ -1695,9 +1700,17 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 		orderedBlocks = append(orderedBlocks, slotBlocks...)
 	}
 
+	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: insertBlocks 222", "blocks", len(blocks), "err", err, "validate", validate)
+
 	// insert process
 	n, err := bc.insertBlocks(orderedBlocks, validate, opSync)
+
+	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: insertBlocks 333", "blocks", len(blocks), "err", err, "validate", validate)
+
 	bc.chainmu.Unlock()
+
+	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: chainmu.Unlock 444", "blocks", len(blocks), "err", err, "validate", validate)
+
 	if err == ErrInsertUncompletedDag {
 		processing := make(map[common.Hash]bool, len(bc.insBlockCache))
 		for _, b := range bc.insBlockCache {

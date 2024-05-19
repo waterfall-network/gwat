@@ -588,8 +588,10 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		}
 		blocks = append(blocks, block)
 	}
+	log.Info("Sync of unknown dag blocks: NewBlockWithHeader 111", "blocks", len(blocks), "err", err)
 
 	blocksBySlot, err := (&blocks).GroupBySlot()
+	log.Info("Sync of unknown dag blocks: GroupBySlot 222", "blocks", len(blocks), "err", err)
 	if err != nil {
 		return err
 	}
@@ -599,14 +601,17 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		slots = append(slots, sl)
 	}
 	sort.Sort(slots)
+	log.Info("Sync of unknown dag blocks: sort slots 333", "blocks", len(blocks), "err", err, "slots", slots)
 
 	insBlocks := make(types.Blocks, 0, len(headers))
 	for _, slot := range slots {
 		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
 		insBlocks = append(insBlocks, slotBlocks...)
 	}
+	log.Info("Sync of unknown dag blocks: SpineSortBlocks 444", "blocks", len(blocks), "err", err)
+
 	if bl, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
-		log.Error("Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+		log.Error("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		return err
 	}
 	return nil
