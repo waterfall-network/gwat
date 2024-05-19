@@ -2350,8 +2350,16 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	}
 	// cp must be an ancestor of the block
 	if !isCpAncestor {
-		log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
-		return false, nil
+		for _, p := range block.ParentHashes() {
+			if p == block.CpHash() {
+				isCpAncestor = true
+				break
+			}
+		}
+		if !isCpAncestor {
+			log.Warn("Block verification: checkpoint is not ancestor", "hash", block.Hash().Hex(), "cpHash", block.CpHash().Hex())
+			return false, nil
+		}
 	}
 
 	// Verify block checkpoint
