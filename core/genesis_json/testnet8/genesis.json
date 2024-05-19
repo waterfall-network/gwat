@@ -11,7 +11,8 @@
     "forkSlotDelegate": 2729920,
     "forkSlotPrefixFin": 18446744073709551615,
     "acceptCpRootOnFinEpoch": {
-      "0xd76dd012c08baefd84750cf9752a6987dbc8ff4451069056cfd110e32250ed4a": [96176]
+      "0xd76dd012c08baefd84750cf9752a6987dbc8ff4451069056cfd110e32250ed4a": [96176],
+      "0xb6269fa641f2b4621af67f1d619eb405521c0ae59e3297459708d50059ddc9e7": [126284]
     }
   },
   "timestamp": "1699915452",
