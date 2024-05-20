@@ -458,6 +458,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 				"root", upEra.Root,
 			)
 		}
+		eraInfo := bc.GetEraInfo()
+		if eraInfo != nil && eraInfo.Number() == 7800 || eraInfo.Number() == 7801 {
+			fixEra := eraInfo.GetEra()
+			fixEra.Root = correctRoot
+			bc.eraInfo = era.NewEraInfo(*fixEra)
+		}
 	}
 
 	return bc, nil
