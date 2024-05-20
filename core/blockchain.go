@@ -431,6 +431,35 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	bc.notProcValSyncOps = bc.GetNotProcessedValidatorSyncData()
 
+	//TODO RM !!! TMP test for tn8
+	if bc.Genesis().Hash() == params.Testnet8GenesisHash {
+		log.Info("Fix era: correct root 0000")
+
+		correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+		upEra := rawdb.ReadEra(bc.db, 7800)
+		if upEra != nil {
+			upEra.Root = correctRoot
+			rawdb.WriteEra(bc.db, upEra.Number, *upEra)
+			log.Info("Fix era: correct root 7800",
+				"num", upEra.Number,
+				"begin", upEra.From,
+				"end", upEra.To,
+				"root", upEra.Root,
+			)
+		}
+		upEra = rawdb.ReadEra(bc.db, 7801)
+		if upEra != nil {
+			upEra.Root = correctRoot
+			rawdb.WriteEra(bc.db, upEra.Number, *upEra)
+			log.Info("Fix era: correct root 7801",
+				"num", upEra.Number,
+				"begin", upEra.From,
+				"end", upEra.To,
+				"root", upEra.Root,
+			)
+		}
+	}
+
 	return bc, nil
 }
 
@@ -4542,17 +4571,15 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 		//TODO RM !!! TMP test for tn8
 		if bc.Genesis().Hash() == params.Testnet8GenesisHash {
 			if nextEra.Number == 7800 || nextEra.Number == 7801 {
-				cprrectRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
-				if nextEra.Root != cprrectRoot {
-					nextEra.Root = cprrectRoot
+				correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+				if nextEra.Root != correctRoot {
+					nextEra.Root = correctRoot
 					rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 					log.Info("######### if nextEra != nil EnterNextEra: correct root",
 						"num", nextEra.Number,
 						"begin", nextEra.From,
 						"end", nextEra.To,
 						"root", nextEra.Root,
-						"currSlot", bc.GetSlotInfo().CurrentSlot(),
-						"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
 					)
 				}
 			}
@@ -4585,8 +4612,6 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 				"begin", nextEra.From,
 				"end", nextEra.To,
 				"root", nextEra.Root,
-				"currSlot", bc.GetSlotInfo().CurrentSlot(),
-				"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
 			)
 		}
 	}
@@ -4649,13 +4674,7 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot comm
 
 					log.Info("######## HandleEra transitionPeriod UPDATE root", "cpEpoch", cp.Epoch,
 						"cpFinEpoch", cp.FinEpoch,
-						"curEpoch", bc.GetSlotInfo().SlotInEpoch(bc.GetSlotInfo().CurrentSlot()),
-						"curSlot", bc.GetSlotInfo().CurrentSlot(),
-						"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
-						"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
-						"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
 					)
-
 				}
 			}
 		}
