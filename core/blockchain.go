@@ -3011,8 +3011,78 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 		log.Debug("Insert blocks: remove optimistic spines from cache", "op", op, "slot", block.Slot())
 		bc.removeOptimisticSpinesFromCache(block.Slot())
 
+		//for case if finalized tip is current cp
+		commonCpHash := block.CpHash()
+		cpCpAncestorsHashes := common.HashArray{}
+		for _, ph := range block.ParentHashes() {
+			if ph == block.CpHash() {
+				bdag := bc.GetBlockDag(ph)
+				if bdag == nil {
+					// create parent blockDag
+					parentBlock := bc.GetHeader(ph)
+					if parentBlock == nil {
+						log.Error("Insert blocks: create CP blockDag: parent not found",
+							"slot", block.Slot(),
+							"height", block.Height(),
+							"hash", block.Hash().Hex(),
+							"parent", ph.Hex(),
+							"err", ErrInsertUncompletedDag,
+						)
+						return it.index, ErrInsertUncompletedDag
+					}
+					cpHeader := bc.GetHeader(parentBlock.CpHash)
+					if cpHeader == nil {
+						log.Error("Insert blocks: create CP blockDag: parent cp not found",
+							"slot", block.Slot(),
+							"height", block.Height(),
+							"hash", block.Hash().Hex(),
+							"parent", ph.Hex(),
+							"parentCP", parentBlock.CpHash.Hex(),
+							"err", ErrInsertUncompletedDag,
+						)
+						return it.index, ErrInsertUncompletedDag
+					}
+
+					log.Warn("Insert blocks: create CP blockDag",
+						"parent.slot", parentBlock.Slot,
+						"parent.height", parentBlock.Height,
+						"parent", ph.Hex(),
+						"slot", block.Slot(),
+						"height", block.Height(),
+						"hash", block.Hash().Hex(),
+					)
+					//isCpAncestor, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
+					_, anc, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
+					if err != nil {
+						return it.index, err
+					}
+					if len(unl) > 0 {
+						log.Error("Insert blocks: create CP blockDag: incomplete dag",
+							"err", ErrInsertUncompletedDag,
+							"parent", ph.Hex(),
+							"parent.slot", parentBlock.Slot,
+							"parent.height", parentBlock.Height,
+							"slot", block.Slot(),
+							"height", block.Height(),
+							"hash", block.Hash().Hex(),
+						)
+						return it.index, ErrInsertUncompletedDag
+					}
+					commonCpHash = parentBlock.CpHash
+					cpCpAncestorsHashes = append(anc.Hashes(), commonCpHash)
+				} else {
+					commonCpHash = bdag.CpHash
+					cpCpAncestorsHashes = append(bdag.OrderedAncestorsHashes, commonCpHash)
+				}
+				break
+			}
+		}
+
 		tmpTips := types.Tips{}
 		for _, h := range block.ParentHashes() {
+			if h == block.CpHash() {
+				continue
+			}
 			bdag := bc.GetBlockDag(h)
 			if bdag == nil {
 				// create parent blockDag
@@ -3090,10 +3160,11 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 			bdag.OrderedAncestorsHashes = bdag.OrderedAncestorsHashes.Difference(common.HashArray{bc.Genesis().Hash()})
 			tmpTips.Add(bdag)
 		}
-		dagChainHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, block.CpHash())
+		dagChainHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, commonCpHash)
 		if err != nil {
 			return it.index, err
 		}
+		dagChainHashes = dagChainHashes.Difference(cpCpAncestorsHashes)
 		cpHeader := bc.GetHeader(block.CpHash())
 		if cpHeader == nil {
 			return it.index, ErrInsertUncompletedDag
