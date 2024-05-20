@@ -3315,11 +3315,20 @@ func (bc *BlockChain) CollectAncestorsHashesByTips(tips types.Tips, cpHash commo
 }
 
 func (bc *BlockChain) CalcBlockHeightByTips(tips types.Tips, cpHash common.Hash) (uint64, error) {
-	ancestors, err := bc.CollectAncestorsHashesByTips(tips, cpHash)
+	//for case if finalized tip is current cp
+	cpCpHash := cpHash
+	for _, tip := range tips {
+		if tip.Hash == cpHash {
+			cpCpHash = tip.CpHash
+			break
+		}
+	}
+
+	ancestors, err := bc.CollectAncestorsHashesByTips(tips, cpCpHash)
 	if err != nil {
 		return 0, err
 	}
-	cpHeader := bc.GetHeader(cpHash)
+	cpHeader := bc.GetHeader(cpCpHash)
 
 	log.Info("Calculate block height",
 		"ancestors", len(ancestors),
