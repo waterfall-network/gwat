@@ -2327,13 +2327,32 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"hash", block.Hash(),
 	)
 
-	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), block.CpHash())
+	//for case if finalized tip is current cp
+	cpCpHash := block.CpHash()
+	cpCpAncestors := make(types.HeaderMap)
+	for _, ph := range block.ParentHashes() {
+		if ph == block.CpHash() {
+			pHdr := bc.GetHeader(ph)
+			cpCpHash = pHdr.CpHash
+			_, cpCpAncestors, _, _ = bc.CollectAncestorsAftCpByTips(pHdr.ParentHashes, cpCpHash)
+			break
+		}
+	}
+
+	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), cpCpHash)
+	for h := range cpCpAncestors {
+		if _, ok := ancestors[h]; ok {
+			delete(ancestors, h)
+		}
+	}
 
 	log.Info("VALIDATION TIME",
 		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
 		"fn:", "CollectAncestorsAftCpByTips",
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
+		"ancestors", len(ancestors),
+		"cpCpAncestors", len(cpCpAncestors),
 	)
 
 	//check is block's chain synced and does not content rejected blocks
@@ -2761,6 +2780,13 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 		)
 		return false
 	}
+	isCpInParents := false
+	for _, ph := range block.ParentHashes() {
+		if block.CpHash() == ph {
+			isCpInParents = true
+		}
+	}
+
 	// check accordance to parent checkpoints
 	for _, ph := range block.ParentHashes() {
 		parBdag := bc.GetBlockDag(ph)
@@ -2778,9 +2804,13 @@ func (bc *BlockChain) verifyCheckpoint(block *types.Block) bool {
 			)
 			return false
 		}
+		//todo check common cp for parent and cp
+		if isCpInParents && parBdag.Slot == cpHeader.Slot {
+			continue
+		}
 		// otherwise block cp must be in past of parent and greater parent cp
 		// or be same.
-		if !parBdag.OrderedAncestorsHashes.Has(block.CpHash()) && ph != block.CpHash() {
+		if !parBdag.OrderedAncestorsHashes.Has(block.CpHash()) {
 			log.Warn("Block verification: cp not found in range from parent cp",
 				"parent.Hash", ph.Hex(),
 				"range", parBdag.OrderedAncestorsHashes,
