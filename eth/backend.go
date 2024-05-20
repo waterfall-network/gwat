@@ -267,10 +267,15 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			fixEra := eraInfo.GetEra()
 			fixEra.Root = correctRoot
 			eth.blockchain.SetNewEraInfo(*fixEra)
-			if eraInfo.Number() == 7800 {
+			if eraInfo.Number() == 7799 {
 				log.Info("Fix era: correct root 2222")
+				era7800 := era.NewEra(7800, 126288, 126319, correctRoot)
+				rawdb.WriteEra(chainDb, era7800.Number, *era7800)
+			}
+			if eraInfo.Number() == 7800 {
+				log.Info("Fix era: correct root 3333")
 				era7801 := era.NewEra(7801, 126320, 126351, correctRoot)
-				rawdb.WriteEra(chainDb, upEra.Number, *era7801)
+				rawdb.WriteEra(chainDb, era7801.Number, *era7801)
 			}
 		}
 	}
