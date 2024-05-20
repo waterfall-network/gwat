@@ -2345,6 +2345,9 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 			delete(ancestors, h)
 		}
 	}
+	if cpCpHash != block.CpHash() {
+		delete(ancestors, block.CpHash())
+	}
 
 	log.Info("VALIDATION TIME",
 		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
