@@ -5051,7 +5051,17 @@ func (bc *BlockChain) IsHibernateSlot(header *types.Header) (bool, error) {
 		bdag.OrderedAncestorsHashes = bdag.OrderedAncestorsHashes.Difference(common.HashArray{bc.Genesis().Hash()})
 		tmpTips.Add(bdag)
 	}
-	dagChainHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, header.CpHash)
+
+	//for case if finalized tip is current cp
+	cpCpHash := header.CpHash
+	for _, tip := range tmpTips {
+		if tip.Hash == header.CpHash {
+			cpCpHash = tip.CpHash
+			break
+		}
+	}
+
+	dagChainHashes, err := bc.CollectAncestorsHashesByTips(tmpTips, cpCpHash)
 	if err != nil {
 		return false, err
 	}
@@ -5060,6 +5070,9 @@ func (bc *BlockChain) IsHibernateSlot(header *types.Header) (bool, error) {
 	for _, hdr := range ancMap {
 		if hdr == nil {
 			return false, ErrInsertUncompletedDag
+		}
+		if hdr.Slot < cpHdr.Slot || hdr.Hash() == cpHdr.Hash() {
+			continue
 		}
 		slotsMap[hdr.Slot] = true
 	}
