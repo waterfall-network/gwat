@@ -4535,7 +4535,29 @@ func (bc *BlockChain) DagMuUnlock() {
 
 func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *era.Era {
 	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
+
+	// todo check nextEra.Root != root (in fork)
 	if nextEra != nil {
+
+		//TODO RM !!! TMP test for tn8
+		if bc.Genesis().Hash() == params.Testnet8GenesisHash {
+			if nextEra.Number == 7800 || nextEra.Number == 7801 {
+				cprrectRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+				if nextEra.Root != cprrectRoot {
+					nextEra.Root = cprrectRoot
+					rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
+					log.Info("######### if nextEra != nil EnterNextEra: correct root",
+						"num", nextEra.Number,
+						"begin", nextEra.From,
+						"end", nextEra.To,
+						"root", nextEra.Root,
+						"currSlot", bc.GetSlotInfo().CurrentSlot(),
+						"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+					)
+				}
+			}
+		}
+
 		rawdb.WriteCurrentEra(bc.db, nextEra.Number)
 		log.Info("######### if nextEra != nil EnterNextEra",
 			"num", nextEra.Number,
@@ -4552,6 +4574,21 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 	transitionSlot, err := bc.GetSlotInfo().SlotOfEpochStart(nextEraEpochFrom - bc.Config().TransitionPeriod)
 	if err != nil {
 		log.Error("Next era: calculate transition slot failed", "err", err)
+	}
+
+	//TODO RM !!! TMP test for tn8
+	if bc.Genesis().Hash() == params.Testnet8GenesisHash {
+		if bc.eraInfo.Number()+1 == 7800 || bc.eraInfo.Number()+1 == 7801 {
+			root = common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+			log.Info("######### if nextEra != nil EnterNextEra: correct root 1111",
+				"num", nextEra.Number,
+				"begin", nextEra.From,
+				"end", nextEra.To,
+				"root", nextEra.Root,
+				"currSlot", bc.GetSlotInfo().CurrentSlot(),
+				"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
+			)
+		}
 	}
 
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, transitionSlot, true, false, "EnterNextEra")
@@ -4588,6 +4625,13 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot comm
 			panic("StartTransitionPeriod slot of epoch start error")
 		}
 
+		//TODO RM !!! TMP test for tn8
+		if bc.Genesis().Hash() == params.Testnet8GenesisHash {
+			if bc.eraInfo.Number()+1 == 7800 || bc.eraInfo.Number()+1 == 7801 {
+				spineRoot = common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+			}
+		}
+
 		validators, _ := bc.ValidatorStorage().GetValidators(bc, cpEpochSlot, true, false, "StartTransitionPeriod")
 		nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
 
@@ -4595,6 +4639,26 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot comm
 
 		log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
 	} else {
+		//TODO RM !!! TMP test for tn8
+		if bc.Genesis().Hash() == params.Testnet8GenesisHash {
+			if nextEra.Number == 7800 || nextEra.Number == 7801 {
+				correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+				if nextEra.Root != correctRoot {
+					nextEra.Root = correctRoot
+					rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
+
+					log.Info("######## HandleEra transitionPeriod UPDATE root", "cpEpoch", cp.Epoch,
+						"cpFinEpoch", cp.FinEpoch,
+						"curEpoch", bc.GetSlotInfo().SlotInEpoch(bc.GetSlotInfo().CurrentSlot()),
+						"curSlot", bc.GetSlotInfo().CurrentSlot(),
+						"bc.GetEraInfo().ToEpoch", bc.GetEraInfo().ToEpoch(),
+						"bc.GetEraInfo().FromEpoch", bc.GetEraInfo().FromEpoch(),
+						"bc.GetEraInfo().Number", bc.GetEraInfo().Number(),
+					)
+
+				}
+			}
+		}
 		log.Info("######## HandleEra transitionPeriod skipped already done", "cpEpoch", cp.Epoch,
 			"cpFinEpoch", cp.FinEpoch,
 			"curEpoch", bc.GetSlotInfo().SlotInEpoch(bc.GetSlotInfo().CurrentSlot()),
