@@ -463,6 +463,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			fixEra := eraInfo.GetEra()
 			fixEra.Root = correctRoot
 			bc.eraInfo = era.NewEraInfo(*fixEra)
+			if eraInfo.Number() == 7800 {
+				era7801 := era.NewEra(7801, 126320, 126351, correctRoot)
+				rawdb.WriteEra(bc.db, upEra.Number, *era7801)
+			}
 		}
 	}
 
