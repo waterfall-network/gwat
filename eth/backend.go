@@ -52,6 +52,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rpc"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/token"
 	val "gitlab.waterfall.network/waterfall/protocol/gwat/validator"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -232,6 +233,46 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	currentEraNumber := rawdb.ReadCurrentEra(chainDb)
 	if eraInfo := rawdb.ReadEra(chainDb, currentEraNumber); eraInfo != nil {
 		eth.blockchain.SetNewEraInfo(*eraInfo)
+	}
+
+	//TODO RM !!! TMP test for tn8
+	if eth.blockchain.Genesis().Hash() == params.Testnet8GenesisHash {
+		log.Info("Fix era: correct root 0000")
+		correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+		upEra := rawdb.ReadEra(chainDb, 7800)
+		if upEra != nil {
+			upEra.Root = correctRoot
+			rawdb.WriteEra(chainDb, upEra.Number, *upEra)
+			log.Info("Fix era: correct root 7800",
+				"num", upEra.Number,
+				"begin", upEra.From,
+				"end", upEra.To,
+				"root", upEra.Root,
+			)
+		}
+		upEra = rawdb.ReadEra(chainDb, 7801)
+		if upEra != nil {
+			upEra.Root = correctRoot
+			rawdb.WriteEra(chainDb, upEra.Number, *upEra)
+			log.Info("Fix era: correct root 7801",
+				"num", upEra.Number,
+				"begin", upEra.From,
+				"end", upEra.To,
+				"root", upEra.Root,
+			)
+		}
+		eraInfo := eth.blockchain.GetEraInfo()
+		if eraInfo != nil && eraInfo.GetEra() != nil && (eraInfo.Number() == 7800 || eraInfo.Number() == 7801) {
+			log.Info("Fix era: correct root 1111")
+			fixEra := eraInfo.GetEra()
+			fixEra.Root = correctRoot
+			eth.blockchain.SetNewEraInfo(*fixEra)
+			if eraInfo.Number() == 7800 {
+				log.Info("Fix era: correct root 2222")
+				era7801 := era.NewEra(7801, 126320, 126351, correctRoot)
+				rawdb.WriteEra(chainDb, upEra.Number, *era7801)
+			}
+		}
 	}
 
 	go eth.dag.StartWork()

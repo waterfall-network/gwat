@@ -431,45 +431,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	bc.notProcValSyncOps = bc.GetNotProcessedValidatorSyncData()
 
-	//TODO RM !!! TMP test for tn8
-	if bc.Genesis().Hash() == params.Testnet8GenesisHash {
-		log.Info("Fix era: correct root 0000")
-
-		correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
-		upEra := rawdb.ReadEra(bc.db, 7800)
-		if upEra != nil {
-			upEra.Root = correctRoot
-			rawdb.WriteEra(bc.db, upEra.Number, *upEra)
-			log.Info("Fix era: correct root 7800",
-				"num", upEra.Number,
-				"begin", upEra.From,
-				"end", upEra.To,
-				"root", upEra.Root,
-			)
-		}
-		upEra = rawdb.ReadEra(bc.db, 7801)
-		if upEra != nil {
-			upEra.Root = correctRoot
-			rawdb.WriteEra(bc.db, upEra.Number, *upEra)
-			log.Info("Fix era: correct root 7801",
-				"num", upEra.Number,
-				"begin", upEra.From,
-				"end", upEra.To,
-				"root", upEra.Root,
-			)
-		}
-		eraInfo := bc.GetEraInfo()
-		if eraInfo != nil && eraInfo.GetEra() != nil && (eraInfo.Number() == 7800 || eraInfo.Number() == 7801) {
-			fixEra := eraInfo.GetEra()
-			fixEra.Root = correctRoot
-			bc.eraInfo = era.NewEraInfo(*fixEra)
-			if eraInfo.Number() == 7800 {
-				era7801 := era.NewEra(7801, 126320, 126351, correctRoot)
-				rawdb.WriteEra(bc.db, upEra.Number, *era7801)
-			}
-		}
-	}
-
 	return bc, nil
 }
 
