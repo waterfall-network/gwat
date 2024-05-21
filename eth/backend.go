@@ -275,7 +275,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	}
 	// fixes era for testnet8
-	eth.blockchain.TestNet8FixEraOnInit()
+	eth.blockchain.FixEra(nil, true, "eth/backend.New")
 
 	go eth.dag.StartWork()
 

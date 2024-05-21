@@ -4538,7 +4538,7 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 
 	// todo check nextEra.Root != root (in fork)
 	if nextEra != nil {
-		bc.TestNet8FixEra(nextEra, true, "EnterNextEra_0")
+		bc.FixEra(nextEra, true, "EnterNextEra_0")
 		rawdb.WriteCurrentEra(bc.db, nextEra.Number)
 		log.Info("######### if nextEra != nil EnterNextEra",
 			"num", nextEra.Number,
@@ -4559,7 +4559,7 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, transitionSlot, true, false, "EnterNextEra")
 	nextEra = era.NextEra(bc, root, uint64(len(validators)))
-	bc.TestNet8FixEra(nextEra, false, "EnterNextEra_1")
+	bc.FixEra(nextEra, false, "EnterNextEra_1")
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
 	log.Info("######### if nextEra == nil EnterNextEra",
@@ -4594,12 +4594,12 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot comm
 
 		validators, _ := bc.ValidatorStorage().GetValidators(bc, cpEpochSlot, true, false, "StartTransitionPeriod")
 		nextEra = era.NextEra(bc, spineRoot, uint64(len(validators)))
-		bc.TestNet8FixEra(nextEra, false, "StartTransitionPeriod_0")
+		bc.FixEra(nextEra, false, "StartTransitionPeriod_0")
 		rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 
 		log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
 	} else {
-		bc.TestNet8FixEra(nextEra, true, "StartTransitionPeriod_1")
+		bc.FixEra(nextEra, true, "StartTransitionPeriod_1")
 		log.Info("######## HandleEra transitionPeriod skipped already done", "cpEpoch", cp.Epoch,
 			"cpFinEpoch", cp.FinEpoch,
 			"curEpoch", bc.GetSlotInfo().SlotInEpoch(bc.GetSlotInfo().CurrentSlot()),
@@ -5225,6 +5225,18 @@ func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error)
 
 func (bc *BlockChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint64) {
 	bc.hc.SetLastFinalisedHeader(head, lastFinNr)
+}
+
+// FixEra fixes era data.
+func (bc BlockChain) FixEra(ptrEra *era.Era, save bool, byFn string) {
+	//testnet8
+	if bc.Genesis().Hash() == params.Testnet8GenesisHash {
+		if byFn == "eth/backend.New" {
+			bc.TestNet8FixEraOnInit()
+			return
+		}
+		bc.TestNet8FixEra(ptrEra, save, byFn)
+	}
 }
 
 // TestNet8FixEraOnInit fixes era data for testnet8.
