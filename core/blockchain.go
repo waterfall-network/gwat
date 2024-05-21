@@ -552,7 +552,7 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 		rawdb.WriteCoordinatedCheckpoint(batch, cp)
 		bc.checkpointCache.Add(cp.Spine, cp)
 	}
-	//update current cp and apoch data.
+	//update current cp and epoch data.
 	currCp := bc.GetLastCoordinatedCheckpoint()
 	if currCp == nil || cp.Root != currCp.Root || cp.FinEpoch != currCp.FinEpoch {
 		bc.lastCoordinatedCp.Store(cp.Copy())
@@ -4538,24 +4538,7 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 
 	// todo check nextEra.Root != root (in fork)
 	if nextEra != nil {
-
-		//TODO RM !!! TMP test for tn8
-		if bc.Genesis().Hash() == params.Testnet8GenesisHash {
-			if nextEra.Number == 7800 || nextEra.Number == 7801 {
-				correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
-				if nextEra.Root != correctRoot {
-					nextEra.Root = correctRoot
-					rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
-					log.Info("######### if nextEra != nil EnterNextEra: correct root",
-						"num", nextEra.Number,
-						"begin", nextEra.From,
-						"end", nextEra.To,
-						"root", nextEra.Root,
-					)
-				}
-			}
-		}
-
+		bc.TestNet8FixEra(nextEra, true, "EnterNextEra_0")
 		rawdb.WriteCurrentEra(bc.db, nextEra.Number)
 		log.Info("######### if nextEra != nil EnterNextEra",
 			"num", nextEra.Number,
@@ -4574,21 +4557,9 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 		log.Error("Next era: calculate transition slot failed", "err", err)
 	}
 
-	//TODO RM !!! TMP test for tn8
-	if bc.Genesis().Hash() == params.Testnet8GenesisHash {
-		if bc.eraInfo.Number()+1 == 7800 || bc.eraInfo.Number()+1 == 7801 {
-			root = common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
-			log.Info("######### if nextEra != nil EnterNextEra: correct root 1111",
-				"num", nextEra.Number,
-				"begin", nextEra.From,
-				"end", nextEra.To,
-				"root", nextEra.Root,
-			)
-		}
-	}
-
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, transitionSlot, true, false, "EnterNextEra")
 	nextEra = era.NextEra(bc, root, uint64(len(validators)))
+	bc.TestNet8FixEra(nextEra, false, "EnterNextEra_1")
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
 	log.Info("######### if nextEra == nil EnterNextEra",
@@ -4621,34 +4592,14 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot comm
 			panic("StartTransitionPeriod slot of epoch start error")
 		}
 
-		//TODO RM !!! TMP test for tn8
-		if bc.Genesis().Hash() == params.Testnet8GenesisHash {
-			if bc.eraInfo.Number()+1 == 7800 || bc.eraInfo.Number()+1 == 7801 {
-				spineRoot = common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
-			}
-		}
-
 		validators, _ := bc.ValidatorStorage().GetValidators(bc, cpEpochSlot, true, false, "StartTransitionPeriod")
-		nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
-
+		nextEra = era.NextEra(bc, spineRoot, uint64(len(validators)))
+		bc.TestNet8FixEra(nextEra, false, "StartTransitionPeriod_0")
 		rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 
 		log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
 	} else {
-		//TODO RM !!! TMP test for tn8
-		if bc.Genesis().Hash() == params.Testnet8GenesisHash {
-			if nextEra.Number == 7800 || nextEra.Number == 7801 {
-				correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
-				if nextEra.Root != correctRoot {
-					nextEra.Root = correctRoot
-					rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
-
-					log.Info("######## HandleEra transitionPeriod UPDATE root", "cpEpoch", cp.Epoch,
-						"cpFinEpoch", cp.FinEpoch,
-					)
-				}
-			}
-		}
+		bc.TestNet8FixEra(nextEra, true, "StartTransitionPeriod_1")
 		log.Info("######## HandleEra transitionPeriod skipped already done", "cpEpoch", cp.Epoch,
 			"cpFinEpoch", cp.FinEpoch,
 			"curEpoch", bc.GetSlotInfo().SlotInEpoch(bc.GetSlotInfo().CurrentSlot()),
@@ -5274,4 +5225,77 @@ func (bc *BlockChain) verifyHibernateModeBlock(block *types.Block) (bool, error)
 
 func (bc *BlockChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint64) {
 	bc.hc.SetLastFinalisedHeader(head, lastFinNr)
+}
+
+// TestNet8FixEraOnInit fixes era data for testnet8.
+func (bc BlockChain) TestNet8FixEraOnInit() {
+	if bc.Genesis().Hash() != params.Testnet8GenesisHash {
+		return
+	}
+	eraInfo := bc.GetEraInfo()
+	if eraInfo == nil && eraInfo.GetEra() == nil {
+		return
+	}
+	correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+	if eraInfo.Number() == 7800 || eraInfo.Number() == 7801 {
+		log.Info("Testnet8 fix era: update era info")
+		fixEra := eraInfo.GetEra()
+		fixEra.Root = correctRoot
+		bc.SetNewEraInfo(*fixEra)
+		if eraInfo.Number() == 7799 {
+			log.Info("Testnet8 fix era: save correct era 7800")
+			era7800 := era.NewEra(7800, 126288, 126319, correctRoot)
+			rawdb.WriteEra(bc.db, era7800.Number, *era7800)
+		}
+		if eraInfo.Number() == 7800 {
+			log.Info("Testnet8 fix era: save correct era 7801")
+			era7801 := era.NewEra(7801, 126320, 126351, correctRoot)
+			rawdb.WriteEra(bc.db, era7801.Number, *era7801)
+		}
+	}
+	upEra := rawdb.ReadEra(bc.db, 7800)
+	if upEra != nil && upEra.Root != correctRoot {
+		upEra.Root = correctRoot
+		rawdb.WriteEra(bc.db, upEra.Number, *upEra)
+		log.Info("Testnet8 fix era: correct root of era 7800",
+			"num", upEra.Number,
+			"begin", upEra.From,
+			"end", upEra.To,
+			"root", upEra.Root,
+		)
+	}
+	upEra = rawdb.ReadEra(bc.db, 7801)
+	if upEra != nil && upEra.Root != correctRoot {
+		upEra.Root = correctRoot
+		rawdb.WriteEra(bc.db, upEra.Number, *upEra)
+		log.Info("Testnet8 fix era: correct root of era 7801",
+			"num", upEra.Number,
+			"begin", upEra.From,
+			"end", upEra.To,
+			"root", upEra.Root,
+		)
+	}
+}
+
+// TestNet8FixEra fixes era data for testnet8.
+func (bc BlockChain) TestNet8FixEra(ptrEra *era.Era, save bool, byFn string) {
+	if bc.Genesis().Hash() != params.Testnet8GenesisHash {
+		return
+	}
+	correctRoot := common.HexToHash("0x6a2119729696ae56975a8490e6e8a4a2ca12c7a15b6c0d3055d402fc47c756f1")
+	if ptrEra.Number == 7800 || ptrEra.Number == 7801 {
+		if ptrEra.Root != correctRoot {
+			ptrEra.Root = correctRoot
+			if save {
+				rawdb.WriteEra(bc.db, ptrEra.Number, *ptrEra)
+			}
+			log.Info("Testnet8 fix era: correct root of era",
+				"num", ptrEra.Number,
+				"begin", ptrEra.From,
+				"end", ptrEra.To,
+				"root", ptrEra.Root.Hex(),
+				"fn", byFn,
+			)
+		}
+	}
 }
