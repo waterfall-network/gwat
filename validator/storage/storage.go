@@ -178,11 +178,19 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddr
 	return nil, nil
 }
 
+// TODO RM
+var tmpCacheCreatorsBySlot []common.Address
+
 // GetCreatorsBySlot return shuffled validators addresses from cache.
 // Input parameters are list of uint64 (slot, subnet). Sequence is required!!!
 func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error) {
 	// TODO: improve this function for subnet supporting.
 	start := time.Now()
+
+	//TODO RM
+	if len(tmpCacheCreatorsBySlot) > 0 {
+		return tmpCacheCreatorsBySlot, nil
+	}
 
 	if len(filter) > 2 {
 		return nil, ErrInvalidValidatorsFilter
@@ -211,6 +219,14 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 	allValidators, _ := s.GetValidators(bc, slot, false, false, "GetCreatorsBySlot")
 	if len(allValidators) == 0 {
 		return nil, errNoValidators
+	}
+
+	//TODO RM
+	for i := 0; i < 5 && i < len(allValidators); i++ {
+		tmpCacheCreatorsBySlot = append(tmpCacheCreatorsBySlot, allValidators[i].Address)
+	}
+	if len(tmpCacheCreatorsBySlot) > 0 {
+		return tmpCacheCreatorsBySlot, nil
 	}
 
 	s.validatorsCache.addAllValidatorsByEpoch(epoch, allValidators)
