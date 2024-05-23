@@ -2218,7 +2218,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 
 	// Verify block slot
 	if !bc.verifyBlockSlot(block) {
-		return false, nil
+		return false, ErrFutureBlock
 	}
 
 	log.Info("VALIDATION TIME",
@@ -2990,6 +2990,10 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 			}
 
 			if ok, err := bc.VerifyBlock(block); !ok {
+				// skip insert future block
+				if err == ErrFutureBlock {
+					continue
+				}
 				if err != nil {
 					return it.index, err
 				}
