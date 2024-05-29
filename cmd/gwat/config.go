@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"os"
 	"reflect"
 	"unicode"
@@ -150,6 +151,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
+
+	// TODO: remove after light client is implemented
+	cfg.Eth.SyncMode = downloader.FullSync
 
 	return stack, cfg
 }
