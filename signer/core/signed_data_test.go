@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core/apitypes"
 	"os"
 	"path"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/signer/core/apitypes"
 )
 
 var typesStandard = apitypes.Types{
