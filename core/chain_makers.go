@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/consensus/misc"
@@ -30,6 +31,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/trie"
 )
 
@@ -47,6 +49,8 @@ type BlockGen struct {
 	receipts []*types.Receipt
 
 	config *params.ChainConfig
+
+	db ethdb.Database
 }
 
 // SetCoinbase sets the coinbase of the generated block.
@@ -76,7 +80,18 @@ func (b *BlockGen) SetExtra(data []byte) {
 // added. Notably, contract code relying on the BLOCKHASH instruction
 // will panic during execution.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
-	b.AddTxWithChain(nil, tx)
+	cacheConfig := &CacheConfig{
+		TrieCleanLimit:    256,
+		TrieDirtyLimit:    256,
+		TrieTimeLimit:     5 * time.Minute,
+		SnapshotLimit:     0,
+		TrieDirtyDisabled: true, // Archive mode
+	}
+	bc, err := NewBlockChain(b.db, cacheConfig, b.config, vm.Config{}, nil)
+	if err != nil {
+		log.Crit("Failed to create blockchain", "err", err)
+	}
+	b.AddTxWithChain(bc, tx)
 }
 
 // AddTxWithChain adds a transaction to the generated block. If no coinbase has
@@ -235,9 +250,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 	if config == nil {
 		config = params.TestChainConfig
 	}
+
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config}
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, db: db}
 		b.header = makeHeader(config, parent, statedb)
 		b.header.CpBaseFee = big.NewInt(1000)
 
@@ -324,4 +340,18 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 	header.BaseFee = misc.CalcSlotBaseFee(config, config.ValidatorsPerSlot, 64, 105000000)
 
 	return header
+}
+
+func GenDepositData(dataLen int) DepositData {
+	depositData := make(DepositData, 0)
+	for i := 0; i < dataLen; i++ {
+		valData := &ValidatorData{
+			Pubkey:            common.BytesToBlsPubKey(testutils.RandomData(96)).String(),
+			CreatorAddress:    common.BytesToAddress(testutils.RandomData(20)).String(),
+			WithdrawalAddress: common.BytesToAddress(testutils.RandomData(20)).String(),
+			Amount:            3200,
+		}
+		depositData = append(depositData, valData)
+	}
+	return depositData
 }
