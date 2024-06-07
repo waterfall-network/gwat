@@ -2005,7 +2005,7 @@ func TestGolangBindings(t *testing.T) {
 			}
 		`, tt.imports, tt.name, tt.tester)
 
-			if err := ioutil.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
 				t.Fatalf("test %d: failed to write tests: %v", i, err)
 			}
 		})
