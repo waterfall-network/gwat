@@ -78,6 +78,7 @@ type BlockContext struct {
 	BaseFee     *big.Int       // Provides information for BASEFEE
 	Slot        uint64
 	Era         uint64
+	Random      *common.Hash // Provides information for PREVRANDAO
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -433,6 +434,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, AccountRef(address), value, gas)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
+	contract.IsDeployment = true
 
 	if evm.Config.Debug {
 		if evm.depth == 0 {

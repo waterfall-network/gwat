@@ -359,6 +359,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
+	IsMerge, IsShanghai                                     bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -379,5 +380,7 @@ func (c *ChainConfig) Rules() Rules {
 		IsIstanbul:       true,
 		IsBerlin:         true,
 		IsLondon:         true,
+		IsMerge:          true,
+		IsShanghai:       true,
 	}
 }

@@ -70,6 +70,10 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	if cfg.JumpTable == nil {
 		switch {
+		case evm.chainRules.IsShanghai:
+			cfg.JumpTable = &shanghaiInstructionSet
+		case evm.chainRules.IsMerge:
+			cfg.JumpTable = &mergeInstructionSet
 		case evm.chainRules.IsLondon:
 			cfg.JumpTable = &londonInstructionSet
 		case evm.chainRules.IsBerlin:
@@ -90,13 +94,13 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 			cfg.JumpTable = &frontierInstructionSet
 		}
 		for i, eip := range cfg.ExtraEips {
-			copy := *cfg.JumpTable
-			if err := EnableEIP(eip, &copy); err != nil {
+			copy := copyJumpTable(cfg.JumpTable)
+			if err := EnableEIP(eip, copy); err != nil {
 				// Disable it, so caller can check if it's activated or not
 				cfg.ExtraEips = append(cfg.ExtraEips[:i], cfg.ExtraEips[i+1:]...)
 				log.Error("EIP activation failed", "eip", eip, "error", err)
 			}
-			cfg.JumpTable = &copy
+			cfg.JumpTable = copy
 		}
 	}
 

@@ -172,11 +172,7 @@ func opByte(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 
 func opAddmod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y, z := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.peek()
-	if z.IsZero() {
-		z.Clear()
-	} else {
-		z.AddMod(&x, &y, z)
-	}
+	z.AddMod(&x, &y, z)
 	return nil, nil
 }
 
@@ -249,10 +245,10 @@ func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if evm.Config.EnablePreimageRecording {
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
-
 	size.SetBytes(interpreter.hasherBuf[:])
 	return nil, nil
 }
+
 func opAddress(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Address().Bytes()))
 	return nil, nil
@@ -269,6 +265,7 @@ func opOrigin(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	scope.Stack.push(new(uint256.Int).SetBytes(interpreter.evm.Origin.Bytes()))
 	return nil, nil
 }
+
 func opCaller(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Caller().Bytes()))
 	return nil, nil
@@ -348,9 +345,7 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 }
 
 func opCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	l := new(uint256.Int)
-	l.SetUint64(uint64(len(scope.Contract.Code)))
-	scope.Stack.push(l)
+	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(scope.Contract.Code))))
 	return nil, nil
 }
 
@@ -364,6 +359,7 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	if overflow {
 		uint64CodeOffset = 0xffffffffffffffff
 	}
+
 	codeCopy := getData(scope.Contract.Code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
@@ -393,35 +389,28 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // There are several cases when the function is called, while we can relay everything
 // to `state.GetCodeHash` function to ensure the correctness.
 //
-//	(1) Caller tries to get the code hash of a normal contract account, state
+//  1. Caller tries to get the code hash of a normal contract account, state
+//     should return the relative code hash and set it as the result.
 //
-// should return the relative code hash and set it as the result.
+//  2. Caller tries to get the code hash of a non-existent account, state should
+//     return common.Hash{} and zero will be set as the result.
 //
-//	(2) Caller tries to get the code hash of a non-existent account, state should
+//  3. Caller tries to get the code hash for an account without contract code, state
+//     should return emptyCodeHash(0xc5d246...) as the result.
 //
-// return common.Hash{} and zero will be set as the result.
+//  4. Caller tries to get the code hash of a precompiled account, the result should be
+//     zero or emptyCodeHash.
 //
-//	(3) Caller tries to get the code hash for an account without contract code,
-//
-// state should return emptyCodeHash(0xc5d246...) as the result.
-//
-//	(4) Caller tries to get the code hash of a precompiled account, the result
-//
-// should be zero or emptyCodeHash.
-//
-// It is worth noting that in order to avoid unnecessary create and clean,
-// all precompile accounts on mainnet have been transferred 1 wei, so the return
-// here should be emptyCodeHash.
-// If the precompile account is not transferred any amount on a private or
+// It is worth noting that in order to avoid unnecessary create and clean, all precompile
+// accounts on mainnet have been transferred 1 wei, so the return here should be
+// emptyCodeHash. If the precompile account is not transferred any amount on a private or
 // customized chain, the return value will be zero.
 //
-//	(5) Caller tries to get the code hash for an account which is marked as suicided
+//  5. Caller tries to get the code hash for an account which is marked as self-destructed
+//     in the current transaction, the code hash of this account should be returned.
 //
-// in the current transaction, the code hash of this account should be returned.
-//
-//	(6) Caller tries to get the code hash for an account which is marked as deleted,
-//
-// this account should be regarded as a non-existent account and zero should be returned.
+//  6. Caller tries to get the code hash for an account which is marked as deleted, this
+//     account should be regarded as a non-existent account and zero should be returned.
 func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
@@ -446,12 +435,9 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		num.Clear()
 		return nil, nil
 	}
+
 	var upper, lower uint64
-	if interpreter.evm.Context.BlockNumber != nil && interpreter.evm.Context.BlockNumber.Uint64() > 0 {
-		upper = interpreter.evm.Context.BlockNumber.Uint64()
-	} else if interpreter.evm.Context.BlockHeight != nil {
-		upper = interpreter.evm.Context.BlockHeight.Uint64()
-	}
+	upper = interpreter.evm.Context.BlockNumber.Uint64()
 	if upper < 257 {
 		lower = 0
 	} else {
@@ -484,6 +470,12 @@ func opNumber(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 
 func opDifficulty(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v, _ := uint256.FromBig(interpreter.evm.Context.Difficulty)
+	scope.Stack.push(v)
+	return nil, nil
+}
+
+func opRandom(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	v := new(uint256.Int).SetBytes(interpreter.evm.Context.Random.Bytes())
 	scope.Stack.push(v)
 	return nil, nil
 }
@@ -828,18 +820,24 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	return nil, errStopToken
 }
 
-func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
 	}
 	beneficiary := scope.Stack.pop()
 	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance)
-	interpreter.evm.StateDB.Suicide(scope.Contract.Address())
-	if interpreter.cfg.Debug {
-		interpreter.cfg.Tracer.CaptureEnter(SELFDESTRUCT, scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
-		interpreter.cfg.Tracer.CaptureExit([]byte{}, 0, nil)
+	return nil, errStopToken
+}
+
+func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
 	}
+	beneficiary := scope.Stack.pop()
+	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
+	interpreter.evm.StateDB.SubBalance(scope.Contract.Address(), balance)
+	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance)
 	return nil, errStopToken
 }
 
@@ -860,19 +858,13 @@ func makeLog(size int) executionFunc {
 		}
 
 		d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
-		//blockNumber := uint64(0)
-		//if interpreter.evm.Context.BlockNumber != nil && interpreter.evm.Context.BlockNumber.Cmp(big0) > 0 {
-		//	blockNumber = interpreter.evm.Context.BlockNumber.Uint64()
-		//} else {
-		//	blockNumber = interpreter.evm.Context.BlockHeight.Uint64()
-		//}
 		interpreter.evm.StateDB.AddLog(&types.Log{
 			Address: scope.Contract.Address(),
 			Topics:  topics,
 			Data:    d,
-			//// This is a non-consensus field, but assigned here because
-			//// core/state doesn't know the current block number.
-			//BlockNumber: blockNumber,
+			// This is a non-consensus field, but assigned here because
+			// core/state doesn't know the current block number.
+			BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
 		})
 
 		return nil, nil

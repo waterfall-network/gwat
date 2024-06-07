@@ -29,6 +29,7 @@ var (
 	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
 	ErrContractAddressCollision = errors.New("contract address collision")
 	ErrExecutionReverted        = errors.New("execution reverted")
+	ErrMaxInitCodeSizeExceeded  = errors.New("max initcode size exceeded")
 	ErrMaxCodeSizeExceeded      = errors.New("max code size exceeded")
 	ErrInvalidJump              = errors.New("invalid jump destination")
 	ErrWriteProtection          = errors.New("write protection")
@@ -68,4 +69,6 @@ type ErrInvalidOpCode struct {
 	opcode OpCode
 }
 
-func (e *ErrInvalidOpCode) Error() string { return fmt.Sprintf("invalid opcode: %s", e.opcode) }
+func (e *ErrInvalidOpCode) Error() string {
+	return fmt.Sprintf("invalid opcode: %s", e.opcode)
+}
