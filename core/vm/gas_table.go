@@ -19,6 +19,7 @@ package vm
 import (
 	"errors"
 	"fmt"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
