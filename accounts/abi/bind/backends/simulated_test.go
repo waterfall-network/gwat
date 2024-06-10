@@ -111,18 +111,18 @@ const deployedCode = `60806040526004361061003b576000357c010000000000000000000000
 // expected return value contains "hello world"
 var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
-func simTestBackend(testAddr common.Address) *SimulatedBackend {
+func simTestBackend(testAddr common.Address, gasLimit uint64) *SimulatedBackend {
 	return NewSimulatedBackend(
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(1000000000000000000)},
-		}, 10000000,
+		}, gasLimit,
 	)
 }
 
 func TestNewSimulatedBackend(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	expectedBal := big.NewInt(1000000000000000000)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 
 	if sim.config != params.AllEthashProtocolChanges {
@@ -159,7 +159,7 @@ func TestAdjustTime(t *testing.T) {
 
 func TestNewAdjustTimeFail(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 105000)
 
 	// Create tx and send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
@@ -202,7 +202,7 @@ func TestNewAdjustTimeFail(t *testing.T) {
 func TestBalanceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	expectedBal := big.NewInt(1000000000000000000)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -275,7 +275,7 @@ func TestBlockByNumber(t *testing.T) {
 func TestNonceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 105000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -328,7 +328,7 @@ func TestNonceAt(t *testing.T) {
 func TestSendTransaction(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 105000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -430,7 +430,7 @@ func TestEstimateGas(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10000000)
+	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10500000000)
 	defer sim.Close()
 
 	parsed, _ := abi.JSON(strings.NewReader(contractAbi))
@@ -624,7 +624,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 func TestHeaderByHash(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -645,7 +645,7 @@ func TestHeaderByHash(t *testing.T) {
 func TestHeaderByNumber(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -692,7 +692,7 @@ func TestHeaderByNumber(t *testing.T) {
 func TestTransactionCount(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 105000)
 	defer sim.Close()
 	bgCtx := context.Background()
 	currentBlock, err := sim.BlockByNumber(bgCtx, nil)
@@ -744,7 +744,7 @@ func TestTransactionCount(t *testing.T) {
 func TestTransactionInBlock(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 105000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -809,7 +809,7 @@ func TestTransactionInBlock(t *testing.T) {
 func TestPendingNonceAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 105000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -874,7 +874,7 @@ func TestPendingNonceAt(t *testing.T) {
 func TestTransactionReceipt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 105000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -923,7 +923,7 @@ func TestSuggestGasPrice(t *testing.T) {
 
 func TestPendingCodeAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	bgCtx := context.Background()
 	code, err := sim.CodeAt(bgCtx, testAddr, nil)
@@ -959,7 +959,7 @@ func TestPendingCodeAt(t *testing.T) {
 
 func TestCodeAt(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	bgCtx := context.Background()
 	code, err := sim.CodeAt(bgCtx, testAddr, nil)
@@ -999,7 +999,7 @@ func TestCodeAt(t *testing.T) {
 //	receipt{status=1 cgas=23949 bloom=00000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000040200000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 logs=[log: b6818c8064f645cd82d99b59a1a267d6d61117ef [75fd880d39c1daf53b6547ab6cb59451fc6452d27caa90e5b6649dd8293b9eed] 000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158 9ae378b6d4409eada347a5dc0c180f186cb62dc68fcc0f043425eb917335aa28 0 95d429d309bb9d753954195fe2d69bd140b4ae731b9b5b605c34323de162cf00 0]}
 func TestPendingAndCallContract(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -1083,7 +1083,7 @@ contract Reverter {
 }*/
 func TestCallContractRevert(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -1178,7 +1178,7 @@ func TestCallContractRevert(t *testing.T) {
 //     having a chain length of just n+1 means that a reorg occurred.
 func TestFork(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	// 1.
 	parent := sim.blockchain.GetLastFinalizedBlock()
@@ -1233,7 +1233,7 @@ const callableBin = "6080604052348015600f57600080fd5b5060998061001e6000396000f3f
 // 10. Check that the event was reborn.
 func TestForkLogsReborn(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 10500000000)
 	defer sim.Close()
 	// 1.
 	parsed, _ := abi.JSON(strings.NewReader(callableAbi))
@@ -1307,7 +1307,7 @@ func TestForkLogsReborn(t *testing.T) {
 //  6. Check that the TX is now included in block 2.
 func TestForkResendTx(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr, 105000)
 	defer sim.Close()
 	// 1.
 	parent := sim.blockchain.GetLastFinalizedBlock()

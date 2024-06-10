@@ -297,7 +297,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy an interaction tester contract and call a transaction on it
@@ -352,7 +352,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(100000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(100000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy a tuple tester contract and execute a structured call on it
@@ -398,7 +398,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy a tuple tester contract and execute a structured call on it
@@ -456,7 +456,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy a slice tester contract and execute a n array call on it
@@ -504,7 +504,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy a default method invoker contract and execute its default method
@@ -570,7 +570,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 		
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 		
 			// Deploy a structs method invoker contract and execute its default method
@@ -702,7 +702,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy a funky gas pattern contract
@@ -752,7 +752,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy a sender tester contract and execute a structured call on it
@@ -827,7 +827,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy a underscorer tester contract and execute a structured call on it
@@ -921,7 +921,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy an eventer contract
@@ -1111,7 +1111,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			//deploy the test contract
@@ -1246,7 +1246,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			_, _, contract, err := DeployTuple(auth, sim)
@@ -1388,7 +1388,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			//deploy the test contract
@@ -1453,7 +1453,7 @@ var bindTests = []struct {
 		// Initialize test accounts
 		key, _ := crypto.GenerateKey()
 		auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-		sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 		defer sim.Close()
 
 		// deploy the test contract
@@ -1543,7 +1543,7 @@ var bindTests = []struct {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
 		// Deploy registrar contract
-		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 		defer sim.Close()
 
 		transactOpts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1605,7 +1605,7 @@ var bindTests = []struct {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
 		// Deploy registrar contract
-		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 		defer sim.Close()
 
 		transactOpts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1667,7 +1667,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 
 			// Deploy a tester contract and execute a structured call on it
@@ -1727,7 +1727,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			addr := crypto.PubkeyToAddress(key.PublicKey)
 	
-			sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000000000000)}}, 1000000)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			defer sim.Close()
 	
 			opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1815,7 +1815,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			)
 			defer sim.Close()
 	
@@ -1885,7 +1885,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000)
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10500000000)
 			)
 			defer sim.Close()
 	
@@ -1926,17 +1926,17 @@ var bindTests = []struct {
 		abi:      []string{`[{"inputs":[{"components":[{"internalType":"uint256","name":"field","type":"uint256"}],"internalType":"struct ConstructorWithStructParam.StructType","name":"st","type":"tuple"}],"stateMutability":"nonpayable","type":"constructor"}]`},
 		imports: `
 			"math/big"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind"
-			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
-			"github.com/ethereum/go-ethereum/crypto"
-			"github.com/ethereum/go-ethereum/eth/ethconfig"
+			"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi/bind"
+			"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/abi/bind/backends"
+			"gitlab.waterfall.network/waterfall/protocol/gwat/core"
+			"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+			"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 		`,
 		tester: `
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Creator.GasCeil)
 			)
 			defer sim.Close()
 			_, tx, _, err := DeployConstructorWithStructParam(user, sim, ConstructorWithStructParamStructType{Field: big.NewInt(42)})
