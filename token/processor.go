@@ -514,28 +514,28 @@ func (p *Processor) transferFrom(caller Ref, token common.Address, op operation.
 
 	switch op.Standard() {
 	case operation.StdWRC20:
-		err = p.wrc20SpendAllowance(storage, op.From(), caller.Address(), op.Value())
+		err = p.wrc20SpendAllowance(storage, from, caller.Address(), value)
 		if err != nil {
 			return nil, err
 		}
 
-		err := transfer(storage, from, to, value)
+		err = transfer(storage, from, to, value)
 		if err != nil {
 			return nil, err
 		}
 
-		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "value", value)
+		log.Info("Transfer token", "address", token, "from", from, "to", to, "value", value)
 
 		defer p.eventEmmiter.TransferWrc20(token, from, to, value)
-		defer p.eventEmmiter.ApprovalWrc20(token, from, common.Address{}, value)
+		defer p.eventEmmiter.ApprovalWrc20(token, from, caller.Address(), big.NewInt(0))
 	case operation.StdWRC721:
 		if err := p.wrc721TransferFrom(storage, caller, op); err != nil {
 			return nil, err
 		}
-		log.Info("Transfer token", "address", token, "from", op.From(), "to", op.To(), "tokenId", value)
+		log.Info("Transfer token", "address", token, "from", from, "to", to, "tokenId", value)
 
 		defer p.eventEmmiter.TransferWrc721(token, from, to, value)
-		defer p.eventEmmiter.ApprovalWrc721(token, from, common.Address{}, value)
+		defer p.eventEmmiter.ApprovalWrc721(token, from, caller.Address(), value)
 	}
 
 	storage.Flush()
@@ -1025,7 +1025,6 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		}
 
 		// check if token exist
-		var err error
 		transferFrom, err = readAddressFromMap(storage, OwnersField, tokenId.Bytes())
 		if err != nil {
 			return nil, err
@@ -1092,6 +1091,11 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info("Buy token", "token", token, "from", transferFrom, "to", transferTo, "value", transferValue, "payment", paymentValue)
+
+	defer p.eventEmmiter.TransferWrc20(token, transferFrom, transferTo, transferValue)
+	defer p.eventEmmiter.ApprovalWrc20(token, transferFrom, caller.Address(), paymentValue)
 
 	storage.Flush()
 	return token.Bytes(), nil
