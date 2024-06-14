@@ -44,8 +44,12 @@ func (bitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, 
 	// Unpack the result and clear temporaries.
 	x := new(big.Int).SetBytes(point[:32])
 	y := new(big.Int).SetBytes(point[32:])
-	clear(point)
-	clear(scalar)
+	for i := range point {
+		point[i] = 0
+	}
+	for i := range padded {
+		scalar[i] = 0
+	}
 	if res != 1 {
 		return nil, nil
 	}
