@@ -1006,8 +1006,6 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 		reminder := big.NewInt(0).Mod(value, cost.ToBig())
 		paymentValue.Sub(value, reminder)
 		transferValue.Div(paymentValue, cost.ToBig())
-
-		defer p.eventEmmiter.TransferWrc20(token, transferFrom, transferTo, transferValue)
 	case operation.StdWRC721:
 		tokenId, ok := op.TokenId()
 		if !ok {
@@ -1078,8 +1076,6 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 
 		transferValue.SetInt64(1)
 		paymentValue.Set(cost.ToBig())
-
-		defer p.eventEmmiter.TransferWrc721(token, transferFrom, transferTo, transferValue)
 	default:
 		return nil, ErrTokenOpStandardNotValid
 	}
@@ -1095,6 +1091,15 @@ func (p *Processor) buy(caller Ref, value *big.Int, token common.Address, op ope
 	}
 
 	log.Info("Buy token", "token", token, "from", transferFrom, "to", transferTo, "value", transferValue, "payment", paymentValue)
+
+	switch std {
+	case operation.StdWRC20:
+		defer p.eventEmmiter.TransferWrc20(token, transferFrom, transferTo, transferValue)
+	case operation.StdWRC721:
+		defer p.eventEmmiter.TransferWrc721(token, transferFrom, transferTo, transferValue)
+	default:
+		return nil, ErrTokenOpStandardNotValid
+	}
 
 	storage.Flush()
 	return token.Bytes(), nil
