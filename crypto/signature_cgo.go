@@ -23,8 +23,8 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto/secp256k1"
 )
 
 // Ecrecover returns the uncompressed public key that created the given signature.
