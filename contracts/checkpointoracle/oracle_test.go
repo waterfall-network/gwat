@@ -180,7 +180,7 @@ func TestCheckpointRegister(t *testing.T) {
 			accounts[0].addr: {Balance: big.NewInt(1000000000000000000)},
 			accounts[1].addr: {Balance: big.NewInt(1000000000000000000)},
 			accounts[2].addr: {Balance: big.NewInt(1000000000000000000)},
-		}, 10500000000,
+		}, 10000000,
 	)
 	defer contractBackend.Close()
 

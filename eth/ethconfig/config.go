@@ -67,7 +67,7 @@ var Defaults = Config{
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
 	Creator: creator.Config{
-		GasCeil:  10500000000,
+		GasCeil:  8000000,
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 1 * time.Second,
 	},

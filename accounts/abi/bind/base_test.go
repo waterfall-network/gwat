@@ -277,7 +277,7 @@ func TestTransactGasFee(t *testing.T) {
 	tx, err := bc.Transact(opts, "")
 	assert.Nil(err)
 	assert.Equal(big.NewInt(5), tx.GasTipCap())
-	assert.Equal(big.NewInt(5), tx.GasFeeCap())
+	assert.Equal(big.NewInt(205), tx.GasFeeCap())
 	assert.Nil(opts.GasTipCap)
 	assert.Nil(opts.GasFeeCap)
 	assert.True(mt.suggestGasTipCapCalled)
@@ -288,7 +288,7 @@ func TestTransactGasFee(t *testing.T) {
 	tx, err = bc.Transact(opts, "")
 	assert.Nil(err)
 	assert.Equal(big.NewInt(6), tx.GasTipCap())
-	assert.Equal(big.NewInt(6), tx.GasFeeCap())
+	assert.Equal(big.NewInt(206), tx.GasFeeCap())
 	assert.True(mt.suggestGasTipCapCalled)
 
 	// GasPrice
