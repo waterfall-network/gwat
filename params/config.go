@@ -224,6 +224,7 @@ type ChainConfig struct {
 	// Fork slots
 	ForkSlotSubNet1  uint64 `json:"forkSlotSubNet1,omitempty"`
 	ForkSlotDelegate uint64 `json:"forkSlotDelegate,omitempty"`
+	ForkSlotShanghai uint64 `json:"forkSlotShanghai,omitempty"`
 
 	// fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	AcceptCpRootOnFinEpoch map[common.Hash][]uint64 `json:"acceptCpRootOnFinEpoch"`
@@ -363,7 +364,7 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules() Rules {
+func (c *ChainConfig) Rules(slot uint64) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -380,7 +381,7 @@ func (c *ChainConfig) Rules() Rules {
 		IsIstanbul:       true,
 		IsBerlin:         true,
 		IsLondon:         true,
-		IsMerge:          true,
-		IsShanghai:       true,
+		IsMerge:          false,
+		IsShanghai:       c.ForkSlotShanghai <= slot,
 	}
 }
