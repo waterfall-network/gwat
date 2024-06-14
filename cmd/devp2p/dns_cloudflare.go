@@ -177,6 +177,7 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 		}
 		// Stale entry, nuke it.
 		log.Info(fmt.Sprintf("Deleting %s = %q", path, entry.Content))
+		deleted++
 		if err := c.DeleteDNSRecord(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), entry.ID); err != nil {
 			return fmt.Errorf("failed to delete %s: %v", path, err)
 		}
