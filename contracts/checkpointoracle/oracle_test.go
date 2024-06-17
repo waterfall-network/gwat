@@ -276,4 +276,67 @@ func TestCheckpointRegister(t *testing.T) {
 	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		return assert(0, emptyHash, big.NewInt(0))
 	}, "test un-multi-signature checkpoint registration")
+
+	// Test valid checkpoint registration
+	validateOperation(t, c, contractBackend, func() {
+		number, hash := getRecent()
+		v, r, s := collectSig(0, checkpoint0.Hash(), 2, nil)
+		c.SetCheckpoint(transactOpts, number, hash, checkpoint0.Hash(), 0, v, r, s)
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
+		if valid, recv := validateEvents(2, events); !valid {
+			return errors.New("receive incorrect number of events")
+		} else {
+			for i := 0; i < len(recv); i++ {
+				event := recv[i].Interface().(*contract.CheckpointOracleNewCheckpointVote)
+				if !assertSignature(contractAddr, event.Index, event.CheckpointHash, event.R, event.S, event.V, accounts[i].addr) {
+					return errors.New("recover signer failed")
+				}
+			}
+		}
+		number, _ := getRecent()
+		return assert(0, checkpoint0.Hash(), number.Add(number, big.NewInt(1)))
+	}, "test valid checkpoint registration")
+
+	distance := 3*sectionSize.Uint64() + processConfirms.Uint64() - contractBackend.Blockchain().GetLastFinalizedHeader().Nr()
+	insertEmptyBlocks(int(distance))
+
+	// Test uncontinuous checkpoint registration
+	validateOperation(t, c, contractBackend, func() {
+		number, hash := getRecent()
+		v, r, s := collectSig(2, checkpoint2.Hash(), 2, nil)
+		c.SetCheckpoint(transactOpts, number, hash, checkpoint2.Hash(), 2, v, r, s)
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
+		if valid, recv := validateEvents(2, events); !valid {
+			return errors.New("receive incorrect number of events")
+		} else {
+			for i := 0; i < len(recv); i++ {
+				event := recv[i].Interface().(*contract.CheckpointOracleNewCheckpointVote)
+				if !assertSignature(contractAddr, event.Index, event.CheckpointHash, event.R, event.S, event.V, accounts[i].addr) {
+					return errors.New("recover signer failed")
+				}
+			}
+		}
+		number, _ := getRecent()
+		return assert(2, checkpoint2.Hash(), number.Add(number, big.NewInt(1)))
+	}, "test uncontinuous checkpoint registration")
+
+	// Test old checkpoint registration
+	validateOperation(t, c, contractBackend, func() {
+		number, hash := getRecent()
+		v, r, s := collectSig(1, checkpoint1.Hash(), 2, nil)
+		c.SetCheckpoint(transactOpts, number, hash, checkpoint1.Hash(), 1, v, r, s)
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
+		number, _ := getRecent()
+		return assert(2, checkpoint2.Hash(), number)
+	}, "test uncontinuous checkpoint registration")
+
+	// Test stale checkpoint registration
+	validateOperation(t, c, contractBackend, func() {
+		number, hash := getRecent()
+		v, r, s := collectSig(2, checkpoint2.Hash(), 2, nil)
+		c.SetCheckpoint(transactOpts, number, hash, checkpoint2.Hash(), 2, v, r, s)
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
+		number, _ := getRecent()
+		return assert(2, checkpoint2.Hash(), number.Sub(number, big.NewInt(1)))
+	}, "test stale checkpoint registration")
 }

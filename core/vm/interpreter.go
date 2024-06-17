@@ -19,6 +19,7 @@ package vm
 import (
 	"errors"
 	"hash"
+	"sync/atomic"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
@@ -72,8 +73,6 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 		switch {
 		case evm.chainRules.IsShanghai:
 			cfg.JumpTable = &shanghaiInstructionSet
-		case evm.chainRules.IsMerge:
-			cfg.JumpTable = &mergeInstructionSet
 		case evm.chainRules.IsLondon:
 			cfg.JumpTable = &londonInstructionSet
 		case evm.chainRules.IsBerlin:
@@ -180,7 +179,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
+	steps := 0
 	for {
+		steps++
+		if steps%1000 == 0 && atomic.LoadInt32(&in.evm.abort) != 0 {
+			break
+		}
 		if in.cfg.Debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
@@ -198,6 +202,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		if !contract.UseGas(cost) {
+			log.Error("Run code out of gas (const)", "gas", contract.Gas, "cost", operation.constantGas, "pc", pc, "op", op, "op.val", uint8(op))
 			return nil, ErrOutOfGas
 		}
 
@@ -211,11 +216,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			if operation.memorySize != nil {
 				memSize, overflow := operation.memorySize(stack)
 				if overflow {
+					log.Error("Run code gas uint64 overflow (stack)", "contract.Gas", contract.Gas, "cost", operation.constantGas, "pc", pc, "op", op, "op.val", uint8(op))
 					return nil, ErrGasUintOverflow
 				}
 				// memory is expanded in words of 32 bytes. Gas
 				// is also calculated in words.
 				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+					log.Error("Run code gas uint64 overflow (memSize)", "contract.Gas", contract.Gas, "cost", operation.constantGas, "pc", pc, "op", op, "op.val", uint8(op))
 					return nil, ErrGasUintOverflow
 				}
 			}
@@ -225,9 +232,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
 			if err != nil || !contract.UseGas(dynamicCost) {
+				log.Error("Run code out of gas (dynamic)", "contract.Gas", contract.Gas, "cost", cost, "dynamicCost", dynamicCost, "pc", pc, "op", op, "op.val", uint8(op))
 				return nil, ErrOutOfGas
 			}
-
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}
