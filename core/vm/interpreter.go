@@ -18,10 +18,11 @@ package vm
 
 import (
 	"errors"
+	"hash"
+
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common/math"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
-	"hash"
 )
 
 // Config are the configuration options for the Interpreter
