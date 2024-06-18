@@ -281,26 +281,26 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
 		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
+		scope          = &ScopeContext{nil, stack, nil}
 		evmInterpreter = NewEVMInterpreter(env, env.Config)
 	)
 
 	env.interpreter = evmInterpreter
 	// convert args
-	byteArgs := make([][]byte, len(args))
+	intArgs := make([]*uint256.Int, len(args))
 	for i, arg := range args {
-		byteArgs[i] = common.Hex2Bytes(arg)
+		intArgs[i] = new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
 	}
 	pc := uint64(0)
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		for _, arg := range byteArgs {
-			a := new(uint256.Int)
-			a.SetBytes(arg)
-			stack.push(a)
+		for _, arg := range intArgs {
+			stack.push(arg)
 		}
-		op(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		op(&pc, evmInterpreter, scope)
 		stack.pop()
 	}
+	bench.StopTimer()
 }
 
 func BenchmarkOpAdd64(b *testing.B) {
@@ -523,12 +523,14 @@ func TestOpMstore(t *testing.T) {
 	mem.Resize(64)
 	pc := uint64(0)
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
-	stack.pushN(*new(uint256.Int).SetBytes(common.Hex2Bytes(v)), *new(uint256.Int))
+	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
+	stack.push(new(uint256.Int))
 	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
-	stack.pushN(*new(uint256.Int).SetUint64(0x1), *new(uint256.Int))
+	stack.push(new(uint256.Int).SetUint64(0x1))
+	stack.push(new(uint256.Int))
 	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
@@ -551,12 +553,13 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		stack.pushN(*value, *memStart)
+		stack.push(value)
+		stack.push(memStart)
 		opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
 
-func BenchmarkOpSHA3(bench *testing.B) {
+func BenchmarkOpKeccak256(bench *testing.B) {
 	var (
 		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
@@ -570,8 +573,9 @@ func BenchmarkOpSHA3(bench *testing.B) {
 
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		stack.pushN(*uint256.NewInt(32), *start)
-		opSha3(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
+		stack.push(uint256.NewInt(32))
+		stack.push(start)
+		opKeccak256(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
 

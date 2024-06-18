@@ -33,6 +33,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/tracers/logger"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/ethdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/ethapi"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -153,7 +154,7 @@ func (api *API) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber
 
 // TraceConfig holds extra parameters to trace functions.
 type TraceConfig struct {
-	*vm.LogConfig
+	*logger.Config
 	Tracer  *string
 	Timeout *string
 	Reexec  *uint64
@@ -162,7 +163,7 @@ type TraceConfig struct {
 // TraceCallConfig is the config for traceCall API. It holds one more
 // field to override the state for tracing.
 type TraceCallConfig struct {
-	*vm.LogConfig
+	*logger.Config
 	Tracer         *string
 	Timeout        *string
 	Reexec         *uint64
@@ -171,7 +172,7 @@ type TraceCallConfig struct {
 
 // StdTraceConfig holds extra parameters to standard-json trace functions.
 type StdTraceConfig struct {
-	vm.LogConfig
+	logger.Config
 	Reexec *uint64
 	TxHash common.Hash
 }
@@ -662,11 +663,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	}
 	// Retrieve the tracing configurations, or use default values
 	var (
-		logConfig vm.LogConfig
+		logConfig logger.Config
 		txHash    common.Hash
 	)
 	if config != nil {
-		logConfig = config.LogConfig
+		logConfig = config.Config
 		txHash = config.TxHash
 	}
 	logConfig.Debug = true
@@ -723,7 +724,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			writer = bufio.NewWriter(dump)
 			vmConf = vm.Config{
 				Debug:                   true,
-				Tracer:                  vm.NewJSONLogger(&logConfig, writer),
+				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
 				EnablePreimageRecording: true,
 			}
 		}
@@ -846,10 +847,10 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	var traceConfig *TraceConfig
 	if config != nil {
 		traceConfig = &TraceConfig{
-			LogConfig: config.LogConfig,
-			Tracer:    config.Tracer,
-			Timeout:   config.Timeout,
-			Reexec:    config.Reexec,
+			Config:  config.Config,
+			Tracer:  config.Tracer,
+			Timeout: config.Timeout,
+			Reexec:  config.Reexec,
 		}
 	}
 	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
@@ -861,7 +862,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
-		tracer    vm.Tracer
+		tracer    vm.EVMLogger
 		err       error
 		txContext = core.NewEVMTxContext(message)
 	)
@@ -883,16 +884,16 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		go func() {
 			<-deadlineCtx.Done()
 			if deadlineCtx.Err() == context.DeadlineExceeded {
-				tracer.(*Tracer).Stop(errors.New("execution timeout"))
+				tracer.(Tracer).Stop(errors.New("execution timeout"))
 			}
 		}()
 		defer cancel()
 
 	case config == nil:
-		tracer = vm.NewStructLogger(nil)
+		tracer = logger.NewStructLogger(nil)
 
 	default:
-		tracer = vm.NewStructLogger(config.LogConfig)
+		tracer = logger.NewStructLogger(config.Config)
 	}
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
@@ -909,7 +910,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 
 	// Depending on the tracer type, format and return the output.
 	switch tracer := tracer.(type) {
-	case *vm.StructLogger:
+	case *logger.StructLogger:
 		// If the result contains a revert reason, return it.
 		returnVal := fmt.Sprintf("%x", result.Return())
 		if len(result.Revert()) > 0 {
@@ -922,7 +923,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
 
-	case *Tracer:
+	case Tracer:
 		return tracer.GetResult()
 
 	default:

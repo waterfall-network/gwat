@@ -35,6 +35,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/tracers/logger"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests"
@@ -369,7 +370,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	}
 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false)
 	// Create the tracer, the EVM environment and run it
-	tracer := vm.NewStructLogger(&vm.LogConfig{
+	tracer := logger.NewStructLogger(&logger.Config{
 		Debug: false,
 		//DisableStorage: true,
 		//EnableMemory: false,

@@ -37,6 +37,31 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
+// This checks that the subscribed channel can be closed after Unsubscribe.
+// It is the reproducer for https://github.com/ethereum/go-ethereum/issues/22322
+func TestClientSubscriptionChannelClose(t *testing.T) {
+	var (
+		srv     = NewServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	srv.RegisterName("nftest", new(notificationTestService))
+	client, _ := Dial(wsURL)
+
+	for i := 0; i < 10; i++ {
+		ch := make(chan int, 10)
+		sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", maxClientSubscriptionBuffer-1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sub.Unsubscribe()
+		close(ch)
+	}
+}
+
 func TestClientRequest(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()
@@ -173,7 +198,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 			{Method: "bar"},
 			{Method: "baz"},
 		}
-		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancelFn := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancelFn()
 		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
 			t.Errorf("expected %q but got: %v", ErrBadResult, err)
@@ -482,31 +507,6 @@ func TestClientSubscriptionUnsubscribeServer(t *testing.T) {
 	}
 	if _, open := <-sub.Err(); open {
 		t.Fatal("subscription error channel not closed after unsubscribe")
-	}
-}
-
-// This checks that the subscribed channel can be closed after Unsubscribe.
-// It is the reproducer for https://github.com/ethereum/go-ethereum/issues/22322
-func TestClientSubscriptionChannelClose(t *testing.T) {
-	var (
-		srv     = NewServer()
-		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
-		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
-	)
-	defer srv.Stop()
-	defer httpsrv.Close()
-
-	srv.RegisterName("nftest", new(notificationTestService))
-	client, _ := Dial(wsURL)
-
-	for i := 0; i < 10; i++ {
-		ch := make(chan int, 10)
-		sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", maxClientSubscriptionBuffer-1, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		sub.Unsubscribe()
-		close(ch)
 	}
 }
 
