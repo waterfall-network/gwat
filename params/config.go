@@ -251,7 +251,7 @@ func (c *CliqueConfig) String() string {
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
-		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, AcceptCpRootOnFinEpoch: %v}",
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, ForkSlotShanghai: %v, AcceptCpRootOnFinEpoch: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
@@ -262,6 +262,7 @@ func (c *ChainConfig) String() string {
 		c.EffectiveBalance,
 		c.ForkSlotSubNet1,
 		c.ForkSlotDelegate,
+		c.ForkSlotShanghai,
 		c.AcceptCpRootOnFinEpoch,
 	)
 }
