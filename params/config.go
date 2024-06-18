@@ -66,7 +66,8 @@ var (
 		ValidatorsPerSlot:      5,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       2048,
+		ForkSlotDelegate:       0,
+		ForkSlotShanghai:       0,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -102,6 +103,7 @@ var (
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       2729920,
+		ForkSlotShanghai:       math.MaxUint64,
 		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
 	}
 
@@ -141,7 +143,8 @@ var (
 		ValidatorsPerSlot:      6,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       math.MaxUint64,
+		ForkSlotDelegate:       0,
+		ForkSlotShanghai:       0,
 	}
 
 	TestChainConfig = &ChainConfig{
@@ -154,7 +157,8 @@ var (
 		ValidatorsPerSlot:      6,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       math.MaxUint64,
+		ForkSlotDelegate:       0,
+		ForkSlotShanghai:       0,
 	}
 )
 

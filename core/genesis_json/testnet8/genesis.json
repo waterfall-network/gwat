@@ -9,6 +9,7 @@
     "effectiveBalance": 3200,
     "forkSlotSubNet1": 18446744073709551615,
     "forkSlotDelegate": 2729920,
+    "forkSlotShanghai": 18446744073709551615,
     "acceptCpRootOnFinEpoch": {
       "0xd76dd012c08baefd84750cf9752a6987dbc8ff4451069056cfd110e32250ed4a": [96176]
     }

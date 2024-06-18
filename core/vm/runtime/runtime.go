@@ -60,7 +60,8 @@ func setDefaults(cfg *Config) {
 			SlotsPerEpoch:    32,
 			EffectiveBalance: big.NewInt(3200),
 			ForkSlotSubNet1:  math.MaxUint64,
-			ForkSlotDelegate: math.MaxUint64,
+			ForkSlotDelegate: 0,
+			ForkSlotShanghai: 0,
 		}
 	}
 
