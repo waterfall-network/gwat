@@ -124,7 +124,7 @@ type Downloader struct {
 	syncPeersMutex      *sync.Mutex
 	syncPeerHashesMutex *sync.Mutex
 
-	syncPeers      map[string]syncPeerChans
+	syncPeers      map[string]*syncPeerChans
 	syncPeerHashes map[string]common.HashArray
 
 	// Cancellation and termination
@@ -258,7 +258,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		},
 		trackStateReq: make(chan *stateReq),
 
-		syncPeers:           make(map[string]syncPeerChans),
+		syncPeers:           make(map[string]*syncPeerChans),
 		syncPeerHashes:      make(map[string]common.HashArray),
 		syncPeerHashesMutex: new(sync.Mutex),
 		syncPeersMutex:      new(sync.Mutex),
@@ -375,8 +375,8 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	return nil
 }
 
-// SyncWithPeerByHashes download blocks ffrom remote peer by hashes.
-func (d *Downloader) SyncWithPeerByHashes(id string, hashes common.HashArray) error {
+// SyncUnloadedParents download blocks ffrom remote peer by hashes.
+func (d *Downloader) SyncUnloadedParents(id string, hashes common.HashArray) error {
 	var err error
 
 	defer func(start time.Time) {
@@ -700,20 +700,23 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	if bl, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
 		log.Error("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		if errors.Is(err, core.ErrInsertUncompletedDag) {
-			failedSlot := bl.Slot()
-			slotBlocks := blocksBySlot[failedSlot]
-			unParents := make(common.HashArray, 0, 32)
-			for _, b := range slotBlocks {
-				unParents = append(unParents, b.ParentHashes()...)
-			}
-			unParents.Deduplicate()
-			if len(unParents) > 0 {
-				log.Info("Sync of unknown dag blocks: recursive call",
-					"err", err,
-					"unloaded", unParents,
-				)
-				go d.SyncWithPeerByHashes(p.id, unParents)
-			}
+			go func() {
+				failedSlot := bl.Slot()
+				slotBlocks := blocksBySlot[failedSlot]
+				unParents := make(common.HashArray, 0, 32)
+				for _, b := range slotBlocks {
+					unParents = append(unParents, b.ParentHashes()...)
+				}
+				unParents.Deduplicate()
+				if len(unParents) > 0 {
+					log.Info("Sync of unknown dag blocks: recursive call",
+						"err", err,
+						"unloaded", unParents,
+					)
+					//recursive call
+					d.SyncUnloadedParents(p.id, unParents)
+				}
+			}()
 			return nil
 		}
 		return err
@@ -1649,7 +1652,7 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 						"unloaded", unParents,
 					)
 					//recursive call
-					d.SyncWithPeerByHashes(p.id, unParents)
+					d.SyncUnloadedParents(p.id, unParents)
 				}
 			}()
 			return nil
@@ -2060,7 +2063,7 @@ func (d *Downloader) getPeerSyncChans(peerId string) *syncPeerChans {
 	defer d.syncPeersMutex.Unlock()
 
 	if ch, ok := d.syncPeers[peerId]; ok {
-		return &ch
+		return ch
 	}
 	return nil
 }

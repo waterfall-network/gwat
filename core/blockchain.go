@@ -2345,9 +2345,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 
 	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), cpCpHash)
 	for h := range cpCpAncestors {
-		if _, ok := ancestors[h]; ok {
-			delete(ancestors, h)
-		}
+		delete(ancestors, h)
 	}
 	if cpCpHash != block.CpHash() {
 		delete(ancestors, block.CpHash())
@@ -5236,7 +5234,7 @@ func (bc *BlockChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint6
 }
 
 // FixEra fixes era data.
-func (bc BlockChain) FixEra(ptrEra *era.Era, save bool, byFn string) {
+func (bc *BlockChain) FixEra(ptrEra *era.Era, save bool, byFn string) {
 	//testnet8
 	if bc.Genesis().Hash() == params.Testnet8GenesisHash {
 		if byFn == "eth/backend.New" {
@@ -5248,7 +5246,7 @@ func (bc BlockChain) FixEra(ptrEra *era.Era, save bool, byFn string) {
 }
 
 // TestNet8FixEraOnInit fixes era data for testnet8.
-func (bc BlockChain) TestNet8FixEraOnInit() {
+func (bc *BlockChain) TestNet8FixEraOnInit() {
 	if bc.Genesis().Hash() != params.Testnet8GenesisHash {
 		return
 	}
@@ -5298,7 +5296,7 @@ func (bc BlockChain) TestNet8FixEraOnInit() {
 }
 
 // TestNet8FixEra fixes era data for testnet8.
-func (bc BlockChain) TestNet8FixEra(ptrEra *era.Era, save bool, byFn string) {
+func (bc *BlockChain) TestNet8FixEra(ptrEra *era.Era, save bool, byFn string) {
 	if bc.Genesis().Hash() != params.Testnet8GenesisHash {
 		return
 	}

@@ -101,8 +101,8 @@ type syncPeerChans struct {
 	procCount int
 }
 
-func initSyncPeerChans() syncPeerChans {
-	return syncPeerChans{
+func initSyncPeerChans() *syncPeerChans {
+	return &syncPeerChans{
 		dagCh:     make(chan dataPack, 1),
 		headerCh:  make(chan dataPack, 1),
 		bodyCh:    make(chan dataPack, 1),
@@ -110,42 +110,43 @@ func initSyncPeerChans() syncPeerChans {
 	}
 }
 
-func (p syncPeerChans) IncrProcCount() {
+func (p *syncPeerChans) IncrProcCount() {
 	p.procCount++
 }
-func (p syncPeerChans) DecrProcCount() {
+func (p *syncPeerChans) DecrProcCount() {
 	p.procCount--
 }
-func (p syncPeerChans) ProcCount() int {
+func (p *syncPeerChans) ProcCount() int {
 	return p.procCount
 }
 
-func (p syncPeerChans) Close() {
+func (p *syncPeerChans) Close() {
 	close(p.dagCh)
 	close(p.headerCh)
 	close(p.bodyCh)
 	close(p.receiptCh)
+	p.procCount = 0
 }
 
-func (p syncPeerChans) GetDagChan() chan dataPack {
+func (p *syncPeerChans) GetDagChan() chan dataPack {
 	if p.dagCh == nil {
 		p.dagCh = make(chan dataPack)
 	}
 	return p.dagCh
 }
-func (p syncPeerChans) GetHeaderChan() chan dataPack {
+func (p *syncPeerChans) GetHeaderChan() chan dataPack {
 	if p.headerCh == nil {
 		p.headerCh = make(chan dataPack)
 	}
 	return p.headerCh
 }
-func (p syncPeerChans) GetBodyChan() chan dataPack {
+func (p *syncPeerChans) GetBodyChan() chan dataPack {
 	if p.bodyCh == nil {
 		p.bodyCh = make(chan dataPack)
 	}
 	return p.bodyCh
 }
-func (p syncPeerChans) GetReceiptChan() chan dataPack {
+func (p *syncPeerChans) GetReceiptChan() chan dataPack {
 	if p.receiptCh == nil {
 		p.receiptCh = make(chan dataPack)
 	}
