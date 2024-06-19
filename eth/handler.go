@@ -189,6 +189,32 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the fetcher (short sync)
 	validateFn := func(header *types.Header) error {
 		bc := h.chain
+
+		// check is future slot
+		if header.Slot > bc.GetSlotInfo().CurrentSlot()+1 {
+			log.Warn("Header verification: future slot",
+				"currSlot", bc.GetSlotInfo().CurrentSlot(),
+				"headerSlot", header.Slot,
+				"headerHash", header.Hash().Hex(),
+				"headerTime", header.Time,
+				"currTime", time.Now().Unix(),
+			)
+			return core.ErrFutureBlock
+		}
+
+		// check era
+		blockEpoch := bc.GetSlotInfo().SlotToEpoch(header.Slot)
+		calcEra := bc.EpochToEra(blockEpoch)
+		if header.Era != calcEra.Number {
+			log.Warn("Header verification: invalid era",
+				"headerEra", header.Era,
+				"calcEra", header.Era,
+				"hash", header.Hash().Hex(),
+			)
+			err := fmt.Errorf("invalid era")
+			return err
+		}
+
 		if len(header.ParentHashes) == 0 {
 			err := fmt.Errorf("no parents in propagate block")
 			log.Warn("Header verification: no parents", "err", err, "hash", header.Hash().Hex())
