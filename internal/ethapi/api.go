@@ -168,14 +168,13 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]interface{}
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "Content")
-	numValidators := uint64(len(validators))
+	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
 	genesisGasLimit := bc.Genesis().GasLimit()
 	// Flatten the pending transactions
 	for account, txs := range pending {
 		dump := make(map[string]interface{})
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["pending"][account.Hex()] = dump
 	}
@@ -183,14 +182,14 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]interface{}
 	for account, txs := range queue {
 		dump := make(map[string]interface{})
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["queued"][account.Hex()] = dump
 	}
 	for account, txs := range processing {
 		dump := make(map[string]interface{})
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCProcessingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCProcessingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount)
 		}
 		content["processing"][account.Hex()] = dump
 	}
@@ -207,27 +206,26 @@ func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "ContentFrom")
-	numValidators := uint64(len(validators))
+	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
 	genesisGasLimit := bc.Genesis().GasLimit()
 
 	// Build the pending transactions
 	dump := make(map[string]*RPCTransaction, len(pending))
 	for _, tx := range pending {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount)
 	}
 	content["pending"] = dump
 
 	// Build the queued transactions
 	dump = make(map[string]*RPCTransaction, len(queue))
 	for _, tx := range queue {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount)
 	}
 	content["queued"] = dump
 
 	dump = make(map[string]*RPCTransaction, len(queue))
 	for _, tx := range processing {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount)
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount)
 	}
 	content["processing"] = dump
 
@@ -1821,10 +1819,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 			creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 		}
-		validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "GetTransactionByHash")
-		numValidators := uint64(len(validators))
+		validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
 		genesisGasLimit := bc.Genesis().GasLimit()
-		return newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount), nil
+		return newRPCPendingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount), nil
 	}
 
 	// Transaction unknown, return as such
@@ -2098,13 +2095,12 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, curHeader.Slot, true, false, "PendingTransactions")
-	numValidators := uint64(len(validators))
+	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
 	genesisGasLimit := bc.Genesis().GasLimit()
 	for _, tx := range pending {
 		from, _ := types.Sender(s.signer, tx)
 		if _, exists := accounts[from]; exists {
-			transactions = append(transactions, newRPCPendingTransaction(tx, s.b.ChainConfig(), numValidators, genesisGasLimit, creatorsPerSlotCount))
+			transactions = append(transactions, newRPCPendingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount))
 		}
 	}
 	return transactions, nil

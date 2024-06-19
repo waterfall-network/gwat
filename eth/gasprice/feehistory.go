@@ -91,12 +91,12 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	// Get active validators number
 	bc := oracle.backend.BlockChain()
 	genesisGasLimit := oracle.backend.Genesis().GasLimit()
-	validators, _ := bc.ValidatorStorage().GetValidators(oracle.backend.BlockChain(), bf.block.Slot(), true, false, "processBlock")
+	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, bf.block.Slot())
 	creatorsPerSlotCount := oracle.backend.ChainConfig().ValidatorsPerSlot
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, bf.header.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	bf.results.nextBaseFee = misc.CalcSlotBaseFee(chainconfig, creatorsPerSlotCount, uint64(len(validators)), genesisGasLimit)
+	bf.results.nextBaseFee = misc.CalcSlotBaseFee(chainconfig, creatorsPerSlotCount, validatorsCount, genesisGasLimit)
 	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null

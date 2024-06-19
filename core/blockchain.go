@@ -3093,8 +3093,8 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, header.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "UpdateFinalizingState")
-	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, header.Slot)
+	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, validatorsCount, bc.Genesis().GasLimit())
 
 	block.SetHeader(header)
 
@@ -4412,8 +4412,8 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 		log.Error("Next era: calculate transition slot failed", "err", err)
 	}
 
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, transitionSlot, true, false, "EnterNextEra")
-	nextEra = era.NextEra(bc, root, uint64(len(validators)))
+	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, transitionSlot)
+	nextEra = era.NextEra(bc, root, validatorsCount)
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
 	log.Info("######### if nextEra == nil EnterNextEra",
@@ -4423,7 +4423,7 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 		"root", nextEra.Root,
 		"currSlot", bc.GetSlotInfo().CurrentSlot(),
 		"currEpoch", bc.GetSlotInfo().SlotToEpoch(bc.GetSlotInfo().CurrentSlot()),
-		"validators", validators,
+		"validators", validatorsCount,
 	)
 	bc.SetNewEraInfo(*nextEra)
 	return nextEra
@@ -4446,10 +4446,12 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot comm
 			panic("StartTransitionPeriod slot of epoch start error")
 		}
 
-		validators, _ := bc.ValidatorStorage().GetValidators(bc, cpEpochSlot, true, false, "StartTransitionPeriod")
-		nextEra := era.NextEra(bc, spineRoot, uint64(len(validators)))
+		validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, cpEpochSlot)
+		nextEra := era.NextEra(bc, spineRoot, validatorsCount)
 
 		rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
+
+		go bc.ValidatorStorage().PrepareNextEraValidators(bc, cpEpochSlot)
 
 		log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
 	} else {
@@ -4820,8 +4822,8 @@ func (bc *BlockChain) verifyBlockBaseFee(block *types.Block) bool {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
 
-	validators, _ := bc.ValidatorStorage().GetValidators(bc, block.Slot(), true, false, "verifyBlockBaseFee")
-	expectedBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, block.Slot())
+	expectedBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, validatorsCount, bc.Genesis().GasLimit())
 
 	if expectedBaseFee.Cmp(block.BaseFee()) != 0 {
 		log.Warn("Block verification: invalid base fee",

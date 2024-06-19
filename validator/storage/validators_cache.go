@@ -6,24 +6,23 @@ import (
 	"sync"
 
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 )
 
 var (
 	ErrInvalidValidatorsFilter = errors.New("invalid validators filter")
 	ErrNoStateValidatorInfo    = errors.New("there is no validator in the state")
 	errNoSubnetValidators      = errors.New("there are no validators for subnet")
-	errNoEpochValidators       = errors.New("there are no validators for epoch")
+	errNoEraValidators         = errors.New("there are no validators for era")
 	errNoValidators            = errors.New("there ara no validators")
 	errBadBinaryData           = errors.New("bad binary data")
 )
 
 const (
-	cacheCapacity = 10
+	cacheCapacity = 3
 )
 
 type ValidatorsCache struct {
-	allValidatorsCache            map[uint64][]Validator                   // epoch/array of validators
+	allActiveValidatorsCache      map[uint64][]common.Address              // era/array of validators
 	subnetValidatorsCache         map[uint64]map[uint64][]common.Address   // epoch/subnet/validators array
 	shuffledValidatorsCache       map[uint64][][]common.Address            // epoch/array of validators arrays (slot is the index in array)
 	shuffledSubnetValidatorsCache map[uint64]map[uint64][][]common.Address // epoch/subnet/array of validators arrays (slot is the index in array)
@@ -36,7 +35,7 @@ type ValidatorsCache struct {
 
 func NewCache() *ValidatorsCache {
 	return &ValidatorsCache{
-		allValidatorsCache:            make(map[uint64][]Validator),
+		allActiveValidatorsCache:      make(map[uint64][]common.Address),
 		subnetValidatorsCache:         make(map[uint64]map[uint64][]common.Address),
 		shuffledValidatorsCache:       make(map[uint64][][]common.Address),
 		shuffledSubnetValidatorsCache: make(map[uint64]map[uint64][][]common.Address),
@@ -47,56 +46,34 @@ func NewCache() *ValidatorsCache {
 	}
 }
 
-func (c *ValidatorsCache) addAllValidatorsByEpoch(epoch uint64, validatorsList []Validator) {
+func (c *ValidatorsCache) addAllActiveValidatorsByEra(era uint64, validatorsList []common.Address) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
-	if len(c.allValidatorsCache) == cacheCapacity {
+	if len(c.allActiveValidatorsCache) == cacheCapacity {
 		needDel := uint64(math.MaxUint64)
-		for e := range c.allValidatorsCache {
+		for e := range c.allActiveValidatorsCache {
 			if e < needDel {
 				needDel = e
 			}
 		}
 
-		delete(c.allValidatorsCache, needDel)
+		delete(c.allActiveValidatorsCache, needDel)
 	}
 
-	c.allValidatorsCache[epoch] = validatorsList
+	c.allActiveValidatorsCache[era] = validatorsList
 }
 
-func (c *ValidatorsCache) getAllValidatorsByEpoch(epoch uint64) ([]Validator, error) {
+func (c *ValidatorsCache) getAllActiveValidatorsByEra(era uint64) ([]common.Address, error) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
-	validators, ok := c.allValidatorsCache[epoch]
+	validators, ok := c.allActiveValidatorsCache[era]
 	if !ok || validators == nil {
-		return nil, errNoEpochValidators
+		return nil, errNoEraValidators
 	}
 
 	return validators, nil
-}
-
-func (c *ValidatorsCache) getActiveValidatorsByEpoch(bc blockchain, epoch uint64) []Validator {
-	c.allMu.Lock()
-	defer c.allMu.Unlock()
-
-	validators := make([]Validator, 0)
-	validatorsList, ok := c.allValidatorsCache[epoch]
-	if !ok {
-		log.Warn(errNoEpochValidators.Error(), "epoch", epoch)
-		return nil
-	}
-
-	era := bc.EpochToEra(epoch)
-
-	for _, validator := range validatorsList {
-		if validator.ActivationEra <= era.Number && validator.ExitEra > era.Number {
-			validators = append(validators, validator)
-		}
-	}
-
-	return validators
 }
 
 //nolint:unused // subnets support
@@ -119,7 +96,7 @@ func (c *ValidatorsCache) getSubnetValidators(epoch, subnet uint64) ([]common.Ad
 
 	epochValidators, ok := c.subnetValidatorsCache[epoch]
 	if !ok {
-		return nil, errNoEpochValidators
+		return nil, errNoEraValidators
 	}
 
 	subnetValidators, ok := epochValidators[subnet]
@@ -131,21 +108,21 @@ func (c *ValidatorsCache) getSubnetValidators(epoch, subnet uint64) ([]common.Ad
 }
 
 //nolint:unused // subnets support
-func (c *ValidatorsCache) addValidator(validator Validator, epoch uint64) {
+func (c *ValidatorsCache) addValidator(addr common.Address, era uint64) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
-	c.allValidatorsCache[epoch] = append(c.allValidatorsCache[epoch], validator)
+	c.allActiveValidatorsCache[era] = append(c.allActiveValidatorsCache[era], addr)
 }
 
 //nolint:unused // subnets support
-func (c *ValidatorsCache) delValidator(validator Validator, epoch uint64) {
+func (c *ValidatorsCache) delValidator(addr common.Address, era uint64) {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
-	for i, v := range c.allValidatorsCache[epoch] {
-		if v.Address == validator.Address {
-			c.allValidatorsCache[epoch] = append(c.allValidatorsCache[epoch][:i], c.allValidatorsCache[epoch][i+1:]...)
+	for i, address := range c.allActiveValidatorsCache[era] {
+		if address == addr {
+			c.allActiveValidatorsCache[era] = append(c.allActiveValidatorsCache[era][:i], c.allActiveValidatorsCache[era][i+1:]...)
 		}
 	}
 }
@@ -208,7 +185,7 @@ func (c *ValidatorsCache) getShuffledValidators(filter []uint64) ([]common.Addre
 
 		epochValidators, ok := c.shuffledValidatorsCache[epoch]
 		if !ok {
-			return nil, errNoEpochValidators
+			return nil, errNoEraValidators
 		}
 
 		return epochValidators[slot], nil
@@ -218,7 +195,7 @@ func (c *ValidatorsCache) getShuffledValidators(filter []uint64) ([]common.Addre
 		subnet = filter[2]
 		epochValidators, ok := c.shuffledSubnetValidatorsCache[epoch]
 		if !ok {
-			return nil, errNoEpochValidators
+			return nil, errNoEraValidators
 		}
 
 		subnetValidators, ok := epochValidators[subnet]
@@ -230,30 +207,4 @@ func (c *ValidatorsCache) getShuffledValidators(filter []uint64) ([]common.Addre
 	default:
 		return nil, ErrInvalidValidatorsFilter
 	}
-}
-
-func (c *ValidatorsCache) getValidatorsAddresses(bc blockchain, epoch uint64, activeOnly bool) []common.Address {
-	c.allMu.Lock()
-	defer c.allMu.Unlock()
-
-	addresses := make([]common.Address, 0)
-	validators := c.allValidatorsCache[epoch]
-
-	if !activeOnly {
-		for _, validator := range validators {
-			addresses = append(addresses, validator.Address)
-		}
-
-		return addresses
-	}
-
-	era := bc.EpochToEra(epoch)
-
-	for _, validator := range validators {
-		if validator.ActivationEra <= era.Number && validator.ExitEra > era.Number {
-			addresses = append(addresses, validator.Address)
-		}
-	}
-
-	return addresses
 }

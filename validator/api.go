@@ -280,7 +280,7 @@ func (s *PublicValidatorAPI) GetValidators(ctx context.Context, era *uint64) ([]
 		return nil, err
 	}
 
-	_, addresses := s.chain.ValidatorStorage().GetValidators(s.chain, slot, true, true, "GetValidators")
+	addresses := s.chain.ValidatorStorage().GetValidators(s.chain, slot, "GetValidators")
 	return addresses, nil
 }
 
