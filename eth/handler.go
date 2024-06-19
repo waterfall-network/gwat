@@ -211,8 +211,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 				"calcEra", header.Era,
 				"hash", header.Hash().Hex(),
 			)
-			err := fmt.Errorf("invalid era")
-			return err
+			return core.ErrInvalidEra
 		}
 
 		if len(header.ParentHashes) == 0 {

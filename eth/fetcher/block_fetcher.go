@@ -833,7 +833,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
 
-		case core.ErrInsertUncompletedDag:
+		case core.ErrInsertUncompletedDag, core.ErrInvalidEra:
 			//if has unknown parents - skip propagate
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 
