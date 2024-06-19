@@ -265,8 +265,15 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 		_, err := h.chain.InsertPropagatedBlocks(types.Blocks{block})
 		if err == core.ErrInsertUncompletedDag {
-			// start sync dag
-			h.downloader.SynchroniseDagOnly(peerId)
+			log.Warn("Insert propagated blocks: unknown ancestors detected. start sync",
+				"err", err,
+				"hash", block.Hash().Hex(),
+				"parents", block.ParentHashes(),
+				"peer", peerId,
+			)
+			err = h.downloader.SyncWithPeerByHashes(peerId, block.ParentHashes())
+			//// start sync dag
+			//h.downloader.SynchroniseDagOnly(peerId)
 			return err
 		}
 		if err == nil {

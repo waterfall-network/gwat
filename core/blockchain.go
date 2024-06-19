@@ -1723,6 +1723,7 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 				processing[bl.Hash()] = true
 			}
 		}
+		return orderedBlocks[n], ErrInsertUncompletedDag
 	} else if err != nil {
 		return orderedBlocks[n], err
 	}

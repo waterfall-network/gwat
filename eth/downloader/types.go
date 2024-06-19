@@ -98,6 +98,7 @@ type syncPeerChans struct {
 	headerCh  chan dataPack
 	bodyCh    chan dataPack
 	receiptCh chan dataPack
+	procCount int
 }
 
 func initSyncPeerChans() syncPeerChans {
@@ -107,6 +108,16 @@ func initSyncPeerChans() syncPeerChans {
 		bodyCh:    make(chan dataPack, 1),
 		receiptCh: make(chan dataPack, 1),
 	}
+}
+
+func (p syncPeerChans) IncrProcCount() {
+	p.procCount++
+}
+func (p syncPeerChans) DecrProcCount() {
+	p.procCount--
+}
+func (p syncPeerChans) ProcCount() int {
+	return p.procCount
 }
 
 func (p syncPeerChans) Close() {

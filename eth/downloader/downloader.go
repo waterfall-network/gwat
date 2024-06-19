@@ -28,6 +28,7 @@ import (
 
 	ethereum "gitlab.waterfall.network/waterfall/protocol/gwat"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/core"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/rawdb"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/state/snapshot"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
@@ -57,7 +58,6 @@ var (
 	errUnknownPeer           = errors.New("peer is unknown or unhealthy")
 	errBadPeer               = errors.New("action from bad peer ignored")
 	errStallingPeer          = errors.New("peer is stalling")
-	errUnsyncedPeer          = errors.New("unsynced peer")
 	errNoPeers               = errors.New("no peers to keep download active")
 	errTimeout               = errors.New("timeout")
 	errEmptyHeaderSet        = errors.New("empty header set by peer")
@@ -79,6 +79,8 @@ var (
 type Downloader struct {
 	mode uint32         // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
+
+	syncByHashesLock sync.RWMutex // Lock protecting the sync stats fields
 
 	checkpoint uint64   // Checkpoint block number to enforce head against (e.g. fast sync)
 	queue      *queue   // Scheduler for selecting the hashes to download
@@ -373,6 +375,91 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	return nil
 }
 
+// SyncWithPeerByHashes download blocks ffrom remote peer by hashes.
+func (d *Downloader) SyncWithPeerByHashes(id string, hashes common.HashArray) error {
+	var err error
+
+	defer func(start time.Time) {
+		atomic.StoreInt32(&d.dagSyncing, 0)
+		log.Info("Sync unknown parents: end", "err", err, "elapsed", time.Since(start), "peer", id, "parents", hashes)
+	}(time.Now())
+
+	d.syncByHashesLock.Lock()
+	defer d.syncByHashesLock.Unlock()
+
+	// rm already loaded-not inserted
+	delayed := d.blockchain.GetInsertDelayedHashes()
+	hashes = hashes.Difference(delayed)
+
+	unloaded := make(common.HashArray, 0, len(hashes))
+	for _, h := range hashes {
+		if d.blockchain.GetHeaderByHash(h) == nil {
+			unloaded = append(unloaded, h)
+		}
+	}
+	if len(unloaded) == 0 {
+		log.Info("Sync unknown parents: already inserted", "peer", id, "parents", hashes)
+		return nil
+	}
+
+	//multi peers sync support
+	if !d.isPeerSync(id) {
+		d.setPeerSync(id)
+		defer d.resetPeerSync(id)
+	} else {
+		return errBusy
+	}
+
+	// If we are already full syncing, but have a fast-sync bloom filter laying
+	// around, make sure it doesn't use memory anymore. This is a special case
+	// when the user attempts to fast sync a new empty network.
+	if d.stateBloom != nil {
+		d.stateBloom.Close()
+	}
+
+	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+		select {
+		case <-ch:
+		default:
+		}
+	}
+	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh, d.receiptCh, d.dagCh} {
+		for empty := false; !empty; {
+			select {
+			case <-ch:
+			default:
+				empty = true
+			}
+		}
+	}
+	for empty := false; !empty; {
+		select {
+		case <-d.headerProcCh:
+		default:
+			empty = true
+		}
+	}
+	// Create cancel channel for aborting mid-flight and mark the master peer
+	d.cancelLock.Lock()
+	d.cancelCh = make(chan struct{})
+	d.cancelPeer = id
+	d.cancelLock.Unlock()
+	defer d.Cancel() // No matter what, we can't leave the cancel channel open
+
+	// Retrieve the origin peer and initiate the downloading process
+	p := d.peers.Peer(id)
+	if p == nil {
+		return errUnknownPeer
+	}
+	err = d.syncWithPeerUnknownDagBlocks(p, unloaded)
+	if err != nil {
+		log.Error("Sync unknown parents: failed", "err", err, "peer", id, "parents", unloaded)
+		return err
+	}
+	log.Info("Sync unknown parents: success", "peer", id, "parents", unloaded)
+	return nil
+}
+
 func (d *Downloader) SynchroniseDagOnly(id string) error {
 	err := d.synchroniseDagOnly(id)
 	switch err {
@@ -380,7 +467,7 @@ func (d *Downloader) SynchroniseDagOnly(id string) error {
 		return err
 	}
 	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
-		errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
+		errors.Is(err, errStallingPeer) || errors.Is(err, errEmptyHeaderSet) ||
 		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
 		errors.Is(err, errInvalidBody) {
 		log.Warn("Sync failed, dropping peer", "peer", id, "err", err)
@@ -612,6 +699,23 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 
 	if bl, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
 		log.Error("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+		if errors.Is(err, core.ErrInsertUncompletedDag) {
+			failedSlot := bl.Slot()
+			slotBlocks := blocksBySlot[failedSlot]
+			unParents := make(common.HashArray, 0, 32)
+			for _, b := range slotBlocks {
+				unParents = append(unParents, b.ParentHashes()...)
+			}
+			unParents.Deduplicate()
+			if len(unParents) > 0 {
+				log.Info("Sync of unknown dag blocks: recursive call",
+					"err", err,
+					"unloaded", unParents,
+				)
+				go d.SyncWithPeerByHashes(p.id, unParents)
+			}
+			return nil
+		}
 		return err
 	}
 	return nil
@@ -750,10 +854,9 @@ func (d *Downloader) fetchDagHashesBySlots(p *peerConnection, from, to uint64) (
 	p.log.Info("Retrieving remote dag hashes by slot: start", "from", from, "to", to)
 
 	//multi peers sync support
-	if !d.isPeerSync(p.id) {
-		d.setPeerSync(p.id)
-		defer d.resetPeerSync(p.id)
-	}
+	d.setPeerSync(p.id)
+	defer d.resetPeerSync(p.id)
+
 	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
 
 	err = p.peer.RequestHashesBySlots(from, to)
@@ -808,10 +911,9 @@ func (d *Downloader) fetchHashesBySpines(p *peerConnection, baseSpine common.Has
 	)
 
 	//multi peers sync support
-	if !d.isPeerSync(p.id) {
-		d.setPeerSync(p.id)
-		defer d.resetPeerSync(p.id)
-	}
+	d.setPeerSync(p.id)
+	defer d.resetPeerSync(p.id)
+
 	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
 
 	err = p.peer.RequestDag(baseSpine, terminalSpine)
@@ -863,10 +965,9 @@ func (d *Downloader) fetchDagHeaders(p *peerConnection, hashes common.HashArray)
 	p.log.Info("Retrieving remote dag headers: start", "hashes", len(hashes))
 
 	//multi peers sync support
-	if !d.isPeerSync(p.id) {
-		d.setPeerSync(p.id)
-		defer d.resetPeerSync(p.id)
-	}
+	d.setPeerSync(p.id)
+	defer d.resetPeerSync(p.id)
+
 	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
 
 	err = p.peer.RequestHeadersByHashes(hashes)
@@ -940,10 +1041,9 @@ func (d *Downloader) requestDagTxs(p *peerConnection, hashes common.HashArray) (
 	p.log.Info("Request remote dag block txs: start", "hashes", len(hashes))
 
 	//multi peers sync support
-	if !d.isPeerSync(p.id) {
-		d.setPeerSync(p.id)
-		defer d.resetPeerSync(p.id)
-	}
+	d.setPeerSync(p.id)
+	defer d.resetPeerSync(p.id)
+
 	peerCh := d.getPeerSyncChans(p.id).GetBodyChan()
 
 	err := p.peer.RequestBodies(hashes)
@@ -1018,7 +1118,7 @@ func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) er
 			continue
 		}
 		if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
-			errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
+			errors.Is(err, errStallingPeer) || errors.Is(err, errEmptyHeaderSet) ||
 			errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
 			errors.Is(err, errInvalidBody) {
 			log.Warn("Sync failed, dropping peer", "peer", con.id, "err", err)
@@ -1180,10 +1280,9 @@ func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *type
 	fetch := 1
 
 	//multi peers sync support
-	if !d.isPeerSync(p.id) {
-		d.setPeerSync(p.id)
-		defer d.resetPeerSync(p.id)
-	}
+	d.setPeerSync(p.id)
+	defer d.resetPeerSync(p.id)
+
 	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
 
 	err = p.peer.RequestHeadersByNumber(nr, 1, 0, true)
@@ -1239,10 +1338,9 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 	fetch := 1
 
 	//multi peers sync support
-	if !d.isPeerSync(p.id) {
-		d.setPeerSync(p.id)
-		defer d.resetPeerSync(p.id)
-	}
+	d.setPeerSync(p.id)
+	defer d.resetPeerSync(p.id)
+
 	peerCh := d.getPeerSyncChans(p.id).GetHeaderChan()
 
 	err = p.peer.RequestHeadersByHashes(common.HashArray{hash})
@@ -1453,6 +1551,10 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 	}
 
 	if bl, err := d.blockchain.WriteSyncBlocks(blocks, false); err != nil {
+		if errors.Is(err, core.ErrInsertUncompletedDag) {
+			log.Error("Sync by spines: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+			return lastHash, nil
+		}
 		log.Error("Sync by spines: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		return lastHash, err
 	}
@@ -1533,6 +1635,25 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 	}
 
 	if bl, err := d.blockchain.WriteSyncBlocks(blocks, true); err != nil {
+		if errors.Is(err, core.ErrInsertUncompletedDag) {
+			go func() {
+				slotBlocks := blocks
+				unParents := make(common.HashArray, 0, 32)
+				for _, b := range slotBlocks {
+					unParents = append(unParents, b.ParentHashes()...)
+				}
+				unParents.Deduplicate()
+				if len(unParents) > 0 {
+					log.Info("Sync by slots: recursive call",
+						"err", err,
+						"unloaded", unParents,
+					)
+					//recursive call
+					d.SyncWithPeerByHashes(p.id, unParents)
+				}
+			}()
+			return nil
+		}
 		log.Error("Sync by slots: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		return err
 	}
@@ -1660,8 +1781,11 @@ Loop:
 					if errors.Is(err, errTimeout) {
 						log.Warn("Sync head failed: timed out", "i", i, "peer", con.id, "err", err)
 					}
+					if errors.Is(err, errBusy) {
+						log.Warn("Sync head failed: peer busy", "i", i, "peer", con.id, "err", err)
+					}
 					if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || //errors.Is(err, errTimeout) ||
-						errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
+						errors.Is(err, errStallingPeer) || errors.Is(err, errEmptyHeaderSet) ||
 						errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
 						errors.Is(err, errInvalidBody) {
 						log.Warn("Sync head failed, dropping peer", "i", i, "peer", con.id, "err", err)
@@ -1674,7 +1798,7 @@ Loop:
 							d.dropPeer(con.id)
 						}
 					}
-					log.Info("Sync head: finished peer", "i", i, "peer", con.id)
+					log.Warn("Sync head: failed", "i", i, "peer", con.id, "err", err)
 					sem <- struct{}{}
 					return
 				} else {
@@ -1798,10 +1922,9 @@ func (d *Downloader) multiFetchDagHashesBySlots(p *peerConnection, from, to uint
 	p.log.Info("Retrieving remote dag hashes by slot: start", "from", from, "to", to)
 
 	//multi peers sync support
-	if !d.isPeerSync(p.id) {
-		d.setPeerSync(p.id)
-		defer d.resetPeerSync(p.id)
-	}
+	d.setPeerSync(p.id)
+	defer d.resetPeerSync(p.id)
+
 	peerCh := d.getPeerSyncChans(p.id).GetDagChan()
 
 	err = p.peer.RequestHashesBySlots(from, to)
@@ -1908,6 +2031,7 @@ func (d *Downloader) setPeerSync(peerId string) {
 	if _, ok := d.syncPeers[peerId]; !ok {
 		d.syncPeers[peerId] = initSyncPeerChans()
 	}
+	d.syncPeers[peerId].IncrProcCount()
 }
 
 func (d *Downloader) resetPeerSync(peerId string) {
@@ -1915,8 +2039,11 @@ func (d *Downloader) resetPeerSync(peerId string) {
 	defer d.syncPeersMutex.Unlock()
 
 	if ch, ok := d.syncPeers[peerId]; ok {
-		ch.Close()
-		delete(d.syncPeers, peerId)
+		ch.DecrProcCount()
+		if ch.ProcCount() <= 0 {
+			ch.Close()
+			delete(d.syncPeers, peerId)
+		}
 	}
 }
 
