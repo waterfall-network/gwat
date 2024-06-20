@@ -1650,15 +1650,10 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 	bc.blockProcFeed.Send(true)
 	defer bc.blockProcFeed.Send(false)
 
-	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: 000", "blocks", len(blocks), "err", err, "validate", validate)
-
 	// Pre-checks passed, start the full block imports
 	if !bc.chainmu.TryLock() {
-		log.Info("Sync of unknown dag blocks: WriteSyncBlocks: bc.chainmu.TryLock FAILED 111", "blocks", len(blocks), "err", errInsertionInterrupted, "validate", validate)
 		return nil, errInsertionInterrupted
 	}
-
-	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: bc.chainmu.TryLock 111", "blocks", len(blocks), "err", err, "validate", validate)
 
 	// include delayed blocks
 	if len(bc.insBlockCache) > 0 {
@@ -1700,17 +1695,9 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 		orderedBlocks = append(orderedBlocks, slotBlocks...)
 	}
 
-	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: insertBlocks 222", "blocks", len(blocks), "err", err, "validate", validate)
-
 	// insert process
 	n, err := bc.insertBlocks(orderedBlocks, validate, opSync)
-
-	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: insertBlocks 333", "blocks", len(blocks), "err", err, "validate", validate)
-
 	bc.chainmu.Unlock()
-
-	log.Info("Sync of unknown dag blocks: WriteSyncBlocks: chainmu.Unlock 444", "blocks", len(blocks), "err", err, "validate", validate)
-
 	if err == ErrInsertUncompletedDag {
 		processing := make(map[common.Hash]bool, len(bc.insBlockCache))
 		for _, b := range bc.insBlockCache {
@@ -3037,7 +3024,13 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 						)
 						return it.index, ErrInsertUncompletedDag
 					}
-					cpHeader := bc.GetHeader(parentBlock.CpHash)
+					var cpHeader *types.Header
+					if parentBlock.Height == 0 {
+						// if parentBlock is genesis
+						cpHeader = parentBlock
+					} else {
+						cpHeader = bc.GetHeader(parentBlock.CpHash)
+					}
 					if cpHeader == nil {
 						log.Error("Insert blocks: create CP blockDag: parent cp not found",
 							"slot", block.Slot(),
@@ -3058,8 +3051,7 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 						"height", block.Height(),
 						"hash", block.Hash().Hex(),
 					)
-					//isCpAncestor, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
-					_, anc, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
+					_, anc, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, cpHeader.Hash())
 					if err != nil {
 						return it.index, err
 					}
@@ -3075,7 +3067,7 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 						)
 						return it.index, ErrInsertUncompletedDag
 					}
-					commonCpHash = parentBlock.CpHash
+					commonCpHash = cpHeader.Hash()
 					cpCpAncestorsHashes = append(anc.Hashes(), commonCpHash)
 				} else {
 					commonCpHash = bdag.CpHash
@@ -3104,14 +3096,20 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 					)
 					return it.index, ErrInsertUncompletedDag
 				}
-				cpHeader := bc.GetHeader(parentBlock.CpHash)
+				var cpHeader *types.Header
+				if parentBlock.Height == 0 {
+					// if parentBlock is genesis
+					cpHeader = parentBlock
+				} else {
+					cpHeader = bc.GetHeader(parentBlock.CpHash)
+				}
 				if cpHeader == nil {
 					log.Error("Insert blocks: create parent blockDag: parent cp not found",
 						"slot", block.Slot(),
 						"height", block.Height(),
 						"hash", block.Hash().Hex(),
 						"parent", h.Hex(),
-						"parentCP", parentBlock.CpHash.Hex(),
+						"parentCP", cpHeader.Hash().Hex(),
 						"err", ErrInsertUncompletedDag,
 					)
 					return it.index, ErrInsertUncompletedDag
@@ -3125,8 +3123,7 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 					"height", block.Height(),
 					"hash", block.Hash().Hex(),
 				)
-				//isCpAncestor, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
-				_, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
+				_, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, cpHeader.Hash())
 				if err != nil {
 					return it.index, err
 				}
@@ -3159,7 +3156,7 @@ func (bc *BlockChain) insertBlocks(chain types.Blocks, validate bool, op string)
 					Hash:                   h,
 					Height:                 parentBlock.Height,
 					Slot:                   parentBlock.Slot,
-					CpHash:                 parentBlock.CpHash,
+					CpHash:                 cpHeader.Hash(),
 					CpHeight:               cpHeader.Height,
 					OrderedAncestorsHashes: ancestors.Hashes(),
 				}
@@ -3369,7 +3366,11 @@ func (bc *BlockChain) CollectAncestorsHashesByTips(tips types.Tips, cpHash commo
 	cpHeader := bc.GetHeader(cpHash)
 	cpBlDag := bc.GetBlockDag(cpHash)
 	if cpBlDag == nil {
-		_, anc, _, err := bc.CollectAncestorsAftCpByParents(cpHeader.ParentHashes, cpHeader.CpHash)
+		cpCpHash := cpHeader.CpHash
+		if cpHeader.Height == 0 {
+			cpCpHash = cpHash
+		}
+		_, anc, _, err := bc.CollectAncestorsAftCpByParents(cpHeader.ParentHashes, cpCpHash)
 		if err != nil {
 			return nil, err
 		}
@@ -5121,13 +5122,19 @@ func (bc *BlockChain) IsHibernateSlot(header *types.Header) (bool, error) {
 				)
 				return false, ErrInsertUncompletedDag
 			}
-			cpHeader := bc.GetHeader(parentBlock.CpHash)
+			var cpHeader *types.Header
+			if parentBlock.Height == 0 {
+				// if parentBlock is genesis
+				cpHeader = parentBlock
+			} else {
+				cpHeader = bc.GetHeader(parentBlock.CpHash)
+			}
 			if cpHeader == nil {
 				log.Error("IsHibernateSlot: create parent blockDag: parent cp not found",
 					"slot", header.Slot,
 					"hash", header.Hash().Hex(),
 					"parent", h.Hex(),
-					"parentCP", parentBlock.CpHash.Hex(),
+					"parentCP", cpHeader.Hash().Hex(),
 					"err", ErrInsertUncompletedDag,
 				)
 				return false, ErrInsertUncompletedDag
@@ -5140,7 +5147,7 @@ func (bc *BlockChain) IsHibernateSlot(header *types.Header) (bool, error) {
 				"height", header.Height,
 				"hash", header.Hash().Hex(),
 			)
-			_, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, parentBlock.CpHash)
+			_, ancestors, unl, err := bc.CollectAncestorsAftCpByParents(parentBlock.ParentHashes, cpHeader.Hash())
 			if err != nil {
 				return false, err
 			}
@@ -5159,7 +5166,7 @@ func (bc *BlockChain) IsHibernateSlot(header *types.Header) (bool, error) {
 				Hash:                   h,
 				Height:                 parentBlock.Height,
 				Slot:                   parentBlock.Slot,
-				CpHash:                 parentBlock.CpHash,
+				CpHash:                 cpHeader.Hash(),
 				CpHeight:               cpHeader.Height,
 				OrderedAncestorsHashes: ancestors.Hashes(),
 			}
