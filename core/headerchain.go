@@ -563,6 +563,9 @@ func (hc *HeaderChain) ResetTips() error {
 func (hc *HeaderChain) ClearBlockDag() {
 	dagHashes := rawdb.ReadAllBlockDagHashes(hc.chainDb)
 	for _, hash := range dagHashes {
+		if hash == hc.genesisHeader.Hash() {
+			continue
+		}
 		rawdb.DeleteBlockDag(hc.chainDb, hash)
 	}
 }
@@ -1073,6 +1076,9 @@ func (hc *HeaderChain) SaveBlockDag(bdag *types.BlockDAG) {
 
 // DeleteBlockDag remove a block dag from the database and cache.
 func (hc *HeaderChain) DeleteBlockDag(hash common.Hash) {
+	if hash == hc.genesisHeader.Hash() {
+		return
+	}
 	rawdb.DeleteBlockDag(hc.chainDb, hash)
 	hc.blockDagCache.Remove(hash)
 }

@@ -318,7 +318,11 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 			// check last finalized blockDag exists
 			lfBlDag := c.bc.GetBlockDag(lfHash)
 			if lfBlDag == nil {
-				_, anc, _, err := c.bc.CollectAncestorsAftCpByParents(lastFinBlock.ParentHashes(), lastFinBlock.CpHash())
+				cpHash := lastFinBlock.CpHash()
+				if lastFinBlock.Height() == 0 {
+					cpHash = lastFinBlock.Hash()
+				}
+				_, anc, _, err := c.bc.CollectAncestorsAftCpByParents(lastFinBlock.ParentHashes(), cpHash)
 				if err != nil {
 					return nil, err
 				}
@@ -326,8 +330,8 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 					Hash:                   lastFinBlock.Hash(),
 					Height:                 lastFinBlock.Height(),
 					Slot:                   lastFinBlock.Slot(),
-					CpHash:                 lastFinBlock.CpHash(),
-					CpHeight:               c.bc.GetHeader(lastFinBlock.CpHash()).Height,
+					CpHash:                 cpHash,
+					CpHeight:               c.bc.GetHeader(cpHash).Height,
 					OrderedAncestorsHashes: anc.Hashes(),
 				}
 				c.bc.SaveBlockDag(lfBlDag)

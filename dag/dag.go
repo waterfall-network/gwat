@@ -380,6 +380,9 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 		if spHeader == nil {
 			return true, nil
 		}
+		if spHeader.Height == 0 {
+			continue
+		}
 		_, _, unl, err = d.bc.CollectAncestorsAftCpByParents(spHeader.ParentHashes, spHeader.CpHash)
 		if err != nil {
 			return false, err
