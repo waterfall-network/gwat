@@ -2218,28 +2218,30 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	timeTrack := time.Now()
 
 	// Verify block slot
-	if !bc.verifyBlockSlot(block) {
+	if !bc.VerifyBlockSlot(block.Header()) {
 		return false, ErrFutureBlock
 	}
 
 	log.Info("VALIDATION TIME",
 		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
-		"fn:", "verifyBlockSlot",
+		"fn:", "VerifyBlockSlot",
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify block era
-	if !bc.verifyBlockEra(block) {
+	if !bc.VerifyBlockEra(block.Header()) {
 		return false, nil
 	}
 
 	log.Info("VALIDATION TIME",
 		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
-		"fn:", "verifyBlockEra",
+		"fn:", "VerifyBlockEra",
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	slotCreators, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
 	if err != nil {
@@ -2253,6 +2255,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify block coinbase
 	if !bc.verifyBlockCoinbase(block, slotCreators) {
@@ -2265,6 +2268,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	err = bc.verifyEmptyBlock(block, slotCreators)
 	if err != nil {
@@ -2277,6 +2281,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	isValid, err := bc.verifyHibernateModeBlock(block)
 	if err != nil {
@@ -2291,6 +2296,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify baseFee
 	if !bc.verifyBlockBaseFee(block) {
@@ -2303,6 +2309,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify body hash and transactions hash
 	if !bc.verifyBlockHashes(block) {
@@ -2315,6 +2322,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify block used gas
 	if !bc.verifyBlockUsedGas(block) {
@@ -2327,6 +2335,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	//for case if finalized tip is current cp
 	cpCpHash := block.CpHash()
@@ -2359,6 +2368,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"ancestors", len(ancestors),
 		"cpCpAncestors", len(cpCpAncestors),
 	)
+	timeTrack = time.Now()
 
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
@@ -2397,6 +2407,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify block height
 	if !bc.verifyBlockHeight(block, len(ancestors)) {
@@ -2409,6 +2420,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	valid, err := bc.verifyBlockParents(block)
 
@@ -2502,13 +2514,13 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 	return true
 }
 
-func (bc *BlockChain) verifyBlockSlot(block *types.Block) bool {
-	if block.Slot() > bc.GetSlotInfo().CurrentSlot()+1 {
+func (bc *BlockChain) VerifyBlockSlot(header *types.Header) bool {
+	if header.Slot > bc.GetSlotInfo().CurrentSlot() {
 		log.Warn("Block verification: future slot",
 			"currentSlot", bc.GetSlotInfo().CurrentSlot(),
-			"blockSlot", block.Slot(),
-			"blockHash", block.Hash().Hex(),
-			"blockTime", block.Time(),
+			"blockSlot", header.Slot,
+			"blockHash", header.Hash().Hex(),
+			"blockTime", header.Time,
 			"timeNow", time.Now().Unix(),
 		)
 		return false
@@ -2651,15 +2663,16 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	return nil
 }
 
-func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
+func (bc *BlockChain) VerifyBlockEra(block *types.Header) bool {
 	// Get the epoch of the block
-	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot)
 
 	calcEra := bc.EpochToEra(blockEpoch)
-	if calcEra.Number != block.Era() {
+	if calcEra.Number != block.Era {
 		log.Warn("Block verification: invalid era",
 			"hash", block.Hash().Hex(),
-			"era", block.Era(),
+			"era", block.Era,
+			"calcEra", calcEra,
 		)
 		return false
 	}

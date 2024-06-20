@@ -191,7 +191,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		bc := h.chain
 
 		// check is future slot
-		if header.Slot > bc.GetSlotInfo().CurrentSlot()+1 {
+		if !bc.VerifyBlockSlot(header) {
 			log.Warn("Header verification: future slot",
 				"currSlot", bc.GetSlotInfo().CurrentSlot(),
 				"headerSlot", header.Slot,
@@ -203,9 +203,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 
 		// check era
-		blockEpoch := bc.GetSlotInfo().SlotToEpoch(header.Slot)
-		calcEra := bc.EpochToEra(blockEpoch)
-		if header.Era != calcEra.Number {
+		if !bc.VerifyBlockEra(header) {
 			log.Warn("Header verification: invalid era",
 				"headerEra", header.Era,
 				"calcEra", header.Era,
