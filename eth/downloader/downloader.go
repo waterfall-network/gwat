@@ -698,27 +698,28 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	log.Info("Sync of unknown dag blocks: SpineSortBlocks 444", "blocks", len(blocks), "err", err)
 
 	if bl, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
-		log.Error("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		if errors.Is(err, core.ErrInsertUncompletedDag) {
-			go func() {
-				failedSlot := bl.Slot()
-				slotBlocks := blocksBySlot[failedSlot]
-				unParents := make(common.HashArray, 0, 32)
-				for _, b := range slotBlocks {
-					unParents = append(unParents, b.ParentHashes()...)
-				}
-				unParents.Deduplicate()
-				if len(unParents) > 0 {
-					log.Info("Sync of unknown dag blocks: recursive call",
-						"err", err,
-						"unloaded", unParents,
-					)
-					//recursive call
-					d.SyncUnloadedParents(p.id, unParents)
-				}
-			}()
+			log.Warn("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+			//go func() {
+			//	failedSlot := bl.Slot()
+			//	slotBlocks := blocksBySlot[failedSlot]
+			//	unParents := make(common.HashArray, 0, 32)
+			//	for _, b := range slotBlocks {
+			//		unParents = append(unParents, b.ParentHashes()...)
+			//	}
+			//	unParents.Deduplicate()
+			//	if len(unParents) > 0 {
+			//		log.Info("Sync of unknown dag blocks: recursive call",
+			//			"err", err,
+			//			"unloaded", unParents,
+			//		)
+			//		//recursive call
+			//		d.SyncUnloadedParents(p.id, unParents)
+			//	}
+			//}()
 			return nil
 		}
+		log.Error("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 		return err
 	}
 	return nil
@@ -1555,7 +1556,7 @@ func (d *Downloader) syncBySpines(p *peerConnection, baseSpine, terminalSpine co
 
 	if bl, err := d.blockchain.WriteSyncBlocks(blocks, false); err != nil {
 		if errors.Is(err, core.ErrInsertUncompletedDag) {
-			log.Error("Sync by spines: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+			log.Warn("Sync by spines: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 			return lastHash, nil
 		}
 		log.Error("Sync by spines: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
@@ -1639,22 +1640,7 @@ func (d *Downloader) syncBySlots(p *peerConnection, from, to uint64) error {
 
 	if bl, err := d.blockchain.WriteSyncBlocks(blocks, true); err != nil {
 		if errors.Is(err, core.ErrInsertUncompletedDag) {
-			go func() {
-				slotBlocks := blocks
-				unParents := make(common.HashArray, 0, 32)
-				for _, b := range slotBlocks {
-					unParents = append(unParents, b.ParentHashes()...)
-				}
-				unParents.Deduplicate()
-				if len(unParents) > 0 {
-					log.Info("Sync by slots: recursive call",
-						"err", err,
-						"unloaded", unParents,
-					)
-					//recursive call
-					d.SyncUnloadedParents(p.id, unParents)
-				}
-			}()
+			log.Warn("Sync by slots: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
 			return nil
 		}
 		log.Error("Sync by slots: writing blocks failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
