@@ -66,7 +66,8 @@ var (
 		ValidatorsPerSlot:      5,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       2048,
+		ForkSlotDelegate:       0,
+		ForkSlotShanghai:       0,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -102,6 +103,7 @@ var (
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       2729920,
+		ForkSlotShanghai:       math.MaxUint64,
 		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
 	}
 
@@ -141,7 +143,8 @@ var (
 		ValidatorsPerSlot:      6,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       math.MaxUint64,
+		ForkSlotDelegate:       0,
+		ForkSlotShanghai:       0,
 	}
 
 	TestChainConfig = &ChainConfig{
@@ -154,7 +157,8 @@ var (
 		ValidatorsPerSlot:      6,
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
-		ForkSlotDelegate:       math.MaxUint64,
+		ForkSlotDelegate:       0,
+		ForkSlotShanghai:       0,
 	}
 )
 
@@ -224,6 +228,7 @@ type ChainConfig struct {
 	// Fork slots
 	ForkSlotSubNet1  uint64 `json:"forkSlotSubNet1,omitempty"`
 	ForkSlotDelegate uint64 `json:"forkSlotDelegate,omitempty"`
+	ForkSlotShanghai uint64 `json:"forkSlotShanghai,omitempty"`
 
 	// fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	AcceptCpRootOnFinEpoch map[common.Hash][]uint64 `json:"acceptCpRootOnFinEpoch"`
@@ -250,7 +255,7 @@ func (c *CliqueConfig) String() string {
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
-		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, AcceptCpRootOnFinEpoch: %v}",
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, ForkSlotShanghai: %v, AcceptCpRootOnFinEpoch: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
@@ -261,6 +266,7 @@ func (c *ChainConfig) String() string {
 		c.EffectiveBalance,
 		c.ForkSlotSubNet1,
 		c.ForkSlotDelegate,
+		c.ForkSlotShanghai,
 		c.AcceptCpRootOnFinEpoch,
 	)
 }
@@ -358,11 +364,11 @@ type Rules struct {
 	ChainID                                                 *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
-	IsBerlin, IsLondon                                      bool
+	IsBerlin, IsLondon, IsShanghai                          bool
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules() Rules {
+func (c *ChainConfig) Rules(slot uint64) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -379,5 +385,6 @@ func (c *ChainConfig) Rules() Rules {
 		IsIstanbul:       true,
 		IsBerlin:         true,
 		IsLondon:         true,
+		IsShanghai:       c.ForkSlotShanghai <= slot,
 	}
 }
