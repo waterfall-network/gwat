@@ -4890,22 +4890,23 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 		return []common.HashArray{}, nil
 	}
 
-	var err error
-	optimisticSpines := make([]common.HashArray, 0)
+	optimisticSpines := make([]common.HashArray, 0, bc.Config().SlotsPerEpoch*3)
 
 	for slot := gtSlot + 1; slot <= currentSlot; slot++ {
 		slotSpines := bc.GetOptimisticSpinesFromCache(slot)
 		if slotSpines == nil {
-			slotBlocks := make(types.Headers, 0)
+			slotBlocks := make(types.Headers, 0, bc.Config().ValidatorsPerSlot)
 			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(bc.Database(), slot)
 			for _, hash := range slotBlocksHashes {
 				block := bc.GetHeader(hash)
 				slotBlocks = append(slotBlocks, block)
 			}
-			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
-			if err != nil {
-				return []common.HashArray{}, err
-			}
+			slotSpines = types.OptimisticSortSlotHeaders(slotBlocks)
+			//var err error
+			//slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
+			//if err != nil {
+			//	return []common.HashArray{}, err
+			//}
 			bc.SetOptimisticSpinesToCache(slot, slotSpines)
 		}
 
