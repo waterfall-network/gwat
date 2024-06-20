@@ -76,8 +76,7 @@ func TestNewValidatorsCache(t *testing.T) {
 func TestGetActiveValidatorsByEra(t *testing.T) {
 	cache := NewCache()
 
-	validators, err := cache.getAllActiveValidatorsByEra(1)
-	testutils.AssertError(t, err, errNoEraValidators)
+	validators := cache.getAllActiveValidatorsByEra(1)
 	if validators != nil {
 		t.Fatal("Expected nil, got", validators)
 	}
@@ -86,13 +85,11 @@ func TestGetActiveValidatorsByEra(t *testing.T) {
 	cache.addAllActiveValidatorsByEra(10, validatorsList)
 
 	expectedValidators := validatorsList
-	validators, err = cache.getAllActiveValidatorsByEra(10)
-	testutils.AssertNoError(t, err)
+	validators = cache.getAllActiveValidatorsByEra(10)
 	testutils.AssertEqual(t, expectedValidators, validators)
 
 	cache.addAllActiveValidatorsByEra(30, validatorsList)
-	validators, err = cache.getAllActiveValidatorsByEra(30)
-	testutils.AssertNoError(t, err)
+	validators = cache.getAllActiveValidatorsByEra(30)
 	testutils.AssertEqual(t, expectedValidators, validators)
 }
 
@@ -102,8 +99,7 @@ func TestAddValidator(t *testing.T) {
 	c := NewCache()
 
 	c.addValidator(testmodels.Addr1, era)
-	validators, err := c.getAllActiveValidatorsByEra(era)
-	testutils.AssertNoError(t, err)
+	validators := c.getAllActiveValidatorsByEra(era)
 	if len(validators) != 1 {
 		t.Fatalf("Expected 1 validator but got %v", len(validators))
 	}
@@ -118,15 +114,13 @@ func TestDelValidator(t *testing.T) {
 	c := NewCache()
 	c.addValidator(testmodels.Addr10, era)
 
-	validators, err := c.getAllActiveValidatorsByEra(era)
-	testutils.AssertNoError(t, err)
+	validators := c.getAllActiveValidatorsByEra(era)
 	if len(validators) != 1 {
 		t.Fatalf("Expected 1 validator but got %v", len(validators))
 	}
 
 	c.delValidator(testmodels.Addr10, era)
-	validators, err = c.getAllActiveValidatorsByEra(era)
-	testutils.AssertNoError(t, err)
+	validators = c.getAllActiveValidatorsByEra(era)
 	if len(validators) != 0 {
 		t.Fatalf("Expected 0 validators but got %v", len(validators))
 	}
@@ -143,12 +137,10 @@ func TestAllValidatorsCache(t *testing.T) {
 
 	testutils.AssertEqual(t, cachedValidatorsList, testmodels.InputValidators)
 
-	cachedValidatorsList, err := cache.getAllActiveValidatorsByEra(epoch)
-	testutils.AssertNoError(t, err)
+	cachedValidatorsList = cache.getAllActiveValidatorsByEra(epoch)
 	testutils.AssertEqual(t, cachedValidatorsList, testmodels.InputValidators)
 
-	cachedValidatorsList, err = cache.getAllActiveValidatorsByEra(epoch + 1)
-	testutils.AssertError(t, err, errNoEraValidators)
+	cachedValidatorsList = cache.getAllActiveValidatorsByEra(epoch + 1)
 	testutils.AssertNil(t, cachedValidatorsList)
 }
 

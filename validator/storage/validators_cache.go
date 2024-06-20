@@ -64,16 +64,16 @@ func (c *ValidatorsCache) addAllActiveValidatorsByEra(era uint64, validatorsList
 	c.allActiveValidatorsCache[era] = validatorsList
 }
 
-func (c *ValidatorsCache) getAllActiveValidatorsByEra(era uint64) ([]common.Address, error) {
+func (c *ValidatorsCache) getAllActiveValidatorsByEra(era uint64) []common.Address {
 	c.allMu.Lock()
 	defer c.allMu.Unlock()
 
 	validators, ok := c.allActiveValidatorsCache[era]
 	if !ok || validators == nil {
-		return nil, errNoEraValidators
+		return nil
 	}
 
-	return validators, nil
+	return validators
 }
 
 //nolint:unused // subnets support
