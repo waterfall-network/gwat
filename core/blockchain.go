@@ -2334,6 +2334,9 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		if ph == block.CpHash() {
 			pHdr := bc.GetHeader(ph)
 			cpCpHash = pHdr.CpHash
+			if pHdr.Height == 0 {
+				cpCpHash = pHdr.Hash()
+			}
 			_, cpCpAncestors, _, _ = bc.CollectAncestorsAftCpByTips(pHdr.ParentHashes, cpCpHash)
 			break
 		}
