@@ -143,11 +143,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	slotEra := bc.EpochToEra(slotEpoch)
 
-	_, ok := s.processTransition[slotEra.Number]
-	if ok {
-		log.Info("Era process transition period", "era", slotEra.Number)
-		return nil
-	}
+	s.checkTransitionProcessing(slotEra.Number)
 
 	validators = s.validatorsCache.getAllActiveValidatorsByEra(slotEra.Number)
 	if validators != nil {
@@ -320,6 +316,8 @@ func (s *storage) GetActiveValidatorsCount(bc blockchain, slot uint64) uint64 {
 	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	slotEra := bc.EpochToEra(slotEpoch)
 
+	s.checkTransitionProcessing(slotEra.Number)
+
 	vals, ok := s.validatorsCache.allActiveValidatorsCache[slotEra.Number]
 	if ok {
 		return uint64(len(vals))
@@ -363,4 +361,14 @@ func (s *storage) PrepareNextEraValidators(bc blockchain, slot uint64) {
 	}
 
 	delete(s.processTransition, slotEra.Number)
+}
+
+func (s *storage) checkTransitionProcessing(era uint64) {
+	_, transitionProcessing := s.processTransition[era]
+	if transitionProcessing {
+		log.Info("Era process transition period, waiting", "era", era)
+		for transitionProcessing {
+			_, transitionProcessing = s.processTransition[era]
+		}
+	}
 }
