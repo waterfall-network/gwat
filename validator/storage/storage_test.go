@@ -135,7 +135,8 @@ func TestGetValidators(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			addresses := store.GetValidators(bc, test.slot, "Tests")
+			addresses, err := store.GetValidators(bc, test.slot, "Tests")
+			testutils.AssertNoError(t, err)
 			testutils.AssertEqual(t, test.wantAddresses, addresses)
 		})
 	}

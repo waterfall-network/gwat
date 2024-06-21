@@ -23,12 +23,12 @@ func (m mockBlockchain) GetHeaderByHash(hash common.Hash) *types.Header {
 	panic("implement me")
 }
 
-func (m mockBlockchain) EnterNextEra(cp uint64, hash common.Hash) *Era {
+func (m mockBlockchain) EnterNextEra(cp uint64, hash common.Hash) (*Era, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m mockBlockchain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) {
+func (m mockBlockchain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) error {
 	//TODO implement me
 	panic("implement me")
 }

@@ -91,7 +91,16 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	// Get active validators number
 	bc := oracle.backend.BlockChain()
 	genesisGasLimit := oracle.backend.Genesis().GasLimit()
-	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, bf.block.Slot())
+	validatorsCount, err := bc.ValidatorStorage().GetActiveValidatorsCount(bc, bf.block.Slot())
+	if err != nil {
+		log.Error(
+			"Block processing error, can`t calculate base fee",
+			"blockHash", bf.block.Hash().Hex(),
+			"blockSlot", bf.block.Slot(),
+			"error", err,
+		)
+		return
+	}
 	creatorsPerSlotCount := oracle.backend.ChainConfig().ValidatorsPerSlot
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, bf.header.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))

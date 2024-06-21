@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,9 +28,9 @@ type blockchain interface {
 }
 
 type Storage interface {
-	GetValidators(bc blockchain, slot uint64, tmpFromWhere string) []common.Address
+	GetValidators(bc blockchain, slot uint64, tmpFromWhere string) ([]common.Address, error)
 	GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error)
-	GetActiveValidatorsCount(bc blockchain, slot uint64) uint64
+	GetActiveValidatorsCount(bc blockchain, slot uint64) (uint64, error)
 
 	SetValidator(stateDb vm.StateDB, val *Validator) error
 	GetValidator(stateDb vm.StateDB, address common.Address) (*Validator, error)
@@ -137,17 +138,20 @@ func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
 // GetValidators return two values: array of Validator and array of Validators addresses.
 // If parameter needAddresses is false it return array of Validator and nil value for validators addresses.
 // Use parameter activeOnly true if you need only active validators.
-func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string) []common.Address {
+func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string) ([]common.Address, error) {
 	var validators []common.Address
 
 	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	slotEra := bc.EpochToEra(slotEpoch)
 
-	s.checkTransitionProcessing(slotEra.Number)
+	err := s.checkTransitionProcessing(slotEra.Number)
+	if err != nil {
+		return nil, err
+	}
 
 	validators = s.validatorsCache.getAllActiveValidatorsByEra(slotEra.Number)
 	if validators != nil {
-		return validators
+		return validators, nil
 	}
 	log.Info("Get validators", "epoch", slotEpoch, "era", slotEra.Number, "root", slotEra.Root.Hex())
 
@@ -172,7 +176,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 		"slot", slot, "epoch", slotEpoch,
 	)
 
-	return validators
+	return validators, nil
 }
 
 // GetCreatorsBySlot return shuffled validators addresses from cache.
@@ -204,9 +208,9 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		return validators, nil
 	}
 
-	allValidators := s.GetValidators(bc, slot, "GetCreatorsBySlot")
-	if len(allValidators) == 0 {
-		return nil, errNoValidators
+	allValidators, err := s.GetValidators(bc, slot, "GetCreatorsBySlot")
+	if err != nil || len(allValidators) == 0 {
+		return nil, err
 	}
 
 	spineEpoch := uint64(0)
@@ -312,15 +316,18 @@ func (s *storage) AddValidatorToList(stateDb vm.StateDB, index uint64, validator
 	s.SetValidatorsList(stateDb, list)
 }
 
-func (s *storage) GetActiveValidatorsCount(bc blockchain, slot uint64) uint64 {
+func (s *storage) GetActiveValidatorsCount(bc blockchain, slot uint64) (uint64, error) {
 	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	slotEra := bc.EpochToEra(slotEpoch)
 
-	s.checkTransitionProcessing(slotEra.Number)
+	err := s.checkTransitionProcessing(slotEra.Number)
+	if err != nil {
+		return 0, err
+	}
 
 	vals, ok := s.validatorsCache.allActiveValidatorsCache[slotEra.Number]
 	if ok {
-		return uint64(len(vals))
+		return uint64(len(vals)), nil
 	}
 
 	count := uint64(0)
@@ -338,7 +345,7 @@ func (s *storage) GetActiveValidatorsCount(bc blockchain, slot uint64) uint64 {
 		}
 	}
 
-	return count
+	return count, nil
 }
 
 func (s *storage) PrepareNextEraValidators(bc blockchain, slot uint64) {
@@ -363,12 +370,23 @@ func (s *storage) PrepareNextEraValidators(bc blockchain, slot uint64) {
 	delete(s.processTransition, slotEra.Number)
 }
 
-func (s *storage) checkTransitionProcessing(era uint64) {
+func (s *storage) checkTransitionProcessing(era uint64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
 	_, transitionProcessing := s.processTransition[era]
 	if transitionProcessing {
 		log.Info("Era process transition period, waiting", "era", era)
 		for transitionProcessing {
-			_, transitionProcessing = s.processTransition[era]
+			select {
+			case <-ctx.Done():
+				return errors.New("check transition processing failed, timeout expired")
+			default:
+				_, transitionProcessing = s.processTransition[era]
+				time.Sleep(time.Millisecond * 200)
+			}
 		}
 	}
+
+	return nil
 }

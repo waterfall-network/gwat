@@ -335,7 +335,10 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 	if creatorsPerSlot, err := c.bc.ValidatorStorage().GetCreatorsBySlot(c.bc, header.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validatorsCount := c.bc.ValidatorStorage().GetActiveValidatorsCount(c.bc, header.Slot)
+	validatorsCount, err := c.bc.ValidatorStorage().GetActiveValidatorsCount(c.bc, header.Slot)
+	if err != nil {
+		return nil, err
+	}
 	header.BaseFee = misc.CalcSlotBaseFee(c.bc.Config(), creatorsPerSlotCount, validatorsCount, c.bc.Genesis().GasLimit())
 
 	return header, nil

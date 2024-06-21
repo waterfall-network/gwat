@@ -22,8 +22,8 @@ type Blockchain interface {
 	GetEraInfo() *EraInfo
 	Config() *params.ChainConfig
 	GetHeaderByHash(common.Hash) *types.Header
-	EnterNextEra(uint64, common.Hash) *Era
-	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
+	EnterNextEra(uint64, common.Hash) (*Era, error)
+	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) error
 }
 
 type Era struct {
@@ -206,7 +206,10 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 	// New era
 	if bc.GetEraInfo().ToEpoch()+1 <= cp.FinEpoch {
 		for curToEpoch+1 <= cp.FinEpoch {
-			nextEra := bc.EnterNextEra(curToEpoch+1, spineRoot)
+			nextEra, err := bc.EnterNextEra(curToEpoch+1, spineRoot)
+			if err != nil {
+				return err
+			}
 			if nextEra != nil {
 				curToEpoch = nextEra.To
 			} else {
@@ -223,7 +226,7 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 		)
 		return nil
 	} else if (bc.GetEraInfo().ToEpoch()+1)-bc.Config().TransitionPeriod == cp.FinEpoch && cp.FinEpoch <= bc.GetEraInfo().ToEpoch()+1 {
-		bc.StartTransitionPeriod(cp, spineRoot)
+		return bc.StartTransitionPeriod(cp, spineRoot)
 	}
 	return nil
 }

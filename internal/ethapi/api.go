@@ -169,7 +169,11 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]interface{}
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
+	validatorsCount, err := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
+	if err != nil {
+		log.Error("can`t prepare content", "error", err)
+		return nil
+	}
 	genesisGasLimit := bc.Genesis().GasLimit()
 	// Flatten the pending transactions
 	for account, txs := range pending {
@@ -207,7 +211,11 @@ func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
+	validatorsCount, err := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
+	if err != nil {
+		log.Error("can`t prepare content from", "error", err)
+		return nil
+	}
 	genesisGasLimit := bc.Genesis().GasLimit()
 
 	// Build the pending transactions
@@ -1820,7 +1828,10 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 			creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 		}
-		validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
+		validatorsCount, err := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
+		if err != nil {
+			return nil, err
+		}
 		genesisGasLimit := bc.Genesis().GasLimit()
 		return newRPCPendingTransaction(tx, s.b.ChainConfig(), validatorsCount, genesisGasLimit, creatorsPerSlotCount), nil
 	}
@@ -2096,7 +2107,10 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, curHeader.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	validatorsCount := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
+	validatorsCount, err := bc.ValidatorStorage().GetActiveValidatorsCount(bc, curHeader.Slot)
+	if err != nil {
+		return nil, err
+	}
 	genesisGasLimit := bc.Genesis().GasLimit()
 	for _, tx := range pending {
 		from, _ := types.Sender(s.signer, tx)
