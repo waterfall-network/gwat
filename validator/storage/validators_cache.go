@@ -13,7 +13,6 @@ var (
 	ErrNoStateValidatorInfo    = errors.New("there is no validator in the state")
 	errNoSubnetValidators      = errors.New("there are no validators for subnet")
 	errNoEraValidators         = errors.New("there are no validators for era")
-	errNoValidators            = errors.New("there ara no validators")
 	errBadBinaryData           = errors.New("bad binary data")
 )
 
