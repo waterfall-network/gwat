@@ -615,6 +615,7 @@ func (d *Downloader) getMode() SyncMode {
 }
 
 // syncWithPeerUnknownDagBlocks if remote peer has unknown dag blocks only sync such blocks only
+// nolint:unused
 func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.HashArray) (err error) {
 	// Make sure only one goroutine is ever allowed past this point at once
 	if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
@@ -837,7 +838,7 @@ func (d *Downloader) syncWithPeerUnknownBlocksWithParents(p *peerConnection, has
 		reqHashes = make(common.HashArray, 0, len(parents))
 		var wg sync.WaitGroup
 		var loadedMu sync.RWMutex
-		for ph, _ := range parents {
+		for ph := range parents {
 			if loadedHashesMap[ph] {
 				continue
 			}

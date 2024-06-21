@@ -758,15 +758,55 @@ func (d *Dag) removeTipsWithOutdatedCp() error {
 		if th == d.bc.Genesis().Hash() {
 			continue
 		}
-		cp := d.bc.GetCoordinatedCheckpoint(tip.CpHash)
-		if cp == nil {
-			err := errors.New("tips checkpoint not found")
-			log.Error("Removing tips with outdated cp failed", "err", err, "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
-			return err
+		for i := len(tip.OrderedAncestorsHashes) - 1; i >= 0; i-- {
+			ancHash := tip.OrderedAncestorsHashes[i]
+			ancHeader := d.bc.GetHeaderByHash(ancHash)
+			if ancHeader == nil {
+				rmTips = append(rmTips, th)
+				log.Warn("Removing outdated tips: rm tips",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
+			if ancHeader.Nr() > 0 {
+				continue
+			}
+			ancCp := d.bc.GetCoordinatedCheckpoint(ancHeader.CpHash)
+			if ancCp == nil {
+				rmTips = append(rmTips, th)
+				log.Warn("Removing outdated tips: ancestor cp not found",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
+			if d.bc.IsCheckpointOutdated(ancCp) {
+				rmTips = append(rmTips, th)
+				log.Warn("Removing outdated tips",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
 		}
-		if d.bc.IsCheckpointOutdated(cp) {
-			rmTips = append(rmTips, th)
-			log.Warn("Creator detect outdated cp", "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
+		if !rmTips.Has(th) {
+			cp := d.bc.GetCoordinatedCheckpoint(tip.CpHash)
+			if cp == nil {
+				rmTips = append(rmTips, th)
+				log.Warn("Removing outdated tips: cp not found",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+				)
+				continue
+			}
+			if d.bc.IsCheckpointOutdated(cp) {
+				rmTips = append(rmTips, th)
+				log.Warn("Removing outdated tips", "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
+			}
 		}
 	}
 	if len(rmTips) > 0 {
