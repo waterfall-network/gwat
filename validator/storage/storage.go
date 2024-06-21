@@ -378,12 +378,12 @@ func (s *storage) checkTransitionProcessing(era uint64) error {
 	if transitionProcessing {
 		log.Info("Era process transition period, waiting", "era", era)
 		for transitionProcessing {
+			time.Sleep(time.Millisecond * 200)
 			select {
 			case <-ctx.Done():
 				return errors.New("check transition processing failed, timeout expired")
 			default:
 				_, transitionProcessing = s.processTransition[era]
-				time.Sleep(time.Millisecond * 200)
 			}
 		}
 	}
