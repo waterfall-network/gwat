@@ -451,7 +451,7 @@ func (d *Downloader) SyncUnloadedParents(id string, hashes common.HashArray) err
 	if p == nil {
 		return errUnknownPeer
 	}
-	err = d.syncWithPeerUnknownDagBlocks(p, unloaded)
+	err = d.syncWithPeerUnknownBlocksWithParents(p, unloaded)
 	if err != nil {
 		log.Error("Sync unknown parents: failed", "err", err, "peer", id, "parents", unloaded)
 		return err
@@ -720,6 +720,180 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 			return nil
 		}
 		log.Error("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+		return err
+	}
+	return nil
+}
+
+// syncWithPeerUnknownBlocksWithParents fetching unloaded blocks by hashes from remote peer.
+func (d *Downloader) syncWithPeerUnknownBlocksWithParents(p *peerConnection, hashes common.HashArray) (err error) {
+	// Make sure only one goroutine is ever allowed past this point at once
+	if !atomic.CompareAndSwapInt32(&d.dagSyncing, 0, 1) {
+		return errBusy
+	}
+
+	iterCount := 0
+	defer func(start time.Time) {
+		atomic.StoreInt32(&d.dagSyncing, 0)
+		log.Info("Sync unknown blocks: end",
+			"elapsed", time.Since(start),
+			"iterCount", iterCount,
+		)
+	}(time.Now())
+
+	hashes.Deduplicate()
+	// filter existed blocks
+	delayed := d.blockchain.GetInsertDelayedHashes()
+	diffHashes := hashes.Difference(delayed)
+	dagBlocks := d.blockchain.GetBlocksByHashes(diffHashes)
+	reqHashes := make(common.HashArray, 0, len(diffHashes))
+	for _, h := range diffHashes {
+		if dagBlocks[h] == nil && h != (common.Hash{}) {
+			reqHashes = append(reqHashes, h)
+		}
+	}
+
+	log.Info("Sync unknown blocks", "reqHashes", len(reqHashes), "reqHashes", reqHashes)
+
+	if len(reqHashes) == 0 {
+		return nil
+	}
+
+	loadedHashesMap := make(map[common.Hash]bool, len(delayed))
+	for _, h := range delayed {
+		loadedHashesMap[h] = true
+	}
+	blocks := make(types.Blocks, 0, len(reqHashes))
+	for {
+		rawHdrs, err := d.fetchDagHeaders(p, reqHashes)
+		if err != nil {
+			log.Error("Sync unknown blocks: fetch headers failed",
+				"i", iterCount,
+				"err", err,
+				"reqHashes", reqHashes,
+			)
+			return err
+		}
+		hdrHashes := make(common.HashArray, 0, len(rawHdrs))
+		headers := make(types.Headers, 0, len(rawHdrs))
+		for _, hdr := range rawHdrs {
+			if hdr != nil {
+				headers = append(headers, hdr)
+				hdrHashes = append(hdrHashes, hdr.Hash())
+			}
+		}
+		if len(headers) == 0 {
+			log.Warn("Sync unknown blocks: no headers fetched",
+				"i", iterCount,
+				"headers", len(headers),
+				"raw", len(rawHdrs),
+				"reqHashes", reqHashes,
+			)
+			break
+		}
+
+		log.Info("Sync unknown blocks: fetch headers",
+			"i", iterCount,
+			"headers", len(headers),
+			"raw", len(rawHdrs),
+			"reqHashes", reqHashes,
+		)
+
+		// request bodies for retrieved headers only
+		txsMap, err := d.fetchDagTxs(p, hdrHashes)
+		if err != nil {
+			log.Error("Sync unknown blocks: fetch bodies failed",
+				"i", iterCount,
+				"err", err,
+			)
+			return err
+		}
+		log.Info("Sync unknown blocks: fetch bodies", "count", len(txsMap), "reqHashes", reqHashes)
+
+		parents := make(map[common.Hash]bool)
+		for _, header := range headers {
+			hash := header.Hash()
+			txs := txsMap[hash]
+			block := types.NewBlockWithHeader(header).WithBody(txs)
+			// quick body validation
+			if block.BodyHash() != block.Body().CalculateHash() {
+				log.Error("Sync unknown blocks: bad block bodyHash",
+					"i", iterCount,
+					"bodyHash", block.BodyHash().Hex(),
+					"calcBodyHash", block.Body().CalculateHash().Hex(),
+					"err", errInvalidBody,
+				)
+				return errInvalidBody
+			}
+			blocks = append(blocks, block)
+			loadedHashesMap[hash] = true
+			for _, ph := range block.ParentHashes() {
+				parents[ph] = true
+			}
+		}
+		log.Info("Sync unknown blocks: blocks assembled", "i", iterCount, "blocks", len(blocks), "reqHashes", reqHashes)
+
+		//collect unloaded parents
+		reqHashes = make(common.HashArray, 0, len(parents))
+		var wg sync.WaitGroup
+		var loadedMu sync.RWMutex
+		for ph, _ := range parents {
+			if loadedHashesMap[ph] {
+				continue
+			}
+			wg.Add(1)
+			go func(pHash common.Hash) {
+				defer wg.Done()
+				parent := d.blockchain.GetHeaderByHash(pHash)
+				if parent == nil {
+					reqHashes = append(reqHashes, pHash)
+				} else {
+					loadedMu.Lock()
+					loadedHashesMap[pHash] = true
+					loadedMu.Unlock()
+				}
+			}(ph)
+		}
+		wg.Wait()
+
+		log.Info("Sync unknown blocks: unloaded parents", "i", iterCount, "unloaded", reqHashes)
+
+		if len(reqHashes) == 0 {
+			break
+		}
+		iterCount++
+	}
+	log.Info("Sync unknown blocks: all blocks fetched", "blocks", len(blocks))
+
+	blocksBySlot, err := (&blocks).GroupBySlot()
+	if err != nil {
+		log.Error("Sync unknown blocks: group by slot failed",
+			"i", iterCount,
+			"err", err,
+		)
+		return err
+	}
+	//sort by slots
+	slots := common.SorterAscU64{}
+	for sl := range blocksBySlot {
+		slots = append(slots, sl)
+	}
+	sort.Sort(slots)
+	log.Info("Sync unknown blocks: sort slots", "blocks", len(blocks), "slots", slots)
+
+	insBlocks := make(types.Blocks, 0, len(blocks))
+	for _, slot := range slots {
+		slotBlocks := types.SpineSortBlocks(blocksBySlot[slot])
+		insBlocks = append(insBlocks, slotBlocks...)
+	}
+	log.Info("Sync unknown blocks: sort blocks", "blocks", len(blocks), "slots", slots)
+
+	if bl, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
+		if bl != nil {
+			log.Error("Sync unknown blocks: insert block to chain failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+		} else {
+			log.Error("Sync unknown blocks: insert block to chain failed", "err", err)
+		}
 		return err
 	}
 	return nil
@@ -1806,7 +1980,8 @@ Loop:
 
 	for pid, dag := range d.syncPeerHashes {
 		con := d.peers.Peer(pid)
-		err = d.syncWithPeerUnknownDagBlocks(con, dag)
+		//err = d.syncWithPeerUnknownDagBlocks(con, dag)
+		err = d.syncWithPeerUnknownBlocksWithParents(con, dag)
 		if err != nil {
 			log.Error("Sync head: block fetching failed", "err", err, "peer", pid, "blocks", dag)
 		}

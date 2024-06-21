@@ -349,11 +349,12 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 	}
 	d.bc.SetIsSynced(false)
 
-	lfNr := d.bc.GetLastFinalizedNumber()
-	err = d.finalizer.SetSpineState(&baseSpine, lfNr)
-	if err != nil {
-		return err
-	}
+	////todo check it
+	//lfNr := d.bc.GetLastFinalizedNumber()
+	//err = d.finalizer.SetSpineState(&baseSpine, lfNr)
+	//if err != nil {
+	//	return err
+	//}
 
 	d.bc.SetSyncCheckpointCache(cp)
 	defer d.bc.ResetSyncCheckpointCache()

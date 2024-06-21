@@ -269,9 +269,10 @@ func newHandler(config *handlerConfig) (*handler, error) {
 				"parents", block.ParentHashes(),
 				"peer", peerId,
 			)
-			//err = h.downloader.SyncUnloadedParents(peerId, block.ParentHashes())
-			// start sync dag
-			h.downloader.SynchroniseDagOnly(peerId)
+			// sync unloaded parents
+			err = h.downloader.SyncUnloadedParents(peerId, block.ParentHashes())
+			//// start sync dag
+			//h.downloader.SynchroniseDagOnly(peerId)
 			return err
 		}
 		if err == nil {
