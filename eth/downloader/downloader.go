@@ -699,27 +699,25 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	//try to insert all blocks
 	for {
 		var bl *types.Block
-		//if insertion failed - trying to insert after failed block
-		if bl != nil {
-			failedIx := 0
-			for i, b := range insBlocks {
-				failedIx = i
-				if bl.Hash() == b.Hash() {
-					break
-				}
-			}
-			if failedIx+1 >= len(insBlocks) {
-				return err
-			}
-			insBlocks = insBlocks[failedIx+1:]
-		}
-
 		if bl, err = d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
 			log.Error("Sync of unknown dag blocks: Failed writing blocks to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+			//if insertion failed - trying to insert after failed block
+			if bl != nil {
+				failedIx := 0
+				for i, b := range insBlocks {
+					failedIx = i
+					if bl.Hash() == b.Hash() {
+						break
+					}
+				}
+				if failedIx+1 < len(insBlocks) {
+					insBlocks = insBlocks[failedIx+1:]
+					continue
+				}
+				return nil
+			}
 		}
-		if err == nil {
-			return nil
-		}
+		return nil
 	}
 	return nil
 }
