@@ -92,6 +92,7 @@ type blockChain interface {
 
 type ethDownloader interface {
 	Synchronising() bool
+	OptimisticSpineSync(spines common.HashArray) error
 	MainSync(baseSpine common.Hash, spines common.HashArray) error
 	DagSync(baseSpine common.Hash, spines common.HashArray) error
 	Terminate()
@@ -358,7 +359,8 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 
 	d.bc.SetSyncCheckpointCache(cp)
 	defer d.bc.ResetSyncCheckpointCache()
-	if err = d.downloader.DagSync(baseSpine, spines); err != nil {
+	//if err = d.downloader.DagSync(baseSpine, spines); err != nil {
+	if err = d.downloader.OptimisticSpineSync(spines); err != nil {
 		return err
 	}
 	return nil

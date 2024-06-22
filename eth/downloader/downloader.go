@@ -387,10 +387,6 @@ func (d *Downloader) SyncUnloadedParents(id string, hashes common.HashArray) err
 	d.syncByHashesLock.Lock()
 	defer d.syncByHashesLock.Unlock()
 
-	// rm already loaded-not inserted
-	delayed := d.blockchain.GetInsertDelayedHashes()
-	hashes = hashes.Difference(delayed)
-
 	unloaded := make(common.HashArray, 0, len(hashes))
 	for _, h := range hashes {
 		if d.blockchain.GetHeaderByHash(h) == nil {
@@ -885,13 +881,28 @@ func (d *Downloader) syncWithPeerUnknownBlocksWithParents(p *peerConnection, has
 	}
 	log.Info("Sync unknown blocks: sort blocks", "blocks", len(blocks), "slots", slots)
 
-	if bl, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
-		if bl != nil {
-			log.Error("Sync unknown blocks: insert block to chain failed", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
-		} else {
-			log.Error("Sync unknown blocks: insert block to chain failed", "err", err)
+	//try to insert all blocks
+	for {
+		var bl *types.Block
+		if bl, err = d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
+			log.Error("Sync unknown blocks: Failed writing blocks to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+			//if insertion failed - trying to insert after failed block
+			if bl != nil {
+				failedIx := 0
+				for i, b := range insBlocks {
+					failedIx = i
+					if bl.Hash() == b.Hash() {
+						break
+					}
+				}
+				if failedIx+1 < len(insBlocks) {
+					insBlocks = insBlocks[failedIx+1:]
+					continue
+				}
+				return nil
+			}
 		}
-		return err
+		return nil
 	}
 	return nil
 }
@@ -1265,6 +1276,58 @@ func (d *Downloader) requestDagTxs(p *peerConnection, hashes common.HashArray) (
 			return nil, errTimeout
 		}
 	}
+}
+
+func (d *Downloader) OptimisticSpineSync(spines common.HashArray) error {
+	log.Info("Sync opt spines", "spines", len(spines), "peers", d.peers.Len(), "spines", spines)
+	if len(spines) == 0 {
+		return nil
+	}
+	if d.peers.Len() == 0 {
+		log.Error("Sync opt spines", "spines", len(spines), "peers.Len", d.peers.Len(), "err", errNoPeers, "spines", spines)
+		return errNoPeers
+	}
+
+	//select peer
+	for _, con := range d.peers.AllPeers() {
+		err := d.SyncUnloadedParents(con.id, spines)
+		switch err {
+		case nil:
+			//check all spines loaded
+			unloadedSpines := make(common.HashArray, 0, len(spines))
+			for _, spine := range spines {
+				if d.blockchain.GetHeaderByHash(spine) == nil {
+					unloadedSpines = append(unloadedSpines, spine)
+				}
+			}
+			if len(unloadedSpines) > 0 {
+				spines = unloadedSpines
+				continue
+			}
+			return nil
+		case errBusy, errCanceled:
+			log.Warn("Sync opt spines failed, trying next peer",
+				"err", err,
+				"spines", spines,
+			)
+			continue
+		}
+		if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
+			errors.Is(err, errStallingPeer) || errors.Is(err, errEmptyHeaderSet) ||
+			errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
+			errors.Is(err, errInvalidBody) {
+			log.Warn("Sync opt spines failed, dropping peer", "peer", con.id, "err", err)
+			if d.dropPeer == nil {
+				// The dropPeer method is nil when `--copydb` is used for a local copy.
+				// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
+				log.Warn("Sync opt spines wants to drop peer, but peerdrop-function is not set", "peer", con.id)
+			} else {
+				d.dropPeer(con.id)
+			}
+		}
+		log.Warn("Sync opt spines failed, trying next peer", "err", err)
+	}
+	return errNoPeers
 }
 
 func (d *Downloader) MainSync(baseSpine common.Hash, spines common.HashArray) error {
