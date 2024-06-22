@@ -645,21 +645,19 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 
 	log.Info("Sync of unknown dag blocks", "count", len(dag), "dag", dag)
 
-	headers, err := d.fetchDagHeaders(p, dag)
-	log.Info("Sync of unknown dag blocks: dag headers retrieved", "count", len(headers), "headers", headers, "err", err)
+	rawHdrs, err := d.fetchDagHeaders(p, dag)
+	log.Info("Sync of unknown dag blocks: dag headers retrieved", "count", len(rawHdrs), "headers", rawHdrs, "err", err)
 	if err != nil {
 		return err
 	}
-	// request bodies for retrieved headers only
-	dag = make(common.HashArray, 0, len(headers))
-	for _, hdr := range headers {
-		if hdr != nil {
-			dag = append(dag, hdr.Hash())
-		}
-	}
-	if len(dag) == 0 {
+
+	headers, _, _ := d.filterConsistentParentsChains(rawHdrs)
+	if len(headers) == 0 {
 		return nil
 	}
+
+	dag = *headers.GetHashes()
+
 	txsMap, err := d.fetchDagTxs(p, dag)
 	log.Info("Sync of unknown dag blocks: dag transactions retrieved", "count", len(txsMap), "err", err)
 	if err != nil {
@@ -698,30 +696,30 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 	}
 	log.Info("Sync of unknown dag blocks: SpineSortBlocks 444", "blocks", len(blocks), "err", err)
 
-	if bl, err := d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
-		if errors.Is(err, core.ErrInsertUncompletedDag) {
-			log.Warn("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
-			//go func() {
-			//	failedSlot := bl.Slot()
-			//	slotBlocks := blocksBySlot[failedSlot]
-			//	unParents := make(common.HashArray, 0, 32)
-			//	for _, b := range slotBlocks {
-			//		unParents = append(unParents, b.ParentHashes()...)
-			//	}
-			//	unParents.Deduplicate()
-			//	if len(unParents) > 0 {
-			//		log.Info("Sync of unknown dag blocks: recursive call",
-			//			"err", err,
-			//			"unloaded", unParents,
-			//		)
-			//		//recursive call
-			//		d.SyncUnloadedParents(p.id, unParents)
-			//	}
-			//}()
+	//try to insert all blocks
+	for {
+		var bl *types.Block
+		//if insertion failed - trying to insert after failed block
+		if bl != nil {
+			failedIx := 0
+			for i, b := range insBlocks {
+				failedIx = i
+				if bl.Hash() == b.Hash() {
+					break
+				}
+			}
+			if failedIx+1 >= len(insBlocks) {
+				return err
+			}
+			insBlocks = insBlocks[failedIx+1:]
+		}
+
+		if bl, err = d.blockchain.WriteSyncBlocks(insBlocks, true); err != nil {
+			log.Error("Sync of unknown dag blocks: Failed writing blocks to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
+		}
+		if err == nil {
 			return nil
 		}
-		log.Error("Sync of unknown dag blocks: Failed writing block to chain  (sync unl)", "err", err, "bl.Slot", bl.Slot(), "hash", bl.Hash().Hex())
-		return err
 	}
 	return nil
 }
@@ -2228,4 +2226,66 @@ func (d *Downloader) getPeerSyncChans(peerId string) *syncPeerChans {
 		return ch
 	}
 	return nil
+}
+
+func (d *Downloader) filterConsistentParentsChains(headers types.Headers) (filtered, failed types.Headers, unknownParents common.HashArray) {
+	knownHeaderMap := make(map[common.Hash]bool)
+	parentsHdrMap := make(map[common.Hash]common.HashArray)
+	for _, hdr := range headers {
+		if hdr == nil {
+			continue
+		}
+		knownHeaderMap[hdr.Hash()] = true
+		hdrHash := hdr.Hash()
+		for _, ph := range hdr.ParentHashes {
+			if _, ok := parentsHdrMap[ph]; !ok {
+				parentsHdrMap[ph] = make(common.HashArray, 0, len(headers))
+			}
+			parentsHdrMap[ph] = append(parentsHdrMap[ph], hdrHash)
+		}
+	}
+	unknownParents = make(common.HashArray, 0, len(parentsHdrMap))
+
+	//collect unloaded parents
+	var wg sync.WaitGroup
+	var loadedMu sync.RWMutex
+	for ph := range parentsHdrMap {
+		if knownHeaderMap[ph] {
+			continue
+		}
+		wg.Add(1)
+		go func(pHash common.Hash) {
+			defer wg.Done()
+			parent := d.blockchain.GetHeaderByHash(pHash)
+			if parent == nil {
+				unknownParents = append(unknownParents, pHash)
+			} else {
+				loadedMu.Lock()
+				knownHeaderMap[pHash] = true
+				loadedMu.Unlock()
+			}
+		}(ph)
+	}
+	wg.Wait()
+
+	//collect failed headers
+	failedHeaderMap := make(map[common.Hash]bool)
+	for _, unph := range unknownParents {
+		for _, fh := range parentsHdrMap[unph] {
+			failedHeaderMap[fh] = true
+		}
+	}
+
+	// filter target headers
+	filtered = make(types.Headers, 0, len(headers)-len(failedHeaderMap))
+	failed = make(types.Headers, 0, len(failedHeaderMap))
+	for _, hdr := range headers {
+		hash := hdr.Hash()
+		if failedHeaderMap[hash] {
+			failed = append(failed, hdr)
+		} else {
+			filtered = append(filtered, hdr)
+		}
+	}
+	return filtered, failed, unknownParents
 }
