@@ -1981,8 +1981,8 @@ Loop:
 
 	for pid, dag := range d.syncPeerHashes {
 		con := d.peers.Peer(pid)
-		//err = d.syncWithPeerUnknownDagBlocks(con, dag)
-		err = d.syncWithPeerUnknownBlocksWithParents(con, dag)
+		err = d.syncWithPeerUnknownDagBlocks(con, dag)
+		//err = d.syncWithPeerUnknownBlocksWithParents(con, dag)
 		if err != nil {
 			log.Error("Sync head: block fetching failed", "err", err, "peer", pid, "blocks", dag)
 		}

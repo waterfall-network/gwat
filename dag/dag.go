@@ -246,7 +246,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			return res
 		}
 	case types.HeadSync:
-		if err = d.downloader.DagSync(baseSpine, spines); err != nil {
+		if err = d.downloader.DagSync(data.Checkpoint.Spine, spines); err != nil {
 			strErr := err.Error()
 			res.Error = &strErr
 			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
