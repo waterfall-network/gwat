@@ -715,7 +715,6 @@ func (d *Downloader) syncWithPeerUnknownDagBlocks(p *peerConnection, dag common.
 		}
 		return nil
 	}
-	return nil
 }
 
 // syncWithPeerUnknownBlocksWithParents fetching unloaded blocks by hashes from remote peer.
@@ -904,7 +903,6 @@ func (d *Downloader) syncWithPeerUnknownBlocksWithParents(p *peerConnection, has
 		}
 		return nil
 	}
-	return nil
 }
 
 // cancel aborts all of the operations and resets the queue. However, cancel does

@@ -568,6 +568,9 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 			log.Crit("Set last coordinated checkpoint failed", "err", err)
 		}
 	}
+
+	bc.RemoveOutdatedTips()
+
 	// rm stale blockDags
 	go func() {
 		if currCp != nil && cp.Root != currCp.Root {
@@ -2859,6 +2862,122 @@ func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
 		"prevCp.Spine", prevCp.Spine.Hex(),
 	)
 	return true
+}
+
+// RemoveOutdatedTips remove tips with outdated cp.
+func (bc *BlockChain) RemoveOutdatedTips() {
+	tips := bc.GetTips().Copy()
+	rmTips := common.HashArray{}
+
+	checkedAncestors := make(map[common.Hash]bool)
+
+	for th, tip := range tips {
+		if th == bc.Genesis().Hash() {
+			continue
+		}
+		for i := len(tip.OrderedAncestorsHashes) - 1; i >= 0; i-- {
+			ancHash := tip.OrderedAncestorsHashes[i]
+			if valid, ok := checkedAncestors[ancHash]; ok {
+				if valid {
+					continue
+				}
+				rmTips = append(rmTips, th)
+				break
+			}
+
+			ancHeader := bc.GetHeaderByHash(ancHash)
+			if ancHeader == nil {
+				rmTips = append(rmTips, th)
+				checkedAncestors[ancHash] = false
+				log.Warn("Removing outdated tips: rm tips",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
+			if ancHeader.Nr() > 0 {
+				checkedAncestors[th] = true
+				continue
+			}
+			ancCp := bc.GetCoordinatedCheckpoint(ancHeader.CpHash)
+			if ancCp == nil {
+				rmTips = append(rmTips, th)
+				checkedAncestors[ancHash] = false
+				log.Warn("Removing outdated tips: ancestor cp not found",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
+			if bc.IsCheckpointOutdated(ancCp) {
+				rmTips = append(rmTips, th)
+				checkedAncestors[ancHash] = false
+				log.Warn("Removing outdated tips",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
+			checkedAncestors[th] = true
+		}
+		if !rmTips.Has(th) {
+			cp := bc.GetCoordinatedCheckpoint(tip.CpHash)
+			if cp == nil {
+				rmTips = append(rmTips, th)
+				checkedAncestors[th] = false
+				log.Warn("Removing outdated tips: cp not found",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+				)
+				continue
+			}
+			if bc.IsCheckpointOutdated(cp) {
+				rmTips = append(rmTips, th)
+				checkedAncestors[th] = false
+				log.Warn("Removing outdated tips", "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
+			}
+		}
+	}
+
+	if len(rmTips) > 0 {
+		// collect blocks to rm
+		validAncMap := make(map[common.Hash]bool)
+		for th, tip := range tips {
+			if rmTips.Has(th) {
+				// if invalid tips
+				for _, ah := range tip.OrderedAncestorsHashes {
+					if _, ok := validAncMap[ah]; !ok {
+						validAncMap[ah] = false
+					}
+				}
+				if _, ok := validAncMap[th]; !ok {
+					validAncMap[th] = false
+				}
+				continue
+			}
+			// if valid tips
+			for _, ah := range tip.OrderedAncestorsHashes {
+				validAncMap[ah] = true
+			}
+			validAncMap[th] = true
+		}
+		go func() {
+			// rm invalid blocks
+			for h, valid := range validAncMap {
+				log.Warn("Removing outdated tips", "valid", valid, "hash", h.Hex())
+				if valid {
+					continue
+				}
+				bc.rmBlockData(h, nil)
+			}
+		}()
+
+		bc.RemoveTips(rmTips)
+		bc.WriteCurrentTips()
+	}
 }
 
 // insertBlocks inserts blocks to chain

@@ -695,10 +695,6 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	if err := d.removeTipsWithOutdatedCp(); err != nil {
-		return
-	}
-
 	if d.Creator().IsRunning() {
 		var canCreate bool
 		for _, account := range slotCreators {
@@ -750,72 +746,6 @@ func (d *Dag) isCoordinatorConnectionLost() bool {
 	}
 	slot = si.CurrentSlot()
 	return (slot - d.getLastFinalizeApiSlot()) > si.SlotsPerEpoch
-}
-
-// removeTipsWithOutdatedCp remove tips with outdated cp.
-func (d *Dag) removeTipsWithOutdatedCp() error {
-	tips := d.bc.GetTips()
-	rmTips := common.HashArray{}
-	for th, tip := range tips.Copy() {
-		if th == d.bc.Genesis().Hash() {
-			continue
-		}
-		for i := len(tip.OrderedAncestorsHashes) - 1; i >= 0; i-- {
-			ancHash := tip.OrderedAncestorsHashes[i]
-			ancHeader := d.bc.GetHeaderByHash(ancHash)
-			if ancHeader == nil {
-				rmTips = append(rmTips, th)
-				log.Warn("Removing outdated tips: rm tips",
-					"tip.CpHash", tip.CpHash.Hex(),
-					"tip.Hash", th.Hex(),
-					"ancestor", ancHash.Hex(),
-				)
-				break
-			}
-			if ancHeader.Nr() > 0 {
-				continue
-			}
-			ancCp := d.bc.GetCoordinatedCheckpoint(ancHeader.CpHash)
-			if ancCp == nil {
-				rmTips = append(rmTips, th)
-				log.Warn("Removing outdated tips: ancestor cp not found",
-					"tip.CpHash", tip.CpHash.Hex(),
-					"tip.Hash", th.Hex(),
-					"ancestor", ancHash.Hex(),
-				)
-				break
-			}
-			if d.bc.IsCheckpointOutdated(ancCp) {
-				rmTips = append(rmTips, th)
-				log.Warn("Removing outdated tips",
-					"tip.CpHash", tip.CpHash.Hex(),
-					"tip.Hash", th.Hex(),
-					"ancestor", ancHash.Hex(),
-				)
-				break
-			}
-		}
-		if !rmTips.Has(th) {
-			cp := d.bc.GetCoordinatedCheckpoint(tip.CpHash)
-			if cp == nil {
-				rmTips = append(rmTips, th)
-				log.Warn("Removing outdated tips: cp not found",
-					"tip.CpHash", tip.CpHash.Hex(),
-					"tip.Hash", th.Hex(),
-				)
-				continue
-			}
-			if d.bc.IsCheckpointOutdated(cp) {
-				rmTips = append(rmTips, th)
-				log.Warn("Removing outdated tips", "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
-			}
-		}
-	}
-	if len(rmTips) > 0 {
-		d.bc.RemoveTips(rmTips)
-		d.bc.WriteCurrentTips()
-	}
-	return nil
 }
 
 func (d *Dag) getCheckpoint() *types.Checkpoint {

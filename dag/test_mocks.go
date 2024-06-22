@@ -699,6 +699,11 @@ type MockethDownloader struct {
 	recorder *MockethDownloaderMockRecorder
 }
 
+func (m *MockethDownloader) OptimisticSpineSync(spines common.HashArray) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 // MockethDownloaderMockRecorder is the mock recorder for MockethDownloader.
 type MockethDownloaderMockRecorder struct {
 	mock *MockethDownloader
