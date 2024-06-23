@@ -827,26 +827,17 @@ func (d *Downloader) syncWithPeerUnknownBlocksWithParents(p *peerConnection, has
 
 		//collect unloaded parents
 		reqHashes = make(common.HashArray, 0, len(parents))
-		var wg sync.WaitGroup
-		var loadedMu sync.RWMutex
 		for ph := range parents {
 			if loadedHashesMap[ph] {
 				continue
 			}
-			wg.Add(1)
-			go func(pHash common.Hash) {
-				defer wg.Done()
-				parent := d.blockchain.GetHeaderByHash(pHash)
-				if parent == nil {
-					reqHashes = append(reqHashes, pHash)
-				} else {
-					loadedMu.Lock()
-					loadedHashesMap[pHash] = true
-					loadedMu.Unlock()
-				}
-			}(ph)
+			parent := d.blockchain.GetHeaderByHash(ph)
+			if parent == nil {
+				reqHashes = append(reqHashes, ph)
+			} else {
+				loadedHashesMap[ph] = true
+			}
 		}
-		wg.Wait()
 
 		log.Info("Sync unknown blocks: unloaded parents", "i", iterCount, "unloaded", reqHashes)
 
@@ -2306,26 +2297,17 @@ func (d *Downloader) filterConsistentParentsChains(headers types.Headers) (filte
 	unknownParents = make(common.HashArray, 0, len(parentsHdrMap))
 
 	//collect unloaded parents
-	var wg sync.WaitGroup
-	var loadedMu sync.RWMutex
 	for ph := range parentsHdrMap {
 		if knownHeaderMap[ph] {
 			continue
 		}
-		wg.Add(1)
-		go func(pHash common.Hash) {
-			defer wg.Done()
-			parent := d.blockchain.GetHeaderByHash(pHash)
-			if parent == nil {
-				unknownParents = append(unknownParents, pHash)
-			} else {
-				loadedMu.Lock()
-				knownHeaderMap[pHash] = true
-				loadedMu.Unlock()
-			}
-		}(ph)
+		parent := d.blockchain.GetHeaderByHash(ph)
+		if parent == nil {
+			unknownParents = append(unknownParents, ph)
+		} else {
+			knownHeaderMap[ph] = true
+		}
 	}
-	wg.Wait()
 
 	//collect failed headers
 	failedHeaderMap := make(map[common.Hash]bool)
