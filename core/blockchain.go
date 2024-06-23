@@ -2505,7 +2505,7 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 }
 
 func (bc *BlockChain) VerifyBlockSlot(header *types.Header) bool {
-	if header.Slot > bc.GetSlotInfo().CurrentSlot() {
+	if header.Slot > bc.GetSlotInfo().CurrentSlot()+1 {
 		log.Warn("Block verification: future slot",
 			"currentSlot", bc.GetSlotInfo().CurrentSlot(),
 			"blockSlot", header.Slot,
