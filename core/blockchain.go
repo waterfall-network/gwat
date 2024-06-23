@@ -2949,7 +2949,18 @@ func (bc *BlockChain) RemoveOutdatedTips() {
 			if rmTips.Has(th) {
 				// if invalid tips
 				for _, ah := range tip.OrderedAncestorsHashes {
+					if valid, ok := checkedAncestors[ah]; ok && valid {
+						//skip valid
+						validAncMap[ah] = true
+						continue
+					}
 					if _, ok := validAncMap[ah]; !ok {
+						aHeader := bc.GetHeaderByHash(ah)
+						if aHeader != nil && aHeader.Nr() > 0 {
+							// if finalized
+							validAncMap[ah] = true
+							continue
+						}
 						validAncMap[ah] = false
 					}
 				}
