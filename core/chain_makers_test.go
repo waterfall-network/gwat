@@ -117,7 +117,7 @@ func getTestBlockchainAndBlocks() (*BlockChain, []*types.Block) {
 	rawdb.WriteCoordinatedCheckpoint(db, genesisCp)
 	rawdb.WriteEpoch(db, 0, genesisCp.Spine)
 
-	genesisEraLength := era.EstimateEraLength(genspec.Config, uint64(len(genspec.Validators)))
+	genesisEraLength := era.EstimateEraLength(genspec.Config, uint64(len(genspec.Validators)), 0)
 	genesisEra := era.Era{0, 0, genesisEraLength - 1, genesisBlock.Root()}
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(db, genesisEra.Number)

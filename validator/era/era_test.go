@@ -145,6 +145,7 @@ func TestEstimateEraLength(t *testing.T) {
 			EpochsPerEra:      20,
 			SlotsPerEpoch:     32,
 			ValidatorsPerSlot: 4,
+			StartEpochsPerEra: 30,
 		},
 		slotInfo: types.SlotInfo{
 			SlotsPerEpoch: 32,
@@ -152,13 +153,13 @@ func TestEstimateEraLength(t *testing.T) {
 	}
 
 	// Ensure that the EstimateEraLength function returns the correct era length for different numbers of validators
-	if EstimateEraLength(bc.Config(), 1000) != 20 {
-		t.Errorf("Expected EstimateEraLength to return 20, but got %v", EstimateEraLength(bc.Config(), 1000))
+	if EstimateEraLength(bc.Config(), 1000, 0) != 20 {
+		t.Errorf("Expected EstimateEraLength to return 20, but got %v", EstimateEraLength(bc.Config(), 1000, 0))
 	}
-	if EstimateEraLength(bc.Config(), 10000) != 80 {
-		t.Errorf("Expected EstimateEraLength to return 80, but got %v", EstimateEraLength(bc.Config(), 10000))
+	if EstimateEraLength(bc.Config(), 10000, 20) != 80 {
+		t.Errorf("Expected EstimateEraLength to return 80, but got %v", EstimateEraLength(bc.Config(), 10000, 20))
 	}
-	if EstimateEraLength(bc.Config(), 20000) != 160 {
-		t.Errorf("Expected EstimateEraLength to return 160, but got %v", EstimateEraLength(bc.Config(), 20000))
+	if EstimateEraLength(bc.Config(), 20000, 30) != 20 {
+		t.Errorf("Expected EstimateEraLength to return 160, but got %v", EstimateEraLength(bc.Config(), 20000, 30))
 	}
 }

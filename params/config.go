@@ -68,6 +68,7 @@ var (
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
 		ForkSlotShanghai:       0,
+		StartEpochsPerEra:      0,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -105,6 +106,7 @@ var (
 		ForkSlotDelegate:       2729920,
 		ForkSlotShanghai:       math.MaxUint64,
 		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
+		StartEpochsPerEra:      math.MaxUint64,
 	}
 
 	// TestNet8TrustedCheckpoint contains the light client trusted checkpoint for the Testnet8.
@@ -159,6 +161,7 @@ var (
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
 		ForkSlotShanghai:       0,
+		StartEpochsPerEra:      0,
 	}
 )
 
@@ -233,7 +236,7 @@ type ChainConfig struct {
 	// fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	AcceptCpRootOnFinEpoch map[common.Hash][]uint64 `json:"acceptCpRootOnFinEpoch"`
 
-	FixEraLengthNumber uint64 `json:"fixEraLengthNumber"`
+	StartEpochsPerEra uint64 `json:"startEpochsPerEra"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
