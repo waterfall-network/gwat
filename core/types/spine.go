@@ -109,6 +109,48 @@ func CalculateOptimisticSpines(slotBlocks Headers) (common.HashArray, error) {
 	return optimisticSpines, nil
 }
 
+// OptimisticSortSlotHeaders sorts headers of the same slot by optimistic order.
+func OptimisticSortSlotHeaders(slotHeaders []*Header) common.HashArray {
+	heightPlenMap := map[uint64]map[uint64]common.HashArray{}
+	for _, bl := range slotHeaders {
+		h := bl.Height
+		plen := uint64(len(bl.ParentHashes))
+		hash := bl.Hash()
+		if heightPlenMap[h] == nil {
+			heightPlenMap[h] = map[uint64]common.HashArray{}
+		}
+		heightPlenMap[h][plen] = append(heightPlenMap[h][plen], hash)
+	}
+
+	//sort by height
+	heightKeys := make(common.SorterDescU64, 0, len(heightPlenMap))
+	for k := range heightPlenMap {
+		heightKeys = append(heightKeys, k)
+	}
+	sort.Sort(heightKeys)
+
+	sortedHashes := make(common.HashArray, 0, len(slotHeaders))
+	for _, hk := range heightKeys {
+		plenMap := heightPlenMap[hk]
+		// sort by number of parents
+		plenKeys := make(common.SorterDescU64, 0, len(plenMap))
+		for plk := range plenMap {
+			plenKeys = append(plenKeys, plk)
+		}
+		sort.Sort(plenKeys)
+		for _, k := range plenKeys {
+			hashKeys := plenMap[k]
+			// sort by hash
+			sort.Slice(hashKeys, func(i, j int) bool {
+				cmp := bytes.Compare(hashKeys[i][:], hashKeys[j][:]) < 0
+				return cmp
+			})
+			sortedHashes = append(sortedHashes, hashKeys...)
+		}
+	}
+	return sortedHashes
+}
+
 func selectSpinesByMaxParentsCount(headers Headers) Headers {
 	var maxParents uint64
 	maxParentsBlocks := make(Headers, 0)

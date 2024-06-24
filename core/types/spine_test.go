@@ -611,3 +611,103 @@ func addParents(blocks SlotSpineMap, blocksInChain map[common.Hash]struct{}, bc 
 		}
 	}
 }
+
+func TestOptimisticSortSlotHeaders_OK(t *testing.T) {
+	block1 := &Header{
+		Slot:         1,
+		ParentHashes: nil,
+		Height:       10,
+	}
+	block2 := &Header{
+		Slot:         1,
+		ParentHashes: nil,
+		Height:       8,
+	}
+	block3 := &Header{
+		Slot: 1,
+		ParentHashes: common.HashArray{
+			common.Hash{0x01},
+			common.Hash{0x02},
+			common.Hash{0x03},
+			common.Hash{0x04},
+		},
+		Height: 25,
+	}
+	block4 := &Header{
+		Slot: 1,
+		ParentHashes: common.HashArray{
+			common.Hash{0x01},
+			common.Hash{0x02},
+			common.Hash{0x03},
+			common.Hash{0x04},
+			common.Hash{0x05},
+		},
+		Height: 25,
+	}
+	block5 := &Header{
+		Slot: 1,
+		ParentHashes: common.HashArray{
+			common.Hash{0x01},
+			common.Hash{0x02},
+		},
+		Height: 25,
+	}
+	//0x731a10de0a2607e6dab69c682715bcc9937a40bdd0feb164aadc96db577b879d
+	block_0x731a := &Header{
+		Slot:   1,
+		TxHash: common.Hash{0x015, 8},
+		ParentHashes: common.HashArray{
+			common.Hash{0x01},
+			common.Hash{0x02},
+		},
+		Height: 30,
+	}
+	//0xbfd31be113ce9e6364523c94aab0a41829916d6527ee92f20ecad08b74a25d9f
+	block_0xbfd3 := &Header{
+		Slot:   1,
+		TxHash: common.Hash{0x02},
+		ParentHashes: common.HashArray{
+			common.Hash{0x01},
+			common.Hash{0x02},
+		},
+		Height: 30,
+	}
+	//0x460adfd3c947ca4458bc3817fcde7088bef645683d3fbe8c785ceb6607d051b0
+	block_0x460a := &Header{
+		Slot:   1,
+		TxHash: common.Hash{0x01},
+		ParentHashes: common.HashArray{
+			common.Hash{0x01},
+			common.Hash{0x02},
+		},
+		Height: 30,
+	}
+	testCases := []struct {
+		name           string
+		blocks         Headers
+		expectedBlocks common.HashArray
+	}{
+		{
+			name:           "Sort by height",
+			blocks:         Headers{block2, block1},
+			expectedBlocks: common.HashArray{block1.Hash(), block2.Hash()},
+		},
+		{
+			name:           "Sort by parents count",
+			blocks:         Headers{block3, block4, block5},
+			expectedBlocks: common.HashArray{block4.Hash(), block3.Hash(), block5.Hash()},
+		},
+		{
+			name:           "Sort by hashes",
+			blocks:         Headers{block_0xbfd3, block_0x731a, block_0x460a},
+			expectedBlocks: common.HashArray{block_0x460a.Hash(), block_0x731a.Hash(), block_0xbfd3.Hash()},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidates := OptimisticSortSlotHeaders(testCase.blocks)
+			testutils.AssertEqual(t, testCase.expectedBlocks, candidates)
+		})
+	}
+}

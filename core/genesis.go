@@ -191,10 +191,10 @@ func (e *GenesisMismatchError) Error() string {
 //
 // The returned chain configuration is never nil.
 func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis, nil)
+	return SetupGenesisBlockWithOverride(db, genesis, nil, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegatingStakeSlot *uint64) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegatingStakeSlot, prefixFinSlot *uint64) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -209,6 +209,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 		}
 		if delegatingStakeSlot != nil {
 			genesis.Config.ForkSlotDelegate = *delegatingStakeSlot
+		}
+		if prefixFinSlot != nil {
+			genesis.Config.ForkSlotPrefixFin = *prefixFinSlot
 		}
 		block, err := genesis.Commit(db)
 		log.Info("Writing custom genesis block", "hash", block.Hash().Hex(), "root", block.Root().Hex())
@@ -251,6 +254,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 	if delegatingStakeSlot != nil {
 		newcfg.ForkSlotDelegate = *delegatingStakeSlot
 	}
+	if prefixFinSlot != nil {
+		newcfg.ForkSlotPrefixFin = *prefixFinSlot
+	}
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
@@ -269,6 +275,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 		}
 		if delegatingStakeSlot != nil {
 			storedcfg.ForkSlotDelegate = *delegatingStakeSlot
+		}
+		if storedcfg.ForkSlotPrefixFin == 0 {
+			storedcfg.ForkSlotPrefixFin = newcfg.ForkSlotPrefixFin
+		}
+		if prefixFinSlot != nil {
+			storedcfg.ForkSlotPrefixFin = *prefixFinSlot
 		}
 		if storedcfg.ForkSlotSubNet1 == 0 {
 			storedcfg.ForkSlotSubNet1 = newcfg.ForkSlotSubNet1
