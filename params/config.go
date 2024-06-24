@@ -234,7 +234,7 @@ type ChainConfig struct {
 	ForkSlotSubNet1   uint64 `json:"forkSlotSubNet1,omitempty"`
 	ForkSlotDelegate  uint64 `json:"forkSlotDelegate,omitempty"`
 	ForkSlotPrefixFin uint64 `json:"forkSlotPrefixFin,omitempty"`
-	ForkSlotShanghai uint64 `json:"forkSlotShanghai,omitempty"`
+	ForkSlotShanghai  uint64 `json:"forkSlotShanghai,omitempty"`
 
 	// fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	AcceptCpRootOnFinEpoch map[common.Hash][]uint64 `json:"acceptCpRootOnFinEpoch"`
