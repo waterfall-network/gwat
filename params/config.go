@@ -232,6 +232,8 @@ type ChainConfig struct {
 
 	// fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	AcceptCpRootOnFinEpoch map[common.Hash][]uint64 `json:"acceptCpRootOnFinEpoch"`
+
+	FixEraLengthNumber uint64 `json:"fixEraLengthNumber"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

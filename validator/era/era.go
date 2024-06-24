@@ -45,7 +45,14 @@ func NewEra(number, from, to uint64, root common.Hash) *Era {
 
 func NextEra(bc Blockchain, root common.Hash, numValidators uint64) *Era {
 	nextEraNumber := bc.GetEraInfo().Number() + 1
-	nextEraLength := EstimateEraLength(bc.Config(), numValidators)
+
+	var nextEraLength uint64
+	if nextEraNumber >= bc.Config().FixEraLengthNumber {
+		nextEraLength = bc.Config().EpochsPerEra
+	} else {
+		nextEraLength = EstimateEraLength(bc.Config(), numValidators)
+	}
+
 	nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
 	nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
 
