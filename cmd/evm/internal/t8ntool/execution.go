@@ -50,7 +50,7 @@ type Prestate struct {
 type ExecutionResult struct {
 	StateRoot   common.Hash           `json:"stateRoot"`
 	TxRoot      common.Hash           `json:"txRoot"`
-	ReceiptRoot common.Hash           `json:"receiptRoot"`
+	ReceiptRoot common.Hash           `json:"receiptsRoot"`
 	LogsHash    common.Hash           `json:"logsHash"`
 	Bloom       types.Bloom           `json:"logsBloom"        gencodec:"required"`
 	Receipts    types.Receipts        `json:"receipts"`
@@ -98,7 +98,7 @@ type rejectedTx struct {
 // Deprecated
 func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	txs types.Transactions, miningReward int64,
-	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error)) (*state.StateDB, *ExecutionResult, error) {
+	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error)) (*state.StateDB, *ExecutionResult, error) {
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error

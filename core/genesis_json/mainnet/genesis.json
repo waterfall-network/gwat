@@ -8,8 +8,9 @@
     "transitionPeriod": 2,
     "effectiveBalance": 3200,
     "forkSlotSubNet1": 18446744073709551615,
-    "forkSlotDelegate": 2048,
-    "forkSlotPrefixFin": 0
+    "forkSlotDelegate": 0,
+    "forkSlotPrefixFin": 0,
+    "forkSlotShanghai": 0
   },
   "timestamp": "1709649140",
   "gasLimit":  "210000000",

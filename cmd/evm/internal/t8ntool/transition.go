@@ -33,6 +33,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/types"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/core/vm"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/crypto"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/tracers/logger"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/params"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/rlp"
@@ -88,10 +89,10 @@ func Transition(ctx *cli.Context) error {
 
 	var (
 		err     error
-		tracer  vm.Tracer
+		tracer  vm.EVMLogger
 		baseDir = ""
 	)
-	var getTracer func(txIndex int, txHash common.Hash) (vm.Tracer, error)
+	var getTracer func(txIndex int, txHash common.Hash) (vm.EVMLogger, error)
 
 	// If user specified a basedir, make sure it exists
 	if ctx.IsSet(OutputBasedir.Name) {
@@ -105,7 +106,7 @@ func Transition(ctx *cli.Context) error {
 	}
 	if ctx.Bool(TraceFlag.Name) {
 		// Configure the EVM logger
-		logConfig := &vm.LogConfig{
+		logConfig := &logger.Config{
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
 			EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name),
 			EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name),
@@ -118,7 +119,7 @@ func Transition(ctx *cli.Context) error {
 				prevFile.Close()
 			}
 		}()
-		getTracer = func(txIndex int, txHash common.Hash) (vm.Tracer, error) {
+		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
 			if prevFile != nil {
 				prevFile.Close()
 			}
@@ -127,10 +128,10 @@ func Transition(ctx *cli.Context) error {
 				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
 			prevFile = traceFile
-			return vm.NewJSONLogger(logConfig, traceFile), nil
+			return logger.NewJSONLogger(logConfig, traceFile), nil
 		}
 	} else {
-		getTracer = func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error) {
+		getTracer = func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error) {
 			return nil, nil
 		}
 	}

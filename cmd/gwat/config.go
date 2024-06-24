@@ -30,6 +30,7 @@ import (
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/scwallet"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/accounts/usbwallet"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/cmd/utils"
+	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/downloader"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/eth/ethconfig"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/internal/ethapi"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/log"
@@ -150,6 +151,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
+
+	// TODO: remove after light client is implemented
+	cfg.Eth.SyncMode = downloader.FullSync
 
 	return stack, cfg
 }
