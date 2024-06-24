@@ -568,6 +568,9 @@ func (bc *BlockChain) SetLastCoordinatedCheckpoint(cp *types.Checkpoint) {
 			log.Crit("Set last coordinated checkpoint failed", "err", err)
 		}
 	}
+
+	bc.RemoveOutdatedTips()
+
 	// rm stale blockDags
 	go func() {
 		if currCp != nil && cp.Root != currCp.Root {
@@ -1710,6 +1713,7 @@ func (bc *BlockChain) WriteSyncBlocks(blocks types.Blocks, validate bool) (faile
 				processing[bl.Hash()] = true
 			}
 		}
+		return orderedBlocks[n], ErrInsertUncompletedDag
 	} else if err != nil {
 		return orderedBlocks[n], err
 	}
@@ -2204,28 +2208,30 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 	timeTrack := time.Now()
 
 	// Verify block slot
-	if !bc.verifyBlockSlot(block) {
+	if !bc.VerifyBlockSlot(block.Header()) {
 		return false, ErrFutureBlock
 	}
 
 	log.Info("VALIDATION TIME",
 		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
-		"fn:", "verifyBlockSlot",
+		"fn:", "VerifyBlockSlot",
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify block era
-	if !bc.verifyBlockEra(block) {
+	if !bc.VerifyBlockEra(block.Header()) {
 		return false, nil
 	}
 
 	log.Info("VALIDATION TIME",
 		"elapsed", common.PrettyDuration(time.Since(timeTrack)),
-		"fn:", "verifyBlockEra",
+		"fn:", "VerifyBlockEra",
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	slotCreators, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, block.Slot())
 	if err != nil {
@@ -2239,6 +2245,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify block coinbase
 	if !bc.verifyBlockCoinbase(block, slotCreators) {
@@ -2251,6 +2258,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	err = bc.verifyEmptyBlock(block, slotCreators)
 	if err != nil {
@@ -2263,6 +2271,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	isValid, err := bc.verifyHibernateModeBlock(block)
 	if err != nil {
@@ -2277,6 +2286,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify baseFee
 	if !bc.verifyBlockBaseFee(block) {
@@ -2289,6 +2299,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify body hash and transactions hash
 	if !bc.verifyBlockHashes(block) {
@@ -2301,6 +2312,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify block used gas
 	if !bc.verifyBlockUsedGas(block) {
@@ -2313,6 +2325,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	//for case if finalized tip is current cp
 	cpCpHash := block.CpHash()
@@ -2331,9 +2344,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 
 	isCpAncestor, ancestors, unloaded, _ := bc.CollectAncestorsAftCpByTips(block.ParentHashes(), cpCpHash)
 	for h := range cpCpAncestors {
-		if _, ok := ancestors[h]; ok {
-			delete(ancestors, h)
-		}
+		delete(ancestors, h)
 	}
 	if cpCpHash != block.CpHash() {
 		delete(ancestors, block.CpHash())
@@ -2347,6 +2358,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"ancestors", len(ancestors),
 		"cpCpAncestors", len(cpCpAncestors),
 	)
+	timeTrack = time.Now()
 
 	//check is block's chain synced and does not content rejected blocks
 	if len(unloaded) > 0 {
@@ -2385,6 +2397,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	// Verify block height
 	if !bc.verifyBlockHeight(block, len(ancestors)) {
@@ -2397,6 +2410,7 @@ func (bc *BlockChain) VerifyBlock(block *types.Block) (bool, error) {
 		"txs", len(block.Transactions()),
 		"hash", block.Hash(),
 	)
+	timeTrack = time.Now()
 
 	valid, err := bc.verifyBlockParents(block)
 
@@ -2490,13 +2504,13 @@ func (bc *BlockChain) verifyBlockHashes(block *types.Block) bool {
 	return true
 }
 
-func (bc *BlockChain) verifyBlockSlot(block *types.Block) bool {
-	if block.Slot() > bc.GetSlotInfo().CurrentSlot()+1 {
+func (bc *BlockChain) VerifyBlockSlot(header *types.Header) bool {
+	if header.Slot > bc.GetSlotInfo().CurrentSlot()+1 {
 		log.Warn("Block verification: future slot",
 			"currentSlot", bc.GetSlotInfo().CurrentSlot(),
-			"blockSlot", block.Slot(),
-			"blockHash", block.Hash().Hex(),
-			"blockTime", block.Time(),
+			"blockSlot", header.Slot,
+			"blockHash", header.Hash().Hex(),
+			"blockTime", header.Time,
 			"timeNow", time.Now().Unix(),
 		)
 		return false
@@ -2639,15 +2653,16 @@ func (bc *BlockChain) verifyEmptyBlock(block *types.Block, creators []common.Add
 	return nil
 }
 
-func (bc *BlockChain) verifyBlockEra(block *types.Block) bool {
+func (bc *BlockChain) VerifyBlockEra(block *types.Header) bool {
 	// Get the epoch of the block
-	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot())
+	blockEpoch := bc.GetSlotInfo().SlotToEpoch(block.Slot)
 
 	calcEra := bc.EpochToEra(blockEpoch)
-	if calcEra.Number != block.Era() {
+	if calcEra.Number != block.Era {
 		log.Warn("Block verification: invalid era",
 			"hash", block.Hash().Hex(),
-			"era", block.Era(),
+			"era", block.Era,
+			"calcEra", calcEra,
 		)
 		return false
 	}
@@ -2847,6 +2862,133 @@ func (bc *BlockChain) IsCheckpointOutdated(cp *types.Checkpoint) bool {
 		"prevCp.Spine", prevCp.Spine.Hex(),
 	)
 	return true
+}
+
+// RemoveOutdatedTips remove tips with outdated cp.
+func (bc *BlockChain) RemoveOutdatedTips() {
+	tips := bc.GetTips().Copy()
+	rmTips := common.HashArray{}
+
+	checkedAncestors := make(map[common.Hash]bool)
+
+	for th, tip := range tips {
+		if th == bc.Genesis().Hash() {
+			continue
+		}
+		for i := len(tip.OrderedAncestorsHashes) - 1; i >= 0; i-- {
+			ancHash := tip.OrderedAncestorsHashes[i]
+			if valid, ok := checkedAncestors[ancHash]; ok {
+				if valid {
+					continue
+				}
+				rmTips = append(rmTips, th)
+				break
+			}
+
+			ancHeader := bc.GetHeaderByHash(ancHash)
+			if ancHeader == nil {
+				rmTips = append(rmTips, th)
+				checkedAncestors[ancHash] = false
+				log.Warn("Removing outdated tips: rm tips",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
+			if ancHeader.Nr() > 0 {
+				checkedAncestors[th] = true
+				continue
+			}
+			ancCp := bc.GetCoordinatedCheckpoint(ancHeader.CpHash)
+			if ancCp == nil {
+				rmTips = append(rmTips, th)
+				checkedAncestors[ancHash] = false
+				log.Warn("Removing outdated tips: ancestor cp not found",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
+			if bc.IsCheckpointOutdated(ancCp) {
+				rmTips = append(rmTips, th)
+				checkedAncestors[ancHash] = false
+				log.Warn("Removing outdated tips",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+					"ancestor", ancHash.Hex(),
+				)
+				break
+			}
+			checkedAncestors[th] = true
+		}
+		if !rmTips.Has(th) {
+			cp := bc.GetCoordinatedCheckpoint(tip.CpHash)
+			if cp == nil {
+				rmTips = append(rmTips, th)
+				checkedAncestors[th] = false
+				log.Warn("Removing outdated tips: cp not found",
+					"tip.CpHash", tip.CpHash.Hex(),
+					"tip.Hash", th.Hex(),
+				)
+				continue
+			}
+			if bc.IsCheckpointOutdated(cp) {
+				rmTips = append(rmTips, th)
+				checkedAncestors[th] = false
+				log.Warn("Removing outdated tips", "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
+			}
+		}
+	}
+
+	if len(rmTips) > 0 {
+		// collect blocks to rm
+		validAncMap := make(map[common.Hash]bool)
+		for th, tip := range tips {
+			if rmTips.Has(th) {
+				// if invalid tips
+				for _, ah := range tip.OrderedAncestorsHashes {
+					if valid, ok := checkedAncestors[ah]; ok && valid {
+						//skip valid
+						validAncMap[ah] = true
+						continue
+					}
+					if _, ok := validAncMap[ah]; !ok {
+						aHeader := bc.GetHeaderByHash(ah)
+						if aHeader != nil && aHeader.Nr() > 0 {
+							// if finalized
+							validAncMap[ah] = true
+							continue
+						}
+						validAncMap[ah] = false
+					}
+				}
+				if _, ok := validAncMap[th]; !ok {
+					validAncMap[th] = false
+				}
+				continue
+			}
+			// if valid tips
+			for _, ah := range tip.OrderedAncestorsHashes {
+				validAncMap[ah] = true
+			}
+			validAncMap[th] = true
+		}
+		go func() {
+			// rm invalid blocks
+			for h, valid := range validAncMap {
+				log.Warn("Removing outdated tips", "valid", valid, "hash", h.Hex())
+				if valid {
+					continue
+				}
+				bc.rmBlockData(h, nil)
+			}
+		}()
+
+		bc.RemoveTips(rmTips)
+		bc.WriteCurrentTips()
+	}
 }
 
 // insertBlocks inserts blocks to chain
@@ -4879,22 +5021,23 @@ func (bc *BlockChain) GetOptimisticSpines(gtSlot uint64) ([]common.HashArray, er
 		return []common.HashArray{}, nil
 	}
 
-	var err error
-	optimisticSpines := make([]common.HashArray, 0)
+	optimisticSpines := make([]common.HashArray, 0, bc.Config().SlotsPerEpoch*3)
 
 	for slot := gtSlot + 1; slot <= currentSlot; slot++ {
 		slotSpines := bc.GetOptimisticSpinesFromCache(slot)
 		if slotSpines == nil {
-			slotBlocks := make(types.Headers, 0)
+			slotBlocks := make(types.Headers, 0, bc.Config().ValidatorsPerSlot)
 			slotBlocksHashes := rawdb.ReadSlotBlocksHashes(bc.Database(), slot)
 			for _, hash := range slotBlocksHashes {
 				block := bc.GetHeader(hash)
 				slotBlocks = append(slotBlocks, block)
 			}
-			slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
-			if err != nil {
-				return []common.HashArray{}, err
-			}
+			slotSpines = types.OptimisticSortSlotHeaders(slotBlocks)
+			//var err error
+			//slotSpines, err = types.CalculateOptimisticSpines(slotBlocks)
+			//if err != nil {
+			//	return []common.HashArray{}, err
+			//}
 			bc.SetOptimisticSpinesToCache(slot, slotSpines)
 		}
 
@@ -5242,7 +5385,7 @@ func (bc *BlockChain) SetLastFinalisedHeader(head *types.Header, lastFinNr uint6
 }
 
 // FixEra fixes era data.
-func (bc BlockChain) FixEra(ptrEra *era.Era, save bool, byFn string) {
+func (bc *BlockChain) FixEra(ptrEra *era.Era, save bool, byFn string) {
 	//testnet8
 	if bc.Genesis().Hash() == params.Testnet8GenesisHash {
 		if byFn == "eth/backend.New" {
@@ -5254,7 +5397,7 @@ func (bc BlockChain) FixEra(ptrEra *era.Era, save bool, byFn string) {
 }
 
 // TestNet8FixEraOnInit fixes era data for testnet8.
-func (bc BlockChain) TestNet8FixEraOnInit() {
+func (bc *BlockChain) TestNet8FixEraOnInit() {
 	if bc.Genesis().Hash() != params.Testnet8GenesisHash {
 		return
 	}
@@ -5304,7 +5447,7 @@ func (bc BlockChain) TestNet8FixEraOnInit() {
 }
 
 // TestNet8FixEra fixes era data for testnet8.
-func (bc BlockChain) TestNet8FixEra(ptrEra *era.Era, save bool, byFn string) {
+func (bc *BlockChain) TestNet8FixEra(ptrEra *era.Era, save bool, byFn string) {
 	if bc.Genesis().Hash() != params.Testnet8GenesisHash {
 		return
 	}

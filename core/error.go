@@ -37,6 +37,8 @@ var (
 	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.
 	ErrInsertUncompletedDag = errors.New("insert uncompleted dag chain")
 
+	ErrInvalidEra = errors.New("invalid era")
+
 	// ErrCpIsnotAncestor is returned when checkpoint is not in past of block.
 	ErrCpIsnotAncestor = errors.New("checkpoint is not ancestor")
 
