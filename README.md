@@ -1,3 +1,11 @@
+## Go Waterfall
+## Building the source
+**We strongly recommend installing go version 1.21.11 or later**
+
+```shell
+CGO_CFLAGS="-O2 -D__BLST_PORTABLE__" go run build/ci.go install ./cmd/gwat
+```
+
 ## Go Ethereum
 
 Official Golang implementation of the Ethereum protocol.
