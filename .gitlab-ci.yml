@@ -33,8 +33,7 @@ lint:
       when: on_success
   script:
     - echo "SKIPPED"
-#TODO UNCIMMENT
-#    - golangci-lint run -v
+    - golangci-lint run -v
 
 test:
   stage: test
@@ -45,8 +44,7 @@ test:
       when: on_success
   script:
     - echo "SKIPPED"
-#TODO UNCIMMENT
-#    - go test ./...
+    - go test ./...
 
 build branch:
   stage: build
