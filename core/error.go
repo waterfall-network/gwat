@@ -26,13 +26,18 @@ var (
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
-	// ErrNoGenesis is returned when there is no Genesis Block.
+	// ErrBadSlotInfo if SlotInfo not set.
 	ErrBadSlotInfo = errors.New("blockchain received unacceptable slot info data")
+
+	// ErrFutureBlock if received block with future slot.
+	ErrFutureBlock = errors.New("block of future slot")
 
 	errSideChainReceipts = errors.New("side blocks can't be accepted as ancient chain data")
 
 	// ErrInsertUncompletedDag is returned when dag of inserting propagated block is uncompleted.
 	ErrInsertUncompletedDag = errors.New("insert uncompleted dag chain")
+
+	ErrInvalidEra = errors.New("invalid era")
 
 	// ErrCpIsnotAncestor is returned when checkpoint is not in past of block.
 	ErrCpIsnotAncestor = errors.New("checkpoint is not ancestor")

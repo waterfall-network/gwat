@@ -124,7 +124,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideDelegatingStake)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideDelegatingStake, config.OverridePrefixFin)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -232,7 +232,50 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	currentEraNumber := rawdb.ReadCurrentEra(chainDb)
 	if eraInfo := rawdb.ReadEra(chainDb, currentEraNumber); eraInfo != nil {
 		eth.blockchain.SetNewEraInfo(*eraInfo)
+
+		//check transition period and next era
+		si := eth.blockchain.GetSlotInfo()
+		if si != nil {
+			lfHdr := eth.blockchain.GetLastFinalizedHeader()
+			if lfHdr.Era > eraInfo.Number {
+				log.Crit("Bad data initialized: last finalized era less than current era",
+					"finalizedEra", lfHdr.Era,
+					"currEpoch", eraInfo.Number,
+				)
+				log.Crit("Use backup to restore work")
+			}
+			lfEpoch := si.SlotToEpoch(lfHdr.Slot)
+			ei := eth.blockchain.GetEraInfo()
+			//if transition period - check next era
+			if ei.IsTransitionPeriodEpoch(eth.blockchain, lfEpoch) {
+				nextEra := rawdb.ReadEra(chainDb, eraInfo.Number+1)
+				if nextEra == nil {
+					transEpoch := uint64(0)
+					for epoch := eraInfo.From; epoch <= eraInfo.To; epoch++ {
+						// find tratsition epoch
+						if ei.IsTransitionPeriodEpoch(eth.blockchain, epoch) {
+							transEpoch = epoch
+							break
+						}
+					}
+					cpSpine := rawdb.ReadEpoch(chainDb, transEpoch)
+					cp := rawdb.ReadCoordinatedCheckpoint(chainDb, cpSpine)
+					if cp == nil {
+						log.Crit("Bad data initialized: epoch cp not fount", "epoch", transEpoch, "cpSpine", cpSpine.Hex())
+						log.Crit("Use backup to restore work")
+					}
+					header := eth.blockchain.GetHeaderByHash(cp.Spine)
+					if header == nil {
+						log.Crit("Bad data initialized: epoch cp header not fount", "epoch", transEpoch, "cpSpine", cpSpine.Hex())
+						log.Crit("Use backup to restore work")
+					}
+					eth.blockchain.StartTransitionPeriod(cp, header.Root)
+				}
+			}
+		}
 	}
+	// fixes era for testnet8
+	eth.blockchain.FixEra(nil, true, "eth/backend.New")
 
 	go eth.dag.StartWork()
 
