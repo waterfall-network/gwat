@@ -63,6 +63,7 @@ func setDefaults(cfg *Config) {
 			ForkSlotDelegate:  0,
 			ForkSlotPrefixFin: 0,
 			ForkSlotShanghai:  0,
+			StartEpochsPerEra: 0,
 		}
 	}
 
