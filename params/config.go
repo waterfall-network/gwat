@@ -70,6 +70,7 @@ var (
 		ForkSlotDelegate:       0,
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		StartEpochsPerEra:      0,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -107,6 +108,7 @@ var (
 		ForkSlotDelegate:       2729920,
 		ForkSlotPrefixFin:      4058240,
 		ForkSlotShanghai:       math.MaxUint64,
+		StartEpochsPerEra:      math.MaxUint64,
 		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
 	}
 
@@ -149,6 +151,7 @@ var (
 		ForkSlotDelegate:       0,
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		StartEpochsPerEra:      0,
 	}
 
 	TestChainConfig = &ChainConfig{
@@ -164,6 +167,7 @@ var (
 		ForkSlotDelegate:       0,
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		StartEpochsPerEra:      0,
 	}
 )
 
@@ -235,6 +239,8 @@ type ChainConfig struct {
 	ForkSlotDelegate  uint64 `json:"forkSlotDelegate,omitempty"`
 	ForkSlotPrefixFin uint64 `json:"forkSlotPrefixFin,omitempty"`
 	ForkSlotShanghai  uint64 `json:"forkSlotShanghai,omitempty"`
+	// Fork eras
+	StartEpochsPerEra uint64 `json:"startEpochsPerEra"`
 
 	// fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	AcceptCpRootOnFinEpoch map[common.Hash][]uint64 `json:"acceptCpRootOnFinEpoch"`
@@ -262,7 +268,7 @@ func (c *CliqueConfig) String() string {
 func (c *ChainConfig) String() string {
 	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
 		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, "+
-		"ForkSlotPrefixFin: %v, ForkSlotShanghai: %v, AcceptCpRootOnFinEpoch: %v}",
+		"ForkSlotPrefixFin: %v, ForkSlotShanghai: %v, StartEpochsPerEra: %v, AcceptCpRootOnFinEpoch: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
@@ -275,6 +281,7 @@ func (c *ChainConfig) String() string {
 		c.ForkSlotDelegate,
 		c.ForkSlotPrefixFin,
 		c.ForkSlotShanghai,
+		c.StartEpochsPerEra,
 		c.AcceptCpRootOnFinEpoch,
 	)
 }

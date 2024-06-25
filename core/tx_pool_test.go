@@ -101,7 +101,7 @@ func defaultTestBC(addr common.Address) *BlockChain {
 	rawdb.WriteCoordinatedCheckpoint(database, genesisCp)
 	rawdb.WriteEpoch(database, 0, genesisCp.Spine)
 
-	genesisEraLength := era.EstimateEraLength(genesis.Config, uint64(len(genesis.Validators)))
+	genesisEraLength := era.EstimateEraLength(genesis.Config, uint64(len(genesis.Validators)), 0)
 	genesisEra := era.Era{0, 0, genesisEraLength - 1, genesisBlock.Root()}
 	rawdb.WriteEra(database, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(database, genesisEra.Number)

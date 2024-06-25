@@ -45,7 +45,9 @@ func NewEra(number, from, to uint64, root common.Hash) *Era {
 
 func NextEra(bc Blockchain, root common.Hash, numValidators uint64) *Era {
 	nextEraNumber := bc.GetEraInfo().Number() + 1
-	nextEraLength := EstimateEraLength(bc.Config(), numValidators)
+
+	nextEraLength := EstimateEraLength(bc.Config(), numValidators, nextEraNumber)
+
 	nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
 	nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
 
@@ -166,7 +168,11 @@ func (ei *EraInfo) IsContainsEpoch(epoch uint64) bool {
 	return false
 }
 
-func EstimateEraLength(chainConfig *params.ChainConfig, numberOfValidators uint64) (eraLength uint64) {
+func EstimateEraLength(chainConfig *params.ChainConfig, numberOfValidators, eraNumber uint64) (eraLength uint64) {
+	if eraNumber >= chainConfig.StartEpochsPerEra {
+		return chainConfig.EpochsPerEra
+	}
+
 	var (
 		epochsPerEra      = chainConfig.EpochsPerEra
 		slotsPerEpoch     = float64(chainConfig.SlotsPerEpoch)
