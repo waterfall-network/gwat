@@ -4744,6 +4744,13 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot comm
 			"nextEraFirstSlot", bc.GetEraInfo().NextEraFirstSlot(bc),
 		)
 
+		if int64(cp.FinEpoch)-int64(bc.Config().TransitionPeriod) < 0 {
+			log.Warn("Skip transition period processing, cp.FinEpoch less then transition period",
+				"cp.FinEpoch", cp.FinEpoch,
+				"transitionPeriod", bc.Config().TransitionPeriod,
+			)
+			return
+		}
 		cpEpochSlot, err := bc.GetSlotInfo().SlotOfEpochStart(cp.FinEpoch - bc.Config().TransitionPeriod)
 		if err != nil {
 			panic("StartTransitionPeriod slot of epoch start error")
