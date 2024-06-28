@@ -189,6 +189,29 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the fetcher (short sync)
 	validateFn := func(header *types.Header) error {
 		bc := h.chain
+
+		// check is future slot
+		if !bc.VerifyBlockSlot(header) {
+			log.Warn("Header verification: future slot",
+				"currSlot", bc.GetSlotInfo().CurrentSlot(),
+				"headerSlot", header.Slot,
+				"headerHash", header.Hash().Hex(),
+				"headerTime", header.Time,
+				"currTime", time.Now().Unix(),
+			)
+			return core.ErrFutureBlock
+		}
+
+		// check era
+		if !bc.VerifyBlockEra(header) {
+			log.Warn("Header verification: invalid era",
+				"headerEra", header.Era,
+				"calcEra", header.Era,
+				"hash", header.Hash().Hex(),
+			)
+			return core.ErrInvalidEra
+		}
+
 		if len(header.ParentHashes) == 0 {
 			err := fmt.Errorf("no parents in propagate block")
 			log.Warn("Header verification: no parents", "err", err, "hash", header.Hash().Hex())
@@ -240,8 +263,16 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 		_, err := h.chain.InsertPropagatedBlocks(types.Blocks{block})
 		if err == core.ErrInsertUncompletedDag {
-			// start sync dag
-			h.downloader.SynchroniseDagOnly(peerId)
+			log.Warn("Insert propagated blocks: unknown ancestors detected. start sync",
+				"err", err,
+				"hash", block.Hash().Hex(),
+				"parents", block.ParentHashes(),
+				"peer", peerId,
+			)
+			// sync unloaded parents
+			err = h.downloader.SyncUnloadedParents(peerId, block.ParentHashes())
+			//// start sync dag
+			//h.downloader.SynchroniseDagOnly(peerId)
 			return err
 		}
 		if err == nil {

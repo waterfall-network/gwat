@@ -105,7 +105,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	rawdb.WriteCoordinatedCheckpoint(database, genesisCp)
 	rawdb.WriteEpoch(database, 0, genesisCp.Spine)
 
-	genesisEraLength := era.EstimateEraLength(genesis.Config, uint64(len(genesis.Validators)))
+	genesisEraLength := era.EstimateEraLength(genesis.Config, uint64(len(genesis.Validators)), 0)
 	genesisEra := era.Era{
 		Number: 0,
 		From:   0,

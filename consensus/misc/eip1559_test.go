@@ -40,6 +40,10 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		EffectiveBalance:       original.EffectiveBalance,
 		ForkSlotSubNet1:        original.ForkSlotSubNet1,
 		ForkSlotDelegate:       original.ForkSlotDelegate,
+		ForkSlotPrefixFin:      original.ForkSlotPrefixFin,
+		ForkSlotShanghai:       original.ForkSlotShanghai,
+		StartEpochsPerEra:      original.StartEpochsPerEra,
+		AcceptCpRootOnFinEpoch: original.AcceptCpRootOnFinEpoch,
 	}
 }
 

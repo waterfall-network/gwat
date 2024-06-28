@@ -57,6 +57,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideDelegatingStake *uint64                        `toml:",omitempty"`
+		OverridePrefixFin       *uint64                        `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -100,6 +101,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.Checkpoint = c.Checkpoint
 	enc.CheckpointOracle = c.CheckpointOracle
 	enc.OverrideDelegatingStake = c.OverrideDelegatingStake
+	enc.OverridePrefixFin = c.OverridePrefixFin
 	return &enc, nil
 }
 
@@ -147,6 +149,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideDelegatingStake *uint64                        `toml:",omitempty"`
+		OverridePrefixFin       *uint64                        `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -274,6 +277,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideDelegatingStake != nil {
 		c.OverrideDelegatingStake = dec.OverrideDelegatingStake
+	}
+	if dec.OverridePrefixFin != nil {
+		c.OverridePrefixFin = dec.OverridePrefixFin
 	}
 	return nil
 }

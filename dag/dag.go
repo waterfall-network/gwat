@@ -92,6 +92,7 @@ type blockChain interface {
 
 type ethDownloader interface {
 	Synchronising() bool
+	OptimisticSpineSync(spines common.HashArray) error
 	MainSync(baseSpine common.Hash, spines common.HashArray) error
 	DagSync(baseSpine common.Hash, spines common.HashArray) error
 	Terminate()
@@ -246,7 +247,7 @@ func (d *Dag) HandleFinalize(data *types.FinalizationParams) *types.Finalization
 			return res
 		}
 	case types.HeadSync:
-		if err = d.downloader.DagSync(baseSpine, spines); err != nil {
+		if err = d.downloader.DagSync(data.Checkpoint.Spine, spines); err != nil {
 			strErr := err.Error()
 			res.Error = &strErr
 			log.Error("Handle Finalize: response (sync failed)", "syncMode", data.SyncMode, "result", res, "err", err)
@@ -349,15 +350,17 @@ func (d *Dag) handleSyncUnloadedBlocks(baseSpine common.Hash, spines common.Hash
 	}
 	d.bc.SetIsSynced(false)
 
-	lfNr := d.bc.GetLastFinalizedNumber()
-	err = d.finalizer.SetSpineState(&baseSpine, lfNr)
-	if err != nil {
-		return err
-	}
+	////todo check it
+	//lfNr := d.bc.GetLastFinalizedNumber()
+	//err = d.finalizer.SetSpineState(&baseSpine, lfNr)
+	//if err != nil {
+	//	return err
+	//}
 
 	d.bc.SetSyncCheckpointCache(cp)
 	defer d.bc.ResetSyncCheckpointCache()
-	if err = d.downloader.DagSync(baseSpine, spines); err != nil {
+	//if err = d.downloader.DagSync(baseSpine, spines); err != nil {
+	if err = d.downloader.OptimisticSpineSync(spines); err != nil {
 		return err
 	}
 	return nil
@@ -379,6 +382,9 @@ func (d *Dag) hasUnloadedBlocks(spines common.HashArray) (bool, error) {
 		spHeader := d.bc.GetHeaderByHash(spine)
 		if spHeader == nil {
 			return true, nil
+		}
+		if spHeader.Height == 0 {
+			continue
 		}
 		_, _, unl, err = d.bc.CollectAncestorsAftCpByParents(spHeader.ParentHashes, spHeader.CpHash)
 		if err != nil {
@@ -689,10 +695,6 @@ func (d *Dag) work(slot uint64, slotCreators []common.Address) {
 	d.bc.DagMuLock()
 	defer d.bc.DagMuUnlock()
 
-	if err := d.removeTipsWithOutdatedCp(); err != nil {
-		return
-	}
-
 	if d.Creator().IsRunning() {
 		var canCreate bool
 		for _, account := range slotCreators {
@@ -744,32 +746,6 @@ func (d *Dag) isCoordinatorConnectionLost() bool {
 	}
 	slot = si.CurrentSlot()
 	return (slot - d.getLastFinalizeApiSlot()) > si.SlotsPerEpoch
-}
-
-// removeTipsWithOutdatedCp remove tips with outdated cp.
-func (d *Dag) removeTipsWithOutdatedCp() error {
-	tips := d.bc.GetTips()
-	rmTips := common.HashArray{}
-	for th, tip := range tips.Copy() {
-		if th == d.bc.Genesis().Hash() {
-			continue
-		}
-		cp := d.bc.GetCoordinatedCheckpoint(tip.CpHash)
-		if cp == nil {
-			err := errors.New("tips checkpoint not found")
-			log.Error("Removing tips with outdated cp failed", "err", err, "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
-			return err
-		}
-		if d.bc.IsCheckpointOutdated(cp) {
-			rmTips = append(rmTips, th)
-			log.Warn("Creator detect outdated cp", "tip.CpHash", tip.CpHash.Hex(), "tip.Hash", th.Hex())
-		}
-	}
-	if len(rmTips) > 0 {
-		d.bc.RemoveTips(rmTips)
-		d.bc.WriteCurrentTips()
-	}
-	return nil
 }
 
 func (d *Dag) getCheckpoint() *types.Checkpoint {

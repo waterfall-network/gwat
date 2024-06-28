@@ -9,7 +9,9 @@
     "effectiveBalance": 3200,
     "forkSlotSubNet1": 18446744073709551615,
     "forkSlotDelegate": 0,
-    "forkSlotShanghai": 0
+    "forkSlotPrefixFin": 0,
+    "forkSlotShanghai": 0,
+    "startEpochsPerEra": 0
   },
   "timestamp": "1709649140",
   "gasLimit":  "210000000",

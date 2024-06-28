@@ -37,6 +37,7 @@ var (
 	// testnet8AcceptCpRootOnFinEpoch fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	testnet8AcceptCpRootOnFinEpoch = map[common.Hash][]uint64{
 		common.HexToHash("0xd76dd012c08baefd84750cf9752a6987dbc8ff4451069056cfd110e32250ed4a"): {96176},
+		common.HexToHash("0x771d385d42fa93c0303ea34086f09d8adf99f97813f761aa6a437451959a0841"): {126283},
 	}
 )
 
@@ -67,7 +68,9 @@ var (
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
+		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		StartEpochsPerEra:      0,
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -103,7 +106,9 @@ var (
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       2729920,
+		ForkSlotPrefixFin:      4058240,
 		ForkSlotShanghai:       math.MaxUint64,
+		StartEpochsPerEra:      math.MaxUint64,
 		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
 	}
 
@@ -144,7 +149,9 @@ var (
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
+		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		StartEpochsPerEra:      0,
 	}
 
 	TestChainConfig = &ChainConfig{
@@ -158,7 +165,9 @@ var (
 		EffectiveBalance:       big.NewInt(3200),
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
+		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		StartEpochsPerEra:      0,
 	}
 )
 
@@ -226,9 +235,12 @@ type ChainConfig struct {
 	ValidatorsPerSlot      uint64   `json:"validatorsPerSlot"`
 	EffectiveBalance       *big.Int `json:"effectiveBalance"`
 	// Fork slots
-	ForkSlotSubNet1  uint64 `json:"forkSlotSubNet1,omitempty"`
-	ForkSlotDelegate uint64 `json:"forkSlotDelegate,omitempty"`
-	ForkSlotShanghai uint64 `json:"forkSlotShanghai,omitempty"`
+	ForkSlotSubNet1   uint64 `json:"forkSlotSubNet1,omitempty"`
+	ForkSlotDelegate  uint64 `json:"forkSlotDelegate,omitempty"`
+	ForkSlotPrefixFin uint64 `json:"forkSlotPrefixFin,omitempty"`
+	ForkSlotShanghai  uint64 `json:"forkSlotShanghai,omitempty"`
+	// Fork eras
+	StartEpochsPerEra uint64 `json:"startEpochsPerEra"`
 
 	// fix sync finalization by hard define cp.finEpoch/cpRoot combo
 	AcceptCpRootOnFinEpoch map[common.Hash][]uint64 `json:"acceptCpRootOnFinEpoch"`
@@ -255,7 +267,8 @@ func (c *CliqueConfig) String() string {
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
-		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, ForkSlotShanghai: %v, AcceptCpRootOnFinEpoch: %v}",
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, "+
+		"ForkSlotPrefixFin: %v, ForkSlotShanghai: %v, StartEpochsPerEra: %v, AcceptCpRootOnFinEpoch: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
@@ -266,7 +279,9 @@ func (c *ChainConfig) String() string {
 		c.EffectiveBalance,
 		c.ForkSlotSubNet1,
 		c.ForkSlotDelegate,
+		c.ForkSlotPrefixFin,
 		c.ForkSlotShanghai,
+		c.StartEpochsPerEra,
 		c.AcceptCpRootOnFinEpoch,
 	)
 }
@@ -281,6 +296,11 @@ func (c *ChainConfig) IsForkSlotDelegate(slot uint64) bool {
 	return slot >= c.ForkSlotDelegate
 }
 
+// IsForkSlotPrefixFin returns true if provided slot greater or equal of the fork slot ForkSlotPrefixFin.
+func (c *ChainConfig) IsForkSlotPrefixFin(slot uint64) bool {
+	return slot >= c.ForkSlotPrefixFin
+}
+
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
 // to guarantee that forks can be implemented in a different order than on official networks
 func (c *ChainConfig) CheckConfigForkOrder() error {
@@ -291,8 +311,8 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}
 	var lastFork fork
 	for _, cur := range []fork{
-		{name: "forkSlotDelegate", slot: new(big.Int).SetUint64(c.ForkSlotDelegate)},
-		//{name: "londonBlock", block: c.LondonBlock},
+		//{name: "forkSlotDelegate", slot: new(big.Int).SetUint64(c.ForkSlotDelegate)},
+		//{name: "forkSlotPrefixFin", slot: new(big.Int).SetUint64(c.ForkSlotPrefixFin)},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -387,4 +407,8 @@ func (c *ChainConfig) Rules(slot uint64) Rules {
 		IsLondon:         true,
 		IsShanghai:       c.ForkSlotShanghai <= slot,
 	}
+}
+
+func (c *ChainConfig) HibernationSpinesThreshold() uint64 {
+	return 128
 }
