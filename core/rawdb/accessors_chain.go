@@ -1127,14 +1127,14 @@ func ReadEra(db ethdb.KeyValueReader, number uint64) *era.Era {
 		return nil
 	}
 
-	var decoded era.Era
-	err = rlp.DecodeBytes(encoded, &decoded)
-	if err != nil {
+	decoded := new(era.Era)
+	err = rlp.DecodeBytes(encoded, decoded)
+	if err != nil && decoded == nil {
 		log.Warn("Failed to decode era", "err", err, "number", number)
 		return nil
 	}
 
-	return &decoded
+	return decoded
 }
 
 func DeleteEra(db ethdb.KeyValueWriter, number uint64) {
