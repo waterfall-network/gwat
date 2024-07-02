@@ -3401,7 +3401,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	header.Root = statedb.IntermediateRoot(true)
 	//set updated header
 	block.SetHeader(header)
-	//update receips data
+	//update receipts data
 	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
 	//update cashes
