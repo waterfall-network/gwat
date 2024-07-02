@@ -3410,7 +3410,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 		bc.hc.numberCache.Add(hash, block.Nr())
 	}
 	bc.blockCache.Add(hash, block)
-	bc.receiptsCache.Add(hash, receipts)
+	bc.receiptsCache.Add(hash, types.Receipts(receipts))
 	bc.hc.headerCache.Add(hash, header)
 
 	// Update the metrics touched during block processing
