@@ -1623,14 +1623,19 @@ func (bc *BlockChain) rollbackBlockFinalization(finNr uint64) error {
 	if block == nil {
 		return errBlockNotFound
 	}
+	//reset header's finalization data
+	upHeader := block.Header()
+	upHeader.Number = nil
+	upHeader.BaseFee = nil
+	upHeader.GasUsed = 0
+	upHeader.Bloom = types.Bloom{}
+	upHeader.Root = common.Hash{}
+	upHeader.ReceiptHash = types.EmptyRootHash
+	block.SetHeader(upHeader)
+
 	hash := block.Hash()
-	block.SetNumber(nil)
 
-	batch := bc.db.NewBatch()
-	rawdb.DeleteFinalizedHashNumber(batch, hash, finNr)
-	rawdb.DeleteReceipts(batch, hash)
-
-	// update finalized number cache
+	//update cached finalization data
 	bc.hc.numberCache.Remove(hash)
 	bc.receiptsCache.Remove(hash)
 
@@ -1640,6 +1645,12 @@ func (bc *BlockChain) rollbackBlockFinalization(finNr uint64) error {
 	bc.blockCache.Remove(hash)
 	bc.blockCache.Add(hash, block)
 
+	//update db records
+	batch := bc.db.NewBatch()
+	rawdb.DeleteFinalizedHashNumber(batch, hash, finNr)
+	rawdb.DeleteReceipts(batch, hash)
+	rawdb.WriteBlock(batch, block)
+	rawdb.WriteHeader(batch, upHeader)
 	// Flush the whole batch into the disk, exit the node if failed
 	if err := batch.Write(); err != nil {
 		log.Error("Failed to rollback block finalization", "finNr", finNr, "hash", hash.Hex(), "err", err)
@@ -3382,16 +3393,26 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "UpdateFinalizingState")
 	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
 
-	block.SetHeader(header)
-
 	// Process block using the parent state as reference point
 	subStart := time.Now()
 	statedb, receipts, logs, usedGas := bc.CommitBlockTransactions(block, statedb)
-
+	// update finalization data
 	header.GasUsed = usedGas
 	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
 	header.Root = statedb.IntermediateRoot(true)
+
+	//set updated header
+	block.SetHeader(header)
+
+	//update cashes
+	hash := block.Hash()
+	if block.Height() > 0 && block.Nr() > 0 {
+		bc.hc.numberCache.Add(hash, block.Number())
+	}
+	bc.blockCache.Add(hash, block)
+	bc.receiptsCache.Add(hash, receipts)
+	bc.hc.headerCache.Add(hash, header)
 
 	// Update the metrics touched during block processing
 	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -4854,10 +4875,6 @@ func (bc *BlockChain) RestoreValidatorSyncOp(tx *types.Transaction, header *type
 	if !bc.IsTxValidatorSync(tx) {
 		return nil
 	}
-
-	if tx.To() == nil || bc.Config().ValidatorsStateAddress == nil {
-		return nil
-	}
 	op, err := validatorOp.DecodeBytes(tx.Data())
 	if err != nil {
 		log.Error("Validator sync tx: restore op fail: unmarshal", "err", err)
@@ -4890,9 +4907,6 @@ func (bc *BlockChain) RestoreValidatorSyncOp(tx *types.Transaction, header *type
 				"amount", v.Amount().String(),
 				"InitTxHash", fmt.Sprintf("%#x", v.InitTxHash()),
 			)
-			if !bc.Config().IsForkSlotDelegate(header.Slot) {
-				return nil
-			}
 			// check tx status
 			rc, _, _ := bc.GetTransactionReceipt(*savedValSync.TxHash)
 			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
