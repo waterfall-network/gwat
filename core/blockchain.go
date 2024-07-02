@@ -3408,7 +3408,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	//update cashes
 	hash := block.Hash()
 	if block.Height() > 0 && block.Nr() > 0 {
-		bc.hc.numberCache.Add(hash, block.Number())
+		bc.hc.numberCache.Add(hash, block.Nr())
 	}
 	bc.blockCache.Add(hash, block)
 	bc.receiptsCache.Add(hash, receipts)
