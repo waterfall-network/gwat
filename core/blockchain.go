@@ -3398,12 +3398,11 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	statedb, receipts, logs, usedGas := bc.CommitBlockTransactions(block, statedb)
 	// update finalization data
 	header.GasUsed = usedGas
-	block.SetReceipt(receipts, trie.NewStackTrie(nil))
-
 	header.Root = statedb.IntermediateRoot(true)
-
 	//set updated header
 	block.SetHeader(header)
+	//update receips data
+	block.SetReceipt(receipts, trie.NewStackTrie(nil))
 
 	//update cashes
 	hash := block.Hash()
