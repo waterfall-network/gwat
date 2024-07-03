@@ -1513,6 +1513,7 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 }
 
 // fetchHeaderByNr retrieves the header by finalized number from a remote peer.
+// nolint:unused
 func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *types.Header, err error) {
 	p.log.Info("Sync: Retrieving remote chain header by nr")
 	fetch := 1
