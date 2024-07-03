@@ -704,7 +704,7 @@ func (bc *BlockChain) AppendNotProcessedValidatorSyncData(valSyncData []*types.V
 		if npvs := currOps[vs.Key()]; npvs == nil || npvs.ProcEpoch > vs.ProcEpoch {
 			// check in saved op
 			savedValSync := bc.GetValidatorSyncData(vs.InitTxHash)
-			if savedValSync == nil || savedValSync.ProcEpoch >= vs.ProcEpoch {
+			if savedValSync == nil || (savedValSync.ProcEpoch > vs.ProcEpoch && savedValSync.TxHash != nil) {
 				bc.notProcValSyncOps[vs.Key()] = vs
 				isUpdated = true
 			}
