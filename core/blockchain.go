@@ -1168,18 +1168,12 @@ func (bc *BlockChain) writeFinalizedBlock(finNr uint64, block *types.Block, isHe
 	batch := bc.db.NewBatch()
 	rawdb.WriteFinalizedHashNumber(batch, block.Hash(), finNr)
 	if val, ok := bc.hc.numberCache.Get(block.Hash()); ok {
-		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "hash", block.Hash().Hex())
+		log.Warn("????? Cached Nr for Dag Block", "val", val.(uint64), "finNr", finNr, "hash", block.Hash().Hex())
 	}
 
 	// update finalized number cache
 	bc.hc.numberCache.Remove(block.Hash())
 	bc.hc.numberCache.Add(block.Hash(), finNr)
-
-	bc.hc.headerCache.Remove(block.Hash())
-	bc.hc.headerCache.Add(block.Hash(), block.Header())
-
-	bc.blockCache.Remove(block.Hash())
-	bc.blockCache.Add(block.Hash(), block)
 
 	// If the block is better than our head or is on a different chain, force update heads
 	if isHead {
@@ -1638,9 +1632,7 @@ func (bc *BlockChain) rollbackBlockFinalization(finNr uint64) error {
 	//update cached finalization data
 	bc.hc.numberCache.Remove(hash)
 	bc.receiptsCache.Remove(hash)
-
 	bc.hc.headerCache.Remove(hash)
-	bc.hc.headerCache.Add(hash, block.Header())
 
 	bc.blockCache.Remove(hash)
 	bc.blockCache.Add(hash, block)
@@ -3406,12 +3398,8 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 
 	//update cashes
 	hash := block.Hash()
-	if block.Height() > 0 && block.Nr() > 0 {
-		bc.hc.numberCache.Add(hash, block.Nr())
-	}
 	bc.blockCache.Add(hash, block)
-	bc.receiptsCache.Add(hash, types.Receipts(receipts))
-	bc.hc.headerCache.Add(hash, header)
+	bc.hc.headerCache.Remove(hash)
 
 	// Update the metrics touched during block processing
 	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -4829,7 +4817,7 @@ func (bc *BlockChain) handleBlockValidatorSyncTxs(block *types.Block) {
 				"err", err,
 				"tx.Hash", tx.Hash().Hex(),
 				"tx.To", tx.To().Hex(),
-				"ValidatorsStateAddress", bc.Config().ValidatorsStateAddress.Bytes(),
+				"ValidatorsStateAddress", bc.Config().ValidatorsStateAddress.Hex(),
 				"condIsValSync", bytes.Equal(tx.To().Bytes(), bc.Config().ValidatorsStateAddress.Bytes()),
 			)
 			continue
