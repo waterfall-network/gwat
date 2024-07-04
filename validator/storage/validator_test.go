@@ -53,6 +53,7 @@ func TestValidator_MarshalingBinary(t *testing.T) {
 	testutils.AssertEqual(t, v.Index, testValidator.Index)
 	testutils.AssertEqual(t, v.ActivationEra, testValidator.ActivationEra)
 	testutils.AssertEqual(t, v.ExitEra, testValidator.ExitEra)
+	testutils.AssertEqual(t, NoVer, testValidator.Version())
 
 	testutils.AssertEqual(t, len(v.Stake), len(testValidator.Stake))
 	t.Logf("Length of unmarshalled Stake slice: %d, expected length: %d", len(v.Stake), len(testValidator.Stake))
@@ -92,6 +93,7 @@ func TestValidatorDelegatingStake_MarshalingBinary(t *testing.T) {
 	testutils.AssertEqual(t, v.Index, testValidator.Index)
 	testutils.AssertEqual(t, v.ActivationEra, testValidator.ActivationEra)
 	testutils.AssertEqual(t, v.ExitEra, testValidator.ExitEra)
+	testutils.AssertEqual(t, NoVer, testValidator.Version())
 
 	testutils.AssertEqual(t, len(v.Stake), len(testValidator.Stake))
 	for i, stake := range v.Stake {
@@ -104,6 +106,51 @@ func TestValidatorDelegatingStake_MarshalingBinary(t *testing.T) {
 	testutils.AssertEqual(t, dsr.Rules, v.DelegatingStake.Rules)
 	testutils.AssertEqual(t, dsr.TrialPeriod, v.DelegatingStake.TrialPeriod)
 	testutils.AssertEqual(t, dsr.TrialRules, v.DelegatingStake.TrialRules)
+}
+
+func TestValidator_MarshalingBinary_Ver1(t *testing.T) {
+	testValidator.SetVersion(Ver1)
+	testValidator.OpInitTx = &common.Hash{0x11}
+
+	data, err := testValidator.MarshalBinary()
+	testutils.AssertNoError(t, err)
+
+	v := new(Validator)
+	err = v.UnmarshalBinary(data)
+	testutils.AssertNoError(t, err)
+
+	testutils.AssertEqual(t, v.PubKey, testValidator.PubKey)
+	testutils.AssertEqual(t, v.Address, testValidator.Address)
+	testutils.AssertEqual(t, v.WithdrawalAddress, testValidator.WithdrawalAddress)
+	testutils.AssertEqual(t, v.Index, testValidator.Index)
+	testutils.AssertEqual(t, v.ActivationEra, testValidator.ActivationEra)
+	testutils.AssertEqual(t, v.ExitEra, testValidator.ExitEra)
+	testutils.AssertEqual(t, Ver1, testValidator.Version())
+	testutils.AssertEqual(t, v.OpInitTx, testValidator.OpInitTx)
+	testutils.AssertEqual(t, v.DelegatingStake, testValidator.DelegatingStake)
+
+	testutils.AssertEqual(t, len(v.Stake), len(testValidator.Stake))
+	t.Logf("Length of unmarshalled Stake slice: %d, expected length: %d", len(v.Stake), len(testValidator.Stake))
+	for i, stake := range v.Stake {
+		expectedStake := testValidator.Stake[i]
+		testutils.AssertEqual(t, stake.Address, expectedStake.Address)
+		testutils.AssertEqual(t, stake.Sum, expectedStake.Sum)
+
+		t.Logf("Stake %d: Address: %s, Expected Address: %s, Sum: %d, Expected Sum: %d",
+			i, stake.Address, expectedStake.Address, stake.Sum, expectedStake.Sum)
+	}
+
+	// OpInitTx = nil
+	testValidator.SetVersion(Ver1)
+	testValidator.OpInitTx = nil
+	data, err = testValidator.MarshalBinary()
+	testutils.AssertNoError(t, err)
+
+	v = new(Validator)
+	err = v.UnmarshalBinary(data)
+	testutils.AssertNoError(t, err)
+	testutils.AssertEqual(t, Ver1, testValidator.Version())
+	testutils.AssertEqual(t, v.OpInitTx, testValidator.OpInitTx)
 }
 
 func TestValidatorSettersGetters(t *testing.T) {
