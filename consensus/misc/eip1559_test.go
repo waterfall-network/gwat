@@ -38,10 +38,12 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		ValidatorsStateAddress: original.ValidatorsStateAddress,
 		ValidatorsPerSlot:      original.ValidatorsPerSlot,
 		EffectiveBalance:       original.EffectiveBalance,
+		ValidatorOpExpireSlots: original.ValidatorOpExpireSlots,
 		ForkSlotSubNet1:        original.ForkSlotSubNet1,
 		ForkSlotDelegate:       original.ForkSlotDelegate,
 		ForkSlotPrefixFin:      original.ForkSlotPrefixFin,
 		ForkSlotShanghai:       original.ForkSlotShanghai,
+		ForkSlotValOpTracking:  original.ForkSlotValOpTracking,
 		StartEpochsPerEra:      original.StartEpochsPerEra,
 		AcceptCpRootOnFinEpoch: original.AcceptCpRootOnFinEpoch,
 	}

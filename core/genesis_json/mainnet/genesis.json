@@ -7,10 +7,12 @@
     "epochsPerEra": 4,
     "transitionPeriod": 2,
     "effectiveBalance": 3200,
+    "validatorOpExpireSlots": 14400,
     "forkSlotSubNet1": 18446744073709551615,
     "forkSlotDelegate": 0,
     "forkSlotPrefixFin": 0,
     "forkSlotShanghai": 0,
+    "forkSlotValOpTracking": 18446744073709551615,
     "startEpochsPerEra": 0
   },
   "timestamp": "1709649140",

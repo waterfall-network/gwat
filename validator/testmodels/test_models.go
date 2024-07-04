@@ -46,10 +46,12 @@ func init() {
 		ValidatorsPerSlot:      2,
 		EpochsPerEra:           22,
 		TransitionPeriod:       2,
+		ValidatorOpExpireSlots: 14400,
 		ForkSlotSubNet1:        9999999,
 		ForkSlotDelegate:       10,
 		ForkSlotPrefixFin:      10,
 		ForkSlotShanghai:       0,
+		ForkSlotValOpTracking:  0,
 		StartEpochsPerEra:      0,
 		EffectiveBalance:       big.NewInt(3200),
 	}

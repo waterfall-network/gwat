@@ -66,10 +66,12 @@ var (
 		ValidatorsStateAddress: nil,
 		ValidatorsPerSlot:      5,
 		EffectiveBalance:       big.NewInt(3200),
+		ValidatorOpExpireSlots: 14400,
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		ForkSlotValOpTracking:  math.MaxUint64,
 		StartEpochsPerEra:      0,
 	}
 
@@ -104,10 +106,12 @@ var (
 		ValidatorsStateAddress: nil,
 		ValidatorsPerSlot:      5,
 		EffectiveBalance:       big.NewInt(3200),
+		ValidatorOpExpireSlots: 21600,
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       2729920,
 		ForkSlotPrefixFin:      4058240,
 		ForkSlotShanghai:       math.MaxUint64,
+		ForkSlotValOpTracking:  math.MaxUint64,
 		StartEpochsPerEra:      math.MaxUint64,
 		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
 	}
@@ -147,10 +151,12 @@ var (
 		ValidatorsStateAddress: nil,
 		ValidatorsPerSlot:      6,
 		EffectiveBalance:       big.NewInt(3200),
+		ValidatorOpExpireSlots: 14400,
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		ForkSlotValOpTracking:  0,
 		StartEpochsPerEra:      0,
 	}
 
@@ -163,10 +169,12 @@ var (
 		ValidatorsStateAddress: nil,
 		ValidatorsPerSlot:      6,
 		EffectiveBalance:       big.NewInt(3200),
+		ValidatorOpExpireSlots: 14400,
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
+		ForkSlotValOpTracking:  0,
 		StartEpochsPerEra:      0,
 	}
 )
@@ -234,11 +242,14 @@ type ChainConfig struct {
 	ValidatorsStateAddress *common.Address
 	ValidatorsPerSlot      uint64   `json:"validatorsPerSlot"`
 	EffectiveBalance       *big.Int `json:"effectiveBalance"`
+	ValidatorOpExpireSlots uint64   `json:"validatorOpExpireSlots"`
 	// Fork slots
-	ForkSlotSubNet1   uint64 `json:"forkSlotSubNet1,omitempty"`
-	ForkSlotDelegate  uint64 `json:"forkSlotDelegate,omitempty"`
-	ForkSlotPrefixFin uint64 `json:"forkSlotPrefixFin,omitempty"`
-	ForkSlotShanghai  uint64 `json:"forkSlotShanghai,omitempty"`
+	ForkSlotSubNet1       uint64 `json:"forkSlotSubNet1,omitempty"`
+	ForkSlotDelegate      uint64 `json:"forkSlotDelegate,omitempty"`
+	ForkSlotPrefixFin     uint64 `json:"forkSlotPrefixFin,omitempty"`
+	ForkSlotShanghai      uint64 `json:"forkSlotShanghai,omitempty"`
+	ForkSlotValOpTracking uint64 `json:"forkSlotValOpTracking,omitempty"`
+
 	// Fork eras
 	StartEpochsPerEra uint64 `json:"startEpochsPerEra"`
 
@@ -267,8 +278,8 @@ func (c *CliqueConfig) String() string {
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
-		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, "+
-		"ForkSlotPrefixFin: %v, ForkSlotShanghai: %v, StartEpochsPerEra: %v, AcceptCpRootOnFinEpoch: %v}",
+		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ValidatorOpExpireSlots: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, "+
+		"ForkSlotPrefixFin: %v, ForkSlotShanghai: %v, ForkSlotValOpTracking: %v, StartEpochsPerEra: %v, AcceptCpRootOnFinEpoch: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
@@ -277,10 +288,12 @@ func (c *ChainConfig) String() string {
 		c.ValidatorsPerSlot,
 		c.ValidatorsStateAddress,
 		c.EffectiveBalance,
+		c.ValidatorOpExpireSlots,
 		c.ForkSlotSubNet1,
 		c.ForkSlotDelegate,
 		c.ForkSlotPrefixFin,
 		c.ForkSlotShanghai,
+		c.ForkSlotValOpTracking,
 		c.StartEpochsPerEra,
 		c.AcceptCpRootOnFinEpoch,
 	)
@@ -299,6 +312,11 @@ func (c *ChainConfig) IsForkSlotDelegate(slot uint64) bool {
 // IsForkSlotPrefixFin returns true if provided slot greater or equal of the fork slot ForkSlotPrefixFin.
 func (c *ChainConfig) IsForkSlotPrefixFin(slot uint64) bool {
 	return slot >= c.ForkSlotPrefixFin
+}
+
+// IsForkSlotValOpTracking returns true if provided slot greater or equal of the fork slot ForkSlotValOpTracking.
+func (c *ChainConfig) IsForkSlotValOpTracking(slot uint64) bool {
+	return slot >= c.ForkSlotValOpTracking
 }
 
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
