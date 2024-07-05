@@ -29,7 +29,9 @@ type Validator struct {
 	Stake             []*StakeByAddress              `json:"stake"`
 	DelegatingStake   *operation.DelegatingStakeData `json:"delegatingStake"`
 	Ver               *ValidatorVersion              `json:"version"`
-	OpInitTx          *common.Hash                   `json:"opInitTx"`
+	DepositTxs        common.HashArray               `json:"depositTxs"`
+	WithdrawalTxs     common.HashArray               `json:"withdrawalTxs"`
+	ExitTx            *common.Hash                   `json:"exitTx"`
 }
 
 func NewValidator(pubKey common.BlsPubKey, address common.Address, withdrawal *common.Address) *Validator {
@@ -82,7 +84,9 @@ type rlpBaseValidator struct {
 }
 
 type rlpVer1 struct {
-	OpInitTx *common.Hash `json:"opInitTx"`
+	DepositTxs    common.HashArray `json:"depositTxs"`
+	WithdrawalTxs common.HashArray `json:"withdrawalTxs"`
+	ExitTx        *common.Hash     `json:"exitTx"`
 }
 
 func (v *Validator) MarshalBinary() ([]byte, error) {
@@ -124,16 +128,18 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 			extenedDataLen += common.Uint16Size
 
 			//prepare rlp data
-			opInitTx := v.OpInitTx
-			if opInitTx == nil {
-				opInitTx = &common.Hash{}
+			exitTx := v.GetExitTx()
+			if exitTx == nil {
+				exitTx = &common.Hash{}
 			}
 
 			// make binary versioned data
 			switch v.Version() {
 			case Ver1:
 				dataVer1 := rlpVer1{
-					OpInitTx: opInitTx,
+					DepositTxs:    v.GetDepositTxs(),
+					WithdrawalTxs: v.GetWithdrawalTxs(),
+					ExitTx:        exitTx,
 				}
 				versionData, err = rlp.EncodeToBytes(dataVer1)
 			default:
@@ -262,7 +268,6 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 			version := ValidatorVersion(binary.BigEndian.Uint16(versionedData[startOffset:endOfset]))
 			v.SetVersion(version)
 
-			var opInitTx *common.Hash
 			// decode versioned data
 			switch v.Version() {
 			case Ver1:
@@ -271,14 +276,13 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 				if err = rlp.DecodeBytes(versionedData[startOffset:], ver1Data); err != nil {
 					return err
 				}
-				if *ver1Data.OpInitTx != (common.Hash{}) {
-					opInitTx = ver1Data.OpInitTx
-				}
+				//set data ver1
+				v.SetDepositTxs(ver1Data.DepositTxs)
+				v.SetWithdrawalTxs(ver1Data.WithdrawalTxs)
+				v.SetExitTx(ver1Data.ExitTx)
 			default:
 				return fmt.Errorf("invalid Validator version: %d", v.Version())
 			}
-			//set versioned data
-			v.OpInitTx = opInitTx
 		}
 	}
 
@@ -409,6 +413,51 @@ func (v *Validator) SetVersion(version ValidatorVersion) {
 		v.Ver = nil
 	}
 	v.Ver = &version
+}
+
+func (v *Validator) GetExitTx() *common.Hash {
+	if v.Version() == NoVer || v.ExitTx != nil && *v.ExitTx == (common.Hash{}) {
+		return nil
+	}
+	return v.ExitTx
+}
+
+func (v *Validator) SetExitTx(tx *common.Hash) {
+	if v.Version() == NoVer || tx != nil && *tx == (common.Hash{}) {
+		v.ExitTx = nil
+		return
+	}
+	v.ExitTx = tx
+}
+
+func (v *Validator) GetDepositTxs() common.HashArray {
+	if v.Version() == NoVer {
+		return common.HashArray{}
+	}
+	return v.DepositTxs.Copy()
+}
+
+func (v *Validator) SetDepositTxs(txs common.HashArray) {
+	if v.Version() == NoVer {
+		v.DepositTxs = common.HashArray{}
+		return
+	}
+	v.DepositTxs = txs
+}
+
+func (v *Validator) GetWithdrawalTxs() common.HashArray {
+	if v.Version() == NoVer {
+		return common.HashArray{}
+	}
+	return v.WithdrawalTxs.Copy()
+}
+
+func (v *Validator) SetWithdrawalTxs(txs common.HashArray) {
+	if v.Version() == NoVer {
+		v.WithdrawalTxs = common.HashArray{}
+		return
+	}
+	v.WithdrawalTxs = txs
 }
 
 // ValidatorBinary is a Validator represented as an array of bytes.
