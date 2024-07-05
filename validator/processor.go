@@ -688,6 +688,10 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 		return nil, ErrNotActivatedValidator
 	}
 
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.SetExitTx(nil)
+
 	exitEra := opEra.Number + postpone
 	validator.SetExitEra(exitEra)
 	err = p.Storage().SetValidator(p.state, validator)
