@@ -277,7 +277,7 @@ func (v *Validator) UnmarshalBinary(data []byte) error {
 					return err
 				}
 				//set data ver1
-				v.SetDepositTxs(ver1Data.DepositTxs)
+				v.setDepositTxs(ver1Data.DepositTxs)
 				v.SetWithdrawalTxs(ver1Data.WithdrawalTxs)
 				v.SetExitTx(ver1Data.ExitTx)
 			default:
@@ -437,12 +437,24 @@ func (v *Validator) GetDepositTxs() common.HashArray {
 	return v.DepositTxs.Copy()
 }
 
-func (v *Validator) SetDepositTxs(txs common.HashArray) {
+func (v *Validator) setDepositTxs(txs common.HashArray) {
 	if v.Version() == NoVer {
 		v.DepositTxs = common.HashArray{}
 		return
 	}
 	v.DepositTxs = txs
+}
+
+func (v *Validator) AddDepositTxs(txHash common.Hash) {
+	if v.Version() == NoVer {
+		v.DepositTxs = common.HashArray{}
+		return
+	}
+	v.DepositTxs = append(v.GetDepositTxs(), txHash)
+}
+
+func (v *Validator) ResetDepositTxs() {
+	v.DepositTxs = common.HashArray{}
 }
 
 func (v *Validator) GetWithdrawalTxs() common.HashArray {

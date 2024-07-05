@@ -68,7 +68,7 @@ func TestProcessorDeposit(t *testing.T) {
 	msg := NewMockmessage(ctrl)
 
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
 
 	processor := NewProcessor(ctx, stateDb, bc)
 	to := processor.GetValidatorsStateAddress()
@@ -899,7 +899,7 @@ func TestProcessorExit(t *testing.T) {
 
 	eraInfo := era.NewEraInfo(testmodels.TestEra)
 	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().Config().Return(testmodels.TestChainConfig)
+	bc.EXPECT().Config().Return(testmodels.TestChainConfig).AnyTimes()
 	bc.EXPECT().GetEraInfo().AnyTimes().Return(&eraInfo)
 
 	processor := NewProcessor(ctx, stateDb, bc)

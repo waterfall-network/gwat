@@ -37,6 +37,7 @@ var (
 	ErrInvalidToAddress       = errors.New("address to must be validators state address")
 	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
 	ErrValSyncTxExists        = errors.New("validator sync tx already exists")
+	ErrValOpBlocked           = errors.New("blocked by another validator operation")
 	ErrMismatchValSyncOp      = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
 	ErrInvalidOpEpoch         = errors.New("epoch to apply tx is not acceptable")
 	ErrTxNF                   = errors.New("tx not found")
@@ -169,7 +170,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 	ret = nil
 	switch v := op.(type) {
 	case operation.Deposit:
-		ret, err = p.validatorDeposit(caller, toAddr, value, v)
+		ret, err = p.validatorDeposit(caller, toAddr, value, v, msg.TxHash())
 		if err != nil {
 			log.Error("Validator deposit: err",
 				"opCode", op.OpCode(),
@@ -213,7 +214,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 			)
 		}
 	case operation.Exit:
-		ret, err = p.validatorExit(caller, toAddr, v)
+		ret, err = p.validatorExit(caller, toAddr, v, msg.TxHash())
 		if err != nil {
 			log.Error("Validator exit: err",
 				"opCode", op.OpCode(),
@@ -257,7 +258,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 	return ret, err
 }
 
-func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *big.Int, op operation.Deposit) (_ []byte, err error) {
+func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *big.Int, op operation.Deposit, txHash common.Hash) (_ []byte, err error) {
 	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
@@ -333,6 +334,10 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		validator = currValidator
 	}
 
+	//update current validator's data versions
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.AddDepositTxs(txHash)
+
 	validator.AddStake(from, value)
 
 	err = p.Storage().SetValidator(p.state, validator)
@@ -349,7 +354,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operation.Exit) ([]byte, error) {
+func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operation.Exit, txHash common.Hash) ([]byte, error) {
 	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
@@ -406,6 +411,29 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 	} else if from != *validator.GetWithdrawalAddress() {
 		return nil, ErrInvalidFromAddresses
 	}
+
+	// ver1 data validation
+	if validator.Version() >= valStore.Ver1 {
+		//if operation already has been requested
+		prevOpTx := validator.GetExitTx()
+		if prevOpTx != nil {
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check prev op succes
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				//check prev operation expiration
+				prevHeader := p.blockchain.GetHeaderByHash(blHash)
+				expiration := p.blockchain.Config().ValidatorOpExpireSlots
+				currSlot := p.ctx.Slot
+				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
+					return nil, ErrValOpBlocked
+				}
+			}
+		}
+	}
+
+	//update current validator's data versions
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.SetExitTx(&txHash)
 
 	logData := txlog.PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
 	p.eventEmmiter.ExitRequest(toAddr, logData)
@@ -971,4 +999,15 @@ func ValidatePartialDepositOp(validator *valStore.Validator, op operation.Deposi
 		return fmt.Errorf("mismatch validator delegating stake rules")
 	}
 	return nil
+}
+
+func (p *Processor) updateValidatorVersionBySlot(validator *valStore.Validator) *valStore.Validator {
+	ver := valStore.NoVer
+	bcConf := p.blockchain.Config()
+	slot := p.ctx.Slot
+	if bcConf.IsForkSlotValOpTracking(slot) {
+		ver = valStore.Ver1
+	}
+	validator.SetVersion(ver)
+	return validator
 }
