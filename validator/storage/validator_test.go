@@ -112,7 +112,7 @@ func TestValidator_MarshalingBinary_Ver1(t *testing.T) {
 	testValidator.SetVersion(Ver1)
 	testValidator.ExitTx = &common.Hash{0x11}
 	testValidator.DepositTxs = common.HashArray{{0x11}, {0x22}, {0x33}}
-	testValidator.WithdrawalTxs = common.HashArray{{0x33}, {0x44}, {0x55}}
+	testValidator.WithdrawalTx = &common.Hash{0x33}
 
 	data, err := testValidator.MarshalBinary()
 	testutils.AssertNoError(t, err)
@@ -131,7 +131,7 @@ func TestValidator_MarshalingBinary_Ver1(t *testing.T) {
 	testutils.AssertEqual(t, v.DelegatingStake, testValidator.DelegatingStake)
 	testutils.AssertEqual(t, v.ExitTx, testValidator.ExitTx)
 	testutils.AssertEqual(t, v.DepositTxs, testValidator.DepositTxs)
-	testutils.AssertEqual(t, v.WithdrawalTxs, testValidator.WithdrawalTxs)
+	testutils.AssertEqual(t, v.WithdrawalTx, testValidator.WithdrawalTx)
 
 	testutils.AssertEqual(t, len(v.Stake), len(testValidator.Stake))
 	t.Logf("Length of unmarshalled Stake slice: %d, expected length: %d", len(v.Stake), len(testValidator.Stake))
@@ -149,7 +149,7 @@ func TestValidator_MarshalingBinary_Ver1(t *testing.T) {
 
 	testValidator.ExitTx = nil
 	testValidator.DepositTxs = common.HashArray{}
-	testValidator.WithdrawalTxs = common.HashArray{}
+	testValidator.WithdrawalTx = nil
 
 	data, err = testValidator.MarshalBinary()
 	testutils.AssertNoError(t, err)
@@ -160,7 +160,7 @@ func TestValidator_MarshalingBinary_Ver1(t *testing.T) {
 	testutils.AssertEqual(t, Ver1, testValidator.Version())
 	testutils.AssertEqual(t, v.ExitTx, testValidator.ExitTx)
 	testutils.AssertEqual(t, v.DepositTxs, testValidator.DepositTxs)
-	testutils.AssertEqual(t, v.WithdrawalTxs, testValidator.WithdrawalTxs)
+	testutils.AssertEqual(t, v.WithdrawalTx, testValidator.WithdrawalTx)
 }
 
 func TestValidatorSettersGetters(t *testing.T) {
