@@ -469,6 +469,12 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 	validator = p.updateValidatorVersionBySlot(validator)
 	validator.SetExitTx(&txHash)
 
+	// update validator
+	err = p.Storage().SetValidator(p.state, validator)
+	if err != nil {
+		return nil, err
+	}
+
 	logData := txlog.PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
 	p.eventEmmiter.ExitRequest(toAddr, logData)
 
@@ -550,25 +556,22 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		if opAmount.Cmp(common.Big0) == 0 {
 			opAmount = new(big.Int).Set(stakeByAddr)
 		}
-		// withdrawal amount from deposit balance
-		newStake, err := validator.SubtractStake(from, opAmount)
-		if err != nil {
-			log.Error("Validator withdrawal: refunds of insufficient deposit failed",
-				"opCode", op.OpCode(),
-				"amount", opAmount.String(),
-				"creator", op.CreatorAddress().Hex(),
-				"error", err,
-			)
-			return nil, err
-		}
-		// rm validator stake if empty
-		if newStake != nil && newStake.Cmp(common.Big0) == 0 {
-			validator.RmStakeByAddress(from)
-		}
-		// update validator
-		err = p.Storage().SetValidator(p.state, validator)
-		if err != nil {
-			return nil, err
+		if !p.blockchain.Config().IsForkSlotValOpTracking(p.ctx.Slot) {
+			// withdrawal amount from deposit balance
+			newStake, err := validator.SubtractStake(from, opAmount)
+			if err != nil {
+				log.Error("Validator withdrawal: refunds of insufficient deposit failed",
+					"opCode", op.OpCode(),
+					"amount", opAmount.String(),
+					"creator", op.CreatorAddress().Hex(),
+					"error", err,
+				)
+				return nil, err
+			}
+			// rm validator stake if empty
+			if newStake != nil && newStake.Cmp(common.Big0) == 0 {
+				validator.RmStakeByAddress(from)
+			}
 		}
 	} else if validator.HasDelegatingStake() {
 		//check delegating roles
@@ -597,6 +600,11 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		if from != *validator.GetWithdrawalAddress() {
 			return nil, ErrInvalidFromAddresses
 		}
+	}
+	// update validator
+	err = p.Storage().SetValidator(p.state, validator)
+	if err != nil {
+		return nil, err
 	}
 
 	// create tx log
@@ -811,6 +819,43 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		signer := types.LatestSigner(p.blockchain.Config())
 		iTxFrom, _ := types.Sender(signer, initTx)
 		withdrawalTo = &iTxFrom
+
+		if p.blockchain.Config().IsForkSlotValOpTracking(p.ctx.Slot) {
+			// withdrawal amount from deposit balance
+			wDepositAmt := op.Amount()
+			curDepositStake := validator.StakeByAddress(iTxFrom)
+			if curDepositStake.Cmp(wDepositAmt) < 0 {
+				log.Warn("Validator update balance: refunds of insufficient deposit: op amount less than stake",
+					"opCode", op.OpCode(),
+					"InitTxHash", op.InitTxHash().Hex(),
+					"amount", op.Amount().String(),
+					"stake", curDepositStake.String(),
+					"procEpoch", op.ProcEpoch(),
+					"vIndex", op.Index(),
+					"creator", op.Creator().Hex(),
+				)
+				wDepositAmt = new(big.Int).Set(curDepositStake)
+			}
+
+			newStake, err := validator.SubtractStake(iTxFrom, wDepositAmt)
+			if err != nil {
+				log.Error("Validator withdrawal: refunds of insufficient deposit failed",
+					"opCode", op.OpCode(),
+					"InitTxHash", op.InitTxHash().Hex(),
+					"amount", op.Amount().String(),
+					"stake", curDepositStake.String(),
+					"procEpoch", op.ProcEpoch(),
+					"vIndex", op.Index(),
+					"creator", op.Creator().Hex(),
+					"error", err,
+				)
+				return nil, err
+			}
+			// rm validator stake if empty
+			if newStake != nil && newStake.Cmp(common.Big0) == 0 {
+				validator.RmStakeByAddress(iTxFrom)
+			}
+		}
 	} else if validator.HasDelegatingStake() {
 		// Handle delegate rules
 		return p.applyDelegatingStakeRules(op, validator)
@@ -822,6 +867,12 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 			return nil, ErrNoWithdrawalCred
 		}
 	}
+	// update validator
+	err = p.Storage().SetValidator(p.state, validator)
+	if err != nil {
+		return nil, err
+	}
+
 	// transfer amount to withdrawal address
 	p.state.AddBalance(*withdrawalTo, op.Amount())
 
