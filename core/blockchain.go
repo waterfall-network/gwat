@@ -1620,7 +1620,6 @@ func (bc *BlockChain) rollbackBlockFinalization(finNr uint64) error {
 	//reset header's finalization data
 	upHeader := block.Header()
 	upHeader.Number = nil
-	upHeader.BaseFee = nil
 	upHeader.GasUsed = 0
 	upHeader.Bloom = types.Bloom{}
 	upHeader.Root = common.Hash{}
