@@ -334,6 +334,32 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		validator = currValidator
 	}
 
+	// ver1 data validation
+	if validator.Version() >= valStore.Ver1 {
+		//withdrawal operations are limited to 1 op at time
+		//if operation already has been requested, check it expiration
+		prevOpTx := validator.GetWithdrawalTx()
+		if prevOpTx != nil {
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check prev op succes
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				//check prev operation expiration
+				prevHeader := p.blockchain.GetHeaderByHash(blHash)
+				expiration := p.blockchain.Config().ValidatorOpExpireSlots
+				currSlot := p.ctx.Slot
+				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
+					log.Error("Validator deposit: op blocked by withdrawal",
+						"blockedByTx", prevOpTx.Hex(),
+						"opCode", op.OpCode(),
+						"creator", op.CreatorAddress().Hex(),
+						"error", err,
+					)
+					return nil, ErrValOpBlocked
+				}
+			}
+		}
+	}
+
 	//update current validator's data version
 	validator = p.updateValidatorVersionBySlot(validator)
 	validator.AddDepositTxs(txHash)
@@ -426,6 +452,7 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 				currSlot := p.ctx.Slot
 				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
 					log.Error("Validator exit: op blocked",
+						"blockedByTx", prevOpTx.Hex(),
 						"opCode", op.OpCode(),
 						"creator", op.CreatorAddress().Hex(),
 						"error", err,
@@ -482,6 +509,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 				currSlot := p.ctx.Slot
 				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
 					log.Error("Validator withdrawal: op blocked",
+						"blockedByTx", prevOpTx.Hex(),
 						"opCode", op.OpCode(),
 						"amount", opAmount.String(),
 						"creator", op.CreatorAddress().Hex(),
