@@ -33,6 +33,7 @@ var (
 	ErrNoWithdrawalCred       = errors.New("no withdrawal credentials")
 	ErrMismatchPulicKey       = errors.New("validator public key mismatch")
 	ErrNotActivatedValidator  = errors.New("validator not activated yet")
+	ErrValidatorActivated     = errors.New("validator is activated")
 	ErrValidatorIsOut         = errors.New("validator is exited")
 	ErrInvalidToAddress       = errors.New("address to must be validators state address")
 	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
@@ -637,6 +638,14 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 	if validator == nil {
 		return nil, ErrUnknownValidator
 	}
+
+	if p.blockchain.Config().IsForkSlotValOpTracking(p.ctx.Slot) && validator.GetActivationEra() != math.MaxUint64 {
+		return nil, ErrValidatorActivated
+	}
+
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.ResetDepositTxs()
 
 	opEra := p.blockchain.EpochToEra(op.ProcEpoch())
 
