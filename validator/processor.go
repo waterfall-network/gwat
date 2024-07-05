@@ -39,6 +39,7 @@ var (
 	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
 	ErrValSyncTxExists        = errors.New("validator sync tx already exists")
 	ErrValOpBlocked           = errors.New("blocked by another validator operation")
+	ErrNoActiveWithdrawalOp   = errors.New("no active withdrawal operation")
 	ErrMismatchValSyncOp      = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
 	ErrInvalidOpEpoch         = errors.New("epoch to apply tx is not acceptable")
 	ErrTxNF                   = errors.New("tx not found")
@@ -342,7 +343,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		prevOpTx := validator.GetWithdrawalTx()
 		if prevOpTx != nil {
 			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
-			//check prev op succes
+			//check prev op success
 			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
 				//check prev operation expiration
 				prevHeader := p.blockchain.GetHeaderByHash(blHash)
@@ -353,7 +354,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 						"blockedByTx", prevOpTx.Hex(),
 						"opCode", op.OpCode(),
 						"creator", op.CreatorAddress().Hex(),
-						"error", err,
+						"error", ErrValOpBlocked,
 					)
 					return nil, ErrValOpBlocked
 				}
@@ -445,7 +446,7 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		prevOpTx := validator.GetExitTx()
 		if prevOpTx != nil {
 			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
-			//check prev op succes
+			//check prev op success
 			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
 				//check prev operation expiration
 				prevHeader := p.blockchain.GetHeaderByHash(blHash)
@@ -456,7 +457,7 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 						"blockedByTx", prevOpTx.Hex(),
 						"opCode", op.OpCode(),
 						"creator", op.CreatorAddress().Hex(),
-						"error", err,
+						"error", ErrValOpBlocked,
 					)
 					return nil, ErrValOpBlocked
 				}
@@ -502,7 +503,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		prevOpTx := validator.GetWithdrawalTx()
 		if prevOpTx != nil {
 			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
-			//check prev op succes
+			//check prev op success
 			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
 				//check prev operation expiration
 				prevHeader := p.blockchain.GetHeaderByHash(blHash)
@@ -514,7 +515,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 						"opCode", op.OpCode(),
 						"amount", opAmount.String(),
 						"creator", op.CreatorAddress().Hex(),
-						"error", err,
+						"error", ErrValOpBlocked,
 					)
 					return nil, ErrValOpBlocked
 				}
@@ -721,6 +722,62 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	if validator == nil {
 		return nil, ErrUnknownValidator
 	}
+
+	// ver1 data validation
+	if validator.Version() >= valStore.Ver1 {
+		//withdrawal operations are limited to 1 op at time
+		prevOpTx := validator.GetWithdrawalTx()
+		if prevOpTx == nil {
+			//check withdrawal initialized before ForkSlotValOpTracking
+			//quick check
+			expiration := p.blockchain.Config().ValidatorOpExpireSlots
+			var checkSlot uint64
+			if p.ctx.Slot > expiration {
+				checkSlot = p.ctx.Slot - expiration
+			}
+			if p.blockchain.Config().IsForkSlotValOpTracking(checkSlot) {
+				return nil, ErrNoActiveWithdrawalOp
+			}
+			//check slot of initTx applying (for transition period only)
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(op.InitTxHash())
+			//check initTx success
+			if rc == nil {
+				return nil, fmt.Errorf("initTx receipt not found: %#x", op.InitTxHash())
+			}
+			if rc.Status != types.ReceiptStatusSuccessful {
+				return nil, fmt.Errorf("initTx receipt status is failed: %#x", op.InitTxHash())
+			}
+			initTxHeader := p.blockchain.GetHeaderByHash(blHash)
+			if p.blockchain.Config().IsForkSlotValOpTracking(initTxHeader.Slot) {
+				return nil, ErrNoActiveWithdrawalOp
+			}
+		} else if *prevOpTx != op.InitTxHash() {
+			//if another operation already has been requested, check it expiration
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check prev op success
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				//check prev operation expiration
+				prevHeader := p.blockchain.GetHeaderByHash(blHash)
+				expiration := p.blockchain.Config().ValidatorOpExpireSlots
+				currSlot := p.ctx.Slot
+				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
+					log.Error("Validator withdrawal: op blocked",
+						"blockedByTx", prevOpTx.Hex(),
+						"opCode", op.OpCode(),
+						"amount", op.Amount().String(),
+						"creator", op.Creator().Hex(),
+						"error", ErrValOpBlocked,
+					)
+					return nil, ErrValOpBlocked
+				}
+			}
+		}
+	}
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	//reset current withdrawal op
+	validator.SetWithdrawalTx(nil)
+
 	var withdrawalTo *common.Address
 	// if total deposited amount is less than the effective balance
 	// - deposit is insufficient to activate validator.
