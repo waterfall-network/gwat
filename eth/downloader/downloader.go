@@ -1473,17 +1473,28 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 		}
 		return false, nil, ErrInvalidBaseSpine
 	}
-	baseNr := baseHeader.Nr()
-	baseRemote, err := d.fetchHeaderByNr(p, baseNr)
+	baseHash := baseHeader.Hash()
+	baseRemote, err := d.fetchHeaderByHash(p, baseHash)
 	if err == errBadPeer {
 		return false, nil, errCanceled
 	}
 	if err != nil {
 		return false, nil, err
 	}
-	if baseRemote.Hash() != baseHeader.Hash() || baseRemote.Root != baseHeader.Root {
+	if baseRemote.Hash() != baseHeader.Hash() {
 		return false, nil, errBadPeer
 	}
+	//baseNr := baseHeader.Nr()
+	//baseRemote, err := d.fetchHeaderByNr(p, baseNr)
+	//if err == errBadPeer {
+	//	return false, nil, errCanceled
+	//}
+	//if err != nil {
+	//	return false, nil, err
+	//}
+	//if baseRemote.Hash() != baseHeader.Hash() || baseRemote.Root != baseHeader.Root {
+	//	return false, nil, errBadPeer
+	//}
 	if len(spines) == 0 {
 		return true, terminalRemote, nil
 	}
@@ -1502,6 +1513,7 @@ func (d *Downloader) checkPeer(p *peerConnection, baseSpine common.Hash, spines 
 }
 
 // fetchHeaderByNr retrieves the header by finalized number from a remote peer.
+// nolint:unused
 func (d *Downloader) fetchHeaderByNr(p *peerConnection, nr uint64) (header *types.Header, err error) {
 	p.log.Info("Sync: Retrieving remote chain header by nr")
 	fetch := 1
@@ -1605,7 +1617,7 @@ func (d *Downloader) fetchHeaderByHash(p *peerConnection, hash common.Hash) (hea
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
 				log.Error(fmt.Sprintf("Sync: header by hash: %s: returned headers %d != requested %d", errBadPeer, len(headers), fetch), "peer", p.id)
-				return nil, errBadPeer
+				return nil, errCanceled
 			}
 			header = headers[0]
 			return header, nil
@@ -2029,6 +2041,9 @@ Loop:
 
 	for pid, dag := range d.syncPeerHashes {
 		con := d.peers.Peer(pid)
+		if con == nil {
+			continue
+		}
 		err = d.syncWithPeerUnknownDagBlocks(con, dag)
 		//err = d.syncWithPeerUnknownBlocksWithParents(con, dag)
 		if err != nil {
