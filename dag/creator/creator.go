@@ -913,7 +913,12 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 		if validatorSync.ProcEpoch <= c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) {
 			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.backend, header.CpHash, header.Coinbase, header.Slot, validatorSync, nonce, c.current.keystore)
 			if err != nil {
-				log.Error("failed to create validator sync tx", "error", err)
+				log.Error("failed to create validator sync tx",
+					"error", err,
+					"slot", header.Slot,
+					"creator", header.Coinbase.Hex(),
+					"syncOp", validatorSync.Print(),
+				)
 				continue
 			}
 			c.current.txsMu.Lock()
