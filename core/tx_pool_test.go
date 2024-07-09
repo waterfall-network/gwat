@@ -152,6 +152,16 @@ type testBlockChain struct {
 	genesisBlock       *types.Block
 }
 
+func (bc *testBlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (bc *testBlockChain) GetTransactionReceipt(txHash common.Hash) (rc *types.Receipt, blHash common.Hash, index uint64) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (bc *testBlockChain) GetSlotInfo() *types.SlotInfo {
 	//TODO implement me
 	panic("implement me")

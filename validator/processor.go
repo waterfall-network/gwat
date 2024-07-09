@@ -33,10 +33,13 @@ var (
 	ErrNoWithdrawalCred       = errors.New("no withdrawal credentials")
 	ErrMismatchPulicKey       = errors.New("validator public key mismatch")
 	ErrNotActivatedValidator  = errors.New("validator not activated yet")
+	ErrValidatorActivated     = errors.New("validator is activated")
 	ErrValidatorIsOut         = errors.New("validator is exited")
 	ErrInvalidToAddress       = errors.New("address to must be validators state address")
 	ErrNoSavedValSyncOp       = errors.New("no coordinated confirmation of validator sync data")
 	ErrValSyncTxExists        = errors.New("validator sync tx already exists")
+	ErrValOpBlocked           = errors.New("blocked by another validator operation")
+	ErrNoActiveWithdrawalOp   = errors.New("no active withdrawal operation")
 	ErrMismatchValSyncOp      = errors.New("validator sync tx data is not conforms to coordinated confirmation data")
 	ErrInvalidOpEpoch         = errors.New("epoch to apply tx is not acceptable")
 	ErrTxNF                   = errors.New("tx not found")
@@ -169,7 +172,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 	ret = nil
 	switch v := op.(type) {
 	case operation.Deposit:
-		ret, err = p.validatorDeposit(caller, toAddr, value, v)
+		ret, err = p.validatorDeposit(caller, toAddr, value, v, msg.TxHash())
 		if err != nil {
 			log.Error("Validator deposit: err",
 				"opCode", op.OpCode(),
@@ -213,7 +216,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 			)
 		}
 	case operation.Exit:
-		ret, err = p.validatorExit(caller, toAddr, v)
+		ret, err = p.validatorExit(caller, toAddr, v, msg.TxHash())
 		if err != nil {
 			log.Error("Validator exit: err",
 				"opCode", op.OpCode(),
@@ -231,7 +234,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 			)
 		}
 	case operation.Withdrawal:
-		ret, err = p.validatorWithdrawal(caller, toAddr, v)
+		ret, err = p.validatorWithdrawal(caller, toAddr, v, msg.TxHash())
 		if err != nil {
 			log.Error("Validator withdrawal: err",
 				"opCode", op.OpCode(),
@@ -257,7 +260,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 	return ret, err
 }
 
-func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *big.Int, op operation.Deposit) (_ []byte, err error) {
+func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *big.Int, op operation.Deposit, txHash common.Hash) (_ []byte, err error) {
 	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
@@ -333,6 +336,36 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		validator = currValidator
 	}
 
+	// ver1 data validation
+	if validator.Version() >= valStore.Ver1 {
+		//withdrawal operations are limited to 1 op at time
+		//if operation already has been requested, check it expiration
+		prevOpTx := validator.GetWithdrawalTx()
+		if prevOpTx != nil {
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check prev op success
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				//check prev operation expiration
+				prevHeader := p.blockchain.GetHeaderByHash(blHash)
+				expiration := p.blockchain.Config().ValidatorOpExpireSlots
+				currSlot := p.ctx.Slot
+				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
+					log.Error("Validator deposit: op blocked by withdrawal",
+						"blockedByTx", prevOpTx.Hex(),
+						"opCode", op.OpCode(),
+						"creator", op.CreatorAddress().Hex(),
+						"error", ErrValOpBlocked,
+					)
+					return nil, ErrValOpBlocked
+				}
+			}
+		}
+	}
+
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.AddDepositTxs(txHash)
+
 	validator.AddStake(from, value)
 
 	err = p.Storage().SetValidator(p.state, validator)
@@ -349,7 +382,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 	return value.FillBytes(make([]byte, 32)), nil
 }
 
-func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operation.Exit) ([]byte, error) {
+func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operation.Exit, txHash common.Hash) ([]byte, error) {
 	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
@@ -407,13 +440,48 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		return nil, ErrInvalidFromAddresses
 	}
 
+	// ver1 data validation
+	if validator.Version() >= valStore.Ver1 {
+		//if operation already has been requested, check it expiration
+		prevOpTx := validator.GetExitTx()
+		if prevOpTx != nil {
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check prev op success
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				//check prev operation expiration
+				prevHeader := p.blockchain.GetHeaderByHash(blHash)
+				expiration := p.blockchain.Config().ValidatorOpExpireSlots
+				currSlot := p.ctx.Slot
+				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
+					log.Error("Validator exit: op blocked",
+						"blockedByTx", prevOpTx.Hex(),
+						"opCode", op.OpCode(),
+						"creator", op.CreatorAddress().Hex(),
+						"error", ErrValOpBlocked,
+					)
+					return nil, ErrValOpBlocked
+				}
+			}
+		}
+	}
+
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.SetExitTx(&txHash)
+
+	// update validator
+	err = p.Storage().SetValidator(p.state, validator)
+	if err != nil {
+		return nil, err
+	}
+
 	logData := txlog.PackExitRequestLogData(op.PubKey(), op.CreatorAddress(), validator.GetIndex(), op.ExitAfterEpoch())
 	p.eventEmmiter.ExitRequest(toAddr, logData)
 
 	return op.CreatorAddress().Bytes(), nil
 }
 
-func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op operation.Withdrawal) ([]byte, error) {
+func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op operation.Withdrawal, txHash common.Hash) ([]byte, error) {
 	if !p.IsValidatorOp(&toAddr) {
 		return nil, ErrInvalidToAddress
 	}
@@ -433,6 +501,36 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 	if validator == nil {
 		return nil, ErrUnknownValidator
 	}
+
+	// ver1 data validation
+	if validator.Version() >= valStore.Ver1 {
+		//withdrawal operations are limited to 1 op at time
+		//if operation already has been requested, check it expiration
+		prevOpTx := validator.GetWithdrawalTx()
+		if prevOpTx != nil {
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check prev op success
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				//check prev operation expiration
+				prevHeader := p.blockchain.GetHeaderByHash(blHash)
+				expiration := p.blockchain.Config().ValidatorOpExpireSlots
+				currSlot := p.ctx.Slot
+				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
+					log.Error("Validator withdrawal: op blocked",
+						"blockedByTx", prevOpTx.Hex(),
+						"opCode", op.OpCode(),
+						"amount", opAmount.String(),
+						"creator", op.CreatorAddress().Hex(),
+						"error", ErrValOpBlocked,
+					)
+					return nil, ErrValOpBlocked
+				}
+			}
+		}
+	}
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.SetWithdrawalTx(&txHash)
 
 	// if total deposited amount is less than the effective balance
 	// - deposit is insufficient to activate validator.
@@ -458,25 +556,22 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		if opAmount.Cmp(common.Big0) == 0 {
 			opAmount = new(big.Int).Set(stakeByAddr)
 		}
-		// withdrawal amount from deposit balance
-		newStake, err := validator.SubtractStake(from, opAmount)
-		if err != nil {
-			log.Error("Validator withdrawal: refunds of insufficient deposit failed",
-				"opCode", op.OpCode(),
-				"amount", opAmount.String(),
-				"creator", op.CreatorAddress().Hex(),
-				"error", err,
-			)
-			return nil, err
-		}
-		// rm validator stake if empty
-		if newStake != nil && newStake.Cmp(common.Big0) == 0 {
-			validator.RmStakeByAddress(from)
-		}
-		// update validator
-		err = p.Storage().SetValidator(p.state, validator)
-		if err != nil {
-			return nil, err
+		if !p.blockchain.Config().IsForkSlotValOpTracking(p.ctx.Slot) {
+			// withdrawal amount from deposit balance
+			newStake, err := validator.SubtractStake(from, opAmount)
+			if err != nil {
+				log.Error("Validator withdrawal: refunds of insufficient deposit failed",
+					"opCode", op.OpCode(),
+					"amount", opAmount.String(),
+					"creator", op.CreatorAddress().Hex(),
+					"error", err,
+				)
+				return nil, err
+			}
+			// rm validator stake if empty
+			if newStake != nil && newStake.Cmp(common.Big0) == 0 {
+				validator.RmStakeByAddress(from)
+			}
 		}
 	} else if validator.HasDelegatingStake() {
 		//check delegating roles
@@ -505,6 +600,11 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		if from != *validator.GetWithdrawalAddress() {
 			return nil, ErrInvalidFromAddresses
 		}
+	}
+	// update validator
+	err = p.Storage().SetValidator(p.state, validator)
+	if err != nil {
+		return nil, err
 	}
 
 	// create tx log
@@ -548,6 +648,14 @@ func (p *Processor) validatorActivate(op operation.ValidatorSync) ([]byte, error
 		return nil, ErrUnknownValidator
 	}
 
+	if p.blockchain.Config().IsForkSlotValOpTracking(p.ctx.Slot) && validator.GetActivationEra() != math.MaxUint64 {
+		return nil, ErrValidatorActivated
+	}
+
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.ResetDepositTxs()
+
 	opEra := p.blockchain.EpochToEra(op.ProcEpoch())
 
 	validator.SetActivationEra(opEra.Number + postpone)
@@ -589,6 +697,10 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 		return nil, ErrNotActivatedValidator
 	}
 
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	validator.SetExitTx(nil)
+
 	exitEra := opEra.Number + postpone
 	validator.SetExitEra(exitEra)
 	err = p.Storage().SetValidator(p.state, validator)
@@ -618,6 +730,62 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 	if validator == nil {
 		return nil, ErrUnknownValidator
 	}
+
+	// ver1 data validation
+	if validator.Version() >= valStore.Ver1 {
+		//withdrawal operations are limited to 1 op at time
+		prevOpTx := validator.GetWithdrawalTx()
+		if prevOpTx == nil {
+			//check withdrawal initialized before ForkSlotValOpTracking
+			//quick check
+			expiration := p.blockchain.Config().ValidatorOpExpireSlots
+			var checkSlot uint64
+			if p.ctx.Slot > expiration {
+				checkSlot = p.ctx.Slot - expiration
+			}
+			if p.blockchain.Config().IsForkSlotValOpTracking(checkSlot) {
+				return nil, ErrNoActiveWithdrawalOp
+			}
+			//check slot of initTx applying (for transition period only)
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(op.InitTxHash())
+			//check initTx success
+			if rc == nil {
+				return nil, fmt.Errorf("initTx receipt not found: %#x", op.InitTxHash())
+			}
+			if rc.Status != types.ReceiptStatusSuccessful {
+				return nil, fmt.Errorf("initTx receipt status is failed: %#x", op.InitTxHash())
+			}
+			initTxHeader := p.blockchain.GetHeaderByHash(blHash)
+			if p.blockchain.Config().IsForkSlotValOpTracking(initTxHeader.Slot) {
+				return nil, ErrNoActiveWithdrawalOp
+			}
+		} else if *prevOpTx != op.InitTxHash() {
+			//if another operation already has been requested, check it expiration
+			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check prev op success
+			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
+				//check prev operation expiration
+				prevHeader := p.blockchain.GetHeaderByHash(blHash)
+				expiration := p.blockchain.Config().ValidatorOpExpireSlots
+				currSlot := p.ctx.Slot
+				if prevHeader != nil && currSlot < prevHeader.Slot+expiration {
+					log.Error("Validator withdrawal: op blocked",
+						"blockedByTx", prevOpTx.Hex(),
+						"opCode", op.OpCode(),
+						"amount", op.Amount().String(),
+						"creator", op.Creator().Hex(),
+						"error", ErrValOpBlocked,
+					)
+					return nil, ErrValOpBlocked
+				}
+			}
+		}
+	}
+	//update current validator's data version
+	validator = p.updateValidatorVersionBySlot(validator)
+	//reset current withdrawal op
+	validator.SetWithdrawalTx(nil)
+
 	var withdrawalTo *common.Address
 	// if total deposited amount is less than the effective balance
 	// - deposit is insufficient to activate validator.
@@ -651,6 +819,43 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		signer := types.LatestSigner(p.blockchain.Config())
 		iTxFrom, _ := types.Sender(signer, initTx)
 		withdrawalTo = &iTxFrom
+
+		if p.blockchain.Config().IsForkSlotValOpTracking(p.ctx.Slot) {
+			// withdrawal amount from deposit balance
+			wDepositAmt := op.Amount()
+			curDepositStake := validator.StakeByAddress(iTxFrom)
+			if curDepositStake.Cmp(wDepositAmt) < 0 {
+				log.Warn("Validator update balance: refunds of insufficient deposit: op amount less than stake",
+					"opCode", op.OpCode(),
+					"InitTxHash", op.InitTxHash().Hex(),
+					"amount", op.Amount().String(),
+					"stake", curDepositStake.String(),
+					"procEpoch", op.ProcEpoch(),
+					"vIndex", op.Index(),
+					"creator", op.Creator().Hex(),
+				)
+				wDepositAmt = new(big.Int).Set(curDepositStake)
+			}
+
+			newStake, err := validator.SubtractStake(iTxFrom, wDepositAmt)
+			if err != nil {
+				log.Error("Validator withdrawal: refunds of insufficient deposit failed",
+					"opCode", op.OpCode(),
+					"InitTxHash", op.InitTxHash().Hex(),
+					"amount", op.Amount().String(),
+					"stake", curDepositStake.String(),
+					"procEpoch", op.ProcEpoch(),
+					"vIndex", op.Index(),
+					"creator", op.Creator().Hex(),
+					"error", err,
+				)
+				return nil, err
+			}
+			// rm validator stake if empty
+			if newStake != nil && newStake.Cmp(common.Big0) == 0 {
+				validator.RmStakeByAddress(iTxFrom)
+			}
+		}
 	} else if validator.HasDelegatingStake() {
 		// Handle delegate rules
 		return p.applyDelegatingStakeRules(op, validator)
@@ -662,6 +867,12 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 			return nil, ErrNoWithdrawalCred
 		}
 	}
+	// update validator
+	err = p.Storage().SetValidator(p.state, validator)
+	if err != nil {
+		return nil, err
+	}
+
 	// transfer amount to withdrawal address
 	p.state.AddBalance(*withdrawalTo, op.Amount())
 
@@ -971,4 +1182,15 @@ func ValidatePartialDepositOp(validator *valStore.Validator, op operation.Deposi
 		return fmt.Errorf("mismatch validator delegating stake rules")
 	}
 	return nil
+}
+
+func (p *Processor) updateValidatorVersionBySlot(validator *valStore.Validator) *valStore.Validator {
+	ver := valStore.NoVer
+	bcConf := p.blockchain.Config()
+	slot := p.ctx.Slot
+	if bcConf.IsForkSlotValOpTracking(slot) {
+		ver = valStore.Ver1
+	}
+	validator.SetVersion(ver)
+	return validator
 }
