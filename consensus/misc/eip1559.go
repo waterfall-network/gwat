@@ -61,7 +61,7 @@ func CalcSlotBaseFee(config *params.ChainConfig, creatorsPerSlotCount, validator
 	)
 
 	if !config.IsForkSlotReduceBaseFee(slot) {
-		optValidatorsNumBig = new(big.Float).SetUint64(params.OptValidatorsNum * 10)
+		optValidatorsNumBig = new(big.Float).SetUint64(params.OptValidatorsNumBeforeReduceBaseFee)
 	}
 
 	annualizedReturnRate := new(big.Float).Mul(annualizedRateBig, new(big.Float).Sqrt(new(big.Float).Quo(optValidatorsNumBig, validatorsAmountBig)))
