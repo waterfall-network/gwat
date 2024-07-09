@@ -78,6 +78,7 @@ type BlockContext struct {
 	BaseFee     *big.Int       // Provides information for BASEFEE
 	Slot        uint64
 	Era         uint64
+	BlockHash   common.Hash
 }
 
 // TxContext provides the EVM with information about a transaction.
