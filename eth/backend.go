@@ -269,7 +269,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 						log.Crit("Bad data initialized: epoch cp header not fount", "epoch", transEpoch, "cpSpine", cpSpine.Hex())
 						log.Crit("Use backup to restore work")
 					}
-					eth.blockchain.StartTransitionPeriod(cp, header.Root)
+					eth.blockchain.StartTransitionPeriod(cp, header.Root, header.Hash())
 				}
 			}
 		}

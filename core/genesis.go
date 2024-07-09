@@ -392,15 +392,22 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	genesisEraLength := era.EstimateEraLength(g.Config, uint64(len(g.Validators)), 0)
 	genesisEra := era.Era{
-		Number: 0,
-		From:   0,
-		To:     genesisEraLength - 1,
-		Root:   genesisBlock.Root(),
+		Number:    0,
+		From:      0,
+		To:        genesisEraLength - 1,
+		Root:      genesisBlock.Root(),
+		BlockHash: genesisBlock.Hash(),
 	}
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(db, genesisEra.Number)
 
-	log.Info("Genesis era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root.Hex())
+	log.Info("Genesis era",
+		"number", genesisEra.Number,
+		"begin:", genesisEra.From,
+		"end:", genesisEra.To,
+		"root", genesisEra.Root.Hex(),
+		"blockHash", genesisBlock.Hash().Hex(),
+	)
 
 	return genesisBlock
 }

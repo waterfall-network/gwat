@@ -22,28 +22,30 @@ type Blockchain interface {
 	GetEraInfo() *EraInfo
 	Config() *params.ChainConfig
 	GetHeaderByHash(common.Hash) *types.Header
-	EnterNextEra(uint64, common.Hash) *Era
-	StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash)
+	EnterNextEra(fromEpoch uint64, root, hash common.Hash) *Era
+	StartTransitionPeriod(cp *types.Checkpoint, spineRoot, spineHash common.Hash)
 }
 
 type Era struct {
-	Number uint64      `json:"number"`
-	From   uint64      `json:"fromEpoch"`
-	To     uint64      `json:"toEpoch"`
-	Root   common.Hash `json:"root"`
+	Number    uint64      `json:"number"`
+	From      uint64      `json:"fromEpoch"`
+	To        uint64      `json:"toEpoch"`
+	Root      common.Hash `json:"root"`
+	BlockHash common.Hash `json:"blockHash"`
 }
 
 // New function to create a new Era instance
-func NewEra(number, from, to uint64, root common.Hash) *Era {
+func NewEra(number, from, to uint64, root, blockHash common.Hash) *Era {
 	return &Era{
-		Number: number,
-		From:   from,
-		To:     to,
-		Root:   root,
+		Number:    number,
+		From:      from,
+		To:        to,
+		Root:      root,
+		BlockHash: blockHash,
 	}
 }
 
-func NextEra(bc Blockchain, root common.Hash, numValidators uint64) *Era {
+func NextEra(bc Blockchain, root, blockHash common.Hash, numValidators uint64) *Era {
 	nextEraNumber := bc.GetEraInfo().Number() + 1
 
 	nextEraLength := EstimateEraLength(bc.Config(), numValidators, nextEraNumber)
@@ -51,7 +53,7 @@ func NextEra(bc Blockchain, root common.Hash, numValidators uint64) *Era {
 	nextEraBegin := bc.GetEraInfo().ToEpoch() + 1
 	nextEraEnd := bc.GetEraInfo().ToEpoch() + nextEraLength
 
-	return NewEra(nextEraNumber, nextEraBegin, nextEraEnd, root)
+	return NewEra(nextEraNumber, nextEraBegin, nextEraEnd, root, blockHash)
 }
 
 func (e *Era) Length() uint64 {
@@ -198,11 +200,12 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 
 	log.Info("ERA started for new cp", "cp", cp.Epoch, "finEpoch", cp.FinEpoch, "root", cp.Spine.Hex())
 
-	var spineRoot common.Hash
+	var spineRoot, spineHash common.Hash
 	// if cp != nil {
 	header := bc.GetHeaderByHash(cp.Spine)
 	if header != nil {
 		spineRoot = header.Root
+		spineHash = header.Hash()
 	} else {
 		log.Error("Checkpoint spine header not found", "err", ErrCheckpointInvalid)
 		return ErrCheckpointInvalid
@@ -212,7 +215,7 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 	// New era
 	if bc.GetEraInfo().ToEpoch()+1 <= cp.FinEpoch {
 		for curToEpoch+1 <= cp.FinEpoch {
-			nextEra := bc.EnterNextEra(curToEpoch+1, spineRoot)
+			nextEra := bc.EnterNextEra(curToEpoch+1, spineRoot, spineHash)
 			if nextEra != nil {
 				curToEpoch = nextEra.To
 			} else {
@@ -229,7 +232,7 @@ func HandleEra(bc Blockchain, cp *types.Checkpoint) error {
 		)
 		return nil
 	} else if (bc.GetEraInfo().ToEpoch()+1)-bc.Config().TransitionPeriod == cp.FinEpoch && cp.FinEpoch <= bc.GetEraInfo().ToEpoch()+1 {
-		bc.StartTransitionPeriod(cp, spineRoot)
+		bc.StartTransitionPeriod(cp, spineRoot, spineHash)
 	}
 	return nil
 }

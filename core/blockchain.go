@@ -4680,6 +4680,7 @@ func (bc *BlockChain) SetNewEraInfo(newEra era.Era) {
 		"begin", newEra.From,
 		"end", newEra.To,
 		"root", newEra.Root,
+		"blockHash", newEra.BlockHash,
 	)
 
 	bc.eraInfo = era.NewEraInfo(newEra)
@@ -4697,7 +4698,7 @@ func (bc *BlockChain) DagMuUnlock() {
 	bc.dagMu.Unlock()
 }
 
-func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *era.Era {
+func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root, blockHash common.Hash) *era.Era {
 	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
 
 	// todo check nextEra.Root != root (in fork)
@@ -4722,7 +4723,7 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 	}
 
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, transitionSlot, true, false, "EnterNextEra")
-	nextEra = era.NextEra(bc, root, uint64(len(validators)))
+	nextEra = era.NextEra(bc, root, blockHash, uint64(len(validators)))
 	bc.FixEra(nextEra, false, "EnterNextEra_1")
 	rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 	rawdb.WriteCurrentEra(bc.db, nextEra.Number)
@@ -4739,7 +4740,7 @@ func (bc *BlockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) *e
 	return nextEra
 }
 
-func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) {
+func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot, spineHash common.Hash) {
 	nextEra := rawdb.ReadEra(bc.db, bc.eraInfo.Number()+1)
 	if nextEra == nil {
 		log.Info("GetValidators StartTransitionPeriod", "slot", bc.GetSlotInfo().CurrentSlot(),
@@ -4764,7 +4765,7 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot comm
 		}
 
 		validators, _ := bc.ValidatorStorage().GetValidators(bc, cpEpochSlot, true, false, "StartTransitionPeriod")
-		nextEra = era.NextEra(bc, spineRoot, uint64(len(validators)))
+		nextEra = era.NextEra(bc, spineRoot, spineHash, uint64(len(validators)))
 		bc.FixEra(nextEra, false, "StartTransitionPeriod_0")
 		rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 
@@ -5427,12 +5428,12 @@ func (bc *BlockChain) TestNet8FixEraOnInit() {
 		bc.SetNewEraInfo(*fixEra)
 		if eraInfo.Number() == 7799 {
 			log.Info("Testnet8 fix era: save correct era 7800")
-			era7800 := era.NewEra(7800, 126288, 126319, correctRoot)
+			era7800 := era.NewEra(7800, 126288, 126319, correctRoot, common.Hash{})
 			rawdb.WriteEra(bc.db, era7800.Number, *era7800)
 		}
 		if eraInfo.Number() == 7800 {
 			log.Info("Testnet8 fix era: save correct era 7801")
-			era7801 := era.NewEra(7801, 126320, 126351, correctRoot)
+			era7801 := era.NewEra(7801, 126320, 126351, correctRoot, common.Hash{})
 			rawdb.WriteEra(bc.db, era7801.Number, *era7801)
 		}
 	}
@@ -5445,6 +5446,7 @@ func (bc *BlockChain) TestNet8FixEraOnInit() {
 			"begin", upEra.From,
 			"end", upEra.To,
 			"root", upEra.Root,
+			"blockHash", upEra.BlockHash,
 		)
 	}
 	upEra = rawdb.ReadEra(bc.db, 7801)
@@ -5456,6 +5458,7 @@ func (bc *BlockChain) TestNet8FixEraOnInit() {
 			"begin", upEra.From,
 			"end", upEra.To,
 			"root", upEra.Root,
+			"blockHash", upEra.BlockHash,
 		)
 	}
 }
@@ -5477,6 +5480,7 @@ func (bc *BlockChain) TestNet8FixEra(ptrEra *era.Era, save bool, byFn string) {
 				"begin", ptrEra.From,
 				"end", ptrEra.To,
 				"root", ptrEra.Root.Hex(),
+				"blockHash", ptrEra.BlockHash.Hex(),
 				"fn", byFn,
 			)
 		}
