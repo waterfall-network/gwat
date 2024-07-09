@@ -352,7 +352,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		g.Config = &params.ChainConfig{ValidatorsStateAddress: validatorsStateAddress}
 	}
 
-	head.BaseFee = misc.CalcSlotBaseFee(g.Config, g.Config.ValidatorsPerSlot, uint64(len(g.Validators.Addresses())), g.GasLimit)
+	head.BaseFee = misc.CalcSlotBaseFee(g.Config, g.Config.ValidatorsPerSlot, uint64(len(g.Validators.Addresses())), g.GasLimit, g.Slot)
 	validatorStorage := valStore.NewStorage(g.Config)
 
 	validatorStorage.SetValidatorsList(statedb, g.Validators.Addresses())

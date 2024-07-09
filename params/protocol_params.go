@@ -123,7 +123,7 @@ const (
 
 	// DAG BaseFee constants
 	PriceMultiplier         = 3
-	OptValidatorsNum        = 3000000
+	OptValidatorsNum        = 300000
 	MaxAnnualizedReturnRate = 0.2
 
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract

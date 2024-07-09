@@ -3382,7 +3382,7 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, header.Slot, true, false, "UpdateFinalizingState")
-	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit(), header.Slot)
 
 	// Process block using the parent state as reference point
 	subStart := time.Now()
@@ -5134,7 +5134,7 @@ func (bc *BlockChain) verifyBlockBaseFee(block *types.Block) bool {
 	}
 
 	validators, _ := bc.ValidatorStorage().GetValidators(bc, block.Slot(), true, false, "verifyBlockBaseFee")
-	expectedBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit())
+	expectedBaseFee := misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, uint64(len(validators)), bc.Genesis().GasLimit(), block.Slot())
 
 	if expectedBaseFee.Cmp(block.BaseFee()) != 0 {
 		log.Warn("Block verification: invalid base fee",

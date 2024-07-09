@@ -13,6 +13,7 @@
     "forkSlotPrefixFin": 4058240,
     "forkSlotShanghai": 18446744073709551615,
     "forkSlotValOpTracking": 18446744073709551615,
+    "forkSlotReduceBaseFee": 18446744073709551615,
     "startEpochsPerEra": 18446744073709551615,
     "acceptCpRootOnFinEpoch": {
       "0xd76dd012c08baefd84750cf9752a6987dbc8ff4451069056cfd110e32250ed4a": [96176],
