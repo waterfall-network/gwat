@@ -183,6 +183,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"withdrawalAddress", v.WithdrawalAddress().Hex(),
 				"pubKey", v.PubKey().Hex(),
 				"delegatingStake", v.DelegatingStake() != nil,
+				"blHash", p.ctx.BlockHash.Hex(),
 				"err", err,
 			)
 		} else {
@@ -195,6 +196,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"withdrawalAddress", v.WithdrawalAddress().Hex(),
 				"pubKey", v.PubKey().Hex(),
 				"delegatingStake", v.DelegatingStake() != nil,
+				"blHash", p.ctx.BlockHash.Hex(),
 			)
 		}
 	case operation.ValidatorSync:
@@ -205,6 +207,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"initTx", v.InitTxHash().Hex(),
 				"creator", v.Creator().Hex(),
 				"procEpoch", v.ProcEpoch(),
+				"blHash", p.ctx.BlockHash.Hex(),
 				"err", err,
 			)
 		} else {
@@ -213,6 +216,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"initTx", v.InitTxHash().Hex(),
 				"creator", v.Creator().Hex(),
 				"procEpoch", v.ProcEpoch(),
+				"blHash", p.ctx.BlockHash.Hex(),
 			)
 		}
 	case operation.Exit:
@@ -241,6 +245,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"tx", msg.TxHash().Hex(),
 				"amount", v.Amount().String(),
 				"creator", v.CreatorAddress().Hex(),
+				"blHash", p.ctx.BlockHash.Hex(),
 				"err", err,
 			)
 		} else {
@@ -249,6 +254,7 @@ func (p *Processor) Call(caller Ref, toAddr common.Address, value *big.Int, msg 
 				"tx", msg.TxHash().Hex(),
 				"amount", v.Amount().String(),
 				"creator", v.CreatorAddress().Hex(),
+				"blHash", p.ctx.BlockHash.Hex(),
 			)
 		}
 	}
@@ -343,6 +349,17 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 		prevOpTx := validator.GetWithdrawalTx()
 		if prevOpTx != nil {
 			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check if prev tx in same block
+			if blHash != (common.Hash{}) && blHash == p.ctx.BlockHash {
+				log.Error("Validator deposit: op blocked by withdrawal (op in same block)",
+					"blockedByTx", prevOpTx.Hex(),
+					"opCode", op.OpCode(),
+					"creator", op.CreatorAddress().Hex(),
+					"blHash", p.ctx.BlockHash.Hex(),
+					"error", ErrValOpBlocked,
+				)
+				return nil, ErrValOpBlocked
+			}
 			//check prev op success
 			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
 				//check prev operation expiration
@@ -354,6 +371,7 @@ func (p *Processor) validatorDeposit(caller Ref, toAddr common.Address, value *b
 						"blockedByTx", prevOpTx.Hex(),
 						"opCode", op.OpCode(),
 						"creator", op.CreatorAddress().Hex(),
+						"blHash", p.ctx.BlockHash.Hex(),
 						"error", ErrValOpBlocked,
 					)
 					return nil, ErrValOpBlocked
@@ -446,6 +464,17 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 		prevOpTx := validator.GetExitTx()
 		if prevOpTx != nil {
 			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check if prev tx in same block
+			if blHash != (common.Hash{}) && blHash == p.ctx.BlockHash {
+				log.Error("Validator exit: op blocked (op in same block)",
+					"blockedByTx", prevOpTx.Hex(),
+					"opCode", op.OpCode(),
+					"creator", op.CreatorAddress().Hex(),
+					"blHash", p.ctx.BlockHash.Hex(),
+					"error", ErrValOpBlocked,
+				)
+				return nil, ErrValOpBlocked
+			}
 			//check prev op success
 			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
 				//check prev operation expiration
@@ -457,6 +486,7 @@ func (p *Processor) validatorExit(caller Ref, toAddr common.Address, op operatio
 						"blockedByTx", prevOpTx.Hex(),
 						"opCode", op.OpCode(),
 						"creator", op.CreatorAddress().Hex(),
+						"blHash", p.ctx.BlockHash.Hex(),
 						"error", ErrValOpBlocked,
 					)
 					return nil, ErrValOpBlocked
@@ -509,6 +539,19 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 		prevOpTx := validator.GetWithdrawalTx()
 		if prevOpTx != nil {
 			rc, blHash, _ := p.blockchain.GetTransactionReceipt(*prevOpTx)
+			//check if prev tx in same block
+			if blHash != (common.Hash{}) && blHash == p.ctx.BlockHash {
+				log.Error("Validator withdrawal: op blocked (op in same block)",
+					"blockedByTx", prevOpTx.Hex(),
+					"opCode", op.OpCode(),
+					"amount", opAmount.String(),
+					"creator", op.CreatorAddress().Hex(),
+					"blHash", p.ctx.BlockHash.Hex(),
+					"error", ErrValOpBlocked,
+				)
+				return nil, ErrValOpBlocked
+			}
+
 			//check prev op success
 			if rc != nil && rc.Status == types.ReceiptStatusSuccessful {
 				//check prev operation expiration
@@ -522,6 +565,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 						"amount", opAmount.String(),
 						"creator", op.CreatorAddress().Hex(),
 						"error", ErrValOpBlocked,
+						"blHash", p.ctx.BlockHash.Hex(),
 					)
 					return nil, ErrValOpBlocked
 				}
@@ -542,6 +586,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 			"opCode", op.OpCode(),
 			"amount", opAmount.String(),
 			"creator", op.CreatorAddress().Hex(),
+			"blHash", p.ctx.BlockHash.Hex(),
 		)
 		stakeByAddr := validator.StakeByAddress(from)
 		//withdrawal address must be one of the depositors
@@ -564,6 +609,7 @@ func (p *Processor) validatorWithdrawal(caller Ref, toAddr common.Address, op op
 					"opCode", op.OpCode(),
 					"amount", opAmount.String(),
 					"creator", op.CreatorAddress().Hex(),
+					"blHash", p.ctx.BlockHash.Hex(),
 					"error", err,
 				)
 				return nil, err
@@ -623,6 +669,7 @@ func (p *Processor) syncOpProcessing(op operation.ValidatorSync, msg message) (r
 			"OpCode", op.OpCode(),
 			"Creator", op.Creator().Hex(),
 			"InitTxHash", op.InitTxHash().Hex(),
+			"blHash", p.ctx.BlockHash.Hex(),
 		)
 		return nil, err
 	}
@@ -774,6 +821,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 						"opCode", op.OpCode(),
 						"amount", op.Amount().String(),
 						"creator", op.Creator().Hex(),
+						"blHash", p.ctx.BlockHash.Hex(),
 						"error", ErrValOpBlocked,
 					)
 					return nil, ErrValOpBlocked
@@ -800,6 +848,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 			"procEpoch", op.ProcEpoch(),
 			"vIndex", op.Index(),
 			"creator", op.Creator().Hex(),
+			"blHash", p.ctx.BlockHash.Hex(),
 		)
 		// check initial tx
 		initTx, _, _ := p.blockchain.GetTransaction(op.InitTxHash())
@@ -809,7 +858,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 		// check init tx data
 		iop, err := operation.DecodeBytes(initTx.Data())
 		if err != nil {
-			log.Error("can`t unmarshal validator sync operation from tx data", "err", err)
+			log.Error("can`t unmarshal validator sync operation from tx data", "blHash", p.ctx.BlockHash.Hex(), "err", err)
 			return nil, err
 		}
 		if iop.OpCode() != operation.WithdrawalCode {
@@ -833,6 +882,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 					"procEpoch", op.ProcEpoch(),
 					"vIndex", op.Index(),
 					"creator", op.Creator().Hex(),
+					"blHash", p.ctx.BlockHash.Hex(),
 				)
 				wDepositAmt = new(big.Int).Set(curDepositStake)
 			}
@@ -847,6 +897,7 @@ func (p *Processor) validatorUpdateBalance(op operation.ValidatorSync) ([]byte, 
 					"procEpoch", op.ProcEpoch(),
 					"vIndex", op.Index(),
 					"creator", op.Creator().Hex(),
+					"blHash", p.ctx.BlockHash.Hex(),
 					"error", err,
 				)
 				return nil, err
@@ -898,6 +949,7 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 		"procEpoch", op.ProcEpoch(),
 		"vIndex", op.Index(),
 		"creator", op.Creator().Hex(),
+		"blHash", p.ctx.BlockHash.Hex(),
 	)
 
 	bc := p.blockchain
@@ -952,6 +1004,7 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 				"Amount", amt.String(),
 				"InitTxHash", op.InitTxHash().Hex(),
 				"creator", op.Creator().Hex(),
+				"blHash", p.ctx.BlockHash.Hex(),
 			)
 
 			// transfer amount to withdrawal address
@@ -975,6 +1028,7 @@ func (p *Processor) applyDelegatingStakeRules(op operation.ValidatorSync, valida
 				"Amount", amt.String(),
 				"InitTxHash", op.InitTxHash().Hex(),
 				"creator", op.Creator().Hex(),
+				"blHash", p.ctx.BlockHash.Hex(),
 			)
 
 			// transfer amount to withdrawal address
