@@ -1918,7 +1918,13 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 				statedb = pool.currentState
 			}
 			validators := pool.chain.ValidatorStorage().GetValidatorsList(statedb)
-			pendingBaseFee := misc.CalcSlotBaseFee(pool.chainconfig, pool.chainconfig.ValidatorsPerSlot, uint64(len(validators)), pool.chain.Genesis().GasLimit())
+			pendingBaseFee := misc.CalcSlotBaseFee(
+				pool.chainconfig,
+				pool.chainconfig.ValidatorsPerSlot,
+				uint64(len(validators)),
+				pool.chain.Genesis().GasLimit(),
+				reset.newHead.Slot,
+			)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}
