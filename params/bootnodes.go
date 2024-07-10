@@ -21,8 +21,7 @@ import "gitlab.waterfall.network/waterfall/protocol/gwat/common"
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Ethereum network.
 var MainnetBootnodes = []string{
-	//todo tn5 data
-	"enode://d1de1e39286eb6f6783a63e7bff81a5264569bc1f0bea0fe923454a8ff2dcdebf2d02ed0cacfca6f3ac1504062a696e0ecb26526161a5d886bd238d2b2f985fa@5.75.135.44:30301",
+	"enode://89c1056d25113169b08b2134eb01782f918db49779c3cbd89b9115ced96533ad88ec47030ab4febc80a0fc7761a2de67fc8bf5d83d31a2c6f51f1d891ab0785a@34.38.132.50:30301",
 }
 
 // Testnet8Bootnodes are the enode URLs of the P2P bootstrap nodes running on the

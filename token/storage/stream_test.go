@@ -21,7 +21,7 @@ var (
 func init() {
 	stateDb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	address = common.BytesToAddress(testutils.RandomData(20))
-	lenBuf := testutils.RandomInt(0, 200)
+	lenBuf := testutils.RandomInt(2, 200)
 	buf = testutils.RandomData(lenBuf)
 	// -2 because RandomInt is inclusive [min,max].
 	// It is needed for offset to be smaller than buffer`s length

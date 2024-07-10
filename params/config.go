@@ -28,7 +28,7 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xdcafaade5ac90c72bcd8603f3c94764fab5d3218b1afc4923bb3c34f2cd4fe74")
+	MainnetGenesisHash = common.HexToHash("0x5c46071bf3056d26734af3696fb829ba87dbd24502cbfc3a20c5c9285e637ceb")
 	// Testnet8GenesisHash  waterfall test net
 	Testnet8GenesisHash = common.HexToHash("0xa7531d17d43684576b864662852e3cbb2dc20df7cdb9fc5405d5a0a253f623eb")
 )
@@ -56,16 +56,17 @@ var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
 //}
 
 var (
+	validatorsStateAddress = common.HexToAddress("0x329c3A3d65Ab0bE08c6eff6695933391Cfc02cCA")
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:                big.NewInt(1501865),
-		SecondsPerSlot:         4,
+		ChainID:                big.NewInt(181),
+		SecondsPerSlot:         6,
 		SlotsPerEpoch:          32,
-		EpochsPerEra:           4,
+		EpochsPerEra:           16,
 		TransitionPeriod:       2,
-		ValidatorsStateAddress: nil,
-		ValidatorsPerSlot:      5,
-		EffectiveBalance:       big.NewInt(3200),
+		ValidatorsStateAddress: &validatorsStateAddress,
+		ValidatorsPerSlot:      8,
+		EffectiveBalance:       big.NewInt(32000),
 		ValidatorOpExpireSlots: 14400,
 		ForkSlotSubNet1:        math.MaxUint64,
 		ForkSlotDelegate:       0,
