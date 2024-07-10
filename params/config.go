@@ -441,3 +441,26 @@ func (c *ChainConfig) Rules(slot uint64) Rules {
 func (c *ChainConfig) HibernationSpinesThreshold() uint64 {
 	return 128
 }
+
+// OverrideTestConf given conf while run a node with --testconf param.
+func OverrideTestConf(conf *ChainConfig) *ChainConfig {
+	//conf.ChainID = nil
+	//conf.SecondsPerSlot = 0
+	//conf.SlotsPerEpoch = 0
+	//conf.EpochsPerEra = 0
+	//conf.TransitionPeriod = 0
+	//conf.ValidatorsStateAddress = nil
+	//conf.ValidatorsPerSlot = 0
+	//conf.EffectiveBalance = nil
+	conf.ValidatorOpExpireSlots = 100
+	//conf.ForkSlotSubNet1 = 0
+	//conf.ForkSlotDelegate = 0
+	//conf.ForkSlotPrefixFin = 0
+	//conf.ForkSlotShanghai = 0
+	conf.ForkSlotValOpTracking = 512
+	conf.ForkSlotReduceBaseFee = 512
+	//conf.StartEpochsPerEra = 0
+	//conf.AcceptCpRootOnFinEpoch = nil
+
+	return conf
+}
