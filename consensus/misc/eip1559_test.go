@@ -44,6 +44,7 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		ForkSlotPrefixFin:      original.ForkSlotPrefixFin,
 		ForkSlotShanghai:       original.ForkSlotShanghai,
 		ForkSlotValOpTracking:  original.ForkSlotValOpTracking,
+		ForkSlotReduceBaseFee:  original.ForkSlotReduceBaseFee,
 		StartEpochsPerEra:      original.StartEpochsPerEra,
 		AcceptCpRootOnFinEpoch: original.AcceptCpRootOnFinEpoch,
 	}

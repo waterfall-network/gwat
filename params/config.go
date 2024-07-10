@@ -159,6 +159,7 @@ var (
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
 		ForkSlotValOpTracking:  0,
+		ForkSlotReduceBaseFee:  0,
 		StartEpochsPerEra:      0,
 	}
 
@@ -177,6 +178,7 @@ var (
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
 		ForkSlotValOpTracking:  0,
+		ForkSlotReduceBaseFee:  0,
 		StartEpochsPerEra:      0,
 	}
 )
