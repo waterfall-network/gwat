@@ -122,9 +122,10 @@ const (
 	InitialBaseFee           = 1000000000 // Initial base fee for EIP-1559 blocks.
 
 	// DAG BaseFee constants
-	PriceMultiplier         = 3
-	OptValidatorsNum        = 3000000
-	MaxAnnualizedReturnRate = 0.2
+	PriceMultiplier                     = 3
+	OptValidatorsNum                    = 300000
+	OptValidatorsNumBeforeReduceBaseFee = 3000000
+	MaxAnnualizedReturnRate             = 0.2
 
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 

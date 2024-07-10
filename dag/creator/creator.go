@@ -394,7 +394,7 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
 	validators, _ := c.bc.ValidatorStorage().GetValidators(c.bc, header.Slot, true, false, "RunBlockCreation")
-	header.BaseFee = misc.CalcSlotBaseFee(c.bc.Config(), creatorsPerSlotCount, uint64(len(validators)), c.bc.Genesis().GasLimit())
+	header.BaseFee = misc.CalcSlotBaseFee(c.bc.Config(), creatorsPerSlotCount, uint64(len(validators)), c.bc.Genesis().GasLimit(), header.Slot)
 
 	return header, nil
 }

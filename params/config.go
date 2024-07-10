@@ -73,6 +73,7 @@ var (
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
 		ForkSlotValOpTracking:  math.MaxUint64,
+		ForkSlotReduceBaseFee:  math.MaxUint64,
 		StartEpochsPerEra:      0,
 	}
 
@@ -113,6 +114,7 @@ var (
 		ForkSlotPrefixFin:      4058240,
 		ForkSlotShanghai:       math.MaxUint64,
 		ForkSlotValOpTracking:  math.MaxUint64,
+		ForkSlotReduceBaseFee:  math.MaxUint64,
 		StartEpochsPerEra:      math.MaxUint64,
 		AcceptCpRootOnFinEpoch: testnet8AcceptCpRootOnFinEpoch,
 	}
@@ -158,6 +160,7 @@ var (
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
 		ForkSlotValOpTracking:  0,
+		ForkSlotReduceBaseFee:  0,
 		StartEpochsPerEra:      0,
 	}
 
@@ -176,6 +179,7 @@ var (
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
 		ForkSlotValOpTracking:  0,
+		ForkSlotReduceBaseFee:  0,
 		StartEpochsPerEra:      0,
 	}
 )
@@ -250,7 +254,7 @@ type ChainConfig struct {
 	ForkSlotPrefixFin     uint64 `json:"forkSlotPrefixFin,omitempty"`
 	ForkSlotShanghai      uint64 `json:"forkSlotShanghai,omitempty"`
 	ForkSlotValOpTracking uint64 `json:"forkSlotValOpTracking,omitempty"`
-
+	ForkSlotReduceBaseFee uint64 `json:"forkSlotReduceBaseFee,omitempty"`
 	// Fork eras
 	StartEpochsPerEra uint64 `json:"startEpochsPerEra"`
 
@@ -280,7 +284,7 @@ func (c *CliqueConfig) String() string {
 func (c *ChainConfig) String() string {
 	return fmt.Sprintf("{ChainID: %v, SecondsPerSlot: %v, SlotsPerEpoch: %v, EpochsPerEra: %v, TransitionPeriod: %v, "+
 		"ValidatorsPerSlot %v, ValidatorsStateAddress %v, EffectiveBalance: %v, ValidatorOpExpireSlots: %v, ForkSlotSubNet1: %v, ForkSlotDelegate: %v, "+
-		"ForkSlotPrefixFin: %v, ForkSlotShanghai: %v, ForkSlotValOpTracking: %v, StartEpochsPerEra: %v, AcceptCpRootOnFinEpoch: %v}",
+		"ForkSlotPrefixFin: %v, ForkSlotShanghai: %v, ForkSlotValOpTracking: %v, ForkSlotReduceBaseFee: %v, StartEpochsPerEra: %v, AcceptCpRootOnFinEpoch: %v}",
 		c.ChainID,
 		c.SecondsPerSlot,
 		c.SlotsPerEpoch,
@@ -295,6 +299,7 @@ func (c *ChainConfig) String() string {
 		c.ForkSlotPrefixFin,
 		c.ForkSlotShanghai,
 		c.ForkSlotValOpTracking,
+		c.ForkSlotReduceBaseFee,
 		c.StartEpochsPerEra,
 		c.AcceptCpRootOnFinEpoch,
 	)
@@ -318,6 +323,11 @@ func (c *ChainConfig) IsForkSlotPrefixFin(slot uint64) bool {
 // IsForkSlotValOpTracking returns true if provided slot greater or equal of the fork slot ForkSlotValOpTracking.
 func (c *ChainConfig) IsForkSlotValOpTracking(slot uint64) bool {
 	return slot >= c.ForkSlotValOpTracking
+}
+
+// IsForkSlotReduceBaseFee returns true if provided slot greater or equal of the fork slot ForkSlotReduceBaseFee.
+func (c *ChainConfig) IsForkSlotReduceBaseFee(slot uint64) bool {
+	return slot >= c.ForkSlotReduceBaseFee
 }
 
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
