@@ -72,6 +72,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name: "DEVELOPER CHAIN",
 		Flags: []cli.Flag{
 			utils.DeveloperFlag,
+			utils.TestConfFlag,
 		},
 	},
 	{

@@ -141,6 +141,10 @@ var (
 		Name:  "testnet8",
 		Usage: "Waterfall test network8: pre-configured Directed Acyclic Graph (DAG) test network",
 	}
+	TestConfFlag = cli.BoolFlag{
+		Name:  "testconf",
+		Usage: "Overrides configuration by test params (do not use, for dev purposes only)",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Activate developer mode functionality",
@@ -1493,6 +1497,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.GlobalIsSet(DeveloperFlag.Name) {
 		cfg.IsDevMode = true
+	}
+	if ctx.GlobalIsSet(TestConfFlag.Name) {
+		cfg.IsTestConf = true
 	}
 	// Override any default configs for hard coded networks.
 	switch {
