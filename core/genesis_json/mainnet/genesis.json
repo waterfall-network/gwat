@@ -12,8 +12,8 @@
     "forkSlotDelegate": 0,
     "forkSlotPrefixFin": 0,
     "forkSlotShanghai": 0,
-    "forkSlotValOpTracking": 18446744073709551615,
-    "forkSlotReduceBaseFee": 18446744073709551615,
+    "forkSlotValOpTracking": 216000,
+    "forkSlotReduceBaseFee": 216000,
     "startEpochsPerEra": 0
   },
   "timestamp": "1719561600",

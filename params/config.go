@@ -72,8 +72,8 @@ var (
 		ForkSlotDelegate:       0,
 		ForkSlotPrefixFin:      0,
 		ForkSlotShanghai:       0,
-		ForkSlotValOpTracking:  math.MaxUint64,
-		ForkSlotReduceBaseFee:  math.MaxUint64,
+		ForkSlotValOpTracking:  216000,
+		ForkSlotReduceBaseFee:  216000,
 		StartEpochsPerEra:      0,
 	}
 
