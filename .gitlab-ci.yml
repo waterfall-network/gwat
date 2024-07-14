@@ -3,6 +3,9 @@ image: golang:1.21
 before_script:
   - echo "machine $CI_SERVER_HOST login gitlab-ci-token password $CI_JOB_TOKEN" >> ~/.netrc
   - export GOPRIVATE=${CI_SERVER_HOST}
+  - go version
+after_script:
+  - rm ~/.netrc
 stages:
   - lint
   - test
@@ -11,7 +14,6 @@ stages:
 
 .job_build:
   script: &job_build |-
-    go version
     export CGO_CFLAGS="-O -D__BLST_PORTABLE__"
     export CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__"
     cp -r params/version.go /tmp/version.go
