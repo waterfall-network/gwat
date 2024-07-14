@@ -11,6 +11,7 @@ stages:
 
 .job_build:
   script: &job_build |-
+    go version
     export CGO_CFLAGS="-O -D__BLST_PORTABLE__"
     export CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__"
     cp -r params/version.go /tmp/version.go
@@ -33,6 +34,7 @@ lint:
       when: on_success
   script:
     - echo "SKIPPED"
+    - go version
     - golangci-lint run -v
 
 test:
