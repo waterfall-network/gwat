@@ -3,6 +3,14 @@ image: golang:1.21
 before_script:
   - echo "machine $CI_SERVER_HOST login gitlab-ci-token password $CI_JOB_TOKEN" >> ~/.netrc
   - export GOPRIVATE=${CI_SERVER_HOST}
+  - echo "Current shell: $SHELL"
+  - echo "Current user: $(whoami)"
+  - echo "Current PATH: $PATH"
+  - echo "Setting GVM_ROOT"
+  - echo "Sourcing GVM scripts"
+  - source ~/.gvm/scripts/gvm || echo "Failed to source GVM"
+  - echo "Using GVM"
+  - gvm use go1.21.12 --default || echo "Failed to use GVM"
   - go version
 after_script:
   - rm ~/.netrc
@@ -38,6 +46,8 @@ lint:
     - echo "SKIPPED"
     - go version
     - golangci-lint run -v
+  before_script: []
+  after_script: []
 
 test:
   stage: test
