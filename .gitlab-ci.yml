@@ -46,8 +46,8 @@ lint:
     - echo "SKIPPED"
     - go version
     - golangci-lint run -v
-  before_script: []
-  after_script: []
+  before_script: ""
+  after_script: ""
 
 test:
   stage: test
