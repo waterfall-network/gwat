@@ -146,7 +146,7 @@ var (
 		Usage: "Overrides configuration by params defined for testnet5 (do not use, for dev purposes only)",
 	}
 	Testnet9Flag = cli.BoolFlag{
-		Name:  "testnet5",
+		Name:  "testnet9",
 		Usage: "Overrides configuration by params defined for testnet9 (do not use, for dev purposes only)",
 	}
 	DeveloperFlag = cli.BoolFlag{

@@ -453,7 +453,7 @@ func OverrideTestnet5(conf *ChainConfig) *ChainConfig {
 	//conf.ValidatorsPerSlot = 0
 	//conf.EffectiveBalance = nil
 	conf.ValidatorOpExpireSlots = 100
-	//conf.ForkSlotSubNet1 = 0
+	conf.ForkSlotSubNet1 = math.MaxUint64
 	//conf.ForkSlotDelegate = 0
 	//conf.ForkSlotPrefixFin = 0
 	//conf.ForkSlotShanghai = 0
@@ -477,16 +477,13 @@ func OverrideTestnet9(conf *ChainConfig) *ChainConfig {
 	conf.ValidatorsStateAddress = &valsStateAddr
 	conf.ValidatorsPerSlot = 5
 	conf.EffectiveBalance = new(big.Int).SetInt64(32000)
-
-	conf.ForkSlotSubNet1 = 18446744073709552000
+	conf.ForkSlotSubNet1 = math.MaxUint64
 	//conf.ForkSlotDelegate = 0
 	//conf.ForkSlotPrefixFin = 0
 	//conf.ForkSlotShanghai = 0
-
-	conf.ValidatorOpExpireSlots = 14400
-	conf.ForkSlotValOpTracking = 216000
-	conf.ForkSlotReduceBaseFee = 216000
-
+	conf.ValidatorOpExpireSlots = 320
+	conf.ForkSlotValOpTracking = math.MaxUint64
+	conf.ForkSlotReduceBaseFee = math.MaxUint64
 	conf.StartEpochsPerEra = 0
 	//conf.AcceptCpRootOnFinEpoch = nil
 
