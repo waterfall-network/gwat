@@ -442,8 +442,8 @@ func (c *ChainConfig) HibernationSpinesThreshold() uint64 {
 	return 128
 }
 
-// OverrideTestConf given conf while run a node with --testconf param.
-func OverrideTestConf(conf *ChainConfig) *ChainConfig {
+// OverrideTestnet5 given conf while run a node with --testconf param.
+func OverrideTestnet5(conf *ChainConfig) *ChainConfig {
 	//conf.ChainID = nil
 	//conf.SecondsPerSlot = 0
 	//conf.SlotsPerEpoch = 0
@@ -457,9 +457,37 @@ func OverrideTestConf(conf *ChainConfig) *ChainConfig {
 	//conf.ForkSlotDelegate = 0
 	//conf.ForkSlotPrefixFin = 0
 	//conf.ForkSlotShanghai = 0
-	conf.ForkSlotValOpTracking = 512
-	conf.ForkSlotReduceBaseFee = 512
+	conf.ForkSlotValOpTracking = 0
+	conf.ForkSlotReduceBaseFee = 0
 	//conf.StartEpochsPerEra = 0
+	//conf.AcceptCpRootOnFinEpoch = nil
+
+	return conf
+}
+
+// OverrideTestnet9 given conf while run a node with --testconf param.
+func OverrideTestnet9(conf *ChainConfig) *ChainConfig {
+	valsStateAddr := common.HexToAddress("0xc3653bd746859b94839c3ba0a8020febec009714")
+
+	conf.ChainID = new(big.Int).SetInt64(1501869)
+	conf.SecondsPerSlot = 6
+	conf.SlotsPerEpoch = 32
+	conf.EpochsPerEra = 4
+	conf.TransitionPeriod = 2
+	conf.ValidatorsStateAddress = &valsStateAddr
+	conf.ValidatorsPerSlot = 5
+	conf.EffectiveBalance = new(big.Int).SetInt64(32000)
+
+	conf.ForkSlotSubNet1 = 18446744073709552000
+	//conf.ForkSlotDelegate = 0
+	//conf.ForkSlotPrefixFin = 0
+	//conf.ForkSlotShanghai = 0
+
+	conf.ValidatorOpExpireSlots = 14400
+	conf.ForkSlotValOpTracking = 216000
+	conf.ForkSlotReduceBaseFee = 216000
+
+	conf.StartEpochsPerEra = 0
 	//conf.AcceptCpRootOnFinEpoch = nil
 
 	return conf

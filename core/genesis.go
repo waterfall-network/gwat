@@ -191,10 +191,15 @@ func (e *GenesisMismatchError) Error() string {
 //
 // The returned chain configuration is never nil.
 func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis, nil, nil, false)
+	return SetupGenesisBlockWithOverride(db, genesis, nil, nil, false, false)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegatingStakeSlot, prefixFinSlot *uint64, IsTestConf bool) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(
+	db ethdb.Database,
+	genesis *Genesis,
+	delegatingStakeSlot, prefixFinSlot *uint64,
+	isTestnet5, isTestnet9 bool,
+) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -207,8 +212,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 		} else {
 			log.Info("Writing custom genesis block")
 		}
-		if IsTestConf {
-			params.OverrideTestConf(genesis.Config)
+		if isTestnet5 {
+			params.OverrideTestnet5(genesis.Config)
+		}
+		if isTestnet9 {
+			params.OverrideTestnet9(genesis.Config)
 		}
 		if delegatingStakeSlot != nil {
 			genesis.Config.ForkSlotDelegate = *delegatingStakeSlot
@@ -234,8 +242,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
-		if IsTestConf {
-			params.OverrideTestConf(genesis.Config)
+		if isTestnet5 {
+			params.OverrideTestnet5(genesis.Config)
+		}
+		if isTestnet9 {
+			params.OverrideTestnet9(genesis.Config)
 		}
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(nil).Hash()
@@ -257,8 +268,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 	}
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
-	if IsTestConf {
-		params.OverrideTestConf(newcfg)
+	if isTestnet5 {
+		params.OverrideTestnet5(newcfg)
+	}
+	if isTestnet9 {
+		params.OverrideTestnet9(newcfg)
 	}
 	if delegatingStakeSlot != nil {
 		newcfg.ForkSlotDelegate = *delegatingStakeSlot
@@ -279,8 +293,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
 	if genesis == nil && stored != params.MainnetGenesisHash {
-		if IsTestConf {
-			params.OverrideTestConf(storedcfg)
+		if isTestnet5 {
+			params.OverrideTestnet5(storedcfg)
+		}
+		if isTestnet9 {
+			params.OverrideTestnet9(storedcfg)
 		}
 		if storedcfg.ForkSlotDelegate == 0 {
 			storedcfg.ForkSlotDelegate = newcfg.ForkSlotDelegate
