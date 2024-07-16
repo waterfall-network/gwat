@@ -467,14 +467,13 @@ func OverrideTestnet5(conf *ChainConfig) *ChainConfig {
 
 // OverrideTestnet9 given conf while run a node with --testconf param.
 func OverrideTestnet9(conf *ChainConfig) *ChainConfig {
-	valsStateAddr := common.HexToAddress("0xc3653bd746859b94839c3ba0a8020febec009714")
-
+	//valsStateAddr := common.HexToAddress("0xc3653bd746859b94839c3ba0a8020febec009714")
+	//conf.ValidatorsStateAddress = &valsStateAddr
 	conf.ChainID = new(big.Int).SetInt64(1501869)
 	conf.SecondsPerSlot = 6
 	conf.SlotsPerEpoch = 32
 	conf.EpochsPerEra = 4
 	conf.TransitionPeriod = 2
-	conf.ValidatorsStateAddress = &valsStateAddr
 	conf.ValidatorsPerSlot = 5
 	conf.EffectiveBalance = new(big.Int).SetInt64(32000)
 	conf.ForkSlotSubNet1 = math.MaxUint64
