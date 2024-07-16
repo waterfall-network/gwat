@@ -1522,6 +1522,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultTestNet8GenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.Testnet8GenesisHash)
+	case ctx.GlobalBool(Testnet5Flag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 1501865
+		}
+	case ctx.GlobalBool(Testnet9Flag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 1501869
+		}
 	default:
 		if cfg.NetworkId == 1 {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)

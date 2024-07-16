@@ -444,7 +444,7 @@ func (c *ChainConfig) HibernationSpinesThreshold() uint64 {
 
 // OverrideTestnet5 given conf while run a node with --testconf param.
 func OverrideTestnet5(conf *ChainConfig) *ChainConfig {
-	//conf.ChainID = nil
+	conf.ChainID = new(big.Int).SetInt64(1501865)
 	//conf.SecondsPerSlot = 0
 	//conf.SlotsPerEpoch = 0
 	//conf.EpochsPerEra = 0
