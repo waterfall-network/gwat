@@ -285,14 +285,16 @@ func (s *PublicValidatorAPI) GetValidators(ctx context.Context, era *uint64) ([]
 }
 
 // Validator_GetInfo retrieves validator info by provided address.
-func (s *PublicValidatorAPI) Validator_GetInfo(ctx context.Context, address common.Address) (*valStore.Validator, error) {
+func (s *PublicValidatorAPI) Validator_GetInfo(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*valStore.Validator, error) {
 	slotInfo := s.chain.GetSlotInfo()
 	if slotInfo == nil {
 		return nil, errors.New("no slot info")
 	}
 
-	stateDb, _ := s.chain.StateAt(s.chain.GetEraInfo().GetEra().Root)
-
+	stateDb, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if stateDb == nil || err != nil {
+		return nil, err
+	}
 	return s.chain.ValidatorStorage().GetValidator(stateDb, address)
 }
 
