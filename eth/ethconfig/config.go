@@ -178,7 +178,8 @@ type Config struct {
 	// OverridePrefixFin slot override (TODO: remove after the fork)
 	OverridePrefixFin *uint64 `toml:",omitempty"`
 
-	IsTestConf bool `toml:",omitempty"`
+	IsTestnet5 bool `toml:",omitempty"`
+	IsTestnet9 bool `toml:",omitempty"`
 
 	// is dev mode running
 	IsDevMode bool
