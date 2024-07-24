@@ -869,6 +869,9 @@ func (pool *TxPool) checkExitOperation(op valOperation.Exit, from common.Address
 	if validator.GetExitEra() != math.MaxUint64 {
 		return val.ErrValidatorIsOut
 	}
+	if validator.GetActivationEra() == math.MaxUint64 {
+		return val.ErrNotActivatedValidator
+	}
 	if validator.HasDelegatingStake() {
 		//check delegating roles
 		//retrieve actual rules
