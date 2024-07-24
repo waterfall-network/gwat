@@ -573,10 +573,24 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		)
 	}
 
-	log.Info("Block creation: assigned op for", "senders", len(pendingTxs), "validators", len(syncData))
-
 	// Short circuit if no pending transactions
-	if len(pendingTxs) == 0 && len(syncData) == 0 {
+	var noAssignedTxs bool
+	if c.bc.Config().IsForkSlotValSyncProc(header.Slot) {
+		noAssignedTxs = len(pendingTxs) == 0 && (len(syncData) == 0 || !c.isAddressAssigned(coinbase, *c.bc.Config().ValidatorsStateAddress, creators))
+	} else {
+		noAssignedTxs = len(pendingTxs) == 0 && len(syncData) == 0
+	}
+	log.Info("Block creation: assigned txs",
+		"noAssignedTxs", noAssignedTxs,
+		"senders", len(pendingTxs),
+		"validators", len(syncData),
+		"needEmptyBlock", needEmptyBlock,
+		"isValSyncAssigned", c.isAddressAssigned(coinbase, *c.bc.Config().ValidatorsStateAddress, creators),
+		"isForkSlotValSyncProc", c.bc.Config().IsForkSlotValSyncProc(header.Slot),
+		"coinbase", coinbase.Hex(),
+		"slot", header.Slot,
+	)
+	if noAssignedTxs {
 		if needEmptyBlock {
 			c.create(header, true)
 			log.Info("Create empty block", "creator", header.Coinbase.Hex(), "slot", header.Slot)
