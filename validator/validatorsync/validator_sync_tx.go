@@ -129,8 +129,6 @@ func ValidateCreateTxValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.
 		return false, err
 	}
 
-	procEra := bc.EpochToEra(valSyncOp.ProcEpoch)
-
 	switch valSyncOp.OpType {
 	case types.Activate:
 		if validator.GetActivationEra() < math.MaxUint64 {
@@ -140,8 +138,25 @@ func ValidateCreateTxValidatorSyncOp(bc *core.BlockChain, stateBlockHash common.
 		if validator.GetExitEra() < math.MaxUint64 {
 			return false, fmt.Errorf("validator sync operation failed: validator already deactivated")
 		}
-		if validator.GetActivationEra() >= procEra.Number {
-			return false, fmt.Errorf("validator sync operation failed: exit epoche is too low")
+
+		procEra := bc.EpochToEra(valSyncOp.ProcEpoch)
+		isLowExitEpoch := validator.GetActivationEra() >= procEra.Number
+		if bc.Config().IsForkSlotValSyncProc(slot) {
+			procEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+			procEra = bc.EpochToEra(procEpoch)
+			isLowExitEpoch = validator.GetActivationEra() > procEra.Number
+		}
+
+		log.Info("Create validator sync tx: exit: is low epoch",
+			"cond", validator.GetActivationEra() > procEra.Number,
+			"procEra", procEra,
+			"valActivationEra", validator.GetActivationEra(),
+			"IsForkSlotValSyncProc", bc.Config().IsForkSlotValSyncProc(slot),
+			"slot", slot,
+		)
+
+		if isLowExitEpoch {
+			return false, fmt.Errorf("validator sync operation failed: exit epoch is too low")
 		}
 	case types.UpdateBalance:
 		if valSyncOp.Amount == nil || valSyncOp.Amount.Sign() == 0 {

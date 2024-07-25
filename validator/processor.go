@@ -740,7 +740,11 @@ func (p *Processor) validatorDeactivate(op operation.ValidatorSync) ([]byte, err
 	}
 
 	opEra := p.blockchain.EpochToEra(op.ProcEpoch())
-	if validator.GetActivationEra() >= opEra.Number {
+	opEraNr := opEra.Number
+	if p.blockchain.Config().IsForkSlotValSyncProc(p.ctx.Slot) {
+		opEraNr = p.ctx.Era
+	}
+	if validator.GetActivationEra() >= opEraNr {
 		return nil, ErrNotActivatedValidator
 	}
 
