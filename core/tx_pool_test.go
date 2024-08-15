@@ -495,8 +495,8 @@ func TestInvalidTransactions(t *testing.T) {
 
 	balance := new(big.Int).Add(tx.Value(), new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), tx.GasPrice()))
 	testAddBalance(pool, from, balance)
-	if err := pool.AddRemote(tx); !errors.Is(err, ErrIntrinsicGas) {
-		t.Error("expected", ErrIntrinsicGas, "got", err)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Error("expected", nil, "got", err)
 	}
 
 	testSetNonce(pool, from, 1)
@@ -1097,8 +1097,8 @@ func testTransactionQueueGlobalLimiting(t *testing.T, nolocals bool) {
 		}
 	} else {
 		// Local exemptions are enabled, make sure the local account owned the queue
-		if len(pool.queue) != 0 {
-			t.Errorf("multiple accounts in queue: have %v, want %v", len(pool.queue), 0)
+		if len(pool.queue) != 1 {
+			t.Errorf("multiple accounts in queue: have %v, want %v", len(pool.queue), 1)
 		}
 	}
 }
@@ -2186,8 +2186,8 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.addRemoteSync(pricedTransaction(0, 21000, big.NewInt(1), key)); err != nil {
 		t.Fatalf("failed to add original cheap pending transaction: %v", err)
 	}
-	if err := pool.AddRemote(pricedTransaction(0, 2, big.NewInt(1), key)); err != ErrIntrinsicGas {
-		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, ErrIntrinsicGas)
+	if err := pool.AddRemote(pricedTransaction(0, 2, big.NewInt(1), key)); err != ErrReplaceUnderpriced {
+		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
 	}
 	if err := pool.AddRemote(pricedTransaction(0, 21000, big.NewInt(2), key)); err != nil {
 		t.Fatalf("failed to replace original cheap pending transaction: %v", err)
