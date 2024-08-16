@@ -788,20 +788,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// check gas estimation
-	head := pool.chain.GetLastFinalizedHeader()
-	signer := types.MakeSigner(pool.chain.Config())
-	msg, err := tx.AsMessage(signer, head.BaseFee)
-	if err != nil {
-		return err
-	}
-	estimateGas, err := pool.chain.EstimateGas(msg, head)
-	if err != nil {
-		return err
-	}
-	egh := estimateGas / 2
-	if tx.Gas() < estimateGas-egh || tx.Gas() > estimateGas+egh {
-		return ErrIntrinsicGas
-	}
+	//head := pool.chain.GetLastFinalizedHeader()
+	//signer := types.MakeSigner(pool.chain.Config())
+	//msg, err := tx.AsMessage(signer, head.BaseFee)
+	//if err != nil {
+	//	return err
+	//}
+	//estimateGas, err := pool.chain.EstimateGas(msg, head)
+	//if err != nil {
+	//	return err
+	//}
+	//egh := estimateGas / 2
+	//if tx.Gas() < estimateGas-egh || tx.Gas() > estimateGas+egh {
+	//	return ErrIntrinsicGas
+	//}
 
 	return nil
 }
