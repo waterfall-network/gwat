@@ -102,10 +102,6 @@ func TestSwapOrNot(t *testing.T) {
 	}
 }
 
-func init() {
-
-}
-
 func BenchmarkShuffleValidators(b *testing.B) {
 	var validators = make([]common.Address, 10000000)
 	for i := range validators {

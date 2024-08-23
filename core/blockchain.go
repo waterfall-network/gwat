@@ -3387,8 +3387,6 @@ func (bc *BlockChain) UpdateFinalizingState(block *types.Block, stateBlock *type
 	}
 	header.BaseFee = misc.CalcSlotBaseFee(bc.Config(), creatorsPerSlotCount, validatorsCount, bc.Genesis().GasLimit(), block.Slot())
 
-	block.SetHeader(header)
-
 	// Process block using the parent state as reference point
 	subStart := time.Now()
 	statedb, receipts, logs, usedGas := bc.CommitBlockTransactions(block, statedb)
