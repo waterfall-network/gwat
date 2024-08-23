@@ -191,10 +191,15 @@ func (e *GenesisMismatchError) Error() string {
 //
 // The returned chain configuration is never nil.
 func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis, nil, nil)
+	return SetupGenesisBlockWithOverride(db, genesis, nil, nil, false, false)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegatingStakeSlot, prefixFinSlot *uint64) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(
+	db ethdb.Database,
+	genesis *Genesis,
+	delegatingStakeSlot, prefixFinSlot *uint64,
+	isTestnet5, isTestnet9 bool,
+) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -206,6 +211,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 			genesis = DefaultGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
+		}
+		if isTestnet5 {
+			params.OverrideTestnet5(genesis.Config)
+		}
+		if isTestnet9 {
+			params.OverrideTestnet9(genesis.Config)
 		}
 		if delegatingStakeSlot != nil {
 			genesis.Config.ForkSlotDelegate = *delegatingStakeSlot
@@ -231,6 +242,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
+		if isTestnet5 {
+			params.OverrideTestnet5(genesis.Config)
+		}
+		if isTestnet9 {
+			params.OverrideTestnet9(genesis.Config)
+		}
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
@@ -251,6 +268,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 	}
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
+	if isTestnet5 {
+		params.OverrideTestnet5(newcfg)
+	}
+	if isTestnet9 {
+		params.OverrideTestnet9(newcfg)
+	}
 	if delegatingStakeSlot != nil {
 		newcfg.ForkSlotDelegate = *delegatingStakeSlot
 	}
@@ -270,6 +293,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, delegati
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
 	if genesis == nil && stored != params.MainnetGenesisHash {
+		if isTestnet5 {
+			params.OverrideTestnet5(storedcfg)
+		}
+		if isTestnet9 {
+			params.OverrideTestnet9(storedcfg)
+		}
 		if storedcfg.ForkSlotDelegate == 0 {
 			storedcfg.ForkSlotDelegate = newcfg.ForkSlotDelegate
 		}
@@ -352,7 +381,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		g.Config = &params.ChainConfig{ValidatorsStateAddress: validatorsStateAddress}
 	}
 
-	head.BaseFee = misc.CalcSlotBaseFee(g.Config, g.Config.ValidatorsPerSlot, uint64(len(g.Validators.Addresses())), g.GasLimit)
+	head.BaseFee = misc.CalcSlotBaseFee(g.Config, g.Config.ValidatorsPerSlot, uint64(len(g.Validators.Addresses())), g.GasLimit, g.Slot)
 	validatorStorage := valStore.NewStorage(g.Config)
 
 	validatorStorage.SetValidatorsList(statedb, g.Validators.Addresses())
@@ -392,15 +421,22 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 	genesisEraLength := era.EstimateEraLength(g.Config, uint64(len(g.Validators)), 0)
 	genesisEra := era.Era{
-		Number: 0,
-		From:   0,
-		To:     genesisEraLength - 1,
-		Root:   genesisBlock.Root(),
+		Number:    0,
+		From:      0,
+		To:        genesisEraLength - 1,
+		Root:      genesisBlock.Root(),
+		BlockHash: genesisBlock.Hash(),
 	}
 	rawdb.WriteEra(db, genesisEra.Number, genesisEra)
 	rawdb.WriteCurrentEra(db, genesisEra.Number)
 
-	log.Info("Genesis era", "number", genesisEra.Number, "begin:", genesisEra.From, "end:", genesisEra.To, "root", genesisEra.Root.Hex())
+	log.Info("Genesis era",
+		"number", genesisEra.Number,
+		"begin:", genesisEra.From,
+		"end:", genesisEra.To,
+		"root", genesisEra.Root.Hex(),
+		"blockHash", genesisBlock.Hash().Hex(),
+	)
 
 	return genesisBlock
 }

@@ -38,10 +38,14 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		ValidatorsStateAddress: original.ValidatorsStateAddress,
 		ValidatorsPerSlot:      original.ValidatorsPerSlot,
 		EffectiveBalance:       original.EffectiveBalance,
+		ValidatorOpExpireSlots: original.ValidatorOpExpireSlots,
 		ForkSlotSubNet1:        original.ForkSlotSubNet1,
 		ForkSlotDelegate:       original.ForkSlotDelegate,
 		ForkSlotPrefixFin:      original.ForkSlotPrefixFin,
 		ForkSlotShanghai:       original.ForkSlotShanghai,
+		ForkSlotValOpTracking:  original.ForkSlotValOpTracking,
+		ForkSlotReduceBaseFee:  original.ForkSlotReduceBaseFee,
+		ForkSlotValSyncProc:    original.ForkSlotValSyncProc,
 		StartEpochsPerEra:      original.StartEpochsPerEra,
 		AcceptCpRootOnFinEpoch: original.AcceptCpRootOnFinEpoch,
 	}
@@ -63,20 +67,20 @@ func TestBlockGasLimits(t *testing.T) {
 		ok        bool
 	}{
 		// Transitions from non-london to london
-		{47689510544, 10000000, 4, 10000000, true}, // No change
-		{47689510544, 10000000, 4, 10000000, true}, // Upper limit
+		{15080747381, 10000000, 4, 10000000, true}, // No change
+		{15080747381, 10000000, 4, 10000000, true}, // Upper limit
 		{1000000000, 10000000, 4, 20019531, false}, // Upper +1
-		{47689510544, 10000000, 4, 10000000, true}, // Lower limit
+		{15080747381, 10000000, 4, 10000000, true}, // Lower limit
 		{1000000000, 10000000, 4, 19980469, false}, // Lower limit -1
 		// London to London
-		{47689510544, 20000000, 5, 20000000, true},
-		{47689510544, 20000000, 5, 20019530, true}, // Upper limit
+		{15080747381, 20000000, 5, 20000000, true},
+		{15080747381, 20000000, 5, 20019530, true}, // Upper limit
 		{1000000000, 20000000, 5, 20019531, false}, // Upper limit +1
-		{47689510544, 20000000, 5, 19980470, true}, // Lower limit
+		{15080747381, 20000000, 5, 19980470, true}, // Lower limit
 		{1000000000, 20000000, 5, 19980469, false}, // Lower limit -1
-		{47689510544, 40000000, 5, 40039061, true}, // Upper limit
+		{15080747381, 40000000, 5, 40039061, true}, // Upper limit
 		{1000000000, 40000000, 5, 40039062, false}, // Upper limit +1
-		{47689510544, 40000000, 5, 39960939, true}, // lower limit
+		{15080747381, 40000000, 5, 39960939, true}, // lower limit
 		{1000000000, 40000000, 5, 39960938, false}, // Lower limit -1
 	} {
 		nrPt := uint64(tc.pNum)
@@ -107,9 +111,10 @@ func TestBlockGasLimits(t *testing.T) {
 // TestCalcSlotBaseFee assumes all blocks are 1559-blocks
 func TestCalcSlotBaseFee(t *testing.T) {
 	conf := &params.ChainConfig{
-		SecondsPerSlot:    4,
-		ValidatorsPerSlot: 4,
-		EffectiveBalance:  big.NewInt(3200),
+		SecondsPerSlot:        4,
+		ValidatorsPerSlot:     4,
+		EffectiveBalance:      big.NewInt(3200),
+		ForkSlotReduceBaseFee: 100,
 	}
 
 	maxGasAmountPerBlock := uint64(105000000)
@@ -174,7 +179,7 @@ func TestCalcSlotBaseFee(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("validators amount %d", testCase.validatorsCount), func(t *testing.T) {
-			res := CalcSlotBaseFee(conf, 4, testCase.validatorsCount, maxGasAmountPerBlock)
+			res := CalcSlotBaseFee(conf, 4, testCase.validatorsCount, maxGasAmountPerBlock, 0)
 			testutils.BigIntEquals(res, testCase.expectedBaseFee)
 		})
 	}
@@ -182,9 +187,10 @@ func TestCalcSlotBaseFee(t *testing.T) {
 
 func TestCalcCreatorRewardForBaseTx(t *testing.T) {
 	conf := &params.ChainConfig{
-		SecondsPerSlot:    4,
-		ValidatorsPerSlot: 4,
-		EffectiveBalance:  big.NewInt(3200),
+		SecondsPerSlot:        4,
+		ValidatorsPerSlot:     4,
+		EffectiveBalance:      big.NewInt(3200),
+		ForkSlotReduceBaseFee: 10,
 	}
 
 	maxGasAmountPerBlock := uint64(105000000)
@@ -249,7 +255,7 @@ func TestCalcCreatorRewardForBaseTx(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("validators amount %d", testCase.validatorsCount), func(t *testing.T) {
-			baseFee := CalcSlotBaseFee(conf, 4, testCase.validatorsCount, maxGasAmountPerBlock)
+			baseFee := CalcSlotBaseFee(conf, 4, testCase.validatorsCount, maxGasAmountPerBlock, 0)
 			reward := CalcCreatorReward(params.TxGas, baseFee)
 			testutils.BigIntEquals(reward, testCase.expectedReward)
 		})

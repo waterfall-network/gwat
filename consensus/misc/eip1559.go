@@ -38,7 +38,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 		return fmt.Errorf("header is missing baseFee")
 	}
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcSlotBaseFee(config, creatorsPerSlot, validatorsNum, maxGasPerBlock)
+	expectedBaseFee := CalcSlotBaseFee(config, creatorsPerSlot, validatorsNum, maxGasPerBlock, header.Slot)
 
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
@@ -48,7 +48,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 }
 
 // CalcSlotBaseFee calculates the base fee of the slot.
-func CalcSlotBaseFee(config *params.ChainConfig, creatorsPerSlotCount uint64, validatorsCount uint64, maxGasAmountPerBlock uint64) *big.Int {
+func CalcSlotBaseFee(config *params.ChainConfig, creatorsPerSlotCount, validatorsCount, maxGasAmountPerBlock, slot uint64) *big.Int {
 	var (
 		effectiveBalanceInWei = new(big.Float).Mul(new(big.Float).SetInt(config.EffectiveBalance), big.NewFloat(1e9))
 		annualizedRateBig     = new(big.Float).SetFloat64(params.MaxAnnualizedReturnRate)
@@ -59,6 +59,10 @@ func CalcSlotBaseFee(config *params.ChainConfig, creatorsPerSlotCount uint64, va
 		slotTimeBig           = new(big.Float).SetUint64(config.SecondsPerSlot)
 		blocksPerSlotBig      = new(big.Float).SetUint64(creatorsPerSlotCount)
 	)
+
+	if !config.IsForkSlotReduceBaseFee(slot) {
+		optValidatorsNumBig = new(big.Float).SetUint64(params.OptValidatorsNumBeforeReduceBaseFee)
+	}
 
 	annualizedReturnRate := new(big.Float).Mul(annualizedRateBig, new(big.Float).Sqrt(new(big.Float).Quo(optValidatorsNumBig, validatorsAmountBig)))
 	annualizedMintedAmount := new(big.Float).Mul(stakeAmount, annualizedReturnRate)

@@ -576,10 +576,18 @@ func (c *Creator) createNewBlock(coinbase common.Address, creators []common.Addr
 		)
 	}
 
-	log.Info("Block creation: assigned op for", "senders", len(pendingTxs), "validators", len(syncData))
-
 	// Short circuit if no pending transactions
-	if len(pendingTxs) == 0 && len(syncData) == 0 {
+	noAssignedTxs := len(pendingTxs) == 0 && (len(syncData) == 0 || !c.isAddressAssigned(coinbase, *c.bc.Config().ValidatorsStateAddress, creators))
+	log.Info("Block creation: assigned txs",
+		"noAssignedTxs", noAssignedTxs,
+		"senders", len(pendingTxs),
+		"validators", len(syncData),
+		"isValSyncAssigned", c.isAddressAssigned(coinbase, *c.bc.Config().ValidatorsStateAddress, creators),
+		"needEmptyBlock", needEmptyBlock,
+		"coinbase", coinbase.Hex(),
+		"slot", header.Slot,
+	)
+	if noAssignedTxs {
 		if needEmptyBlock {
 			c.create(header, true)
 			log.Info("Create empty block", "creator", header.Coinbase.Hex(), "slot", header.Slot)
@@ -916,7 +924,12 @@ func (c *Creator) processValidatorTxs(syncData map[common.Hash]*types.ValidatorS
 		if validatorSync.ProcEpoch <= c.bc.GetSlotInfo().SlotToEpoch(c.bc.GetSlotInfo().CurrentSlot()) {
 			valSyncTx, err := validatorsync.CreateValidatorSyncTx(c.backend, header.CpHash, header.Coinbase, header.Slot, validatorSync, nonce, c.current.keystore)
 			if err != nil {
-				log.Error("failed to create validator sync tx", "error", err)
+				log.Error("failed to create validator sync tx",
+					"error", err,
+					"slot", header.Slot,
+					"creator", header.Coinbase.Hex(),
+					"syncOp", validatorSync.Print(),
+				)
 				continue
 			}
 			c.current.txsMu.Lock()

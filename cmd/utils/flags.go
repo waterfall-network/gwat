@@ -141,6 +141,14 @@ var (
 		Name:  "testnet8",
 		Usage: "Waterfall test network8: pre-configured Directed Acyclic Graph (DAG) test network",
 	}
+	Testnet5Flag = cli.BoolFlag{
+		Name:  "testnet5",
+		Usage: "Overrides configuration by params defined for testnet5 (do not use, for dev purposes only)",
+	}
+	Testnet9Flag = cli.BoolFlag{
+		Name:  "testnet9",
+		Usage: "Overrides configuration by params defined for testnet9 (do not use, for dev purposes only)",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Activate developer mode functionality",
@@ -1494,11 +1502,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(DeveloperFlag.Name) {
 		cfg.IsDevMode = true
 	}
+	if ctx.GlobalIsSet(Testnet5Flag.Name) {
+		cfg.IsTestnet5 = true
+	}
+	if ctx.GlobalIsSet(Testnet9Flag.Name) {
+		cfg.IsTestnet9 = true
+	}
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(MainnetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 1501865
+			cfg.NetworkId = 181
 		}
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
@@ -1508,6 +1522,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultTestNet8GenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.Testnet8GenesisHash)
+	case ctx.GlobalBool(Testnet5Flag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 1501865
+		}
+	case ctx.GlobalBool(Testnet9Flag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 1501869
+		}
 	default:
 		if cfg.NetworkId == 1 {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)

@@ -1020,7 +1020,15 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'validator.getInfo',
 			call: 'wat_validator_GetInfo',
-			params: 1
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, function(param) {
+				if (param != null) {
+					if (param == "final") {
+						return "final"
+					}
+					return web3._extend.formatters.inputDefaultBlockNumberFormatter(param)
+				}
+			}]
 		}),	
 
 		// INFO API //

@@ -59,6 +59,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		GasLimit:    header.GasLimit,
 		Era:         header.Era,
 		Slot:        header.Slot,
+		BlockHash:   header.Hash(),
 	}
 }
 

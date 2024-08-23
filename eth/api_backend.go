@@ -177,6 +177,22 @@ func (b *EthAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts)
 
 func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	// Pending state is only known by the miner
+	if number == rpc.CheckpointBlockNumber {
+		cp := b.eth.blockchain.GetLastCoordinatedCheckpoint()
+		if cp == nil {
+			return nil, nil, errors.New("current cp not found")
+		}
+		header, err := b.HeaderByHash(ctx, cp.Spine)
+		if err != nil {
+			return nil, nil, err
+		}
+		if header == nil {
+			return nil, nil, errors.New("header not found")
+		}
+		stateDb, err := b.eth.BlockChain().StateAt(header.Root)
+		return stateDb, header, err
+	}
+	// Pending state is only known by the miner
 	if number == rpc.PendingBlockNumber {
 		block, state := b.eth.dag.Creator().Pending()
 		if block != nil && state != nil {
