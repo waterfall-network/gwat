@@ -397,7 +397,7 @@ func (c *Creator) prepareBlockHeader(assigned *Assignment, tipsBlocks types.Bloc
 	if err != nil {
 		return nil, err
 	}
-	header.BaseFee = misc.CalcSlotBaseFee(c.bc.Config(), creatorsPerSlotCount, validatorsCount, c.bc.Genesis().GasLimit())
+	header.BaseFee = misc.CalcSlotBaseFee(c.bc.Config(), creatorsPerSlotCount, validatorsCount, c.bc.Genesis().GasLimit(), header.Slot)
 
 	return header, nil
 }

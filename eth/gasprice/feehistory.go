@@ -105,7 +105,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	if creatorsPerSlot, err := bc.ValidatorStorage().GetCreatorsBySlot(bc, bf.header.Slot); err == nil {
 		creatorsPerSlotCount = uint64(len(creatorsPerSlot))
 	}
-	bf.results.nextBaseFee = misc.CalcSlotBaseFee(chainconfig, creatorsPerSlotCount, validatorsCount, genesisGasLimit)
+	bf.results.nextBaseFee = misc.CalcSlotBaseFee(chainconfig, creatorsPerSlotCount, validatorsCount, genesisGasLimit, bf.header.Slot)
 	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null

@@ -233,18 +233,18 @@ func (mr *MockblockChainMockRecorder) Database() *gomock.Call {
 }
 
 // EnterNextEra mocks base method.
-func (m *MockblockChain) EnterNextEra(nextEraEpochFrom uint64, root common.Hash) (*era.Era, error) {
+func (m *MockblockChain) EnterNextEra(nextEraEpochFrom uint64, root, blockHash common.Hash) (*era.Era, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnterNextEra", nextEraEpochFrom, root)
+	ret := m.ctrl.Call(m, "EnterNextEra", nextEraEpochFrom, root, blockHash)
 	ret0, _ := ret[0].(*era.Era)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // EnterNextEra indicates an expected call of EnterNextEra.
-func (mr *MockblockChainMockRecorder) EnterNextEra(nextEraEpochFrom, root interface{}) *gomock.Call {
+func (mr *MockblockChainMockRecorder) EnterNextEra(nextEraEpochFrom, root, blockHash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnterNextEra", reflect.TypeOf((*MockblockChain)(nil).EnterNextEra), nextEraEpochFrom, root)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnterNextEra", reflect.TypeOf((*MockblockChain)(nil).EnterNextEra), nextEraEpochFrom, root, blockHash)
 }
 
 // EpochToEra mocks base method.
@@ -642,17 +642,17 @@ func (mr *MockblockChainMockRecorder) SetSyncCheckpointCache(cp interface{}) *go
 }
 
 // StartTransitionPeriod mocks base method.
-func (m *MockblockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) error {
+func (m *MockblockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot, spineHash common.Hash) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartTransitionPeriod", cp, spineRoot)
+	ret := m.ctrl.Call(m, "StartTransitionPeriod", cp, spineRoot, spineHash)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartTransitionPeriod indicates an expected call of StartTransitionPeriod.
-func (mr *MockblockChainMockRecorder) StartTransitionPeriod(cp, spineRoot interface{}) *gomock.Call {
+func (mr *MockblockChainMockRecorder) StartTransitionPeriod(cp, spineRoot, spineHash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTransitionPeriod", reflect.TypeOf((*MockblockChain)(nil).StartTransitionPeriod), cp, spineRoot)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTransitionPeriod", reflect.TypeOf((*MockblockChain)(nil).StartTransitionPeriod), cp, spineRoot, spineHash)
 }
 
 // StateAt mocks base method.
@@ -702,11 +702,6 @@ type MockethDownloader struct {
 	recorder *MockethDownloaderMockRecorder
 }
 
-func (m *MockethDownloader) OptimisticSpineSync(spines common.HashArray) error {
-	//TODO implement me
-	panic("implement me")
-}
-
 // MockethDownloaderMockRecorder is the mock recorder for MockethDownloader.
 type MockethDownloaderMockRecorder struct {
 	mock *MockethDownloader
@@ -750,6 +745,20 @@ func (m *MockethDownloader) MainSync(baseSpine common.Hash, spines common.HashAr
 func (mr *MockethDownloaderMockRecorder) MainSync(baseSpine, spines interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MainSync", reflect.TypeOf((*MockethDownloader)(nil).MainSync), baseSpine, spines)
+}
+
+// OptimisticSpineSync mocks base method.
+func (m *MockethDownloader) OptimisticSpineSync(spines common.HashArray) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OptimisticSpineSync", spines)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// OptimisticSpineSync indicates an expected call of OptimisticSpineSync.
+func (mr *MockethDownloaderMockRecorder) OptimisticSpineSync(spines interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OptimisticSpineSync", reflect.TypeOf((*MockethDownloader)(nil).OptimisticSpineSync), spines)
 }
 
 // Synchronising mocks base method.

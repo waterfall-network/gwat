@@ -107,18 +107,18 @@ func (mr *MockblockchainMockRecorder) Database() *gomock.Call {
 }
 
 // EnterNextEra mocks base method.
-func (m *Mockblockchain) EnterNextEra(arg0 uint64, arg1 common.Hash) (*era.Era, error) {
+func (m *Mockblockchain) EnterNextEra(fromEpoch uint64, root, hash common.Hash) (*era.Era, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnterNextEra", arg0, arg1)
+	ret := m.ctrl.Call(m, "EnterNextEra", fromEpoch, root, hash)
 	ret0, _ := ret[0].(*era.Era)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // EnterNextEra indicates an expected call of EnterNextEra.
-func (mr *MockblockchainMockRecorder) EnterNextEra(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockblockchainMockRecorder) EnterNextEra(fromEpoch, root, hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnterNextEra", reflect.TypeOf((*Mockblockchain)(nil).EnterNextEra), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnterNextEra", reflect.TypeOf((*Mockblockchain)(nil).EnterNextEra), fromEpoch, root, hash)
 }
 
 // EpochToEra mocks base method.
@@ -266,17 +266,17 @@ func (mr *MockblockchainMockRecorder) GetValidatorSyncData(InitTxHash interface{
 }
 
 // StartTransitionPeriod mocks base method.
-func (m *Mockblockchain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot common.Hash) error {
+func (m *Mockblockchain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot, spineHash common.Hash) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartTransitionPeriod", cp, spineRoot)
+	ret := m.ctrl.Call(m, "StartTransitionPeriod", cp, spineRoot, spineHash)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartTransitionPeriod indicates an expected call of StartTransitionPeriod.
-func (mr *MockblockchainMockRecorder) StartTransitionPeriod(cp, spineRoot interface{}) *gomock.Call {
+func (mr *MockblockchainMockRecorder) StartTransitionPeriod(cp, spineRoot, spineHash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTransitionPeriod", reflect.TypeOf((*Mockblockchain)(nil).StartTransitionPeriod), cp, spineRoot)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTransitionPeriod", reflect.TypeOf((*Mockblockchain)(nil).StartTransitionPeriod), cp, spineRoot, spineHash)
 }
 
 // StateAt mocks base method.
