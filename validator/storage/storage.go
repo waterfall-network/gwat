@@ -139,8 +139,6 @@ func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
 // If parameter needAddresses is false it return array of Validator and nil value for validators addresses.
 // Use parameter activeOnly true if you need only active validators.
 func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string) ([]common.Address, error) {
-	var validators []common.Address
-
 	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
 	slotEra := bc.EpochToEra(slotEpoch)
 
@@ -149,7 +147,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 		return nil, err
 	}
 
-	validators = s.validatorsCache.getAllActiveValidatorsByEra(slotEra.Number)
+	validators := s.validatorsCache.getAllActiveValidatorsByEra(slotEra.Number)
 	if validators != nil {
 		return validators, nil
 	}
@@ -158,6 +156,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 	stateDb, _ := bc.StateAt(slotEra.Root)
 	valList := s.GetValidatorsList(stateDb)
 	log.Info("GetValidators from state", "validators", len(valList), "slot", slot, "epoch", slotEpoch, "root", slotEra.Root.Hex())
+	eraValidators := make([]common.Address, 0)
 	for _, valAddress := range valList {
 		val, err := s.GetValidator(stateDb, valAddress)
 		if err != nil {
@@ -165,16 +164,19 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 			continue
 		}
 		if val.ActivationEra <= slotEra.Number+1 && val.ExitEra > slotEra.Number {
-			validators = append(validators, val.GetAddress())
+			eraValidators = append(eraValidators, val.GetAddress())
 		}
 	}
 
-	s.validatorsCache.addAllActiveValidatorsByEra(slotEra.Number, validators)
+	s.validatorsCache.addAllActiveValidatorsByEra(slotEra.Number, eraValidators)
 
 	log.Info("GetValidators", "callFunc", tmpFromWhere, "all", len(validators),
 		"active", len(validators),
 		"slot", slot, "epoch", slotEpoch,
 	)
+
+	validators = make([]common.Address, len(eraValidators))
+	copy(validators, eraValidators)
 
 	return validators, nil
 }
