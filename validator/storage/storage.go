@@ -149,7 +149,10 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 
 	validators := s.validatorsCache.getAllActiveValidatorsByEra(slotEra.Number)
 	if validators != nil {
-		return validators, nil
+		eraValidators := make([]common.Address, len(validators))
+		copy(eraValidators, validators)
+
+		return eraValidators, nil
 	}
 	log.Info("Get validators", "epoch", slotEpoch, "era", slotEra.Number, "root", slotEra.Root.Hex())
 
@@ -234,6 +237,7 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		"spine", epochSpine.Hex(),
 		"seed", seed.Hex(),
 		"validatorsCount", len(allValidators),
+		"validators", allValidators,
 	)
 
 	shuffledValidators, err := shuffle.ShuffleValidators(allValidators, seed)
