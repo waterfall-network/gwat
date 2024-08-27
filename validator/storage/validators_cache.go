@@ -72,7 +72,10 @@ func (c *ValidatorsCache) getAllActiveValidatorsByEra(era uint64) []common.Addre
 		return nil
 	}
 
-	return validators
+	eraValidators := make([]common.Address, len(validators))
+	copy(eraValidators, validators)
+
+	return eraValidators
 }
 
 //nolint:unused // subnets support

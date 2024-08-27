@@ -149,10 +149,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 
 	validators := s.validatorsCache.getAllActiveValidatorsByEra(slotEra.Number)
 	if validators != nil {
-		eraValidators := make([]common.Address, len(validators))
-		copy(eraValidators, validators)
-
-		return eraValidators, nil
+		return validators, nil
 	}
 	log.Info("Get validators", "epoch", slotEpoch, "era", slotEra.Number, "root", slotEra.Root.Hex())
 
