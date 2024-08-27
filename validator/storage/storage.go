@@ -234,7 +234,6 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		"spine", epochSpine.Hex(),
 		"seed", seed.Hex(),
 		"validatorsCount", len(allValidators),
-		"validators", allValidators,
 	)
 
 	shuffledValidators, err := shuffle.ShuffleValidators(allValidators, seed)
