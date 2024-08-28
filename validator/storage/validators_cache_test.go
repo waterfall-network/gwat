@@ -3,10 +3,8 @@ package storage
 import (
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/common"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/tests/testutils"
-	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/era"
 	"gitlab.waterfall.network/waterfall/protocol/gwat/validator/testmodels"
 )
 
@@ -42,8 +40,8 @@ var (
 func TestNewValidatorsCache(t *testing.T) {
 	cache := NewCache()
 
-	if cache.allValidatorsCache == nil {
-		t.Fatal("Expected allValidatorsCache to be initialized, but it was nil")
+	if cache.allActiveValidatorsCache == nil {
+		t.Fatal("Expected allActiveValidatorsCache to be initialized, but it was nil")
 	}
 
 	if cache.subnetValidatorsCache == nil {
@@ -75,88 +73,54 @@ func TestNewValidatorsCache(t *testing.T) {
 	}
 }
 
-func TestGetActiveValidatorsByEpoch(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	bc := NewMockblockchain(ctrl)
-
+func TestGetActiveValidatorsByEra(t *testing.T) {
 	cache := NewCache()
 
-	validators := cache.getActiveValidatorsByEpoch(bc, 1)
+	validators := cache.getAllActiveValidatorsByEra(1)
 	if validators != nil {
 		t.Fatal("Expected nil, got", validators)
 	}
 
-	bc.EXPECT().EpochToEra(uint64(10)).Return(&era.Era{
-		Number: 10,
-		From:   0,
-		To:     0,
-		Root:   common.Hash{},
-	})
-	validator1 := Validator{ActivationEra: 1, ExitEra: 20}
-	validator2 := Validator{ActivationEra: 5, ExitEra: 50}
-	validator3 := Validator{ActivationEra: 15, ExitEra: 30}
-	validatorsList := []Validator{validator1, validator2, validator3}
-	cache.addAllValidatorsByEpoch(10, validatorsList)
+	validatorsList := []common.Address{testmodels.Addr1, testmodels.Addr2, testmodels.Addr3}
+	cache.addAllActiveValidatorsByEra(10, validatorsList)
 
-	bc.EXPECT().EpochToEra(uint64(30)).Return(&era.Era{
-		Number: 30,
-		From:   0,
-		To:     0,
-		Root:   common.Hash{},
-	})
-	expectedValidators := []Validator{validator1, validator2}
-	validators = cache.getActiveValidatorsByEpoch(bc, 10)
+	expectedValidators := validatorsList
+	validators = cache.getAllActiveValidatorsByEra(10)
 	testutils.AssertEqual(t, expectedValidators, validators)
 
-	cache.addAllValidatorsByEpoch(30, validatorsList)
-	validators = cache.getActiveValidatorsByEpoch(bc, 30)
-	testutils.AssertEqual(t, []Validator{validator2}, validators)
+	cache.addAllActiveValidatorsByEra(30, validatorsList)
+	validators = cache.getAllActiveValidatorsByEra(30)
+	testutils.AssertEqual(t, expectedValidators, validators)
 }
 
 func TestAddValidator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	bc := NewMockblockchain(ctrl)
-	epoch := uint64(10)
-	bc.EXPECT().EpochToEra(epoch).Return(&era.Era{Number: 10})
+	era := uint64(10)
 
 	c := NewCache()
-	validator := Validator{
-		Address:       testmodels.Addr1,
-		ActivationEra: 10,
-		ExitEra:       20,
-	}
 
-	c.addValidator(validator, epoch)
-	validators := c.getActiveValidatorsByEpoch(bc, epoch)
+	c.addValidator(testmodels.Addr1, era)
+	validators := c.getAllActiveValidatorsByEra(era)
 	if len(validators) != 1 {
 		t.Fatalf("Expected 1 validator but got %v", len(validators))
 	}
-	if validators[0].Address != validator.Address {
-		t.Fatalf("Expected address %v but got %v", validator.Address, validators[0].Address)
+	if validators[0] != testmodels.Addr1 {
+		t.Fatalf("Expected address %v but got %v", testmodels.Addr1, validators[0])
 	}
 }
 
 func TestDelValidator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	bc := NewMockblockchain(ctrl)
-	epoch := uint64(10)
-	bc.EXPECT().EpochToEra(epoch).AnyTimes().Return(&era.Era{Number: 10})
+	era := uint64(10)
 
 	c := NewCache()
-	validator := Validator{
-		Address:       common.Address{1},
-		ActivationEra: 10,
-		ExitEra:       20,
-	}
+	c.addValidator(testmodels.Addr10, era)
 
-	c.addValidator(validator, epoch)
-	validators := c.getActiveValidatorsByEpoch(bc, epoch)
+	validators := c.getAllActiveValidatorsByEra(era)
 	if len(validators) != 1 {
 		t.Fatalf("Expected 1 validator but got %v", len(validators))
 	}
 
-	c.delValidator(validator, epoch)
-	validators = c.getActiveValidatorsByEpoch(bc, epoch)
+	c.delValidator(testmodels.Addr10, era)
+	validators = c.getAllActiveValidatorsByEra(era)
 	if len(validators) != 0 {
 		t.Fatalf("Expected 0 validators but got %v", len(validators))
 	}
@@ -164,27 +128,19 @@ func TestDelValidator(t *testing.T) {
 
 func TestAllValidatorsCache(t *testing.T) {
 	cache := NewCache()
-	validatorsList := make([]Validator, len(testmodels.InputValidators))
+	cache.addAllActiveValidatorsByEra(epoch, testmodels.InputValidators)
 
-	for i, inputValidator := range testmodels.InputValidators {
-		validatorsList[i] = *NewValidator(common.BlsPubKey{}, inputValidator, nil)
-	}
-
-	cache.addAllValidatorsByEpoch(epoch, validatorsList)
-
-	cachedValidatorsList, ok := cache.allValidatorsCache[epoch]
+	cachedValidatorsList, ok := cache.allActiveValidatorsCache[epoch]
 	if !ok {
 		t.Errorf("Expected validators list for epoch %d to be cached, but it wasn't", epoch)
 	}
 
-	testutils.AssertEqual(t, cachedValidatorsList, validatorsList)
+	testutils.AssertEqual(t, cachedValidatorsList, testmodels.InputValidators)
 
-	cachedValidatorsList, err := cache.getAllValidatorsByEpoch(epoch)
-	testutils.AssertNoError(t, err)
-	testutils.AssertEqual(t, cachedValidatorsList, validatorsList)
+	cachedValidatorsList = cache.getAllActiveValidatorsByEra(epoch)
+	testutils.AssertEqual(t, cachedValidatorsList, testmodels.InputValidators)
 
-	cachedValidatorsList, err = cache.getAllValidatorsByEpoch(epoch + 1)
-	testutils.AssertError(t, err, errNoEpochValidators)
+	cachedValidatorsList = cache.getAllActiveValidatorsByEra(epoch + 1)
 	testutils.AssertNil(t, cachedValidatorsList)
 }
 
@@ -203,45 +159,12 @@ func TestSubnetValidatorsCache(t *testing.T) {
 	testutils.AssertEqual(t, testmodels.InputValidators, cachedValidators)
 
 	cachedValidators, err = cache.getSubnetValidators(epoch+1, subnet)
-	testutils.AssertError(t, err, errNoEpochValidators)
+	testutils.AssertError(t, err, errNoEraValidators)
 	testutils.AssertNil(t, cachedValidators)
 
 	cachedValidators, err = cache.getSubnetValidators(epoch, subnet+1)
 	testutils.AssertError(t, err, errNoSubnetValidators)
 	testutils.AssertNil(t, cachedValidators)
-}
-
-func TestGetValidatorsAddresses(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	bc := NewMockblockchain(ctrl)
-	bc.EXPECT().EpochToEra(gomock.AssignableToTypeOf(uint64(0))).AnyTimes().Return(&era.Era{Number: 10})
-
-	cache := NewCache()
-	validatorsList := make([]Validator, len(testmodels.InputValidators))
-
-	for i, inputValidator := range testmodels.InputValidators {
-		validatorsList[i] = *NewValidator(common.BlsPubKey{}, inputValidator, nil)
-	}
-
-	cache.addAllValidatorsByEpoch(epoch, validatorsList)
-
-	addresses := cache.getValidatorsAddresses(bc, epoch, false)
-	testutils.AssertEqual(t, testmodels.InputValidators, addresses)
-
-	for i := 0; i < len(validatorsList); i++ {
-		currentEpoch := uint64(i)
-		cache.addAllValidatorsByEpoch(currentEpoch, validatorsList)
-		addresses = cache.getValidatorsAddresses(bc, currentEpoch, true)
-
-		activeValidators := make([]common.Address, 0)
-		for _, v := range validatorsList {
-			if v.ActivationEra <= currentEpoch && v.ExitEra > currentEpoch {
-				activeValidators = append(activeValidators, v.Address)
-			}
-		}
-
-		testutils.AssertEqual(t, activeValidators, addresses)
-	}
 }
 
 func TestShuffledValidatorsCache(t *testing.T) {
@@ -254,7 +177,7 @@ func TestShuffledValidatorsCache(t *testing.T) {
 	testutils.AssertEqual(t, shuffleList, shuffledValidators[slot])
 
 	shuffleList, err = cache.getShuffledValidators([]uint64{epoch + 1, slot})
-	testutils.AssertError(t, err, errNoEpochValidators)
+	testutils.AssertError(t, err, errNoEraValidators)
 	testutils.AssertNil(t, shuffleList)
 
 	for i := uint64(0); i < cacheCapacity*2; i++ {
@@ -291,7 +214,7 @@ func TestShuffledValidatorsCache(t *testing.T) {
 	testutils.AssertEqual(t, shuffledValidators[slot], shuffleList)
 
 	shuffleList, err = cache.getShuffledValidators([]uint64{epoch + 1, slot, subnet})
-	testutils.AssertError(t, err, errNoEpochValidators)
+	testutils.AssertError(t, err, errNoEraValidators)
 	testutils.AssertNil(t, shuffleList)
 
 	shuffleList, err = cache.getShuffledValidators([]uint64{epoch, slot, subnet + 1})

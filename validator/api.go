@@ -280,8 +280,7 @@ func (s *PublicValidatorAPI) GetValidators(ctx context.Context, era *uint64) ([]
 		return nil, err
 	}
 
-	_, addresses := s.chain.ValidatorStorage().GetValidators(s.chain, slot, true, true, "GetValidators")
-	return addresses, nil
+	return s.chain.ValidatorStorage().GetValidators(s.chain, slot, "GetValidators")
 }
 
 // Validator_GetInfo retrieves validator info by provided address.

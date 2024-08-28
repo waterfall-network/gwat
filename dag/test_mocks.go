@@ -233,11 +233,12 @@ func (mr *MockblockChainMockRecorder) Database() *gomock.Call {
 }
 
 // EnterNextEra mocks base method.
-func (m *MockblockChain) EnterNextEra(nextEraEpochFrom uint64, root, blockHash common.Hash) *era.Era {
+func (m *MockblockChain) EnterNextEra(nextEraEpochFrom uint64, root, blockHash common.Hash) (*era.Era, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EnterNextEra", nextEraEpochFrom, root, blockHash)
 	ret0, _ := ret[0].(*era.Era)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // EnterNextEra indicates an expected call of EnterNextEra.
@@ -641,9 +642,11 @@ func (mr *MockblockChainMockRecorder) SetSyncCheckpointCache(cp interface{}) *go
 }
 
 // StartTransitionPeriod mocks base method.
-func (m *MockblockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot, spineHash common.Hash) {
+func (m *MockblockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot, spineHash common.Hash) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartTransitionPeriod", cp, spineRoot, spineHash)
+	ret := m.ctrl.Call(m, "StartTransitionPeriod", cp, spineRoot, spineHash)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // StartTransitionPeriod indicates an expected call of StartTransitionPeriod.

@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,8 +28,9 @@ type blockchain interface {
 }
 
 type Storage interface {
-	GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool, tmpFromWhere string) ([]Validator, []common.Address)
+	GetValidators(bc blockchain, slot uint64, tmpFromWhere string) ([]common.Address, error)
 	GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.Address, error)
+	GetActiveValidatorsCount(bc blockchain, slot uint64) (uint64, error)
 
 	SetValidator(stateDb vm.StateDB, val *Validator) error
 	GetValidator(stateDb vm.StateDB, address common.Address) (*Validator, error)
@@ -40,17 +42,21 @@ type Storage interface {
 	GetValidatorsStateAddress() *common.Address
 	GetDepositCount(stateDb vm.StateDB) uint64
 	IncrementDepositCount(stateDb vm.StateDB)
+
+	PrepareNextEraValidators(bc blockchain, slot uint64)
 }
 
 type storage struct {
-	validatorsCache *ValidatorsCache
-	config          *params.ChainConfig
+	validatorsCache   *ValidatorsCache
+	config            *params.ChainConfig
+	processTransition map[uint64]struct{}
 }
 
 func NewStorage(config *params.ChainConfig) Storage {
 	return &storage{
-		validatorsCache: NewCache(),
-		config:          config,
+		validatorsCache:   NewCache(),
+		config:            config,
+		processTransition: make(map[uint64]struct{}),
 	}
 }
 func (s *storage) ValidatorsStateAddress() *common.Address {
@@ -132,50 +138,47 @@ func (s *storage) IncrementDepositCount(stateDb vm.StateDB) {
 // GetValidators return two values: array of Validator and array of Validators addresses.
 // If parameter needAddresses is false it return array of Validator and nil value for validators addresses.
 // Use parameter activeOnly true if you need only active validators.
-func (s *storage) GetValidators(bc blockchain, slot uint64, activeOnly, needAddresses bool, tmpFromWhere string) ([]Validator, []common.Address) {
-	var err error
-	var validators []Validator
-
+func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string) ([]common.Address, error) {
 	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-	validators, err = s.validatorsCache.getAllValidatorsByEpoch(slotEpoch)
+	slotEra := bc.EpochToEra(slotEpoch)
 
+	err := s.checkTransitionProcessing(slotEra.Number)
 	if err != nil {
-		eraEra := bc.EpochToEra(slotEpoch)
-		log.Info("Get validators", "error", err, "epoch", slotEpoch, "era", eraEra.Number, "root", eraEra.Root.Hex())
-
-		stateDb, _ := bc.StateAt(eraEra.Root)
-
-		valList := s.GetValidatorsList(stateDb)
-		log.Info("GetValidators from state", "validators", len(valList), "slot", slot, "epoch", slotEpoch, "root", eraEra.Root.Hex())
-		for _, valAddress := range valList {
-			val, err := s.GetValidator(stateDb, valAddress)
-			if err != nil {
-				log.Error("can`t get validator from state", "error", err, "address", valAddress.Hex())
-				continue
-			}
-			validators = append(validators, *val)
-		}
-
-		s.validatorsCache.addAllValidatorsByEpoch(slotEpoch, validators)
+		return nil, err
 	}
 
+	validators := s.validatorsCache.getAllActiveValidatorsByEra(slotEra.Number)
+	if validators != nil {
+		return validators, nil
+	}
+	log.Info("Get validators", "epoch", slotEpoch, "era", slotEra.Number, "root", slotEra.Root.Hex())
+
+	stateDb, _ := bc.StateAt(slotEra.Root)
+	valList := s.GetValidatorsList(stateDb)
+	log.Info("GetValidators from state", "validators", len(valList), "slot", slot, "epoch", slotEpoch, "root", slotEra.Root.Hex())
+	eraValidators := make([]common.Address, 0)
+	for _, valAddress := range valList {
+		val, err := s.GetValidator(stateDb, valAddress)
+		if err != nil {
+			log.Error("can`t get validator from state", "error", err, "address", valAddress.Hex())
+			continue
+		}
+		if val.ActivationEra <= slotEra.Number+1 && val.ExitEra > slotEra.Number {
+			eraValidators = append(eraValidators, val.GetAddress())
+		}
+	}
+
+	s.validatorsCache.addAllActiveValidatorsByEra(slotEra.Number, eraValidators)
+
 	log.Info("GetValidators", "callFunc", tmpFromWhere, "all", len(validators),
-		"active", len(s.validatorsCache.getActiveValidatorsByEpoch(bc, slotEpoch)),
+		"active", len(validators),
 		"slot", slot, "epoch", slotEpoch,
 	)
 
-	switch {
-	case !activeOnly && !needAddresses:
-		return validators, nil
-	case !activeOnly && needAddresses:
-		return validators, s.validatorsCache.getValidatorsAddresses(bc, slotEpoch, false)
-	case activeOnly && !needAddresses:
-		return s.validatorsCache.getActiveValidatorsByEpoch(bc, slotEpoch), nil
-	case activeOnly && needAddresses:
-		return s.validatorsCache.getActiveValidatorsByEpoch(bc, slotEpoch), s.validatorsCache.getValidatorsAddresses(bc, slotEpoch, true)
-	}
+	validators = make([]common.Address, len(eraValidators))
+	copy(validators, eraValidators)
 
-	return nil, nil
+	return validators, nil
 }
 
 // GetCreatorsBySlot return shuffled validators addresses from cache.
@@ -191,9 +194,8 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 	slot := filter[0]
 
 	params := make([]uint64, 0)
-	epoch := bc.GetSlotInfo().SlotToEpoch(slot)
-	params = append(params, epoch)
-
+	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	params = append(params, slotEpoch)
 	slotInEpoch := bc.GetSlotInfo().SlotInEpoch(slot)
 	params = append(params, slotInEpoch)
 
@@ -208,37 +210,33 @@ func (s *storage) GetCreatorsBySlot(bc blockchain, filter ...uint64) ([]common.A
 		return validators, nil
 	}
 
-	allValidators, _ := s.GetValidators(bc, slot, false, false, "GetCreatorsBySlot")
-	if len(allValidators) == 0 {
-		return nil, errNoValidators
+	allValidators, err := s.GetValidators(bc, slot, "GetCreatorsBySlot")
+	if err != nil || len(allValidators) == 0 {
+		return nil, err
 	}
 
-	s.validatorsCache.addAllValidatorsByEpoch(epoch, allValidators)
-
-	activeEpochValidators := s.validatorsCache.getValidatorsAddresses(bc, epoch, true)
-
 	spineEpoch := uint64(0)
-	if epoch > 0 {
-		spineEpoch = epoch - 1
+	if slotEpoch > 0 {
+		spineEpoch = slotEpoch - 1
 	}
 	epochSpine := bc.GetEpoch(spineEpoch)
 	if epochSpine == (common.Hash{}) {
 		return nil, fmt.Errorf("epoch not found")
 	}
-	seed, err := s.seed(epoch, epochSpine)
+	seed, err := s.seed(slotEpoch, epochSpine)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Info("CheckShuffle - shuffle params", "slot", slot,
-		"slotEpoch", epoch,
+		"slotEpoch", slotEpoch,
 		"spineEpoch", spineEpoch,
 		"spine", epochSpine.Hex(),
 		"seed", seed.Hex(),
-		"validatorsCount", len(activeEpochValidators),
+		"validatorsCount", len(allValidators),
 	)
 
-	shuffledValidators, err := shuffle.ShuffleValidators(activeEpochValidators, seed)
+	shuffledValidators, err := shuffle.ShuffleValidators(allValidators, seed)
 	if err != nil {
 		return nil, err
 	}
@@ -318,4 +316,79 @@ func (s *storage) AddValidatorToList(stateDb vm.StateDB, index uint64, validator
 
 	list[index] = validator
 	s.SetValidatorsList(stateDb, list)
+}
+
+func (s *storage) GetActiveValidatorsCount(bc blockchain, slot uint64) (uint64, error) {
+	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	slotEra := bc.EpochToEra(slotEpoch)
+
+	err := s.checkTransitionProcessing(slotEra.Number)
+	if err != nil {
+		return 0, err
+	}
+
+	vals, ok := s.validatorsCache.allActiveValidatorsCache[slotEra.Number]
+	if ok {
+		return uint64(len(vals)), nil
+	}
+
+	count := uint64(0)
+	stateDb, _ := bc.StateAt(slotEra.Root)
+	valList := s.GetValidatorsList(stateDb)
+	for _, valAddress := range valList {
+		val, err := s.GetValidator(stateDb, valAddress)
+		if err != nil {
+			log.Error("can`t get validator from state", "error", err, "address", valAddress.Hex())
+			continue
+		}
+
+		if val.ActivationEra <= slotEra.Number+1 && val.ExitEra > slotEra.Number {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+func (s *storage) PrepareNextEraValidators(bc blockchain, slot uint64) {
+	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
+	slotEra := bc.EpochToEra(slotEpoch)
+	s.processTransition[slotEra.Number] = struct{}{}
+	stateDb, _ := bc.StateAt(slotEra.Root)
+
+	valList := s.GetValidatorsList(stateDb)
+	for _, valAddress := range valList {
+		val, err := s.GetValidator(stateDb, valAddress)
+		if err != nil {
+			log.Error("can`t get validator from state", "error", err, "address", valAddress.Hex())
+			continue
+		}
+
+		if val.ActivationEra <= slotEra.Number+1 && val.ExitEra > slotEra.Number {
+			s.validatorsCache.addValidator(val.Address, slotEra.Number+1)
+		}
+	}
+
+	delete(s.processTransition, slotEra.Number)
+}
+
+func (s *storage) checkTransitionProcessing(era uint64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	_, transitionProcessing := s.processTransition[era]
+	if transitionProcessing {
+		log.Info("Era process transition period, waiting", "era", era)
+		for transitionProcessing {
+			time.Sleep(time.Millisecond * 200)
+			select {
+			case <-ctx.Done():
+				return errors.New("check transition processing failed, timeout expired")
+			default:
+				_, transitionProcessing = s.processTransition[era]
+			}
+		}
+	}
+
+	return nil
 }

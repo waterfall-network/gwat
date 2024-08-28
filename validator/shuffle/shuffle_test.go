@@ -2,6 +2,7 @@ package shuffle
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
@@ -96,6 +97,30 @@ func TestSwapOrNot(t *testing.T) {
 			swapOrNot(buf, test.byteV, 1, 2, input, test.source, CustomSHA256Hasher())
 			if !reflect.DeepEqual(input, test.expectedOutput) {
 				t.Errorf("expected output: %v, got: %v", test.expectedOutput, input)
+			}
+		})
+	}
+}
+
+func BenchmarkShuffleValidators(b *testing.B) {
+	var validators = make([]common.Address, 10000000)
+	for i := range validators {
+		validators[i] = common.HexToAddress(strconv.Itoa(i))
+	}
+
+	seed := common.HexToHash("0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef")
+
+	sizes := []int{1000, 10000, 100000, 500000, 1000000, 10000000}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			subset := validators[:size]
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := ShuffleValidators(subset, seed)
+				if err != nil {
+					b.Fatalf("Error shuffling validators: %v", err)
+				}
 			}
 		})
 	}
