@@ -43,7 +43,7 @@ type Storage interface {
 	GetDepositCount(stateDb vm.StateDB) uint64
 	IncrementDepositCount(stateDb vm.StateDB)
 
-	PrepareNextEraValidators(bc blockchain, slot uint64)
+	PrepareNextEraValidators(bc blockchain, era *era.Era)
 }
 
 type storage struct {
@@ -350,11 +350,9 @@ func (s *storage) GetActiveValidatorsCount(bc blockchain, slot uint64) (uint64, 
 	return count, nil
 }
 
-func (s *storage) PrepareNextEraValidators(bc blockchain, slot uint64) {
-	slotEpoch := bc.GetSlotInfo().SlotToEpoch(slot)
-	slotEra := bc.EpochToEra(slotEpoch)
-	s.processTransition[slotEra.Number] = struct{}{}
-	stateDb, _ := bc.StateAt(slotEra.Root)
+func (s *storage) PrepareNextEraValidators(bc blockchain, era *era.Era) {
+	s.processTransition[era.Number] = struct{}{}
+	stateDb, _ := bc.StateAt(era.Root)
 
 	valList := s.GetValidatorsList(stateDb)
 	for _, valAddress := range valList {
@@ -364,12 +362,19 @@ func (s *storage) PrepareNextEraValidators(bc blockchain, slot uint64) {
 			continue
 		}
 
-		if val.ActivationEra <= slotEra.Number+1 && val.ExitEra > slotEra.Number {
-			s.validatorsCache.addValidator(val.Address, slotEra.Number+1)
+		if val.ActivationEra <= era.Number && val.ExitEra > era.Number {
+			s.validatorsCache.addValidator(val.Address, era.Number)
 		}
 	}
 
-	delete(s.processTransition, slotEra.Number)
+	log.Info("Prepare next era validators",
+		"eraNumber", era.Number,
+		"eraRoot", era.Root,
+		"eraBlockHash", era.BlockHash,
+		"validatorsCount", len(s.validatorsCache.allActiveValidatorsCache[era.Number]),
+	)
+
+	delete(s.processTransition, era.Number)
 }
 
 func (s *storage) checkTransitionProcessing(era uint64) error {
