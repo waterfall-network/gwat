@@ -250,10 +250,16 @@ func BenchmarkPrepareNextEraValidators(b *testing.B) {
 			testValidators := validators[:size]
 			store.SetValidatorsList(stateDb, testValidators)
 
-			slot := uint64(0)
+			era := &era.Era{
+				Number:    0,
+				From:      0,
+				To:        0,
+				Root:      common.Hash{},
+				BlockHash: common.Hash{},
+			}
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				store.PrepareNextEraValidators(bc, slot)
+				store.PrepareNextEraValidators(bc, era)
 			}
 		})
 	}

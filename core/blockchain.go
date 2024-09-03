@@ -4780,7 +4780,7 @@ func (bc *BlockChain) StartTransitionPeriod(cp *types.Checkpoint, spineRoot, spi
 
 		rawdb.WriteEra(bc.db, nextEra.Number, *nextEra)
 
-		go bc.ValidatorStorage().PrepareNextEraValidators(bc, cpEpochSlot)
+		go bc.ValidatorStorage().PrepareNextEraValidators(bc, nextEra)
 
 		log.Info("Era transition period", "from", bc.GetEraInfo().Number(), "num", nextEra.Number, "begin", nextEra.From, "end", nextEra.To, "length", nextEra.Length())
 	} else {
