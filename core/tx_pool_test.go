@@ -1385,13 +1385,12 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 	blockchain := defaultTestBC(common.Address{})
 
 	config := testTxPoolConfig
-	config.GlobalSlots = 1
 
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)
 	defer pool.Stop()
 
 	// Create a number of test accounts and fund them
-	keys := make([]*ecdsa.PrivateKey, 5)
+	keys := make([]*ecdsa.PrivateKey, 10)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
@@ -1872,7 +1871,6 @@ func TestTransactionPoolStableUnderpricing(t *testing.T) {
 	blockchain := defaultTestBC(common.Address{})
 
 	config := testTxPoolConfig
-	config.GlobalSlots = 128
 	config.GlobalQueue = 0
 
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)
