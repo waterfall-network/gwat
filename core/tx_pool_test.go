@@ -57,6 +57,9 @@ func init() {
 	testTxPoolConfig = DefaultTxPoolConfig
 	testTxPoolConfig.Journal = ""
 
+	testTxPoolConfig.AccountSlots = 16
+	testTxPoolConfig.GlobalSlots = (4096 + 1024) * 20
+
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
 }
