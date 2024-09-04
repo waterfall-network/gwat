@@ -207,8 +207,8 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	//GlobalSlots:  (4096 + 1024) * 20, // urgent + floating queue capacity with 4:1 ratio
 	AccountSlots: 30_000,
 	GlobalSlots:  240_000,
-	AccountQueue: 30_000,
-	GlobalQueue:  240_000,
+	AccountQueue: 64,
+	GlobalQueue:  1024,
 
 	Lifetime: 3 * time.Hour,
 }
