@@ -163,7 +163,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 			log.Error("can`t get validator from state", "error", err, "address", valAddress.Hex())
 			continue
 		}
-		if val.ActivationEra <= slotEra.Number+1 && val.ExitEra > slotEra.Number {
+		if val.ActivationEra <= slotEra.Number && val.ExitEra > slotEra.Number {
 			eraValidators = append(eraValidators, val.GetAddress())
 		}
 	}
@@ -171,7 +171,7 @@ func (s *storage) GetValidators(bc blockchain, slot uint64, tmpFromWhere string)
 	s.validatorsCache.addAllActiveValidatorsByEra(slotEra.Number, eraValidators)
 
 	log.Info("GetValidators", "callFunc", tmpFromWhere, "all", len(validators),
-		"active", len(validators),
+		"active", len(eraValidators),
 		"slot", slot, "epoch", slotEpoch,
 	)
 
