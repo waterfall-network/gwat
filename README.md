@@ -76,7 +76,7 @@ This command will:
    causing it to download more data in exchange for avoiding processing the entire history
    of the Ethereum network, which is very CPU intensive.
  * Start up `geth`'s built-in interactive [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console),
-   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://web3js.readthedocs.io/) 
+   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://web3js.readthedocs.io/)
    (note: the `web3` version bundled within `geth` is very old, and not up to date with official docs),
    as well as `geth`'s own [management APIs](https://geth.ethereum.org/docs/rpc/server).
    This tool is optional and if you leave it out you can always attach to an already running
@@ -332,31 +332,15 @@ proceedings to the account specified by `--miner.etherbase`. You can further tun
 by changing the default gas limit blocks converge to (`--miner.targetgaslimit`) and the price
 transactions are accepted at (`--miner.gasprice`).
 
-## Contribution
+## Contributing
+### Branches
+Coordinator maintains two permanent branches:
 
-Thank you for considering to help out with the source code! We welcome contributions
-from anyone on the internet, and are grateful for even the smallest of fixes!
+* [main](https://github.com/waterfall-network/coordinator/tree/main): This points to the latest stable release. It is ideal for most users.
+* [develop](https://github.com/waterfall-network/coordinator/tree/develop): This is used for development, it contains the latest PRs. Developers should base their PRs on this branch.
 
-If you'd like to contribute to go-ethereum, please fork, fix, commit and send a pull request
-for the maintainers to review and merge into the main code base. If you wish to submit
-more complex changes though, please check up with the core devs first on [our Discord Server](https://discord.gg/invite/nthXNEv)
-to ensure those changes are in line with the general philosophy of the project and/or get
-some early feedback which can make both your efforts much lighter as well as our review
-and merge procedures quick and simple.
-
-Please make sure your contributions adhere to our coding guidelines:
-
- * Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting)
-   guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
- * Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary)
-   guidelines.
- * Pull requests need to be based on and opened against the `master` branch.
- * Commit messages should be prefixed with the package(s) they modify.
-   * E.g. "eth, rpc: make trace configs optional"
-
-Please see the [Developers' Guide](https://geth.ethereum.org/docs/developers/devguide)
-for more details on configuring your environment, managing project dependencies, and
-testing procedures.
+### Guide
+Want to get involved? Check out our [Contribution Guide](/CONTRIBUTING.md) to learn more!
 
 ## License
 
@@ -368,4 +352,5 @@ The go-ethereum binaries (i.e. all code inside of the `cmd` directory) is licens
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also
 included in our repository in the `COPYING` file.
 
-The code written for the Waterfall project is distributed under [APACHE LICENSE, VERSION 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+The code written for the Waterfall project is distributed under [APACHE LICENSE, VERSION 2.0](https://www.apache.org/licenses/LICENSE-2.0), also
+included in our repository in the `LICENSE` file.
