@@ -1,4 +1,4 @@
-## Gwat: A Waterfall BlockDAG protocol Implementation Written in Go
+## Gwat: A Waterfall Verifier Layer Implementation Written in Go
 
 The Waterfall team forked the project on October 20, 2021, and has since made its own changes.
 
