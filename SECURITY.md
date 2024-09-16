@@ -1,12 +1,21 @@
 # Security Policy
 
+The Waterfall team forked the project on October 20, 2021, and has since made its own changes.
+
+
 ## Supported Versions
 
-Please see [Releases](https://github.com/ethereum/go-ethereum/releases). We recommend using the [most recently released version](https://github.com/ethereum/go-ethereum/releases/latest).
+We recommend downloading the software from the official documentation site: https://docs.waterfall.network
 
 ## Audit reports
 
-Audit reports are published in the `docs` folder: https://github.com/ethereum/go-ethereum/tree/master/docs/audits 
+### Waterfall
+
+- Jul 8, 2024 by Hacken, [web](https://audits.hacken.io/waterfall/l1-waterfall-network-node-apr2024/) , [pdf](https://docs.waterfall.network/assets/audits/hacken_audit_report_24_06_2024.pdf)
+
+### Geth
+
+Audit reports are published in the `docs` folder: https://github.com/ethereum/go-ethereum/tree/master/docs/audits
 
 | Scope | Date | Report Link |
 | ------- | ------- | ----------- |
@@ -17,104 +26,65 @@ Audit reports are published in the `docs` folder: https://github.com/ethereum/go
 
 ## Reporting a Vulnerability
 
-**Please do not file a public ticket** mentioning the vulnerability.
-
-To find out how to disclose a vulnerability in Ethereum visit [https://bounty.ethereum.org](https://bounty.ethereum.org) or email bounty@ethereum.org. Please read the [disclosure page](https://github.com/ethereum/go-ethereum/security/advisories?state=published) for more information about publically disclosed security vulnerabilities.
-
-Use the built-in `geth version-check` feature to check whether the software is affected by any known vulnerability. This command will fetch the latest [`vulnerabilities.json`](https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json) file which contains known security vulnerabilities concerning `geth`, and cross-check the data against its own version number.
+**Please do not file a public ticket** mentioning the vulnerability, as doing so could increase the likelihood of the vulnerability being used before a fix has been created, released and installed on the network.
 
 The following key may be used to communicate sensitive information to developers.
 
-Fingerprint: `AE96 ED96 9E47 9B00 84F3 E17F E88D 3334 FA5F 6A0A`
+Email: `security@waterfall.network`
+
+Fingerprint: `3FB5 199A DA6D 04EF 55A6  B31D 9413 51F9 5EBB 44DC`
 
 ```
 -----BEGIN PGP PUBLIC KEY BLOCK-----
-Version: GnuPG v1
 
-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
-=r6KK
+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
+nTzshbCpN++EHQ==
+=qwTj
 -----END PGP PUBLIC KEY BLOCK-----
 ```
