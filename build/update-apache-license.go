@@ -60,6 +60,7 @@ var (
 		"cmd/internal/browser", "common/bitutil/bitutil",
 		"crypto/bn256/", "crypto/ecies/", "graphql/graphiql.go",
 		"crypto/bls12381/", "metrics/", "log/",
+		"crypto/bls_sig/", "crypto/secp256k1",
 	}
 
 	licenseCommentRE = regexp.MustCompile(`^//\s*(Copyright|This file is part of).*?\n(?://.*?\n)*\n*`)
